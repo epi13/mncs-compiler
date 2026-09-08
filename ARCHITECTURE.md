@@ -232,3 +232,14 @@ The compiler implementation may understand newer language features before its ow
 ## 15. Development rule
 
 When compiler implementation exposes a language limitation, first record the pressure here. Classify it as language, stdlib/runtime, backend, tooling, or compiler-architecture pressure. Fix upstream only in a dedicated `mncs-language` run, then return here and prove the pressure case is resolved.
+
+## 16. First executable kernel boundary
+
+The initial implementation is deliberately narrower than the target architecture:
+exact ≤64-byte source values feed pure lexical and header requests. Spans preserve
+source provenance; module spans are not normalized IDs, and results do not yet
+carry persisted fact keys. Identity/invalidation requirements from RFC 0002 remain
+the target contract, with cache materialization deferred until whole-source
+storage is settled. No coordinator is implemented. See
+[evidence/FRONTEND.md](evidence/FRONTEND.md) for inputs, invariants, verification,
+cost, failure behavior and the precise implemented/partial/deferred status.

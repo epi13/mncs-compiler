@@ -25,6 +25,25 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
+Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md)):
+
+- implemented: bounded immutable byte inputs, guarded reads, span validation,
+  ASCII lexer, nested comments, lexical errors, coverage evidence and source equality;
+- partially implemented: syntax/parser (header and qualified module declaration
+  only), structured diagnostics and pure source-unit fact requests;
+- blocked for whole-module scale: 64-byte source capacity; Unicode classification
+  remains a parity gap. See CP-0001 and CP-0002 before extending storage;
+- not started: declarations/expressions, imports, symbols, semantic/type/effect/
+  ownership checks, compiler IR and backend lowering;
+- intentionally deferred: persisted fact IDs/cache, service/coordinator, distributed
+  or learned features, Rust succession and self-hosting.
+
+Next: resolve or deliberately redesign the measured storage boundary in a
+separate language run, then extend source-backed syntax and dependency facts.
+Record sequences already elaborate; do not assume every collection problem
+requires a new language feature. Source Profile 0.10 is supported by the unchanged
+pinned Stage-0 and now replaces the original scaffold's 0.8 metadata.
+
 Architecture may already use fact/obligation boundaries even when evaluation is single-threaded and uncached.
 
 ## Phase 2 — Self-host capable

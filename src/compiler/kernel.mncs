@@ -1,0 +1,64 @@
+mncs 0.10;
+module mncs.compiler.kernel.v1;
+use mncs.compiler.parser.v1 as parser;
+use mncs.compiler.source.v1 as source;
+use mncs.compiler.lexer.v1 as lexer;
+
+// Establish a header fact from the exact bounded source value.
+// Operation identity: mncs.compiler.kernel.v1::parse_header / semantics 1.
+// No target, filesystem, session, cache, or scheduling inputs are relevant.
+fn parse_header(text: [byte; up_to 64]) -> (result: parser.Header) {
+    return parser.header(text);
+}
+
+// Exact equality for a caller's source snapshot comparison. This is NOT a
+// content hash or a globally stable module ID. Spelling remains source spans.
+fn same_source(left: [byte; up_to 64], right: [byte; up_to 64]) -> (result: bool) {
+    iterate i over left carrying same: bool = left.len == right.len {
+        next same = same && source.byte_at(left, i) == source.byte_at(right, i);
+    }
+    return same;
+}
+
+// A narrow structural verifier: coverage/progress and diagnostic shape only.
+// It does not independently prove a token's lexical classification.
+fn token_shape(text: [byte; up_to 64], cursor: u64, kind: u64, start: u64, end: u64, diagnostic: u64) -> (result: bool) {
+    if cursor > text.len { return false; }
+    if start != cursor || select(source.span_valid(text, start, end), false, true) { return false; }
+    if kind == 0 { return start == text.len && end == start && diagnostic == 0; }
+    let known: bool = (kind >= 1 && kind <= 7) || (kind >= 10 && kind <= 39) || (kind >= 50 && kind <= 70) || (kind >= 80 && kind <= 96);
+    let diagnostic_ok: bool = (diagnostic == 0 && kind != 7) || (diagnostic == 1 && kind == 3) || ((diagnostic == 2 || diagnostic == 3) && kind == 7);
+    return known && diagnostic_ok && end > start;
+}
+
+// Whole bounded-source coverage evidence, independently useful before parsing.
+// code: 0 complete; 1 lexical errors; 2 structural verification failure;
+// 3 unsupported non-ASCII source. Counts include trivia; EOF is not counted.
+record LexicalEvidence { code: u64, cursor: u64, tokens: u64, trivia: u64, errors: u64, first_start: u64, first_end: u64 }
+fn lex_summary(text: [byte; up_to 64]) -> (result: LexicalEvidence) {
+    let seed: LexicalEvidence = LexicalEvidence { code: 0, cursor: 0, tokens: 0, trivia: 0, errors: 0, first_start: 0, first_end: 0 };
+    if source.ascii(text) {
+        iterate i over text carrying evidence: LexicalEvidence = seed {
+            next evidence = lex_step(text, evidence);
+        }
+        return evidence;
+    }
+    return LexicalEvidence { ..seed, code: 3, first_end: text.len };
+}
+fn lex_step(text: [byte; up_to 64], evidence: LexicalEvidence) -> (result: LexicalEvidence) {
+    if evidence.cursor == text.len || evidence.code == 2 { return evidence; }
+    let token: lexer.Token = lexer.next_token(text, evidence.cursor);
+    if token_shape(text, evidence.cursor, token.kind, token.start, token.end, token.diagnostic) {
+        let error: bool = token.diagnostic != 0;
+        let first: bool = error && evidence.errors == 0;
+        return LexicalEvidence {
+            code: select(error, 1, evidence.code), cursor: token.end,
+            tokens: evidence.tokens + 1,
+            trivia: evidence.trivia + select(token.kind >= 1 && token.kind <= 3, 1, 0),
+            errors: evidence.errors + select(error, 1, 0),
+            first_start: select(first, token.start, evidence.first_start),
+            first_end: select(first, token.end, evidence.first_end)
+        };
+    }
+    return LexicalEvidence { ..evidence, code: 2, first_start: token.start, first_end: token.end };
+}
