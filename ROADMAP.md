@@ -25,16 +25,21 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
-Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md)):
+Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md) and
+[declaration evidence](evidence/DECL.md)):
 
 - implemented: bounded immutable byte inputs, guarded reads, span validation,
   ASCII lexer, nested comments, lexical errors, coverage evidence and source equality;
-- partially implemented: syntax/parser (header and qualified module declaration
-  only), structured diagnostics and pure source-unit fact requests;
-- blocked for whole-module scale: 64-byte source capacity; Unicode classification
-  remains a parity gap. See CP-0001 and CP-0002 before extending storage;
-- not started: declarations/expressions, imports, symbols, semantic/type/effect/
-  ownership checks, compiler IR and backend lowering;
+- implemented (declaration vertical, 256-byte units): header/use/record/payload-enum/fn
+  parsing with first-error-span parity vs Stage-0, function-name symbols with
+  duplicate detection, resolve/span walking, postfix stack-IR lowering with a
+  depth self-check;
+- partially implemented: structured diagnostics and pure source-unit fact requests;
+- blocked for whole-module scale: segment-chained source capacity (CP-0001);
+  Unicode classification remains a parity gap (CP-0002). Compiler-scale pressures
+  CP-0008 through CP-0012 (finite-payload visibility, iteration fuel, scalar match,
+  acyclic-call machines, payload sequences) bound the next steps;
+- not started: imports, type/effect/ownership checks, backend lowering;
 - intentionally deferred: persisted fact IDs/cache, service/coordinator, distributed
   or learned features, Rust succession and self-hosting.
 

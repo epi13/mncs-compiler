@@ -1,0 +1,11 @@
+mncs 0.10;
+module probe.u2;
+use probe.u1 as t;
+enum S { W { v: t.E }, Z }
+fn build(s: u64) -> (result: S) {
+    let e: t.E = t.mk(s, s);
+    return S.W { v: e };
+}
+fn read(x: S) -> (result: u64) {
+    return match x { W { v: e } => 1, Z => 0 };
+}

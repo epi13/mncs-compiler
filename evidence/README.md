@@ -45,3 +45,11 @@ See [bounded frontend contracts and reproduction](FRONTEND.md),
 [pinned pressure diagnostics](pressure-results.json), and
 [qualified Stage-0 compilation results](compile-results.json). These establish a bounded
 ASCII lexer/header slice, not self-hosting or backend parity.
+
+## Current declaration-vertical evidence
+
+See [declaration/symbol/IR contracts and reproduction](DECL.md) and
+[repeat/differential declaration results](decl-results.json). These establish
+bounded declaration parsing with oracle span parity, function-name symbol
+facts, resolve/span walking, and depth-verified stack-IR lowering for
+256-byte units, not whole-module compilation or backend parity.

@@ -1,0 +1,245 @@
+mncs 0.10;
+module mncs.compiler.segment.v1;
+use mncs.compiler.source.v1 as source;
+use mncs.compiler.lexer.v1 as lexer;
+
+// Logical bounded source: the concatenation of four exact caller-supplied
+// chunks with a caller-declared total length. Offsets in every compiler
+// request below are absolute offsets into this logical source.
+//
+// This is a deliberately bounded bootstrap/fragment representation, not the
+// intended whole-module source API (see CP-0001). The single-chunk
+// `source`/`lexer` modules remain the tested primitive path; this module
+// mirrors their exact semantics over absolute offsets so declaration-scale
+// programs (up to 256 bytes) can pressure deeper compiler layers while the
+// upstream storage pressure stays open and honestly labeled.
+
+// The total must not exceed the bytes the caller actually supplied.
+fn total_valid(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
+    return total <= s0.len + s1.len + s2.len + s3.len;
+}
+
+// Absolute byte fetch. Out-of-range reads yield sentinel 256, mirroring
+// `source.byte_at`: the sentinel is distinct from every byte value.
+fn byte_at(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, offset: u64) -> (result: u64) {
+    if offset >= total {
+        return 256;
+    }
+    let l0: u64 = s0.len;
+    let l1: u64 = s1.len;
+    let l2: u64 = s2.len;
+    if offset < l0 {
+        return source.byte_at(s0, offset);
+    }
+    if offset < l0 + l1 {
+        return source.byte_at(s1, offset - l0);
+    }
+    if offset < l0 + l1 + l2 {
+        return source.byte_at(s2, offset - l0 - l1);
+    }
+    return source.byte_at(s3, offset - l0 - l1 - l2);
+}
+
+record AsciiState { valid: bool, index: u64 }
+fn ascii_step(total: u64, st: AsciiState, byte: u64) -> (result: AsciiState) {
+    if st.index >= total { return AsciiState { valid: st.valid, index: st.index + 1 }; }
+    return AsciiState { valid: st.valid && byte < 128, index: st.index + 1 };
+}
+
+fn ascii(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
+    iterate ai0 over s0 carrying a: AsciiState = AsciiState { valid: true, index: 0 } {
+        next a = ascii_step(total, a, source.byte_at(s0, ai0) as u64);
+    }
+    iterate ai1 over s1 carrying b: AsciiState = a {
+        next b = ascii_step(total, b, source.byte_at(s1, ai1) as u64);
+    }
+    iterate ai2 over s2 carrying c: AsciiState = b {
+        next c = ascii_step(total, c, source.byte_at(s2, ai2) as u64);
+    }
+    iterate ai3 over s3 carrying d: AsciiState = c {
+        next d = ascii_step(total, d, source.byte_at(s3, ai3) as u64);
+    }
+    return d.valid;
+}
+
+fn span_valid(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: bool) {
+    return start <= end && end <= total;
+}
+
+// Word classification over absolute offsets. Mirrors `lexer.keyword`
+// exactly; duplicated because the single-chunk fetch cannot cross chunk
+// boundaries. Any divergence from `lexer.keyword` is a compiler bug.
+fn keyword(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: u64) {
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 109 && byte_at(s0, s1, s2, s3, total, start + 1) == 110 && byte_at(s0, s1, s2, s3, total, start + 2) == 99 && byte_at(s0, s1, s2, s3, total, start + 3) == 115 { return 10; }
+    }
+    if end - start == 6 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 109 && byte_at(s0, s1, s2, s3, total, start + 1) == 111 && byte_at(s0, s1, s2, s3, total, start + 2) == 100 && byte_at(s0, s1, s2, s3, total, start + 3) == 117 && byte_at(s0, s1, s2, s3, total, start + 4) == 108 && byte_at(s0, s1, s2, s3, total, start + 5) == 101 { return 11; }
+    }
+    if end - start == 2 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 102 && byte_at(s0, s1, s2, s3, total, start + 1) == 110 { return 12; }
+    }
+    if end - start == 6 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 114 && byte_at(s0, s1, s2, s3, total, start + 1) == 101 && byte_at(s0, s1, s2, s3, total, start + 2) == 116 && byte_at(s0, s1, s2, s3, total, start + 3) == 117 && byte_at(s0, s1, s2, s3, total, start + 4) == 114 && byte_at(s0, s1, s2, s3, total, start + 5) == 110 { return 13; }
+    }
+    if end - start == 3 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 108 && byte_at(s0, s1, s2, s3, total, start + 1) == 101 && byte_at(s0, s1, s2, s3, total, start + 2) == 116 { return 14; }
+    }
+    if end - start == 2 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 105 && byte_at(s0, s1, s2, s3, total, start + 1) == 102 { return 15; }
+    }
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 101 && byte_at(s0, s1, s2, s3, total, start + 1) == 108 && byte_at(s0, s1, s2, s3, total, start + 2) == 115 && byte_at(s0, s1, s2, s3, total, start + 3) == 101 { return 16; }
+    }
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 102 && byte_at(s0, s1, s2, s3, total, start + 1) == 97 && byte_at(s0, s1, s2, s3, total, start + 2) == 105 && byte_at(s0, s1, s2, s3, total, start + 3) == 108 { return 17; }
+    }
+    if end - start == 8 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 114 && byte_at(s0, s1, s2, s3, total, start + 1) == 101 && byte_at(s0, s1, s2, s3, total, start + 2) == 113 && byte_at(s0, s1, s2, s3, total, start + 3) == 117 && byte_at(s0, s1, s2, s3, total, start + 4) == 105 && byte_at(s0, s1, s2, s3, total, start + 5) == 114 && byte_at(s0, s1, s2, s3, total, start + 6) == 101 && byte_at(s0, s1, s2, s3, total, start + 7) == 115 { return 18; }
+    }
+    if end - start == 7 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 101 && byte_at(s0, s1, s2, s3, total, start + 1) == 110 && byte_at(s0, s1, s2, s3, total, start + 2) == 115 && byte_at(s0, s1, s2, s3, total, start + 3) == 117 && byte_at(s0, s1, s2, s3, total, start + 4) == 114 && byte_at(s0, s1, s2, s3, total, start + 5) == 101 && byte_at(s0, s1, s2, s3, total, start + 6) == 115 { return 19; }
+    }
+    if end - start == 7 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 97 && byte_at(s0, s1, s2, s3, total, start + 1) == 115 && byte_at(s0, s1, s2, s3, total, start + 2) == 115 && byte_at(s0, s1, s2, s3, total, start + 3) == 117 && byte_at(s0, s1, s2, s3, total, start + 4) == 109 && byte_at(s0, s1, s2, s3, total, start + 5) == 101 && byte_at(s0, s1, s2, s3, total, start + 6) == 115 { return 20; }
+    }
+    if end - start == 8 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 112 && byte_at(s0, s1, s2, s3, total, start + 1) == 114 && byte_at(s0, s1, s2, s3, total, start + 2) == 111 && byte_at(s0, s1, s2, s3, total, start + 3) == 112 && byte_at(s0, s1, s2, s3, total, start + 4) == 101 && byte_at(s0, s1, s2, s3, total, start + 5) == 114 && byte_at(s0, s1, s2, s3, total, start + 6) == 116 && byte_at(s0, s1, s2, s3, total, start + 7) == 121 { return 21; }
+    }
+    if end - start == 9 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 105 && byte_at(s0, s1, s2, s3, total, start + 1) == 110 && byte_at(s0, s1, s2, s3, total, start + 2) == 118 && byte_at(s0, s1, s2, s3, total, start + 3) == 97 && byte_at(s0, s1, s2, s3, total, start + 4) == 114 && byte_at(s0, s1, s2, s3, total, start + 5) == 105 && byte_at(s0, s1, s2, s3, total, start + 6) == 97 && byte_at(s0, s1, s2, s3, total, start + 7) == 110 && byte_at(s0, s1, s2, s3, total, start + 8) == 116 { return 22; }
+    }
+    if end - start == 11 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 109 && byte_at(s0, s1, s2, s3, total, start + 1) == 101 && byte_at(s0, s1, s2, s3, total, start + 2) == 116 && byte_at(s0, s1, s2, s3, total, start + 3) == 97 && byte_at(s0, s1, s2, s3, total, start + 4) == 109 && byte_at(s0, s1, s2, s3, total, start + 5) == 111 && byte_at(s0, s1, s2, s3, total, start + 6) == 114 && byte_at(s0, s1, s2, s3, total, start + 7) == 112 && byte_at(s0, s1, s2, s3, total, start + 8) == 104 && byte_at(s0, s1, s2, s3, total, start + 9) == 105 && byte_at(s0, s1, s2, s3, total, start + 10) == 99 { return 23; }
+    }
+    if end - start == 6 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 101 && byte_at(s0, s1, s2, s3, total, start + 1) == 102 && byte_at(s0, s1, s2, s3, total, start + 2) == 102 && byte_at(s0, s1, s2, s3, total, start + 3) == 101 && byte_at(s0, s1, s2, s3, total, start + 4) == 99 && byte_at(s0, s1, s2, s3, total, start + 5) == 116 { return 24; }
+    }
+    if end - start == 10 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 99 && byte_at(s0, s1, s2, s3, total, start + 1) == 97 && byte_at(s0, s1, s2, s3, total, start + 2) == 112 && byte_at(s0, s1, s2, s3, total, start + 3) == 97 && byte_at(s0, s1, s2, s3, total, start + 4) == 98 && byte_at(s0, s1, s2, s3, total, start + 5) == 105 && byte_at(s0, s1, s2, s3, total, start + 6) == 108 && byte_at(s0, s1, s2, s3, total, start + 7) == 105 && byte_at(s0, s1, s2, s3, total, start + 8) == 116 && byte_at(s0, s1, s2, s3, total, start + 9) == 121 { return 25; }
+    }
+    if end - start == 13 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 97 && byte_at(s0, s1, s2, s3, total, start + 1) == 117 && byte_at(s0, s1, s2, s3, total, start + 2) == 116 && byte_at(s0, s1, s2, s3, total, start + 3) == 104 && byte_at(s0, s1, s2, s3, total, start + 4) == 111 && byte_at(s0, s1, s2, s3, total, start + 5) == 114 && byte_at(s0, s1, s2, s3, total, start + 6) == 105 && byte_at(s0, s1, s2, s3, total, start + 7) == 122 && byte_at(s0, s1, s2, s3, total, start + 8) == 101 && byte_at(s0, s1, s2, s3, total, start + 9) == 100 && byte_at(s0, s1, s2, s3, total, start + 10) == 95 && byte_at(s0, s1, s2, s3, total, start + 11) == 98 && byte_at(s0, s1, s2, s3, total, start + 12) == 121 { return 26; }
+    }
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 101 && byte_at(s0, s1, s2, s3, total, start + 1) == 110 && byte_at(s0, s1, s2, s3, total, start + 2) == 117 && byte_at(s0, s1, s2, s3, total, start + 3) == 109 { return 27; }
+    }
+    if end - start == 3 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 117 && byte_at(s0, s1, s2, s3, total, start + 1) == 115 && byte_at(s0, s1, s2, s3, total, start + 2) == 101 { return 28; }
+    }
+    if end - start == 6 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 114 && byte_at(s0, s1, s2, s3, total, start + 1) == 101 && byte_at(s0, s1, s2, s3, total, start + 2) == 99 && byte_at(s0, s1, s2, s3, total, start + 3) == 111 && byte_at(s0, s1, s2, s3, total, start + 4) == 114 && byte_at(s0, s1, s2, s3, total, start + 5) == 100 { return 29; }
+    }
+    if end - start == 5 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 109 && byte_at(s0, s1, s2, s3, total, start + 1) == 97 && byte_at(s0, s1, s2, s3, total, start + 2) == 116 && byte_at(s0, s1, s2, s3, total, start + 3) == 99 && byte_at(s0, s1, s2, s3, total, start + 4) == 104 { return 30; }
+    }
+    if end - start == 7 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 105 && byte_at(s0, s1, s2, s3, total, start + 1) == 116 && byte_at(s0, s1, s2, s3, total, start + 2) == 101 && byte_at(s0, s1, s2, s3, total, start + 3) == 114 && byte_at(s0, s1, s2, s3, total, start + 4) == 97 && byte_at(s0, s1, s2, s3, total, start + 5) == 116 && byte_at(s0, s1, s2, s3, total, start + 6) == 101 { return 31; }
+    }
+    if end - start == 5 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 117 && byte_at(s0, s1, s2, s3, total, start + 1) == 112 && byte_at(s0, s1, s2, s3, total, start + 2) == 95 && byte_at(s0, s1, s2, s3, total, start + 3) == 116 && byte_at(s0, s1, s2, s3, total, start + 4) == 111 { return 32; }
+    }
+    if end - start == 8 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 99 && byte_at(s0, s1, s2, s3, total, start + 1) == 97 && byte_at(s0, s1, s2, s3, total, start + 2) == 114 && byte_at(s0, s1, s2, s3, total, start + 3) == 114 && byte_at(s0, s1, s2, s3, total, start + 4) == 121 && byte_at(s0, s1, s2, s3, total, start + 5) == 105 && byte_at(s0, s1, s2, s3, total, start + 6) == 110 && byte_at(s0, s1, s2, s3, total, start + 7) == 103 { return 33; }
+    }
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 110 && byte_at(s0, s1, s2, s3, total, start + 1) == 101 && byte_at(s0, s1, s2, s3, total, start + 2) == 120 && byte_at(s0, s1, s2, s3, total, start + 3) == 116 { return 34; }
+    }
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 111 && byte_at(s0, s1, s2, s3, total, start + 1) == 118 && byte_at(s0, s1, s2, s3, total, start + 2) == 101 && byte_at(s0, s1, s2, s3, total, start + 3) == 114 { return 35; }
+    }
+    if end - start == 2 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 97 && byte_at(s0, s1, s2, s3, total, start + 1) == 115 { return 36; }
+    }
+    if end - start == 5 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 119 && byte_at(s0, s1, s2, s3, total, start + 1) == 104 && byte_at(s0, s1, s2, s3, total, start + 2) == 105 && byte_at(s0, s1, s2, s3, total, start + 3) == 108 && byte_at(s0, s1, s2, s3, total, start + 4) == 101 { return 37; }
+    }
+    if end - start == 4 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 116 && byte_at(s0, s1, s2, s3, total, start + 1) == 114 && byte_at(s0, s1, s2, s3, total, start + 2) == 117 && byte_at(s0, s1, s2, s3, total, start + 3) == 101 { return 38; }
+    }
+    if end - start == 5 {
+        if byte_at(s0, s1, s2, s3, total, start + 0) == 102 && byte_at(s0, s1, s2, s3, total, start + 1) == 97 && byte_at(s0, s1, s2, s3, total, start + 2) == 108 && byte_at(s0, s1, s2, s3, total, start + 3) == 115 && byte_at(s0, s1, s2, s3, total, start + 4) == 101 { return 39; }
+    }
+    return 4;
+}
+
+// One scan advance over absolute offsets. Mirrors `lexer.scan_step`; the
+// sentinel 256 never satisfies a byte continuation, and `st.end >= total`
+// freezes the scan exactly like the single-chunk EOF guard.
+fn scan_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: lexer.Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: lexer.Scan) {
+    if st.done || st.end >= total { return st; }
+    let a: u64 = byte_at(s0, s1, s2, s3, total, st.end);
+    let b: u64 = byte_at(s0, s1, s2, s3, total, st.end + 1);
+    if block {
+        if a == 47 && b == 42 { return lexer.Scan { ..st, end: st.end + 2, depth: st.depth + 1 }; }
+        if a == 42 && b == 47 { return lexer.Scan { ..st, end: st.end + 2, depth: st.depth - 1, done: st.depth == 1 }; }
+        return lexer.Scan { ..st, end: st.end + 1 };
+    }
+    // Preserve Stage-0's unusual continuation of dots after the first version dot.
+    let dot: bool = number && a == 46 && (st.dotted || lexer.digit(b));
+    let advance: bool = (line && a != 10) || (word && (lexer.letter(a) || lexer.digit(a))) || (number && (lexer.digit(a) || dot)) || (ws && lexer.space(a));
+    return lexer.Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: select(advance, false, true) };
+}
+
+fn scan_fuel(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: lexer.Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: lexer.Scan) {
+    iterate si0 over s0 carrying a: lexer.Scan = st {
+        next a = scan_step(s0, s1, s2, s3, total, a, line, block, word, number, ws);
+    }
+    iterate si1 over s1 carrying b: lexer.Scan = a {
+        next b = scan_step(s0, s1, s2, s3, total, b, line, block, word, number, ws);
+    }
+    iterate si2 over s2 carrying c: lexer.Scan = b {
+        next c = scan_step(s0, s1, s2, s3, total, c, line, block, word, number, ws);
+    }
+    iterate si3 over s3 carrying d: lexer.Scan = c {
+        next d = scan_step(s0, s1, s2, s3, total, d, line, block, word, number, ws);
+    }
+    return d;
+}
+
+// Absolute-offset twin of `lexer.next_token` with identical kind and
+// diagnostic rules. Spans are absolute logical-source offsets.
+fn next_token(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64) -> (result: lexer.Token) {
+    if start > total { return lexer.Token { kind: 0, start: total, end: total, diagnostic: 4 }; }
+    if start == total { return lexer.Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
+    let a: u64 = byte_at(s0, s1, s2, s3, total, start);
+    let b: u64 = byte_at(s0, s1, s2, s3, total, start + 1);
+    if a >= 128 { return lexer.Token { kind: 7, start: start, end: start + 1, diagnostic: 3 }; }
+    let line: bool = a == 47 && b == 47;
+    let block: bool = a == 47 && b == 42;
+    let word: bool = lexer.letter(a);
+    let number: bool = lexer.digit(a);
+    let ws: bool = lexer.space(a);
+    if line || block || word || number || ws {
+        let seed: lexer.Scan = lexer.Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
+        let st: lexer.Scan = scan_fuel(s0, s1, s2, s3, total, seed, line, block, word, number, ws);
+        let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword(s0, s1, s2, s3, total, start, st.end), select(st.dotted, 6, 5)))));
+        return lexer.Token { kind: kind, start: start, end: st.end, diagnostic: select(block && st.depth > 0, 1, 0) };
+    }
+    let kind: u64 = lexer.punctuation(a, b);
+    return lexer.Token { kind: kind, start: start, end: start + select(kind >= 80, 2, 1), diagnostic: select(kind == 7, 2, 0) };
+}
+
+// Significant-token request over absolute offsets; lexical failure is never
+// discarded as trivia. Mirrors `lexer.significant`.
+fn significant(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64) -> (result: lexer.Token) {
+    let first: lexer.Token = next_token(s0, s1, s2, s3, total, start);
+    iterate gi0 over s0 carrying a: lexer.Token = first {
+        next a = skip_trivia(s0, s1, s2, s3, total, a);
+    }
+    iterate gi1 over s1 carrying b: lexer.Token = a {
+        next b = skip_trivia(s0, s1, s2, s3, total, b);
+    }
+    iterate gi2 over s2 carrying c: lexer.Token = b {
+        next c = skip_trivia(s0, s1, s2, s3, total, c);
+    }
+    iterate gi3 over s3 carrying d: lexer.Token = c {
+        next d = skip_trivia(s0, s1, s2, s3, total, d);
+    }
+    return d;
+}
+
+fn skip_trivia(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, token: lexer.Token) -> (result: lexer.Token) {
+    if token.kind >= 1 && token.kind <= 3 && token.diagnostic == 0 { return next_token(s0, s1, s2, s3, total, token.end); }
+    return token;
+}

@@ -236,10 +236,14 @@ When compiler implementation exposes a language limitation, first record the pre
 ## 16. First executable kernel boundary
 
 The initial implementation is deliberately narrower than the target architecture:
-exact ≤64-byte source values feed pure lexical and header requests. Spans preserve
+exact ≤64-byte source values feed pure lexical and header requests. The
+declaration vertical widens this to chained four-segment ≤256-byte units
+feeding declaration parsing, symbol facts, resolve/span checks, and
+depth-verified stack-IR lowering. Spans preserve
 source provenance; module spans are not normalized IDs, and results do not yet
 carry persisted fact keys. Identity/invalidation requirements from RFC 0002 remain
 the target contract, with cache materialization deferred until whole-source
 storage is settled. No coordinator is implemented. See
-[evidence/FRONTEND.md](evidence/FRONTEND.md) for inputs, invariants, verification,
+[evidence/FRONTEND.md](evidence/FRONTEND.md) and [evidence/DECL.md](evidence/DECL.md)
+for inputs, invariants, verification,
 cost, failure behavior and the precise implemented/partial/deferred status.

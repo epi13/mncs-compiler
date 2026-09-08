@@ -8,19 +8,27 @@ Self-hosted next-generation compiler for MNCS, built in `mncs-language` to press
 
 The repository exists so active compiler architecture can move into MNCS without destabilizing `mncs-language`. Compiler development runs should work here, record language pressure here, and leave language changes for dedicated follow-up runs in `mncs-language`.
 
-## Executable first slice
+## Executable slices
 
-The kernel now implements **bounded ASCII source processing** in MNCS: lossless
+The kernel implements **bounded ASCII source processing** in MNCS: lossless
 lexical tokens, byte spans, lexical diagnostics/coverage evidence, and a parser
-for the language header and qualified module declaration. Inputs are limited to
-64 bytes; this is not yet a whole-module compiler or self-hosting implementation.
+for the language header and qualified module declaration (64-byte inputs).
 
-Run `tools/bootstrap.sh`, then `python3 tools/test_frontend.py` and
-`python3 tools/test_pressure.py`. See [contracts and evidence](evidence/FRONTEND.md)
+The declaration vertical (`src/compiler/segment.mncs`, `src/compiler/decl.mncs`)
+extends this to **bounded declaration-scale compilation**: header, `use`,
+`record`, payload `enum`, and `fn` declarations with bodies and expressions
+(256-byte units); function-name symbol collection with duplicate detection; a
+resolve/span walk over every body; and lowering of every expression to a
+postfix stack IR checked by a stack-depth self-verifier. This is not yet a
+whole-module compiler or self-hosting implementation.
+
+Run `tools/bootstrap.sh`, then `python3 tools/test_frontend.py`,
+`python3 tools/test_decl.py`, and `python3 tools/test_pressure.py`. See
+[frontend evidence](evidence/FRONTEND.md), [declaration evidence](evidence/DECL.md),
 and the [pressure index](pressure/README.md). All production behavior lives in
 `src/compiler/`; the Rust/Python code under `tools/` is a temporary Stage-0 test
-transport, not a compiler implementation. The constant-return scaffolds have
-been removed; there is no standalone driver or coordinator yet.
+transport, not a compiler implementation. There is no standalone driver or
+coordinator yet.
 
 ## Mission
 
