@@ -1,0 +1,20 @@
+mncs 0.8;
+
+// mncs.compiler.session.v1
+//
+// A compilation session is a logical request context, not a compiler process.
+// This file begins the contract surface without prematurely implementing the
+// persistent coordinator described by RFC 0003.
+module mncs.compiler.session.v1;
+
+fn compilation_session_abi() -> (result: u64) {
+    return 1;
+}
+
+fn session_is_process() -> (result: u64) {
+    return 0;
+}
+
+fn session_requires_snapshot_identity() -> (result: u64) {
+    return 1;
+}
