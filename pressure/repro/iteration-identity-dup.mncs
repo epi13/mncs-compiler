@@ -1,0 +1,11 @@
+mncs 0.10;
+module probe.dupiter;
+fn f(a: [u64; 2], b: [u64; 2]) -> (result: u64) {
+    iterate i over a carrying x: u64 = 0 {
+        next x = x + 1;
+    }
+    iterate i over b carrying y: u64 = x {
+        next y = y + 1;
+    }
+    return y;
+}

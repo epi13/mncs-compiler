@@ -1,0 +1,1942 @@
+mncs 0.10;
+module mncs.compiler.decl.v1;
+use mncs.compiler.source.v1 as source;
+use mncs.compiler.lexer.v1 as lexer;
+use mncs.compiler.segment.v1 as segment;
+use mncs.compiler.parser.v1 as parser;
+
+// Bounded declaration-scale syntax facts over a four-segment logical source
+// (see segment.v1). Inputs are exact caller-supplied chunks plus a total
+// length; every offset below is absolute. This is the bounded laboratory
+// interface from CP-0001, not a whole-module source API.
+//
+// Homing rule (see CP-0008): every tree type in this module (expressions,
+// statements, declarations, and their lists) is defined, constructed, and
+// destructured HERE. Stage-0 rejects cross-module finite payload use, so
+// tree-walking stages (parse, resolve, check, lower) must share one home
+// module. Byte/token/record-only layers stay separate; consumers in other
+// modules may only pass these trees opaquely.
+//
+// Scope of this slice (profile 0.10 shapes only; no profile gating):
+// header, use, record, payload enum, and function declarations; function
+// bodies with let/if-else/fail/terminal-return; expressions over names,
+// integers, booleans, all binary operators, direct calls, and field
+// projection. Deliberately deferred: iterate statements, match expressions,
+// record/enum construction literals, index/slice/cast, select/replace and
+// host intrinsics, generics, qualified calls, and vec/mask types. Inputs
+// using deferred shapes fail with an explicit local error span; they are
+// never silently accepted.
+//
+// Error policy: first failure wins. Every parse record carries ok plus the
+// failing span. Nodes are valid only when ok is true; on failure records
+// still carry a dummy node so callers can thread state without option
+// types. Differential negative tests compare the first-error span against
+// Stage-0, mirroring the header precedent.
+
+// Type spelling classification. kind: 1 u64, 2 i64, 3 bool, 4 byte,
+// 5 named, 6 qualified, 7 exact sequence, 8 viewed sequence, 9 other.
+record TypeRef { kind: u64, start: u64, end: u64 }
+record TypeParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: TypeRef }
+
+// Shared name:type pair shape for parameters, results, record fields, and
+// enum payload fields. Source order is preserved (reversed during the
+// fuel-loop accumulation, then restored).
+record Field { name_start: u64, name_end: u64, type_start: u64, type_end: u64, type_kind: u64 }
+enum FieldList { FNil, FCons { head: Field, tail: FieldList } }
+record FieldsParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: FieldList }
+
+enum Stmt {
+    Let { name_start: u64, name_end: u64, type_start: u64, type_end: u64, type_kind: u64, value: Expr, start: u64, end: u64 },
+    If { cond: Expr, then_b: StmtList, else_b: StmtList, start: u64, end: u64 },
+    Fail { mode_start: u64, mode_end: u64, start: u64, end: u64 },
+    Return { value: Expr, start: u64, end: u64 }
+}
+enum StmtList { SNil, SCons { head: Stmt, tail: StmtList } }
+record StmtParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Stmt }
+
+record Clause { kind_start: u64, kind_end: u64, name_start: u64, name_end: u64 }
+enum ClauseList { CNil, CCons { head: Clause, tail: ClauseList } }
+record Effect { kind_start: u64, kind_end: u64, cap_start: u64, cap_end: u64 }
+enum EffectList { XNil, XCons { head: Effect, tail: EffectList } }
+record Cap { start: u64, end: u64 }
+enum CapList { ANil, ACons { head: Cap, tail: CapList } }
+
+record FnSig { name_start: u64, name_end: u64, params: FieldList, results: FieldList, contracts: ClauseList, effects: EffectList, capabilities: CapList }
+record FnBody { body: StmtList, ret: Expr, has_ret: bool }
+record FnDecl { ok: bool, err_start: u64, err_end: u64, sig: FnSig, body: FnBody, fn_start: u64, fn_end: u64, cursor: u64 }
+enum FnList { DNil, DCons { head: FnDecl, tail: FnList } }
+
+record UseDecl { ok: bool, err_start: u64, err_end: u64, module_start: u64, module_end: u64, alias_start: u64, alias_end: u64, has_alias: bool, cursor: u64 }
+enum UseList { UNil, UCons { head: UseDecl, tail: UseList } }
+record RecordDecl { ok: bool, err_start: u64, err_end: u64, name_start: u64, name_end: u64, fields: FieldList, decl_start: u64, decl_end: u64, cursor: u64 }
+enum RecordList { RNil, RCons { head: RecordDecl, tail: RecordList } }
+record Variant { name_start: u64, name_end: u64, fields: FieldList }
+enum VariantList { VNil, VCons { head: Variant, tail: VariantList } }
+record EnumDecl { ok: bool, err_start: u64, err_end: u64, name_start: u64, name_end: u64, variants: VariantList, decl_start: u64, decl_end: u64, cursor: u64 }
+enum EnumList { GNil, GCons { head: EnumDecl, tail: EnumList } }
+
+record Unit { ok: bool, err_start: u64, err_end: u64, header: parser.Header, uses: UseList, records: RecordList, enums: EnumList, fns: FnList, cursor: u64 }
+
+enum Expr {
+    Name { start: u64, end: u64 },
+    Integer { start: u64, end: u64, value: u64, overflow: bool },
+    Boolean { start: u64, end: u64, value: bool },
+    Binary { op: u64, left: Expr, right: Expr, start: u64, end: u64 },
+    Call { name_start: u64, name_end: u64, args: ExprList, start: u64, end: u64 },
+    Project { base: Expr, field_start: u64, field_end: u64, start: u64, end: u64, path: bool }
+}
+enum ExprList { ENil, ECons { head: Expr, tail: ExprList } }
+record ExprParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr, start: u64, end: u64 }
+
+// The language has no logical-negation operator, so predicates use this
+// total helper (see CP-0004).
+fn not(value: bool) -> (result: bool) {
+    return select(value, false, true);
+}
+
+// Operator stack element. Real operators carry the token kind; markers use
+// kind 1000 (parenthesized group) and 1001 (call with callee spans and the
+// arguments collected so far, innermost-first).
+record Op { kind: u64, argc: u64, name_start: u64, name_end: u64, args: ExprList }
+enum OpList { ONil, OCons { head: Op, tail: OpList } }
+
+// Shunting-yard state. expect_operand distinguishes a leading/continued
+// operand position from an operator/delimiter position so lexical failures
+// and EOF land on the same spans Stage-0 reports.
+record ExprState { ok: bool, err_start: u64, err_end: u64, cursor: u64, operands: ExprList, operators: OpList, depth: u64, done: bool, expect_operand: bool }
+
+fn expr_start(node: Expr) -> (result: u64) {
+    return match node {
+        Name { start: s, end: e } => s,
+        Integer { start: s, end: e, value: v, overflow: o } => s,
+        Boolean { start: s, end: e, value: v } => s,
+        Binary { op: o, left: l, right: r, start: s, end: e } => s,
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => t,
+        Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => s
+    };
+}
+fn expr_end(node: Expr) -> (result: u64) {
+    return match node {
+        Name { start: s, end: e } => e,
+        Integer { start: s, end: e, value: v, overflow: o } => e,
+        Boolean { start: s, end: e, value: v } => e,
+        Binary { op: o, left: l, right: r, start: s, end: e } => e,
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => n,
+        Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => e
+    };
+}
+
+// Stage-0 binary_operator precedence, keyed by our token kind. 0 means the
+// token never continues a binary expression.
+fn prec(kind: u64) -> (result: u64) {
+    if kind == 83 { return 1; }
+    if kind == 82 { return 2; }
+    if kind == 56 { return 3; }
+    if kind == 57 { return 4; }
+    if kind == 55 { return 5; }
+    if kind == 84 || kind == 85 { return 6; }
+    if kind == 58 || kind == 86 || kind == 59 || kind == 87 { return 7; }
+    if kind == 88 || kind == 89 { return 8; }
+    if kind == 50 || kind == 51 || kind == 91 || kind == 92 || kind == 94 || kind == 95 { return 9; }
+    if kind == 52 || kind == 93 || kind == 96 || kind == 53 || kind == 54 { return 10; }
+    return 0;
+}
+
+fn is_operand_start(kind: u64) -> (result: bool) {
+    return kind == 5 || kind == 4 || kind == 25 || kind == 38 || kind == 39;
+}
+
+// One directed action per fuel step: shift exactly one token, reduce exactly
+// one operator, or stop/fail. Every action either consumes input, shrinks a
+// stack, or terminates, so byte-count fuel always suffices.
+fn parse_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: ExprParse) {
+    let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true };
+    iterate ex0 over s0 carrying a: ExprState = seed {
+        next a = expr_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ex1 over s1 carrying b: ExprState = a {
+        next b = expr_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ex2 over s2 carrying c: ExprState = b {
+        next c = expr_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ex3 over s3 carrying d: ExprState = c {
+        next d = expr_step(s0, s1, s2, s3, total, d);
+    }
+    iterate ex4 over s0 carrying e: ExprState = d {
+        next e = expr_step(s0, s1, s2, s3, total, e);
+    }
+    iterate ex5 over s1 carrying f: ExprState = e {
+        next f = expr_step(s0, s1, s2, s3, total, f);
+    }
+    iterate ex6 over s2 carrying g: ExprState = f {
+        next g = expr_step(s0, s1, s2, s3, total, g);
+    }
+    iterate ex7 over s3 carrying h: ExprState = g {
+        next h = expr_step(s0, s1, s2, s3, total, h);
+    }
+    iterate exc up_to 32 carrying i: ExprState = h {
+        next i = expr_step(s0, s1, s2, s3, total, i);
+    }
+    return finish_expr(s0, s1, s2, s3, total, i);
+}
+
+fn expr_fail(st: ExprState, start: u64, end: u64) -> (result: ExprState) {
+    return ExprState { ok: false, err_start: start, err_end: end, cursor: st.cursor, operands: st.operands, operators: st.operators, depth: st.depth, done: true, expect_operand: st.expect_operand };
+}
+
+fn expr_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState) -> (result: ExprState) {
+    if not(st.ok) || st.done { return st; }
+    let tok: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if tok.diagnostic != 0 {
+        if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
+        return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end);
+    }
+    if tok.kind == 0 {
+        if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
+        return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end);
+    }
+    if is_operand_start(tok.kind) {
+        if not(st.expect_operand) { return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end); }
+        return shift_operand(s0, s1, s2, s3, total, st, tok);
+    }
+    if tok.kind == 65 {
+        if not(st.expect_operand) { return path_call(s0, s1, s2, s3, total, st, tok); }
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1000, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
+    }
+    if tok.kind == 66 {
+        return close_paren(s0, s1, s2, s3, total, st, tok);
+    }
+    if tok.kind == 64 {
+        return comma_step(s0, s1, s2, s3, total, st, tok);
+    }
+    if tok.kind == 61 {
+        return project_step(s0, s1, s2, s3, total, st, tok);
+    }
+    if prec(tok.kind) > 0 {
+        return operator_step(st, tok);
+    }
+    return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end);
+}
+
+// A delimiter (or a second operand, or a closing paren context): drain one
+// pending operator, or finish when the stacks allow it.
+fn close_or_reduce(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, err_start: u64, err_end: u64) -> (result: ExprState) {
+    if st.depth > 0 { return expr_fail(st, err_start, err_end); }
+    return match st.operators {
+        ONil => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: st.operands, operators: st.operators, depth: st.depth, done: true, expect_operand: st.expect_operand },
+        OCons { head: op, tail: rest } => reduce_or_fail(st, op, rest, err_start, err_end)
+    };
+}
+fn reduce_or_fail(st: ExprState, op: Op, rest: OpList, err_start: u64, err_end: u64) -> (result: ExprState) {
+    if op.kind >= 1000 { return expr_fail(st, err_start, err_end); }
+    return reduce_one(st, op, rest, err_start, err_end);
+}
+fn reduce_one(st: ExprState, op: Op, rest: OpList, err_start: u64, err_end: u64) -> (result: ExprState) {
+    return match st.operands {
+        ENil => expr_fail(st, err_start, err_end),
+        ECons { head: r, tail: t1 } => reduce_inner(st, op, rest, r, t1, err_start, err_end)
+    };
+}
+fn reduce_inner(st: ExprState, op: Op, rest: OpList, r: Expr, t1: ExprList, err_start: u64, err_end: u64) -> (result: ExprState) {
+    return match t1 {
+        ENil => expr_fail(st, err_start, err_end),
+        ECons { head: l, tail: t2 } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: ExprList.ECons { head: Expr.Binary { op: op.kind, left: l, right: r, start: expr_start(l), end: expr_end(r) }, tail: t2 }, operators: rest, depth: st.depth, done: false, expect_operand: false }
+    };
+}
+
+fn shift_operand(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    if tok.kind == 5 {
+        let value: IntVal = int_value(s0, s1, s2, s3, total, tok.start, tok.end);
+        let node: Expr = Expr.Integer { start: tok.start, end: tok.end, value: value.value, overflow: value.overflow };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false };
+    }
+    if tok.kind == 38 || tok.kind == 39 {
+        let node: Expr = Expr.Boolean { start: tok.start, end: tok.end, value: tok.kind == 38 };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false };
+    }
+    let after: lexer.Token = segment.significant(s0, s1, s2, s3, total, tok.end);
+    let node: Expr = Expr.Name { start: tok.start, end: tok.end };
+    if after.diagnostic == 0 && after.kind == 65 {
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: after.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: OpList.OCons { head: Op { kind: 1001, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
+    }
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false };
+}
+
+fn close_paren(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    return match st.operators {
+        ONil => expr_fail(st, tok.start, tok.end),
+        OCons { head: op, tail: rest } => close_paren_top(s0, s1, s2, s3, total, st, tok, op, rest)
+    };
+}
+fn close_paren_top(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
+    if op.kind < 1000 { return reduce_one(st, op, rest, tok.start, tok.end); }
+    if op.kind == 1000 {
+        if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: rest, depth: st.depth - 1, done: false, expect_operand: false };
+    }
+    return close_call(s0, s1, s2, s3, st, tok, op, rest);
+}
+fn close_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
+    if st.expect_operand && op.argc != 0 { return expr_fail(st, tok.start, tok.end); }
+    if st.expect_operand {
+        let node: Expr = Expr.Call { name_start: op.name_start, name_end: op.name_end, args: ExprList.ENil, start: op.name_start, end: tok.end };
+        return match st.operands {
+            ENil => expr_fail(st, tok.start, tok.end),
+            ECons { head: callee, tail: tail } => drop_callee(st, tok, rest, node, callee, tail)
+        };
+    }
+    return match st.operands {
+        ENil => expr_fail(st, tok.start, tok.end),
+        ECons { head: last, tail: before } => close_call_args(s0, s1, s2, s3, st, tok, op, rest, last, before)
+    };
+}
+fn close_call_args(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: ExprState, tok: lexer.Token, op: Op, rest: OpList, last: Expr, before: ExprList) -> (result: ExprState) {
+    let args: ExprList = reverse_exprs(s0, s1, s2, s3, ExprList.ECons { head: last, tail: op.args });
+    let node: Expr = Expr.Call { name_start: op.name_start, name_end: op.name_end, args: args, start: op.name_start, end: tok.end };
+    return match before {
+        ENil => expr_fail(st, tok.start, tok.end),
+        ECons { head: callee, tail: tail } => drop_callee(st, tok, rest, node, callee, tail)
+    };
+}
+// The callee name operand sits below its arguments by stack discipline;
+// popping it here restores the single-value invariant. Anything else in
+// that position is an internal caller error, reported at the paren.
+fn drop_callee(st: ExprState, tok: lexer.Token, rest: OpList, node: Expr, callee: Expr, tail: ExprList) -> (result: ExprState) {
+    return match callee {
+        Name { start: s, end: e } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: tail }, operators: rest, depth: st.depth - 1, done: false, expect_operand: false },
+        Integer { start: s, end: e, value: v, overflow: o } => expr_fail(st, tok.start, tok.end),
+        Boolean { start: s, end: e, value: v } => expr_fail(st, tok.start, tok.end),
+        Binary { op: o, left: l, right: r, start: s, end: e } => expr_fail(st, tok.start, tok.end),
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => expr_fail(st, tok.start, tok.end),
+        Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => expr_fail(st, tok.start, tok.end)
+    };
+}
+
+fn comma_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
+    return match st.operators {
+        ONil => expr_fail(st, tok.start, tok.end),
+        OCons { head: op, tail: rest } => comma_top(s0, s1, s2, s3, total, st, tok, op, rest)
+    };
+}
+fn comma_top(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
+    if op.kind < 1000 { return reduce_one(st, op, rest, tok.start, tok.end); }
+    if op.kind == 1001 {
+        return match st.operands {
+            ENil => expr_fail(st, tok.start, tok.end),
+            ECons { head: arg, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: before, operators: OpList.OCons { head: Op { kind: 1001, argc: op.argc + 1, name_start: op.name_start, name_end: op.name_end, args: ExprList.ECons { head: arg, tail: op.args } }, tail: rest }, depth: st.depth, done: false, expect_operand: true }
+        };
+    }
+    return expr_fail(st, tok.start, tok.end);
+}
+
+fn project_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
+    let field: lexer.Token = segment.significant(s0, s1, s2, s3, total, tok.end);
+    if field.diagnostic != 0 || field.kind != 4 { return expr_fail(st, field.start, field.end); }
+    return match st.operands {
+        ENil => expr_fail(st, tok.start, tok.end),
+        ECons { head: base, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: field.end, operands: ExprList.ECons { head: Expr.Project { base: base, field_start: field.start, field_end: field.end, start: expr_start(base), end: field.end, path: base_is_path(base) }, tail: before }, operators: st.operators, depth: st.depth, done: false, expect_operand: false }
+    };
+}
+// A projection continues a namespace path only over a bare name or a path
+// projection. Anything else (calls, operators) ends the path, so a later
+// paren stops the expression instead of forming a qualified call.
+fn base_is_path(base: Expr) -> (result: bool) {
+    return match base {
+        Name { start: s, end: e } => true,
+        Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => p,
+        Integer { start: s, end: e, value: v, overflow: o } => false,
+        Boolean { start: s, end: e, value: v } => false,
+        Binary { op: o, left: l, right: r, start: s, end: e } => false,
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => false
+    };
+}
+// A paren after a complete operand: a qualified call over a namespace path,
+// or the end of the expression (Stage-0 rejects `(f)(1)` the same way).
+fn path_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    return match st.operands {
+        ENil => close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end),
+        ECons { head: base, tail: before } => path_call_top(s0, s1, s2, s3, total, st, tok, base, before)
+    };
+}
+fn path_call_top(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token, base: Expr, before: ExprList) -> (result: ExprState) {
+    return match base {
+        Name { start: s, end: e } => path_call_push(st, tok, s, e, before),
+        Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => path_call_project(s0, s1, s2, s3, total, st, tok, s, e, p, before),
+        Integer { start: s, end: e, value: v, overflow: o } => close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end),
+        Boolean { start: s, end: e, value: v } => close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end),
+        Binary { op: o, left: l, right: r, start: s, end: e } => close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end),
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end)
+    };
+}
+fn path_call_project(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState, tok: lexer.Token, start: u64, end: u64, path: bool, before: ExprList) -> (result: ExprState) {
+    if path { return path_call_push(st, tok, start, end, before); }
+    return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end);
+}
+// The path span stands in for the callee operand so call closing keeps its
+// single stack shape: the callee below the arguments is always a Name.
+fn path_call_push(st: ExprState, tok: lexer.Token, start: u64, end: u64, before: ExprList) -> (result: ExprState) {
+    let callee: Expr = Expr.Name { start: start, end: end };
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: callee, tail: before }, operators: OpList.OCons { head: Op { kind: 1001, argc: 0, name_start: start, name_end: end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
+}
+
+fn operator_step(st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
+    return match st.operators {
+        ONil => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: tok.kind, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true },
+        OCons { head: op, tail: rest } => operator_top(st, tok, op, rest)
+    };
+}
+fn operator_top(st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
+    if op.kind < 1000 && prec(op.kind) >= prec(tok.kind) { return reduce_one(st, op, rest, tok.start, tok.end); }
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: tok.kind, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true };
+}
+
+fn finish_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState) -> (result: ExprParse) {
+    let bad: Expr = Expr.Name { start: st.cursor, end: st.cursor };
+    if not(st.ok) { return ExprParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, node: bad, start: st.cursor, end: st.cursor }; }
+    if not(st.done) { return ExprParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, node: bad, start: st.cursor, end: st.cursor }; }
+    return match st.operands {
+        ENil => ExprParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, node: bad, start: st.cursor, end: st.cursor },
+        ECons { head: node, tail: rest } => finish_single(st, node, rest)
+    };
+}
+fn finish_single(st: ExprState, node: Expr, rest: ExprList) -> (result: ExprParse) {
+    return match rest {
+        ENil => ExprParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, node: node, start: expr_start(node), end: expr_end(node) },
+        ECons { head: extra, tail: more } => ExprParse { cursor: st.cursor, ok: false, err_start: expr_start(extra), err_end: expr_end(extra), node: node, start: st.cursor, end: st.cursor }
+    };
+}
+
+// Argument/order restoration shared with declaration lists.
+record ExprRev { rest: ExprList, acc: ExprList }
+fn reverse_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: ExprList) -> (result: ExprList) {
+    iterate vi0 over s0 carrying a: ExprRev = ExprRev { rest: list, acc: ExprList.ENil } {
+        next a = reverse_exprs_step(a);
+    }
+    iterate vi1 over s1 carrying b: ExprRev = a {
+        next b = reverse_exprs_step(b);
+    }
+    iterate vi2 over s2 carrying c: ExprRev = b {
+        next c = reverse_exprs_step(c);
+    }
+    iterate vi3 over s3 carrying d: ExprRev = c {
+        next d = reverse_exprs_step(d);
+    }
+    return d.acc;
+}
+fn reverse_exprs_step(st: ExprRev) -> (result: ExprRev) {
+    return match st.rest { ENil => st, ECons { head: h, tail: t } => ExprRev { rest: t, acc: ExprList.ECons { head: h, tail: st.acc } } };
+}
+
+// Decimal literal accumulation with a pre-checked bound so checked
+// arithmetic never traps: values at or beyond 2^64 set overflow instead.
+record IntVal { value: u64, overflow: bool }
+record IntAcc { value: u64, overflow: bool }
+fn int_value(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: IntVal) {
+    iterate ni0 over s0 carrying a: IntAcc = IntAcc { value: 0, overflow: false } {
+        next a = int_step(total, start, end, a, ni0, source.byte_at(s0, ni0) as u64);
+    }
+    iterate ni1 over s1 carrying b: IntAcc = a {
+        next b = int_step(total, start, end, b, s0.len + ni1, source.byte_at(s1, ni1) as u64);
+    }
+    iterate ni2 over s2 carrying c: IntAcc = b {
+        next c = int_step(total, start, end, c, s0.len + s1.len + ni2, source.byte_at(s2, ni2) as u64);
+    }
+    iterate ni3 over s3 carrying d: IntAcc = c {
+        next d = int_step(total, start, end, d, s0.len + s1.len + s2.len + ni3, source.byte_at(s3, ni3) as u64);
+    }
+    return IntVal { value: d.value, overflow: d.overflow };
+}
+fn int_step(total: u64, start: u64, end: u64, st: IntAcc, pos: u64, byte: u64) -> (result: IntAcc) {
+    if pos < start || pos >= end { return st; }
+    let digit: u64 = byte - 48;
+    if st.value > 1844674407370955161 { return IntAcc { value: st.value, overflow: true }; }
+    if st.value == 1844674407370955161 && digit > 5 { return IntAcc { value: st.value, overflow: true }; }
+    return IntAcc { value: st.value * 10 + digit, overflow: st.overflow };
+}
+
+// Header fact twin of parser.header over absolute offsets. Identical state
+// machine and error-spans-as-codes policy; codes match parser.Header.
+fn header(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: parser.Header) {
+    let seed: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
+    if segment.ascii(s0, s1, s2, s3, total) {
+        iterate hi0 over s0 carrying a: parser.Header = seed {
+            next a = header_step(s0, s1, s2, s3, total, a);
+        }
+        iterate hi1 over s1 carrying b: parser.Header = a {
+            next b = header_step(s0, s1, s2, s3, total, b);
+        }
+        iterate hi2 over s2 carrying c: parser.Header = b {
+            next c = header_step(s0, s1, s2, s3, total, c);
+        }
+        iterate hi3 over s3 carrying d: parser.Header = c {
+            next d = header_step(s0, s1, s2, s3, total, d);
+        }
+        return header_finish(s0, s1, s2, s3, total, d);
+    }
+    return parser.Header { ..seed, code: 8, end: total };
+}
+fn header_finish(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: parser.Header) -> (result: parser.Header) {
+    if st.code != 0 || st.state == 8 { return st; }
+    return header_step(s0, s1, s2, s3, total, st);
+}
+fn header_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: parser.Header) -> (result: parser.Header) {
+    if st.code != 0 || st.state == 8 { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.next_offset);
+    if token.diagnostic != 0 { return parser.Header { ..st, code: 1, start: token.start, end: token.end }; }
+    if st.state == 0 {
+        if token.kind == 10 { return parser.Header { ..st, state: 1, next_offset: token.end }; }
+        return parser.Header { ..st, code: 2, start: token.start, end: token.end };
+    }
+    if st.state == 1 {
+        if token.kind == 6 { return parser.Header { ..st, state: 2, next_offset: token.end, version_start: token.start, version_end: token.end }; }
+        return parser.Header { ..st, code: 3, start: token.start, end: token.end };
+    }
+    if st.state == 2 {
+        if token.kind == 63 { return parser.Header { ..st, state: 3, next_offset: token.end }; }
+        return parser.Header { ..st, code: 4, start: token.start, end: token.end };
+    }
+    if st.state == 3 {
+        if token.kind == 11 { return parser.Header { ..st, state: 4, next_offset: token.end }; }
+        return parser.Header { ..st, code: 5, start: token.start, end: token.end };
+    }
+    if st.state == 4 || st.state == 6 {
+        if token.kind == 4 || token.kind == 10 { return parser.Header { ..st, state: 5, next_offset: token.end, module_start: select(st.state == 4, token.start, st.module_start), module_end: token.end }; }
+        return parser.Header { ..st, code: 6, start: token.start, end: token.end };
+    }
+    if token.kind == 61 { return parser.Header { ..st, state: 6, next_offset: token.end }; }
+    if token.kind == 63 { return parser.Header { ..st, state: 8, next_offset: token.end }; }
+    return parser.Header { ..st, code: 7, start: token.start, end: token.end };
+}
+
+// A term-level name: identifier (4) or the capability keyword (25) used as
+// an identifier. Mirrors Stage-0 value_name positions.
+fn is_value_name(kind: u64) -> (result: bool) {
+    return kind == 4 || kind == 25;
+}
+
+// Expect the significant token at cursor to have the wanted kind. Returns
+// the token end on success; on failure ok is false and the span is the
+// offending (or EOF) token, mirroring Stage-0 expect() spans.
+record Expect { cursor: u64, ok: bool, err_start: u64, err_end: u64, tok_start: u64, tok_end: u64 }
+fn expect(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, want: u64) -> (result: Expect) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 { return Expect { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, tok_start: token.start, tok_end: token.end }; }
+    if token.kind == want { return Expect { cursor: token.end, ok: true, err_start: 0, err_end: 0, tok_start: token.start, tok_end: token.end }; }
+    return Expect { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, tok_start: token.start, tok_end: token.end };
+}
+
+// Parse one name token. mode 0 requires an identifier; mode 1 also accepts
+// the capability keyword in value positions.
+record NameParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, start: u64, end: u64 }
+fn parse_name(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, mode: u64) -> (result: NameParse) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 { return NameParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, start: token.start, end: token.end }; }
+    if token.kind == 4 || (mode == 1 && token.kind == 25) {
+        return NameParse { cursor: token.end, ok: true, err_start: 0, err_end: 0, start: token.start, end: token.end };
+    }
+    return NameParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, start: token.start, end: token.end };
+}
+
+// Type spelling. Sequences nest via the same function for the element type;
+// the returned span covers the whole spelling for later text comparison.
+fn parse_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: TypeParse) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 { return TypeParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: TypeRef { kind: 0, start: cursor, end: cursor } }; }
+    if token.kind == 69 {
+        return parse_seq_type(s0, s1, s2, s3, total, token.start, token.end);
+    }
+    if token.kind == 4 {
+        return parse_flat_type(s0, s1, s2, s3, total, token.start, token.end);
+    }
+    return TypeParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: TypeRef { kind: 0, start: cursor, end: cursor } };
+}
+
+fn scalar_kind(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: u64) {
+    if end - start == 3 {
+        if segment.byte_at(s0, s1, s2, s3, total, start) == 117 && segment.byte_at(s0, s1, s2, s3, total, start + 1) == 54 && segment.byte_at(s0, s1, s2, s3, total, start + 2) == 52 { return 1; }
+    }
+    if end - start == 3 {
+        if segment.byte_at(s0, s1, s2, s3, total, start) == 105 && segment.byte_at(s0, s1, s2, s3, total, start + 1) == 54 && segment.byte_at(s0, s1, s2, s3, total, start + 2) == 52 { return 2; }
+    }
+    if end - start == 4 {
+        if segment.byte_at(s0, s1, s2, s3, total, start) == 98 && segment.byte_at(s0, s1, s2, s3, total, start + 1) == 111 && segment.byte_at(s0, s1, s2, s3, total, start + 2) == 111 && segment.byte_at(s0, s1, s2, s3, total, start + 3) == 108 { return 3; }
+    }
+    if end - start == 4 {
+        if segment.byte_at(s0, s1, s2, s3, total, start) == 98 && segment.byte_at(s0, s1, s2, s3, total, start + 1) == 121 && segment.byte_at(s0, s1, s2, s3, total, start + 2) == 116 && segment.byte_at(s0, s1, s2, s3, total, start + 3) == 101 { return 4; }
+    }
+    return 5;
+}
+
+// Flat (non-sequence) type: identifier with optional qualification. Sequence
+// element types nest at most one level deep through here: genuinely nested
+// sequence spellings are a deferred shape (explicit local error at the inner
+// `[`), because mutual parser recursion is unavailable. See parse_seq_type.
+fn parse_flat_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, cursor: u64) -> (result: TypeParse) {
+    iterate ti0 over s0 carrying a: TypeParse = TypeParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 0, start: start, end: cursor } } {
+        next a = qualified_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ti1 over s1 carrying b: TypeParse = a {
+        next b = qualified_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ti2 over s2 carrying c: TypeParse = b {
+        next c = qualified_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ti3 over s3 carrying d: TypeParse = c {
+        next d = qualified_step(s0, s1, s2, s3, total, d);
+    }
+    return finish_named_type(s0, s1, s2, s3, total, start, d);
+}
+fn qualified_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TypeParse) -> (result: TypeParse) {
+    if not(st.ok) { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 || token.kind != 61 { return st; }
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
+    if not(name.ok) { return TypeParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: st.node }; }
+    return TypeParse { cursor: name.cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 6, start: st.node.start, end: name.end } };
+}
+fn finish_named_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, st: TypeParse) -> (result: TypeParse) {
+    if not(st.ok) {
+        return TypeParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, node: TypeRef { kind: 0, start: start, end: start } };
+    }
+    if st.node.kind == 6 {
+        return TypeParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 6, start: start, end: st.node.end } };
+    }
+    let kind: u64 = scalar_kind(s0, s1, s2, s3, total, start, st.node.end);
+    return TypeParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: kind, start: start, end: st.node.end } };
+}
+
+// Exact `[T; N]` and viewed `[T; up_to N]` spellings. Bounds may be integer
+// literals or Nat identifiers in profile 0.10; only the span is retained
+// because index/select expressions are deferred.
+fn parse_seq_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, bracket: u64, cursor: u64) -> (result: TypeParse) {
+    let bad: TypeRef = TypeRef { kind: 0, start: cursor, end: cursor };
+    let elem: TypeParse = parse_seq_elem(s0, s1, s2, s3, total, cursor);
+    if not(elem.ok) { return TypeParse { cursor: cursor, ok: false, err_start: elem.err_start, err_end: elem.err_end, node: bad }; }
+    let semi: Expect = expect(s0, s1, s2, s3, total, elem.cursor, 63);
+    if not(semi.ok) { return TypeParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    let bound: NameParse = seq_bound(s0, s1, s2, s3, total, semi.cursor);
+    if not(bound.ok) { return TypeParse { cursor: cursor, ok: false, err_start: bound.err_start, err_end: bound.err_end, node: bad }; }
+    let close: Expect = expect(s0, s1, s2, s3, total, bound.cursor, 70);
+    if not(close.ok) { return TypeParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, node: bad }; }
+    let viewed: bool = is_up_to_bound(s0, s1, s2, s3, total, bound.start, bound.end);
+    return TypeParse { cursor: close.cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: select(viewed, 8, 7), start: bracket, end: close.cursor } };
+}
+// A viewed bound starts with the `up_to` keyword plus a space. A bare Nat
+// identifier can never equal the keyword (it lexes as kind 32), and a longer
+// identifier starting with those bytes has a non-space sixth byte.
+fn is_up_to_bound(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: bool) {
+    if end - start < 6 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, start) != 117 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, start + 1) != 112 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, start + 2) != 95 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, start + 3) != 116 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, start + 4) != 111 { return false; }
+    if not(lexer.space(segment.byte_at(s0, s1, s2, s3, total, start + 5))) { return false; }
+    return true;
+}
+
+// A sequence bound is `up_to` plus a literal/identifier, or a bare literal
+// or Nat identifier. Returns the bound span; viewed-ness is re-derived by
+// the caller from the leading byte ('u' == 117).
+fn seq_bound(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: NameParse) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 { return NameParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, start: token.start, end: token.end }; }
+    if token.kind == 32 {
+        let cap: lexer.Token = segment.significant(s0, s1, s2, s3, total, token.end);
+        if cap.diagnostic != 0 { return NameParse { cursor: cursor, ok: false, err_start: cap.start, err_end: cap.end, start: cap.start, end: cap.end }; }
+        if cap.kind == 5 || cap.kind == 4 {
+            return NameParse { cursor: cap.end, ok: true, err_start: 0, err_end: 0, start: token.start, end: cap.end };
+        }
+        return NameParse { cursor: cursor, ok: false, err_start: cap.start, err_end: cap.end, start: cap.start, end: cap.end };
+    }
+    if token.kind == 5 || token.kind == 4 {
+        return NameParse { cursor: token.end, ok: true, err_start: 0, err_end: 0, start: token.start, end: token.end };
+    }
+    return NameParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, start: token.start, end: token.end };
+}
+
+// Shared name:type list for parameters, results, record fields, and payload
+// fields. closer is the terminating kind (66 ')' or 68 '}'); name_mode 0
+// requires identifiers, 1 also accepts `capability` in value positions.
+fn parse_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, closer: u64, name_mode: u64) -> (result: FieldsParse) {
+    iterate fi0 over s0 carrying a: FieldsParse = FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil } {
+        next a = fields_step(s0, s1, s2, s3, total, a, closer, name_mode);
+    }
+    iterate fi1 over s1 carrying b: FieldsParse = a {
+        next b = fields_step(s0, s1, s2, s3, total, b, closer, name_mode);
+    }
+    iterate fi2 over s2 carrying c: FieldsParse = b {
+        next c = fields_step(s0, s1, s2, s3, total, c, closer, name_mode);
+    }
+    iterate fi3 over s3 carrying d: FieldsParse = c {
+        next d = fields_step(s0, s1, s2, s3, total, d, closer, name_mode);
+    }
+    return finish_fields(s0, s1, s2, s3, d);
+}
+fn fields_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FieldsParse, closer: u64, name_mode: u64) -> (result: FieldsParse) {
+    if not(st.ok) { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 || token.kind == closer || (not(is_value_name(token.kind)) && token.kind != 4) { return st; }
+    if token.kind != 4 && not(name_mode == 1 && token.kind == 25) { return st; }
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, st.cursor, name_mode);
+    if not(name.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list }; }
+    let colon: Expect = expect(s0, s1, s2, s3, total, name.cursor, 62);
+    if not(colon.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, list: st.list }; }
+    let ftype: TypeParse = parse_type(s0, s1, s2, s3, total, colon.cursor);
+    if not(ftype.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, list: st.list }; }
+    let field: Field = Field { name_start: name.start, name_end: name.end, type_start: ftype.node.start, type_end: ftype.node.end, type_kind: ftype.node.kind };
+    let comma: lexer.Token = segment.significant(s0, s1, s2, s3, total, ftype.cursor);
+    if comma.diagnostic == 0 && comma.kind == 64 {
+        return FieldsParse { cursor: comma.end, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list } };
+    }
+    return FieldsParse { cursor: ftype.cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list } };
+}
+// Element spellings nest at most one level: a flat type, or an explicit
+// local error on a nested `[`. Keeps the type parser acyclic.
+fn parse_seq_elem(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: TypeParse) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic == 0 && token.kind == 69 {
+        return TypeParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: TypeRef { kind: 0, start: cursor, end: cursor } };
+    }
+    if token.diagnostic == 0 && token.kind == 4 {
+        return parse_flat_type(s0, s1, s2, s3, total, token.start, token.end);
+    }
+    if token.diagnostic != 0 {
+        return TypeParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: TypeRef { kind: 0, start: cursor, end: cursor } };
+    }
+    return TypeParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: TypeRef { kind: 0, start: cursor, end: cursor } };
+}
+fn finish_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: FieldsParse) -> (result: FieldsParse) {
+    return FieldsParse { cursor: st.cursor, ok: st.ok, err_start: st.err_start, err_end: st.err_end, list: reverse_fields(s0, s1, s2, s3, st.list) };
+}
+// Reversal by fuel loop (parser recursion is unavailable): each step pops
+// one cell, so the four chunk traversals always suffice.
+record FieldRev { rest: FieldList, acc: FieldList }
+fn reverse_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: FieldList) -> (result: FieldList) {
+    iterate ri0 over s0 carrying a: FieldRev = FieldRev { rest: list, acc: FieldList.FNil } {
+        next a = reverse_fields_step(a);
+    }
+    iterate ri1 over s1 carrying b: FieldRev = a {
+        next b = reverse_fields_step(b);
+    }
+    iterate ri2 over s2 carrying c: FieldRev = b {
+        next c = reverse_fields_step(c);
+    }
+    iterate ri3 over s3 carrying d: FieldRev = c {
+        next d = reverse_fields_step(d);
+    }
+    return d.acc;
+}
+fn reverse_fields_step(st: FieldRev) -> (result: FieldRev) {
+    return match st.rest { FNil => st, FCons { head: h, tail: t } => FieldRev { rest: t, acc: FieldList.FCons { head: h, tail: st.acc } } };
+}
+
+// `use a.b.c [as alias];`. Segments accept identifiers and the `mncs`
+// keyword so standard paths keep parsing; alias requires an identifier.
+fn parse_use(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: UseDecl) {
+    let bad: UseDecl = UseDecl { ok: false, err_start: cursor, err_end: cursor, module_start: cursor, module_end: cursor, alias_start: 0, alias_end: 0, has_alias: false, cursor: cursor };
+    let path: NameParse = parse_module_path(s0, s1, s2, s3, total, cursor);
+    if not(path.ok) { return UseDecl { ..bad, err_start: path.err_start, err_end: path.err_end }; }
+    let alias: NameParse = parse_use_alias(s0, s1, s2, s3, total, path.cursor);
+    if not(alias.ok) { return UseDecl { ..bad, module_start: path.start, module_end: path.end, err_start: alias.err_start, err_end: alias.err_end }; }
+    let semi: Expect = expect(s0, s1, s2, s3, total, alias.cursor, 63);
+    if not(semi.ok) { return UseDecl { ..bad, module_start: path.start, module_end: path.end, err_start: semi.err_start, err_end: semi.err_end }; }
+    return UseDecl { ok: true, err_start: 0, err_end: 0, module_start: path.start, module_end: path.end, alias_start: alias.start, alias_end: alias.end, has_alias: alias.start != alias.end, cursor: semi.cursor };
+}
+fn parse_module_path(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: NameParse) {
+    let first: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if first.diagnostic != 0 || (first.kind != 4 && first.kind != 10) {
+        return NameParse { cursor: cursor, ok: false, err_start: first.start, err_end: first.end, start: cursor, end: cursor };
+    }
+    iterate pi0 over s0 carrying a: NameParse = NameParse { cursor: first.end, ok: true, err_start: 0, err_end: 0, start: first.start, end: first.end } {
+        next a = path_step(s0, s1, s2, s3, total, a);
+    }
+    iterate pi1 over s1 carrying b: NameParse = a {
+        next b = path_step(s0, s1, s2, s3, total, b);
+    }
+    iterate pi2 over s2 carrying c: NameParse = b {
+        next c = path_step(s0, s1, s2, s3, total, c);
+    }
+    iterate pi3 over s3 carrying d: NameParse = c {
+        next d = path_step(s0, s1, s2, s3, total, d);
+    }
+    return d;
+}
+fn path_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: NameParse) -> (result: NameParse) {
+    if not(st.ok) { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 || token.kind != 61 { return st; }
+    let seg: lexer.Token = segment.significant(s0, s1, s2, s3, total, token.end);
+    if seg.diagnostic != 0 || (seg.kind != 4 && seg.kind != 10) {
+        return NameParse { cursor: st.cursor, ok: false, err_start: seg.start, err_end: seg.end, start: st.start, end: st.end };
+    }
+    return NameParse { cursor: seg.end, ok: true, err_start: 0, err_end: 0, start: st.start, end: seg.end };
+}
+fn parse_use_alias(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: NameParse) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 || token.kind != 36 {
+        return NameParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, start: cursor, end: cursor };
+    }
+    return parse_name(s0, s1, s2, s3, total, token.end, 0);
+}
+
+// `record Name { fields }`. At least one field is required.
+fn parse_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, start: u64) -> (result: RecordDecl) {
+    let bad: RecordDecl = RecordDecl { ok: false, err_start: cursor, err_end: cursor, name_start: cursor, name_end: cursor, fields: FieldList.FNil, decl_start: start, decl_end: cursor, cursor: cursor };
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 0);
+    if not(name.ok) { return RecordDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
+    let open: Expect = expect(s0, s1, s2, s3, total, name.cursor, 67);
+    if not(open.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
+    let fields: FieldsParse = parse_fields(s0, s1, s2, s3, total, open.cursor, 68, 0);
+    if not(fields.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: fields.err_start, err_end: fields.err_end }; }
+    // An empty body reports at the token AFTER the closing brace (or the
+    // missing-brace span when `}` is absent), mirroring Stage-0 MNP128.
+    if fields.cursor == open.cursor {
+        let empty_close: Expect = expect(s0, s1, s2, s3, total, open.cursor, 68);
+        if not(empty_close.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: empty_close.err_start, err_end: empty_close.err_end }; }
+        let at: lexer.Token = segment.significant(s0, s1, s2, s3, total, empty_close.cursor);
+        return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: at.start, err_end: at.end };
+    }
+    let close: Expect = expect(s0, s1, s2, s3, total, fields.cursor, 68);
+    if not(close.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
+    return RecordDecl { ok: true, err_start: 0, err_end: 0, name_start: name.start, name_end: name.end, fields: fields.list, decl_start: start, decl_end: close.cursor, cursor: close.cursor };
+}
+
+// `enum Name { variants }` with optional `{ field: Type, ... }` payloads.
+// At least one variant is required; variant names are strict identifiers.
+fn parse_enum(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, start: u64) -> (result: EnumDecl) {
+    let bad: EnumDecl = EnumDecl { ok: false, err_start: cursor, err_end: cursor, name_start: cursor, name_end: cursor, variants: VariantList.VNil, decl_start: start, decl_end: cursor, cursor: cursor };
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 0);
+    if not(name.ok) { return EnumDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
+    let open: Expect = expect(s0, s1, s2, s3, total, name.cursor, 67);
+    if not(open.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
+    let variants: VariantsParse = parse_variants(s0, s1, s2, s3, total, open.cursor);
+    if not(variants.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: variants.err_start, err_end: variants.err_end }; }
+    let close: Expect = expect(s0, s1, s2, s3, total, variants.cursor, 68);
+    if not(close.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
+    return EnumDecl { ok: true, err_start: 0, err_end: 0, name_start: name.start, name_end: name.end, variants: variants.list, decl_start: start, decl_end: close.cursor, cursor: close.cursor };
+}
+record VariantsParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList }
+record VariantsState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList, done: bool }
+fn parse_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: VariantsParse) {
+    iterate ni0 over s0 carrying a: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
+        next a = variants_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ni1 over s1 carrying b: VariantsState = a {
+        next b = variants_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ni2 over s2 carrying c: VariantsState = b {
+        next c = variants_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ni3 over s3 carrying d: VariantsState = c {
+        next d = variants_step(s0, s1, s2, s3, total, d);
+    }
+    return finish_variants(s0, s1, s2, s3, total, d);
+}
+fn variants_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantsState) -> (result: VariantsState) {
+    if not(st.ok) || st.done { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 || token.kind != 4 { return VariantsState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, done: true }; }
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, st.cursor, 0);
+    if not(name.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
+    let payload: FieldsParse = parse_variant_payload(s0, s1, s2, s3, total, name.cursor);
+    if not(payload.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: payload.err_start, err_end: payload.err_end, list: st.list, done: true }; }
+    let variant: Variant = Variant { name_start: name.start, name_end: name.end, fields: payload.list };
+    let comma: lexer.Token = segment.significant(s0, s1, s2, s3, total, payload.cursor);
+    if comma.diagnostic == 0 && comma.kind == 64 {
+        return VariantsState { cursor: comma.end, ok: true, err_start: 0, err_end: 0, list: VariantList.VCons { head: variant, tail: st.list }, done: false };
+    }
+    return VariantsState { cursor: payload.cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VCons { head: variant, tail: st.list }, done: false };
+}
+fn parse_variant_payload(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: FieldsParse) {
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 || token.kind != 67 {
+        return FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil };
+    }
+    let fields: FieldsParse = parse_fields(s0, s1, s2, s3, total, token.end, 68, 0);
+    if not(fields.ok) { return fields; }
+    let close: Expect = expect(s0, s1, s2, s3, total, fields.cursor, 68);
+    if not(close.ok) { return FieldsParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, list: FieldList.FNil }; }
+    return FieldsParse { cursor: close.cursor, ok: true, err_start: 0, err_end: 0, list: fields.list };
+}
+fn finish_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantsState) -> (result: VariantsParse) {
+    if not(st.ok) { return VariantsParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: VariantList.VNil }; }
+    return match st.list {
+        VNil => finish_variants_empty(s0, s1, s2, s3, total, st),
+        VCons { head: h, tail: t } => VariantsParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_variants(s0, s1, s2, s3, st.list) }
+    };
+}
+fn finish_variants_empty(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantsState) -> (result: VariantsParse) {
+    // Empty variant lists report after the closing brace like records
+    // (Stage-0 MNP075); a missing brace reports at its own span (MNP074).
+    let empty_close: Expect = expect(s0, s1, s2, s3, total, st.cursor, 68);
+    if not(empty_close.ok) { return VariantsParse { cursor: st.cursor, ok: false, err_start: empty_close.err_start, err_end: empty_close.err_end, list: VariantList.VNil }; }
+    let at: lexer.Token = segment.significant(s0, s1, s2, s3, total, empty_close.cursor);
+    return VariantsParse { cursor: st.cursor, ok: false, err_start: at.start, err_end: at.end, list: VariantList.VNil };
+}
+record VariantRev { rest: VariantList, acc: VariantList }
+fn reverse_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: VariantList) -> (result: VariantList) {
+    iterate qi0 over s0 carrying a: VariantRev = VariantRev { rest: list, acc: VariantList.VNil } {
+        next a = reverse_variants_step(a);
+    }
+    iterate qi1 over s1 carrying b: VariantRev = a {
+        next b = reverse_variants_step(b);
+    }
+    iterate qi2 over s2 carrying c: VariantRev = b {
+        next c = reverse_variants_step(c);
+    }
+    iterate qi3 over s3 carrying d: VariantRev = c {
+        next d = reverse_variants_step(d);
+    }
+    return d.acc;
+}
+fn reverse_variants_step(st: VariantRev) -> (result: VariantRev) {
+    return match st.rest { VNil => st, VCons { head: h, tail: t } => VariantRev { rest: t, acc: VariantList.VCons { head: h, tail: st.acc } } };
+}
+
+// Statements. `return` parses as a statement for branch bodies; the top
+// body loop stops at `return` itself so mid-body returns keep failing
+// exactly where Stage-0 reports them.
+fn parse_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
+    let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
+    if token.kind == 14 { return parse_let(s0, s1, s2, s3, total, token.end); }
+    if token.kind == 15 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
+    if token.kind == 17 { return parse_fail_stmt(s0, s1, s2, s3, total, token.end); }
+    if token.kind == 13 { return parse_return_stmt(s0, s1, s2, s3, total, token.end); }
+    if token.kind == 31 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
+    if token.kind == 37 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
+    return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad };
+}
+fn parse_let(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
+    let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 1);
+    if not(name.ok) { return StmtParse { cursor: cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: bad }; }
+    let colon: Expect = expect(s0, s1, s2, s3, total, name.cursor, 62);
+    if not(colon.ok) { return StmtParse { cursor: cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, node: bad }; }
+    let ftype: TypeParse = parse_type(s0, s1, s2, s3, total, colon.cursor);
+    if not(ftype.ok) { return StmtParse { cursor: cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, node: bad }; }
+    let eq: Expect = expect(s0, s1, s2, s3, total, ftype.cursor, 60);
+    if not(eq.ok) { return StmtParse { cursor: cursor, ok: false, err_start: eq.err_start, err_end: eq.err_end, node: bad }; }
+    let value: ExprParse = parse_expr(s0, s1, s2, s3, total, eq.cursor);
+    if not(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
+    let semi: Expect = expect(s0, s1, s2, s3, total, value.cursor, 63);
+    if not(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    let node: Stmt = Stmt.Let { name_start: name.start, name_end: name.end, type_start: ftype.node.start, type_end: ftype.node.end, type_kind: ftype.node.kind, value: value.node, start: name.start, end: value.end };
+    return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
+}
+fn parse_fail_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
+    let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
+    let mode: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 0);
+    if not(mode.ok) { return StmtParse { cursor: cursor, ok: false, err_start: mode.err_start, err_end: mode.err_end, node: bad }; }
+    let semi: Expect = expect(s0, s1, s2, s3, total, mode.cursor, 63);
+    if not(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    let node: Stmt = Stmt.Fail { mode_start: mode.start, mode_end: mode.end, start: mode.start, end: mode.end };
+    return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
+}
+fn parse_return_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
+    let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
+    let value: ExprParse = parse_expr(s0, s1, s2, s3, total, cursor);
+    if not(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
+    let semi: Expect = expect(s0, s1, s2, s3, total, value.cursor, 63);
+    if not(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    let node: Stmt = Stmt.Return { value: value.node, start: value.start, end: value.end };
+    return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
+}
+// Statement blocks with arbitrarily nested `if`/`else`, parsed by one
+// iterative machine over an explicit frame stack (statement recursion is
+// unavailable). mode 0 is a branch block: `return` parses as a statement.
+// mode 1 is a top body block: the machine stops at `return` so the body
+// tail owns it, which keeps mid-body returns failing exactly where
+// Stage-0 reports them. Lists come out in source order.
+record BranchParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: StmtList }
+record Frame { cond: Expr, cond_start: u64, cond_end: u64, then_list: StmtList, parent: StmtList, phase: u64 }
+enum FrameList { YNil, YCons { head: Frame, tail: FrameList } }
+record BlockState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: StmtList, frames: FrameList, done: bool, mode: u64 }
+fn parse_branch(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: BranchParse) {
+    return parse_stmts(s0, s1, s2, s3, total, cursor, 0);
+}
+fn parse_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, mode: u64) -> (result: BranchParse) {
+    iterate bi0 over s0 carrying a: BlockState = BlockState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YNil, done: false, mode: mode } {
+        next a = block_step(s0, s1, s2, s3, total, a);
+    }
+    iterate bi1 over s1 carrying b: BlockState = a {
+        next b = block_step(s0, s1, s2, s3, total, b);
+    }
+    iterate bi2 over s2 carrying c: BlockState = b {
+        next c = block_step(s0, s1, s2, s3, total, c);
+    }
+    iterate bi3 over s3 carrying d: BlockState = c {
+        next d = block_step(s0, s1, s2, s3, total, d);
+    }
+    iterate bi4 over s0 carrying e: BlockState = d {
+        next e = block_step(s0, s1, s2, s3, total, e);
+    }
+    iterate bi5 over s1 carrying f: BlockState = e {
+        next f = block_step(s0, s1, s2, s3, total, f);
+    }
+    iterate bi6 over s2 carrying g: BlockState = f {
+        next g = block_step(s0, s1, s2, s3, total, g);
+    }
+    iterate bi7 over s3 carrying h: BlockState = g {
+        next h = block_step(s0, s1, s2, s3, total, h);
+    }
+    return finish_block(s0, s1, s2, s3, h);
+}
+fn block_fail(st: BlockState, start: u64, end: u64) -> (result: BlockState) {
+    return BlockState { cursor: st.cursor, ok: false, err_start: start, err_end: end, list: st.list, frames: st.frames, done: true, mode: st.mode };
+}
+fn block_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState) -> (result: BlockState) {
+    if not(st.ok) || st.done { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 { return block_fail(st, token.start, token.end); }
+    if token.kind == 0 { return block_eof(s0, s1, s2, s3, total, st, token); }
+    if token.kind == 68 { return block_rbrace(s0, s1, s2, s3, total, st, token); }
+    if token.kind == 15 { return block_if(s0, s1, s2, s3, total, st, token); }
+    if st.mode == 1 && token.kind == 13 {
+        return match st.frames {
+            YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode },
+            YCons { head: fr, tail: fl } => block_plain_stmt(s0, s1, s2, s3, total, st, token)
+        };
+    }
+    return block_plain_stmt(s0, s1, s2, s3, total, st, token);
+}
+fn block_eof(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token) -> (result: BlockState) {
+    return match st.frames {
+        YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode },
+        YCons { head: fr, tail: fl } => block_fail(st, token.start, token.end)
+    };
+}
+fn block_rbrace(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token) -> (result: BlockState) {
+    return match st.frames {
+        YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode },
+        YCons { head: fr, tail: fl } => block_then_close(s0, s1, s2, s3, total, st, token, fr, fl)
+    };
+}
+// A `}` inside a then-branch parks the branch and looks for `else`.
+fn block_then_close(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
+    if fr.phase == 0 {
+        let parked: Frame = Frame { cond: fr.cond, cond_start: fr.cond_start, cond_end: fr.cond_end, then_list: st.list, parent: fr.parent, phase: 1 };
+        return BlockState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: parked, tail: fl }, done: false, mode: st.mode };
+    }
+    return block_else_close(s0, s1, s2, s3, st, token, fr, fl);
+}
+fn block_else_close(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
+    let node: Stmt = Stmt.If { cond: fr.cond, then_b: reverse_stmts(s0, s1, s2, s3, fr.then_list), else_b: reverse_stmts(s0, s1, s2, s3, st.list), start: fr.cond_start, end: fr.cond_end };
+    return BlockState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode };
+}
+// After a then-branch: `else {` continues the frame, anything else
+// completes the if with an empty else without consuming the token.
+fn block_await_else(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
+    if token.kind == 16 {
+        let open: Expect = expect(s0, s1, s2, s3, total, token.end, 67);
+        if not(open.ok) { return block_fail(st, open.err_start, open.err_end); }
+        let cont: Frame = Frame { cond: fr.cond, cond_start: fr.cond_start, cond_end: fr.cond_end, then_list: fr.then_list, parent: fr.parent, phase: 2 };
+        return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: cont, tail: fl }, done: false, mode: st.mode };
+    }
+    let node: Stmt = Stmt.If { cond: fr.cond, then_b: reverse_stmts(s0, s1, s2, s3, fr.then_list), else_b: StmtList.SNil, start: fr.cond_start, end: fr.cond_end };
+    return BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode };
+}
+fn block_if(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token) -> (result: BlockState) {
+    return match st.frames {
+        YNil => block_if_open(s0, s1, s2, s3, total, st, token),
+        YCons { head: fr, tail: fl } => block_if_frame(s0, s1, s2, s3, total, st, token, fr, fl)
+    };
+}
+// An `if` while awaiting `else` is not an else-branch: complete the pending
+// if first (mirrors Stage-0 rejecting `else if`), then open the new one.
+fn block_if_frame(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
+    if fr.phase == 1 {
+        let node: Stmt = Stmt.If { cond: fr.cond, then_b: reverse_stmts(s0, s1, s2, s3, fr.then_list), else_b: StmtList.SNil, start: fr.cond_start, end: fr.cond_end };
+        let popped: BlockState = BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode };
+        return block_if_open(s0, s1, s2, s3, total, popped, token);
+    }
+    return block_if_open(s0, s1, s2, s3, total, st, token);
+}
+fn block_if_open(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token) -> (result: BlockState) {
+    let cond: ExprParse = parse_expr(s0, s1, s2, s3, total, token.end);
+    if not(cond.ok) { return block_fail(st, cond.err_start, cond.err_end); }
+    let open: Expect = expect(s0, s1, s2, s3, total, cond.cursor, 67);
+    if not(open.ok) { return block_fail(st, open.err_start, open.err_end); }
+    let frame: Frame = Frame { cond: cond.node, cond_start: cond.start, cond_end: cond.end, then_list: StmtList.SNil, parent: st.list, phase: 0 };
+    return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: frame, tail: st.frames }, done: false, mode: st.mode };
+}
+fn block_plain_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token) -> (result: BlockState) {
+    return match st.frames {
+        YNil => block_top_stmt(s0, s1, s2, s3, total, st),
+        YCons { head: fr, tail: fl } => block_frame_stmt(s0, s1, s2, s3, total, st, fr, fl)
+    };
+}
+fn block_top_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState) -> (result: BlockState) {
+    let stmt: StmtParse = parse_stmt(s0, s1, s2, s3, total, st.cursor);
+    if not(stmt.ok) { return block_fail(st, stmt.err_start, stmt.err_end); }
+    return BlockState { cursor: stmt.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: stmt.node, tail: st.list }, frames: st.frames, done: false, mode: st.mode };
+}
+fn block_frame_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, fr: Frame, fl: FrameList) -> (result: BlockState) {
+    if fr.phase == 1 {
+        let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+        return block_await_else(s0, s1, s2, s3, total, st, token, fr, fl);
+    }
+    return block_top_stmt(s0, s1, s2, s3, total, st);
+}
+fn finish_block(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BlockState) -> (result: BranchParse) {
+    if not(st.ok) { return BranchParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: StmtList.SNil }; }
+    if not(st.done) { return BranchParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, list: StmtList.SNil }; }
+    return match st.frames {
+        YNil => BranchParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_stmts(s0, s1, s2, s3, st.list) },
+        YCons { head: fr, tail: fl } => BranchParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, list: StmtList.SNil }
+    };
+}
+record StmtRev { rest: StmtList, acc: StmtList }
+fn reverse_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: StmtList) -> (result: StmtList) {
+    iterate qi4 over s0 carrying a: StmtRev = StmtRev { rest: list, acc: StmtList.SNil } {
+        next a = reverse_stmts_step(a);
+    }
+    iterate qi5 over s1 carrying b: StmtRev = a {
+        next b = reverse_stmts_step(b);
+    }
+    iterate qi6 over s2 carrying c: StmtRev = b {
+        next c = reverse_stmts_step(c);
+    }
+    iterate qi7 over s3 carrying d: StmtRev = c {
+        next d = reverse_stmts_step(d);
+    }
+    return d.acc;
+}
+fn reverse_stmts_step(st: StmtRev) -> (result: StmtRev) {
+    return match st.rest { SNil => st, SCons { head: h, tail: t } => StmtRev { rest: t, acc: StmtList.SCons { head: h, tail: st.acc } } };
+}
+
+// Function signature clauses: requires/ensures/assumes/property/invariant/
+// metamorphic (kind + name), `capability name`, and
+// `effect kind authorized_by capability`. Retained as facts; the semantic
+// layer does not interpret them in this slice.
+record ClausesParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, contracts: ClauseList, effects: EffectList, capabilities: CapList }
+record ClausesState { cursor: u64, ok: bool, err_start: u64, err_end: u64, contracts: ClauseList, effects: EffectList, capabilities: CapList, done: bool }
+fn parse_clauses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: ClausesParse) {
+    iterate ci0 over s0 carrying a: ClausesState = ClausesState { cursor: cursor, ok: true, err_start: 0, err_end: 0, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil, done: false } {
+        next a = clauses_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ci1 over s1 carrying b: ClausesState = a {
+        next b = clauses_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ci2 over s2 carrying c: ClausesState = b {
+        next c = clauses_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ci3 over s3 carrying d: ClausesState = c {
+        next d = clauses_step(s0, s1, s2, s3, total, d);
+    }
+    return finish_clauses(s0, s1, s2, s3, d);
+}
+fn clauses_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState) -> (result: ClausesState) {
+    if not(st.ok) || st.done { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 { return ClausesState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    if token.kind == 25 { return clause_capability(s0, s1, s2, s3, total, st, token); }
+    if token.kind == 24 { return clause_effect(s0, s1, s2, s3, total, st, token); }
+    if token.kind == 18 || token.kind == 19 || token.kind == 20 || token.kind == 21 || token.kind == 22 || token.kind == 23 {
+        return clause_contract(s0, s1, s2, s3, total, st, token);
+    }
+    return ClausesState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true };
+}
+fn clause_contract(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState, token: lexer.Token) -> (result: ClausesState) {
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
+    if not(name.ok) { return ClausesState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    let clause: Clause = Clause { kind_start: token.start, kind_end: token.end, name_start: name.start, name_end: name.end };
+    return ClausesState { cursor: name.cursor, ok: true, err_start: 0, err_end: 0, contracts: ClauseList.CCons { head: clause, tail: st.contracts }, effects: st.effects, capabilities: st.capabilities, done: false };
+}
+fn clause_capability(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState, token: lexer.Token) -> (result: ClausesState) {
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
+    if not(name.ok) { return ClausesState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    let cap: Cap = Cap { start: name.start, end: name.end };
+    return ClausesState { cursor: name.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: st.effects, capabilities: CapList.ACons { head: cap, tail: st.capabilities }, done: false };
+}
+fn clause_effect(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState, token: lexer.Token) -> (result: ClausesState) {
+    let bad: ClausesState = ClausesState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true };
+    let kind: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
+    if not(kind.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: kind.err_start, err_end: kind.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    let auth: Expect = expect(s0, s1, s2, s3, total, kind.cursor, 26);
+    if not(auth.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: auth.err_start, err_end: auth.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    let cap: NameParse = parse_name(s0, s1, s2, s3, total, auth.cursor, 0);
+    if not(cap.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: cap.err_start, err_end: cap.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    let eff: Effect = Effect { kind_start: kind.start, kind_end: kind.end, cap_start: cap.start, cap_end: cap.end };
+    return ClausesState { cursor: cap.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: EffectList.XCons { head: eff, tail: st.effects }, capabilities: st.capabilities, done: false };
+}
+fn finish_clauses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: ClausesState) -> (result: ClausesParse) {
+    if not(st.ok) { return ClausesParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }; }
+    return ClausesParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, contracts: reverse_clauses(s0, s1, s2, s3, st.contracts), effects: reverse_effects(s0, s1, s2, s3, st.effects), capabilities: reverse_caps(s0, s1, s2, s3, st.capabilities) };
+}
+record ClauseRev { rest: ClauseList, acc: ClauseList }
+fn reverse_clauses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: ClauseList) -> (result: ClauseList) {
+    iterate qi8 over s0 carrying a: ClauseRev = ClauseRev { rest: list, acc: ClauseList.CNil } {
+        next a = reverse_clauses_step(a);
+    }
+    iterate qi9 over s1 carrying b: ClauseRev = a {
+        next b = reverse_clauses_step(b);
+    }
+    iterate qi10 over s2 carrying c: ClauseRev = b {
+        next c = reverse_clauses_step(c);
+    }
+    iterate qi11 over s3 carrying d: ClauseRev = c {
+        next d = reverse_clauses_step(d);
+    }
+    return d.acc;
+}
+fn reverse_clauses_step(st: ClauseRev) -> (result: ClauseRev) {
+    return match st.rest { CNil => st, CCons { head: h, tail: t } => ClauseRev { rest: t, acc: ClauseList.CCons { head: h, tail: st.acc } } };
+}
+record EffectRev { rest: EffectList, acc: EffectList }
+fn reverse_effects(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: EffectList) -> (result: EffectList) {
+    iterate qi12 over s0 carrying a: EffectRev = EffectRev { rest: list, acc: EffectList.XNil } {
+        next a = reverse_effects_step(a);
+    }
+    iterate qi13 over s1 carrying b: EffectRev = a {
+        next b = reverse_effects_step(b);
+    }
+    iterate qi14 over s2 carrying c: EffectRev = b {
+        next c = reverse_effects_step(c);
+    }
+    iterate qi15 over s3 carrying d: EffectRev = c {
+        next d = reverse_effects_step(d);
+    }
+    return d.acc;
+}
+fn reverse_effects_step(st: EffectRev) -> (result: EffectRev) {
+    return match st.rest { XNil => st, XCons { head: h, tail: t } => EffectRev { rest: t, acc: EffectList.XCons { head: h, tail: st.acc } } };
+}
+record CapRev { rest: CapList, acc: CapList }
+fn reverse_caps(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: CapList) -> (result: CapList) {
+    iterate qi16 over s0 carrying a: CapRev = CapRev { rest: list, acc: CapList.ANil } {
+        next a = reverse_caps_step(a);
+    }
+    iterate qi17 over s1 carrying b: CapRev = a {
+        next b = reverse_caps_step(b);
+    }
+    iterate qi18 over s2 carrying c: CapRev = b {
+        next c = reverse_caps_step(c);
+    }
+    iterate qi19 over s3 carrying d: CapRev = c {
+        next d = reverse_caps_step(d);
+    }
+    return d.acc;
+}
+fn reverse_caps_step(st: CapRev) -> (result: CapRev) {
+    return match st.rest { ANil => st, ACons { head: h, tail: t } => CapRev { rest: t, acc: CapList.ACons { head: h, tail: st.acc } } };
+}
+
+// `fn name(params) -> (results) clauses { body }`. Generic parameter lists
+// are a deferred shape: `<` after the name fails explicitly.
+fn parse_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, start: u64) -> (result: FnDecl) {
+    let bad: FnDecl = FnDecl { ok: false, err_start: cursor, err_end: cursor, sig: FnSig { name_start: cursor, name_end: cursor, params: FieldList.FNil, results: FieldList.FNil, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }, body: FnBody { body: StmtList.SNil, ret: Expr.Name { start: cursor, end: cursor }, has_ret: false }, fn_start: start, fn_end: cursor, cursor: cursor };
+    let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 1);
+    if not(name.ok) { return FnDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
+    let peek: lexer.Token = segment.significant(s0, s1, s2, s3, total, name.cursor);
+    if peek.diagnostic == 0 && peek.kind == 58 {
+        return FnDecl { ..bad, err_start: peek.start, err_end: peek.end };
+    }
+    let open: Expect = expect(s0, s1, s2, s3, total, name.cursor, 65);
+    if not(open.ok) { return FnDecl { ..bad, err_start: open.err_start, err_end: open.err_end }; }
+    let params: FieldsParse = parse_fields(s0, s1, s2, s3, total, open.cursor, 66, 1);
+    if not(params.ok) { return FnDecl { ..bad, err_start: params.err_start, err_end: params.err_end }; }
+    let close: Expect = expect(s0, s1, s2, s3, total, params.cursor, 66);
+    if not(close.ok) { return FnDecl { ..bad, err_start: close.err_start, err_end: close.err_end }; }
+    let arrow: Expect = expect(s0, s1, s2, s3, total, close.cursor, 80);
+    if not(arrow.ok) { return FnDecl { ..bad, err_start: arrow.err_start, err_end: arrow.err_end }; }
+    let open2: Expect = expect(s0, s1, s2, s3, total, arrow.cursor, 65);
+    if not(open2.ok) { return FnDecl { ..bad, err_start: open2.err_start, err_end: open2.err_end }; }
+    let results: FieldsParse = parse_fields(s0, s1, s2, s3, total, open2.cursor, 66, 1);
+    if not(results.ok) { return FnDecl { ..bad, err_start: results.err_start, err_end: results.err_end }; }
+    let close2: Expect = expect(s0, s1, s2, s3, total, results.cursor, 66);
+    if not(close2.ok) { return FnDecl { ..bad, err_start: close2.err_start, err_end: close2.err_end }; }
+    let clauses: ClausesParse = parse_clauses(s0, s1, s2, s3, total, close2.cursor);
+    if not(clauses.ok) { return FnDecl { ..bad, err_start: clauses.err_start, err_end: clauses.err_end }; }
+    let open3: Expect = expect(s0, s1, s2, s3, total, clauses.cursor, 67);
+    if not(open3.ok) { return FnDecl { ..bad, err_start: open3.err_start, err_end: open3.err_end }; }
+    let body: BranchParse = parse_stmts(s0, s1, s2, s3, total, open3.cursor, 1);
+    if not(body.ok) { return FnDecl { ..bad, err_start: body.err_start, err_end: body.err_end }; }
+    let tail: ReturnParse = parse_return_tail(s0, s1, s2, s3, total, body.cursor);
+    if not(tail.ok) { return FnDecl { ..bad, err_start: tail.err_start, err_end: tail.err_end }; }
+    let close3: Expect = expect(s0, s1, s2, s3, total, tail.cursor, 68);
+    if not(close3.ok) { return FnDecl { ..bad, err_start: close3.err_start, err_end: close3.err_end }; }
+    let sig: FnSig = FnSig { name_start: name.start, name_end: name.end, params: params.list, results: results.list, contracts: clauses.contracts, effects: clauses.effects, capabilities: clauses.capabilities };
+    let fnbody: FnBody = FnBody { body: body.list, ret: tail.node, has_ret: true };
+    return FnDecl { ok: true, err_start: 0, err_end: 0, sig: sig, body: fnbody, fn_start: start, fn_end: close3.cursor, cursor: close3.cursor };
+}
+record ReturnParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr }
+fn parse_return_tail(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: ReturnParse) {
+    let bad: Expr = Expr.Name { start: cursor, end: cursor };
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, cursor);
+    if token.diagnostic != 0 || token.kind != 13 {
+        return ReturnParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad };
+    }
+    let value: ExprParse = parse_expr(s0, s1, s2, s3, total, token.end);
+    if not(value.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
+    let semi: Expect = expect(s0, s1, s2, s3, total, value.cursor, 63);
+    if not(semi.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    return ReturnParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: value.node };
+}
+
+// Whole logical-source unit: header, imports, then interleaved record,
+// enum, and function declarations through EOF.
+record UnitState { cursor: u64, ok: bool, err_start: u64, err_end: u64, uses: UseList, records: RecordList, enums: EnumList, fns: FnList, count: u64, done: bool }
+fn parse_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: Unit) {
+    let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
+    let bad: Unit = Unit { ok: false, err_start: 0, err_end: 0, header: empty, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: 0 };
+    if not(segment.total_valid(s0, s1, s2, s3, total)) { return Unit { ..bad, err_end: total }; }
+    let head: parser.Header = header(s0, s1, s2, s3, total);
+    if head.code != 0 { return Unit { ..bad, header: head, err_start: head.start, err_end: head.end, cursor: head.next_offset }; }
+    let uses: UsesParse = parse_uses(s0, s1, s2, s3, total, head.next_offset);
+    if not(uses.ok) { return Unit { ..bad, header: head, err_start: uses.err_start, err_end: uses.err_end, cursor: uses.cursor }; }
+    iterate ui0 over s0 carrying a: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false } {
+        next a = unit_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ui1 over s1 carrying b: UnitState = a {
+        next b = unit_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ui2 over s2 carrying c: UnitState = b {
+        next c = unit_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ui3 over s3 carrying d: UnitState = c {
+        next d = unit_step(s0, s1, s2, s3, total, d);
+    }
+    return finish_unit(s0, s1, s2, s3, total, head, d);
+}
+record UsesParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: UseList }
+record UsesState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: UseList, done: bool }
+fn parse_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: UsesParse) {
+    iterate si0 over s0 carrying a: UsesState = UsesState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: UseList.UNil, done: false } {
+        next a = uses_step(s0, s1, s2, s3, total, a);
+    }
+    iterate si1 over s1 carrying b: UsesState = a {
+        next b = uses_step(s0, s1, s2, s3, total, b);
+    }
+    iterate si2 over s2 carrying c: UsesState = b {
+        next c = uses_step(s0, s1, s2, s3, total, c);
+    }
+    iterate si3 over s3 carrying d: UsesState = c {
+        next d = uses_step(s0, s1, s2, s3, total, d);
+    }
+    return finish_uses(s0, s1, s2, s3, d);
+}
+fn uses_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UsesState) -> (result: UsesState) {
+    if not(st.ok) || st.done { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 || token.kind != 28 { return UsesState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, done: true }; }
+    let decl: UseDecl = parse_use(s0, s1, s2, s3, total, token.end);
+    if not(decl.ok) { return UsesState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, list: st.list, done: true }; }
+    return UsesState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, list: UseList.UCons { head: decl, tail: st.list }, done: false };
+}
+fn finish_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: UsesState) -> (result: UsesParse) {
+    if not(st.ok) { return UsesParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: UseList.UNil }; }
+    return UsesParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_uses(s0, s1, s2, s3, st.list) };
+}
+record UseRev { rest: UseList, acc: UseList }
+fn reverse_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: UseList) -> (result: UseList) {
+    iterate qi20 over s0 carrying a: UseRev = UseRev { rest: list, acc: UseList.UNil } {
+        next a = reverse_uses_step(a);
+    }
+    iterate qi21 over s1 carrying b: UseRev = a {
+        next b = reverse_uses_step(b);
+    }
+    iterate qi22 over s2 carrying c: UseRev = b {
+        next c = reverse_uses_step(c);
+    }
+    iterate qi23 over s3 carrying d: UseRev = c {
+        next d = reverse_uses_step(d);
+    }
+    return d.acc;
+}
+fn reverse_uses_step(st: UseRev) -> (result: UseRev) {
+    return match st.rest { UNil => st, UCons { head: h, tail: t } => UseRev { rest: t, acc: UseList.UCons { head: h, tail: st.acc } } };
+}
+fn unit_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState) -> (result: UnitState) {
+    if not(st.ok) || st.done { return st; }
+    let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if token.diagnostic != 0 || token.kind == 0 { return UnitState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    if token.kind == 27 { return unit_enum(s0, s1, s2, s3, total, st, token); }
+    if token.kind == 29 { return unit_record(s0, s1, s2, s3, total, st, token); }
+    if token.kind == 12 { return unit_fn(s0, s1, s2, s3, total, st, token); }
+    return UnitState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true };
+}
+fn unit_enum(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
+    let decl: EnumDecl = parse_enum(s0, s1, s2, s3, total, token.end, token.start);
+    if not(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: EnumList.GCons { head: decl, tail: st.enums }, fns: st.fns, count: st.count + 1, done: false };
+}
+fn unit_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
+    let decl: RecordDecl = parse_record(s0, s1, s2, s3, total, token.end, token.start);
+    if not(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: RecordList.RCons { head: decl, tail: st.records }, enums: st.enums, fns: st.fns, count: st.count + 1, done: false };
+}
+fn unit_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
+    let decl: FnDecl = parse_fn(s0, s1, s2, s3, total, token.end, token.start);
+    if not(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: FnList.DCons { head: decl, tail: st.fns }, count: st.count + 1, done: false };
+}
+fn finish_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, head: parser.Header, st: UnitState) -> (result: Unit) {
+    let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
+    if not(st.ok) { return Unit { ok: false, err_start: st.err_start, err_end: st.err_end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
+    let tail: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
+    if tail.diagnostic != 0 { return Unit { ok: false, err_start: tail.start, err_end: tail.end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
+    if tail.kind != 0 { return Unit { ok: false, err_start: tail.start, err_end: tail.end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
+    if st.count == 0 {
+        return Unit { ok: false, err_start: tail.start, err_end: tail.end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor };
+    }
+    return Unit { ok: true, err_start: 0, err_end: 0, header: head, uses: st.uses, records: reverse_records(s0, s1, s2, s3, st.records), enums: reverse_enums(s0, s1, s2, s3, st.enums), fns: reverse_fns(s0, s1, s2, s3, st.fns), cursor: st.cursor };
+}
+record RecordRev { rest: RecordList, acc: RecordList }
+fn reverse_records(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: RecordList) -> (result: RecordList) {
+    iterate qi24 over s0 carrying a: RecordRev = RecordRev { rest: list, acc: RecordList.RNil } {
+        next a = reverse_records_step(a);
+    }
+    iterate qi25 over s1 carrying b: RecordRev = a {
+        next b = reverse_records_step(b);
+    }
+    iterate qi26 over s2 carrying c: RecordRev = b {
+        next c = reverse_records_step(c);
+    }
+    iterate qi27 over s3 carrying d: RecordRev = c {
+        next d = reverse_records_step(d);
+    }
+    return d.acc;
+}
+fn reverse_records_step(st: RecordRev) -> (result: RecordRev) {
+    return match st.rest { RNil => st, RCons { head: h, tail: t } => RecordRev { rest: t, acc: RecordList.RCons { head: h, tail: st.acc } } };
+}
+record EnumRev { rest: EnumList, acc: EnumList }
+fn reverse_enums(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: EnumList) -> (result: EnumList) {
+    iterate qi28 over s0 carrying a: EnumRev = EnumRev { rest: list, acc: EnumList.GNil } {
+        next a = reverse_enums_step(a);
+    }
+    iterate qi29 over s1 carrying b: EnumRev = a {
+        next b = reverse_enums_step(b);
+    }
+    iterate qi30 over s2 carrying c: EnumRev = b {
+        next c = reverse_enums_step(c);
+    }
+    iterate qi31 over s3 carrying d: EnumRev = c {
+        next d = reverse_enums_step(d);
+    }
+    return d.acc;
+}
+fn reverse_enums_step(st: EnumRev) -> (result: EnumRev) {
+    return match st.rest { GNil => st, GCons { head: h, tail: t } => EnumRev { rest: t, acc: EnumList.GCons { head: h, tail: st.acc } } };
+}
+record FnRev { rest: FnList, acc: FnList }
+fn reverse_fns(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: FnList) -> (result: FnList) {
+    iterate qi32 over s0 carrying a: FnRev = FnRev { rest: list, acc: FnList.DNil } {
+        next a = reverse_fns_step(a);
+    }
+    iterate qi33 over s1 carrying b: FnRev = a {
+        next b = reverse_fns_step(b);
+    }
+    iterate qi34 over s2 carrying c: FnRev = b {
+        next c = reverse_fns_step(c);
+    }
+    iterate qi35 over s3 carrying d: FnRev = c {
+        next d = reverse_fns_step(d);
+    }
+    return d.acc;
+}
+fn reverse_fns_step(st: FnRev) -> (result: FnRev) {
+    return match st.rest { DNil => st, DCons { head: h, tail: t } => FnRev { rest: t, acc: FnList.DCons { head: h, tail: st.acc } } };
+}
+
+// Symbol, semantic, and IR micro-facts over parsed units. Same home module
+// as the trees (see the homing rule at the top of this file). All checks
+// are bounded: list traversals burn caller-supplied segment fuel, and an
+// undrained work stack at the end of fuel is reported as a check failure,
+// never silently accepted (see CP-0009). Stage tags on UnitCheck: 0 parse,
+// 1 duplicate symbols, 2 resolve/span walk, 3 IR depth, 4 fully verified.
+// Type-namespace resolution (record/enum/value types, use aliases) is
+// deferred; only function-name symbols and call resolution are checked.
+
+// A declared function name as a source span.
+record NameSpan { start: u64, end: u64 }
+enum NameList { NNil, NCons { head: NameSpan, tail: NameList } }
+
+// Exact byte equality of two spans. Lengths compare without fuel; only
+// equal-length spans burn byte fuel, one position per step.
+record EqState { a_start: u64, len: u64, b_start: u64, off: u64, eq: bool }
+fn spans_equal(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> (result: bool) {
+    if a_end < a_start || b_end < b_start { return false; }
+    if a_end - a_start != b_end - b_start { return false; }
+    iterate ei0 over s0 carrying a: EqState = EqState { a_start: a_start, len: a_end - a_start, b_start: b_start, off: 0, eq: true } {
+        next a = span_eq_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ei1 over s1 carrying b: EqState = a {
+        next b = span_eq_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ei2 over s2 carrying c: EqState = b {
+        next c = span_eq_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ei3 over s3 carrying d: EqState = c {
+        next d = span_eq_step(s0, s1, s2, s3, total, d);
+    }
+    return d.eq;
+}
+fn span_eq_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EqState) -> (result: EqState) {
+    if st.off >= st.len { return st; }
+    let same: bool = segment.byte_at(s0, s1, s2, s3, total, st.a_start + st.off) == segment.byte_at(s0, s1, s2, s3, total, st.b_start + st.off);
+    return EqState { a_start: st.a_start, len: st.len, b_start: st.b_start, off: st.off + 1, eq: st.eq && same };
+}
+
+// Declared function names in source order (reversed during accumulation,
+// then restored like every other list here).
+record FnNameAcc { rest: FnList, acc: NameList }
+fn collect_fn_names(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], fns: FnList) -> (result: NameList) {
+    iterate ni0 over s0 carrying a: FnNameAcc = FnNameAcc { rest: fns, acc: NameList.NNil } {
+        next a = collect_fn_names_step(a);
+    }
+    iterate ni1 over s1 carrying b: FnNameAcc = a {
+        next b = collect_fn_names_step(b);
+    }
+    iterate ni2 over s2 carrying c: FnNameAcc = b {
+        next c = collect_fn_names_step(c);
+    }
+    iterate ni3 over s3 carrying d: FnNameAcc = c {
+        next d = collect_fn_names_step(d);
+    }
+    return reverse_names(s0, s1, s2, s3, d.acc);
+}
+fn collect_fn_names_step(st: FnNameAcc) -> (result: FnNameAcc) {
+    return match st.rest {
+        DNil => st,
+        DCons { head: h, tail: t } => collect_fn_names_cons(st, h, t)
+    };
+}
+fn collect_fn_names_cons(st: FnNameAcc, h: FnDecl, t: FnList) -> (result: FnNameAcc) {
+    let sg: FnSig = h.sig;
+    return FnNameAcc { rest: t, acc: NameList.NCons { head: NameSpan { start: sg.name_start, end: sg.name_end }, tail: st.acc } };
+}
+record NameRev { rest: NameList, acc: NameList }
+fn reverse_names(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: NameList) -> (result: NameList) {
+    iterate ri0 over s0 carrying a: NameRev = NameRev { rest: list, acc: NameList.NNil } {
+        next a = reverse_names_step(a);
+    }
+    iterate ri1 over s1 carrying b: NameRev = a {
+        next b = reverse_names_step(b);
+    }
+    iterate ri2 over s2 carrying c: NameRev = b {
+        next c = reverse_names_step(c);
+    }
+    iterate ri3 over s3 carrying d: NameRev = c {
+        next d = reverse_names_step(d);
+    }
+    return d.acc;
+}
+fn reverse_names_step(st: NameRev) -> (result: NameRev) {
+    return match st.rest { NNil => st, NCons { head: h, tail: t } => NameRev { rest: t, acc: NameList.NCons { head: h, tail: st.acc } } };
+}
+
+// Membership of a span in a name list by exact bytes.
+record KnownState { rest: NameList, start: u64, end: u64, found: bool }
+fn name_known(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, list: NameList, start: u64, end: u64) -> (result: bool) {
+    iterate ki0 over s0 carrying a: KnownState = KnownState { rest: list, start: start, end: end, found: false } {
+        next a = name_known_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ki1 over s1 carrying b: KnownState = a {
+        next b = name_known_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ki2 over s2 carrying c: KnownState = b {
+        next c = name_known_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ki3 over s3 carrying d: KnownState = c {
+        next d = name_known_step(s0, s1, s2, s3, total, d);
+    }
+    return d.found;
+}
+fn name_known_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: KnownState) -> (result: KnownState) {
+    return match st.rest {
+        NNil => st,
+        NCons { head: h, tail: t } => KnownState { rest: t, start: st.start, end: st.end, found: st.found || spans_equal(s0, s1, s2, s3, total, h.start, h.end, st.start, st.end) }
+    };
+}
+
+// First duplicated function name, if any.
+record DupState { rest: NameList, seen: NameList, found: bool, start: u64, end: u64 }
+record DupReport { found: bool, start: u64, end: u64 }
+fn duplicate_fn_names(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, names: NameList) -> (result: DupReport) {
+    iterate di0 over s0 carrying a: DupState = DupState { rest: names, seen: NameList.NNil, found: false, start: 0, end: 0 } {
+        next a = duplicate_fn_names_step(s0, s1, s2, s3, total, a);
+    }
+    iterate di1 over s1 carrying b: DupState = a {
+        next b = duplicate_fn_names_step(s0, s1, s2, s3, total, b);
+    }
+    iterate di2 over s2 carrying c: DupState = b {
+        next c = duplicate_fn_names_step(s0, s1, s2, s3, total, c);
+    }
+    iterate di3 over s3 carrying d: DupState = c {
+        next d = duplicate_fn_names_step(s0, s1, s2, s3, total, d);
+    }
+    return DupReport { found: d.found, start: d.start, end: d.end };
+}
+fn duplicate_fn_names_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: DupState) -> (result: DupState) {
+    return match st.rest {
+        NNil => st,
+        NCons { head: h, tail: t } => duplicate_fn_names_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn duplicate_fn_names_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: DupState, h: NameSpan, t: NameList) -> (result: DupState) {
+    if st.found { return DupState { rest: t, seen: st.seen, found: true, start: st.start, end: st.end }; }
+    if name_known(s0, s1, s2, s3, total, st.seen, h.start, h.end) {
+        return DupState { rest: t, seen: st.seen, found: true, start: h.start, end: h.end };
+    }
+    return DupState { rest: t, seen: NameList.NCons { head: h, tail: st.seen }, found: false, start: 0, end: 0 };
+}
+
+// Resolve/span walk over one function body. Two work stacks: swords holds
+// statements whose expressions are not yet queued, work holds queued
+// expressions. Every visited expression is pushed onto acc for the later
+// IR phase. The first bad span (out-of-range expression span or call to
+// an undeclared function name) drains both stacks and wins; traversal
+// order is the documented first-error order.
+record WalkState { swords: StmtList, work: ExprList, acc: ExprList, names: NameList, total: u64, ok: bool, bad_start: u64, bad_end: u64 }
+record BodyReport { ok: bool, bad_start: u64, bad_end: u64, exprs: ExprList }
+fn check_body(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, body: StmtList, ret: Expr, names: NameList) -> (result: BodyReport) {
+    iterate wi0 over s0 carrying a: WalkState = WalkState { swords: body, work: ExprList.ECons { head: ret, tail: ExprList.ENil }, acc: ExprList.ENil, names: names, total: total, ok: true, bad_start: 0, bad_end: 0 } {
+        next a = walk_step(s0, s1, s2, s3, a);
+    }
+    iterate wi1 over s1 carrying b: WalkState = a {
+        next b = walk_step(s0, s1, s2, s3, b);
+    }
+    iterate wi2 over s2 carrying c: WalkState = b {
+        next c = walk_step(s0, s1, s2, s3, c);
+    }
+    iterate wi3 over s3 carrying d: WalkState = c {
+        next d = walk_step(s0, s1, s2, s3, d);
+    }
+    return walk_report(d);
+}
+fn walk_report(st: WalkState) -> (result: BodyReport) {
+    if not(st.ok) { return BodyReport { ok: false, bad_start: st.bad_start, bad_end: st.bad_end, exprs: ExprList.ENil }; }
+    if not(walk_drained(st)) { return BodyReport { ok: false, bad_start: st.total, bad_end: st.total, exprs: ExprList.ENil }; }
+    return BodyReport { ok: true, bad_start: 0, bad_end: 0, exprs: st.acc };
+}
+fn walk_drained(st: WalkState) -> (result: bool) {
+    return match st.swords {
+        SCons { head: h, tail: t } => walk_drained_cons(h, t, st),
+        SNil => walk_work_drained(st)
+    };
+}
+fn walk_drained_cons(h: Stmt, t: StmtList, st: WalkState) -> (result: bool) {
+    return false;
+}
+fn walk_work_drained(st: WalkState) -> (result: bool) {
+    return match st.work {
+        ECons { head: h, tail: t } => walk_drained_cons_expr(h, t),
+        ENil => true
+    };
+}
+fn walk_drained_cons_expr(h: Expr, t: ExprList) -> (result: bool) {
+    return false;
+}
+fn walk_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState) -> (result: WalkState) {
+    if not(st.ok) { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: st.bad_start, bad_end: st.bad_end }; }
+    return match st.swords {
+        SCons { head: h, tail: t } => walk_stmt(s0, s1, s2, s3, st, h, t),
+        SNil => walk_expr_top(s0, s1, s2, s3, st)
+    };
+}
+fn walk_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState, h: Stmt, t: StmtList) -> (result: WalkState) {
+    return match h {
+        Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => walk_stmt_let(st, t, v, a, b, c, d, k, s, e),
+        If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => walk_stmt_if(s0, s1, s2, s3, st, t, c, tb, eb, s, e),
+        Fail { mode_start: a, mode_end: b, start: s, end: e } => walk_stmt_fail(st, t, a, b, s, e),
+        Return { value: v, start: s, end: e } => walk_stmt_return(st, t, v, s, e)
+    };
+}
+fn walk_stmt_let(st: WalkState, t: StmtList, v: Expr, a: u64, b: u64, c: u64, d: u64, k: u64, s: u64, e: u64) -> (result: WalkState) {
+    if e < s || e > st.total { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: s, bad_end: e }; }
+    return WalkState { swords: t, work: ExprList.ECons { head: v, tail: st.work }, acc: st.acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
+}
+fn walk_stmt_if(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState, t: StmtList, c: Expr, tb: StmtList, eb: StmtList, s: u64, e: u64) -> (result: WalkState) {
+    if e < s || e > st.total { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: s, bad_end: e }; }
+    return WalkState { swords: append_stmts(s0, s1, s2, s3, tb, append_stmts(s0, s1, s2, s3, eb, t)), work: ExprList.ECons { head: c, tail: st.work }, acc: st.acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
+}
+fn walk_stmt_fail(st: WalkState, t: StmtList, a: u64, b: u64, s: u64, e: u64) -> (result: WalkState) {
+    if e < s || e > st.total { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: s, bad_end: e }; }
+    return WalkState { swords: t, work: st.work, acc: st.acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
+}
+fn walk_stmt_return(st: WalkState, t: StmtList, v: Expr, s: u64, e: u64) -> (result: WalkState) {
+    if e < s || e > st.total { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: s, bad_end: e }; }
+    return WalkState { swords: t, work: ExprList.ECons { head: v, tail: st.work }, acc: st.acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
+}
+fn walk_expr_top(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState) -> (result: WalkState) {
+    return match st.work {
+        ENil => st,
+        ECons { head: h, tail: t } => walk_expr(s0, s1, s2, s3, st, h, t)
+    };
+}
+fn walk_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState, h: Expr, t: ExprList) -> (result: WalkState) {
+    let s: u64 = expr_start(h);
+    let e: u64 = expr_end(h);
+    let acc: ExprList = ExprList.ECons { head: h, tail: st.acc };
+    if e < s || e > st.total { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: acc, names: st.names, total: st.total, ok: false, bad_start: s, bad_end: e }; }
+    return walk_children(s0, s1, s2, s3, st, h, t, acc);
+}
+fn walk_children(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState, h: Expr, t: ExprList, acc: ExprList) -> (result: WalkState) {
+    return match h {
+        Name { start: s, end: e } => WalkState { swords: st.swords, work: t, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        Integer { start: s, end: e, value: v, overflow: o } => WalkState { swords: st.swords, work: t, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        Boolean { start: s, end: e, value: v } => WalkState { swords: st.swords, work: t, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        Binary { op: o, left: l, right: r, start: s, end: e } => WalkState { swords: st.swords, work: ExprList.ECons { head: l, tail: ExprList.ECons { head: r, tail: t } }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => walk_call(s0, s1, s2, s3, st, t, acc, ns, ne, a),
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => WalkState { swords: st.swords, work: ExprList.ECons { head: b, tail: t }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 }
+    };
+}
+fn walk_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState, t: ExprList, acc: ExprList, ns: u64, ne: u64, args: ExprList) -> (result: WalkState) {
+    if not(name_known(s0, s1, s2, s3, st.total, st.names, ns, ne)) {
+        return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: acc, names: st.names, total: st.total, ok: false, bad_start: ns, bad_end: ne };
+    }
+    return WalkState { swords: st.swords, work: append_exprs(s0, s1, s2, s3, args, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
+}
+
+// List appends via reversal (each input list is consumed once, so the
+// traversal stays within segment fuel for bounded sources).
+record StmtPrepend { rest: StmtList, acc: StmtList }
+fn append_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: StmtList, second: StmtList) -> (result: StmtList) {
+    let rev: StmtList = reverse_stmts(s0, s1, s2, s3, first);
+    iterate ai0 over s0 carrying a: StmtPrepend = StmtPrepend { rest: rev, acc: second } {
+        next a = append_stmts_step(a);
+    }
+    iterate ai1 over s1 carrying b: StmtPrepend = a {
+        next b = append_stmts_step(b);
+    }
+    iterate ai2 over s2 carrying c: StmtPrepend = b {
+        next c = append_stmts_step(c);
+    }
+    iterate ai3 over s3 carrying d: StmtPrepend = c {
+        next d = append_stmts_step(d);
+    }
+    return d.acc;
+}
+fn append_stmts_step(st: StmtPrepend) -> (result: StmtPrepend) {
+    return match st.rest { SNil => st, SCons { head: h, tail: t } => StmtPrepend { rest: t, acc: StmtList.SCons { head: h, tail: st.acc } } };
+}
+record ExprPrepend { rest: ExprList, acc: ExprList }
+fn append_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: ExprList, second: ExprList) -> (result: ExprList) {
+    let rev: ExprList = reverse_exprs(s0, s1, s2, s3, first);
+    iterate pi0 over s0 carrying a: ExprPrepend = ExprPrepend { rest: rev, acc: second } {
+        next a = append_exprs_step(a);
+    }
+    iterate pi1 over s1 carrying b: ExprPrepend = a {
+        next b = append_exprs_step(b);
+    }
+    iterate pi2 over s2 carrying c: ExprPrepend = b {
+        next c = append_exprs_step(c);
+    }
+    iterate pi3 over s3 carrying d: ExprPrepend = c {
+        next d = append_exprs_step(d);
+    }
+    return d.acc;
+}
+fn append_exprs_step(st: ExprPrepend) -> (result: ExprPrepend) {
+    return match st.rest { ENil => st, ECons { head: h, tail: t } => ExprPrepend { rest: t, acc: ExprList.ECons { head: h, tail: st.acc } } };
+}
+
+// Tiny stack IR: one instruction per expression node in postorder. The
+// depth verifier below is a self-check in the kernel.shape tradition: it
+// must accept every lowering of a walked body, so a rejection is always
+// a lowering bug, never a source fact.
+enum FlatOp {
+    PInt { value: u64 },
+    PBool { value: bool },
+    PName { start: u64, end: u64 },
+    PBin { op: u64 },
+    PCall { name_start: u64, name_end: u64, argc: u64 },
+    PProj { field_start: u64, field_end: u64, path: bool }
+}
+enum FlatList { INil, ICons { head: FlatOp, tail: FlatList } }
+record LowerState { work: ExprList, out: FlatList }
+fn lower_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], node: Expr) -> (result: FlatList) {
+    iterate li0 over s0 carrying a: LowerState = LowerState { work: ExprList.ECons { head: node, tail: ExprList.ENil }, out: FlatList.INil } {
+        next a = lower_step(s0, s1, s2, s3, a);
+    }
+    iterate li1 over s1 carrying b: LowerState = a {
+        next b = lower_step(s0, s1, s2, s3, b);
+    }
+    iterate li2 over s2 carrying c: LowerState = b {
+        next c = lower_step(s0, s1, s2, s3, c);
+    }
+    iterate li3 over s3 carrying d: LowerState = c {
+        next d = lower_step(s0, s1, s2, s3, d);
+    }
+    // No reversal: right-subtree-first visiting conses nodes so the head-
+    // first output list already reads postorder (operator after both
+    // operand subtrees, call after all argument subtrees).
+    return d.out;
+}
+fn lower_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: LowerState) -> (result: LowerState) {
+    return match st.work {
+        ENil => st,
+        ECons { head: h, tail: t } => lower_one(s0, s1, s2, s3, st, h, t)
+    };
+}
+fn lower_one(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: LowerState, h: Expr, t: ExprList) -> (result: LowerState) {
+    return match h {
+        Name { start: s, end: e } => LowerState { work: t, out: FlatList.ICons { head: FlatOp.PName { start: s, end: e }, tail: st.out } },
+        Integer { start: s, end: e, value: v, overflow: o } => LowerState { work: t, out: FlatList.ICons { head: FlatOp.PInt { value: v }, tail: st.out } },
+        Boolean { start: s, end: e, value: v } => LowerState { work: t, out: FlatList.ICons { head: FlatOp.PBool { value: v }, tail: st.out } },
+        Binary { op: o, left: l, right: r, start: s, end: e } => LowerState { work: ExprList.ECons { head: r, tail: ExprList.ECons { head: l, tail: t } }, out: FlatList.ICons { head: FlatOp.PBin { op: o }, tail: st.out } },
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => lower_call(s0, s1, s2, s3, st, t, ns, ne, a),
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => LowerState { work: ExprList.ECons { head: b, tail: t }, out: FlatList.ICons { head: FlatOp.PProj { field_start: fs, field_end: fe, path: p }, tail: st.out } }
+    };
+}
+fn lower_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: LowerState, t: ExprList, ns: u64, ne: u64, args: ExprList) -> (result: LowerState) {
+    let argc: u64 = count_exprs(s0, s1, s2, s3, args);
+    // Arguments queue reversed so the last argument is visited first and
+    // the output keeps source argument order before the call op.
+    let rev: ExprList = reverse_exprs(s0, s1, s2, s3, args);
+    return LowerState { work: append_exprs(s0, s1, s2, s3, rev, t), out: FlatList.ICons { head: FlatOp.PCall { name_start: ns, name_end: ne, argc: argc }, tail: st.out } };
+}
+record CountState { rest: ExprList, n: u64 }
+fn count_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: ExprList) -> (result: u64) {
+    iterate ci0 over s0 carrying a: CountState = CountState { rest: list, n: 0 } {
+        next a = count_exprs_step(a);
+    }
+    iterate ci1 over s1 carrying b: CountState = a {
+        next b = count_exprs_step(b);
+    }
+    iterate ci2 over s2 carrying c: CountState = b {
+        next c = count_exprs_step(c);
+    }
+    iterate ci3 over s3 carrying d: CountState = c {
+        next d = count_exprs_step(d);
+    }
+    return d.n;
+}
+fn count_exprs_step(st: CountState) -> (result: CountState) {
+    return match st.rest { ENil => st, ECons { head: h, tail: t } => CountState { rest: t, n: st.n + 1 } };
+}
+// Stack-depth verifier: pushes add one, PBin nets minus one, PCall nets
+// one minus argc, PProj is depth-neutral. A well-formed lowering of one
+// expression ends at depth exactly one without ever going negative.
+record DepthState { rest: FlatList, depth: u64, ok: bool }
+fn flat_ok(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], ops: FlatList) -> (result: bool) {
+    iterate gi0 over s0 carrying a: DepthState = DepthState { rest: ops, depth: 0, ok: true } {
+        next a = flat_step(a);
+    }
+    iterate gi1 over s1 carrying b: DepthState = a {
+        next b = flat_step(b);
+    }
+    iterate gi2 over s2 carrying c: DepthState = b {
+        next c = flat_step(c);
+    }
+    iterate gi3 over s3 carrying d: DepthState = c {
+        next d = flat_step(d);
+    }
+    return d.ok && d.depth == 1;
+}
+fn flat_step(st: DepthState) -> (result: DepthState) {
+    if not(st.ok) { return st; }
+    return match st.rest {
+        INil => st,
+        ICons { head: h, tail: t } => flat_one(st, h, t)
+    };
+}
+fn flat_one(st: DepthState, h: FlatOp, t: FlatList) -> (result: DepthState) {
+    return match h {
+        PInt { value: v } => DepthState { rest: t, depth: st.depth + 1, ok: true },
+        PBool { value: v } => DepthState { rest: t, depth: st.depth + 1, ok: true },
+        PName { start: s, end: e } => DepthState { rest: t, depth: st.depth + 1, ok: true },
+        PBin { op: o } => flat_bin(st, t),
+        PCall { name_start: ns, name_end: ne, argc: c } => flat_call(st, t, c),
+        PProj { field_start: fs, field_end: fe, path: p } => flat_proj(st, t)
+    };
+}
+fn flat_bin(st: DepthState, t: FlatList) -> (result: DepthState) {
+    if st.depth < 2 { return DepthState { rest: FlatList.INil, depth: 0, ok: false }; }
+    return DepthState { rest: t, depth: st.depth - 1, ok: true };
+}
+fn flat_call(st: DepthState, t: FlatList, argc: u64) -> (result: DepthState) {
+    if st.depth < argc { return DepthState { rest: FlatList.INil, depth: 0, ok: false }; }
+    return DepthState { rest: t, depth: st.depth - argc + 1, ok: true };
+}
+fn flat_proj(st: DepthState, t: FlatList) -> (result: DepthState) {
+    if st.depth < 1 { return DepthState { rest: FlatList.INil, depth: 0, ok: false }; }
+    return DepthState { rest: t, depth: st.depth, ok: true };
+}
+
+// Whole-unit driver: parse, then duplicate symbols, then the resolve/span
+// walk over every function body, then the IR depth self-check over every
+// walked expression. Counts are reported for evidence; ir_ok must be true
+// whenever ok is true.
+record FnsState { rest: FnList, names: NameList, total: u64, ok: bool, bad_start: u64, bad_end: u64, fn_count: u64, exprs: ExprList }
+record FnsReport { ok: bool, bad_start: u64, bad_end: u64, fn_count: u64, exprs: ExprList }
+record IrState { rest: ExprList, ok: bool, count: u64 }
+record IrReport { ok: bool, count: u64 }
+record UnitCheck { ok: bool, err_start: u64, err_end: u64, stage: u64, fn_count: u64, expr_count: u64, ir_ok: bool }
+fn check_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: UnitCheck) {
+    let u: Unit = parse_unit(s0, s1, s2, s3, total);
+    if not(u.ok) { return UnitCheck { ok: false, err_start: u.err_start, err_end: u.err_end, stage: 0, fn_count: 0, expr_count: 0, ir_ok: false }; }
+    let names: NameList = collect_fn_names(s0, s1, s2, s3, u.fns);
+    let dup: DupReport = duplicate_fn_names(s0, s1, s2, s3, total, names);
+    if dup.found { return UnitCheck { ok: false, err_start: dup.start, err_end: dup.end, stage: 1, fn_count: 0, expr_count: 0, ir_ok: false }; }
+    let fns: FnsReport = check_all_fns(s0, s1, s2, s3, total, u.fns, names);
+    if not(fns.ok) { return UnitCheck { ok: false, err_start: fns.bad_start, err_end: fns.bad_end, stage: 2, fn_count: 0, expr_count: 0, ir_ok: false }; }
+    let ir: IrReport = verify_ir_exprs(s0, s1, s2, s3, fns.exprs);
+    if not(ir.ok) { return UnitCheck { ok: false, err_start: total, err_end: total, stage: 3, fn_count: fns.fn_count, expr_count: ir.count, ir_ok: false }; }
+    return UnitCheck { ok: true, err_start: 0, err_end: 0, stage: 4, fn_count: fns.fn_count, expr_count: ir.count, ir_ok: true };
+}
+fn check_all_fns(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fns: FnList, names: NameList) -> (result: FnsReport) {
+    iterate mi0 over s0 carrying a: FnsState = FnsState { rest: fns, names: names, total: total, ok: true, bad_start: 0, bad_end: 0, fn_count: 0, exprs: ExprList.ENil } {
+        next a = check_fns_step(s0, s1, s2, s3, a);
+    }
+    iterate mi1 over s1 carrying b: FnsState = a {
+        next b = check_fns_step(s0, s1, s2, s3, b);
+    }
+    iterate mi2 over s2 carrying c: FnsState = b {
+        next c = check_fns_step(s0, s1, s2, s3, c);
+    }
+    iterate mi3 over s3 carrying d: FnsState = c {
+        next d = check_fns_step(s0, s1, s2, s3, d);
+    }
+    return FnsReport { ok: d.ok, bad_start: d.bad_start, bad_end: d.bad_end, fn_count: d.fn_count, exprs: d.exprs };
+}
+fn check_fns_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: FnsState) -> (result: FnsState) {
+    if not(st.ok) { return FnsState { rest: FnList.DNil, names: st.names, total: st.total, ok: false, bad_start: st.bad_start, bad_end: st.bad_end, fn_count: st.fn_count, exprs: st.exprs }; }
+    return match st.rest {
+        DNil => st,
+        DCons { head: h, tail: t } => check_one_fn(s0, s1, s2, s3, st, h, t)
+    };
+}
+fn check_one_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: FnsState, h: FnDecl, t: FnList) -> (result: FnsState) {
+    let bd: FnBody = h.body;
+    let rep: BodyReport = check_body(s0, s1, s2, s3, st.total, bd.body, bd.ret, st.names);
+    if not(rep.ok) { return FnsState { rest: FnList.DNil, names: st.names, total: st.total, ok: false, bad_start: rep.bad_start, bad_end: rep.bad_end, fn_count: st.fn_count, exprs: st.exprs }; }
+    return FnsState { rest: t, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0, fn_count: st.fn_count + 1, exprs: append_exprs(s0, s1, s2, s3, rep.exprs, st.exprs) };
+}
+fn verify_ir_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], exprs: ExprList) -> (result: IrReport) {
+    iterate qi0 over s0 carrying a: IrState = IrState { rest: exprs, ok: true, count: 0 } {
+        next a = verify_ir_step(s0, s1, s2, s3, a);
+    }
+    iterate qi1 over s1 carrying b: IrState = a {
+        next b = verify_ir_step(s0, s1, s2, s3, b);
+    }
+    iterate qi2 over s2 carrying c: IrState = b {
+        next c = verify_ir_step(s0, s1, s2, s3, c);
+    }
+    iterate qi3 over s3 carrying d: IrState = c {
+        next d = verify_ir_step(s0, s1, s2, s3, d);
+    }
+    return IrReport { ok: d.ok, count: d.count };
+}
+fn verify_ir_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: IrState) -> (result: IrState) {
+    if not(st.ok) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
+    return match st.rest {
+        ENil => st,
+        ECons { head: h, tail: t } => verify_ir_one(s0, s1, s2, s3, st, h, t)
+    };
+}
+fn verify_ir_one(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: IrState, h: Expr, t: ExprList) -> (result: IrState) {
+    let ops: FlatList = lower_expr(s0, s1, s2, s3, h);
+    if not(flat_ok(s0, s1, s2, s3, ops)) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
+    return IrState { rest: t, ok: true, count: st.count + 1 };
+}
+

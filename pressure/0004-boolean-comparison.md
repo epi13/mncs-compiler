@@ -18,3 +18,14 @@ Desired behavior: a documented, consistent boolean equality/negation idiom;
 possibly stdlib helpers rather than a language change. Likely ownership:
 language semantics and documentation/tooling. Do not prioritize this above
 whole-source storage or Unicode parity.
+
+## Update (declaration-vertical pass)
+
+The family is larger than equality: there is no logical-negation operator
+at all. `!x` lexes as MNL002 (unsupported character); only `!=` exists.
+Every predicate in the declaration core negates through a local
+`fn not(value: bool) -> (result: bool) { return select(value, false, true); }`
+(duplicated per module since leaf helpers are not shared). Related:
+`match` accepts no integer patterns (see CP-0010), so scalar dispatch and
+negation both route around the same missing boolean/scalar operator
+surface. Workaround remains sufficient; severity stays low.

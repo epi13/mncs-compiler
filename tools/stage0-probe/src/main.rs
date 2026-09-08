@@ -1,6 +1,6 @@
 //! Temporary test transport only. All compiler behavior comes from the pinned
 //! reference libraries or the MNCS source under test. No replacement semantics.
-use mncs_compiler::{ModuleResolver, ReferenceCompiler};
+use mncs_compiler::{ModuleResolver, NullResolver, ReferenceCompiler};
 use mncs_model::{BodyExecutionSession, ExecutionRequest};
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
@@ -20,7 +20,7 @@ fn envelope(text: String) -> SourceEnvelope {
 }
 fn main() {
     let mut sources = Sources(BTreeMap::new());
-    for file in ["source", "lexer", "parser", "kernel"] {
+    for file in ["source", "lexer", "parser", "kernel", "segment", "decl"] {
         let text = std::fs::read_to_string(format!("src/compiler/{file}.mncs")).unwrap();
         sources
             .0
@@ -40,6 +40,10 @@ fn main() {
         let input: Value = serde_json::from_str(&line.unwrap()).unwrap();
         let output = if let Some(text) = input.get("oracle").and_then(Value::as_str) {
             serde_json::to_value(mncs_syntax::parse(&envelope(text.to_owned()))).unwrap()
+        } else if let Some(text) = input.get("elaborate").and_then(Value::as_str) {
+            let result = ReferenceCompiler::default()
+                .front_end_with_resolver(envelope(text.to_owned()), &NullResolver);
+            serde_json::to_value(&result.diagnostics).unwrap()
         } else {
             let request: ExecutionRequest = serde_json::from_value(input).unwrap();
             let session = &sessions[&request.target.module];

@@ -45,6 +45,19 @@ Use `0000-template.md` for new findings.
 | [CP-0006: envelope inference](0006-envelope-profile-inference.md) | Align leading-trivia profile inference with syntax |
 | [CP-0007: bootstrap evidence cost](0007-bootstrap-evidence-cost.md) | Measure IR size and checked-obligation propagation |
 
-Record sequences and imported record results are supported in the inspected
-pin; no missing-enum/arena/generic/concurrency claim is inferred from this pass.
-Those larger compiler workloads have not yet been implemented or measured.
+## Declaration-vertical pass
+
+| Finding | Priority for the next language run |
+| --- | --- |
+| [CP-0008: finite payload visibility](0008-finite-payload-visibility.md) | Highest: blocks multi-module compiler architecture at lowering |
+| [CP-0009: iteration fuel chaining](0009-iteration-fuel-chaining.md) | High: affects every pass; silent-exhaustion risk |
+| [CP-0010: scalar match dispatch](0010-scalar-match-dispatch.md) | Medium: exhaustiveness checking for opcode tables |
+| [CP-0011: acyclic calls force machines](0011-acyclic-calls-machines.md) | High: dominant complexity/cost driver; needs direction |
+| [CP-0012: payload sequence ban](0012-payload-sequence-ban.md) | Low: cons-list workaround is exact |
+
+The previous pass's closing note is superseded: recursive enums with
+scalar/finite/record payloads elaborate, construct, match, and compile
+(verified with 25 variants and 6-field payloads), and imported record
+results remain supported. The missing capabilities found at compiler
+scale are finite-payload visibility across modules (CP-0008), scalar
+match dispatch (CP-0010), and direct sequence payloads (CP-0012).

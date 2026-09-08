@@ -1,0 +1,9 @@
+mncs 0.10;
+module probe.recursive_call;
+enum E { Leaf, Node { left: E, right: E } }
+fn depth(e: E) -> (result: u64) {
+    return match e {
+        Leaf => 0,
+        Node { left: l, right: r } => depth(l) + depth(r) + 1
+    };
+}
