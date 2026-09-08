@@ -1,0 +1,22 @@
+mncs 0.10;
+module mncs.compiler.source.v1;
+
+// Exact immutable input is supplied by the caller. No ambient file access.
+// This bounded bootstrap API cannot accept a whole normal compiler module.
+fn byte_at(source: [byte; up_to 64], offset: u64) -> (result: u64) {
+    if offset < source.len {
+        return source[offset] as u64;
+    }
+    return 256;
+}
+
+fn ascii(source: [byte; up_to 64]) -> (result: bool) {
+    iterate i over source carrying valid: bool = true {
+        next valid = valid && source[i] as u64 < 128;
+    }
+    return valid;
+}
+
+fn span_valid(source: [byte; up_to 64], start: u64, end: u64) -> (result: bool) {
+    return start <= end && end <= source.len;
+}

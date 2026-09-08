@@ -8,6 +8,20 @@ Self-hosted next-generation compiler for MNCS, built in `mncs-language` to press
 
 The repository exists so active compiler architecture can move into MNCS without destabilizing `mncs-language`. Compiler development runs should work here, record language pressure here, and leave language changes for dedicated follow-up runs in `mncs-language`.
 
+## Executable first slice
+
+The kernel now implements **bounded ASCII source processing** in MNCS: lossless
+lexical tokens, byte spans, lexical diagnostics/coverage evidence, and a parser
+for the language header and qualified module declaration. Inputs are limited to
+64 bytes; this is not yet a whole-module compiler or self-hosting implementation.
+
+Run `tools/bootstrap.sh`, then `python3 tools/test_frontend.py` and
+`python3 tools/test_pressure.py`. See [contracts and evidence](evidence/FRONTEND.md)
+and the [pressure index](pressure/README.md). All production behavior lives in
+`src/compiler/`; the Rust/Python code under `tools/` is a temporary Stage-0 test
+transport, not a compiler implementation. The constant-return scaffolds have
+been removed; there is no standalone driver or coordinator yet.
+
 ## Mission
 
 Build a compiler appropriate for an ecosystem where humans, tools, and autonomous agents are first-class compiler clients.
@@ -47,7 +61,7 @@ The compiler kernel must also remain directly usable in standalone mode.
 
 ## Initial repository layout
 
-- `src/` — MNCS implementation scaffold and deterministic compiler kernel.
+- `src/` — MNCS deterministic compiler kernel.
 - `tests/` — compiler/self-host/differential tests as implementation grows.
 - `rfcs/` — architectural contracts.
 - `pressure/` — language, stdlib, runtime, backend, and architecture pressure findings.

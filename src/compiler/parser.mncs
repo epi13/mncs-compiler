@@ -1,0 +1,53 @@
+mncs 0.10;
+module mncs.compiler.parser.v1;
+use mncs.compiler.lexer.v1 as lexer;
+use mncs.compiler.source.v1 as source;
+
+// Header fact only, not a full-module parse. Spans refer to the exact input.
+// code: 0 success; 1 lexical; 2 expected mncs; 3 expected version;
+// 4 expected semicolon; 5 expected module; 6 expected identifier;
+// 7 expected dot or semicolon; 8 unsupported non-ASCII source.
+record Header { code: u64, start: u64, end: u64, version_start: u64, version_end: u64, module_start: u64, module_end: u64, next_offset: u64, state: u64 }
+
+fn header(text: [byte; up_to 64]) -> (result: Header) {
+    let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
+    if source.ascii(text) {
+        iterate i over text carrying st: Header = seed {
+            next st = step(text, st);
+        }
+        return finish(text, st);
+    }
+    return Header { ..seed, code: 8, end: text.len };
+}
+fn finish(text: [byte; up_to 64], st: Header) -> (result: Header) {
+    if st.code != 0 || st.state == 8 { return st; }
+    return step(text, st);
+}
+fn step(text: [byte; up_to 64], st: Header) -> (result: Header) {
+    if st.code != 0 || st.state == 8 { return st; }
+    let token: lexer.Token = lexer.significant(text, st.next_offset);
+    if token.diagnostic != 0 { return Header { ..st, code: 1, start: token.start, end: token.end }; }
+    if st.state == 0 {
+        if token.kind == 10 { return Header { ..st, state: 1, next_offset: token.end }; }
+        return Header { ..st, code: 2, start: token.start, end: token.end };
+    }
+    if st.state == 1 {
+        if token.kind == 6 { return Header { ..st, state: 2, next_offset: token.end, version_start: token.start, version_end: token.end }; }
+        return Header { ..st, code: 3, start: token.start, end: token.end };
+    }
+    if st.state == 2 {
+        if token.kind == 63 { return Header { ..st, state: 3, next_offset: token.end }; }
+        return Header { ..st, code: 4, start: token.start, end: token.end };
+    }
+    if st.state == 3 {
+        if token.kind == 11 { return Header { ..st, state: 4, next_offset: token.end }; }
+        return Header { ..st, code: 5, start: token.start, end: token.end };
+    }
+    if st.state == 4 || st.state == 6 {
+        if token.kind == 4 || token.kind == 10 { return Header { ..st, state: 5, next_offset: token.end, module_start: select(st.state == 4, token.start, st.module_start), module_end: token.end }; }
+        return Header { ..st, code: 6, start: token.start, end: token.end };
+    }
+    if token.kind == 61 { return Header { ..st, state: 6, next_offset: token.end }; }
+    if token.kind == 63 { return Header { ..st, state: 8, next_offset: token.end }; }
+    return Header { ..st, code: 7, start: token.start, end: token.end };
+}

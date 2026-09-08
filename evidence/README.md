@@ -38,3 +38,10 @@ As `mncs-compiler` approaches canonical status, maintain a succession matrix cov
 | Bootstrap/recovery | canonical | pending | |
 
 The exact matrix may evolve, but replacement of the Rust compiler must remain evidence-based.
+## Current kernel evidence
+
+See [bounded frontend contracts and reproduction](FRONTEND.md),
+[repeat/differential execution results](frontend-results.json), and
+[pinned pressure diagnostics](pressure-results.json), and
+[qualified Stage-0 compilation results](compile-results.json). These establish a bounded
+ASCII lexer/header slice, not self-hosting or backend parity.
