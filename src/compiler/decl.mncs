@@ -1940,3 +1940,2162 @@ fn verify_ir_one(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64
     return IrState { rest: t, ok: true, count: st.count + 1 };
 }
 
+// Semantic facts, obligations, and intrinsic proof.
+//
+// Where check_unit stops at resolution and a structural depth tripwire,
+// this section establishes meaning: every function body is checked against
+// a bidirectional type discipline mirroring Stage-0 elaboration, and every
+// check emits proof obligations as structured values. Proof lives inside
+// fact establishment (each checking step is its own narrow authority),
+// not in a separate pass.
+//
+// Obligation statuses: 1 FAIL (fact rejected), 2 UNKNOWN (fact accepted
+// conservatively with the obligation retained). PASS leaves no obligation;
+// the accepted fact plus its typed IR is the evidence. UNKNOWN never
+// silently becomes PASS: any UNKNOWN forces conservative status.
+//
+// Obligation kinds (differential families against Stage-0 codes):
+// 1 NAME_BOUND (MNE102) 2 NAME_TYPE (MNE117) 3 INT_LIT (MNE118)
+// 4 BOOL_LIT (MNE122) 5 NO_SHADOW (MNE110) 6 ARITY (MNE132)
+// 7 OPERAND_SAME (MNE119) 8 ARITH_INT (MNE120) 9 CMP_INT (MNE121)
+// 10 BOOL_OP (MNE181) 11 SHIFT_BASE (MNE190) 12 BYTE_ARITH (MNE191)
+// 13 OVERFLOW (checked-arithmetic risk, always UNKNOWN)
+// 14 DIV_ZERO (non-literal divisor risk, always UNKNOWN)
+// 15 EFFECT_COVER (MNE134) 16 CONTRACT (requires/ensures, always UNKNOWN)
+// 17 CAP_AUTH (MNE111) 18 RESULT_ONE (MNE101) 19 TYPE_VALID (MNE105)
+// 20 UNREACHABLE (MNE114) 21 FAIL_MODE (MNE113) 22 PROJ_FIELD (MNE162)
+// 23 PROJ_BASE (MNE161) 24 IF_BOOL (MNE116) 25 CALL_RESULT (MNE135)
+// 26 ARG_MATCH (MNE133) 27 RET_MATCH (MNE103) 28 LET_MATCH (MNE115)
+// 29 REC_FIELD (MNE153) 30 ENUM_PAYLOAD (MNE171) 31 QUALIFIED (MNE173)
+// 32 CALLEE (MNE131) 33 DUP_FIELD (MNE152) 34 DUP_VARIANT (MNE121 quirk)
+// 35 PROJ_TYPE (MNE163) 36 USE_UNAVAIL (MNE173) 37 FN_DUP (MNE104)
+record Obligation { kind: u64, start: u64, end: u64, status: u64 }
+enum OblList { LNil, LCons { head: Obligation, tail: OblList } }
+record OblRev { rest: OblList, acc: OblList }
+fn reverse_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: OblList) -> (result: OblList) {
+    iterate oi0 over s0 carrying a: OblRev = OblRev { rest: list, acc: OblList.LNil } {
+        next a = reverse_obls_step(a);
+    }
+    iterate oi1 over s1 carrying b: OblRev = a {
+        next b = reverse_obls_step(b);
+    }
+    iterate oi2 over s2 carrying c: OblRev = b {
+        next c = reverse_obls_step(c);
+    }
+    iterate oi3 over s3 carrying d: OblRev = c {
+        next d = reverse_obls_step(d);
+    }
+    return d.acc;
+}
+fn reverse_obls_step(st: OblRev) -> (result: OblRev) {
+    return match st.rest { LNil => st, LCons { head: h, tail: t } => OblRev { rest: t, acc: OblList.LCons { head: h, tail: st.acc } } };
+}
+record OblPrepend { rest: OblList, acc: OblList }
+fn append_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: OblList, second: OblList) -> (result: OblList) {
+    let rev: OblList = reverse_obls(s0, s1, s2, s3, first);
+    iterate oj0 over s0 carrying a: OblPrepend = OblPrepend { rest: rev, acc: second } {
+        next a = append_obls_step(a);
+    }
+    iterate oj1 over s1 carrying b: OblPrepend = a {
+        next b = append_obls_step(b);
+    }
+    iterate oj2 over s2 carrying c: OblPrepend = b {
+        next c = append_obls_step(c);
+    }
+    iterate oj3 over s3 carrying d: OblPrepend = c {
+        next d = append_obls_step(d);
+    }
+    return d.acc;
+}
+fn append_obls_step(st: OblPrepend) -> (result: OblPrepend) {
+    return match st.rest { LNil => st, LCons { head: h, tail: t } => OblPrepend { rest: t, acc: OblList.LCons { head: h, tail: st.acc } } };
+}
+record OblCount { rest: OblList, n: u64, unknowns: u64, fails: u64 }
+fn count_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: OblList) -> (result: OblCount) {
+    iterate ok0 over s0 carrying a: OblCount = OblCount { rest: list, n: 0, unknowns: 0, fails: 0 } {
+        next a = count_obls_step(a);
+    }
+    iterate ok1 over s1 carrying b: OblCount = a {
+        next b = count_obls_step(b);
+    }
+    iterate ok2 over s2 carrying c: OblCount = b {
+        next c = count_obls_step(c);
+    }
+    iterate ok3 over s3 carrying d: OblCount = c {
+        next d = count_obls_step(d);
+    }
+    return d;
+}
+fn count_obls_step(st: OblCount) -> (result: OblCount) {
+    return match st.rest {
+        LNil => st,
+        LCons { head: h, tail: t } => count_obls_cons(st, h, t)
+    };
+}
+fn count_obls_cons(st: OblCount, h: Obligation, t: OblList) -> (result: OblCount) {
+    if h.status == 2 { return OblCount { rest: t, n: st.n + 1, unknowns: st.unknowns + 1, fails: st.fails }; }
+    return OblCount { rest: t, n: st.n + 1, unknowns: st.unknowns, fails: st.fails + 1 };
+}
+
+// Resolved semantic types. Named carries the declaration name span;
+// Seq is opaque (element validity is established at resolution; no index
+// expressions exist in this subset). TPoison marks error recovery: checks
+// against poison are skipped so one error does not cascade.
+enum SemType {
+    TBool,
+    TByte,
+    TInt { width: u64, signed: bool },
+    TNamed { start: u64, end: u64 },
+    TSeq,
+    TPoison
+}
+// Required-type input for bidirectional checking: absent, or present.
+enum ExpTy { XNone, XSome { ty: SemType } }
+fn is_poison(ty: SemType) -> (result: bool) {
+    return match ty { TPoison => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false };
+}
+fn sem_eq(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: SemType, b: SemType) -> (result: bool) {
+    return match a {
+        TBool => sem_eq_bool(b),
+        TByte => sem_eq_byte(b),
+        TInt { width: w, signed: s } => sem_eq_int(b, w, s),
+        TNamed { start: s, end: e } => sem_eq_named(s0, s1, s2, s3, total, b, s, e),
+        TSeq => sem_eq_seq(b),
+        TPoison => sem_eq_poison(b)
+    };
+}
+fn sem_eq_poison(b: SemType) -> (result: bool) {
+    return match b { TPoison => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false };
+}
+fn sem_eq_bool(b: SemType) -> (result: bool) {
+    return match b { TBool => true, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+}
+fn sem_eq_byte(b: SemType) -> (result: bool) {
+    return match b { TBool => false, TByte => true, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+}
+fn sem_eq_int(b: SemType, w: u64, s: bool) -> (result: bool) {
+    return match b {
+        TInt { width: w2, signed: s2 } => int_eq_extra(w, w2, s, s2),
+        TBool => false,
+        TByte => false,
+        TNamed { start: s3, end: e3 } => false,
+        TSeq => false,
+        TPoison => false
+    };
+}
+// Boolean conjunction without `==` on booleans (Stage-0 rejects boolean
+// equality, so the compiler itself cannot use it).
+fn int_eq_extra(w: u64, w2: u64, s: bool, s2: bool) -> (result: bool) {
+    if w != w2 { return false; }
+    if s { return s2; }
+    return not(s2);
+}
+fn sem_eq_named(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, b: SemType, s: u64, e: u64) -> (result: bool) {
+    return match b {
+        TNamed { start: q2, end: g2 } => spans_equal(s0, s1, s2, s3, total, s, e, q2, g2),
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: g } => false,
+        TSeq => false,
+        TPoison => false
+    };
+}
+fn sem_eq_seq(b: SemType) -> (result: bool) {
+    return match b { TSeq => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TPoison => false };
+}
+fn is_int_ty(ty: SemType) -> (result: bool) {
+    return match ty { TInt { width: w, signed: s } => true, TBool => false, TByte => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+}
+fn is_bool_ty(ty: SemType) -> (result: bool) {
+    return match ty { TBool => true, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+}
+
+// Lexical scopes. Bindings never leak out of a block: each if/else branch
+// is checked under a pushed scope that is discarded afterward, while the
+// function top level shares one scope with its parameters (Stage-0
+// MNE110/MNE102 behavior). Rebinding in the same scope keeps the FIRST
+// binding and records the obligation; the later declaration is dropped.
+record Bind { start: u64, end: u64, ty: SemType }
+enum BindList { BNil, BCons { head: Bind, tail: BindList } }
+record Scope { binds: BindList }
+enum ScopeStack { ZNil, ZCons { head: Scope, tail: ScopeStack } }
+record LookupRes { found: bool, ty: SemType }
+record ScopeLookup { rest: BindList, start: u64, end: u64, found: bool, ty: SemType }
+fn scope_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, binds: BindList, start: u64, end: u64) -> (result: LookupRes) {
+    iterate sl0 over s0 carrying a: ScopeLookup = ScopeLookup { rest: binds, start: start, end: end, found: false, ty: SemType.TPoison } {
+        next a = scope_lookup_step(s0, s1, s2, s3, total, a);
+    }
+    iterate sl1 over s1 carrying b: ScopeLookup = a {
+        next b = scope_lookup_step(s0, s1, s2, s3, total, b);
+    }
+    iterate sl2 over s2 carrying c: ScopeLookup = b {
+        next c = scope_lookup_step(s0, s1, s2, s3, total, c);
+    }
+    iterate sl3 over s3 carrying d: ScopeLookup = c {
+        next d = scope_lookup_step(s0, s1, s2, s3, total, d);
+    }
+    return LookupRes { found: d.found, ty: d.ty };
+}
+fn scope_lookup_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ScopeLookup) -> (result: ScopeLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        BNil => st,
+        BCons { head: h, tail: t } => scope_lookup_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn scope_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ScopeLookup, h: Bind, t: BindList) -> (result: ScopeLookup) {
+    if spans_equal(s0, s1, s2, s3, total, h.start, h.end, st.start, st.end) {
+        return ScopeLookup { rest: BindList.BNil, start: st.start, end: st.end, found: true, ty: h.ty };
+    }
+    return ScopeLookup { rest: t, start: st.start, end: st.end, found: false, ty: SemType.TPoison };
+}
+record EnvLookup { rest: ScopeStack, start: u64, end: u64, found: bool, ty: SemType }
+fn env_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ScopeStack, start: u64, end: u64) -> (result: LookupRes) {
+    iterate el0 over s0 carrying a: EnvLookup = EnvLookup { rest: st, start: start, end: end, found: false, ty: SemType.TPoison } {
+        next a = env_lookup_step(s0, s1, s2, s3, total, a);
+    }
+    iterate el1 over s1 carrying b: EnvLookup = a {
+        next b = env_lookup_step(s0, s1, s2, s3, total, b);
+    }
+    iterate el2 over s2 carrying c: EnvLookup = b {
+        next c = env_lookup_step(s0, s1, s2, s3, total, c);
+    }
+    iterate el3 over s3 carrying d: EnvLookup = c {
+        next d = env_lookup_step(s0, s1, s2, s3, total, d);
+    }
+    return LookupRes { found: d.found, ty: d.ty };
+}
+fn env_lookup_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EnvLookup) -> (result: EnvLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        ZNil => st,
+        ZCons { head: h, tail: t } => env_lookup_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn env_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EnvLookup, h: Scope, t: ScopeStack) -> (result: EnvLookup) {
+    let got: LookupRes = scope_lookup(s0, s1, s2, s3, total, h.binds, st.start, st.end);
+    if got.found { return EnvLookup { rest: ScopeStack.ZNil, start: st.start, end: st.end, found: true, ty: got.ty }; }
+    return EnvLookup { rest: t, start: st.start, end: st.end, found: false, ty: SemType.TPoison };
+}
+record BindRes { dup: bool, stack: ScopeStack }
+fn env_bind_current(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ScopeStack, start: u64, end: u64, ty: SemType) -> (result: BindRes) {
+    return match st {
+        ZNil => BindRes { dup: false, stack: ScopeStack.ZCons { head: Scope { binds: BindList.BCons { head: Bind { start: start, end: end, ty: ty }, tail: BindList.BNil } }, tail: ScopeStack.ZNil } },
+        ZCons { head: h, tail: t } => env_bind_scope(s0, s1, s2, s3, total, h, t, start, end, ty)
+    };
+}
+fn env_bind_scope(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, h: Scope, t: ScopeStack, start: u64, end: u64, ty: SemType) -> (result: BindRes) {
+    let got: LookupRes = scope_lookup(s0, s1, s2, s3, total, h.binds, start, end);
+    if got.found { return BindRes { dup: true, stack: ScopeStack.ZCons { head: h, tail: t } }; }
+    return BindRes { dup: false, stack: ScopeStack.ZCons { head: Scope { binds: BindList.BCons { head: Bind { start: start, end: end, ty: ty }, tail: h.binds } }, tail: t } };
+}
+fn push_scope(st: ScopeStack) -> (result: ScopeStack) {
+    return ScopeStack.ZCons { head: Scope { binds: BindList.BNil }, tail: st };
+}
+
+// Extended integer spellings (u8/u16/u32/i8/i16/i32/i64) arrive as named
+// type references; anything else falls through to record/enum resolution
+// by returning the name itself as a TNamed candidate.
+fn scalar_sem(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: SemType) {
+    if end < start { return SemType.TNamed { start: start, end: end }; }
+    if end - start < 2 || end - start > 3 { return SemType.TNamed { start: start, end: end }; }
+    let b0: u64 = segment.byte_at(s0, s1, s2, s3, total, start);
+    if b0 != 117 && b0 != 105 { return SemType.TNamed { start: start, end: end }; }
+    if not(span_digits(s0, s1, s2, s3, total, start + 1, end)) { return SemType.TNamed { start: start, end: end }; }
+    let val: IntVal = int_value(s0, s1, s2, s3, total, start + 1, end);
+    if val.overflow { return SemType.TNamed { start: start, end: end }; }
+    if val.value == 8 || val.value == 16 || val.value == 32 || val.value == 64 {
+        return SemType.TInt { width: val.value, signed: b0 == 105 };
+    }
+    return SemType.TNamed { start: start, end: end };
+}
+record DigitCheck { pos: u64, end: u64, ok: bool }
+fn span_digits(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: bool) {
+    iterate dg0 over s0 carrying a: DigitCheck = DigitCheck { pos: start, end: end, ok: true } {
+        next a = span_digits_step(s0, s1, s2, s3, total, a);
+    }
+    iterate dg1 over s1 carrying b: DigitCheck = a {
+        next b = span_digits_step(s0, s1, s2, s3, total, b);
+    }
+    iterate dg2 over s2 carrying c: DigitCheck = b {
+        next c = span_digits_step(s0, s1, s2, s3, total, c);
+    }
+    iterate dg3 over s3 carrying d: DigitCheck = c {
+        next d = span_digits_step(s0, s1, s2, s3, total, d);
+    }
+    return d.ok && d.pos >= d.end;
+}
+fn span_digits_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: DigitCheck) -> (result: DigitCheck) {
+    if not(st.ok) || st.pos >= st.end { return st; }
+    let byte: u64 = segment.byte_at(s0, s1, s2, s3, total, st.pos);
+    if byte < 48 || byte > 57 { return DigitCheck { pos: st.pos, end: st.end, ok: false }; }
+    return DigitCheck { pos: st.pos + 1, end: st.end, ok: true };
+}
+// Type resolution against scalar spellings and the declared record/enum
+// tables. Qualified (kind 6) and unknown (kind 9) spellings fail here; the
+// caller selects the diagnostic family (MNE105/MNE153/MNE171/MNE173).
+record TyRes { ty: SemType, ok: bool }
+fn resolve_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+    if kind == 3 { return TyRes { ty: SemType.TBool, ok: true }; }
+    if kind == 4 { return TyRes { ty: SemType.TByte, ok: true }; }
+    if kind == 1 { return TyRes { ty: SemType.TInt { width: 64, signed: false }, ok: true }; }
+    if kind == 2 { return TyRes { ty: SemType.TInt { width: 64, signed: true }, ok: true }; }
+    if kind == 7 || kind == 8 { return resolve_seq_type(s0, s1, s2, s3, total, start, end, rectab, enumtab); }
+    if kind == 5 { return resolve_named_type(s0, s1, s2, s3, total, start, end, rectab, enumtab); }
+    return TyRes { ty: SemType.TPoison, ok: false };
+}
+fn resolve_seq_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+    let elem: TypeParse = parse_type(s0, s1, s2, s3, total, start + 1);
+    if not(elem.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    // No back-call into resolve_type (MNE130): sequence elements are flat
+    // by construction (the parser rejects nested `[`), so the element is
+    // resolved by the flat case split below.
+    if elem.node.kind == 7 || elem.node.kind == 8 { return TyRes { ty: SemType.TSeq, ok: true }; }
+    if elem.node.kind == 1 || elem.node.kind == 2 || elem.node.kind == 3 || elem.node.kind == 4 { return TyRes { ty: SemType.TSeq, ok: true }; }
+    if elem.node.kind == 5 { return resolve_seq_elem(s0, s1, s2, s3, total, elem.node.start, elem.node.end, rectab, enumtab); }
+    return TyRes { ty: SemType.TPoison, ok: false };
+}
+fn resolve_seq_elem(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+    let inner: TyRes = resolve_named_type(s0, s1, s2, s3, total, start, end, rectab, enumtab);
+    if not(inner.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    return TyRes { ty: SemType.TSeq, ok: true };
+}
+fn resolve_named_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+    let sc: SemType = scalar_sem(s0, s1, s2, s3, total, start, end);
+    return match sc {
+        TNamed { start: n, end: m } => resolve_declared_type(s0, s1, s2, s3, total, n, m, rectab, enumtab),
+        TBool => TyRes { ty: SemType.TBool, ok: true },
+        TByte => TyRes { ty: SemType.TByte, ok: true },
+        TInt { width: w, signed: g } => TyRes { ty: SemType.TInt { width: w, signed: g }, ok: true },
+        TSeq => TyRes { ty: SemType.TSeq, ok: true },
+        TPoison => TyRes { ty: SemType.TPoison, ok: false }
+    };
+}
+fn resolve_declared_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+    if record_declared(s0, s1, s2, s3, total, rectab, start, end) { return TyRes { ty: SemType.TNamed { start: start, end: end }, ok: true }; }
+    if enum_declared(s0, s1, s2, s3, total, enumtab, start, end) { return TyRes { ty: SemType.TNamed { start: start, end: end }, ok: true }; }
+    return TyRes { ty: SemType.TPoison, ok: false };
+}
+fn record_declared(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, rectab: RecordList, start: u64, end: u64) -> (result: bool) {
+    iterate rd0 over s0 carrying a: RecScan = RecScan { rest: rectab, start: start, end: end, found: false } {
+        next a = record_declared_step(s0, s1, s2, s3, total, a);
+    }
+    iterate rd1 over s1 carrying b: RecScan = a {
+        next b = record_declared_step(s0, s1, s2, s3, total, b);
+    }
+    iterate rd2 over s2 carrying c: RecScan = b {
+        next c = record_declared_step(s0, s1, s2, s3, total, c);
+    }
+    iterate rd3 over s3 carrying d: RecScan = c {
+        next d = record_declared_step(s0, s1, s2, s3, total, d);
+    }
+    return d.found;
+}
+record RecScan { rest: RecordList, start: u64, end: u64, found: bool }
+fn record_declared_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecScan) -> (result: RecScan) {
+    if st.found { return st; }
+    return match st.rest {
+        RNil => st,
+        RCons { head: h, tail: t } => record_declared_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn record_declared_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecScan, h: RecordDecl, t: RecordList) -> (result: RecScan) {
+    if spans_equal(s0, s1, s2, s3, total, h.name_start, h.name_end, st.start, st.end) {
+        return RecScan { rest: RecordList.RNil, start: st.start, end: st.end, found: true };
+    }
+    return RecScan { rest: t, start: st.start, end: st.end, found: false };
+}
+fn enum_declared(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, enumtab: EnumList, start: u64, end: u64) -> (result: bool) {
+    iterate ed0 over s0 carrying a: EnumScan = EnumScan { rest: enumtab, start: start, end: end, found: false } {
+        next a = enum_declared_step(s0, s1, s2, s3, total, a);
+    }
+    iterate ed1 over s1 carrying b: EnumScan = a {
+        next b = enum_declared_step(s0, s1, s2, s3, total, b);
+    }
+    iterate ed2 over s2 carrying c: EnumScan = b {
+        next c = enum_declared_step(s0, s1, s2, s3, total, c);
+    }
+    iterate ed3 over s3 carrying d: EnumScan = c {
+        next d = enum_declared_step(s0, s1, s2, s3, total, d);
+    }
+    return d.found;
+}
+record EnumScan { rest: EnumList, start: u64, end: u64, found: bool }
+fn enum_declared_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EnumScan) -> (result: EnumScan) {
+    if st.found { return st; }
+    return match st.rest {
+        GNil => st,
+        GCons { head: h, tail: t } => enum_declared_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn enum_declared_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EnumScan, h: EnumDecl, t: EnumList) -> (result: EnumScan) {
+    if spans_equal(s0, s1, s2, s3, total, h.name_start, h.name_end, st.start, st.end) {
+        return EnumScan { rest: EnumList.GNil, start: st.start, end: st.end, found: true };
+    }
+    return EnumScan { rest: t, start: st.start, end: st.end, found: false };
+}
+
+// Function signatures: parameter/result type validity, exactly-one-result,
+// capability declaration with keep-first duplicate handling, effect
+// authority against declared capabilities, and contract clauses recorded
+// as retained UNKNOWN assumptions (Stage-0 never rejects them, not even
+// for undeclared names or mismatched arities).
+record Sig { start: u64, end: u64, params: BindList, nparams: u64, result: SemType, fx: EffectList }
+enum SigTab { HNil, HCons { head: Sig, tail: SigTab } }
+record SigRep { sig: Sig, obls: OblList }
+fn check_sig(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, h: FnDecl, rectab: RecordList, enumtab: EnumList) -> (result: SigRep) {
+    let sg: FnSig = h.sig;
+    let ps: ParamRep = check_params(s0, s1, s2, s3, total, sg.params, rectab, enumtab);
+    let rs: ResultRep = check_results(s0, s1, s2, s3, total, sg.results, h.fn_start, h.fn_end, rectab, enumtab);
+    let cs: CapRep = check_caps(s0, s1, s2, s3, total, sg.capabilities);
+    let es: FxRep = check_effects(s0, s1, s2, s3, total, sg.effects, cs.caps);
+    let ks: OblList = check_contracts(s0, s1, s2, s3, sg.contracts);
+    let o1: OblList = append_obls(s0, s1, s2, s3, ps.obls, rs.obls);
+    let o2: OblList = append_obls(s0, s1, s2, s3, o1, cs.obls);
+    let o3: OblList = append_obls(s0, s1, s2, s3, o2, es.obls);
+    let obls: OblList = append_obls(s0, s1, s2, s3, o3, ks);
+    return SigRep { sig: Sig { start: sg.name_start, end: sg.name_end, params: ps.binds, nparams: ps.n, result: rs.ty, fx: es.fx }, obls: obls };
+}
+record ParamRep { binds: BindList, n: u64, obls: OblList }
+record ParamState { rest: FieldList, binds: BindList, seen: NameList, n: u64, obls: OblList }
+fn check_params(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, params: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ParamRep) {
+    iterate pm0 over s0 carrying a: ParamState = ParamState { rest: params, binds: BindList.BNil, seen: NameList.NNil, n: 0, obls: OblList.LNil } {
+        next a = check_params_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate pm1 over s1 carrying b: ParamState = a {
+        next b = check_params_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate pm2 over s2 carrying c: ParamState = b {
+        next c = check_params_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate pm3 over s3 carrying d: ParamState = c {
+        next d = check_params_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return ParamRep { binds: d.binds, n: d.n, obls: reverse_obls(s0, s1, s2, s3, d.obls) };
+}
+fn check_params_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ParamState, rectab: RecordList, enumtab: EnumList) -> (result: ParamState) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: h, tail: t } => check_one_param(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_param(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ParamState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ParamState) {
+    let ty: TyRes = resolve_type(s0, s1, s2, s3, total, h.type_kind, h.type_start, h.type_end, rectab, enumtab);
+    let tob: OblList = param_type_obl(h, ty);
+    if name_known(s0, s1, s2, s3, total, st.seen, h.name_start, h.name_end) {
+        let dob: Obligation = Obligation { kind: 5, start: h.name_start, end: h.name_end, status: 1 };
+        return ParamState { rest: t, binds: st.binds, seen: st.seen, n: st.n, obls: OblList.LCons { head: dob, tail: append_obls(s0, s1, s2, s3, tob, st.obls) } };
+    }
+    let seen: NameList = NameList.NCons { head: NameSpan { start: h.name_start, end: h.name_end }, tail: st.seen };
+    let bound: SemType = param_bound_type(ty);
+    let binds: BindList = BindList.BCons { head: Bind { start: h.name_start, end: h.name_end, ty: bound }, tail: st.binds };
+    return ParamState { rest: t, binds: binds, seen: seen, n: st.n + 1, obls: append_obls(s0, s1, s2, s3, tob, st.obls) };
+}
+fn param_type_obl(h: Field, ty: TyRes) -> (result: OblList) {
+    if ty.ok { return OblList.LNil; }
+    if h.type_kind == 6 { return OblList.LCons { head: Obligation { kind: 31, start: h.type_start, end: h.type_end, status: 1 }, tail: OblList.LNil }; }
+    return OblList.LCons { head: Obligation { kind: 19, start: h.type_start, end: h.type_end, status: 1 }, tail: OblList.LNil };
+}
+fn param_bound_type(ty: TyRes) -> (result: SemType) {
+    if ty.ok { return ty.ty; }
+    return SemType.TPoison;
+}
+record ResultRep { ty: SemType, obls: OblList }
+record ResultState { rest: FieldList, n: u64, ty: SemType, obls: OblList }
+fn check_results(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, results: FieldList, fn_start: u64, fn_end: u64, rectab: RecordList, enumtab: EnumList) -> (result: ResultRep) {
+    iterate rs0 over s0 carrying a: ResultState = ResultState { rest: results, n: 0, ty: SemType.TPoison, obls: OblList.LNil } {
+        next a = check_results_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate rs1 over s1 carrying b: ResultState = a {
+        next b = check_results_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate rs2 over s2 carrying c: ResultState = b {
+        next c = check_results_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate rs3 over s3 carrying d: ResultState = c {
+        next d = check_results_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return finish_results(s0, s1, s2, s3, d, fn_start, fn_end);
+}
+fn check_results_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ResultState, rectab: RecordList, enumtab: EnumList) -> (result: ResultState) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: h, tail: t } => check_one_result(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_result(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ResultState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ResultState) {
+    let ty: TyRes = resolve_type(s0, s1, s2, s3, total, h.type_kind, h.type_start, h.type_end, rectab, enumtab);
+    let tob: OblList = param_type_obl(h, ty);
+    let bound: SemType = param_bound_type(ty);
+    let kept: SemType = result_kept_type(st, bound);
+    return ResultState { rest: t, n: st.n + 1, ty: kept, obls: append_obls(s0, s1, s2, s3, tob, st.obls) };
+}
+fn result_kept_type(st: ResultState, bound: SemType) -> (result: SemType) {
+    if st.n == 0 { return bound; }
+    return st.ty;
+}
+fn finish_results(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: ResultState, fn_start: u64, fn_end: u64) -> (result: ResultRep) {
+    let ordered: OblList = reverse_obls(s0, s1, s2, s3, st.obls);
+    if st.n == 1 { return ResultRep { ty: st.ty, obls: ordered }; }
+    let obl: Obligation = Obligation { kind: 18, start: fn_start, end: fn_end, status: 1 };
+    return ResultRep { ty: SemType.TPoison, obls: append_obls(s0, s1, s2, s3, ordered, OblList.LCons { head: obl, tail: OblList.LNil }) };
+}
+record CapRep { caps: NameList, obls: OblList }
+record CapState { rest: CapList, caps: NameList, obls: OblList }
+fn check_caps(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, caps: CapList) -> (result: CapRep) {
+    iterate cp0 over s0 carrying a: CapState = CapState { rest: caps, caps: NameList.NNil, obls: OblList.LNil } {
+        next a = check_caps_step(s0, s1, s2, s3, total, a);
+    }
+    iterate cp1 over s1 carrying b: CapState = a {
+        next b = check_caps_step(s0, s1, s2, s3, total, b);
+    }
+    iterate cp2 over s2 carrying c: CapState = b {
+        next c = check_caps_step(s0, s1, s2, s3, total, c);
+    }
+    iterate cp3 over s3 carrying d: CapState = c {
+        next d = check_caps_step(s0, s1, s2, s3, total, d);
+    }
+    return CapRep { caps: d.caps, obls: reverse_obls(s0, s1, s2, s3, d.obls) };
+}
+fn check_caps_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: CapState) -> (result: CapState) {
+    return match st.rest {
+        ANil => st,
+        ACons { head: h, tail: t } => check_one_cap(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn check_one_cap(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: CapState, h: Cap, t: CapList) -> (result: CapState) {
+    if name_known(s0, s1, s2, s3, total, st.caps, h.start, h.end) {
+        let obl: Obligation = Obligation { kind: 5, start: h.start, end: h.end, status: 1 };
+        return CapState { rest: t, caps: st.caps, obls: OblList.LCons { head: obl, tail: st.obls } };
+    }
+    let caps: NameList = NameList.NCons { head: NameSpan { start: h.start, end: h.end }, tail: st.caps };
+    return CapState { rest: t, caps: caps, obls: st.obls };
+}
+record FxRep { fx: EffectList, obls: OblList }
+record FxState { rest: EffectList, fx: EffectList, obls: OblList }
+fn check_effects(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, effects: EffectList, caps: NameList) -> (result: FxRep) {
+    iterate fx0 over s0 carrying a: FxState = FxState { rest: effects, fx: EffectList.XNil, obls: OblList.LNil } {
+        next a = check_effects_step(s0, s1, s2, s3, total, a, caps);
+    }
+    iterate fx1 over s1 carrying b: FxState = a {
+        next b = check_effects_step(s0, s1, s2, s3, total, b, caps);
+    }
+    iterate fx2 over s2 carrying c: FxState = b {
+        next c = check_effects_step(s0, s1, s2, s3, total, c, caps);
+    }
+    iterate fx3 over s3 carrying d: FxState = c {
+        next d = check_effects_step(s0, s1, s2, s3, total, d, caps);
+    }
+    return FxRep { fx: reverse_effects(s0, s1, s2, s3, d.fx), obls: reverse_obls(s0, s1, s2, s3, d.obls) };
+}
+fn check_effects_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FxState, caps: NameList) -> (result: FxState) {
+    return match st.rest {
+        XNil => st,
+        XCons { head: h, tail: t } => check_one_effect(s0, s1, s2, s3, total, st, h, t, caps)
+    };
+}
+fn check_one_effect(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FxState, h: Effect, t: EffectList, caps: NameList) -> (result: FxState) {
+    if name_known(s0, s1, s2, s3, total, caps, h.cap_start, h.cap_end) {
+        return FxState { rest: t, fx: EffectList.XCons { head: h, tail: st.fx }, obls: st.obls };
+    }
+    let obl: Obligation = Obligation { kind: 17, start: h.kind_start, end: h.cap_end, status: 1 };
+    return FxState { rest: t, fx: st.fx, obls: OblList.LCons { head: obl, tail: st.obls } };
+}
+record ClauseState { rest: ClauseList, obls: OblList }
+fn check_contracts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], clauses: ClauseList) -> (result: OblList) {
+    iterate kc0 over s0 carrying a: ClauseState = ClauseState { rest: clauses, obls: OblList.LNil } {
+        next a = check_contracts_step(a);
+    }
+    iterate kc1 over s1 carrying b: ClauseState = a {
+        next b = check_contracts_step(b);
+    }
+    iterate kc2 over s2 carrying c: ClauseState = b {
+        next c = check_contracts_step(c);
+    }
+    iterate kc3 over s3 carrying d: ClauseState = c {
+        next d = check_contracts_step(d);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn check_contracts_step(st: ClauseState) -> (result: ClauseState) {
+    return match st.rest {
+        CNil => st,
+        CCons { head: h, tail: t } => ClauseState { rest: t, obls: OblList.LCons { head: Obligation { kind: 16, start: h.kind_start, end: h.name_end, status: 2 }, tail: st.obls } }
+    };
+}
+// Declaration tables: uses are unavailable without a module system
+// (MNE173, matching the oracle in this environment); enum payloads admit
+// scalars and declared nominals but no sequences; record fields admit
+// sequences with valid elements.
+fn check_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], uses: UseList) -> (result: OblList) {
+    iterate us0 over s0 carrying a: UseState = UseState { rest: uses, obls: OblList.LNil } {
+        next a = check_uses_step(a);
+    }
+    iterate us1 over s1 carrying b: UseState = a {
+        next b = check_uses_step(b);
+    }
+    iterate us2 over s2 carrying c: UseState = b {
+        next c = check_uses_step(c);
+    }
+    iterate us3 over s3 carrying d: UseState = c {
+        next d = check_uses_step(d);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+record UseState { rest: UseList, obls: OblList }
+fn check_uses_step(st: UseState) -> (result: UseState) {
+    return match st.rest {
+        UNil => st,
+        UCons { head: h, tail: t } => UseState { rest: t, obls: OblList.LCons { head: Obligation { kind: 36, start: h.module_start, end: h.module_end, status: 1 }, tail: st.obls } }
+    };
+}
+
+// Typed stack IR with provenance. Every operation carries its source span
+// and its established type, so an IR operation stays related to the
+// semantic expression it came from. The type-stack verifier below is a
+// narrow authority: it checks operand depth, binary operand equality, and
+// the final type, but it does NOT re-derive operator typing (that proof
+// belongs to the checking step that emitted the operation). It rejects
+// poisoned types: poison only arises alongside a recorded FAIL, so
+// poisoned IR is never verified.
+enum TOp {
+    TInt { value: u64, ty: SemType, start: u64, end: u64 },
+    TBool { value: bool, ty: SemType, start: u64, end: u64 },
+    TName { ty: SemType, start: u64, end: u64 },
+    TBin { op: u64, ty: SemType, start: u64, end: u64 },
+    TCall { ty: SemType, argc: u64, start: u64, end: u64, ns: u64, ne: u64 },
+    TProj { ty: SemType, fstart: u64, fend: u64, start: u64, end: u64 }
+}
+enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
+enum TopsList { TLNil, TLCons { head: TOpList, tail: TopsList } }
+enum TyList { TyNil, TyCons { head: SemType, tail: TyList } }
+enum TyStack { WNil, WCons { head: SemType, tail: TyStack } }
+record TopsRev { rest: TOpList, acc: TOpList }
+fn reverse_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TOpList) -> (result: TOpList) {
+    iterate tp0 over s0 carrying a: TopsRev = TopsRev { rest: list, acc: TOpList.PNil } {
+        next a = reverse_tops_step(a);
+    }
+    iterate tp1 over s1 carrying b: TopsRev = a {
+        next b = reverse_tops_step(b);
+    }
+    iterate tp2 over s2 carrying c: TopsRev = b {
+        next c = reverse_tops_step(c);
+    }
+    iterate tp3 over s3 carrying d: TopsRev = c {
+        next d = reverse_tops_step(d);
+    }
+    return d.acc;
+}
+fn reverse_tops_step(st: TopsRev) -> (result: TopsRev) {
+    return match st.rest { PNil => st, PCons { head: h, tail: t } => TopsRev { rest: t, acc: TOpList.PCons { head: h, tail: st.acc } } };
+}
+record TopsPrepend { rest: TOpList, acc: TOpList }
+fn append_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: TOpList, second: TOpList) -> (result: TOpList) {
+    let rev: TOpList = reverse_tops(s0, s1, s2, s3, first);
+    iterate tq0 over s0 carrying a: TopsPrepend = TopsPrepend { rest: rev, acc: second } {
+        next a = append_tops_step(a);
+    }
+    iterate tq1 over s1 carrying b: TopsPrepend = a {
+        next b = append_tops_step(b);
+    }
+    iterate tq2 over s2 carrying c: TopsPrepend = b {
+        next c = append_tops_step(c);
+    }
+    iterate tq3 over s3 carrying d: TopsPrepend = c {
+        next d = append_tops_step(d);
+    }
+    return d.acc;
+}
+fn append_tops_step(st: TopsPrepend) -> (result: TopsPrepend) {
+    return match st.rest { PNil => st, PCons { head: h, tail: t } => TopsPrepend { rest: t, acc: TOpList.PCons { head: h, tail: st.acc } } };
+}
+record TopsCount { rest: TOpList, n: u64 }
+fn count_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TOpList) -> (result: u64) {
+    iterate tc0 over s0 carrying a: TopsCount = TopsCount { rest: list, n: 0 } {
+        next a = count_tops_step(a);
+    }
+    iterate tc1 over s1 carrying b: TopsCount = a {
+        next b = count_tops_step(b);
+    }
+    iterate tc2 over s2 carrying c: TopsCount = b {
+        next c = count_tops_step(c);
+    }
+    iterate tc3 over s3 carrying d: TopsCount = c {
+        next d = count_tops_step(d);
+    }
+    return d.n;
+}
+fn count_tops_step(st: TopsCount) -> (result: TopsCount) {
+    return match st.rest { PNil => st, PCons { head: h, tail: t } => TopsCount { rest: t, n: st.n + 1 } };
+}
+// Type-stack verification: pushes add one typed slot; TBin needs two
+// equal operand types; TCall needs argc slots; TProj is depth-neutral.
+// A well-formed lowering of one expression ends at depth exactly one;
+// when a final type is required it must equal the established type.
+record TDepth { rest: TOpList, stack: TyStack, depth: u64, ok: bool }
+fn verify_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, ops: TOpList, want: ExpTy) -> (result: bool) {
+    iterate tv0 over s0 carrying a: TDepth = TDepth { rest: ops, stack: TyStack.WNil, depth: 0, ok: true } {
+        next a = verify_tops_step(s0, s1, s2, s3, total, a);
+    }
+    iterate tv1 over s1 carrying b: TDepth = a {
+        next b = verify_tops_step(s0, s1, s2, s3, total, b);
+    }
+    iterate tv2 over s2 carrying c: TDepth = b {
+        next c = verify_tops_step(s0, s1, s2, s3, total, c);
+    }
+    iterate tv3 over s3 carrying d: TDepth = c {
+        next d = verify_tops_step(s0, s1, s2, s3, total, d);
+    }
+    return finish_verify_tops(s0, s1, s2, s3, total, d, want);
+}
+fn verify_tops_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth) -> (result: TDepth) {
+    if not(st.ok) { return st; }
+    return match st.rest {
+        PNil => st,
+        PCons { head: h, tail: t } => verify_top_one(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn verify_top_one(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, h: TOp, t: TOpList) -> (result: TDepth) {
+    return match h {
+        TInt { value: v, ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
+        TBool { value: v, ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
+        TName { ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
+        TBin { op: o, ty: ty, start: s, end: e } => verify_top_bin(s0, s1, s2, s3, total, st, t, ty),
+        TCall { ty: ty, argc: c, start: s, end: e, ns: ns, ne: ne } => verify_top_call(s0, s1, s2, s3, st, t, ty, c),
+        TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => verify_top_proj(st, t, ty)
+    };
+}
+fn verify_top_push(st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
+    if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: st.stack }, depth: st.depth + 1, ok: true };
+}
+fn verify_top_bin(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
+    if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match st.stack {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: h1, tail: t1 } => verify_top_bin_inner(s0, s1, s2, s3, total, st, t, ty, h1, t1)
+    };
+}
+fn verify_top_bin_inner(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, t: TOpList, ty: SemType, h1: SemType, t1: TyStack) -> (result: TDepth) {
+    return match t1 {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: h2, tail: t2 } => verify_top_bin_eq(s0, s1, s2, s3, total, st, t, ty, h1, h2, t2)
+    };
+}
+fn verify_top_bin_eq(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, t: TOpList, ty: SemType, h1: SemType, h2: SemType, t2: TyStack) -> (result: TDepth) {
+    if not(sem_eq(s0, s1, s2, s3, total, h1, h2)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: t2 }, depth: st.depth - 1, ok: true };
+}
+record PopN { rest: TyStack, n: u64, ok: bool }
+fn pop_tys(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], stack: TyStack, n: u64) -> (result: PopN) {
+    iterate pn0 over s0 carrying a: PopN = PopN { rest: stack, n: n, ok: true } {
+        next a = pop_tys_step(a);
+    }
+    iterate pn1 over s1 carrying b: PopN = a {
+        next b = pop_tys_step(b);
+    }
+    iterate pn2 over s2 carrying c: PopN = b {
+        next c = pop_tys_step(c);
+    }
+    iterate pn3 over s3 carrying d: PopN = c {
+        next d = pop_tys_step(d);
+    }
+    return d;
+}
+fn pop_tys_step(st: PopN) -> (result: PopN) {
+    if not(st.ok) || st.n == 0 { return st; }
+    return match st.rest {
+        WNil => PopN { rest: TyStack.WNil, n: st.n, ok: false },
+        WCons { head: h, tail: t } => PopN { rest: t, n: st.n - 1, ok: true }
+    };
+}
+fn verify_top_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: TDepth, t: TOpList, ty: SemType, argc: u64) -> (result: TDepth) {
+    if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if st.depth < argc { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    let popped: PopN = pop_tys(s0, s1, s2, s3, st.stack, argc);
+    if not(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: popped.rest }, depth: st.depth - argc + 1, ok: true };
+}
+fn verify_top_proj(st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
+    if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match st.stack {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: h, tail: t2 } => TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: t2 }, depth: st.depth, ok: true }
+    };
+}
+fn finish_verify_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, want: ExpTy) -> (result: bool) {
+    if not(st.ok) { return false; }
+    if st.depth != 1 { return false; }
+    return match want {
+        XNone => true,
+        XSome { ty: ty } => finish_verify_want(s0, s1, s2, s3, total, st, ty)
+    };
+}
+fn finish_verify_want(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, ty: SemType) -> (result: bool) {
+    return match st.stack {
+        WNil => false,
+        WCons { head: h, tail: t } => finish_verify_top(s0, s1, s2, s3, total, h, ty)
+    };
+}
+fn finish_verify_top(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, h: SemType, ty: SemType) -> (result: bool) {
+    if is_poison(h) || is_poison(ty) { return false; }
+    return sem_eq(s0, s1, s2, s3, total, h, ty);
+}
+// Adversarial constructors: deliberately corrupted IR states built inside
+// MNCS. Each must be rejected by its verifier; the sound sample must pass.
+// The probe passes only source bytes, so no host-constructed values cross
+// the boundary: construction and verdict both execute in MNCS.
+fn sabotage_depth(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64]) -> (result: bool) {
+    let bad: FlatList = FlatList.ICons { head: FlatOp.PBin { op: 50 }, tail: FlatList.INil };
+    return flat_ok(s0, s1, s2, s3, bad);
+}
+fn sabotage_call_arity(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
+    let bad: TOpList = TOpList.PCons { head: TOp.TCall { ty: SemType.TInt { width: 64, signed: false }, argc: 2, start: 0, end: 1, ns: 0, ne: 1 }, tail: TOpList.PNil };
+    return verify_tops(s0, s1, s2, s3, total, bad, ExpTy.XNone);
+}
+fn sabotage_bin_mismatch(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
+    let ints: SemType = SemType.TInt { width: 64, signed: false };
+    let ops: TOpList = TOpList.PCons { head: TOp.TInt { value: 1, ty: ints, start: 0, end: 1 }, tail: TOpList.PCons { head: TOp.TBool { value: true, ty: SemType.TBool, start: 2, end: 6 }, tail: TOpList.PCons { head: TOp.TBin { op: 50, ty: ints, start: 0, end: 6 }, tail: TOpList.PNil } } };
+    return verify_tops(s0, s1, s2, s3, total, ops, ExpTy.XNone);
+}
+fn sabotage_final_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
+    let ops: TOpList = TOpList.PCons { head: TOp.TInt { value: 1, ty: SemType.TInt { width: 64, signed: false }, start: 0, end: 1 }, tail: TOpList.PNil };
+    return verify_tops(s0, s1, s2, s3, total, ops, ExpTy.XSome { ty: SemType.TBool });
+}
+fn sound_sample(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
+    let ints: SemType = SemType.TInt { width: 64, signed: false };
+    let ops: TOpList = TOpList.PCons { head: TOp.TInt { value: 1, ty: ints, start: 0, end: 1 }, tail: TOpList.PCons { head: TOp.TInt { value: 2, ty: ints, start: 4, end: 5 }, tail: TOpList.PCons { head: TOp.TBin { op: 50, ty: ints, start: 0, end: 5 }, tail: TOpList.PNil } } };
+    return verify_tops(s0, s1, s2, s3, total, ops, ExpTy.XSome { ty: ints });
+}
+
+// Bidirectional expression checking as an explicit-stack machine (MNE130
+// forbids the recursive descent this algorithm wants to be). Each job
+// carries its required type downward; each continuation resumes the parent
+// when a child type is established. A hard failure (unresolvable name,
+// arity, class violation) drains the machine; a mismatch against a
+// required type records its obligation and continues with the actual
+// type, mirroring Stage-0 elaboration. Checking and typed lowering are
+// fused: every established node emits its typed operation, so the typed
+// IR is produced BY the proof, not after it.
+record SemJob { e: Expr, exp: ExpTy }
+enum JobList { JNil, JCons { head: SemJob, tail: JobList } }
+enum SemKont {
+    KTop,
+    KBinL { op: u64, right: Expr, start: u64, end: u64 },
+    KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool },
+    KCallA { sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy },
+    KProj { fstart: u64, fend: u64, bstart: u64, bend: u64, start: u64, end: u64, exp: ExpTy }
+}
+enum KontList { QNil, QCons { head: SemKont, tail: KontList } }
+record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, fx: EffectList, total: u64 }
+record ExprRes { ty: SemType, ok: bool, obls: OblList, tops: TOpList }
+fn prove_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, fx: EffectList, total: u64, e: Expr, exp: ExpTy) -> (result: ExprRes) {
+    iterate sm0 over s0 carrying a: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, fx: fx, total: total } {
+        next a = sem_step(s0, s1, s2, s3, a);
+    }
+    iterate sm1 over s1 carrying b: SemState = a {
+        next b = sem_step(s0, s1, s2, s3, b);
+    }
+    iterate sm2 over s2 carrying c: SemState = b {
+        next c = sem_step(s0, s1, s2, s3, c);
+    }
+    iterate sm3 over s3 carrying d: SemState = c {
+        next d = sem_step(s0, s1, s2, s3, d);
+    }
+    return finish_prove_expr(s0, s1, s2, s3, d);
+}
+fn finish_prove_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState) -> (result: ExprRes) {
+    if st.failed { return ExprRes { ty: SemType.TPoison, ok: false, obls: reverse_obls(s0, s1, s2, s3, st.obls), tops: TOpList.PNil }; }
+    return ExprRes { ty: st.top_ty, ok: true, obls: reverse_obls(s0, s1, s2, s3, st.obls), tops: reverse_tops(s0, s1, s2, s3, st.tops) };
+}
+fn sem_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState) -> (result: SemState) {
+    if st.failed { return st; }
+    return match st.jobs {
+        JCons { head: j, tail: t } => sem_job(s0, s1, s2, s3, SemState { ..st, jobs: t }, j),
+        JNil => sem_kont_empty(s0, s1, s2, s3, st)
+    };
+}
+fn sem_kont_empty(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState) -> (result: SemState) {
+    return match st.konts {
+        QNil => st,
+        QCons { head: k, tail: t } => apply_kont(s0, s1, s2, s3, SemState { ..st, konts: t }, k)
+    };
+}
+fn sem_emit(st: SemState, kind: u64, start: u64, end: u64, status: u64) -> (result: SemState) {
+    return SemState { ..st, obls: OblList.LCons { head: Obligation { kind: kind, start: start, end: end, status: status }, tail: st.obls } };
+}
+fn sem_emit_top(st: SemState, top: TOp) -> (result: SemState) {
+    return SemState { ..st, tops: TOpList.PCons { head: top, tail: st.tops } };
+}
+fn sem_drain(st: SemState) -> (result: SemState) {
+    return SemState { ..st, jobs: JobList.JNil, konts: KontList.QNil, failed: true };
+}
+fn sem_accept(st: SemState, ty: SemType) -> (result: SemState) {
+    return SemState { ..st, last_ty: ty };
+}
+fn sem_job(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, job: SemJob) -> (result: SemState) {
+    return match job.e {
+        Name { start: s, end: e } => finish_name(s0, s1, s2, s3, st, s, e, job.exp),
+        Integer { start: s, end: e, value: v, overflow: o } => finish_int(st, v, s, e, job.exp),
+        Boolean { start: s, end: e, value: v } => finish_bool(st, v, s, e, job.exp),
+        Binary { op: o, left: l, right: r, start: s, end: e } => seed_binop(st, o, l, r, s, e, job.exp),
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => seed_call(s0, s1, s2, s3, st, ns, ne, a, s, e, job.exp),
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => seed_proj(st, b, fs, fe, s, e, job.exp)
+    };
+}
+fn finish_name(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let got: LookupRes = env_lookup(s0, s1, s2, s3, st.total, st.env, start, end);
+    if not(got.found) { return sem_drain(sem_emit(st, 1, start, end, 1)); }
+    return finish_name_exp(s0, s1, s2, s3, st, got.ty, start, end, exp);
+}
+fn finish_name_exp(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ty: SemType, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => sem_emit_top(sem_accept(st, ty), TOp.TName { ty: ty, start: start, end: end }),
+        XSome { ty: r } => finish_name_req(s0, s1, s2, s3, st, ty, r, start, end)
+    };
+}
+fn finish_name_req(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ty: SemType, r: SemType, start: u64, end: u64) -> (result: SemState) {
+    if sem_eq(s0, s1, s2, s3, st.total, ty, r) { return sem_emit_top(sem_accept(st, ty), TOp.TName { ty: ty, start: start, end: end }); }
+    return sem_emit_top(sem_accept(sem_emit(st, 2, start, end, 1), ty), TOp.TName { ty: ty, start: start, end: end });
+}
+fn finish_int(st: SemState, value: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => finish_int_plain(st, value, start, end),
+        XSome { ty: r } => finish_int_req(st, value, r, start, end)
+    };
+}
+fn finish_int_plain(st: SemState, value: u64, start: u64, end: u64) -> (result: SemState) {
+    let ty: SemType = SemType.TInt { width: 64, signed: true };
+    return sem_emit_top(sem_accept(st, ty), TOp.TInt { value: value, ty: ty, start: start, end: end });
+}
+fn finish_int_req(st: SemState, value: u64, r: SemType, start: u64, end: u64) -> (result: SemState) {
+    return match r {
+        TInt { width: w, signed: g } => sem_emit_top(sem_accept(st, r), TOp.TInt { value: value, ty: r, start: start, end: end }),
+        TByte => finish_int_byte(st, value, start, end),
+        TBool => finish_int_fail(st, value, start, end),
+        TNamed { start: n, end: m } => finish_int_fail(st, value, start, end),
+        TSeq => finish_int_fail(st, value, start, end),
+        TPoison => finish_int_fail(st, value, start, end)
+    };
+}
+fn finish_int_byte(st: SemState, value: u64, start: u64, end: u64) -> (result: SemState) {
+    if value <= 255 { return sem_emit_top(sem_accept(st, SemType.TByte), TOp.TInt { value: value, ty: SemType.TByte, start: start, end: end }); }
+    return sem_emit_top(sem_accept(sem_emit(st, 3, start, end, 1), SemType.TByte), TOp.TInt { value: value, ty: SemType.TByte, start: start, end: end });
+}
+fn finish_int_fail(st: SemState, value: u64, start: u64, end: u64) -> (result: SemState) {
+    let ty: SemType = SemType.TInt { width: 64, signed: true };
+    return sem_emit_top(sem_accept(sem_emit(st, 3, start, end, 1), ty), TOp.TInt { value: value, ty: ty, start: start, end: end });
+}
+fn finish_bool(st: SemState, value: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBool { value: value, ty: SemType.TBool, start: start, end: end }),
+        XSome { ty: r } => finish_bool_req(st, value, r, start, end)
+    };
+}
+fn finish_bool_req(st: SemState, value: bool, r: SemType, start: u64, end: u64) -> (result: SemState) {
+    return match r {
+        TBool => sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBool { value: value, ty: SemType.TBool, start: start, end: end }),
+        TByte => finish_bool_fail(st, value, start, end),
+        TInt { width: w, signed: g } => finish_bool_fail(st, value, start, end),
+        TNamed { start: n, end: m } => finish_bool_fail(st, value, start, end),
+        TSeq => finish_bool_fail(st, value, start, end),
+        TPoison => finish_bool_fail(st, value, start, end)
+    };
+}
+fn finish_bool_fail(st: SemState, value: bool, start: u64, end: u64) -> (result: SemState) {
+    return sem_emit_top(sem_accept(sem_emit(st, 4, start, end, 1), SemType.TBool), TOp.TBool { value: value, ty: SemType.TBool, start: start, end: end });
+}
+fn is_threaded(op: u64) -> (result: bool) {
+    if op == 50 || op == 51 || op == 52 { return true; }
+    if op == 55 || op == 56 || op == 57 { return true; }
+    if op == 91 || op == 92 || op == 93 { return true; }
+    if op == 94 || op == 95 || op == 96 { return true; }
+    return false;
+}
+fn bin_left_exp(op: u64, exp: ExpTy) -> (result: ExpTy) {
+    if is_threaded(op) { return exp; }
+    return ExpTy.XNone;
+}
+fn seed_binop(st: SemState, op: u64, left: Expr, right: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let lexp: ExpTy = bin_left_exp(op, exp);
+    let job: SemJob = SemJob { e: left, exp: lexp };
+    let kont: SemKont = SemKont.KBinL { op: op, right: right, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn nonzero_lit(e: Expr) -> (result: bool) {
+    return match e {
+        Integer { start: s, end: e2, value: v, overflow: o } => nonzero_val(v),
+        Name { start: s, end: e2 } => false,
+        Boolean { start: s, end: e2, value: v } => false,
+        Binary { op: o, left: l, right: r, start: s, end: e2 } => false,
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: p } => false
+    };
+}
+fn nonzero_val(v: u64) -> (result: bool) {
+    if v == 0 { return false; }
+    return true;
+}
+fn apply_kont(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, k: SemKont) -> (result: SemState) {
+    return match k {
+        KTop => SemState { ..st, top_ty: st.last_ty },
+        KBinL { op: o, right: r, start: s, end: e } => apply_bin_l(st, o, r, s, e),
+        KBinR { op: o, lty: l, start: s, end: e, rlit: q } => apply_bin_r(s0, s1, s2, s3, st, o, l, s, e, q),
+        KCallA { sig: g, args: a, ptys: p, start: s, end: e, exp: x } => apply_call_a(s0, s1, s2, s3, st, g, a, p, s, e, x),
+        KProj { fstart: fs, fend: fe, bstart: bs, bend: be, start: s, end: e, exp: x } => apply_proj(s0, s1, s2, s3, st, fs, fe, bs, be, s, e, x)
+    };
+}
+fn apply_bin_l(st: SemState, op: u64, right: Expr, start: u64, end: u64) -> (result: SemState) {
+    let lty: SemType = st.last_ty;
+    let job: SemJob = SemJob { e: right, exp: ExpTy.XSome { ty: lty } };
+    let kont: SemKont = SemKont.KBinR { op: op, lty: lty, start: start, end: end, rlit: nonzero_lit(right) };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_bin_r(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, op: u64, lty: SemType, start: u64, end: u64, rlit: bool) -> (result: SemState) {
+    let rty: SemType = st.last_ty;
+    if not(sem_eq(s0, s1, s2, s3, st.total, lty, rty)) { return sem_drain(sem_emit(st, 7, start, end, 1)); }
+    return finish_bin_class(s0, s1, s2, s3, st, op, lty, rty, start, end, rlit);
+}
+// Operator classes: 0 total arithmetic (checked, wrapping, saturating,
+// bitwise), 1 division/modulo, 2 comparisons, 3 boolean connectives,
+// 4 shifts. Anything else is unreachable from the parser and defended
+// as an integer-arithmetic failure.
+fn op_class(op: u64) -> (result: u64) {
+    if op == 50 || op == 51 || op == 52 { return 0; }
+    if op == 55 || op == 56 || op == 57 { return 0; }
+    if op == 91 || op == 92 || op == 93 { return 0; }
+    if op == 94 || op == 95 || op == 96 { return 0; }
+    if op == 53 || op == 54 { return 1; }
+    if op == 84 || op == 85 || op == 58 { return 2; }
+    if op == 86 || op == 59 || op == 87 { return 2; }
+    if op == 82 || op == 83 { return 3; }
+    if op == 88 || op == 89 { return 4; }
+    return 0;
+}
+fn finish_bin_class(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, op: u64, lty: SemType, rty: SemType, start: u64, end: u64, rlit: bool) -> (result: SemState) {
+    let cls: u64 = op_class(op);
+    if cls == 1 { return finish_bin_divmod(st, op, lty, start, end, rlit); }
+    if cls == 2 { return finish_bin_cmp(st, op, lty, start, end); }
+    if cls == 3 { return finish_bin_boolop(st, op, lty, start, end); }
+    if cls == 4 { return finish_bin_shift(st, op, lty, start, end); }
+    return finish_bin_arith(st, op, lty, start, end);
+}
+fn arith_int_or_byte(st: SemState, lty: SemType, start: u64, end: u64) -> (result: SemState) {
+    return match lty {
+        TInt { width: w, signed: g } => st,
+        TByte => sem_emit(st, 12, start, end, 1),
+        TBool => sem_emit(st, 8, start, end, 1),
+        TNamed { start: n, end: m } => sem_emit(st, 8, start, end, 1),
+        TSeq => sem_emit(st, 8, start, end, 1),
+        TPoison => sem_emit(st, 8, start, end, 1)
+    };
+}
+fn arith_failed(st: SemState, lty: SemType) -> (result: bool) {
+    return match lty {
+        TInt { width: w, signed: g } => false,
+        TByte => true,
+        TBool => true,
+        TNamed { start: n, end: m } => true,
+        TSeq => true,
+        TPoison => true
+    };
+}
+fn finish_bin_arith(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -> (result: SemState) {
+    if arith_failed(st, lty) { return sem_drain(arith_int_or_byte(st, lty, start, end)); }
+    if op == 50 || op == 51 || op == 52 {
+        return sem_emit_top(sem_accept(sem_emit(st, 13, start, end, 2), lty), TOp.TBin { op: op, ty: lty, start: start, end: end });
+    }
+    return sem_emit_top(sem_accept(st, lty), TOp.TBin { op: op, ty: lty, start: start, end: end });
+}
+fn finish_bin_divmod(st: SemState, op: u64, lty: SemType, start: u64, end: u64, rlit: bool) -> (result: SemState) {
+    if arith_failed(st, lty) { return sem_drain(arith_int_or_byte(st, lty, start, end)); }
+    if rlit { return sem_emit_top(sem_accept(st, lty), TOp.TBin { op: op, ty: lty, start: start, end: end }); }
+    return sem_emit_top(sem_accept(sem_emit(st, 14, start, end, 2), lty), TOp.TBin { op: op, ty: lty, start: start, end: end });
+}
+fn finish_bin_cmp(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -> (result: SemState) {
+    return match lty {
+        TInt { width: w, signed: g } => sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBin { op: op, ty: SemType.TBool, start: start, end: end }),
+        TByte => sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBin { op: op, ty: SemType.TBool, start: start, end: end }),
+        TBool => sem_drain(sem_emit(st, 9, start, end, 1)),
+        TNamed { start: n, end: m } => sem_drain(sem_emit(st, 9, start, end, 1)),
+        TSeq => sem_drain(sem_emit(st, 9, start, end, 1)),
+        TPoison => sem_drain(sem_emit(st, 9, start, end, 1))
+    };
+}
+fn finish_bin_boolop(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -> (result: SemState) {
+    if is_bool_ty(lty) { return sem_emit_top(sem_accept(st, SemType.TBool), TOp.TBin { op: op, ty: SemType.TBool, start: start, end: end }); }
+    return sem_drain(sem_emit(st, 10, start, end, 1));
+}
+fn finish_bin_shift(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -> (result: SemState) {
+    return match lty {
+        TByte => sem_emit_top(sem_accept(st, SemType.TByte), TOp.TBin { op: op, ty: SemType.TByte, start: start, end: end }),
+        TInt { width: w, signed: g } => sem_emit_top(sem_accept(st, lty), TOp.TBin { op: op, ty: lty, start: start, end: end }),
+        TBool => sem_drain(sem_emit(st, 11, start, end, 1)),
+        TNamed { start: n, end: m } => sem_drain(sem_emit(st, 11, start, end, 1)),
+        TSeq => sem_drain(sem_emit(st, 11, start, end, 1)),
+        TPoison => sem_drain(sem_emit(st, 11, start, end, 1))
+    };
+}
+// Callee signatures resolve by exact name bytes over the collected table.
+record SigRes { found: bool, sig: Sig }
+record SigScan { rest: SigTab, start: u64, end: u64, found: bool, sig: Sig }
+fn sig_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, sigs: SigTab, start: u64, end: u64) -> (result: SigRes) {
+    iterate gs0 over s0 carrying a: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil } } {
+        next a = sig_lookup_step(s0, s1, s2, s3, total, a);
+    }
+    iterate gs1 over s1 carrying b: SigScan = a {
+        next b = sig_lookup_step(s0, s1, s2, s3, total, b);
+    }
+    iterate gs2 over s2 carrying c: SigScan = b {
+        next c = sig_lookup_step(s0, s1, s2, s3, total, c);
+    }
+    iterate gs3 over s3 carrying d: SigScan = c {
+        next d = sig_lookup_step(s0, s1, s2, s3, total, d);
+    }
+    return SigRes { found: d.found, sig: d.sig };
+}
+fn sig_lookup_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: SigScan) -> (result: SigScan) {
+    if st.found { return st; }
+    return match st.rest {
+        HNil => st,
+        HCons { head: h, tail: t } => sig_lookup_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn sig_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: SigScan, h: Sig, t: SigTab) -> (result: SigScan) {
+    if spans_equal(s0, s1, s2, s3, total, h.start, h.end, st.start, st.end) {
+        return SigScan { rest: SigTab.HNil, start: st.start, end: st.end, found: true, sig: h };
+    }
+    return SigScan { rest: t, start: st.start, end: st.end, found: false, sig: st.sig };
+}
+record TysAcc { rest: BindList, acc: TyList }
+fn params_to_tys(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], params: BindList) -> (result: TyList) {
+    iterate ty0 over s0 carrying a: TysAcc = TysAcc { rest: params, acc: TyList.TyNil } {
+        next a = params_to_tys_step(a);
+    }
+    iterate ty1 over s1 carrying b: TysAcc = a {
+        next b = params_to_tys_step(b);
+    }
+    iterate ty2 over s2 carrying c: TysAcc = b {
+        next c = params_to_tys_step(c);
+    }
+    iterate ty3 over s3 carrying d: TysAcc = c {
+        next d = params_to_tys_step(d);
+    }
+    return reverse_tys(s0, s1, s2, s3, d.acc);
+}
+fn params_to_tys_step(st: TysAcc) -> (result: TysAcc) {
+    return match st.rest { BNil => st, BCons { head: h, tail: t } => TysAcc { rest: t, acc: TyList.TyCons { head: h.ty, tail: st.acc } } };
+}
+record TysRev { rest: TyList, acc: TyList }
+fn reverse_tys(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TyList) -> (result: TyList) {
+    iterate tr0 over s0 carrying a: TysRev = TysRev { rest: list, acc: TyList.TyNil } {
+        next a = reverse_tys_step(a);
+    }
+    iterate tr1 over s1 carrying b: TysRev = a {
+        next b = reverse_tys_step(b);
+    }
+    iterate tr2 over s2 carrying c: TysRev = b {
+        next c = reverse_tys_step(c);
+    }
+    iterate tr3 over s3 carrying d: TysRev = c {
+        next d = reverse_tys_step(d);
+    }
+    return d.acc;
+}
+fn reverse_tys_step(st: TysRev) -> (result: TysRev) {
+    return match st.rest { TyNil => st, TyCons { head: h, tail: t } => TysRev { rest: t, acc: TyList.TyCons { head: h, tail: st.acc } } };
+}
+fn seed_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let got: SigRes = sig_lookup(s0, s1, s2, s3, st.total, st.sigs, ns, ne);
+    if not(got.found) { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
+    let argc: u64 = count_exprs(s0, s1, s2, s3, args);
+    if argc != got.sig.nparams { return sem_drain(sem_emit(st, 6, start, end, 1)); }
+    return seed_call_args(s0, s1, s2, s3, st, got.sig, args, start, end, exp);
+}
+fn seed_call_args(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match args {
+        ENil => finish_call(s0, s1, s2, s3, st, sig, start, end, exp),
+        ECons { head: h, tail: t } => seed_first_arg(s0, s1, s2, s3, st, sig, args, h, start, end, exp)
+    };
+}
+fn seed_first_arg(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, args: ExprList, h: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let ptys: TyList = params_to_tys(s0, s1, s2, s3, sig.params);
+    return match ptys {
+        TyNil => finish_call(s0, s1, s2, s3, st, sig, start, end, exp),
+        TyCons { head: p, tail: q } => push_first_arg(st, sig, args, ptys, h, p, start, end, exp)
+    };
+}
+fn push_first_arg(st: SemState, sig: Sig, args: ExprList, ptys: TyList, h: Expr, p: SemType, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let job: SemJob = SemJob { e: h, exp: ExpTy.XSome { ty: p } };
+    let kont: SemKont = SemKont.KCallA { sig: sig, args: args, ptys: ptys, start: start, end: end, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+// Expression spans for diagnostics that point at a subexpression (MNE133
+// at the argument, MNE161 at the projection base).
+record ExprSpan { start: u64, end: u64 }
+fn expr_span(e: Expr) -> (result: ExprSpan) {
+    return match e {
+        Name { start: s, end: e2 } => ExprSpan { start: s, end: e2 },
+        Integer { start: s, end: e2, value: v, overflow: o } => ExprSpan { start: s, end: e2 },
+        Boolean { start: s, end: e2, value: v } => ExprSpan { start: s, end: e2 },
+        Binary { op: o, left: l, right: r, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: ph } => ExprSpan { start: s, end: e2 }
+    };
+}
+// Each argument is checked against its parameter as it completes, mirroring
+// elaboration order: the argument's own obligations come first, then the
+// match obligation at the argument span. A mismatch records ARG_MATCH and
+// continues with the actual type; arity was already gated at seeding.
+fn apply_call_a(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match ptys {
+        TyNil => finish_call(s0, s1, s2, s3, st, sig, start, end, exp),
+        TyCons { head: p, tail: q } => apply_call_arg(s0, s1, s2, s3, st, sig, args, p, q, start, end, exp)
+    };
+}
+fn apply_call_arg(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, args: ExprList, p: SemType, q: TyList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match args {
+        ENil => finish_call(s0, s1, s2, s3, st, sig, start, end, exp),
+        ECons { head: h, tail: t } => check_arg_cons(s0, s1, s2, s3, st, sig, h, t, p, q, start, end, exp)
+    };
+}
+fn check_arg_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, h: Expr, t: ExprList, p: SemType, q: TyList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let asp: ExprSpan = expr_span(h);
+    let actual: SemType = st.last_ty;
+    let st2: SemState = check_arg_ty(s0, s1, s2, s3, st, actual, p, asp.start, asp.end);
+    return match t {
+        ENil => finish_call(s0, s1, s2, s3, st2, sig, start, end, exp),
+        ECons { head: nh, tail: nt } => advance_call_arg(s0, s1, s2, s3, st2, sig, t, q, nh, start, end, exp)
+    };
+}
+fn check_arg_ty(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, actual: SemType, p: SemType, astart: u64, aend: u64) -> (result: SemState) {
+    if sem_eq(s0, s1, s2, s3, st.total, actual, p) { return st; }
+    return sem_emit(st, 26, astart, aend, 1);
+}
+fn advance_call_arg(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, t: ExprList, q: TyList, nh: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match q {
+        TyNil => finish_call(s0, s1, s2, s3, st, sig, start, end, exp),
+        TyCons { head: np, tail: nq } => push_next_arg(st, sig, t, q, nh, np, start, end, exp)
+    };
+}
+fn push_next_arg(st: SemState, sig: Sig, args: ExprList, ptys: TyList, nh: Expr, np: SemType, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let job: SemJob = SemJob { e: nh, exp: ExpTy.XSome { ty: np } };
+    let kont: SemKont = SemKont.KCallA { sig: sig, args: args, ptys: ptys, start: start, end: end, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+// Effect coverage (MNE134): every callee effect must already be granted to
+// the caller. The check is fatal and runs after all arguments, before the
+// result check. Capability authorization (MNE111) is a signature-level
+// concern handled by check_sig, not repeated per call.
+fn fx_eq(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: Effect, b: Effect) -> (result: bool) {
+    if not(spans_equal(s0, s1, s2, s3, total, a.kind_start, a.kind_end, b.kind_start, b.kind_end)) { return false; }
+    return spans_equal(s0, s1, s2, s3, total, a.cap_start, a.cap_end, b.cap_start, b.cap_end);
+}
+record FxScan { rest: EffectList, want: Effect, covered: bool }
+fn fx_covered(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, avail: EffectList, want: Effect) -> (result: bool) {
+    iterate fx0 over s0 carrying a: FxScan = FxScan { rest: avail, want: want, covered: false } {
+        next a = fx_cover_step(s0, s1, s2, s3, total, a);
+    }
+    iterate fx1 over s1 carrying b: FxScan = a {
+        next b = fx_cover_step(s0, s1, s2, s3, total, b);
+    }
+    iterate fx2 over s2 carrying c: FxScan = b {
+        next c = fx_cover_step(s0, s1, s2, s3, total, c);
+    }
+    iterate fx3 over s3 carrying d: FxScan = c {
+        next d = fx_cover_step(s0, s1, s2, s3, total, d);
+    }
+    return d.covered;
+}
+fn fx_cover_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FxScan) -> (result: FxScan) {
+    if st.covered { return st; }
+    return match st.rest {
+        XNil => st,
+        XCons { head: h, tail: t } => fx_cover_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn fx_cover_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FxScan, h: Effect, t: EffectList) -> (result: FxScan) {
+    if fx_eq(s0, s1, s2, s3, total, h, st.want) {
+        return FxScan { rest: EffectList.XNil, want: st.want, covered: true };
+    }
+    return FxScan { rest: t, want: st.want, covered: false };
+}
+record NeedScan { rest: EffectList, ok: bool }
+fn fx_cover_check(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, need: EffectList, start: u64, end: u64) -> (result: SemState) {
+    iterate nc0 over s0 carrying a: NeedScan = NeedScan { rest: need, ok: true } {
+        next a = need_scan_step(s0, s1, s2, s3, st, a);
+    }
+    iterate nc1 over s1 carrying b: NeedScan = a {
+        next b = need_scan_step(s0, s1, s2, s3, st, b);
+    }
+    iterate nc2 over s2 carrying c: NeedScan = b {
+        next c = need_scan_step(s0, s1, s2, s3, st, c);
+    }
+    iterate nc3 over s3 carrying d: NeedScan = c {
+        next d = need_scan_step(s0, s1, s2, s3, st, d);
+    }
+    if d.ok { return st; }
+    return sem_drain(sem_emit(st, 15, start, end, 1));
+}
+fn need_scan_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, acc: NeedScan) -> (result: NeedScan) {
+    if not(acc.ok) { return acc; }
+    return match acc.rest {
+        XNil => acc,
+        XCons { head: h, tail: t } => need_scan_cons(s0, s1, s2, s3, st, acc, h, t)
+    };
+}
+fn need_scan_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, acc: NeedScan, h: Effect, t: EffectList) -> (result: NeedScan) {
+    if fx_covered(s0, s1, s2, s3, st.total, st.fx, h) {
+        return NeedScan { rest: t, ok: acc.ok };
+    }
+    return NeedScan { rest: EffectList.XNil, ok: false };
+}
+fn finish_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let st2: SemState = fx_cover_check(s0, s1, s2, s3, st, sig.fx, start, end);
+    if st2.failed { return st2; }
+    return finish_call_res(s0, s1, s2, s3, st2, sig, start, end, exp);
+}
+fn finish_call_res(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let top: TOp = TOp.TCall { ty: sig.result, argc: sig.nparams, start: start, end: end, ns: sig.start, ne: sig.end };
+    return match exp {
+        XNone => sem_emit_top(sem_accept(st, sig.result), top),
+        XSome { ty: r } => finish_call_req(s0, s1, s2, s3, st, sig, top, r, start, end)
+    };
+}
+fn finish_call_req(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, sig: Sig, top: TOp, r: SemType, start: u64, end: u64) -> (result: SemState) {
+    if sem_eq(s0, s1, s2, s3, st.total, sig.result, r) { return sem_emit_top(sem_accept(st, sig.result), top); }
+    return sem_emit_top(sem_accept(sem_emit(st, 25, start, end, 1), sig.result), top);
+}
+// Projection seeds its base with no requirement; the record type is
+// established when the base completes. Chained projections nest through
+// the base job, so each level resolves against its own base type.
+fn seed_proj(st: SemState, b: Expr, fs: u64, fe: u64, s: u64, e: u64, exp: ExpTy) -> (result: SemState) {
+    let bsp: ExprSpan = expr_span(b);
+    let job: SemJob = SemJob { e: b, exp: ExpTy.XNone };
+    let kont: SemKont = SemKont.KProj { fstart: fs, fend: fe, bstart: bsp.start, bend: bsp.end, start: s, end: e, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_proj(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, fs: u64, fe: u64, bs: u64, be: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let bty: SemType = st.last_ty;
+    if is_poison(bty) {
+        return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end });
+    }
+    return match bty {
+        TNamed { start: ns, end: ne } => proj_named(s0, s1, s2, s3, st, ns, ne, fs, fe, bs, be, start, end, exp),
+        TBool => sem_drain(sem_emit(st, 23, bs, be, 1)),
+        TByte => sem_drain(sem_emit(st, 23, bs, be, 1)),
+        TInt { width: w, signed: g } => sem_drain(sem_emit(st, 23, bs, be, 1)),
+        TSeq => sem_drain(sem_emit(st, 23, bs, be, 1)),
+        TPoison => sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end })
+    };
+}
+// Records resolve by exact name bytes over the collected table; fields
+// resolve by exact name bytes within the record, first declaration wins.
+record RecFind { rest: RecordList, ns: u64, ne: u64, found: bool, decl: RecordDecl }
+record FieldScan { rest: FieldList, fs: u64, fe: u64, found: bool, field: Field }
+fn rec_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, rectab: RecordList, ns: u64, ne: u64) -> (result: RecFind) {
+    iterate rl0 over s0 carrying a: RecFind = RecFind { rest: rectab, ns: ns, ne: ne, found: false, decl: RecordDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, fields: FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0 } } {
+        next a = rec_lookup_step(s0, s1, s2, s3, total, a);
+    }
+    iterate rl1 over s1 carrying b: RecFind = a {
+        next b = rec_lookup_step(s0, s1, s2, s3, total, b);
+    }
+    iterate rl2 over s2 carrying c: RecFind = b {
+        next c = rec_lookup_step(s0, s1, s2, s3, total, c);
+    }
+    iterate rl3 over s3 carrying d: RecFind = c {
+        next d = rec_lookup_step(s0, s1, s2, s3, total, d);
+    }
+    return d;
+}
+fn rec_lookup_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecFind) -> (result: RecFind) {
+    if st.found { return st; }
+    return match st.rest {
+        RNil => st,
+        RCons { head: h, tail: t } => rec_lookup_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn rec_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecFind, h: RecordDecl, t: RecordList) -> (result: RecFind) {
+    if spans_equal(s0, s1, s2, s3, total, h.name_start, h.name_end, st.ns, st.ne) {
+        return RecFind { rest: RecordList.RNil, ns: st.ns, ne: st.ne, found: true, decl: h };
+    }
+    return RecFind { rest: t, ns: st.ns, ne: st.ne, found: false, decl: st.decl };
+}
+fn field_scan(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, fs: u64, fe: u64) -> (result: FieldScan) {
+    iterate fd0 over s0 carrying a: FieldScan = FieldScan { rest: fields, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 } } {
+        next a = field_scan_step(s0, s1, s2, s3, total, a);
+    }
+    iterate fd1 over s1 carrying b: FieldScan = a {
+        next b = field_scan_step(s0, s1, s2, s3, total, b);
+    }
+    iterate fd2 over s2 carrying c: FieldScan = b {
+        next c = field_scan_step(s0, s1, s2, s3, total, c);
+    }
+    iterate fd3 over s3 carrying d: FieldScan = c {
+        next d = field_scan_step(s0, s1, s2, s3, total, d);
+    }
+    return d;
+}
+fn field_scan_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FieldScan) -> (result: FieldScan) {
+    if st.found { return st; }
+    return match st.rest {
+        FNil => st,
+        FCons { head: h, tail: t } => field_scan_cons(s0, s1, s2, s3, total, st, h, t)
+    };
+}
+fn field_scan_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FieldScan, h: Field, t: FieldList) -> (result: FieldScan) {
+    if spans_equal(s0, s1, s2, s3, total, h.name_start, h.name_end, st.fs, st.fe) {
+        return FieldScan { rest: FieldList.FNil, fs: st.fs, fe: st.fe, found: true, field: h };
+    }
+    return FieldScan { rest: t, fs: st.fs, fe: st.fe, found: false, field: st.field };
+}
+fn proj_named(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ns: u64, ne: u64, fs: u64, fe: u64, bs: u64, be: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let got: RecFind = rec_lookup(s0, s1, s2, s3, st.total, st.rectab, ns, ne);
+    if not(got.found) { return sem_drain(sem_emit(st, 23, bs, be, 1)); }
+    let fld: FieldScan = field_scan(s0, s1, s2, s3, st.total, got.decl.fields, fs, fe);
+    if not(fld.found) { return sem_drain(sem_emit(st, 22, fs, fe, 1)); }
+    let fty: TyRes = resolve_type(s0, s1, s2, s3, st.total, fld.field.type_kind, fld.field.type_start, fld.field.type_end, st.rectab, st.enumtab);
+    if not(fty.ok) {
+        return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end });
+    }
+    return finish_proj_exp(s0, s1, s2, s3, st, fty.ty, fs, fe, start, end, exp);
+}
+fn finish_proj_exp(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, fty: SemType, fs: u64, fe: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let top: TOp = TOp.TProj { ty: fty, fstart: fs, fend: fe, start: start, end: end };
+    return match exp {
+        XNone => sem_emit_top(sem_accept(st, fty), top),
+        XSome { ty: r } => finish_proj_req(s0, s1, s2, s3, st, fty, top, r, start, end)
+    };
+}
+fn finish_proj_req(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, fty: SemType, top: TOp, r: SemType, start: u64, end: u64) -> (result: SemState) {
+    if sem_eq(s0, s1, s2, s3, st.total, fty, r) { return sem_emit_top(sem_accept(st, fty), top); }
+    return sem_emit_top(sem_accept(sem_emit(st, 35, start, end, 1), fty), top);
+}
+// Function bodies: statement proving over the expression machine (F12).
+// Signatures are collected for the whole unit first (elaboration order is
+// [all signatures] then [all bodies]); each body re-resolves its own
+// parameter and result annotations, so declaration type failures surface
+// twice, while scope duplicates stay signature-side. A body whose result
+// list does not hold exactly one output is skipped after its signature:
+// with no single output there is no expectation to prove against.
+record StmtSpan { start: u64, end: u64 }
+fn stmt_span(h: Stmt) -> (result: StmtSpan) {
+    return match h {
+        Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => StmtSpan { start: s, end: e },
+        If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => StmtSpan { start: s, end: e },
+        Fail { mode_start: a, mode_end: b, start: s, end: e } => StmtSpan { start: s, end: e },
+        Return { value: v, start: s, end: e } => StmtSpan { start: s, end: e }
+    };
+}
+// Failure modes are raw name bytes matched exactly: isolated, atomic,
+// fatal. Anything else records FAIL_MODE and behaves as a terminator.
+fn fail_mode_ok(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: u64, b: u64) -> (result: bool) {
+    if b < a { return false; }
+    if b - a == 8 { return fail_is_isolated(s0, s1, s2, s3, total, a); }
+    if b - a == 6 { return fail_is_atomic(s0, s1, s2, s3, total, a); }
+    if b - a == 5 { return fail_is_fatal(s0, s1, s2, s3, total, a); }
+    return false;
+}
+fn fail_is_isolated(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: u64) -> (result: bool) {
+    if segment.byte_at(s0, s1, s2, s3, total, a) != 105 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 1) != 115 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 2) != 111 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 3) != 108 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 4) != 97 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 5) != 116 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 6) != 101 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 7) != 100 { return false; }
+    return true;
+}
+fn fail_is_atomic(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: u64) -> (result: bool) {
+    if segment.byte_at(s0, s1, s2, s3, total, a) != 97 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 1) != 116 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 2) != 111 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 3) != 109 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 4) != 105 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 5) != 99 { return false; }
+    return true;
+}
+fn fail_is_fatal(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: u64) -> (result: bool) {
+    if segment.byte_at(s0, s1, s2, s3, total, a) != 102 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 1) != 97 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 2) != 116 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 3) != 97 { return false; }
+    if segment.byte_at(s0, s1, s2, s3, total, a + 4) != 108 { return false; }
+    return true;
+}
+// The type-stack verifier only guards clean lowerings: poison in the
+// established or required type means a FAIL obligation already covers
+// this proof, and poisoned IR is never verified. Statement sites verify
+// shape only (XNone): the required-type comparison belongs to the match
+// obligations, which stay non-fatal.
+fn want_poison(w: ExpTy) -> (result: bool) {
+    return match w { XNone => false, XSome { ty: t } => is_poison(t) };
+}
+record FldObl { rest: FieldList, obls: OblList }
+fn field_type_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+    iterate fo0 over s0 carrying a: FldObl = FldObl { rest: fields, obls: OblList.LNil } {
+        next a = field_obls_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate fo1 over s1 carrying b: FldObl = a {
+        next b = field_obls_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate fo2 over s2 carrying c: FldObl = b {
+        next c = field_obls_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate fo3 over s3 carrying d: FldObl = c {
+        next d = field_obls_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn field_obls_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FldObl, rectab: RecordList, enumtab: EnumList) -> (result: FldObl) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: h, tail: t } => field_obls_cons(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn field_obls_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FldObl, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: FldObl) {
+    let ty: TyRes = resolve_type(s0, s1, s2, s3, total, h.type_kind, h.type_start, h.type_end, rectab, enumtab);
+    let tob: OblList = param_type_obl(h, ty);
+    return FldObl { rest: t, obls: append_obls(s0, s1, s2, s3, st.obls, tob) };
+}
+record ResCount { rest: FieldList, n: u64 }
+fn count_results_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], fields: FieldList) -> (result: u64) {
+    iterate rc0 over s0 carrying a: ResCount = ResCount { rest: fields, n: 0 } {
+        next a = count_results_step(a);
+    }
+    iterate rc1 over s1 carrying b: ResCount = a {
+        next b = count_results_step(b);
+    }
+    iterate rc2 over s2 carrying c: ResCount = b {
+        next c = count_results_step(c);
+    }
+    iterate rc3 over s3 carrying d: ResCount = c {
+        next d = count_results_step(d);
+    }
+    return d.n;
+}
+fn count_results_step(st: ResCount) -> (result: ResCount) {
+    return match st.rest { FNil => st, FCons { head: h, tail: t } => ResCount { rest: t, n: st.n + 1 } };
+}
+// Statement proving as one iterative machine over an explicit frame stack:
+// branch bodies cannot recurse (statement recursion is unavailable), so an
+// `if` suspends its parent list in a frame while each arm proves in a
+// pushed scope. Obligation lists stay in source order throughout: proved
+// expressions arrive ordered, single obligations append behind them.
+record StmtFrame { after: StmtList, saved_env: ScopeStack, else_b: StmtList, phase: u64 }
+enum StmtFrames { BrNil, BrCons { head: StmtFrame, tail: StmtFrames } }
+record StmtWalk { rest: StmtList, frames: StmtFrames, env: ScopeStack, closed: bool, ok: bool, obls: OblList, tops: TopsList, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList, total: u64 }
+fn prove_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], w: StmtWalk) -> (result: StmtWalk) {
+    iterate sw0 over s0 carrying a: StmtWalk = w {
+        next a = prove_stmt_step(s0, s1, s2, s3, a);
+    }
+    iterate sw1 over s1 carrying b: StmtWalk = a {
+        next b = prove_stmt_step(s0, s1, s2, s3, b);
+    }
+    iterate sw2 over s2 carrying c: StmtWalk = b {
+        next c = prove_stmt_step(s0, s1, s2, s3, c);
+    }
+    iterate sw3 over s3 carrying d: StmtWalk = c {
+        next d = prove_stmt_step(s0, s1, s2, s3, d);
+    }
+    return d;
+}
+fn prove_stmt_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk) -> (result: StmtWalk) {
+    if not(st.ok) { return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil }; }
+    return match st.rest {
+        SNil => unwind_or_done(st),
+        SCons { head: h, tail: t } => prove_stmt_cons(s0, s1, s2, s3, st, h, t)
+    };
+}
+fn prove_stmt_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, h: Stmt, t: StmtList) -> (result: StmtWalk) {
+    if st.closed {
+        let sp: StmtSpan = stmt_span(h);
+        let obl: OblList = OblList.LCons { head: Obligation { kind: 20, start: sp.start, end: sp.end, status: 1 }, tail: OblList.LNil };
+        return StmtWalk { ..st, rest: StmtList.SNil, obls: append_obls(s0, s1, s2, s3, st.obls, obl) };
+    }
+    return prove_one_stmt(s0, s1, s2, s3, st, h, t);
+}
+fn unwind_or_done(st: StmtWalk) -> (result: StmtWalk) {
+    return match st.frames {
+        BrNil => st,
+        BrCons { head: f, tail: t } => unwind_frame(st, f, t)
+    };
+}
+fn unwind_frame(st: StmtWalk, f: StmtFrame, t: StmtFrames) -> (result: StmtWalk) {
+    if f.phase == 0 {
+        let frame: StmtFrame = StmtFrame { after: f.after, saved_env: f.saved_env, else_b: f.else_b, phase: 1 };
+        return StmtWalk { ..st, rest: f.else_b, frames: StmtFrames.BrCons { head: frame, tail: t }, env: push_scope(f.saved_env), closed: false };
+    }
+    return StmtWalk { ..st, rest: f.after, frames: t, env: f.saved_env, closed: false };
+}
+fn close_and(a: bool, b: bool) -> (result: bool) {
+    if not(a) { return false; }
+    if not(b) { return false; }
+    return true;
+}
+fn prove_one_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, h: Stmt, t: StmtList) -> (result: StmtWalk) {
+    return match h {
+        Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => prove_let(s0, s1, s2, s3, st, t, a, b, c, d, k, v, s, e),
+        If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => prove_if(s0, s1, s2, s3, st, t, c, tb, eb, s, e),
+        Fail { mode_start: a, mode_end: b, start: s, end: e } => prove_fail(s0, s1, s2, s3, st, t, a, b, s, e),
+        Return { value: v, start: s, end: e } => prove_return_val(s0, s1, s2, s3, st, v, t, s, e)
+    };
+}
+fn prove_let(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, a: u64, b: u64, c: u64, d: u64, k: u64, v: Expr, s: u64, e: u64) -> (result: StmtWalk) {
+    let ty: TyRes = resolve_type(s0, s1, s2, s3, st.total, k, c, d, st.rectab, st.enumtab);
+    let tob: OblList = param_type_obl(Field { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k }, ty);
+    let declared: SemType = param_bound_type(ty);
+    let want: ExpTy = ExpTy.XSome { ty: declared };
+    let res: ExprRes = prove_expr(s0, s1, s2, s3, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, st.total, v, want);
+    let obls1: OblList = append_obls(s0, s1, s2, s3, append_obls(s0, s1, s2, s3, st.obls, tob), res.obls);
+    if not(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
+    if not(skip_verify(res.ty, want)) {
+        if not(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
+            return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil, ok: false, obls: obls1, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
+        }
+    }
+    return finish_let(s0, s1, s2, s3, st, t, a, b, s, e, res, declared, obls1);
+}
+fn skip_verify(ty: SemType, want: ExpTy) -> (result: bool) {
+    if is_poison(ty) { return true; }
+    if want_poison(want) { return true; }
+    return false;
+}
+fn finish_let(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, a: u64, b: u64, s: u64, e: u64, res: ExprRes, declared: SemType, obls1: OblList) -> (result: StmtWalk) {
+    let obls2: OblList = match_obl(s0, s1, s2, s3, st, res.ty, declared, obls1, 28, s, e);
+    let bind: BindRes = env_bind_current(s0, s1, s2, s3, st.total, st.env, a, b, declared);
+    let obls3: OblList = dup_obl(s0, s1, s2, s3, st, bind, obls2, a, b);
+    return StmtWalk { ..st, rest: t, env: bind.stack, obls: obls3, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
+}
+fn match_obl(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, actual: SemType, want_ty: SemType, obls: OblList, kind: u64, s: u64, e: u64) -> (result: OblList) {
+    if sem_eq(s0, s1, s2, s3, st.total, actual, want_ty) { return obls; }
+    let obl: OblList = OblList.LCons { head: Obligation { kind: kind, start: s, end: e, status: 1 }, tail: OblList.LNil };
+    return append_obls(s0, s1, s2, s3, obls, obl);
+}
+fn dup_obl(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, bind: BindRes, obls: OblList, a: u64, b: u64) -> (result: OblList) {
+    if not(bind.dup) { return obls; }
+    let obl: OblList = OblList.LCons { head: Obligation { kind: 5, start: a, end: b, status: 1 }, tail: OblList.LNil };
+    return append_obls(s0, s1, s2, s3, obls, obl);
+}
+fn prove_if(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, c: Expr, tb: StmtList, eb: StmtList, s: u64, e: u64) -> (result: StmtWalk) {
+    let want: ExpTy = ExpTy.XSome { ty: SemType.TBool };
+    let res: ExprRes = prove_expr(s0, s1, s2, s3, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, st.total, c, want);
+    let obls1: OblList = append_obls(s0, s1, s2, s3, st.obls, res.obls);
+    if not(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
+    if not(skip_verify(res.ty, want)) {
+        if not(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
+            return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil, ok: false, obls: obls1, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
+        }
+    }
+    let tops1: TopsList = TopsList.TLCons { head: res.tops, tail: st.tops };
+    if sem_eq(s0, s1, s2, s3, st.total, res.ty, SemType.TBool) {
+        return prove_if_arms(st, t, tb, eb, obls1, tops1);
+    }
+    return prove_if_reject(s0, s1, s2, s3, st, t, c, obls1, tops1);
+}
+fn prove_if_arms(st: StmtWalk, t: StmtList, tb: StmtList, eb: StmtList, obls1: OblList, tops1: TopsList) -> (result: StmtWalk) {
+    let frame: StmtFrame = StmtFrame { after: t, saved_env: st.env, else_b: eb, phase: 0 };
+    return StmtWalk { ..st, rest: tb, frames: StmtFrames.BrCons { head: frame, tail: st.frames }, env: push_scope(st.env), closed: false, obls: obls1, tops: tops1 };
+}
+fn prove_if_reject(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, c: Expr, obls1: OblList, tops1: TopsList) -> (result: StmtWalk) {
+    let csp: ExprSpan = expr_span(c);
+    let obl: OblList = OblList.LCons { head: Obligation { kind: 24, start: csp.start, end: csp.end, status: 1 }, tail: OblList.LNil };
+    return StmtWalk { ..st, rest: t, obls: append_obls(s0, s1, s2, s3, obls1, obl), tops: tops1 };
+}
+fn prove_fail(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, a: u64, b: u64, s: u64, e: u64) -> (result: StmtWalk) {
+    if fail_mode_ok(s0, s1, s2, s3, st.total, a, b) {
+        return StmtWalk { ..st, rest: t, closed: true };
+    }
+    let obl: OblList = OblList.LCons { head: Obligation { kind: 21, start: s, end: e, status: 1 }, tail: OblList.LNil };
+    return StmtWalk { ..st, rest: t, closed: true, obls: append_obls(s0, s1, s2, s3, st.obls, obl) };
+}
+// A returned name resolves only: no requirement is checked against it, so
+// NAME_TYPE never fires here; the output comparison below still applies.
+// Any other tail value elaborates against the declared output.
+fn prove_return_val(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, v: Expr, t: StmtList, qs: u64, qe: u64) -> (result: StmtWalk) {
+    return match v {
+        Name { start: ns, end: ne } => prove_return_name(s0, s1, s2, s3, st, t, ns, ne, qs, qe),
+        Integer { start: s, end: e2, value: vv, overflow: o } => prove_return_expr(s0, s1, s2, s3, st, v, t, qs, qe),
+        Boolean { start: s, end: e2, value: vv } => prove_return_expr(s0, s1, s2, s3, st, v, t, qs, qe),
+        Binary { op: o, left: l, right: r, start: s, end: e2 } => prove_return_expr(s0, s1, s2, s3, st, v, t, qs, qe),
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => prove_return_expr(s0, s1, s2, s3, st, v, t, qs, qe),
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: ph } => prove_return_expr(s0, s1, s2, s3, st, v, t, qs, qe)
+    };
+}
+fn prove_return_name(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, ns: u64, ne: u64, qs: u64, qe: u64) -> (result: StmtWalk) {
+    let got: LookupRes = env_lookup(s0, s1, s2, s3, st.total, st.env, ns, ne);
+    if not(got.found) {
+        let obl: OblList = OblList.LCons { head: Obligation { kind: 1, start: ns, end: ne, status: 1 }, tail: OblList.LNil };
+        return StmtWalk { ..st, rest: t, obls: append_obls(s0, s1, s2, s3, st.obls, obl) };
+    }
+    let top: TOp = TOp.TName { ty: got.ty, start: ns, end: ne };
+    let tops1: TopsList = TopsList.TLCons { head: TOpList.PCons { head: top, tail: TOpList.PNil }, tail: st.tops };
+    let obls1: OblList = match_obl(s0, s1, s2, s3, st, got.ty, st.sig.result, st.obls, 27, qs, qe);
+    return StmtWalk { ..st, rest: t, closed: true, obls: obls1, tops: tops1 };
+}
+fn prove_return_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, v: Expr, t: StmtList, qs: u64, qe: u64) -> (result: StmtWalk) {
+    let want: ExpTy = ExpTy.XSome { ty: st.sig.result };
+    let res: ExprRes = prove_expr(s0, s1, s2, s3, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, st.total, v, want);
+    let obls1: OblList = append_obls(s0, s1, s2, s3, st.obls, res.obls);
+    if not(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
+    if not(skip_verify(res.ty, want)) {
+        if not(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
+            return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil, ok: false, obls: obls1, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
+        }
+    }
+    let obls2: OblList = match_obl(s0, s1, s2, s3, st, res.ty, st.sig.result, obls1, 27, qs, qe);
+    return StmtWalk { ..st, rest: t, closed: true, obls: obls2, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
+}
+fn prove_tail(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], w: StmtWalk, ret: Expr) -> (result: StmtWalk) {
+    let sp: ExprSpan = expr_span(ret);
+    if w.closed {
+        let obl: OblList = OblList.LCons { head: Obligation { kind: 20, start: sp.start, end: sp.end, status: 1 }, tail: OblList.LNil };
+        return StmtWalk { ..w, obls: append_obls(s0, s1, s2, s3, w.obls, obl) };
+    }
+    return prove_return_val(s0, s1, s2, s3, w, ret, StmtList.SNil, sp.start, sp.end);
+}
+record FnProve { ok: bool, obls: OblList, tops: TopsList }
+fn prove_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], h: FnDecl, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList, total: u64) -> (result: FnProve) {
+    let nres: u64 = count_results_fields(s0, s1, s2, s3, h.sig.results);
+    if nres != 1 { return FnProve { ok: true, obls: OblList.LNil, tops: TopsList.TLNil }; }
+    let par: OblList = field_type_obls(s0, s1, s2, s3, total, h.sig.params, rectab, enumtab);
+    let res: OblList = field_type_obls(s0, s1, s2, s3, total, h.sig.results, rectab, enumtab);
+    let env0: ScopeStack = ScopeStack.ZCons { head: Scope { binds: sig.params }, tail: ScopeStack.ZNil };
+    let w0: StmtWalk = StmtWalk { rest: h.body.body, frames: StmtFrames.BrNil, env: env0, closed: false, ok: true, obls: OblList.LNil, tops: TopsList.TLNil, sig: sig, sigs: sigs, rectab: rectab, enumtab: enumtab, total: total };
+    let w1: StmtWalk = prove_stmts(s0, s1, s2, s3, w0);
+    if walk_stuck(w1) { return FnProve { ok: false, obls: append_obls(s0, s1, s2, s3, par, append_obls(s0, s1, s2, s3, res, w1.obls)), tops: topslist_reverse(s0, s1, s2, s3, w1.tops) }; }
+    let w2: StmtWalk = prove_tail(s0, s1, s2, s3, w1, h.body.ret);
+    return FnProve { ok: w2.ok, obls: append_obls(s0, s1, s2, s3, par, append_obls(s0, s1, s2, s3, res, w2.obls)), tops: topslist_reverse(s0, s1, s2, s3, w2.tops) };
+}
+fn walk_stuck(w: StmtWalk) -> (result: bool) {
+    return match w.rest {
+        SNil => frames_stuck(w.frames),
+        SCons { head: h, tail: t } => true
+    };
+}
+fn frames_stuck(frames: StmtFrames) -> (result: bool) {
+    return match frames { BrNil => false, BrCons { head: h, tail: t } => true };
+}
+record TopsLRev { rest: TopsList, acc: TopsList }
+fn topslist_reverse(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TopsList) -> (result: TopsList) {
+    iterate tl0 over s0 carrying a: TopsLRev = TopsLRev { rest: list, acc: TopsList.TLNil } {
+        next a = topslist_reverse_step(a);
+    }
+    iterate tl1 over s1 carrying b: TopsLRev = a {
+        next b = topslist_reverse_step(b);
+    }
+    iterate tl2 over s2 carrying c: TopsLRev = b {
+        next c = topslist_reverse_step(c);
+    }
+    iterate tl3 over s3 carrying d: TopsLRev = c {
+        next d = topslist_reverse_step(d);
+    }
+    return d.acc;
+}
+fn topslist_reverse_step(st: TopsLRev) -> (result: TopsLRev) {
+    return match st.rest { TLNil => st, TLCons { head: h, tail: t } => TopsLRev { rest: t, acc: TopsList.TLCons { head: h, tail: st.acc } } };
+}
+record TopsLPrepend { rest: TopsList, acc: TopsList }
+fn append_topslist(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: TopsList, second: TopsList) -> (result: TopsList) {
+    let rev: TopsList = topslist_reverse(s0, s1, s2, s3, first);
+    iterate ta0 over s0 carrying a: TopsLPrepend = TopsLPrepend { rest: rev, acc: second } {
+        next a = append_topslist_step(a);
+    }
+    iterate ta1 over s1 carrying b: TopsLPrepend = a {
+        next b = append_topslist_step(b);
+    }
+    iterate ta2 over s2 carrying c: TopsLPrepend = b {
+        next c = append_topslist_step(c);
+    }
+    iterate ta3 over s3 carrying d: TopsLPrepend = c {
+        next d = append_topslist_step(d);
+    }
+    return d.acc;
+}
+fn append_topslist_step(st: TopsLPrepend) -> (result: TopsLPrepend) {
+    return match st.rest { TLNil => st, TLCons { head: h, tail: t } => TopsLPrepend { rest: t, acc: TopsList.TLCons { head: h, tail: st.acc } } };
+}
+// The unit proof runs in elaboration order: every signature first, then
+// every body against the completed table. Table order is reverse-source
+// (prepend accumulation), which lookup does not observe: after duplicate
+// rejection each name resolves at most once.
+record SigTabRep { tab: SigTab, obls: OblList }
+record SigWalk { rest: FnList, tab: SigTab, obls: OblList }
+fn collect_sigtab(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fns: FnList, rectab: RecordList, enumtab: EnumList) -> (result: SigTabRep) {
+    iterate sg0 over s0 carrying a: SigWalk = SigWalk { rest: fns, tab: SigTab.HNil, obls: OblList.LNil } {
+        next a = collect_sigtab_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate sg1 over s1 carrying b: SigWalk = a {
+        next b = collect_sigtab_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate sg2 over s2 carrying c: SigWalk = b {
+        next c = collect_sigtab_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate sg3 over s3 carrying d: SigWalk = c {
+        next d = collect_sigtab_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return SigTabRep { tab: d.tab, obls: d.obls };
+}
+fn collect_sigtab_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: SigWalk, rectab: RecordList, enumtab: EnumList) -> (result: SigWalk) {
+    return match st.rest {
+        DNil => st,
+        DCons { head: h, tail: t } => collect_one_sig(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn collect_one_sig(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: SigWalk, h: FnDecl, t: FnList, rectab: RecordList, enumtab: EnumList) -> (result: SigWalk) {
+    let rep: SigRep = check_sig(s0, s1, s2, s3, total, h, rectab, enumtab);
+    let tob: OblList = obl_only_types(s0, s1, s2, s3, rep.obls);
+    return SigWalk { rest: t, tab: SigTab.HCons { head: rep.sig, tail: st.tab }, obls: append_obls(s0, s1, s2, s3, st.obls, tob) };
+}
+// Signature obligations split across elaboration passes: declaration type
+// validity (TYPE_VALID/QUALIFIED) resolves for every function first; scope,
+// count, authorization, and contract obligations stay per-function.
+fn is_type_obl_kind(k: u64) -> (result: bool) {
+    if k == 19 { return true; }
+    if k == 31 { return true; }
+    return false;
+}
+record OblKeep { rest: OblList, acc: OblList, keep: bool }
+fn obl_filter_types(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList, keep: bool) -> (result: OblList) {
+    iterate fk0 over s0 carrying a: OblKeep = OblKeep { rest: obls, acc: OblList.LNil, keep: keep } {
+        next a = obl_filter_step(a);
+    }
+    iterate fk1 over s1 carrying b: OblKeep = a {
+        next b = obl_filter_step(b);
+    }
+    iterate fk2 over s2 carrying c: OblKeep = b {
+        next c = obl_filter_step(c);
+    }
+    iterate fk3 over s3 carrying d: OblKeep = c {
+        next d = obl_filter_step(d);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.acc);
+}
+fn obl_filter_step(st: OblKeep) -> (result: OblKeep) {
+    return match st.rest {
+        LNil => st,
+        LCons { head: h, tail: t } => obl_filter_cons(st, h, t)
+    };
+}
+fn obl_filter_cons(st: OblKeep, h: Obligation, t: OblList) -> (result: OblKeep) {
+    if is_type_obl_kind(h.kind) {
+        if st.keep { return OblKeep { rest: t, acc: OblList.LCons { head: h, tail: st.acc }, keep: st.keep }; }
+        return OblKeep { rest: t, acc: st.acc, keep: st.keep };
+    }
+    if st.keep { return OblKeep { rest: t, acc: st.acc, keep: st.keep }; }
+    return OblKeep { rest: t, acc: OblList.LCons { head: h, tail: st.acc }, keep: st.keep };
+}
+fn obl_only_types(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList) -> (result: OblList) {
+    return obl_filter_types(s0, s1, s2, s3, obls, true);
+}
+record BodyWalk { rest: FnList, tab: SigTab, rectab: RecordList, enumtab: EnumList, total: u64, obls: OblList, tops: TopsList, ok: bool, n: u64 }
+fn prove_bodies(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BodyWalk) -> (result: BodyWalk) {
+    iterate pb0 over s0 carrying a: BodyWalk = st {
+        next a = prove_bodies_step(s0, s1, s2, s3, a);
+    }
+    iterate pb1 over s1 carrying b: BodyWalk = a {
+        next b = prove_bodies_step(s0, s1, s2, s3, b);
+    }
+    iterate pb2 over s2 carrying c: BodyWalk = b {
+        next c = prove_bodies_step(s0, s1, s2, s3, c);
+    }
+    iterate pb3 over s3 carrying d: BodyWalk = c {
+        next d = prove_bodies_step(s0, s1, s2, s3, d);
+    }
+    return d;
+}
+fn prove_bodies_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BodyWalk) -> (result: BodyWalk) {
+    return match st.rest {
+        DNil => st,
+        DCons { head: h, tail: t } => prove_one_body(s0, s1, s2, s3, st, h, t)
+    };
+}
+fn prove_one_body(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BodyWalk, h: FnDecl, t: FnList) -> (result: BodyWalk) {
+    let nres: u64 = count_results_fields(s0, s1, s2, s3, h.sig.results);
+    if nres != 1 { return prove_body_skip(s0, s1, s2, s3, st, h, t); }
+    let checked: SigRep = check_sig(s0, s1, s2, s3, st.total, h, st.rectab, st.enumtab);
+    let rest: OblList = sig_rest_obls(s0, s1, s2, s3, st, h);
+    let rep: FnProve = prove_fn(s0, s1, s2, s3, h, checked.sig, st.tab, st.rectab, st.enumtab, st.total);
+    let obls1: OblList = append_obls(s0, s1, s2, s3, st.obls, rest);
+    return BodyWalk { ..st, rest: t, obls: append_obls(s0, s1, s2, s3, obls1, rep.obls), tops: append_topslist(s0, s1, s2, s3, st.tops, rep.tops), ok: close_and(st.ok, rep.ok), n: st.n + 1 };
+}
+// A result list without exactly one output ends the function after a
+// single RESULT_ONE obligation: no clause, scope, or body work follows.
+fn prove_body_skip(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BodyWalk, h: FnDecl, t: FnList) -> (result: BodyWalk) {
+    let obl: OblList = OblList.LCons { head: Obligation { kind: 18, start: h.fn_start, end: h.fn_end, status: 1 }, tail: OblList.LNil };
+    return BodyWalk { ..st, rest: t, obls: append_obls(s0, s1, s2, s3, st.obls, obl), n: st.n + 1 };
+}
+// Per-function signature remainder in elaboration order: capabilities,
+// effects, contracts, then parameter scope. Declaration type validity
+// already resolved in the pre-pass; the count gate above owns RESULT_ONE.
+fn sig_rest_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BodyWalk, h: FnDecl) -> (result: OblList) {
+    let sg: FnSig = h.sig;
+    let cs: CapRep = check_caps(s0, s1, s2, s3, st.total, sg.capabilities);
+    let es: FxRep = check_effects(s0, s1, s2, s3, st.total, sg.effects, cs.caps);
+    let ks: OblList = check_contracts(s0, s1, s2, s3, sg.contracts);
+    let ps: ParamRep = check_params(s0, s1, s2, s3, st.total, sg.params, st.rectab, st.enumtab);
+    let dup5: OblList = obl_only_kind(s0, s1, s2, s3, ps.obls, 5);
+    let o1: OblList = append_obls(s0, s1, s2, s3, cs.obls, es.obls);
+    let o2: OblList = append_obls(s0, s1, s2, s3, o1, ks);
+    return append_obls(s0, s1, s2, s3, o2, dup5);
+}
+record OblKindKeep { rest: OblList, acc: OblList, want: u64 }
+fn obl_only_kind(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList, want: u64) -> (result: OblList) {
+    iterate kk0 over s0 carrying a: OblKindKeep = OblKindKeep { rest: obls, acc: OblList.LNil, want: want } {
+        next a = obl_kind_step(a);
+    }
+    iterate kk1 over s1 carrying b: OblKindKeep = a {
+        next b = obl_kind_step(b);
+    }
+    iterate kk2 over s2 carrying c: OblKindKeep = b {
+        next c = obl_kind_step(c);
+    }
+    iterate kk3 over s3 carrying d: OblKindKeep = c {
+        next d = obl_kind_step(d);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.acc);
+}
+fn obl_kind_step(st: OblKindKeep) -> (result: OblKindKeep) {
+    return match st.rest {
+        LNil => st,
+        LCons { head: h, tail: t } => obl_kind_cons(st, h, t)
+    };
+}
+fn obl_kind_cons(st: OblKindKeep, h: Obligation, t: OblList) -> (result: OblKindKeep) {
+    if h.kind == st.want { return OblKindKeep { rest: t, acc: OblList.LCons { head: h, tail: st.acc }, want: st.want }; }
+    return OblKindKeep { rest: t, acc: st.acc, want: st.want };
+}
+record FailScan { rest: OblList, found: bool }
+fn obl_has_fail(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList) -> (result: bool) {
+    iterate fh0 over s0 carrying a: FailScan = FailScan { rest: obls, found: false } {
+        next a = obl_fail_step(a);
+    }
+    iterate fh1 over s1 carrying b: FailScan = a {
+        next b = obl_fail_step(b);
+    }
+    iterate fh2 over s2 carrying c: FailScan = b {
+        next c = obl_fail_step(c);
+    }
+    iterate fh3 over s3 carrying d: FailScan = c {
+        next d = obl_fail_step(d);
+    }
+    return d.found;
+}
+fn obl_fail_step(st: FailScan) -> (result: FailScan) {
+    if st.found { return st; }
+    return match st.rest {
+        LNil => st,
+        LCons { head: h, tail: t } => obl_fail_cons(st, h, t)
+    };
+}
+fn obl_fail_cons(st: FailScan, h: Obligation, t: OblList) -> (result: FailScan) {
+    if h.status == 1 { return FailScan { rest: OblList.LNil, found: true }; }
+    return FailScan { rest: t, found: false };
+}
+record UnitProve { ok: bool, err_start: u64, err_end: u64, obls: OblList, tops: TopsList, fn_count: u64 }
+fn prove_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: UnitProve) {
+    let u: Unit = parse_unit(s0, s1, s2, s3, total);
+    if not(u.ok) { return UnitProve { ok: false, err_start: u.err_start, err_end: u.err_end, obls: OblList.LNil, tops: TopsList.TLNil, fn_count: 0 }; }
+    let names: NameList = collect_fn_names(s0, s1, s2, s3, u.fns);
+    let dup: DupReport = duplicate_fn_names(s0, s1, s2, s3, total, names);
+    if dup.found {
+        let obl: OblList = OblList.LCons { head: Obligation { kind: 37, start: dup.start, end: dup.end, status: 1 }, tail: OblList.LNil };
+        return UnitProve { ok: false, err_start: dup.start, err_end: dup.end, obls: obl, tops: TopsList.TLNil, fn_count: 0 };
+    }
+    let sigs: SigTabRep = collect_sigtab(s0, s1, s2, s3, total, u.fns, u.records, u.enums);
+    let done: BodyWalk = prove_bodies(s0, s1, s2, s3, BodyWalk { rest: u.fns, tab: sigs.tab, rectab: u.records, enumtab: u.enums, total: total, obls: sigs.obls, tops: TopsList.TLNil, ok: true, n: 0 });
+    let ok: bool = close_and(done.ok, not(obl_has_fail(s0, s1, s2, s3, done.obls)));
+    return UnitProve { ok: ok, err_start: 0, err_end: 0, obls: done.obls, tops: done.tops, fn_count: done.n };
+}
+// Field type validity by declaration context (0 value, 1 record, 2 enum).
+// Value positions accept scalars, declared nominals, and sequences with
+// valid elements; record fields the same; enum payloads reject sequences
+// outright. Qualified spellings fail with the context family.
+fn check_field_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
+    if kind == 1 || kind == 2 || kind == 3 || kind == 4 { return OblList.LNil; }
+    if kind == 5 { return check_named_field_type(s0, s1, s2, s3, total, start, end, rectab, enumtab, ctx); }
+    if kind == 6 { return ctx_field_obl(kind_ctx_qualified(ctx), start, end); }
+    if kind == 7 || kind == 8 { return check_seq_field_type(s0, s1, s2, s3, total, start, end, rectab, enumtab, ctx); }
+    return ctx_field_obl(kind_ctx_other(ctx), start, end);
+}
+fn kind_ctx_qualified(ctx: u64) -> (result: u64) {
+    if ctx == 1 { return 29; }
+    if ctx == 2 { return 30; }
+    return 31;
+}
+fn kind_ctx_other(ctx: u64) -> (result: u64) {
+    if ctx == 1 { return 29; }
+    if ctx == 2 { return 30; }
+    return 19;
+}
+fn ctx_field_obl(kind: u64, start: u64, end: u64) -> (result: OblList) {
+    return OblList.LCons { head: Obligation { kind: kind, start: start, end: end, status: 1 }, tail: OblList.LNil };
+}
+fn check_named_field_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
+    let sc: SemType = scalar_sem(s0, s1, s2, s3, total, start, end);
+    return match sc {
+        TNamed { start: n, end: m } => check_declared_field_type(s0, s1, s2, s3, total, n, m, rectab, enumtab, ctx),
+        TBool => OblList.LNil,
+        TByte => OblList.LNil,
+        TInt { width: w, signed: g } => OblList.LNil,
+        TSeq => OblList.LNil,
+        TPoison => OblList.LNil
+    };
+}
+fn check_declared_field_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
+    if record_declared(s0, s1, s2, s3, total, rectab, start, end) { return OblList.LNil; }
+    if enum_declared(s0, s1, s2, s3, total, enumtab, start, end) { return OblList.LNil; }
+    return ctx_field_obl(kind_ctx_other(ctx), start, end);
+}
+fn check_seq_field_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
+    if ctx == 2 { return ctx_field_obl(30, start, end); }
+    let inner: TyRes = resolve_seq_type(s0, s1, s2, s3, total, start, end, rectab, enumtab);
+    if inner.ok { return OblList.LNil; }
+    return ctx_field_obl(kind_ctx_other(ctx), start, end);
+}
+record RecCheckState { rest: RecordList, obls: OblList }
+fn check_records(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, recs: RecordList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+    iterate rc0 over s0 carrying a: RecCheckState = RecCheckState { rest: recs, obls: OblList.LNil } {
+        next a = check_records_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate rc1 over s1 carrying b: RecCheckState = a {
+        next b = check_records_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate rc2 over s2 carrying c: RecCheckState = b {
+        next c = check_records_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate rc3 over s3 carrying d: RecCheckState = c {
+        next d = check_records_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn check_records_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecCheckState, rectab: RecordList, enumtab: EnumList) -> (result: RecCheckState) {
+    return match st.rest {
+        RNil => st,
+        RCons { head: h, tail: t } => check_one_record(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecCheckState, h: RecordDecl, t: RecordList, rectab: RecordList, enumtab: EnumList) -> (result: RecCheckState) {
+    let obls: OblList = check_record_fields(s0, s1, s2, s3, total, h.fields, rectab, enumtab);
+    return RecCheckState { rest: t, obls: append_obls(s0, s1, s2, s3, st.obls, obls) };
+}
+record RecFieldState { rest: FieldList, seen: NameList, obls: OblList }
+fn check_record_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+    iterate rf0 over s0 carrying a: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
+        next a = check_record_fields_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate rf1 over s1 carrying b: RecFieldState = a {
+        next b = check_record_fields_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate rf2 over s2 carrying c: RecFieldState = b {
+        next c = check_record_fields_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate rf3 over s3 carrying d: RecFieldState = c {
+        next d = check_record_fields_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn check_record_fields_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecFieldState, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: h, tail: t } => check_one_record_field(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_record_field(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecFieldState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
+    let tob: OblList = check_field_type(s0, s1, s2, s3, total, h.type_kind, h.type_start, h.type_end, rectab, enumtab, 1);
+    if name_known(s0, s1, s2, s3, total, st.seen, h.name_start, h.name_end) {
+        let dob: Obligation = Obligation { kind: 33, start: h.name_start, end: h.name_end, status: 1 };
+        return RecFieldState { rest: t, seen: st.seen, obls: OblList.LCons { head: dob, tail: append_obls(s0, s1, s2, s3, tob, st.obls) } };
+    }
+    let seen: NameList = NameList.NCons { head: NameSpan { start: h.name_start, end: h.name_end }, tail: st.seen };
+    return RecFieldState { rest: t, seen: seen, obls: append_obls(s0, s1, s2, s3, tob, st.obls) };
+}
+record EnumCheckState { rest: EnumList, obls: OblList }
+fn check_enums(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, enums: EnumList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+    iterate ec0 over s0 carrying a: EnumCheckState = EnumCheckState { rest: enums, obls: OblList.LNil } {
+        next a = check_enums_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate ec1 over s1 carrying b: EnumCheckState = a {
+        next b = check_enums_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate ec2 over s2 carrying c: EnumCheckState = b {
+        next c = check_enums_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate ec3 over s3 carrying d: EnumCheckState = c {
+        next d = check_enums_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn check_enums_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EnumCheckState, rectab: RecordList, enumtab: EnumList) -> (result: EnumCheckState) {
+    return match st.rest {
+        GNil => st,
+        GCons { head: h, tail: t } => check_one_enum(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_enum(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: EnumCheckState, h: EnumDecl, t: EnumList, rectab: RecordList, enumtab: EnumList) -> (result: EnumCheckState) {
+    let obls: OblList = check_variants(s0, s1, s2, s3, total, h.variants, rectab, enumtab);
+    return EnumCheckState { rest: t, obls: append_obls(s0, s1, s2, s3, st.obls, obls) };
+}
+record VariantState { rest: VariantList, seen: NameList, obls: OblList }
+fn check_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, variants: VariantList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+    iterate vx0 over s0 carrying a: VariantState = VariantState { rest: variants, seen: NameList.NNil, obls: OblList.LNil } {
+        next a = check_variants_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate vx1 over s1 carrying b: VariantState = a {
+        next b = check_variants_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate vx2 over s2 carrying c: VariantState = b {
+        next c = check_variants_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate vx3 over s3 carrying d: VariantState = c {
+        next d = check_variants_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn check_variants_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantState, rectab: RecordList, enumtab: EnumList) -> (result: VariantState) {
+    return match st.rest {
+        VNil => st,
+        VCons { head: h, tail: t } => check_one_variant(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_variant(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantState, h: Variant, t: VariantList, rectab: RecordList, enumtab: EnumList) -> (result: VariantState) {
+    let pobls: OblList = check_payload_fields(s0, s1, s2, s3, total, h.fields, rectab, enumtab);
+    if name_known(s0, s1, s2, s3, total, st.seen, h.name_start, h.name_end) {
+        let dob: Obligation = Obligation { kind: 34, start: h.name_start, end: h.name_end, status: 1 };
+        return VariantState { rest: t, seen: st.seen, obls: OblList.LCons { head: dob, tail: append_obls(s0, s1, s2, s3, pobls, st.obls) } };
+    }
+    let seen: NameList = NameList.NCons { head: NameSpan { start: h.name_start, end: h.name_end }, tail: st.seen };
+    return VariantState { rest: t, seen: seen, obls: append_obls(s0, s1, s2, s3, pobls, st.obls) };
+}
+fn check_payload_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+    iterate pf0 over s0 carrying a: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
+        next a = check_payload_fields_step(s0, s1, s2, s3, total, a, rectab, enumtab);
+    }
+    iterate pf1 over s1 carrying b: RecFieldState = a {
+        next b = check_payload_fields_step(s0, s1, s2, s3, total, b, rectab, enumtab);
+    }
+    iterate pf2 over s2 carrying c: RecFieldState = b {
+        next c = check_payload_fields_step(s0, s1, s2, s3, total, c, rectab, enumtab);
+    }
+    iterate pf3 over s3 carrying d: RecFieldState = c {
+        next d = check_payload_fields_step(s0, s1, s2, s3, total, d, rectab, enumtab);
+    }
+    return reverse_obls(s0, s1, s2, s3, d.obls);
+}
+fn check_payload_fields_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecFieldState, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: h, tail: t } => check_one_payload_field(s0, s1, s2, s3, total, st, h, t, rectab, enumtab)
+    };
+}
+fn check_one_payload_field(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: RecFieldState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
+    let tob: OblList = check_field_type(s0, s1, s2, s3, total, h.type_kind, h.type_start, h.type_end, rectab, enumtab, 2);
+    if name_known(s0, s1, s2, s3, total, st.seen, h.name_start, h.name_end) {
+        let dob: Obligation = Obligation { kind: 33, start: h.name_start, end: h.name_end, status: 1 };
+        return RecFieldState { rest: t, seen: st.seen, obls: OblList.LCons { head: dob, tail: append_obls(s0, s1, s2, s3, tob, st.obls) } };
+    }
+    let seen: NameList = NameList.NCons { head: NameSpan { start: h.name_start, end: h.name_end }, tail: st.seen };
+    return RecFieldState { rest: t, seen: seen, obls: append_obls(s0, s1, s2, s3, tob, st.obls) };
+}
+
