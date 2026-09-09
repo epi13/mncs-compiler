@@ -19,12 +19,19 @@ extends this to **bounded declaration-scale compilation**: header, `use`,
 `record`, payload `enum`, and `fn` declarations with bodies and expressions
 (256-byte units); function-name symbol collection with duplicate detection; a
 resolve/span walk over every body; and lowering of every expression to a
-postfix stack IR checked by a stack-depth self-verifier. This is not yet a
+postfix stack IR checked by a stack-depth self-verifier. The semantic
+vertical (`decl.prove_unit`) adds signature facts with contracts/effects,
+bidirectional expression proof with fused typed lowering, statement
+proving, whole-unit proofs with FAIL/UNKNOWN obligations, and a type-stack
+verifier for the typed IR — with FAIL-obligation parity vs Stage-0
+diagnostics over a 49-case twin differential. This is not yet a
 whole-module compiler or self-hosting implementation.
 
 Run `tools/bootstrap.sh`, then `python3 tools/test_frontend.py`,
-`python3 tools/test_decl.py`, and `python3 tools/test_pressure.py`. See
+`python3 tools/test_decl.py`, `python3 tools/test_sem.py`, and
+`python3 tools/test_pressure.py`. See
 [frontend evidence](evidence/FRONTEND.md), [declaration evidence](evidence/DECL.md),
+[semantic evidence](evidence/SEM.md),
 and the [pressure index](pressure/README.md). All production behavior lives in
 `src/compiler/`; the Rust/Python code under `tools/` is a temporary Stage-0 test
 transport, not a compiler implementation. There is no standalone driver or

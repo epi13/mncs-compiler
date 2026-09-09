@@ -34,12 +34,19 @@ Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md) and
   parsing with first-error-span parity vs Stage-0, function-name symbols with
   duplicate detection, resolve/span walking, postfix stack-IR lowering with a
   depth self-check;
+- implemented (semantic vertical, 256-byte units): signature facts,
+  bidirectional expression proof with fused typed lowering, statement
+  proving, whole-unit proofs with FAIL/UNKNOWN obligations, typed IR with a
+  type-stack verifier, and FAIL-obligation parity vs Stage-0 diagnostics
+  (49-case twin differential, see evidence/SEM.md);
 - partially implemented: structured diagnostics and pure source-unit fact requests;
 - blocked for whole-module scale: segment-chained source capacity (CP-0001);
   Unicode classification remains a parity gap (CP-0002). Compiler-scale pressures
   CP-0008 through CP-0012 (finite-payload visibility, iteration fuel, scalar match,
   acyclic-call machines, payload sequences) bound the next steps;
-- not started: imports, type/effect/ownership checks, backend lowering;
+- not started: imports, ownership checks, backend lowering (expression/statement
+  type and effect-cover checks are implemented; capability authorization at
+  calls is signature-level only);
 - intentionally deferred: persisted fact IDs/cache, service/coordinator, distributed
   or learned features, Rust succession and self-hosting.
 

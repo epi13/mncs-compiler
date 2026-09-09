@@ -54,6 +54,7 @@ Use `0000-template.md` for new findings.
 | [CP-0010: scalar match dispatch](0010-scalar-match-dispatch.md) | Medium: exhaustiveness checking for opcode tables |
 | [CP-0011: acyclic calls force machines](0011-acyclic-calls-machines.md) | High: dominant complexity/cost driver; needs direction |
 | [CP-0012: payload sequence ban](0012-payload-sequence-ban.md) | Low: cons-list workaround is exact |
+| [CP-0013: keyword field next](0013-keyword-field-next.md) | Low: rename workaround is exact |
 
 The previous pass's closing note is superseded: recursive enums with
 scalar/finite/record payloads elaborate, construct, match, and compile
