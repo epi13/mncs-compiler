@@ -1,4 +1,4 @@
-mncs 0.10;
+mncs 0.13;
 module mncs.compiler.kernel.v1;
 use mncs.compiler.parser.v1 as parser;
 use mncs.compiler.source.v1 as source;
@@ -24,7 +24,7 @@ fn same_source(left: [byte; up_to 64], right: [byte; up_to 64]) -> (result: bool
 // It does not independently prove a token's lexical classification.
 fn token_shape(text: [byte; up_to 64], cursor: u64, kind: u64, start: u64, end: u64, diagnostic: u64) -> (result: bool) {
     if cursor > text.len { return false; }
-    if start != cursor || select(source.span_valid(text, start, end), false, true) { return false; }
+    if start != cursor || !source.span_valid(text, start, end) { return false; }
     if kind == 0 { return start == text.len && end == start && diagnostic == 0; }
     let known: bool = (kind >= 1 && kind <= 7) || (kind >= 10 && kind <= 39) || (kind >= 50 && kind <= 70) || (kind >= 80 && kind <= 96);
     let diagnostic_ok: bool = (diagnostic == 0 && kind != 7) || (diagnostic == 1 && kind == 3) || ((diagnostic == 2 || diagnostic == 3) && kind == 7);

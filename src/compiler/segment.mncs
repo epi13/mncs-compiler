@@ -1,4 +1,4 @@
-mncs 0.10;
+mncs 0.13;
 module mncs.compiler.segment.v1;
 use mncs.compiler.source.v1 as source;
 use mncs.compiler.lexer.v1 as lexer;
@@ -47,17 +47,19 @@ fn ascii_step(total: u64, st: AsciiState, byte: u64) -> (result: AsciiState) {
 }
 
 fn ascii(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
-    iterate ai0 over s0 carrying a: AsciiState = AsciiState { valid: true, index: 0 } {
-        next a = ascii_step(total, a, source.byte_at(s0, ai0) as u64);
+    // Sequential links reuse one index name (profile 0.13 records them
+    // hygienically); the chunk is named by the `over` sequence.
+    iterate i over s0 carrying a: AsciiState = AsciiState { valid: true, index: 0 } {
+        next a = ascii_step(total, a, source.byte_at(s0, i) as u64);
     }
-    iterate ai1 over s1 carrying b: AsciiState = a {
-        next b = ascii_step(total, b, source.byte_at(s1, ai1) as u64);
+    iterate i over s1 carrying b: AsciiState = a {
+        next b = ascii_step(total, b, source.byte_at(s1, i) as u64);
     }
-    iterate ai2 over s2 carrying c: AsciiState = b {
-        next c = ascii_step(total, c, source.byte_at(s2, ai2) as u64);
+    iterate i over s2 carrying c: AsciiState = b {
+        next c = ascii_step(total, c, source.byte_at(s2, i) as u64);
     }
-    iterate ai3 over s3 carrying d: AsciiState = c {
-        next d = ascii_step(total, d, source.byte_at(s3, ai3) as u64);
+    iterate i over s3 carrying d: AsciiState = c {
+        next d = ascii_step(total, d, source.byte_at(s3, i) as u64);
     }
     return d.valid;
 }
@@ -178,20 +180,20 @@ fn scan_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
     // Preserve Stage-0's unusual continuation of dots after the first version dot.
     let dot: bool = number && a == 46 && (st.dotted || lexer.digit(b));
     let advance: bool = (line && a != 10) || (word && (lexer.letter(a) || lexer.digit(a))) || (number && (lexer.digit(a) || dot)) || (ws && lexer.space(a));
-    return lexer.Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: select(advance, false, true) };
+    return lexer.Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: !advance };
 }
 
 fn scan_fuel(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: lexer.Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: lexer.Scan) {
-    iterate si0 over s0 carrying a: lexer.Scan = st {
+    iterate i over s0 carrying a: lexer.Scan = st {
         next a = scan_step(s0, s1, s2, s3, total, a, line, block, word, number, ws);
     }
-    iterate si1 over s1 carrying b: lexer.Scan = a {
+    iterate i over s1 carrying b: lexer.Scan = a {
         next b = scan_step(s0, s1, s2, s3, total, b, line, block, word, number, ws);
     }
-    iterate si2 over s2 carrying c: lexer.Scan = b {
+    iterate i over s2 carrying c: lexer.Scan = b {
         next c = scan_step(s0, s1, s2, s3, total, c, line, block, word, number, ws);
     }
-    iterate si3 over s3 carrying d: lexer.Scan = c {
+    iterate i over s3 carrying d: lexer.Scan = c {
         next d = scan_step(s0, s1, s2, s3, total, d, line, block, word, number, ws);
     }
     return d;
@@ -224,16 +226,16 @@ fn next_token(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
 // discarded as trivia. Mirrors `lexer.significant`.
 fn significant(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64) -> (result: lexer.Token) {
     let first: lexer.Token = next_token(s0, s1, s2, s3, total, start);
-    iterate gi0 over s0 carrying a: lexer.Token = first {
+    iterate i over s0 carrying a: lexer.Token = first {
         next a = skip_trivia(s0, s1, s2, s3, total, a);
     }
-    iterate gi1 over s1 carrying b: lexer.Token = a {
+    iterate i over s1 carrying b: lexer.Token = a {
         next b = skip_trivia(s0, s1, s2, s3, total, b);
     }
-    iterate gi2 over s2 carrying c: lexer.Token = b {
+    iterate i over s2 carrying c: lexer.Token = b {
         next c = skip_trivia(s0, s1, s2, s3, total, c);
     }
-    iterate gi3 over s3 carrying d: lexer.Token = c {
+    iterate i over s3 carrying d: lexer.Token = c {
         next d = skip_trivia(s0, s1, s2, s3, total, d);
     }
     return d;
