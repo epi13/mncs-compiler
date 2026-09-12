@@ -2,11 +2,12 @@
 
 ID: CP-0011
 
-Status: open
+Status: partially resolved (2026-09-12)
 
 Category: language | compiler-architecture
 
-Severity: high
+Severity: high (scope narrowed: machines still required except for
+structural self-recursion)
 
 Frequency: pervasive
 
@@ -126,5 +127,27 @@ per request class are recorded in `evidence/decl-results.json`.
 ## Upstream tracking
 
 - `mncs-language` issue/PR:
-- Resolution revision:
+- Resolution revision: profile 0.13 (RFC 0047 structural recursion, partial)
 - Follow-up evidence in this repository:
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): partially resolved
+
+Probed on the current pin: the original `depth()` reproducer — direct
+self-call with the first argument a match-bound structural descendant
+of a finite first parameter — elaborates at 0.13 (exit 0). Mutual
+recursion is still MNE130, as documented (general, mutual, numeric-
+countdown, cross-module, and higher-order recursion stay rejected).
+
+What this changes for the compiler: tree traversals shaped like
+`depth` (one finite value in, one value out, recursion on match-bound
+children) are now expressible directly, with kernel re-derivation of
+the structural-decrease claim and static call-depth fuel on every
+backend. What it does not change: the parser machines (shunting-yard,
+block frames, fuel loops) recurse over *derived* state (operator
+stacks, token cursors, frame stacks), not over a single match-bound
+finite parameter, so they do not fit the admitted shape — the machines
+are retained deliberately, not from inertia. A future pass could move
+pure tree folds (depth/size/counts over `Expr`/`Stmt`) to structural
+recursion once the suites run green (elaboration proof staged after
+CP-0014); the machine patterns stay for everything else. Fuel-
+exhaustion silence (shared with CP-0009) is unaddressed by this change.

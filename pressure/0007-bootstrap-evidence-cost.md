@@ -1,7 +1,9 @@
 # CP-0007 — Small frontend emits substantial Stage-0 IR/evidence
 
-Status: open. Category: tooling, compiler-architecture. Severity: medium.
-Frequency: each bootstrap compilation. Upstream tracking: none.
+Status: open, re-confirmed (2026-09-12). Category: tooling,
+compiler-architecture. Severity: medium. Frequency: each bootstrap
+compilation. Upstream tracking: none; re-measurement staged after
+CP-0014 (the migrated tree is larger and must recompile clean first).
 
 The implemented four-module frontend is 342 MNCS lines. Compiling the linked
 kernel with the pinned CLI and `--emit semantic,hir,ssa` completes with 242

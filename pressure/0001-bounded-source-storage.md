@@ -1,8 +1,10 @@
 # CP-0001 — Whole compiler sources exceed bounded sequence capacity
 
-Status: open. Category: language, stdlib-runtime, tooling. Severity: blocking
-for whole-module compilation. Frequency: pervasive. Upstream tracking: none;
-no upstream changes made.
+Status: partially resolved (2026-09-12). Category: language,
+stdlib-runtime, tooling. Severity: high for whole-module compilation
+(was blocking at 64 bytes). Frequency: pervasive. Upstream tracking:
+profile 0.13 raised ceilings (see re-evaluation); no dedicated storage
+API yet.
 
 ## Workload and reproduction
 
@@ -43,3 +45,20 @@ that all of them are absent.
   lexer, parser, diagnostics, and snapshots.
 - Likely owners: language/resource model and stdlib/runtime storage; tooling for
   a precise capacity diagnostic. Compiler architecture must choose storage units.
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): partially resolved
+
+Probed on the current pin (`mncs abi`, profile 0.13): `[byte; up_to 65]`
+and `[byte; up_to 1024]` elaborate; `[byte; up_to 1025]` is refused
+(MNE105, then MNE161 cascades). Counted_iteration bounds rose the same
+way (1..=1024, MNE142 past it). The ceiling is now 16x higher, and the
+0.10-profile `repro/source-65.mncs` still yields MNE105
+(`tools/test_pressure.py` green), so old-profile behavior is preserved.
+
+What remains: 1024 bytes still cannot hold real modules
+(`decl.mncs` is ~267KB); there is still no owned/shared source storage
+with views, no growable arenas, no stable content identity. The
+four-chunk laboratory interface (256B units) is unchanged. Severity
+drops from blocking to high: chunked compilation can now span 4KB per
+unit-shape change, but whole-module compilation still needs the storage
+API this pressure originally asked for.

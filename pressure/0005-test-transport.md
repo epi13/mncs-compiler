@@ -1,7 +1,9 @@
 # CP-0005 — Bootstrap differential tests need a host test transport
 
-Status: open. Category: tooling, compiler-architecture. Severity: medium.
-Frequency: every evidence run. Upstream tracking: none.
+Status: open, re-confirmed (2026-09-12). Category: tooling,
+compiler-architecture. Severity: medium. Frequency: every evidence run.
+Upstream tracking: none; probe gained `MNCS_PROBE_MODULES` narrowing
+(this campaign) but the transport shape is unchanged.
 
 The compiler workload is comparing many MNCS token/parse requests with pinned
 Rust `mncs-syntax` results. The pinned CLI exposes one-request `execute`, but
