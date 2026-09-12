@@ -1,0 +1,12 @@
+mncs 0.10;
+module probe.bool_payload;
+enum Flag { Yes { set: bool }, No }
+fn is_set(f: Flag) -> (result: bool) {
+    return match f {
+        Yes { set: s } => s,
+        No => false
+    };
+}
+fn make(s: bool) -> (result: Flag) {
+    return Flag.Yes { set: s };
+}

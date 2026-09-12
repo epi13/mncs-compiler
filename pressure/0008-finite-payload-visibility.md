@@ -2,7 +2,7 @@
 
 ID: CP-0008
 
-Status: open
+Status: resolved (2026-09-12)
 
 Category: language | backend | compiler-architecture
 
@@ -150,5 +150,25 @@ finite construction (parses as a record literal); see the finding body.
 ## Upstream tracking
 
 - `mncs-language` issue/PR:
-- Resolution revision:
+- Resolution revision: fixed by `a7a8c05` (nominal-identity/canonicalization work; exact commit not bisected)
 - Follow-up evidence in this repository:
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): resolved
+
+Reproduced the original failure first: with the two repro modules laid
+out as `probe/u1.mncs` + `probe/u2.mncs`, the previous pin reports
+MNB063 (construction) and MNB066 (payload projection) — confirming the
+finding was real and that `mncs abi` surfaces backend diagnostics.
+(On the current pin the same layout yields exit 0 with zero
+diagnostics, at both 0.10 and 0.13 profiles: the fix is not
+profile-gated.) The 0.13 three-segment form `t.E.Name { ... }`
+(ENG-0007) also elaborates across modules in the same test.
+
+History preserved above: the homing-rule workaround that forced all
+tree types into `mncs.compiler.decl.v1`, its cost (monolithic core
+module, late lowering-stage discovery), and the grammar limit that
+motivated it. The consolidation is *retained for now* — splitting tree
+layers into separate modules is staged as follow-up work once the
+declaration suites run green again (blocked: CP-0014) — but it is now a
+design choice, not a language constraint. The `decl.mncs` module comment
+was updated to say so.

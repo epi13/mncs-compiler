@@ -1,8 +1,10 @@
 # CP-0003 — Cursor scans retain bounded no-op iterations
 
-Status: open. Category: language, compiler-architecture, tooling. Severity:
-medium in this slice, potentially high at larger source sizes. Frequency: pervasive.
-Upstream tracking: none.
+Status: open, re-confirmed (2026-09-12). Category: language,
+compiler-architecture, tooling. Severity: medium in this slice,
+potentially high at larger source sizes. Frequency: pervasive.
+Upstream tracking: none; "loop regions" (Sep-10 language work) checked
+and unrelated (WASM memory reclamation, not early termination).
 
 ## Workload and reproduction
 
@@ -35,3 +37,17 @@ reference tooling and test transport, not just kernel execution.
   and available iteration forms before requesting language changes.
 - Likely owners: compiler architecture first; language/tooling where bounded
   iteration cannot efficiently represent the measured workload.
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): still valid
+
+Re-probed: `while` is still refused (MNP106) on profile 0.13, and no
+break/early-exit form exists in any sealed profile. The 0.13 migration
+(five frontend modules + `decl.mncs`) keeps the terminal-guard idiom
+everywhere; the 0.13 `up_to 1024` ceiling changes fuel *arithmetic* but
+not the no-op cost model. Measured signal: the scalar-`match` migration
+cut frontend interpreter steps ~9% (1453237 → 1326192), proving dispatch
+shape matters, but per-token scans still pay their full bound
+(`execution_steps_max` scales with input length in every suite).
+`repro/unbounded-scan.mncs` still yields MNP106. The desired capability
+is unchanged: source-length-bounded early termination, or an explicit
+decision that one-pass-with-no-ops is the intended compiler style.

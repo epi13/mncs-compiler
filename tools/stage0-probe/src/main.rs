@@ -19,8 +19,24 @@ fn envelope(text: String) -> SourceEnvelope {
     SourceEnvelope::inline(SourceArtifactKind::Program, "probe", text)
 }
 fn main() {
+    // `MNCS_PROBE_MODULES` optionally narrows the elaborated module set
+    // (comma-separated leaf names). The default is the full core. Narrowing
+    // exists so frontend-only suites keep running while an unrelated module
+    // is blocked upstream (see CP-0014); narrowed runs prove nothing about
+    // the excluded modules.
+    let wanted: Option<Vec<String>> = std::env::var("MNCS_PROBE_MODULES").ok().map(|raw| {
+        raw.split(',')
+            .map(|part| part.trim().to_owned())
+            .filter(|part| !part.is_empty())
+            .collect()
+    });
     let mut sources = Sources(BTreeMap::new());
     for file in ["source", "lexer", "parser", "kernel", "segment", "decl"] {
+        if let Some(names) = &wanted {
+            if !names.iter().any(|name| name == file) {
+                continue;
+            }
+        }
         let text = std::fs::read_to_string(format!("src/compiler/{file}.mncs")).unwrap();
         sources
             .0

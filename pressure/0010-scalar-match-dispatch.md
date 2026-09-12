@@ -2,7 +2,7 @@
 
 ID: CP-0010
 
-Status: open
+Status: resolved (2026-09-12)
 
 Category: language
 
@@ -95,5 +95,26 @@ mncs abi pressure/repro/match-u64-pattern.mncs  # MNP084 at the `0` pattern
 ## Upstream tracking
 
 - `mncs-language` issue/PR:
-- Resolution revision:
+- Resolution revision: profile 0.13 (scalar integer match with `_` totality)
 - Follow-up evidence in this repository:
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): resolved
+
+Probed on the current pin: `match x { 0 => 1, _ => 2 }` over `u64`
+elaborates at 0.13; a missing `_` default is MNE140 (non-exhaustive
+scalar match) — the exhaustiveness check the original pressure asked
+for, delivered as an elaboration property. The 0.10 control still
+yields MNP084, so old-profile behavior is preserved.
+
+Proven in real compiler code: `lexer.mncs` `punctuation` is now a
+nested scalar match (10 two-byte groups with single-kind inner
+defaults, 12 single kinds, `_ => 7` outer default), and `decl.mncs`
+`prec` (24 operator rows), `is_operand_start`, and `is_value_name` are
+total scalar matches. Every punctuation token of the 1586-token
+frontend differential flows through the migrated dispatch
+(`tools/test_frontend.py` green), and interpreter steps dropped ~9%,
+so the branch-chain lowering is measurably cheaper than the if-chains
+it replaced. `decl.mncs` tables are parse-checked with elaboration
+proof staged after CP-0014. History preserved above: the MNP084
+refusal, the if-chain workaround, and the silent non-exhaustiveness
+that motivated totality.

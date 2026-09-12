@@ -11,8 +11,13 @@ The repository exists so active compiler architecture can move into MNCS without
 ## Executable slices
 
 The kernel implements **bounded ASCII source processing** in MNCS: lossless
-lexical tokens, byte spans, lexical diagnostics/coverage evidence, and a parser
-for the language header and qualified module declaration (64-byte inputs).
+lexical tokens, byte spans, 1-based line/column rendering, lexical
+diagnostics/coverage evidence, and a parser for the language header and
+qualified module declaration (64-byte inputs). The segment layer mirrors
+the same lexical semantics over four-chunk ≤256-byte units with absolute
+offsets, proven by its own twin differential. All six frontend modules
+are profile-0.13 sources using native negation, total scalar `match`
+dispatch, and reused iteration identities.
 
 The declaration vertical (`src/compiler/segment.mncs`, `src/compiler/decl.mncs`)
 extends this to **bounded declaration-scale compilation**: header, `use`,
@@ -24,14 +29,18 @@ vertical (`decl.prove_unit`) adds signature facts with contracts/effects,
 bidirectional expression proof with fused typed lowering, statement
 proving, whole-unit proofs with FAIL/UNKNOWN obligations, and a type-stack
 verifier for the typed IR — with FAIL-obligation parity vs Stage-0
-diagnostics over a 49-case twin differential. This is not yet a
-whole-module compiler or self-hosting implementation.
+diagnostics over a 49-case twin differential. The declaration/semantic
+verticals last ran green at the previous Stage-0 pin and are migrated to
+0.13 (parse-checked); their elaboration proof awaits the upstream
+bool-payload fix (CP-0014). This is not yet a whole-module compiler or
+self-hosting implementation.
 
 Run `tools/bootstrap.sh`, then `python3 tools/test_frontend.py`,
-`python3 tools/test_decl.py`, `python3 tools/test_sem.py`, and
-`python3 tools/test_pressure.py`. See
-[frontend evidence](evidence/FRONTEND.md), [declaration evidence](evidence/DECL.md),
-[semantic evidence](evidence/SEM.md),
+`python3 tools/test_segment.py`, `python3 tools/test_decl.py`,
+`python3 tools/test_sem.py`, and `python3 tools/test_pressure.py`. See
+[frontend evidence](evidence/FRONTEND.md), [segment evidence](evidence/SEGMENT.md),
+[declaration evidence](evidence/DECL.md), [semantic evidence](evidence/SEM.md),
+[parity matrix](evidence/PARITY.md),
 and the [pressure index](pressure/README.md). All production behavior lives in
 `src/compiler/`; the Rust/Python code under `tools/` is a temporary Stage-0 test
 transport, not a compiler implementation. There is no standalone driver or

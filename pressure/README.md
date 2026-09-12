@@ -56,6 +56,35 @@ Use `0000-template.md` for new findings.
 | [CP-0012: payload sequence ban](0012-payload-sequence-ban.md) | Low: cons-list workaround is exact |
 | [CP-0013: keyword field next](0013-keyword-field-next.md) | Low: rename workaround is exact |
 
+## Re-pin pass (Stage-0 `a7a8c05`, profiles 0.13–0.16 available)
+
+| Finding | Priority for the next language run |
+| --- | --- |
+| [CP-0014: bool payload regression](0014-bool-payload-regression.md) | Blocking: decl/sem verticals cannot elaborate until fixed |
+| [CP-0015: version-aware frontend](0015-version-aware-frontend.md) | High: self-parsing gap for 0.13 syntax; decl package staged post-CP-0014 |
+
+## Reconciliation (2026-09-12, Stage-0 `a7a8c05`)
+
+Every prior pressure re-tested; each file carries its evidence section.
+
+| Finding | Verdict |
+| --- | --- |
+| CP-0001 bounded source storage | Partially resolved (ceiling 64→1024; storage API still missing) |
+| CP-0002 Unicode classification | Partially resolved (decoder substrate landed; property tables missing) |
+| CP-0003 bounded scan cost | Still valid (`while` refused; no early exit) |
+| CP-0004 boolean comparison | Resolved (`!`/`==` at 0.13, used in real compiler code) |
+| CP-0005 test transport | Still valid (shape unchanged) |
+| CP-0006 envelope inference | Still valid (MNE002 persists; MNP008 companion pinned) |
+| CP-0007 bootstrap evidence cost | Still valid (re-measurement staged post-CP-0014) |
+| CP-0008 finite payload visibility | Resolved (MNB063/066 gone; split staged as follow-up) |
+| CP-0009 iteration fuel chaining | Partially resolved (reuse + 1024 bounds; derived fuel remains) |
+| CP-0010 scalar match dispatch | Resolved (total int match, used in real dispatch tables) |
+| CP-0011 acyclic-call machines | Partially resolved (structural recursion; machines retained deliberately) |
+| CP-0012 payload sequence ban | Resolved (gate lifted; cons-lists kept by design) |
+| CP-0013 keyword field next | Resolved (`StmtFrame.next` restored in real code) |
+| CP-0014 bool payload regression | New, blocking |
+| CP-0015 version-aware frontend | New, high |
+
 The previous pass's closing note is superseded: recursive enums with
 scalar/finite/record payloads elaborate, construct, match, and compile
 (verified with 25 variants and 6-field payloads), and imported record

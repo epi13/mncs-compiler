@@ -2,7 +2,7 @@
 
 ID: CP-0013
 
-Status: open
+Status: resolved (2026-09-12)
 
 Category: language
 
@@ -10,7 +10,15 @@ Severity: low
 
 Frequency: rare
 
-## `next` is unusable as a record field name
+## `next` was unusable as a record field name (resolved)
+
+Upstream: profile 0.13 contextual `next` fields. Proven in real
+compiler code: `StmtFrame.after` renamed back to `StmtFrame.next`
+(`record`, two constructions, one projection) in the 0.13 migration;
+parse-checked with elaboration proof staged after CP-0014. The 0.10
+`repro/keyword-field-next.mncs` still fails exactly as documented
+(MNP127/128/007), so old-profile behavior is preserved. History
+preserved below.
 
 `next` is the iterate-step keyword, and the parser reserves it in field
 position: `record R { next: u64 }` fails with MNP127 (`expected '}' after

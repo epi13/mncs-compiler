@@ -25,36 +25,44 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
-Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md) and
-[declaration evidence](evidence/DECL.md)):
+Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md),
+[segment evidence](evidence/SEGMENT.md), [declaration evidence](evidence/DECL.md),
+and the [parity matrix](evidence/PARITY.md)):
 
 - implemented: bounded immutable byte inputs, guarded reads, span validation,
-  ASCII lexer, nested comments, lexical errors, coverage evidence and source equality;
-- implemented (declaration vertical, 256-byte units): header/use/record/payload-enum/fn
-  parsing with first-error-span parity vs Stage-0, function-name symbols with
-  duplicate detection, resolve/span walking, postfix stack-IR lowering with a
-  depth self-check;
-- implemented (semantic vertical, 256-byte units): signature facts,
-  bidirectional expression proof with fused typed lowering, statement
-  proving, whole-unit proofs with FAIL/UNKNOWN obligations, typed IR with a
-  type-stack verifier, and FAIL-obligation parity vs Stage-0 diagnostics
-  (49-case twin differential, see evidence/SEM.md);
+  1-based line/column rendering, ASCII lexer, nested comments, lexical errors,
+  coverage evidence and source equality — all as profile-0.13 sources with
+  native negation, total scalar-`match` dispatch, and reused iteration names;
+- implemented (segment vertical, 256-byte units): absolute-offset lexical
+  twins over four chunks with oracle kind/span/diagnostic parity, proven by
+  a dedicated 10679-request twin differential;
+- implemented at the previous pin, migrated to 0.13 and parse-checked,
+  awaiting elaboration proof (blocked: CP-0014 bool-payload regression):
+  declaration parsing with first-error-span parity, function-name symbols,
+  resolve/span walking, depth-checked stack IR; signature facts, bidirectional
+  proof with fused typed lowering, whole-unit proofs, type-stack verifier,
+  and FAIL-obligation parity (49 cases);
 - partially implemented: structured diagnostics and pure source-unit fact requests;
-- blocked for whole-module scale: segment-chained source capacity (CP-0001);
-  Unicode classification remains a parity gap (CP-0002). Compiler-scale pressures
-  CP-0008 through CP-0012 (finite-payload visibility, iteration fuel, scalar match,
-  acyclic-call machines, payload sequences) bound the next steps;
+- resolved since the last update: finite-payload visibility (CP-0008),
+  scalar match dispatch (CP-0010), payload sequence ban (CP-0012), keyword
+  field `next` (CP-0013), boolean comparison/negation (CP-0004); partially
+  resolved: source ceilings 64→1024 (CP-0001), Unicode decoder substrate
+  (CP-0002), iteration reuse + 1024 bounds (CP-0009), structural recursion
+  (CP-0011, machines retained deliberately);
+- blocked for whole-module scale: source storage past 1024 bytes (CP-0001
+  remainder); Unicode property tables (CP-0002 remainder);
 - not started: imports, ownership checks, backend lowering (expression/statement
   type and effect-cover checks are implemented; capability authorization at
-  calls is signature-level only);
+  calls is signature-level only); version-aware 0.13-syntax parsing (CP-0015);
 - intentionally deferred: persisted fact IDs/cache, service/coordinator, distributed
   or learned features, Rust succession and self-hosting.
 
-Next: resolve or deliberately redesign the measured storage boundary in a
-separate language run, then extend source-backed syntax and dependency facts.
-Record sequences already elaborate; do not assume every collection problem
-requires a new language feature. Source Profile 0.10 is supported by the unchanged
-pinned Stage-0 and now replaces the original scaffold's 0.8 metadata.
+Next: land the upstream bool-payload fix and re-run the declaration/semantic
+suites; then implement version-aware parsing (CP-0015), split tree layers into
+modules (enabled by CP-0008's fix), and grow unit capacity toward whole
+modules (CP-0001 remainder). Record sequences already elaborate; do not assume
+every collection problem requires a new language feature. Source Profile 0.13
+is the implementation profile on the current pin (`mncs-language.lock.json`).
 
 Architecture may already use fact/obligation boundaries even when evaluation is single-threaded and uncached.
 

@@ -2,11 +2,11 @@
 
 ID: CP-0012
 
-Status: open
+Status: resolved (2026-09-12)
 
 Category: language | compiler-architecture
 
-Severity: medium
+Severity: medium (capability available; cons-lists retained by design)
 
 Frequency: occasional
 
@@ -104,5 +104,24 @@ mncs abi pressure/repro/enum-sequence-payload.mncs  # MNE171
 ## Upstream tracking
 
 - `mncs-language` issue/PR:
-- Resolution revision:
+- Resolution revision: fixed by `a7a8c05` (bounded-sequence payloads admitted; MNE171 message now lists them)
 - Follow-up evidence in this repository:
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): resolved
+
+Probed on the current pin: `enum E { A { xs: [u64; 2] }, B }`
+elaborates at 0.13 (exit 0) — and so does the full use-shape:
+construction (`E.A { xs: [a, b] }`), payload binding with indexing
+(`A { xs: v } => v[0] + v[1]`), and a `main` round-trip, with zero
+diagnostics including backend-check codes. The MNE171 gate that forced
+cons-lists is lifted.
+
+The compiler nevertheless *keeps* its eleven cons-list types, by
+design rather than necessity: prepend-then-reverse is O(1) per element
+with one O(n) reversal, while sequence payloads would need exact-size
+pre-knowledge at each accumulation site; the report itself noted
+cons-lists "would likely be used anyway". History preserved above:
+the MNE171 refusal, the eleven list/reverse/fuel-loop triples, and the
+verified upside (recursive enums with scalar/finite/record payloads
+were always first-class). If a future tree node wants inline sequences,
+the capability is now available — no pressure remains.

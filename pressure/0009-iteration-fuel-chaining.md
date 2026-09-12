@@ -2,11 +2,11 @@
 
 ID: CP-0009
 
-Status: open
+Status: partially resolved (2026-09-12)
 
 Category: language | compiler-architecture
 
-Severity: high
+Severity: medium (was high)
 
 Frequency: pervasive
 
@@ -111,5 +111,31 @@ the chained passes.
 ## Upstream tracking
 
 - `mncs-language` issue/PR:
-- Resolution revision:
+- Resolution revision: profile 0.13 (sequential reuse, 1..=1024 bounds, 2-level nesting)
 - Follow-up evidence in this repository:
+
+## Re-evaluation (Stage-0 `a7a8c05`, 2026-09-12): partially resolved
+
+Probed on the current pin: `iterate k up_to 256` elaborates at 0.13;
+`up_to 1025` is refused (MNE142, ceiling now 1024); two sequential
+`iterate i` loops elaborate (MNE146 now scope-based with hygienic
+`name#2` recording). The 0.10 controls still fail exactly as documented,
+so old-profile behavior is preserved.
+
+Proven in real compiler code: the 0.13 migration renamed every
+fuel-chain group in `segment.mncs` (ai/si/gi families) and all ~70
+groups in `decl.mncs` (ex/vi/ni/hi/ti/fi/ri/pi/qi/bi/ci/ui/si/ei/ki/di/
+wi/ai/li/gi/mi/oi/oj/ok/sl/el/dg/rd/ed/pm/rs/cp/fx/nc/rl/fd/fo/rc/sw/tl/
+ta/sg/fk/pb/kk/fh/ec/vx/pf/gs/ty/tr/sm/tv/tc/tq/tp/us/kc/…) to a single
+`i` per function — 317 sites in `decl.mncs` alone, plus the carried-`i`
+collision (`fin`) and the position-index group (`int_value`) handled
+explicitly. `segment.mncs` links are proven by the new
+`tools/test_segment.py` differential (pending final run); `decl.mncs`
+is parse-checked with elaboration proof staged after CP-0014.
+
+What remains: fuel is still borrowed from input chunking for bounds
+past 1024 and for derived-data passes (operator stacks, worklists);
+fuel-sufficiency arguments still live in comments; silent exhaustion
+still looks like end-of-input; no-op iterations still cost full steps
+(see CP-0003). The pressure is now about *large* bounds and *derived*
+fuel, not everyday loop naming.

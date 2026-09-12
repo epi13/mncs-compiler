@@ -1,4 +1,4 @@
-mncs 0.10;
+mncs 0.13;
 module mncs.compiler.decl.v1;
 use mncs.compiler.source.v1 as source;
 use mncs.compiler.lexer.v1 as lexer;
@@ -10,14 +10,18 @@ use mncs.compiler.parser.v1 as parser;
 // length; every offset below is absolute. This is the bounded laboratory
 // interface from CP-0001, not a whole-module source API.
 //
-// Homing rule (see CP-0008): every tree type in this module (expressions,
-// statements, declarations, and their lists) is defined, constructed, and
-// destructured HERE. Stage-0 rejects cross-module finite payload use, so
-// tree-walking stages (parse, resolve, check, lower) must share one home
-// module. Byte/token/record-only layers stay separate; consumers in other
-// modules may only pass these trees opaquely.
+// Homing rule (see CP-0008, resolved upstream): every tree type in this
+// module (expressions, statements, declarations, and their lists) is still
+// defined, constructed, and destructured HERE. The cross-module finite
+// payload rejection that forced this consolidation is fixed on the current
+// pin, so a follow-up may split tree layers into separate modules once the
+// declaration suites run green again (blocked: CP-0014). Byte/token/record-
+// only layers stay separate; consumers in other modules may only pass these
+// trees opaquely.
 //
-// Scope of this slice (profile 0.10 shapes only; no profile gating):
+// Scope of this slice (profile 0.13 shapes; version-gated 0.13 syntax such
+// as `!`, negative atoms, repeat literals, `next` fields, and integer match
+// arms is staged in CP-0015 and not yet parsed):
 // header, use, record, payload enum, and function declarations; function
 // bodies with let/if-else/fail/terminal-return; expressions over names,
 // integers, booleans, all binary operators, direct calls, and field
@@ -88,11 +92,9 @@ enum Expr {
 enum ExprList { ENil, ECons { head: Expr, tail: ExprList } }
 record ExprParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr, start: u64, end: u64 }
 
-// The language has no logical-negation operator, so predicates use this
-// total helper (see CP-0004).
-fn not(value: bool) -> (result: bool) {
-    return select(value, false, true);
-}
+// Predicates negate with the native prefix operator (profile 0.13,
+// CP-0004 resolved). The former `not()` helper was removed in the 0.13
+// migration; `select` remains only for value choice, never negation.
 
 // Operator stack element. Real operators carry the token kind; markers use
 // kind 1000 (parenthesized group) and 1001 (call with callee spans and the
@@ -127,23 +129,48 @@ fn expr_end(node: Expr) -> (result: u64) {
 }
 
 // Stage-0 binary_operator precedence, keyed by our token kind. 0 means the
-// token never continues a binary expression.
+// token never continues a binary expression. Scalar `match` checks the
+// table shape at elaboration (MNE140): a new operator kind without a row
+// fails the build instead of silently parsing at precedence 0.
 fn prec(kind: u64) -> (result: u64) {
-    if kind == 83 { return 1; }
-    if kind == 82 { return 2; }
-    if kind == 56 { return 3; }
-    if kind == 57 { return 4; }
-    if kind == 55 { return 5; }
-    if kind == 84 || kind == 85 { return 6; }
-    if kind == 58 || kind == 86 || kind == 59 || kind == 87 { return 7; }
-    if kind == 88 || kind == 89 { return 8; }
-    if kind == 50 || kind == 51 || kind == 91 || kind == 92 || kind == 94 || kind == 95 { return 9; }
-    if kind == 52 || kind == 93 || kind == 96 || kind == 53 || kind == 54 { return 10; }
-    return 0;
+    return match kind {
+        83 => 1,
+        82 => 2,
+        56 => 3,
+        57 => 4,
+        55 => 5,
+        84 => 6,
+        85 => 6,
+        58 => 7,
+        86 => 7,
+        59 => 7,
+        87 => 7,
+        88 => 8,
+        89 => 8,
+        50 => 9,
+        51 => 9,
+        91 => 9,
+        92 => 9,
+        94 => 9,
+        95 => 9,
+        52 => 10,
+        93 => 10,
+        96 => 10,
+        53 => 10,
+        54 => 10,
+        _ => 0
+    };
 }
 
 fn is_operand_start(kind: u64) -> (result: bool) {
-    return kind == 5 || kind == 4 || kind == 25 || kind == 38 || kind == 39;
+    return match kind {
+        5 => true,
+        4 => true,
+        25 => true,
+        38 => true,
+        39 => true,
+        _ => false
+    };
 }
 
 // One directed action per fuel step: shift exactly one token, reduce exactly
@@ -151,34 +178,34 @@ fn is_operand_start(kind: u64) -> (result: bool) {
 // stack, or terminates, so byte-count fuel always suffices.
 fn parse_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: ExprParse) {
     let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true };
-    iterate ex0 over s0 carrying a: ExprState = seed {
+    iterate i over s0 carrying a: ExprState = seed {
         next a = expr_step(s0, s1, s2, s3, total, a);
     }
-    iterate ex1 over s1 carrying b: ExprState = a {
+    iterate i over s1 carrying b: ExprState = a {
         next b = expr_step(s0, s1, s2, s3, total, b);
     }
-    iterate ex2 over s2 carrying c: ExprState = b {
+    iterate i over s2 carrying c: ExprState = b {
         next c = expr_step(s0, s1, s2, s3, total, c);
     }
-    iterate ex3 over s3 carrying d: ExprState = c {
+    iterate i over s3 carrying d: ExprState = c {
         next d = expr_step(s0, s1, s2, s3, total, d);
     }
-    iterate ex4 over s0 carrying e: ExprState = d {
+    iterate i over s0 carrying e: ExprState = d {
         next e = expr_step(s0, s1, s2, s3, total, e);
     }
-    iterate ex5 over s1 carrying f: ExprState = e {
+    iterate i over s1 carrying f: ExprState = e {
         next f = expr_step(s0, s1, s2, s3, total, f);
     }
-    iterate ex6 over s2 carrying g: ExprState = f {
+    iterate i over s2 carrying g: ExprState = f {
         next g = expr_step(s0, s1, s2, s3, total, g);
     }
-    iterate ex7 over s3 carrying h: ExprState = g {
+    iterate i over s3 carrying h: ExprState = g {
         next h = expr_step(s0, s1, s2, s3, total, h);
     }
-    iterate exc up_to 32 carrying i: ExprState = h {
-        next i = expr_step(s0, s1, s2, s3, total, i);
+    iterate i up_to 32 carrying fin: ExprState = h {
+        next fin = expr_step(s0, s1, s2, s3, total, fin);
     }
-    return finish_expr(s0, s1, s2, s3, total, i);
+    return finish_expr(s0, s1, s2, s3, total, fin);
 }
 
 fn expr_fail(st: ExprState, start: u64, end: u64) -> (result: ExprState) {
@@ -186,7 +213,7 @@ fn expr_fail(st: ExprState, start: u64, end: u64) -> (result: ExprState) {
 }
 
 fn expr_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState) -> (result: ExprState) {
-    if not(st.ok) || st.done { return st; }
+    if !(st.ok) || st.done { return st; }
     let tok: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if tok.diagnostic != 0 {
         if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
@@ -197,11 +224,11 @@ fn expr_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
         return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end);
     }
     if is_operand_start(tok.kind) {
-        if not(st.expect_operand) { return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end); }
+        if !(st.expect_operand) { return close_or_reduce(s0, s1, s2, s3, total, st, tok.start, tok.end); }
         return shift_operand(s0, s1, s2, s3, total, st, tok);
     }
     if tok.kind == 65 {
-        if not(st.expect_operand) { return path_call(s0, s1, s2, s3, total, st, tok); }
+        if !(st.expect_operand) { return path_call(s0, s1, s2, s3, total, st, tok); }
         return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1000, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
     }
     if tok.kind == 66 {
@@ -396,8 +423,8 @@ fn operator_top(st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (resul
 
 fn finish_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ExprState) -> (result: ExprParse) {
     let bad: Expr = Expr.Name { start: st.cursor, end: st.cursor };
-    if not(st.ok) { return ExprParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, node: bad, start: st.cursor, end: st.cursor }; }
-    if not(st.done) { return ExprParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, node: bad, start: st.cursor, end: st.cursor }; }
+    if !(st.ok) { return ExprParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, node: bad, start: st.cursor, end: st.cursor }; }
+    if !(st.done) { return ExprParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, node: bad, start: st.cursor, end: st.cursor }; }
     return match st.operands {
         ENil => ExprParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, node: bad, start: st.cursor, end: st.cursor },
         ECons { head: node, tail: rest } => finish_single(st, node, rest)
@@ -413,16 +440,16 @@ fn finish_single(st: ExprState, node: Expr, rest: ExprList) -> (result: ExprPars
 // Argument/order restoration shared with declaration lists.
 record ExprRev { rest: ExprList, acc: ExprList }
 fn reverse_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: ExprList) -> (result: ExprList) {
-    iterate vi0 over s0 carrying a: ExprRev = ExprRev { rest: list, acc: ExprList.ENil } {
+    iterate i over s0 carrying a: ExprRev = ExprRev { rest: list, acc: ExprList.ENil } {
         next a = reverse_exprs_step(a);
     }
-    iterate vi1 over s1 carrying b: ExprRev = a {
+    iterate i over s1 carrying b: ExprRev = a {
         next b = reverse_exprs_step(b);
     }
-    iterate vi2 over s2 carrying c: ExprRev = b {
+    iterate i over s2 carrying c: ExprRev = b {
         next c = reverse_exprs_step(c);
     }
-    iterate vi3 over s3 carrying d: ExprRev = c {
+    iterate i over s3 carrying d: ExprRev = c {
         next d = reverse_exprs_step(d);
     }
     return d.acc;
@@ -436,17 +463,17 @@ fn reverse_exprs_step(st: ExprRev) -> (result: ExprRev) {
 record IntVal { value: u64, overflow: bool }
 record IntAcc { value: u64, overflow: bool }
 fn int_value(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: IntVal) {
-    iterate ni0 over s0 carrying a: IntAcc = IntAcc { value: 0, overflow: false } {
-        next a = int_step(total, start, end, a, ni0, source.byte_at(s0, ni0) as u64);
+    iterate i over s0 carrying a: IntAcc = IntAcc { value: 0, overflow: false } {
+        next a = int_step(total, start, end, a, i, source.byte_at(s0, i) as u64);
     }
-    iterate ni1 over s1 carrying b: IntAcc = a {
-        next b = int_step(total, start, end, b, s0.len + ni1, source.byte_at(s1, ni1) as u64);
+    iterate i over s1 carrying b: IntAcc = a {
+        next b = int_step(total, start, end, b, s0.len + i, source.byte_at(s1, i) as u64);
     }
-    iterate ni2 over s2 carrying c: IntAcc = b {
-        next c = int_step(total, start, end, c, s0.len + s1.len + ni2, source.byte_at(s2, ni2) as u64);
+    iterate i over s2 carrying c: IntAcc = b {
+        next c = int_step(total, start, end, c, s0.len + s1.len + i, source.byte_at(s2, i) as u64);
     }
-    iterate ni3 over s3 carrying d: IntAcc = c {
-        next d = int_step(total, start, end, d, s0.len + s1.len + s2.len + ni3, source.byte_at(s3, ni3) as u64);
+    iterate i over s3 carrying d: IntAcc = c {
+        next d = int_step(total, start, end, d, s0.len + s1.len + s2.len + i, source.byte_at(s3, i) as u64);
     }
     return IntVal { value: d.value, overflow: d.overflow };
 }
@@ -463,16 +490,16 @@ fn int_step(total: u64, start: u64, end: u64, st: IntAcc, pos: u64, byte: u64) -
 fn header(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: parser.Header) {
     let seed: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     if segment.ascii(s0, s1, s2, s3, total) {
-        iterate hi0 over s0 carrying a: parser.Header = seed {
+        iterate i over s0 carrying a: parser.Header = seed {
             next a = header_step(s0, s1, s2, s3, total, a);
         }
-        iterate hi1 over s1 carrying b: parser.Header = a {
+        iterate i over s1 carrying b: parser.Header = a {
             next b = header_step(s0, s1, s2, s3, total, b);
         }
-        iterate hi2 over s2 carrying c: parser.Header = b {
+        iterate i over s2 carrying c: parser.Header = b {
             next c = header_step(s0, s1, s2, s3, total, c);
         }
-        iterate hi3 over s3 carrying d: parser.Header = c {
+        iterate i over s3 carrying d: parser.Header = c {
             next d = header_step(s0, s1, s2, s3, total, d);
         }
         return header_finish(s0, s1, s2, s3, total, d);
@@ -515,7 +542,11 @@ fn header_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64],
 // A term-level name: identifier (4) or the capability keyword (25) used as
 // an identifier. Mirrors Stage-0 value_name positions.
 fn is_value_name(kind: u64) -> (result: bool) {
-    return kind == 4 || kind == 25;
+    return match kind {
+        4 => true,
+        25 => true,
+        _ => false
+    };
 }
 
 // Expect the significant token at cursor to have the wanted kind. Returns
@@ -576,30 +607,30 @@ fn scalar_kind(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64],
 // sequence spellings are a deferred shape (explicit local error at the inner
 // `[`), because mutual parser recursion is unavailable. See parse_seq_type.
 fn parse_flat_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, cursor: u64) -> (result: TypeParse) {
-    iterate ti0 over s0 carrying a: TypeParse = TypeParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 0, start: start, end: cursor } } {
+    iterate i over s0 carrying a: TypeParse = TypeParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 0, start: start, end: cursor } } {
         next a = qualified_step(s0, s1, s2, s3, total, a);
     }
-    iterate ti1 over s1 carrying b: TypeParse = a {
+    iterate i over s1 carrying b: TypeParse = a {
         next b = qualified_step(s0, s1, s2, s3, total, b);
     }
-    iterate ti2 over s2 carrying c: TypeParse = b {
+    iterate i over s2 carrying c: TypeParse = b {
         next c = qualified_step(s0, s1, s2, s3, total, c);
     }
-    iterate ti3 over s3 carrying d: TypeParse = c {
+    iterate i over s3 carrying d: TypeParse = c {
         next d = qualified_step(s0, s1, s2, s3, total, d);
     }
     return finish_named_type(s0, s1, s2, s3, total, start, d);
 }
 fn qualified_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TypeParse) -> (result: TypeParse) {
-    if not(st.ok) { return st; }
+    if !(st.ok) { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 || token.kind != 61 { return st; }
     let name: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
-    if not(name.ok) { return TypeParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: st.node }; }
+    if !(name.ok) { return TypeParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: st.node }; }
     return TypeParse { cursor: name.cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 6, start: st.node.start, end: name.end } };
 }
 fn finish_named_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, st: TypeParse) -> (result: TypeParse) {
-    if not(st.ok) {
+    if !(st.ok) {
         return TypeParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, node: TypeRef { kind: 0, start: start, end: start } };
     }
     if st.node.kind == 6 {
@@ -615,13 +646,13 @@ fn finish_named_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_t
 fn parse_seq_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, bracket: u64, cursor: u64) -> (result: TypeParse) {
     let bad: TypeRef = TypeRef { kind: 0, start: cursor, end: cursor };
     let elem: TypeParse = parse_seq_elem(s0, s1, s2, s3, total, cursor);
-    if not(elem.ok) { return TypeParse { cursor: cursor, ok: false, err_start: elem.err_start, err_end: elem.err_end, node: bad }; }
+    if !(elem.ok) { return TypeParse { cursor: cursor, ok: false, err_start: elem.err_start, err_end: elem.err_end, node: bad }; }
     let semi: Expect = expect(s0, s1, s2, s3, total, elem.cursor, 63);
-    if not(semi.ok) { return TypeParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    if !(semi.ok) { return TypeParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
     let bound: NameParse = seq_bound(s0, s1, s2, s3, total, semi.cursor);
-    if not(bound.ok) { return TypeParse { cursor: cursor, ok: false, err_start: bound.err_start, err_end: bound.err_end, node: bad }; }
+    if !(bound.ok) { return TypeParse { cursor: cursor, ok: false, err_start: bound.err_start, err_end: bound.err_end, node: bad }; }
     let close: Expect = expect(s0, s1, s2, s3, total, bound.cursor, 70);
-    if not(close.ok) { return TypeParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, node: bad }; }
+    if !(close.ok) { return TypeParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, node: bad }; }
     let viewed: bool = is_up_to_bound(s0, s1, s2, s3, total, bound.start, bound.end);
     return TypeParse { cursor: close.cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: select(viewed, 8, 7), start: bracket, end: close.cursor } };
 }
@@ -635,7 +666,7 @@ fn is_up_to_bound(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
     if segment.byte_at(s0, s1, s2, s3, total, start + 2) != 95 { return false; }
     if segment.byte_at(s0, s1, s2, s3, total, start + 3) != 116 { return false; }
     if segment.byte_at(s0, s1, s2, s3, total, start + 4) != 111 { return false; }
-    if not(lexer.space(segment.byte_at(s0, s1, s2, s3, total, start + 5))) { return false; }
+    if !(lexer.space(segment.byte_at(s0, s1, s2, s3, total, start + 5))) { return false; }
     return true;
 }
 
@@ -663,31 +694,31 @@ fn seq_bound(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
 // fields. closer is the terminating kind (66 ')' or 68 '}'); name_mode 0
 // requires identifiers, 1 also accepts `capability` in value positions.
 fn parse_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, closer: u64, name_mode: u64) -> (result: FieldsParse) {
-    iterate fi0 over s0 carrying a: FieldsParse = FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil } {
+    iterate i over s0 carrying a: FieldsParse = FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil } {
         next a = fields_step(s0, s1, s2, s3, total, a, closer, name_mode);
     }
-    iterate fi1 over s1 carrying b: FieldsParse = a {
+    iterate i over s1 carrying b: FieldsParse = a {
         next b = fields_step(s0, s1, s2, s3, total, b, closer, name_mode);
     }
-    iterate fi2 over s2 carrying c: FieldsParse = b {
+    iterate i over s2 carrying c: FieldsParse = b {
         next c = fields_step(s0, s1, s2, s3, total, c, closer, name_mode);
     }
-    iterate fi3 over s3 carrying d: FieldsParse = c {
+    iterate i over s3 carrying d: FieldsParse = c {
         next d = fields_step(s0, s1, s2, s3, total, d, closer, name_mode);
     }
     return finish_fields(s0, s1, s2, s3, d);
 }
 fn fields_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: FieldsParse, closer: u64, name_mode: u64) -> (result: FieldsParse) {
-    if not(st.ok) { return st; }
+    if !(st.ok) { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
-    if token.diagnostic != 0 || token.kind == closer || (not(is_value_name(token.kind)) && token.kind != 4) { return st; }
-    if token.kind != 4 && not(name_mode == 1 && token.kind == 25) { return st; }
+    if token.diagnostic != 0 || token.kind == closer || (!(is_value_name(token.kind)) && token.kind != 4) { return st; }
+    if token.kind != 4 && !(name_mode == 1 && token.kind == 25) { return st; }
     let name: NameParse = parse_name(s0, s1, s2, s3, total, st.cursor, name_mode);
-    if not(name.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list }; }
+    if !(name.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list }; }
     let colon: Expect = expect(s0, s1, s2, s3, total, name.cursor, 62);
-    if not(colon.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, list: st.list }; }
+    if !(colon.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, list: st.list }; }
     let ftype: TypeParse = parse_type(s0, s1, s2, s3, total, colon.cursor);
-    if not(ftype.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, list: st.list }; }
+    if !(ftype.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, list: st.list }; }
     let field: Field = Field { name_start: name.start, name_end: name.end, type_start: ftype.node.start, type_end: ftype.node.end, type_kind: ftype.node.kind };
     let comma: lexer.Token = segment.significant(s0, s1, s2, s3, total, ftype.cursor);
     if comma.diagnostic == 0 && comma.kind == 64 {
@@ -717,16 +748,16 @@ fn finish_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64
 // one cell, so the four chunk traversals always suffice.
 record FieldRev { rest: FieldList, acc: FieldList }
 fn reverse_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: FieldList) -> (result: FieldList) {
-    iterate ri0 over s0 carrying a: FieldRev = FieldRev { rest: list, acc: FieldList.FNil } {
+    iterate i over s0 carrying a: FieldRev = FieldRev { rest: list, acc: FieldList.FNil } {
         next a = reverse_fields_step(a);
     }
-    iterate ri1 over s1 carrying b: FieldRev = a {
+    iterate i over s1 carrying b: FieldRev = a {
         next b = reverse_fields_step(b);
     }
-    iterate ri2 over s2 carrying c: FieldRev = b {
+    iterate i over s2 carrying c: FieldRev = b {
         next c = reverse_fields_step(c);
     }
-    iterate ri3 over s3 carrying d: FieldRev = c {
+    iterate i over s3 carrying d: FieldRev = c {
         next d = reverse_fields_step(d);
     }
     return d.acc;
@@ -740,11 +771,11 @@ fn reverse_fields_step(st: FieldRev) -> (result: FieldRev) {
 fn parse_use(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: UseDecl) {
     let bad: UseDecl = UseDecl { ok: false, err_start: cursor, err_end: cursor, module_start: cursor, module_end: cursor, alias_start: 0, alias_end: 0, has_alias: false, cursor: cursor };
     let path: NameParse = parse_module_path(s0, s1, s2, s3, total, cursor);
-    if not(path.ok) { return UseDecl { ..bad, err_start: path.err_start, err_end: path.err_end }; }
+    if !(path.ok) { return UseDecl { ..bad, err_start: path.err_start, err_end: path.err_end }; }
     let alias: NameParse = parse_use_alias(s0, s1, s2, s3, total, path.cursor);
-    if not(alias.ok) { return UseDecl { ..bad, module_start: path.start, module_end: path.end, err_start: alias.err_start, err_end: alias.err_end }; }
+    if !(alias.ok) { return UseDecl { ..bad, module_start: path.start, module_end: path.end, err_start: alias.err_start, err_end: alias.err_end }; }
     let semi: Expect = expect(s0, s1, s2, s3, total, alias.cursor, 63);
-    if not(semi.ok) { return UseDecl { ..bad, module_start: path.start, module_end: path.end, err_start: semi.err_start, err_end: semi.err_end }; }
+    if !(semi.ok) { return UseDecl { ..bad, module_start: path.start, module_end: path.end, err_start: semi.err_start, err_end: semi.err_end }; }
     return UseDecl { ok: true, err_start: 0, err_end: 0, module_start: path.start, module_end: path.end, alias_start: alias.start, alias_end: alias.end, has_alias: alias.start != alias.end, cursor: semi.cursor };
 }
 fn parse_module_path(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: NameParse) {
@@ -752,22 +783,22 @@ fn parse_module_path(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_t
     if first.diagnostic != 0 || (first.kind != 4 && first.kind != 10) {
         return NameParse { cursor: cursor, ok: false, err_start: first.start, err_end: first.end, start: cursor, end: cursor };
     }
-    iterate pi0 over s0 carrying a: NameParse = NameParse { cursor: first.end, ok: true, err_start: 0, err_end: 0, start: first.start, end: first.end } {
+    iterate i over s0 carrying a: NameParse = NameParse { cursor: first.end, ok: true, err_start: 0, err_end: 0, start: first.start, end: first.end } {
         next a = path_step(s0, s1, s2, s3, total, a);
     }
-    iterate pi1 over s1 carrying b: NameParse = a {
+    iterate i over s1 carrying b: NameParse = a {
         next b = path_step(s0, s1, s2, s3, total, b);
     }
-    iterate pi2 over s2 carrying c: NameParse = b {
+    iterate i over s2 carrying c: NameParse = b {
         next c = path_step(s0, s1, s2, s3, total, c);
     }
-    iterate pi3 over s3 carrying d: NameParse = c {
+    iterate i over s3 carrying d: NameParse = c {
         next d = path_step(s0, s1, s2, s3, total, d);
     }
     return d;
 }
 fn path_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: NameParse) -> (result: NameParse) {
-    if not(st.ok) { return st; }
+    if !(st.ok) { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 || token.kind != 61 { return st; }
     let seg: lexer.Token = segment.significant(s0, s1, s2, s3, total, token.end);
@@ -788,21 +819,21 @@ fn parse_use_alias(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
 fn parse_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, start: u64) -> (result: RecordDecl) {
     let bad: RecordDecl = RecordDecl { ok: false, err_start: cursor, err_end: cursor, name_start: cursor, name_end: cursor, fields: FieldList.FNil, decl_start: start, decl_end: cursor, cursor: cursor };
     let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 0);
-    if not(name.ok) { return RecordDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
+    if !(name.ok) { return RecordDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
     let open: Expect = expect(s0, s1, s2, s3, total, name.cursor, 67);
-    if not(open.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
+    if !(open.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
     let fields: FieldsParse = parse_fields(s0, s1, s2, s3, total, open.cursor, 68, 0);
-    if not(fields.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: fields.err_start, err_end: fields.err_end }; }
+    if !(fields.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: fields.err_start, err_end: fields.err_end }; }
     // An empty body reports at the token AFTER the closing brace (or the
     // missing-brace span when `}` is absent), mirroring Stage-0 MNP128.
     if fields.cursor == open.cursor {
         let empty_close: Expect = expect(s0, s1, s2, s3, total, open.cursor, 68);
-        if not(empty_close.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: empty_close.err_start, err_end: empty_close.err_end }; }
+        if !(empty_close.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: empty_close.err_start, err_end: empty_close.err_end }; }
         let at: lexer.Token = segment.significant(s0, s1, s2, s3, total, empty_close.cursor);
         return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: at.start, err_end: at.end };
     }
     let close: Expect = expect(s0, s1, s2, s3, total, fields.cursor, 68);
-    if not(close.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
+    if !(close.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
     return RecordDecl { ok: true, err_start: 0, err_end: 0, name_start: name.start, name_end: name.end, fields: fields.list, decl_start: start, decl_end: close.cursor, cursor: close.cursor };
 }
 
@@ -811,40 +842,40 @@ fn parse_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64]
 fn parse_enum(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, start: u64) -> (result: EnumDecl) {
     let bad: EnumDecl = EnumDecl { ok: false, err_start: cursor, err_end: cursor, name_start: cursor, name_end: cursor, variants: VariantList.VNil, decl_start: start, decl_end: cursor, cursor: cursor };
     let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 0);
-    if not(name.ok) { return EnumDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
+    if !(name.ok) { return EnumDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
     let open: Expect = expect(s0, s1, s2, s3, total, name.cursor, 67);
-    if not(open.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
+    if !(open.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
     let variants: VariantsParse = parse_variants(s0, s1, s2, s3, total, open.cursor);
-    if not(variants.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: variants.err_start, err_end: variants.err_end }; }
+    if !(variants.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: variants.err_start, err_end: variants.err_end }; }
     let close: Expect = expect(s0, s1, s2, s3, total, variants.cursor, 68);
-    if not(close.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
+    if !(close.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
     return EnumDecl { ok: true, err_start: 0, err_end: 0, name_start: name.start, name_end: name.end, variants: variants.list, decl_start: start, decl_end: close.cursor, cursor: close.cursor };
 }
 record VariantsParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList }
 record VariantsState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList, done: bool }
 fn parse_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: VariantsParse) {
-    iterate ni0 over s0 carrying a: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
+    iterate i over s0 carrying a: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
         next a = variants_step(s0, s1, s2, s3, total, a);
     }
-    iterate ni1 over s1 carrying b: VariantsState = a {
+    iterate i over s1 carrying b: VariantsState = a {
         next b = variants_step(s0, s1, s2, s3, total, b);
     }
-    iterate ni2 over s2 carrying c: VariantsState = b {
+    iterate i over s2 carrying c: VariantsState = b {
         next c = variants_step(s0, s1, s2, s3, total, c);
     }
-    iterate ni3 over s3 carrying d: VariantsState = c {
+    iterate i over s3 carrying d: VariantsState = c {
         next d = variants_step(s0, s1, s2, s3, total, d);
     }
     return finish_variants(s0, s1, s2, s3, total, d);
 }
 fn variants_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantsState) -> (result: VariantsState) {
-    if not(st.ok) || st.done { return st; }
+    if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 || token.kind != 4 { return VariantsState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, done: true }; }
     let name: NameParse = parse_name(s0, s1, s2, s3, total, st.cursor, 0);
-    if not(name.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
+    if !(name.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
     let payload: FieldsParse = parse_variant_payload(s0, s1, s2, s3, total, name.cursor);
-    if not(payload.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: payload.err_start, err_end: payload.err_end, list: st.list, done: true }; }
+    if !(payload.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: payload.err_start, err_end: payload.err_end, list: st.list, done: true }; }
     let variant: Variant = Variant { name_start: name.start, name_end: name.end, fields: payload.list };
     let comma: lexer.Token = segment.significant(s0, s1, s2, s3, total, payload.cursor);
     if comma.diagnostic == 0 && comma.kind == 64 {
@@ -858,13 +889,13 @@ fn parse_variant_payload(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; 
         return FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil };
     }
     let fields: FieldsParse = parse_fields(s0, s1, s2, s3, total, token.end, 68, 0);
-    if not(fields.ok) { return fields; }
+    if !(fields.ok) { return fields; }
     let close: Expect = expect(s0, s1, s2, s3, total, fields.cursor, 68);
-    if not(close.ok) { return FieldsParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, list: FieldList.FNil }; }
+    if !(close.ok) { return FieldsParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, list: FieldList.FNil }; }
     return FieldsParse { cursor: close.cursor, ok: true, err_start: 0, err_end: 0, list: fields.list };
 }
 fn finish_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: VariantsState) -> (result: VariantsParse) {
-    if not(st.ok) { return VariantsParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: VariantList.VNil }; }
+    if !(st.ok) { return VariantsParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: VariantList.VNil }; }
     return match st.list {
         VNil => finish_variants_empty(s0, s1, s2, s3, total, st),
         VCons { head: h, tail: t } => VariantsParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_variants(s0, s1, s2, s3, st.list) }
@@ -874,22 +905,22 @@ fn finish_variants_empty(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; 
     // Empty variant lists report after the closing brace like records
     // (Stage-0 MNP075); a missing brace reports at its own span (MNP074).
     let empty_close: Expect = expect(s0, s1, s2, s3, total, st.cursor, 68);
-    if not(empty_close.ok) { return VariantsParse { cursor: st.cursor, ok: false, err_start: empty_close.err_start, err_end: empty_close.err_end, list: VariantList.VNil }; }
+    if !(empty_close.ok) { return VariantsParse { cursor: st.cursor, ok: false, err_start: empty_close.err_start, err_end: empty_close.err_end, list: VariantList.VNil }; }
     let at: lexer.Token = segment.significant(s0, s1, s2, s3, total, empty_close.cursor);
     return VariantsParse { cursor: st.cursor, ok: false, err_start: at.start, err_end: at.end, list: VariantList.VNil };
 }
 record VariantRev { rest: VariantList, acc: VariantList }
 fn reverse_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: VariantList) -> (result: VariantList) {
-    iterate qi0 over s0 carrying a: VariantRev = VariantRev { rest: list, acc: VariantList.VNil } {
+    iterate i over s0 carrying a: VariantRev = VariantRev { rest: list, acc: VariantList.VNil } {
         next a = reverse_variants_step(a);
     }
-    iterate qi1 over s1 carrying b: VariantRev = a {
+    iterate i over s1 carrying b: VariantRev = a {
         next b = reverse_variants_step(b);
     }
-    iterate qi2 over s2 carrying c: VariantRev = b {
+    iterate i over s2 carrying c: VariantRev = b {
         next c = reverse_variants_step(c);
     }
-    iterate qi3 over s3 carrying d: VariantRev = c {
+    iterate i over s3 carrying d: VariantRev = c {
         next d = reverse_variants_step(d);
     }
     return d.acc;
@@ -916,35 +947,35 @@ fn parse_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
 fn parse_let(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
     let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
     let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 1);
-    if not(name.ok) { return StmtParse { cursor: cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: bad }; }
+    if !(name.ok) { return StmtParse { cursor: cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: bad }; }
     let colon: Expect = expect(s0, s1, s2, s3, total, name.cursor, 62);
-    if not(colon.ok) { return StmtParse { cursor: cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, node: bad }; }
+    if !(colon.ok) { return StmtParse { cursor: cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, node: bad }; }
     let ftype: TypeParse = parse_type(s0, s1, s2, s3, total, colon.cursor);
-    if not(ftype.ok) { return StmtParse { cursor: cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, node: bad }; }
+    if !(ftype.ok) { return StmtParse { cursor: cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, node: bad }; }
     let eq: Expect = expect(s0, s1, s2, s3, total, ftype.cursor, 60);
-    if not(eq.ok) { return StmtParse { cursor: cursor, ok: false, err_start: eq.err_start, err_end: eq.err_end, node: bad }; }
+    if !(eq.ok) { return StmtParse { cursor: cursor, ok: false, err_start: eq.err_start, err_end: eq.err_end, node: bad }; }
     let value: ExprParse = parse_expr(s0, s1, s2, s3, total, eq.cursor);
-    if not(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
+    if !(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
     let semi: Expect = expect(s0, s1, s2, s3, total, value.cursor, 63);
-    if not(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    if !(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
     let node: Stmt = Stmt.Let { name_start: name.start, name_end: name.end, type_start: ftype.node.start, type_end: ftype.node.end, type_kind: ftype.node.kind, value: value.node, start: name.start, end: value.end };
     return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
 }
 fn parse_fail_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
     let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
     let mode: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 0);
-    if not(mode.ok) { return StmtParse { cursor: cursor, ok: false, err_start: mode.err_start, err_end: mode.err_end, node: bad }; }
+    if !(mode.ok) { return StmtParse { cursor: cursor, ok: false, err_start: mode.err_start, err_end: mode.err_end, node: bad }; }
     let semi: Expect = expect(s0, s1, s2, s3, total, mode.cursor, 63);
-    if not(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    if !(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
     let node: Stmt = Stmt.Fail { mode_start: mode.start, mode_end: mode.end, start: mode.start, end: mode.end };
     return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
 }
 fn parse_return_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: StmtParse) {
     let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
     let value: ExprParse = parse_expr(s0, s1, s2, s3, total, cursor);
-    if not(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
+    if !(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
     let semi: Expect = expect(s0, s1, s2, s3, total, value.cursor, 63);
-    if not(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    if !(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
     let node: Stmt = Stmt.Return { value: value.node, start: value.start, end: value.end };
     return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
 }
@@ -962,28 +993,28 @@ fn parse_branch(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64]
     return parse_stmts(s0, s1, s2, s3, total, cursor, 0);
 }
 fn parse_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, mode: u64) -> (result: BranchParse) {
-    iterate bi0 over s0 carrying a: BlockState = BlockState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YNil, done: false, mode: mode } {
+    iterate i over s0 carrying a: BlockState = BlockState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YNil, done: false, mode: mode } {
         next a = block_step(s0, s1, s2, s3, total, a);
     }
-    iterate bi1 over s1 carrying b: BlockState = a {
+    iterate i over s1 carrying b: BlockState = a {
         next b = block_step(s0, s1, s2, s3, total, b);
     }
-    iterate bi2 over s2 carrying c: BlockState = b {
+    iterate i over s2 carrying c: BlockState = b {
         next c = block_step(s0, s1, s2, s3, total, c);
     }
-    iterate bi3 over s3 carrying d: BlockState = c {
+    iterate i over s3 carrying d: BlockState = c {
         next d = block_step(s0, s1, s2, s3, total, d);
     }
-    iterate bi4 over s0 carrying e: BlockState = d {
+    iterate i over s0 carrying e: BlockState = d {
         next e = block_step(s0, s1, s2, s3, total, e);
     }
-    iterate bi5 over s1 carrying f: BlockState = e {
+    iterate i over s1 carrying f: BlockState = e {
         next f = block_step(s0, s1, s2, s3, total, f);
     }
-    iterate bi6 over s2 carrying g: BlockState = f {
+    iterate i over s2 carrying g: BlockState = f {
         next g = block_step(s0, s1, s2, s3, total, g);
     }
-    iterate bi7 over s3 carrying h: BlockState = g {
+    iterate i over s3 carrying h: BlockState = g {
         next h = block_step(s0, s1, s2, s3, total, h);
     }
     return finish_block(s0, s1, s2, s3, h);
@@ -992,7 +1023,7 @@ fn block_fail(st: BlockState, start: u64, end: u64) -> (result: BlockState) {
     return BlockState { cursor: st.cursor, ok: false, err_start: start, err_end: end, list: st.list, frames: st.frames, done: true, mode: st.mode };
 }
 fn block_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState) -> (result: BlockState) {
-    if not(st.ok) || st.done { return st; }
+    if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 { return block_fail(st, token.start, token.end); }
     if token.kind == 0 { return block_eof(s0, s1, s2, s3, total, st, token); }
@@ -1035,7 +1066,7 @@ fn block_else_close(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
 fn block_await_else(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
     if token.kind == 16 {
         let open: Expect = expect(s0, s1, s2, s3, total, token.end, 67);
-        if not(open.ok) { return block_fail(st, open.err_start, open.err_end); }
+        if !(open.ok) { return block_fail(st, open.err_start, open.err_end); }
         let cont: Frame = Frame { cond: fr.cond, cond_start: fr.cond_start, cond_end: fr.cond_end, then_list: fr.then_list, parent: fr.parent, phase: 2 };
         return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: cont, tail: fl }, done: false, mode: st.mode };
     }
@@ -1060,9 +1091,9 @@ fn block_if_frame(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
 }
 fn block_if_open(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, token: lexer.Token) -> (result: BlockState) {
     let cond: ExprParse = parse_expr(s0, s1, s2, s3, total, token.end);
-    if not(cond.ok) { return block_fail(st, cond.err_start, cond.err_end); }
+    if !(cond.ok) { return block_fail(st, cond.err_start, cond.err_end); }
     let open: Expect = expect(s0, s1, s2, s3, total, cond.cursor, 67);
-    if not(open.ok) { return block_fail(st, open.err_start, open.err_end); }
+    if !(open.ok) { return block_fail(st, open.err_start, open.err_end); }
     let frame: Frame = Frame { cond: cond.node, cond_start: cond.start, cond_end: cond.end, then_list: StmtList.SNil, parent: st.list, phase: 0 };
     return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: frame, tail: st.frames }, done: false, mode: st.mode };
 }
@@ -1074,7 +1105,7 @@ fn block_plain_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
 }
 fn block_top_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState) -> (result: BlockState) {
     let stmt: StmtParse = parse_stmt(s0, s1, s2, s3, total, st.cursor);
-    if not(stmt.ok) { return block_fail(st, stmt.err_start, stmt.err_end); }
+    if !(stmt.ok) { return block_fail(st, stmt.err_start, stmt.err_end); }
     return BlockState { cursor: stmt.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: stmt.node, tail: st.list }, frames: st.frames, done: false, mode: st.mode };
 }
 fn block_frame_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: BlockState, fr: Frame, fl: FrameList) -> (result: BlockState) {
@@ -1085,8 +1116,8 @@ fn block_frame_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
     return block_top_stmt(s0, s1, s2, s3, total, st);
 }
 fn finish_block(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BlockState) -> (result: BranchParse) {
-    if not(st.ok) { return BranchParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: StmtList.SNil }; }
-    if not(st.done) { return BranchParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, list: StmtList.SNil }; }
+    if !(st.ok) { return BranchParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: StmtList.SNil }; }
+    if !(st.done) { return BranchParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, list: StmtList.SNil }; }
     return match st.frames {
         YNil => BranchParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_stmts(s0, s1, s2, s3, st.list) },
         YCons { head: fr, tail: fl } => BranchParse { cursor: st.cursor, ok: false, err_start: st.cursor, err_end: st.cursor, list: StmtList.SNil }
@@ -1094,16 +1125,16 @@ fn finish_block(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64]
 }
 record StmtRev { rest: StmtList, acc: StmtList }
 fn reverse_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: StmtList) -> (result: StmtList) {
-    iterate qi4 over s0 carrying a: StmtRev = StmtRev { rest: list, acc: StmtList.SNil } {
+    iterate i over s0 carrying a: StmtRev = StmtRev { rest: list, acc: StmtList.SNil } {
         next a = reverse_stmts_step(a);
     }
-    iterate qi5 over s1 carrying b: StmtRev = a {
+    iterate i over s1 carrying b: StmtRev = a {
         next b = reverse_stmts_step(b);
     }
-    iterate qi6 over s2 carrying c: StmtRev = b {
+    iterate i over s2 carrying c: StmtRev = b {
         next c = reverse_stmts_step(c);
     }
-    iterate qi7 over s3 carrying d: StmtRev = c {
+    iterate i over s3 carrying d: StmtRev = c {
         next d = reverse_stmts_step(d);
     }
     return d.acc;
@@ -1119,22 +1150,22 @@ fn reverse_stmts_step(st: StmtRev) -> (result: StmtRev) {
 record ClausesParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, contracts: ClauseList, effects: EffectList, capabilities: CapList }
 record ClausesState { cursor: u64, ok: bool, err_start: u64, err_end: u64, contracts: ClauseList, effects: EffectList, capabilities: CapList, done: bool }
 fn parse_clauses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: ClausesParse) {
-    iterate ci0 over s0 carrying a: ClausesState = ClausesState { cursor: cursor, ok: true, err_start: 0, err_end: 0, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil, done: false } {
+    iterate i over s0 carrying a: ClausesState = ClausesState { cursor: cursor, ok: true, err_start: 0, err_end: 0, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil, done: false } {
         next a = clauses_step(s0, s1, s2, s3, total, a);
     }
-    iterate ci1 over s1 carrying b: ClausesState = a {
+    iterate i over s1 carrying b: ClausesState = a {
         next b = clauses_step(s0, s1, s2, s3, total, b);
     }
-    iterate ci2 over s2 carrying c: ClausesState = b {
+    iterate i over s2 carrying c: ClausesState = b {
         next c = clauses_step(s0, s1, s2, s3, total, c);
     }
-    iterate ci3 over s3 carrying d: ClausesState = c {
+    iterate i over s3 carrying d: ClausesState = c {
         next d = clauses_step(s0, s1, s2, s3, total, d);
     }
     return finish_clauses(s0, s1, s2, s3, d);
 }
 fn clauses_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState) -> (result: ClausesState) {
-    if not(st.ok) || st.done { return st; }
+    if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 { return ClausesState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
     if token.kind == 25 { return clause_capability(s0, s1, s2, s3, total, st, token); }
@@ -1146,43 +1177,43 @@ fn clauses_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64]
 }
 fn clause_contract(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState, token: lexer.Token) -> (result: ClausesState) {
     let name: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
-    if not(name.ok) { return ClausesState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    if !(name.ok) { return ClausesState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
     let clause: Clause = Clause { kind_start: token.start, kind_end: token.end, name_start: name.start, name_end: name.end };
     return ClausesState { cursor: name.cursor, ok: true, err_start: 0, err_end: 0, contracts: ClauseList.CCons { head: clause, tail: st.contracts }, effects: st.effects, capabilities: st.capabilities, done: false };
 }
 fn clause_capability(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState, token: lexer.Token) -> (result: ClausesState) {
     let name: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
-    if not(name.ok) { return ClausesState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    if !(name.ok) { return ClausesState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
     let cap: Cap = Cap { start: name.start, end: name.end };
     return ClausesState { cursor: name.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: st.effects, capabilities: CapList.ACons { head: cap, tail: st.capabilities }, done: false };
 }
 fn clause_effect(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ClausesState, token: lexer.Token) -> (result: ClausesState) {
     let bad: ClausesState = ClausesState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true };
     let kind: NameParse = parse_name(s0, s1, s2, s3, total, token.end, 0);
-    if not(kind.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: kind.err_start, err_end: kind.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    if !(kind.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: kind.err_start, err_end: kind.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
     let auth: Expect = expect(s0, s1, s2, s3, total, kind.cursor, 26);
-    if not(auth.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: auth.err_start, err_end: auth.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    if !(auth.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: auth.err_start, err_end: auth.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
     let cap: NameParse = parse_name(s0, s1, s2, s3, total, auth.cursor, 0);
-    if not(cap.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: cap.err_start, err_end: cap.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
+    if !(cap.ok) { return ClausesState { cursor: bad.cursor, ok: false, err_start: cap.err_start, err_end: cap.err_end, contracts: st.contracts, effects: st.effects, capabilities: st.capabilities, done: true }; }
     let eff: Effect = Effect { kind_start: kind.start, kind_end: kind.end, cap_start: cap.start, cap_end: cap.end };
     return ClausesState { cursor: cap.cursor, ok: true, err_start: 0, err_end: 0, contracts: st.contracts, effects: EffectList.XCons { head: eff, tail: st.effects }, capabilities: st.capabilities, done: false };
 }
 fn finish_clauses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: ClausesState) -> (result: ClausesParse) {
-    if not(st.ok) { return ClausesParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }; }
+    if !(st.ok) { return ClausesParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }; }
     return ClausesParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, contracts: reverse_clauses(s0, s1, s2, s3, st.contracts), effects: reverse_effects(s0, s1, s2, s3, st.effects), capabilities: reverse_caps(s0, s1, s2, s3, st.capabilities) };
 }
 record ClauseRev { rest: ClauseList, acc: ClauseList }
 fn reverse_clauses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: ClauseList) -> (result: ClauseList) {
-    iterate qi8 over s0 carrying a: ClauseRev = ClauseRev { rest: list, acc: ClauseList.CNil } {
+    iterate i over s0 carrying a: ClauseRev = ClauseRev { rest: list, acc: ClauseList.CNil } {
         next a = reverse_clauses_step(a);
     }
-    iterate qi9 over s1 carrying b: ClauseRev = a {
+    iterate i over s1 carrying b: ClauseRev = a {
         next b = reverse_clauses_step(b);
     }
-    iterate qi10 over s2 carrying c: ClauseRev = b {
+    iterate i over s2 carrying c: ClauseRev = b {
         next c = reverse_clauses_step(c);
     }
-    iterate qi11 over s3 carrying d: ClauseRev = c {
+    iterate i over s3 carrying d: ClauseRev = c {
         next d = reverse_clauses_step(d);
     }
     return d.acc;
@@ -1192,16 +1223,16 @@ fn reverse_clauses_step(st: ClauseRev) -> (result: ClauseRev) {
 }
 record EffectRev { rest: EffectList, acc: EffectList }
 fn reverse_effects(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: EffectList) -> (result: EffectList) {
-    iterate qi12 over s0 carrying a: EffectRev = EffectRev { rest: list, acc: EffectList.XNil } {
+    iterate i over s0 carrying a: EffectRev = EffectRev { rest: list, acc: EffectList.XNil } {
         next a = reverse_effects_step(a);
     }
-    iterate qi13 over s1 carrying b: EffectRev = a {
+    iterate i over s1 carrying b: EffectRev = a {
         next b = reverse_effects_step(b);
     }
-    iterate qi14 over s2 carrying c: EffectRev = b {
+    iterate i over s2 carrying c: EffectRev = b {
         next c = reverse_effects_step(c);
     }
-    iterate qi15 over s3 carrying d: EffectRev = c {
+    iterate i over s3 carrying d: EffectRev = c {
         next d = reverse_effects_step(d);
     }
     return d.acc;
@@ -1211,16 +1242,16 @@ fn reverse_effects_step(st: EffectRev) -> (result: EffectRev) {
 }
 record CapRev { rest: CapList, acc: CapList }
 fn reverse_caps(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: CapList) -> (result: CapList) {
-    iterate qi16 over s0 carrying a: CapRev = CapRev { rest: list, acc: CapList.ANil } {
+    iterate i over s0 carrying a: CapRev = CapRev { rest: list, acc: CapList.ANil } {
         next a = reverse_caps_step(a);
     }
-    iterate qi17 over s1 carrying b: CapRev = a {
+    iterate i over s1 carrying b: CapRev = a {
         next b = reverse_caps_step(b);
     }
-    iterate qi18 over s2 carrying c: CapRev = b {
+    iterate i over s2 carrying c: CapRev = b {
         next c = reverse_caps_step(c);
     }
-    iterate qi19 over s3 carrying d: CapRev = c {
+    iterate i over s3 carrying d: CapRev = c {
         next d = reverse_caps_step(d);
     }
     return d.acc;
@@ -1234,35 +1265,35 @@ fn reverse_caps_step(st: CapRev) -> (result: CapRev) {
 fn parse_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64, start: u64) -> (result: FnDecl) {
     let bad: FnDecl = FnDecl { ok: false, err_start: cursor, err_end: cursor, sig: FnSig { name_start: cursor, name_end: cursor, params: FieldList.FNil, results: FieldList.FNil, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }, body: FnBody { body: StmtList.SNil, ret: Expr.Name { start: cursor, end: cursor }, has_ret: false }, fn_start: start, fn_end: cursor, cursor: cursor };
     let name: NameParse = parse_name(s0, s1, s2, s3, total, cursor, 1);
-    if not(name.ok) { return FnDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
+    if !(name.ok) { return FnDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
     let peek: lexer.Token = segment.significant(s0, s1, s2, s3, total, name.cursor);
     if peek.diagnostic == 0 && peek.kind == 58 {
         return FnDecl { ..bad, err_start: peek.start, err_end: peek.end };
     }
     let open: Expect = expect(s0, s1, s2, s3, total, name.cursor, 65);
-    if not(open.ok) { return FnDecl { ..bad, err_start: open.err_start, err_end: open.err_end }; }
+    if !(open.ok) { return FnDecl { ..bad, err_start: open.err_start, err_end: open.err_end }; }
     let params: FieldsParse = parse_fields(s0, s1, s2, s3, total, open.cursor, 66, 1);
-    if not(params.ok) { return FnDecl { ..bad, err_start: params.err_start, err_end: params.err_end }; }
+    if !(params.ok) { return FnDecl { ..bad, err_start: params.err_start, err_end: params.err_end }; }
     let close: Expect = expect(s0, s1, s2, s3, total, params.cursor, 66);
-    if not(close.ok) { return FnDecl { ..bad, err_start: close.err_start, err_end: close.err_end }; }
+    if !(close.ok) { return FnDecl { ..bad, err_start: close.err_start, err_end: close.err_end }; }
     let arrow: Expect = expect(s0, s1, s2, s3, total, close.cursor, 80);
-    if not(arrow.ok) { return FnDecl { ..bad, err_start: arrow.err_start, err_end: arrow.err_end }; }
+    if !(arrow.ok) { return FnDecl { ..bad, err_start: arrow.err_start, err_end: arrow.err_end }; }
     let open2: Expect = expect(s0, s1, s2, s3, total, arrow.cursor, 65);
-    if not(open2.ok) { return FnDecl { ..bad, err_start: open2.err_start, err_end: open2.err_end }; }
+    if !(open2.ok) { return FnDecl { ..bad, err_start: open2.err_start, err_end: open2.err_end }; }
     let results: FieldsParse = parse_fields(s0, s1, s2, s3, total, open2.cursor, 66, 1);
-    if not(results.ok) { return FnDecl { ..bad, err_start: results.err_start, err_end: results.err_end }; }
+    if !(results.ok) { return FnDecl { ..bad, err_start: results.err_start, err_end: results.err_end }; }
     let close2: Expect = expect(s0, s1, s2, s3, total, results.cursor, 66);
-    if not(close2.ok) { return FnDecl { ..bad, err_start: close2.err_start, err_end: close2.err_end }; }
+    if !(close2.ok) { return FnDecl { ..bad, err_start: close2.err_start, err_end: close2.err_end }; }
     let clauses: ClausesParse = parse_clauses(s0, s1, s2, s3, total, close2.cursor);
-    if not(clauses.ok) { return FnDecl { ..bad, err_start: clauses.err_start, err_end: clauses.err_end }; }
+    if !(clauses.ok) { return FnDecl { ..bad, err_start: clauses.err_start, err_end: clauses.err_end }; }
     let open3: Expect = expect(s0, s1, s2, s3, total, clauses.cursor, 67);
-    if not(open3.ok) { return FnDecl { ..bad, err_start: open3.err_start, err_end: open3.err_end }; }
+    if !(open3.ok) { return FnDecl { ..bad, err_start: open3.err_start, err_end: open3.err_end }; }
     let body: BranchParse = parse_stmts(s0, s1, s2, s3, total, open3.cursor, 1);
-    if not(body.ok) { return FnDecl { ..bad, err_start: body.err_start, err_end: body.err_end }; }
+    if !(body.ok) { return FnDecl { ..bad, err_start: body.err_start, err_end: body.err_end }; }
     let tail: ReturnParse = parse_return_tail(s0, s1, s2, s3, total, body.cursor);
-    if not(tail.ok) { return FnDecl { ..bad, err_start: tail.err_start, err_end: tail.err_end }; }
+    if !(tail.ok) { return FnDecl { ..bad, err_start: tail.err_start, err_end: tail.err_end }; }
     let close3: Expect = expect(s0, s1, s2, s3, total, tail.cursor, 68);
-    if not(close3.ok) { return FnDecl { ..bad, err_start: close3.err_start, err_end: close3.err_end }; }
+    if !(close3.ok) { return FnDecl { ..bad, err_start: close3.err_start, err_end: close3.err_end }; }
     let sig: FnSig = FnSig { name_start: name.start, name_end: name.end, params: params.list, results: results.list, contracts: clauses.contracts, effects: clauses.effects, capabilities: clauses.capabilities };
     let fnbody: FnBody = FnBody { body: body.list, ret: tail.node, has_ret: true };
     return FnDecl { ok: true, err_start: 0, err_end: 0, sig: sig, body: fnbody, fn_start: start, fn_end: close3.cursor, cursor: close3.cursor };
@@ -1275,9 +1306,9 @@ fn parse_return_tail(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_t
         return ReturnParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad };
     }
     let value: ExprParse = parse_expr(s0, s1, s2, s3, total, token.end);
-    if not(value.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
+    if !(value.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
     let semi: Expect = expect(s0, s1, s2, s3, total, value.cursor, 63);
-    if not(semi.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
+    if !(semi.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
     return ReturnParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: value.node };
 }
 
@@ -1287,21 +1318,21 @@ record UnitState { cursor: u64, ok: bool, err_start: u64, err_end: u64, uses: Us
 fn parse_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: Unit) {
     let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     let bad: Unit = Unit { ok: false, err_start: 0, err_end: 0, header: empty, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: 0 };
-    if not(segment.total_valid(s0, s1, s2, s3, total)) { return Unit { ..bad, err_end: total }; }
+    if !(segment.total_valid(s0, s1, s2, s3, total)) { return Unit { ..bad, err_end: total }; }
     let head: parser.Header = header(s0, s1, s2, s3, total);
     if head.code != 0 { return Unit { ..bad, header: head, err_start: head.start, err_end: head.end, cursor: head.next_offset }; }
     let uses: UsesParse = parse_uses(s0, s1, s2, s3, total, head.next_offset);
-    if not(uses.ok) { return Unit { ..bad, header: head, err_start: uses.err_start, err_end: uses.err_end, cursor: uses.cursor }; }
-    iterate ui0 over s0 carrying a: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false } {
+    if !(uses.ok) { return Unit { ..bad, header: head, err_start: uses.err_start, err_end: uses.err_end, cursor: uses.cursor }; }
+    iterate i over s0 carrying a: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false } {
         next a = unit_step(s0, s1, s2, s3, total, a);
     }
-    iterate ui1 over s1 carrying b: UnitState = a {
+    iterate i over s1 carrying b: UnitState = a {
         next b = unit_step(s0, s1, s2, s3, total, b);
     }
-    iterate ui2 over s2 carrying c: UnitState = b {
+    iterate i over s2 carrying c: UnitState = b {
         next c = unit_step(s0, s1, s2, s3, total, c);
     }
-    iterate ui3 over s3 carrying d: UnitState = c {
+    iterate i over s3 carrying d: UnitState = c {
         next d = unit_step(s0, s1, s2, s3, total, d);
     }
     return finish_unit(s0, s1, s2, s3, total, head, d);
@@ -1309,44 +1340,44 @@ fn parse_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
 record UsesParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: UseList }
 record UsesState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: UseList, done: bool }
 fn parse_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, cursor: u64) -> (result: UsesParse) {
-    iterate si0 over s0 carrying a: UsesState = UsesState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: UseList.UNil, done: false } {
+    iterate i over s0 carrying a: UsesState = UsesState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: UseList.UNil, done: false } {
         next a = uses_step(s0, s1, s2, s3, total, a);
     }
-    iterate si1 over s1 carrying b: UsesState = a {
+    iterate i over s1 carrying b: UsesState = a {
         next b = uses_step(s0, s1, s2, s3, total, b);
     }
-    iterate si2 over s2 carrying c: UsesState = b {
+    iterate i over s2 carrying c: UsesState = b {
         next c = uses_step(s0, s1, s2, s3, total, c);
     }
-    iterate si3 over s3 carrying d: UsesState = c {
+    iterate i over s3 carrying d: UsesState = c {
         next d = uses_step(s0, s1, s2, s3, total, d);
     }
     return finish_uses(s0, s1, s2, s3, d);
 }
 fn uses_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UsesState) -> (result: UsesState) {
-    if not(st.ok) || st.done { return st; }
+    if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 || token.kind != 28 { return UsesState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, done: true }; }
     let decl: UseDecl = parse_use(s0, s1, s2, s3, total, token.end);
-    if not(decl.ok) { return UsesState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, list: st.list, done: true }; }
+    if !(decl.ok) { return UsesState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, list: st.list, done: true }; }
     return UsesState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, list: UseList.UCons { head: decl, tail: st.list }, done: false };
 }
 fn finish_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: UsesState) -> (result: UsesParse) {
-    if not(st.ok) { return UsesParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: UseList.UNil }; }
+    if !(st.ok) { return UsesParse { cursor: st.cursor, ok: false, err_start: st.err_start, err_end: st.err_end, list: UseList.UNil }; }
     return UsesParse { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_uses(s0, s1, s2, s3, st.list) };
 }
 record UseRev { rest: UseList, acc: UseList }
 fn reverse_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: UseList) -> (result: UseList) {
-    iterate qi20 over s0 carrying a: UseRev = UseRev { rest: list, acc: UseList.UNil } {
+    iterate i over s0 carrying a: UseRev = UseRev { rest: list, acc: UseList.UNil } {
         next a = reverse_uses_step(a);
     }
-    iterate qi21 over s1 carrying b: UseRev = a {
+    iterate i over s1 carrying b: UseRev = a {
         next b = reverse_uses_step(b);
     }
-    iterate qi22 over s2 carrying c: UseRev = b {
+    iterate i over s2 carrying c: UseRev = b {
         next c = reverse_uses_step(c);
     }
-    iterate qi23 over s3 carrying d: UseRev = c {
+    iterate i over s3 carrying d: UseRev = c {
         next d = reverse_uses_step(d);
     }
     return d.acc;
@@ -1355,7 +1386,7 @@ fn reverse_uses_step(st: UseRev) -> (result: UseRev) {
     return match st.rest { UNil => st, UCons { head: h, tail: t } => UseRev { rest: t, acc: UseList.UCons { head: h, tail: st.acc } } };
 }
 fn unit_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState) -> (result: UnitState) {
-    if not(st.ok) || st.done { return st; }
+    if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if token.diagnostic != 0 || token.kind == 0 { return UnitState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
     if token.kind == 27 { return unit_enum(s0, s1, s2, s3, total, st, token); }
@@ -1365,22 +1396,22 @@ fn unit_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
 }
 fn unit_enum(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
     let decl: EnumDecl = parse_enum(s0, s1, s2, s3, total, token.end, token.start);
-    if not(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
     return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: EnumList.GCons { head: decl, tail: st.enums }, fns: st.fns, count: st.count + 1, done: false };
 }
 fn unit_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
     let decl: RecordDecl = parse_record(s0, s1, s2, s3, total, token.end, token.start);
-    if not(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
     return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: RecordList.RCons { head: decl, tail: st.records }, enums: st.enums, fns: st.fns, count: st.count + 1, done: false };
 }
 fn unit_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
     let decl: FnDecl = parse_fn(s0, s1, s2, s3, total, token.end, token.start);
-    if not(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
     return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: FnList.DCons { head: decl, tail: st.fns }, count: st.count + 1, done: false };
 }
 fn finish_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, head: parser.Header, st: UnitState) -> (result: Unit) {
     let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
-    if not(st.ok) { return Unit { ok: false, err_start: st.err_start, err_end: st.err_end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
+    if !(st.ok) { return Unit { ok: false, err_start: st.err_start, err_end: st.err_end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
     let tail: lexer.Token = segment.significant(s0, s1, s2, s3, total, st.cursor);
     if tail.diagnostic != 0 { return Unit { ok: false, err_start: tail.start, err_end: tail.end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
     if tail.kind != 0 { return Unit { ok: false, err_start: tail.start, err_end: tail.end, header: head, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: st.cursor }; }
@@ -1391,16 +1422,16 @@ fn finish_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64],
 }
 record RecordRev { rest: RecordList, acc: RecordList }
 fn reverse_records(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: RecordList) -> (result: RecordList) {
-    iterate qi24 over s0 carrying a: RecordRev = RecordRev { rest: list, acc: RecordList.RNil } {
+    iterate i over s0 carrying a: RecordRev = RecordRev { rest: list, acc: RecordList.RNil } {
         next a = reverse_records_step(a);
     }
-    iterate qi25 over s1 carrying b: RecordRev = a {
+    iterate i over s1 carrying b: RecordRev = a {
         next b = reverse_records_step(b);
     }
-    iterate qi26 over s2 carrying c: RecordRev = b {
+    iterate i over s2 carrying c: RecordRev = b {
         next c = reverse_records_step(c);
     }
-    iterate qi27 over s3 carrying d: RecordRev = c {
+    iterate i over s3 carrying d: RecordRev = c {
         next d = reverse_records_step(d);
     }
     return d.acc;
@@ -1410,16 +1441,16 @@ fn reverse_records_step(st: RecordRev) -> (result: RecordRev) {
 }
 record EnumRev { rest: EnumList, acc: EnumList }
 fn reverse_enums(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: EnumList) -> (result: EnumList) {
-    iterate qi28 over s0 carrying a: EnumRev = EnumRev { rest: list, acc: EnumList.GNil } {
+    iterate i over s0 carrying a: EnumRev = EnumRev { rest: list, acc: EnumList.GNil } {
         next a = reverse_enums_step(a);
     }
-    iterate qi29 over s1 carrying b: EnumRev = a {
+    iterate i over s1 carrying b: EnumRev = a {
         next b = reverse_enums_step(b);
     }
-    iterate qi30 over s2 carrying c: EnumRev = b {
+    iterate i over s2 carrying c: EnumRev = b {
         next c = reverse_enums_step(c);
     }
-    iterate qi31 over s3 carrying d: EnumRev = c {
+    iterate i over s3 carrying d: EnumRev = c {
         next d = reverse_enums_step(d);
     }
     return d.acc;
@@ -1429,16 +1460,16 @@ fn reverse_enums_step(st: EnumRev) -> (result: EnumRev) {
 }
 record FnRev { rest: FnList, acc: FnList }
 fn reverse_fns(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: FnList) -> (result: FnList) {
-    iterate qi32 over s0 carrying a: FnRev = FnRev { rest: list, acc: FnList.DNil } {
+    iterate i over s0 carrying a: FnRev = FnRev { rest: list, acc: FnList.DNil } {
         next a = reverse_fns_step(a);
     }
-    iterate qi33 over s1 carrying b: FnRev = a {
+    iterate i over s1 carrying b: FnRev = a {
         next b = reverse_fns_step(b);
     }
-    iterate qi34 over s2 carrying c: FnRev = b {
+    iterate i over s2 carrying c: FnRev = b {
         next c = reverse_fns_step(c);
     }
-    iterate qi35 over s3 carrying d: FnRev = c {
+    iterate i over s3 carrying d: FnRev = c {
         next d = reverse_fns_step(d);
     }
     return d.acc;
@@ -1466,16 +1497,16 @@ record EqState { a_start: u64, len: u64, b_start: u64, off: u64, eq: bool }
 fn spans_equal(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a_start: u64, a_end: u64, b_start: u64, b_end: u64) -> (result: bool) {
     if a_end < a_start || b_end < b_start { return false; }
     if a_end - a_start != b_end - b_start { return false; }
-    iterate ei0 over s0 carrying a: EqState = EqState { a_start: a_start, len: a_end - a_start, b_start: b_start, off: 0, eq: true } {
+    iterate i over s0 carrying a: EqState = EqState { a_start: a_start, len: a_end - a_start, b_start: b_start, off: 0, eq: true } {
         next a = span_eq_step(s0, s1, s2, s3, total, a);
     }
-    iterate ei1 over s1 carrying b: EqState = a {
+    iterate i over s1 carrying b: EqState = a {
         next b = span_eq_step(s0, s1, s2, s3, total, b);
     }
-    iterate ei2 over s2 carrying c: EqState = b {
+    iterate i over s2 carrying c: EqState = b {
         next c = span_eq_step(s0, s1, s2, s3, total, c);
     }
-    iterate ei3 over s3 carrying d: EqState = c {
+    iterate i over s3 carrying d: EqState = c {
         next d = span_eq_step(s0, s1, s2, s3, total, d);
     }
     return d.eq;
@@ -1490,16 +1521,16 @@ fn span_eq_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64]
 // then restored like every other list here).
 record FnNameAcc { rest: FnList, acc: NameList }
 fn collect_fn_names(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], fns: FnList) -> (result: NameList) {
-    iterate ni0 over s0 carrying a: FnNameAcc = FnNameAcc { rest: fns, acc: NameList.NNil } {
+    iterate i over s0 carrying a: FnNameAcc = FnNameAcc { rest: fns, acc: NameList.NNil } {
         next a = collect_fn_names_step(a);
     }
-    iterate ni1 over s1 carrying b: FnNameAcc = a {
+    iterate i over s1 carrying b: FnNameAcc = a {
         next b = collect_fn_names_step(b);
     }
-    iterate ni2 over s2 carrying c: FnNameAcc = b {
+    iterate i over s2 carrying c: FnNameAcc = b {
         next c = collect_fn_names_step(c);
     }
-    iterate ni3 over s3 carrying d: FnNameAcc = c {
+    iterate i over s3 carrying d: FnNameAcc = c {
         next d = collect_fn_names_step(d);
     }
     return reverse_names(s0, s1, s2, s3, d.acc);
@@ -1516,16 +1547,16 @@ fn collect_fn_names_cons(st: FnNameAcc, h: FnDecl, t: FnList) -> (result: FnName
 }
 record NameRev { rest: NameList, acc: NameList }
 fn reverse_names(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: NameList) -> (result: NameList) {
-    iterate ri0 over s0 carrying a: NameRev = NameRev { rest: list, acc: NameList.NNil } {
+    iterate i over s0 carrying a: NameRev = NameRev { rest: list, acc: NameList.NNil } {
         next a = reverse_names_step(a);
     }
-    iterate ri1 over s1 carrying b: NameRev = a {
+    iterate i over s1 carrying b: NameRev = a {
         next b = reverse_names_step(b);
     }
-    iterate ri2 over s2 carrying c: NameRev = b {
+    iterate i over s2 carrying c: NameRev = b {
         next c = reverse_names_step(c);
     }
-    iterate ri3 over s3 carrying d: NameRev = c {
+    iterate i over s3 carrying d: NameRev = c {
         next d = reverse_names_step(d);
     }
     return d.acc;
@@ -1537,16 +1568,16 @@ fn reverse_names_step(st: NameRev) -> (result: NameRev) {
 // Membership of a span in a name list by exact bytes.
 record KnownState { rest: NameList, start: u64, end: u64, found: bool }
 fn name_known(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, list: NameList, start: u64, end: u64) -> (result: bool) {
-    iterate ki0 over s0 carrying a: KnownState = KnownState { rest: list, start: start, end: end, found: false } {
+    iterate i over s0 carrying a: KnownState = KnownState { rest: list, start: start, end: end, found: false } {
         next a = name_known_step(s0, s1, s2, s3, total, a);
     }
-    iterate ki1 over s1 carrying b: KnownState = a {
+    iterate i over s1 carrying b: KnownState = a {
         next b = name_known_step(s0, s1, s2, s3, total, b);
     }
-    iterate ki2 over s2 carrying c: KnownState = b {
+    iterate i over s2 carrying c: KnownState = b {
         next c = name_known_step(s0, s1, s2, s3, total, c);
     }
-    iterate ki3 over s3 carrying d: KnownState = c {
+    iterate i over s3 carrying d: KnownState = c {
         next d = name_known_step(s0, s1, s2, s3, total, d);
     }
     return d.found;
@@ -1562,16 +1593,16 @@ fn name_known_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
 record DupState { rest: NameList, seen: NameList, found: bool, start: u64, end: u64 }
 record DupReport { found: bool, start: u64, end: u64 }
 fn duplicate_fn_names(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, names: NameList) -> (result: DupReport) {
-    iterate di0 over s0 carrying a: DupState = DupState { rest: names, seen: NameList.NNil, found: false, start: 0, end: 0 } {
+    iterate i over s0 carrying a: DupState = DupState { rest: names, seen: NameList.NNil, found: false, start: 0, end: 0 } {
         next a = duplicate_fn_names_step(s0, s1, s2, s3, total, a);
     }
-    iterate di1 over s1 carrying b: DupState = a {
+    iterate i over s1 carrying b: DupState = a {
         next b = duplicate_fn_names_step(s0, s1, s2, s3, total, b);
     }
-    iterate di2 over s2 carrying c: DupState = b {
+    iterate i over s2 carrying c: DupState = b {
         next c = duplicate_fn_names_step(s0, s1, s2, s3, total, c);
     }
-    iterate di3 over s3 carrying d: DupState = c {
+    iterate i over s3 carrying d: DupState = c {
         next d = duplicate_fn_names_step(s0, s1, s2, s3, total, d);
     }
     return DupReport { found: d.found, start: d.start, end: d.end };
@@ -1599,23 +1630,23 @@ fn duplicate_fn_names_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte
 record WalkState { swords: StmtList, work: ExprList, acc: ExprList, names: NameList, total: u64, ok: bool, bad_start: u64, bad_end: u64 }
 record BodyReport { ok: bool, bad_start: u64, bad_end: u64, exprs: ExprList }
 fn check_body(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, body: StmtList, ret: Expr, names: NameList) -> (result: BodyReport) {
-    iterate wi0 over s0 carrying a: WalkState = WalkState { swords: body, work: ExprList.ECons { head: ret, tail: ExprList.ENil }, acc: ExprList.ENil, names: names, total: total, ok: true, bad_start: 0, bad_end: 0 } {
+    iterate i over s0 carrying a: WalkState = WalkState { swords: body, work: ExprList.ECons { head: ret, tail: ExprList.ENil }, acc: ExprList.ENil, names: names, total: total, ok: true, bad_start: 0, bad_end: 0 } {
         next a = walk_step(s0, s1, s2, s3, a);
     }
-    iterate wi1 over s1 carrying b: WalkState = a {
+    iterate i over s1 carrying b: WalkState = a {
         next b = walk_step(s0, s1, s2, s3, b);
     }
-    iterate wi2 over s2 carrying c: WalkState = b {
+    iterate i over s2 carrying c: WalkState = b {
         next c = walk_step(s0, s1, s2, s3, c);
     }
-    iterate wi3 over s3 carrying d: WalkState = c {
+    iterate i over s3 carrying d: WalkState = c {
         next d = walk_step(s0, s1, s2, s3, d);
     }
     return walk_report(d);
 }
 fn walk_report(st: WalkState) -> (result: BodyReport) {
-    if not(st.ok) { return BodyReport { ok: false, bad_start: st.bad_start, bad_end: st.bad_end, exprs: ExprList.ENil }; }
-    if not(walk_drained(st)) { return BodyReport { ok: false, bad_start: st.total, bad_end: st.total, exprs: ExprList.ENil }; }
+    if !(st.ok) { return BodyReport { ok: false, bad_start: st.bad_start, bad_end: st.bad_end, exprs: ExprList.ENil }; }
+    if !(walk_drained(st)) { return BodyReport { ok: false, bad_start: st.total, bad_end: st.total, exprs: ExprList.ENil }; }
     return BodyReport { ok: true, bad_start: 0, bad_end: 0, exprs: st.acc };
 }
 fn walk_drained(st: WalkState) -> (result: bool) {
@@ -1637,7 +1668,7 @@ fn walk_drained_cons_expr(h: Expr, t: ExprList) -> (result: bool) {
     return false;
 }
 fn walk_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState) -> (result: WalkState) {
-    if not(st.ok) { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: st.bad_start, bad_end: st.bad_end }; }
+    if !(st.ok) { return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: st.acc, names: st.names, total: st.total, ok: false, bad_start: st.bad_start, bad_end: st.bad_end }; }
     return match st.swords {
         SCons { head: h, tail: t } => walk_stmt(s0, s1, s2, s3, st, h, t),
         SNil => walk_expr_top(s0, s1, s2, s3, st)
@@ -1691,7 +1722,7 @@ fn walk_children(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64
     };
 }
 fn walk_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: WalkState, t: ExprList, acc: ExprList, ns: u64, ne: u64, args: ExprList) -> (result: WalkState) {
-    if not(name_known(s0, s1, s2, s3, st.total, st.names, ns, ne)) {
+    if !(name_known(s0, s1, s2, s3, st.total, st.names, ns, ne)) {
         return WalkState { swords: StmtList.SNil, work: ExprList.ENil, acc: acc, names: st.names, total: st.total, ok: false, bad_start: ns, bad_end: ne };
     }
     return WalkState { swords: st.swords, work: append_exprs(s0, s1, s2, s3, args, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
@@ -1702,16 +1733,16 @@ fn walk_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
 record StmtPrepend { rest: StmtList, acc: StmtList }
 fn append_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: StmtList, second: StmtList) -> (result: StmtList) {
     let rev: StmtList = reverse_stmts(s0, s1, s2, s3, first);
-    iterate ai0 over s0 carrying a: StmtPrepend = StmtPrepend { rest: rev, acc: second } {
+    iterate i over s0 carrying a: StmtPrepend = StmtPrepend { rest: rev, acc: second } {
         next a = append_stmts_step(a);
     }
-    iterate ai1 over s1 carrying b: StmtPrepend = a {
+    iterate i over s1 carrying b: StmtPrepend = a {
         next b = append_stmts_step(b);
     }
-    iterate ai2 over s2 carrying c: StmtPrepend = b {
+    iterate i over s2 carrying c: StmtPrepend = b {
         next c = append_stmts_step(c);
     }
-    iterate ai3 over s3 carrying d: StmtPrepend = c {
+    iterate i over s3 carrying d: StmtPrepend = c {
         next d = append_stmts_step(d);
     }
     return d.acc;
@@ -1722,16 +1753,16 @@ fn append_stmts_step(st: StmtPrepend) -> (result: StmtPrepend) {
 record ExprPrepend { rest: ExprList, acc: ExprList }
 fn append_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: ExprList, second: ExprList) -> (result: ExprList) {
     let rev: ExprList = reverse_exprs(s0, s1, s2, s3, first);
-    iterate pi0 over s0 carrying a: ExprPrepend = ExprPrepend { rest: rev, acc: second } {
+    iterate i over s0 carrying a: ExprPrepend = ExprPrepend { rest: rev, acc: second } {
         next a = append_exprs_step(a);
     }
-    iterate pi1 over s1 carrying b: ExprPrepend = a {
+    iterate i over s1 carrying b: ExprPrepend = a {
         next b = append_exprs_step(b);
     }
-    iterate pi2 over s2 carrying c: ExprPrepend = b {
+    iterate i over s2 carrying c: ExprPrepend = b {
         next c = append_exprs_step(c);
     }
-    iterate pi3 over s3 carrying d: ExprPrepend = c {
+    iterate i over s3 carrying d: ExprPrepend = c {
         next d = append_exprs_step(d);
     }
     return d.acc;
@@ -1755,16 +1786,16 @@ enum FlatOp {
 enum FlatList { INil, ICons { head: FlatOp, tail: FlatList } }
 record LowerState { work: ExprList, out: FlatList }
 fn lower_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], node: Expr) -> (result: FlatList) {
-    iterate li0 over s0 carrying a: LowerState = LowerState { work: ExprList.ECons { head: node, tail: ExprList.ENil }, out: FlatList.INil } {
+    iterate i over s0 carrying a: LowerState = LowerState { work: ExprList.ECons { head: node, tail: ExprList.ENil }, out: FlatList.INil } {
         next a = lower_step(s0, s1, s2, s3, a);
     }
-    iterate li1 over s1 carrying b: LowerState = a {
+    iterate i over s1 carrying b: LowerState = a {
         next b = lower_step(s0, s1, s2, s3, b);
     }
-    iterate li2 over s2 carrying c: LowerState = b {
+    iterate i over s2 carrying c: LowerState = b {
         next c = lower_step(s0, s1, s2, s3, c);
     }
-    iterate li3 over s3 carrying d: LowerState = c {
+    iterate i over s3 carrying d: LowerState = c {
         next d = lower_step(s0, s1, s2, s3, d);
     }
     // No reversal: right-subtree-first visiting conses nodes so the head-
@@ -1797,16 +1828,16 @@ fn lower_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
 }
 record CountState { rest: ExprList, n: u64 }
 fn count_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: ExprList) -> (result: u64) {
-    iterate ci0 over s0 carrying a: CountState = CountState { rest: list, n: 0 } {
+    iterate i over s0 carrying a: CountState = CountState { rest: list, n: 0 } {
         next a = count_exprs_step(a);
     }
-    iterate ci1 over s1 carrying b: CountState = a {
+    iterate i over s1 carrying b: CountState = a {
         next b = count_exprs_step(b);
     }
-    iterate ci2 over s2 carrying c: CountState = b {
+    iterate i over s2 carrying c: CountState = b {
         next c = count_exprs_step(c);
     }
-    iterate ci3 over s3 carrying d: CountState = c {
+    iterate i over s3 carrying d: CountState = c {
         next d = count_exprs_step(d);
     }
     return d.n;
@@ -1819,22 +1850,22 @@ fn count_exprs_step(st: CountState) -> (result: CountState) {
 // expression ends at depth exactly one without ever going negative.
 record DepthState { rest: FlatList, depth: u64, ok: bool }
 fn flat_ok(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], ops: FlatList) -> (result: bool) {
-    iterate gi0 over s0 carrying a: DepthState = DepthState { rest: ops, depth: 0, ok: true } {
+    iterate i over s0 carrying a: DepthState = DepthState { rest: ops, depth: 0, ok: true } {
         next a = flat_step(a);
     }
-    iterate gi1 over s1 carrying b: DepthState = a {
+    iterate i over s1 carrying b: DepthState = a {
         next b = flat_step(b);
     }
-    iterate gi2 over s2 carrying c: DepthState = b {
+    iterate i over s2 carrying c: DepthState = b {
         next c = flat_step(c);
     }
-    iterate gi3 over s3 carrying d: DepthState = c {
+    iterate i over s3 carrying d: DepthState = c {
         next d = flat_step(d);
     }
     return d.ok && d.depth == 1;
 }
 fn flat_step(st: DepthState) -> (result: DepthState) {
-    if not(st.ok) { return st; }
+    if !(st.ok) { return st; }
     return match st.rest {
         INil => st,
         ICons { head: h, tail: t } => flat_one(st, h, t)
@@ -1874,33 +1905,33 @@ record IrReport { ok: bool, count: u64 }
 record UnitCheck { ok: bool, err_start: u64, err_end: u64, stage: u64, fn_count: u64, expr_count: u64, ir_ok: bool }
 fn check_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: UnitCheck) {
     let u: Unit = parse_unit(s0, s1, s2, s3, total);
-    if not(u.ok) { return UnitCheck { ok: false, err_start: u.err_start, err_end: u.err_end, stage: 0, fn_count: 0, expr_count: 0, ir_ok: false }; }
+    if !(u.ok) { return UnitCheck { ok: false, err_start: u.err_start, err_end: u.err_end, stage: 0, fn_count: 0, expr_count: 0, ir_ok: false }; }
     let names: NameList = collect_fn_names(s0, s1, s2, s3, u.fns);
     let dup: DupReport = duplicate_fn_names(s0, s1, s2, s3, total, names);
     if dup.found { return UnitCheck { ok: false, err_start: dup.start, err_end: dup.end, stage: 1, fn_count: 0, expr_count: 0, ir_ok: false }; }
     let fns: FnsReport = check_all_fns(s0, s1, s2, s3, total, u.fns, names);
-    if not(fns.ok) { return UnitCheck { ok: false, err_start: fns.bad_start, err_end: fns.bad_end, stage: 2, fn_count: 0, expr_count: 0, ir_ok: false }; }
+    if !(fns.ok) { return UnitCheck { ok: false, err_start: fns.bad_start, err_end: fns.bad_end, stage: 2, fn_count: 0, expr_count: 0, ir_ok: false }; }
     let ir: IrReport = verify_ir_exprs(s0, s1, s2, s3, fns.exprs);
-    if not(ir.ok) { return UnitCheck { ok: false, err_start: total, err_end: total, stage: 3, fn_count: fns.fn_count, expr_count: ir.count, ir_ok: false }; }
+    if !(ir.ok) { return UnitCheck { ok: false, err_start: total, err_end: total, stage: 3, fn_count: fns.fn_count, expr_count: ir.count, ir_ok: false }; }
     return UnitCheck { ok: true, err_start: 0, err_end: 0, stage: 4, fn_count: fns.fn_count, expr_count: ir.count, ir_ok: true };
 }
 fn check_all_fns(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fns: FnList, names: NameList) -> (result: FnsReport) {
-    iterate mi0 over s0 carrying a: FnsState = FnsState { rest: fns, names: names, total: total, ok: true, bad_start: 0, bad_end: 0, fn_count: 0, exprs: ExprList.ENil } {
+    iterate i over s0 carrying a: FnsState = FnsState { rest: fns, names: names, total: total, ok: true, bad_start: 0, bad_end: 0, fn_count: 0, exprs: ExprList.ENil } {
         next a = check_fns_step(s0, s1, s2, s3, a);
     }
-    iterate mi1 over s1 carrying b: FnsState = a {
+    iterate i over s1 carrying b: FnsState = a {
         next b = check_fns_step(s0, s1, s2, s3, b);
     }
-    iterate mi2 over s2 carrying c: FnsState = b {
+    iterate i over s2 carrying c: FnsState = b {
         next c = check_fns_step(s0, s1, s2, s3, c);
     }
-    iterate mi3 over s3 carrying d: FnsState = c {
+    iterate i over s3 carrying d: FnsState = c {
         next d = check_fns_step(s0, s1, s2, s3, d);
     }
     return FnsReport { ok: d.ok, bad_start: d.bad_start, bad_end: d.bad_end, fn_count: d.fn_count, exprs: d.exprs };
 }
 fn check_fns_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: FnsState) -> (result: FnsState) {
-    if not(st.ok) { return FnsState { rest: FnList.DNil, names: st.names, total: st.total, ok: false, bad_start: st.bad_start, bad_end: st.bad_end, fn_count: st.fn_count, exprs: st.exprs }; }
+    if !(st.ok) { return FnsState { rest: FnList.DNil, names: st.names, total: st.total, ok: false, bad_start: st.bad_start, bad_end: st.bad_end, fn_count: st.fn_count, exprs: st.exprs }; }
     return match st.rest {
         DNil => st,
         DCons { head: h, tail: t } => check_one_fn(s0, s1, s2, s3, st, h, t)
@@ -1909,26 +1940,26 @@ fn check_fns_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
 fn check_one_fn(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: FnsState, h: FnDecl, t: FnList) -> (result: FnsState) {
     let bd: FnBody = h.body;
     let rep: BodyReport = check_body(s0, s1, s2, s3, st.total, bd.body, bd.ret, st.names);
-    if not(rep.ok) { return FnsState { rest: FnList.DNil, names: st.names, total: st.total, ok: false, bad_start: rep.bad_start, bad_end: rep.bad_end, fn_count: st.fn_count, exprs: st.exprs }; }
+    if !(rep.ok) { return FnsState { rest: FnList.DNil, names: st.names, total: st.total, ok: false, bad_start: rep.bad_start, bad_end: rep.bad_end, fn_count: st.fn_count, exprs: st.exprs }; }
     return FnsState { rest: t, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0, fn_count: st.fn_count + 1, exprs: append_exprs(s0, s1, s2, s3, rep.exprs, st.exprs) };
 }
 fn verify_ir_exprs(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], exprs: ExprList) -> (result: IrReport) {
-    iterate qi0 over s0 carrying a: IrState = IrState { rest: exprs, ok: true, count: 0 } {
+    iterate i over s0 carrying a: IrState = IrState { rest: exprs, ok: true, count: 0 } {
         next a = verify_ir_step(s0, s1, s2, s3, a);
     }
-    iterate qi1 over s1 carrying b: IrState = a {
+    iterate i over s1 carrying b: IrState = a {
         next b = verify_ir_step(s0, s1, s2, s3, b);
     }
-    iterate qi2 over s2 carrying c: IrState = b {
+    iterate i over s2 carrying c: IrState = b {
         next c = verify_ir_step(s0, s1, s2, s3, c);
     }
-    iterate qi3 over s3 carrying d: IrState = c {
+    iterate i over s3 carrying d: IrState = c {
         next d = verify_ir_step(s0, s1, s2, s3, d);
     }
     return IrReport { ok: d.ok, count: d.count };
 }
 fn verify_ir_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: IrState) -> (result: IrState) {
-    if not(st.ok) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
+    if !(st.ok) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
     return match st.rest {
         ENil => st,
         ECons { head: h, tail: t } => verify_ir_one(s0, s1, s2, s3, st, h, t)
@@ -1936,7 +1967,7 @@ fn verify_ir_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
 }
 fn verify_ir_one(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: IrState, h: Expr, t: ExprList) -> (result: IrState) {
     let ops: FlatList = lower_expr(s0, s1, s2, s3, h);
-    if not(flat_ok(s0, s1, s2, s3, ops)) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
+    if !(flat_ok(s0, s1, s2, s3, ops)) { return IrState { rest: ExprList.ENil, ok: false, count: st.count }; }
     return IrState { rest: t, ok: true, count: st.count + 1 };
 }
 
@@ -1973,16 +2004,16 @@ record Obligation { kind: u64, start: u64, end: u64, status: u64 }
 enum OblList { LNil, LCons { head: Obligation, tail: OblList } }
 record OblRev { rest: OblList, acc: OblList }
 fn reverse_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: OblList) -> (result: OblList) {
-    iterate oi0 over s0 carrying a: OblRev = OblRev { rest: list, acc: OblList.LNil } {
+    iterate i over s0 carrying a: OblRev = OblRev { rest: list, acc: OblList.LNil } {
         next a = reverse_obls_step(a);
     }
-    iterate oi1 over s1 carrying b: OblRev = a {
+    iterate i over s1 carrying b: OblRev = a {
         next b = reverse_obls_step(b);
     }
-    iterate oi2 over s2 carrying c: OblRev = b {
+    iterate i over s2 carrying c: OblRev = b {
         next c = reverse_obls_step(c);
     }
-    iterate oi3 over s3 carrying d: OblRev = c {
+    iterate i over s3 carrying d: OblRev = c {
         next d = reverse_obls_step(d);
     }
     return d.acc;
@@ -1993,16 +2024,16 @@ fn reverse_obls_step(st: OblRev) -> (result: OblRev) {
 record OblPrepend { rest: OblList, acc: OblList }
 fn append_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: OblList, second: OblList) -> (result: OblList) {
     let rev: OblList = reverse_obls(s0, s1, s2, s3, first);
-    iterate oj0 over s0 carrying a: OblPrepend = OblPrepend { rest: rev, acc: second } {
+    iterate i over s0 carrying a: OblPrepend = OblPrepend { rest: rev, acc: second } {
         next a = append_obls_step(a);
     }
-    iterate oj1 over s1 carrying b: OblPrepend = a {
+    iterate i over s1 carrying b: OblPrepend = a {
         next b = append_obls_step(b);
     }
-    iterate oj2 over s2 carrying c: OblPrepend = b {
+    iterate i over s2 carrying c: OblPrepend = b {
         next c = append_obls_step(c);
     }
-    iterate oj3 over s3 carrying d: OblPrepend = c {
+    iterate i over s3 carrying d: OblPrepend = c {
         next d = append_obls_step(d);
     }
     return d.acc;
@@ -2012,16 +2043,16 @@ fn append_obls_step(st: OblPrepend) -> (result: OblPrepend) {
 }
 record OblCount { rest: OblList, n: u64, unknowns: u64, fails: u64 }
 fn count_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: OblList) -> (result: OblCount) {
-    iterate ok0 over s0 carrying a: OblCount = OblCount { rest: list, n: 0, unknowns: 0, fails: 0 } {
+    iterate i over s0 carrying a: OblCount = OblCount { rest: list, n: 0, unknowns: 0, fails: 0 } {
         next a = count_obls_step(a);
     }
-    iterate ok1 over s1 carrying b: OblCount = a {
+    iterate i over s1 carrying b: OblCount = a {
         next b = count_obls_step(b);
     }
-    iterate ok2 over s2 carrying c: OblCount = b {
+    iterate i over s2 carrying c: OblCount = b {
         next c = count_obls_step(c);
     }
-    iterate ok3 over s3 carrying d: OblCount = c {
+    iterate i over s3 carrying d: OblCount = c {
         next d = count_obls_step(d);
     }
     return d;
@@ -2088,7 +2119,7 @@ fn sem_eq_int(b: SemType, w: u64, s: bool) -> (result: bool) {
 fn int_eq_extra(w: u64, w2: u64, s: bool, s2: bool) -> (result: bool) {
     if w != w2 { return false; }
     if s { return s2; }
-    return not(s2);
+    return !(s2);
 }
 fn sem_eq_named(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, b: SemType, s: u64, e: u64) -> (result: bool) {
     return match b {
@@ -2122,16 +2153,16 @@ enum ScopeStack { ZNil, ZCons { head: Scope, tail: ScopeStack } }
 record LookupRes { found: bool, ty: SemType }
 record ScopeLookup { rest: BindList, start: u64, end: u64, found: bool, ty: SemType }
 fn scope_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, binds: BindList, start: u64, end: u64) -> (result: LookupRes) {
-    iterate sl0 over s0 carrying a: ScopeLookup = ScopeLookup { rest: binds, start: start, end: end, found: false, ty: SemType.TPoison } {
+    iterate i over s0 carrying a: ScopeLookup = ScopeLookup { rest: binds, start: start, end: end, found: false, ty: SemType.TPoison } {
         next a = scope_lookup_step(s0, s1, s2, s3, total, a);
     }
-    iterate sl1 over s1 carrying b: ScopeLookup = a {
+    iterate i over s1 carrying b: ScopeLookup = a {
         next b = scope_lookup_step(s0, s1, s2, s3, total, b);
     }
-    iterate sl2 over s2 carrying c: ScopeLookup = b {
+    iterate i over s2 carrying c: ScopeLookup = b {
         next c = scope_lookup_step(s0, s1, s2, s3, total, c);
     }
-    iterate sl3 over s3 carrying d: ScopeLookup = c {
+    iterate i over s3 carrying d: ScopeLookup = c {
         next d = scope_lookup_step(s0, s1, s2, s3, total, d);
     }
     return LookupRes { found: d.found, ty: d.ty };
@@ -2151,16 +2182,16 @@ fn scope_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_t
 }
 record EnvLookup { rest: ScopeStack, start: u64, end: u64, found: bool, ty: SemType }
 fn env_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: ScopeStack, start: u64, end: u64) -> (result: LookupRes) {
-    iterate el0 over s0 carrying a: EnvLookup = EnvLookup { rest: st, start: start, end: end, found: false, ty: SemType.TPoison } {
+    iterate i over s0 carrying a: EnvLookup = EnvLookup { rest: st, start: start, end: end, found: false, ty: SemType.TPoison } {
         next a = env_lookup_step(s0, s1, s2, s3, total, a);
     }
-    iterate el1 over s1 carrying b: EnvLookup = a {
+    iterate i over s1 carrying b: EnvLookup = a {
         next b = env_lookup_step(s0, s1, s2, s3, total, b);
     }
-    iterate el2 over s2 carrying c: EnvLookup = b {
+    iterate i over s2 carrying c: EnvLookup = b {
         next c = env_lookup_step(s0, s1, s2, s3, total, c);
     }
-    iterate el3 over s3 carrying d: EnvLookup = c {
+    iterate i over s3 carrying d: EnvLookup = c {
         next d = env_lookup_step(s0, s1, s2, s3, total, d);
     }
     return LookupRes { found: d.found, ty: d.ty };
@@ -2201,7 +2232,7 @@ fn scalar_sem(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
     if end - start < 2 || end - start > 3 { return SemType.TNamed { start: start, end: end }; }
     let b0: u64 = segment.byte_at(s0, s1, s2, s3, total, start);
     if b0 != 117 && b0 != 105 { return SemType.TNamed { start: start, end: end }; }
-    if not(span_digits(s0, s1, s2, s3, total, start + 1, end)) { return SemType.TNamed { start: start, end: end }; }
+    if !(span_digits(s0, s1, s2, s3, total, start + 1, end)) { return SemType.TNamed { start: start, end: end }; }
     let val: IntVal = int_value(s0, s1, s2, s3, total, start + 1, end);
     if val.overflow { return SemType.TNamed { start: start, end: end }; }
     if val.value == 8 || val.value == 16 || val.value == 32 || val.value == 64 {
@@ -2211,22 +2242,22 @@ fn scalar_sem(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
 }
 record DigitCheck { pos: u64, end: u64, ok: bool }
 fn span_digits(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64) -> (result: bool) {
-    iterate dg0 over s0 carrying a: DigitCheck = DigitCheck { pos: start, end: end, ok: true } {
+    iterate i over s0 carrying a: DigitCheck = DigitCheck { pos: start, end: end, ok: true } {
         next a = span_digits_step(s0, s1, s2, s3, total, a);
     }
-    iterate dg1 over s1 carrying b: DigitCheck = a {
+    iterate i over s1 carrying b: DigitCheck = a {
         next b = span_digits_step(s0, s1, s2, s3, total, b);
     }
-    iterate dg2 over s2 carrying c: DigitCheck = b {
+    iterate i over s2 carrying c: DigitCheck = b {
         next c = span_digits_step(s0, s1, s2, s3, total, c);
     }
-    iterate dg3 over s3 carrying d: DigitCheck = c {
+    iterate i over s3 carrying d: DigitCheck = c {
         next d = span_digits_step(s0, s1, s2, s3, total, d);
     }
     return d.ok && d.pos >= d.end;
 }
 fn span_digits_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: DigitCheck) -> (result: DigitCheck) {
-    if not(st.ok) || st.pos >= st.end { return st; }
+    if !(st.ok) || st.pos >= st.end { return st; }
     let byte: u64 = segment.byte_at(s0, s1, s2, s3, total, st.pos);
     if byte < 48 || byte > 57 { return DigitCheck { pos: st.pos, end: st.end, ok: false }; }
     return DigitCheck { pos: st.pos + 1, end: st.end, ok: true };
@@ -2246,7 +2277,7 @@ fn resolve_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64]
 }
 fn resolve_seq_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
     let elem: TypeParse = parse_type(s0, s1, s2, s3, total, start + 1);
-    if not(elem.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    if !(elem.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
     // No back-call into resolve_type (MNE130): sequence elements are flat
     // by construction (the parser rejects nested `[`), so the element is
     // resolved by the flat case split below.
@@ -2257,7 +2288,7 @@ fn resolve_seq_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
 }
 fn resolve_seq_elem(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
     let inner: TyRes = resolve_named_type(s0, s1, s2, s3, total, start, end, rectab, enumtab);
-    if not(inner.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    if !(inner.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
     return TyRes { ty: SemType.TSeq, ok: true };
 }
 fn resolve_named_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
@@ -2277,16 +2308,16 @@ fn resolve_declared_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; 
     return TyRes { ty: SemType.TPoison, ok: false };
 }
 fn record_declared(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, rectab: RecordList, start: u64, end: u64) -> (result: bool) {
-    iterate rd0 over s0 carrying a: RecScan = RecScan { rest: rectab, start: start, end: end, found: false } {
+    iterate i over s0 carrying a: RecScan = RecScan { rest: rectab, start: start, end: end, found: false } {
         next a = record_declared_step(s0, s1, s2, s3, total, a);
     }
-    iterate rd1 over s1 carrying b: RecScan = a {
+    iterate i over s1 carrying b: RecScan = a {
         next b = record_declared_step(s0, s1, s2, s3, total, b);
     }
-    iterate rd2 over s2 carrying c: RecScan = b {
+    iterate i over s2 carrying c: RecScan = b {
         next c = record_declared_step(s0, s1, s2, s3, total, c);
     }
-    iterate rd3 over s3 carrying d: RecScan = c {
+    iterate i over s3 carrying d: RecScan = c {
         next d = record_declared_step(s0, s1, s2, s3, total, d);
     }
     return d.found;
@@ -2306,16 +2337,16 @@ fn record_declared_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; u
     return RecScan { rest: t, start: st.start, end: st.end, found: false };
 }
 fn enum_declared(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, enumtab: EnumList, start: u64, end: u64) -> (result: bool) {
-    iterate ed0 over s0 carrying a: EnumScan = EnumScan { rest: enumtab, start: start, end: end, found: false } {
+    iterate i over s0 carrying a: EnumScan = EnumScan { rest: enumtab, start: start, end: end, found: false } {
         next a = enum_declared_step(s0, s1, s2, s3, total, a);
     }
-    iterate ed1 over s1 carrying b: EnumScan = a {
+    iterate i over s1 carrying b: EnumScan = a {
         next b = enum_declared_step(s0, s1, s2, s3, total, b);
     }
-    iterate ed2 over s2 carrying c: EnumScan = b {
+    iterate i over s2 carrying c: EnumScan = b {
         next c = enum_declared_step(s0, s1, s2, s3, total, c);
     }
-    iterate ed3 over s3 carrying d: EnumScan = c {
+    iterate i over s3 carrying d: EnumScan = c {
         next d = enum_declared_step(s0, s1, s2, s3, total, d);
     }
     return d.found;
@@ -2359,16 +2390,16 @@ fn check_sig(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
 record ParamRep { binds: BindList, n: u64, obls: OblList }
 record ParamState { rest: FieldList, binds: BindList, seen: NameList, n: u64, obls: OblList }
 fn check_params(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, params: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ParamRep) {
-    iterate pm0 over s0 carrying a: ParamState = ParamState { rest: params, binds: BindList.BNil, seen: NameList.NNil, n: 0, obls: OblList.LNil } {
+    iterate i over s0 carrying a: ParamState = ParamState { rest: params, binds: BindList.BNil, seen: NameList.NNil, n: 0, obls: OblList.LNil } {
         next a = check_params_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate pm1 over s1 carrying b: ParamState = a {
+    iterate i over s1 carrying b: ParamState = a {
         next b = check_params_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate pm2 over s2 carrying c: ParamState = b {
+    iterate i over s2 carrying c: ParamState = b {
         next c = check_params_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate pm3 over s3 carrying d: ParamState = c {
+    iterate i over s3 carrying d: ParamState = c {
         next d = check_params_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return ParamRep { binds: d.binds, n: d.n, obls: reverse_obls(s0, s1, s2, s3, d.obls) };
@@ -2403,16 +2434,16 @@ fn param_bound_type(ty: TyRes) -> (result: SemType) {
 record ResultRep { ty: SemType, obls: OblList }
 record ResultState { rest: FieldList, n: u64, ty: SemType, obls: OblList }
 fn check_results(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, results: FieldList, fn_start: u64, fn_end: u64, rectab: RecordList, enumtab: EnumList) -> (result: ResultRep) {
-    iterate rs0 over s0 carrying a: ResultState = ResultState { rest: results, n: 0, ty: SemType.TPoison, obls: OblList.LNil } {
+    iterate i over s0 carrying a: ResultState = ResultState { rest: results, n: 0, ty: SemType.TPoison, obls: OblList.LNil } {
         next a = check_results_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate rs1 over s1 carrying b: ResultState = a {
+    iterate i over s1 carrying b: ResultState = a {
         next b = check_results_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate rs2 over s2 carrying c: ResultState = b {
+    iterate i over s2 carrying c: ResultState = b {
         next c = check_results_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate rs3 over s3 carrying d: ResultState = c {
+    iterate i over s3 carrying d: ResultState = c {
         next d = check_results_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return finish_results(s0, s1, s2, s3, d, fn_start, fn_end);
@@ -2443,16 +2474,16 @@ fn finish_results(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
 record CapRep { caps: NameList, obls: OblList }
 record CapState { rest: CapList, caps: NameList, obls: OblList }
 fn check_caps(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, caps: CapList) -> (result: CapRep) {
-    iterate cp0 over s0 carrying a: CapState = CapState { rest: caps, caps: NameList.NNil, obls: OblList.LNil } {
+    iterate i over s0 carrying a: CapState = CapState { rest: caps, caps: NameList.NNil, obls: OblList.LNil } {
         next a = check_caps_step(s0, s1, s2, s3, total, a);
     }
-    iterate cp1 over s1 carrying b: CapState = a {
+    iterate i over s1 carrying b: CapState = a {
         next b = check_caps_step(s0, s1, s2, s3, total, b);
     }
-    iterate cp2 over s2 carrying c: CapState = b {
+    iterate i over s2 carrying c: CapState = b {
         next c = check_caps_step(s0, s1, s2, s3, total, c);
     }
-    iterate cp3 over s3 carrying d: CapState = c {
+    iterate i over s3 carrying d: CapState = c {
         next d = check_caps_step(s0, s1, s2, s3, total, d);
     }
     return CapRep { caps: d.caps, obls: reverse_obls(s0, s1, s2, s3, d.obls) };
@@ -2474,16 +2505,16 @@ fn check_one_cap(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64
 record FxRep { fx: EffectList, obls: OblList }
 record FxState { rest: EffectList, fx: EffectList, obls: OblList }
 fn check_effects(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, effects: EffectList, caps: NameList) -> (result: FxRep) {
-    iterate fx0 over s0 carrying a: FxState = FxState { rest: effects, fx: EffectList.XNil, obls: OblList.LNil } {
+    iterate i over s0 carrying a: FxState = FxState { rest: effects, fx: EffectList.XNil, obls: OblList.LNil } {
         next a = check_effects_step(s0, s1, s2, s3, total, a, caps);
     }
-    iterate fx1 over s1 carrying b: FxState = a {
+    iterate i over s1 carrying b: FxState = a {
         next b = check_effects_step(s0, s1, s2, s3, total, b, caps);
     }
-    iterate fx2 over s2 carrying c: FxState = b {
+    iterate i over s2 carrying c: FxState = b {
         next c = check_effects_step(s0, s1, s2, s3, total, c, caps);
     }
-    iterate fx3 over s3 carrying d: FxState = c {
+    iterate i over s3 carrying d: FxState = c {
         next d = check_effects_step(s0, s1, s2, s3, total, d, caps);
     }
     return FxRep { fx: reverse_effects(s0, s1, s2, s3, d.fx), obls: reverse_obls(s0, s1, s2, s3, d.obls) };
@@ -2503,16 +2534,16 @@ fn check_one_effect(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
 }
 record ClauseState { rest: ClauseList, obls: OblList }
 fn check_contracts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], clauses: ClauseList) -> (result: OblList) {
-    iterate kc0 over s0 carrying a: ClauseState = ClauseState { rest: clauses, obls: OblList.LNil } {
+    iterate i over s0 carrying a: ClauseState = ClauseState { rest: clauses, obls: OblList.LNil } {
         next a = check_contracts_step(a);
     }
-    iterate kc1 over s1 carrying b: ClauseState = a {
+    iterate i over s1 carrying b: ClauseState = a {
         next b = check_contracts_step(b);
     }
-    iterate kc2 over s2 carrying c: ClauseState = b {
+    iterate i over s2 carrying c: ClauseState = b {
         next c = check_contracts_step(c);
     }
-    iterate kc3 over s3 carrying d: ClauseState = c {
+    iterate i over s3 carrying d: ClauseState = c {
         next d = check_contracts_step(d);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -2528,16 +2559,16 @@ fn check_contracts_step(st: ClauseState) -> (result: ClauseState) {
 // scalars and declared nominals but no sequences; record fields admit
 // sequences with valid elements.
 fn check_uses(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], uses: UseList) -> (result: OblList) {
-    iterate us0 over s0 carrying a: UseState = UseState { rest: uses, obls: OblList.LNil } {
+    iterate i over s0 carrying a: UseState = UseState { rest: uses, obls: OblList.LNil } {
         next a = check_uses_step(a);
     }
-    iterate us1 over s1 carrying b: UseState = a {
+    iterate i over s1 carrying b: UseState = a {
         next b = check_uses_step(b);
     }
-    iterate us2 over s2 carrying c: UseState = b {
+    iterate i over s2 carrying c: UseState = b {
         next c = check_uses_step(c);
     }
-    iterate us3 over s3 carrying d: UseState = c {
+    iterate i over s3 carrying d: UseState = c {
         next d = check_uses_step(d);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -2572,16 +2603,16 @@ enum TyList { TyNil, TyCons { head: SemType, tail: TyList } }
 enum TyStack { WNil, WCons { head: SemType, tail: TyStack } }
 record TopsRev { rest: TOpList, acc: TOpList }
 fn reverse_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TOpList) -> (result: TOpList) {
-    iterate tp0 over s0 carrying a: TopsRev = TopsRev { rest: list, acc: TOpList.PNil } {
+    iterate i over s0 carrying a: TopsRev = TopsRev { rest: list, acc: TOpList.PNil } {
         next a = reverse_tops_step(a);
     }
-    iterate tp1 over s1 carrying b: TopsRev = a {
+    iterate i over s1 carrying b: TopsRev = a {
         next b = reverse_tops_step(b);
     }
-    iterate tp2 over s2 carrying c: TopsRev = b {
+    iterate i over s2 carrying c: TopsRev = b {
         next c = reverse_tops_step(c);
     }
-    iterate tp3 over s3 carrying d: TopsRev = c {
+    iterate i over s3 carrying d: TopsRev = c {
         next d = reverse_tops_step(d);
     }
     return d.acc;
@@ -2592,16 +2623,16 @@ fn reverse_tops_step(st: TopsRev) -> (result: TopsRev) {
 record TopsPrepend { rest: TOpList, acc: TOpList }
 fn append_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: TOpList, second: TOpList) -> (result: TOpList) {
     let rev: TOpList = reverse_tops(s0, s1, s2, s3, first);
-    iterate tq0 over s0 carrying a: TopsPrepend = TopsPrepend { rest: rev, acc: second } {
+    iterate i over s0 carrying a: TopsPrepend = TopsPrepend { rest: rev, acc: second } {
         next a = append_tops_step(a);
     }
-    iterate tq1 over s1 carrying b: TopsPrepend = a {
+    iterate i over s1 carrying b: TopsPrepend = a {
         next b = append_tops_step(b);
     }
-    iterate tq2 over s2 carrying c: TopsPrepend = b {
+    iterate i over s2 carrying c: TopsPrepend = b {
         next c = append_tops_step(c);
     }
-    iterate tq3 over s3 carrying d: TopsPrepend = c {
+    iterate i over s3 carrying d: TopsPrepend = c {
         next d = append_tops_step(d);
     }
     return d.acc;
@@ -2611,16 +2642,16 @@ fn append_tops_step(st: TopsPrepend) -> (result: TopsPrepend) {
 }
 record TopsCount { rest: TOpList, n: u64 }
 fn count_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TOpList) -> (result: u64) {
-    iterate tc0 over s0 carrying a: TopsCount = TopsCount { rest: list, n: 0 } {
+    iterate i over s0 carrying a: TopsCount = TopsCount { rest: list, n: 0 } {
         next a = count_tops_step(a);
     }
-    iterate tc1 over s1 carrying b: TopsCount = a {
+    iterate i over s1 carrying b: TopsCount = a {
         next b = count_tops_step(b);
     }
-    iterate tc2 over s2 carrying c: TopsCount = b {
+    iterate i over s2 carrying c: TopsCount = b {
         next c = count_tops_step(c);
     }
-    iterate tc3 over s3 carrying d: TopsCount = c {
+    iterate i over s3 carrying d: TopsCount = c {
         next d = count_tops_step(d);
     }
     return d.n;
@@ -2634,22 +2665,22 @@ fn count_tops_step(st: TopsCount) -> (result: TopsCount) {
 // when a final type is required it must equal the established type.
 record TDepth { rest: TOpList, stack: TyStack, depth: u64, ok: bool }
 fn verify_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, ops: TOpList, want: ExpTy) -> (result: bool) {
-    iterate tv0 over s0 carrying a: TDepth = TDepth { rest: ops, stack: TyStack.WNil, depth: 0, ok: true } {
+    iterate i over s0 carrying a: TDepth = TDepth { rest: ops, stack: TyStack.WNil, depth: 0, ok: true } {
         next a = verify_tops_step(s0, s1, s2, s3, total, a);
     }
-    iterate tv1 over s1 carrying b: TDepth = a {
+    iterate i over s1 carrying b: TDepth = a {
         next b = verify_tops_step(s0, s1, s2, s3, total, b);
     }
-    iterate tv2 over s2 carrying c: TDepth = b {
+    iterate i over s2 carrying c: TDepth = b {
         next c = verify_tops_step(s0, s1, s2, s3, total, c);
     }
-    iterate tv3 over s3 carrying d: TDepth = c {
+    iterate i over s3 carrying d: TDepth = c {
         next d = verify_tops_step(s0, s1, s2, s3, total, d);
     }
     return finish_verify_tops(s0, s1, s2, s3, total, d, want);
 }
 fn verify_tops_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth) -> (result: TDepth) {
-    if not(st.ok) { return st; }
+    if !(st.ok) { return st; }
     return match st.rest {
         PNil => st,
         PCons { head: h, tail: t } => verify_top_one(s0, s1, s2, s3, total, st, h, t)
@@ -2683,27 +2714,27 @@ fn verify_top_bin_inner(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; u
     };
 }
 fn verify_top_bin_eq(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, t: TOpList, ty: SemType, h1: SemType, h2: SemType, t2: TyStack) -> (result: TDepth) {
-    if not(sem_eq(s0, s1, s2, s3, total, h1, h2)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(sem_eq(s0, s1, s2, s3, total, h1, h2)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: t2 }, depth: st.depth - 1, ok: true };
 }
 record PopN { rest: TyStack, n: u64, ok: bool }
 fn pop_tys(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], stack: TyStack, n: u64) -> (result: PopN) {
-    iterate pn0 over s0 carrying a: PopN = PopN { rest: stack, n: n, ok: true } {
+    iterate i over s0 carrying a: PopN = PopN { rest: stack, n: n, ok: true } {
         next a = pop_tys_step(a);
     }
-    iterate pn1 over s1 carrying b: PopN = a {
+    iterate i over s1 carrying b: PopN = a {
         next b = pop_tys_step(b);
     }
-    iterate pn2 over s2 carrying c: PopN = b {
+    iterate i over s2 carrying c: PopN = b {
         next c = pop_tys_step(c);
     }
-    iterate pn3 over s3 carrying d: PopN = c {
+    iterate i over s3 carrying d: PopN = c {
         next d = pop_tys_step(d);
     }
     return d;
 }
 fn pop_tys_step(st: PopN) -> (result: PopN) {
-    if not(st.ok) || st.n == 0 { return st; }
+    if !(st.ok) || st.n == 0 { return st; }
     return match st.rest {
         WNil => PopN { rest: TyStack.WNil, n: st.n, ok: false },
         WCons { head: h, tail: t } => PopN { rest: t, n: st.n - 1, ok: true }
@@ -2713,7 +2744,7 @@ fn verify_top_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
     if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     if st.depth < argc { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     let popped: PopN = pop_tys(s0, s1, s2, s3, st.stack, argc);
-    if not(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: popped.rest }, depth: st.depth - argc + 1, ok: true };
 }
 fn verify_top_proj(st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
@@ -2724,7 +2755,7 @@ fn verify_top_proj(st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
     };
 }
 fn finish_verify_tops(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, st: TDepth, want: ExpTy) -> (result: bool) {
-    if not(st.ok) { return false; }
+    if !(st.ok) { return false; }
     if st.depth != 1 { return false; }
     return match want {
         XNone => true,
@@ -2790,16 +2821,16 @@ enum KontList { QNil, QCons { head: SemKont, tail: KontList } }
 record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, fx: EffectList, total: u64 }
 record ExprRes { ty: SemType, ok: bool, obls: OblList, tops: TOpList }
 fn prove_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, fx: EffectList, total: u64, e: Expr, exp: ExpTy) -> (result: ExprRes) {
-    iterate sm0 over s0 carrying a: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, fx: fx, total: total } {
+    iterate i over s0 carrying a: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, fx: fx, total: total } {
         next a = sem_step(s0, s1, s2, s3, a);
     }
-    iterate sm1 over s1 carrying b: SemState = a {
+    iterate i over s1 carrying b: SemState = a {
         next b = sem_step(s0, s1, s2, s3, b);
     }
-    iterate sm2 over s2 carrying c: SemState = b {
+    iterate i over s2 carrying c: SemState = b {
         next c = sem_step(s0, s1, s2, s3, c);
     }
-    iterate sm3 over s3 carrying d: SemState = c {
+    iterate i over s3 carrying d: SemState = c {
         next d = sem_step(s0, s1, s2, s3, d);
     }
     return finish_prove_expr(s0, s1, s2, s3, d);
@@ -2845,7 +2876,7 @@ fn sem_job(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3:
 }
 fn finish_name(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let got: LookupRes = env_lookup(s0, s1, s2, s3, st.total, st.env, start, end);
-    if not(got.found) { return sem_drain(sem_emit(st, 1, start, end, 1)); }
+    if !(got.found) { return sem_drain(sem_emit(st, 1, start, end, 1)); }
     return finish_name_exp(s0, s1, s2, s3, st, got.ty, start, end, exp);
 }
 fn finish_name_exp(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ty: SemType, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
@@ -2953,7 +2984,7 @@ fn apply_bin_l(st: SemState, op: u64, right: Expr, start: u64, end: u64) -> (res
 }
 fn apply_bin_r(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, op: u64, lty: SemType, start: u64, end: u64, rlit: bool) -> (result: SemState) {
     let rty: SemType = st.last_ty;
-    if not(sem_eq(s0, s1, s2, s3, st.total, lty, rty)) { return sem_drain(sem_emit(st, 7, start, end, 1)); }
+    if !(sem_eq(s0, s1, s2, s3, st.total, lty, rty)) { return sem_drain(sem_emit(st, 7, start, end, 1)); }
     return finish_bin_class(s0, s1, s2, s3, st, op, lty, rty, start, end, rlit);
 }
 // Operator classes: 0 total arithmetic (checked, wrapping, saturating,
@@ -3040,16 +3071,16 @@ fn finish_bin_shift(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -
 record SigRes { found: bool, sig: Sig }
 record SigScan { rest: SigTab, start: u64, end: u64, found: bool, sig: Sig }
 fn sig_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, sigs: SigTab, start: u64, end: u64) -> (result: SigRes) {
-    iterate gs0 over s0 carrying a: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil } } {
+    iterate i over s0 carrying a: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil } } {
         next a = sig_lookup_step(s0, s1, s2, s3, total, a);
     }
-    iterate gs1 over s1 carrying b: SigScan = a {
+    iterate i over s1 carrying b: SigScan = a {
         next b = sig_lookup_step(s0, s1, s2, s3, total, b);
     }
-    iterate gs2 over s2 carrying c: SigScan = b {
+    iterate i over s2 carrying c: SigScan = b {
         next c = sig_lookup_step(s0, s1, s2, s3, total, c);
     }
-    iterate gs3 over s3 carrying d: SigScan = c {
+    iterate i over s3 carrying d: SigScan = c {
         next d = sig_lookup_step(s0, s1, s2, s3, total, d);
     }
     return SigRes { found: d.found, sig: d.sig };
@@ -3069,16 +3100,16 @@ fn sig_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
 }
 record TysAcc { rest: BindList, acc: TyList }
 fn params_to_tys(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], params: BindList) -> (result: TyList) {
-    iterate ty0 over s0 carrying a: TysAcc = TysAcc { rest: params, acc: TyList.TyNil } {
+    iterate i over s0 carrying a: TysAcc = TysAcc { rest: params, acc: TyList.TyNil } {
         next a = params_to_tys_step(a);
     }
-    iterate ty1 over s1 carrying b: TysAcc = a {
+    iterate i over s1 carrying b: TysAcc = a {
         next b = params_to_tys_step(b);
     }
-    iterate ty2 over s2 carrying c: TysAcc = b {
+    iterate i over s2 carrying c: TysAcc = b {
         next c = params_to_tys_step(c);
     }
-    iterate ty3 over s3 carrying d: TysAcc = c {
+    iterate i over s3 carrying d: TysAcc = c {
         next d = params_to_tys_step(d);
     }
     return reverse_tys(s0, s1, s2, s3, d.acc);
@@ -3088,16 +3119,16 @@ fn params_to_tys_step(st: TysAcc) -> (result: TysAcc) {
 }
 record TysRev { rest: TyList, acc: TyList }
 fn reverse_tys(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TyList) -> (result: TyList) {
-    iterate tr0 over s0 carrying a: TysRev = TysRev { rest: list, acc: TyList.TyNil } {
+    iterate i over s0 carrying a: TysRev = TysRev { rest: list, acc: TyList.TyNil } {
         next a = reverse_tys_step(a);
     }
-    iterate tr1 over s1 carrying b: TysRev = a {
+    iterate i over s1 carrying b: TysRev = a {
         next b = reverse_tys_step(b);
     }
-    iterate tr2 over s2 carrying c: TysRev = b {
+    iterate i over s2 carrying c: TysRev = b {
         next c = reverse_tys_step(c);
     }
-    iterate tr3 over s3 carrying d: TysRev = c {
+    iterate i over s3 carrying d: TysRev = c {
         next d = reverse_tys_step(d);
     }
     return d.acc;
@@ -3107,7 +3138,7 @@ fn reverse_tys_step(st: TysRev) -> (result: TysRev) {
 }
 fn seed_call(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let got: SigRes = sig_lookup(s0, s1, s2, s3, st.total, st.sigs, ns, ne);
-    if not(got.found) { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
+    if !(got.found) { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
     let argc: u64 = count_exprs(s0, s1, s2, s3, args);
     if argc != got.sig.nparams { return sem_drain(sem_emit(st, 6, start, end, 1)); }
     return seed_call_args(s0, s1, s2, s3, st, got.sig, args, start, end, exp);
@@ -3188,21 +3219,21 @@ fn push_next_arg(st: SemState, sig: Sig, args: ExprList, ptys: TyList, nh: Expr,
 // result check. Capability authorization (MNE111) is a signature-level
 // concern handled by check_sig, not repeated per call.
 fn fx_eq(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, a: Effect, b: Effect) -> (result: bool) {
-    if not(spans_equal(s0, s1, s2, s3, total, a.kind_start, a.kind_end, b.kind_start, b.kind_end)) { return false; }
+    if !(spans_equal(s0, s1, s2, s3, total, a.kind_start, a.kind_end, b.kind_start, b.kind_end)) { return false; }
     return spans_equal(s0, s1, s2, s3, total, a.cap_start, a.cap_end, b.cap_start, b.cap_end);
 }
 record FxScan { rest: EffectList, want: Effect, covered: bool }
 fn fx_covered(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, avail: EffectList, want: Effect) -> (result: bool) {
-    iterate fx0 over s0 carrying a: FxScan = FxScan { rest: avail, want: want, covered: false } {
+    iterate i over s0 carrying a: FxScan = FxScan { rest: avail, want: want, covered: false } {
         next a = fx_cover_step(s0, s1, s2, s3, total, a);
     }
-    iterate fx1 over s1 carrying b: FxScan = a {
+    iterate i over s1 carrying b: FxScan = a {
         next b = fx_cover_step(s0, s1, s2, s3, total, b);
     }
-    iterate fx2 over s2 carrying c: FxScan = b {
+    iterate i over s2 carrying c: FxScan = b {
         next c = fx_cover_step(s0, s1, s2, s3, total, c);
     }
-    iterate fx3 over s3 carrying d: FxScan = c {
+    iterate i over s3 carrying d: FxScan = c {
         next d = fx_cover_step(s0, s1, s2, s3, total, d);
     }
     return d.covered;
@@ -3222,23 +3253,23 @@ fn fx_cover_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64
 }
 record NeedScan { rest: EffectList, ok: bool }
 fn fx_cover_check(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, need: EffectList, start: u64, end: u64) -> (result: SemState) {
-    iterate nc0 over s0 carrying a: NeedScan = NeedScan { rest: need, ok: true } {
+    iterate i over s0 carrying a: NeedScan = NeedScan { rest: need, ok: true } {
         next a = need_scan_step(s0, s1, s2, s3, st, a);
     }
-    iterate nc1 over s1 carrying b: NeedScan = a {
+    iterate i over s1 carrying b: NeedScan = a {
         next b = need_scan_step(s0, s1, s2, s3, st, b);
     }
-    iterate nc2 over s2 carrying c: NeedScan = b {
+    iterate i over s2 carrying c: NeedScan = b {
         next c = need_scan_step(s0, s1, s2, s3, st, c);
     }
-    iterate nc3 over s3 carrying d: NeedScan = c {
+    iterate i over s3 carrying d: NeedScan = c {
         next d = need_scan_step(s0, s1, s2, s3, st, d);
     }
     if d.ok { return st; }
     return sem_drain(sem_emit(st, 15, start, end, 1));
 }
 fn need_scan_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, acc: NeedScan) -> (result: NeedScan) {
-    if not(acc.ok) { return acc; }
+    if !(acc.ok) { return acc; }
     return match acc.rest {
         XNil => acc,
         XCons { head: h, tail: t } => need_scan_cons(s0, s1, s2, s3, st, acc, h, t)
@@ -3294,16 +3325,16 @@ fn apply_proj(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
 record RecFind { rest: RecordList, ns: u64, ne: u64, found: bool, decl: RecordDecl }
 record FieldScan { rest: FieldList, fs: u64, fe: u64, found: bool, field: Field }
 fn rec_lookup(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, rectab: RecordList, ns: u64, ne: u64) -> (result: RecFind) {
-    iterate rl0 over s0 carrying a: RecFind = RecFind { rest: rectab, ns: ns, ne: ne, found: false, decl: RecordDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, fields: FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0 } } {
+    iterate i over s0 carrying a: RecFind = RecFind { rest: rectab, ns: ns, ne: ne, found: false, decl: RecordDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, fields: FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0 } } {
         next a = rec_lookup_step(s0, s1, s2, s3, total, a);
     }
-    iterate rl1 over s1 carrying b: RecFind = a {
+    iterate i over s1 carrying b: RecFind = a {
         next b = rec_lookup_step(s0, s1, s2, s3, total, b);
     }
-    iterate rl2 over s2 carrying c: RecFind = b {
+    iterate i over s2 carrying c: RecFind = b {
         next c = rec_lookup_step(s0, s1, s2, s3, total, c);
     }
-    iterate rl3 over s3 carrying d: RecFind = c {
+    iterate i over s3 carrying d: RecFind = c {
         next d = rec_lookup_step(s0, s1, s2, s3, total, d);
     }
     return d;
@@ -3322,16 +3353,16 @@ fn rec_lookup_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
     return RecFind { rest: t, ns: st.ns, ne: st.ne, found: false, decl: st.decl };
 }
 fn field_scan(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, fs: u64, fe: u64) -> (result: FieldScan) {
-    iterate fd0 over s0 carrying a: FieldScan = FieldScan { rest: fields, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 } } {
+    iterate i over s0 carrying a: FieldScan = FieldScan { rest: fields, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 } } {
         next a = field_scan_step(s0, s1, s2, s3, total, a);
     }
-    iterate fd1 over s1 carrying b: FieldScan = a {
+    iterate i over s1 carrying b: FieldScan = a {
         next b = field_scan_step(s0, s1, s2, s3, total, b);
     }
-    iterate fd2 over s2 carrying c: FieldScan = b {
+    iterate i over s2 carrying c: FieldScan = b {
         next c = field_scan_step(s0, s1, s2, s3, total, c);
     }
-    iterate fd3 over s3 carrying d: FieldScan = c {
+    iterate i over s3 carrying d: FieldScan = c {
         next d = field_scan_step(s0, s1, s2, s3, total, d);
     }
     return d;
@@ -3351,11 +3382,11 @@ fn field_scan_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
 }
 fn proj_named(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, ns: u64, ne: u64, fs: u64, fe: u64, bs: u64, be: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let got: RecFind = rec_lookup(s0, s1, s2, s3, st.total, st.rectab, ns, ne);
-    if not(got.found) { return sem_drain(sem_emit(st, 23, bs, be, 1)); }
+    if !(got.found) { return sem_drain(sem_emit(st, 23, bs, be, 1)); }
     let fld: FieldScan = field_scan(s0, s1, s2, s3, st.total, got.decl.fields, fs, fe);
-    if not(fld.found) { return sem_drain(sem_emit(st, 22, fs, fe, 1)); }
+    if !(fld.found) { return sem_drain(sem_emit(st, 22, fs, fe, 1)); }
     let fty: TyRes = resolve_type(s0, s1, s2, s3, st.total, fld.field.type_kind, fld.field.type_start, fld.field.type_end, st.rectab, st.enumtab);
-    if not(fty.ok) {
+    if !(fty.ok) {
         return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end });
     }
     return finish_proj_exp(s0, s1, s2, s3, st, fty.ty, fs, fe, start, end, exp);
@@ -3434,16 +3465,16 @@ fn want_poison(w: ExpTy) -> (result: bool) {
 }
 record FldObl { rest: FieldList, obls: OblList }
 fn field_type_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
-    iterate fo0 over s0 carrying a: FldObl = FldObl { rest: fields, obls: OblList.LNil } {
+    iterate i over s0 carrying a: FldObl = FldObl { rest: fields, obls: OblList.LNil } {
         next a = field_obls_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate fo1 over s1 carrying b: FldObl = a {
+    iterate i over s1 carrying b: FldObl = a {
         next b = field_obls_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate fo2 over s2 carrying c: FldObl = b {
+    iterate i over s2 carrying c: FldObl = b {
         next c = field_obls_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate fo3 over s3 carrying d: FldObl = c {
+    iterate i over s3 carrying d: FldObl = c {
         next d = field_obls_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -3461,16 +3492,16 @@ fn field_obls_cons(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 
 }
 record ResCount { rest: FieldList, n: u64 }
 fn count_results_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], fields: FieldList) -> (result: u64) {
-    iterate rc0 over s0 carrying a: ResCount = ResCount { rest: fields, n: 0 } {
+    iterate i over s0 carrying a: ResCount = ResCount { rest: fields, n: 0 } {
         next a = count_results_step(a);
     }
-    iterate rc1 over s1 carrying b: ResCount = a {
+    iterate i over s1 carrying b: ResCount = a {
         next b = count_results_step(b);
     }
-    iterate rc2 over s2 carrying c: ResCount = b {
+    iterate i over s2 carrying c: ResCount = b {
         next c = count_results_step(c);
     }
-    iterate rc3 over s3 carrying d: ResCount = c {
+    iterate i over s3 carrying d: ResCount = c {
         next d = count_results_step(d);
     }
     return d.n;
@@ -3483,26 +3514,26 @@ fn count_results_step(st: ResCount) -> (result: ResCount) {
 // `if` suspends its parent list in a frame while each arm proves in a
 // pushed scope. Obligation lists stay in source order throughout: proved
 // expressions arrive ordered, single obligations append behind them.
-record StmtFrame { after: StmtList, saved_env: ScopeStack, else_b: StmtList, phase: u64 }
+record StmtFrame { next: StmtList, saved_env: ScopeStack, else_b: StmtList, phase: u64 }
 enum StmtFrames { BrNil, BrCons { head: StmtFrame, tail: StmtFrames } }
 record StmtWalk { rest: StmtList, frames: StmtFrames, env: ScopeStack, closed: bool, ok: bool, obls: OblList, tops: TopsList, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList, total: u64 }
 fn prove_stmts(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], w: StmtWalk) -> (result: StmtWalk) {
-    iterate sw0 over s0 carrying a: StmtWalk = w {
+    iterate i over s0 carrying a: StmtWalk = w {
         next a = prove_stmt_step(s0, s1, s2, s3, a);
     }
-    iterate sw1 over s1 carrying b: StmtWalk = a {
+    iterate i over s1 carrying b: StmtWalk = a {
         next b = prove_stmt_step(s0, s1, s2, s3, b);
     }
-    iterate sw2 over s2 carrying c: StmtWalk = b {
+    iterate i over s2 carrying c: StmtWalk = b {
         next c = prove_stmt_step(s0, s1, s2, s3, c);
     }
-    iterate sw3 over s3 carrying d: StmtWalk = c {
+    iterate i over s3 carrying d: StmtWalk = c {
         next d = prove_stmt_step(s0, s1, s2, s3, d);
     }
     return d;
 }
 fn prove_stmt_step(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk) -> (result: StmtWalk) {
-    if not(st.ok) { return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil }; }
+    if !(st.ok) { return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil }; }
     return match st.rest {
         SNil => unwind_or_done(st),
         SCons { head: h, tail: t } => prove_stmt_cons(s0, s1, s2, s3, st, h, t)
@@ -3524,14 +3555,14 @@ fn unwind_or_done(st: StmtWalk) -> (result: StmtWalk) {
 }
 fn unwind_frame(st: StmtWalk, f: StmtFrame, t: StmtFrames) -> (result: StmtWalk) {
     if f.phase == 0 {
-        let frame: StmtFrame = StmtFrame { after: f.after, saved_env: f.saved_env, else_b: f.else_b, phase: 1 };
+        let frame: StmtFrame = StmtFrame { next: f.next, saved_env: f.saved_env, else_b: f.else_b, phase: 1 };
         return StmtWalk { ..st, rest: f.else_b, frames: StmtFrames.BrCons { head: frame, tail: t }, env: push_scope(f.saved_env), closed: false };
     }
-    return StmtWalk { ..st, rest: f.after, frames: t, env: f.saved_env, closed: false };
+    return StmtWalk { ..st, rest: f.next, frames: t, env: f.saved_env, closed: false };
 }
 fn close_and(a: bool, b: bool) -> (result: bool) {
-    if not(a) { return false; }
-    if not(b) { return false; }
+    if !(a) { return false; }
+    if !(b) { return false; }
     return true;
 }
 fn prove_one_stmt(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, h: Stmt, t: StmtList) -> (result: StmtWalk) {
@@ -3549,9 +3580,9 @@ fn prove_let(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
     let want: ExpTy = ExpTy.XSome { ty: declared };
     let res: ExprRes = prove_expr(s0, s1, s2, s3, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, st.total, v, want);
     let obls1: OblList = append_obls(s0, s1, s2, s3, append_obls(s0, s1, s2, s3, st.obls, tob), res.obls);
-    if not(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
-    if not(skip_verify(res.ty, want)) {
-        if not(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
+    if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
+    if !(skip_verify(res.ty, want)) {
+        if !(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
             return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil, ok: false, obls: obls1, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
         }
     }
@@ -3574,7 +3605,7 @@ fn match_obl(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s
     return append_obls(s0, s1, s2, s3, obls, obl);
 }
 fn dup_obl(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, bind: BindRes, obls: OblList, a: u64, b: u64) -> (result: OblList) {
-    if not(bind.dup) { return obls; }
+    if !(bind.dup) { return obls; }
     let obl: OblList = OblList.LCons { head: Obligation { kind: 5, start: a, end: b, status: 1 }, tail: OblList.LNil };
     return append_obls(s0, s1, s2, s3, obls, obl);
 }
@@ -3582,9 +3613,9 @@ fn prove_if(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3
     let want: ExpTy = ExpTy.XSome { ty: SemType.TBool };
     let res: ExprRes = prove_expr(s0, s1, s2, s3, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, st.total, c, want);
     let obls1: OblList = append_obls(s0, s1, s2, s3, st.obls, res.obls);
-    if not(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
-    if not(skip_verify(res.ty, want)) {
-        if not(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
+    if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
+    if !(skip_verify(res.ty, want)) {
+        if !(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
             return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil, ok: false, obls: obls1, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
         }
     }
@@ -3595,7 +3626,7 @@ fn prove_if(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3
     return prove_if_reject(s0, s1, s2, s3, st, t, c, obls1, tops1);
 }
 fn prove_if_arms(st: StmtWalk, t: StmtList, tb: StmtList, eb: StmtList, obls1: OblList, tops1: TopsList) -> (result: StmtWalk) {
-    let frame: StmtFrame = StmtFrame { after: t, saved_env: st.env, else_b: eb, phase: 0 };
+    let frame: StmtFrame = StmtFrame { next: t, saved_env: st.env, else_b: eb, phase: 0 };
     return StmtWalk { ..st, rest: tb, frames: StmtFrames.BrCons { head: frame, tail: st.frames }, env: push_scope(st.env), closed: false, obls: obls1, tops: tops1 };
 }
 fn prove_if_reject(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, c: Expr, obls1: OblList, tops1: TopsList) -> (result: StmtWalk) {
@@ -3625,7 +3656,7 @@ fn prove_return_val(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
 }
 fn prove_return_name(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: StmtWalk, t: StmtList, ns: u64, ne: u64, qs: u64, qe: u64) -> (result: StmtWalk) {
     let got: LookupRes = env_lookup(s0, s1, s2, s3, st.total, st.env, ns, ne);
-    if not(got.found) {
+    if !(got.found) {
         let obl: OblList = OblList.LCons { head: Obligation { kind: 1, start: ns, end: ne, status: 1 }, tail: OblList.LNil };
         return StmtWalk { ..st, rest: t, obls: append_obls(s0, s1, s2, s3, st.obls, obl) };
     }
@@ -3638,9 +3669,9 @@ fn prove_return_expr(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_t
     let want: ExpTy = ExpTy.XSome { ty: st.sig.result };
     let res: ExprRes = prove_expr(s0, s1, s2, s3, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, st.total, v, want);
     let obls1: OblList = append_obls(s0, s1, s2, s3, st.obls, res.obls);
-    if not(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
-    if not(skip_verify(res.ty, want)) {
-        if not(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
+    if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
+    if !(skip_verify(res.ty, want)) {
+        if !(verify_tops(s0, s1, s2, s3, st.total, res.tops, ExpTy.XNone)) {
             return StmtWalk { ..st, rest: StmtList.SNil, frames: StmtFrames.BrNil, ok: false, obls: obls1, tops: TopsList.TLCons { head: res.tops, tail: st.tops } };
         }
     }
@@ -3679,16 +3710,16 @@ fn frames_stuck(frames: StmtFrames) -> (result: bool) {
 }
 record TopsLRev { rest: TopsList, acc: TopsList }
 fn topslist_reverse(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], list: TopsList) -> (result: TopsList) {
-    iterate tl0 over s0 carrying a: TopsLRev = TopsLRev { rest: list, acc: TopsList.TLNil } {
+    iterate i over s0 carrying a: TopsLRev = TopsLRev { rest: list, acc: TopsList.TLNil } {
         next a = topslist_reverse_step(a);
     }
-    iterate tl1 over s1 carrying b: TopsLRev = a {
+    iterate i over s1 carrying b: TopsLRev = a {
         next b = topslist_reverse_step(b);
     }
-    iterate tl2 over s2 carrying c: TopsLRev = b {
+    iterate i over s2 carrying c: TopsLRev = b {
         next c = topslist_reverse_step(c);
     }
-    iterate tl3 over s3 carrying d: TopsLRev = c {
+    iterate i over s3 carrying d: TopsLRev = c {
         next d = topslist_reverse_step(d);
     }
     return d.acc;
@@ -3699,16 +3730,16 @@ fn topslist_reverse_step(st: TopsLRev) -> (result: TopsLRev) {
 record TopsLPrepend { rest: TopsList, acc: TopsList }
 fn append_topslist(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], first: TopsList, second: TopsList) -> (result: TopsList) {
     let rev: TopsList = topslist_reverse(s0, s1, s2, s3, first);
-    iterate ta0 over s0 carrying a: TopsLPrepend = TopsLPrepend { rest: rev, acc: second } {
+    iterate i over s0 carrying a: TopsLPrepend = TopsLPrepend { rest: rev, acc: second } {
         next a = append_topslist_step(a);
     }
-    iterate ta1 over s1 carrying b: TopsLPrepend = a {
+    iterate i over s1 carrying b: TopsLPrepend = a {
         next b = append_topslist_step(b);
     }
-    iterate ta2 over s2 carrying c: TopsLPrepend = b {
+    iterate i over s2 carrying c: TopsLPrepend = b {
         next c = append_topslist_step(c);
     }
-    iterate ta3 over s3 carrying d: TopsLPrepend = c {
+    iterate i over s3 carrying d: TopsLPrepend = c {
         next d = append_topslist_step(d);
     }
     return d.acc;
@@ -3723,16 +3754,16 @@ fn append_topslist_step(st: TopsLPrepend) -> (result: TopsLPrepend) {
 record SigTabRep { tab: SigTab, obls: OblList }
 record SigWalk { rest: FnList, tab: SigTab, obls: OblList }
 fn collect_sigtab(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fns: FnList, rectab: RecordList, enumtab: EnumList) -> (result: SigTabRep) {
-    iterate sg0 over s0 carrying a: SigWalk = SigWalk { rest: fns, tab: SigTab.HNil, obls: OblList.LNil } {
+    iterate i over s0 carrying a: SigWalk = SigWalk { rest: fns, tab: SigTab.HNil, obls: OblList.LNil } {
         next a = collect_sigtab_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate sg1 over s1 carrying b: SigWalk = a {
+    iterate i over s1 carrying b: SigWalk = a {
         next b = collect_sigtab_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate sg2 over s2 carrying c: SigWalk = b {
+    iterate i over s2 carrying c: SigWalk = b {
         next c = collect_sigtab_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate sg3 over s3 carrying d: SigWalk = c {
+    iterate i over s3 carrying d: SigWalk = c {
         next d = collect_sigtab_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return SigTabRep { tab: d.tab, obls: d.obls };
@@ -3758,16 +3789,16 @@ fn is_type_obl_kind(k: u64) -> (result: bool) {
 }
 record OblKeep { rest: OblList, acc: OblList, keep: bool }
 fn obl_filter_types(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList, keep: bool) -> (result: OblList) {
-    iterate fk0 over s0 carrying a: OblKeep = OblKeep { rest: obls, acc: OblList.LNil, keep: keep } {
+    iterate i over s0 carrying a: OblKeep = OblKeep { rest: obls, acc: OblList.LNil, keep: keep } {
         next a = obl_filter_step(a);
     }
-    iterate fk1 over s1 carrying b: OblKeep = a {
+    iterate i over s1 carrying b: OblKeep = a {
         next b = obl_filter_step(b);
     }
-    iterate fk2 over s2 carrying c: OblKeep = b {
+    iterate i over s2 carrying c: OblKeep = b {
         next c = obl_filter_step(c);
     }
-    iterate fk3 over s3 carrying d: OblKeep = c {
+    iterate i over s3 carrying d: OblKeep = c {
         next d = obl_filter_step(d);
     }
     return reverse_obls(s0, s1, s2, s3, d.acc);
@@ -3791,16 +3822,16 @@ fn obl_only_types(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
 }
 record BodyWalk { rest: FnList, tab: SigTab, rectab: RecordList, enumtab: EnumList, total: u64, obls: OblList, tops: TopsList, ok: bool, n: u64 }
 fn prove_bodies(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: BodyWalk) -> (result: BodyWalk) {
-    iterate pb0 over s0 carrying a: BodyWalk = st {
+    iterate i over s0 carrying a: BodyWalk = st {
         next a = prove_bodies_step(s0, s1, s2, s3, a);
     }
-    iterate pb1 over s1 carrying b: BodyWalk = a {
+    iterate i over s1 carrying b: BodyWalk = a {
         next b = prove_bodies_step(s0, s1, s2, s3, b);
     }
-    iterate pb2 over s2 carrying c: BodyWalk = b {
+    iterate i over s2 carrying c: BodyWalk = b {
         next c = prove_bodies_step(s0, s1, s2, s3, c);
     }
-    iterate pb3 over s3 carrying d: BodyWalk = c {
+    iterate i over s3 carrying d: BodyWalk = c {
         next d = prove_bodies_step(s0, s1, s2, s3, d);
     }
     return d;
@@ -3842,16 +3873,16 @@ fn sig_rest_obls(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64
 }
 record OblKindKeep { rest: OblList, acc: OblList, want: u64 }
 fn obl_only_kind(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList, want: u64) -> (result: OblList) {
-    iterate kk0 over s0 carrying a: OblKindKeep = OblKindKeep { rest: obls, acc: OblList.LNil, want: want } {
+    iterate i over s0 carrying a: OblKindKeep = OblKindKeep { rest: obls, acc: OblList.LNil, want: want } {
         next a = obl_kind_step(a);
     }
-    iterate kk1 over s1 carrying b: OblKindKeep = a {
+    iterate i over s1 carrying b: OblKindKeep = a {
         next b = obl_kind_step(b);
     }
-    iterate kk2 over s2 carrying c: OblKindKeep = b {
+    iterate i over s2 carrying c: OblKindKeep = b {
         next c = obl_kind_step(c);
     }
-    iterate kk3 over s3 carrying d: OblKindKeep = c {
+    iterate i over s3 carrying d: OblKindKeep = c {
         next d = obl_kind_step(d);
     }
     return reverse_obls(s0, s1, s2, s3, d.acc);
@@ -3868,16 +3899,16 @@ fn obl_kind_cons(st: OblKindKeep, h: Obligation, t: OblList) -> (result: OblKind
 }
 record FailScan { rest: OblList, found: bool }
 fn obl_has_fail(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], obls: OblList) -> (result: bool) {
-    iterate fh0 over s0 carrying a: FailScan = FailScan { rest: obls, found: false } {
+    iterate i over s0 carrying a: FailScan = FailScan { rest: obls, found: false } {
         next a = obl_fail_step(a);
     }
-    iterate fh1 over s1 carrying b: FailScan = a {
+    iterate i over s1 carrying b: FailScan = a {
         next b = obl_fail_step(b);
     }
-    iterate fh2 over s2 carrying c: FailScan = b {
+    iterate i over s2 carrying c: FailScan = b {
         next c = obl_fail_step(c);
     }
-    iterate fh3 over s3 carrying d: FailScan = c {
+    iterate i over s3 carrying d: FailScan = c {
         next d = obl_fail_step(d);
     }
     return d.found;
@@ -3896,7 +3927,7 @@ fn obl_fail_cons(st: FailScan, h: Obligation, t: OblList) -> (result: FailScan) 
 record UnitProve { ok: bool, err_start: u64, err_end: u64, obls: OblList, tops: TopsList, fn_count: u64 }
 fn prove_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: UnitProve) {
     let u: Unit = parse_unit(s0, s1, s2, s3, total);
-    if not(u.ok) { return UnitProve { ok: false, err_start: u.err_start, err_end: u.err_end, obls: OblList.LNil, tops: TopsList.TLNil, fn_count: 0 }; }
+    if !(u.ok) { return UnitProve { ok: false, err_start: u.err_start, err_end: u.err_end, obls: OblList.LNil, tops: TopsList.TLNil, fn_count: 0 }; }
     let names: NameList = collect_fn_names(s0, s1, s2, s3, u.fns);
     let dup: DupReport = duplicate_fn_names(s0, s1, s2, s3, total, names);
     if dup.found {
@@ -3905,7 +3936,7 @@ fn prove_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
     }
     let sigs: SigTabRep = collect_sigtab(s0, s1, s2, s3, total, u.fns, u.records, u.enums);
     let done: BodyWalk = prove_bodies(s0, s1, s2, s3, BodyWalk { rest: u.fns, tab: sigs.tab, rectab: u.records, enumtab: u.enums, total: total, obls: sigs.obls, tops: TopsList.TLNil, ok: true, n: 0 });
-    let ok: bool = close_and(done.ok, not(obl_has_fail(s0, s1, s2, s3, done.obls)));
+    let ok: bool = close_and(done.ok, !(obl_has_fail(s0, s1, s2, s3, done.obls)));
     return UnitProve { ok: ok, err_start: 0, err_end: 0, obls: done.obls, tops: done.tops, fn_count: done.n };
 }
 // Field type validity by declaration context (0 value, 1 record, 2 enum).
@@ -3956,16 +3987,16 @@ fn check_seq_field_type(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; u
 }
 record RecCheckState { rest: RecordList, obls: OblList }
 fn check_records(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, recs: RecordList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
-    iterate rc0 over s0 carrying a: RecCheckState = RecCheckState { rest: recs, obls: OblList.LNil } {
+    iterate i over s0 carrying a: RecCheckState = RecCheckState { rest: recs, obls: OblList.LNil } {
         next a = check_records_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate rc1 over s1 carrying b: RecCheckState = a {
+    iterate i over s1 carrying b: RecCheckState = a {
         next b = check_records_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate rc2 over s2 carrying c: RecCheckState = b {
+    iterate i over s2 carrying c: RecCheckState = b {
         next c = check_records_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate rc3 over s3 carrying d: RecCheckState = c {
+    iterate i over s3 carrying d: RecCheckState = c {
         next d = check_records_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -3982,16 +4013,16 @@ fn check_one_record(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to
 }
 record RecFieldState { rest: FieldList, seen: NameList, obls: OblList }
 fn check_record_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
-    iterate rf0 over s0 carrying a: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
+    iterate i over s0 carrying a: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
         next a = check_record_fields_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate rf1 over s1 carrying b: RecFieldState = a {
+    iterate i over s1 carrying b: RecFieldState = a {
         next b = check_record_fields_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate rf2 over s2 carrying c: RecFieldState = b {
+    iterate i over s2 carrying c: RecFieldState = b {
         next c = check_record_fields_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate rf3 over s3 carrying d: RecFieldState = c {
+    iterate i over s3 carrying d: RecFieldState = c {
         next d = check_record_fields_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -4013,16 +4044,16 @@ fn check_one_record_field(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte;
 }
 record EnumCheckState { rest: EnumList, obls: OblList }
 fn check_enums(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, enums: EnumList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
-    iterate ec0 over s0 carrying a: EnumCheckState = EnumCheckState { rest: enums, obls: OblList.LNil } {
+    iterate i over s0 carrying a: EnumCheckState = EnumCheckState { rest: enums, obls: OblList.LNil } {
         next a = check_enums_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate ec1 over s1 carrying b: EnumCheckState = a {
+    iterate i over s1 carrying b: EnumCheckState = a {
         next b = check_enums_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate ec2 over s2 carrying c: EnumCheckState = b {
+    iterate i over s2 carrying c: EnumCheckState = b {
         next c = check_enums_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate ec3 over s3 carrying d: EnumCheckState = c {
+    iterate i over s3 carrying d: EnumCheckState = c {
         next d = check_enums_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -4039,16 +4070,16 @@ fn check_one_enum(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 6
 }
 record VariantState { rest: VariantList, seen: NameList, obls: OblList }
 fn check_variants(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, variants: VariantList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
-    iterate vx0 over s0 carrying a: VariantState = VariantState { rest: variants, seen: NameList.NNil, obls: OblList.LNil } {
+    iterate i over s0 carrying a: VariantState = VariantState { rest: variants, seen: NameList.NNil, obls: OblList.LNil } {
         next a = check_variants_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate vx1 over s1 carrying b: VariantState = a {
+    iterate i over s1 carrying b: VariantState = a {
         next b = check_variants_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate vx2 over s2 carrying c: VariantState = b {
+    iterate i over s2 carrying c: VariantState = b {
         next c = check_variants_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate vx3 over s3 carrying d: VariantState = c {
+    iterate i over s3 carrying d: VariantState = c {
         next d = check_variants_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);
@@ -4069,16 +4100,16 @@ fn check_one_variant(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_t
     return VariantState { rest: t, seen: seen, obls: append_obls(s0, s1, s2, s3, pobls, st.obls) };
 }
 fn check_payload_fields(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64, fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
-    iterate pf0 over s0 carrying a: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
+    iterate i over s0 carrying a: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
         next a = check_payload_fields_step(s0, s1, s2, s3, total, a, rectab, enumtab);
     }
-    iterate pf1 over s1 carrying b: RecFieldState = a {
+    iterate i over s1 carrying b: RecFieldState = a {
         next b = check_payload_fields_step(s0, s1, s2, s3, total, b, rectab, enumtab);
     }
-    iterate pf2 over s2 carrying c: RecFieldState = b {
+    iterate i over s2 carrying c: RecFieldState = b {
         next c = check_payload_fields_step(s0, s1, s2, s3, total, c, rectab, enumtab);
     }
-    iterate pf3 over s3 carrying d: RecFieldState = c {
+    iterate i over s3 carrying d: RecFieldState = c {
         next d = check_payload_fields_step(s0, s1, s2, s3, total, d, rectab, enumtab);
     }
     return reverse_obls(s0, s1, s2, s3, d.obls);

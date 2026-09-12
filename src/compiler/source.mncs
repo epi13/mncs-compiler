@@ -1,4 +1,4 @@
-mncs 0.10;
+mncs 0.13;
 module mncs.compiler.source.v1;
 
 // Exact immutable input is supplied by the caller. No ambient file access.
@@ -19,4 +19,24 @@ fn ascii(source: [byte; up_to 64]) -> (result: bool) {
 
 fn span_valid(source: [byte; up_to 64], start: u64, end: u64) -> (result: bool) {
     return start <= end && end <= source.len;
+}
+
+// Human rendering of a byte offset: 1-based (line, column) matching
+// Stage-0's SourceSpan convention (line = newlines before the offset +
+// 1; column = bytes since the last newline + 1). Offsets past the end
+// clamp to the end, mirroring SourceSpan::at. Columns count BYTES, so
+// agreement with Stage-0 holds exactly on the admitted ASCII domain;
+// non-ASCII columns count scalar values there and stay out of scope
+// with the rest of CP-0002.
+record LineCol { line: u64, col: u64 }
+fn line_col(source: [byte; up_to 64], offset: u64) -> (result: LineCol) {
+    iterate i over source carrying st: LineCol = LineCol { line: 1, col: 1 } {
+        next st = line_step(source, offset, i, st);
+    }
+    return st;
+}
+fn line_step(source: [byte; up_to 64], offset: u64, pos: u64, st: LineCol) -> (result: LineCol) {
+    if pos >= offset { return st; }
+    if byte_at(source, pos) == 10 { return LineCol { line: st.line + 1, col: 1 }; }
+    return LineCol { line: st.line, col: st.col + 1 };
 }

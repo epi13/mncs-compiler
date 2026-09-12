@@ -1,4 +1,4 @@
-mncs 0.10;
+mncs 0.13;
 module mncs.compiler.lexer.v1;
 use mncs.compiler.source.v1 as source;
 
@@ -109,46 +109,37 @@ fn keyword(text: [byte; up_to 64], start: u64, end: u64) -> (result: u64) {
     return 4;
 }
 
+// Two-character operators group under their first byte; the inner default is
+// the single-character kind, and the outer default is unknown (kind 7).
+// Scalar `match` checks exhaustiveness at elaboration (MNE140): adding a new
+// two-byte operator without extending its first-byte arm fails the build
+// instead of silently falling through.
 fn punctuation(a: u64, b: u64) -> (result: u64) {
-    if a == 45 && b == 62 { return 80; }
-    if a == 61 && b == 62 { return 81; }
-    if a == 38 && b == 38 { return 82; }
-    if a == 124 && b == 124 { return 83; }
-    if a == 61 && b == 61 { return 84; }
-    if a == 33 && b == 61 { return 85; }
-    if a == 60 && b == 61 { return 86; }
-    if a == 62 && b == 61 { return 87; }
-    if a == 60 && b == 60 { return 88; }
-    if a == 62 && b == 62 { return 89; }
-    if a == 46 && b == 46 { return 90; }
-    if a == 43 && b == 37 { return 91; }
-    if a == 45 && b == 37 { return 92; }
-    if a == 42 && b == 37 { return 93; }
-    if a == 43 && b == 124 { return 94; }
-    if a == 45 && b == 124 { return 95; }
-    if a == 42 && b == 124 { return 96; }
-    if a == 43 { return 50; }
-    if a == 45 { return 51; }
-    if a == 42 { return 52; }
-    if a == 47 { return 53; }
-    if a == 37 { return 54; }
-    if a == 38 { return 55; }
-    if a == 124 { return 56; }
-    if a == 94 { return 57; }
-    if a == 60 { return 58; }
-    if a == 62 { return 59; }
-    if a == 61 { return 60; }
-    if a == 46 { return 61; }
-    if a == 58 { return 62; }
-    if a == 59 { return 63; }
-    if a == 44 { return 64; }
-    if a == 40 { return 65; }
-    if a == 41 { return 66; }
-    if a == 123 { return 67; }
-    if a == 125 { return 68; }
-    if a == 91 { return 69; }
-    if a == 93 { return 70; }
-    return 7;
+    return match a {
+        45 => match b { 62 => 80, 37 => 92, 124 => 95, _ => 51 },
+        61 => match b { 62 => 81, 61 => 84, _ => 60 },
+        38 => match b { 38 => 82, _ => 55 },
+        124 => match b { 124 => 83, _ => 56 },
+        33 => match b { 61 => 85, _ => 7 },
+        60 => match b { 61 => 86, 60 => 88, _ => 58 },
+        62 => match b { 61 => 87, 62 => 89, _ => 59 },
+        46 => match b { 46 => 90, _ => 61 },
+        43 => match b { 37 => 91, 124 => 94, _ => 50 },
+        42 => match b { 37 => 93, 124 => 96, _ => 52 },
+        47 => 53,
+        37 => 54,
+        94 => 57,
+        58 => 62,
+        59 => 63,
+        44 => 64,
+        40 => 65,
+        41 => 66,
+        123 => 67,
+        125 => 68,
+        91 => 69,
+        93 => 70,
+        _ => 7
+    };
 }
 
 fn next_token(text: [byte; up_to 64], start: u64) -> (result: Token) {
@@ -186,7 +177,7 @@ fn scan_step(text: [byte; up_to 64], st: Scan, line: bool, block: bool, word: bo
     // Preserve Stage-0's unusual continuation of dots after the first version dot.
     let dot: bool = number && a == 46 && (st.dotted || digit(b));
     let advance: bool = (line && a != 10) || (word && (letter(a) || digit(a))) || (number && (digit(a) || dot)) || (ws && space(a));
-    return Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: select(advance, false, true) };
+    return Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: !advance };
 }
 
 // Significant-token request; lexical failure is never discarded as trivia.
