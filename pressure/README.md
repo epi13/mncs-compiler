@@ -61,6 +61,7 @@ Use `0000-template.md` for new findings.
 | Finding | Priority for the next language run |
 | --- | --- |
 | [CP-0014: bool payload regression](0014-bool-payload-regression.md) | Blocking: decl/sem verticals cannot elaborate until fixed |
+| [CP-0015: version-aware frontend](0015-version-aware-frontend.md) | High: self-parsing gap for 0.13 syntax; decl package staged post-CP-0014 |
 
 The previous pass's closing note is superseded: recursive enums with
 scalar/finite/record payloads elaborate, construct, match, and compile
