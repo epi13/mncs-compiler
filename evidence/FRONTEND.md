@@ -41,6 +41,7 @@ obligations and conservative fallbacks, not a fully discharged proof (CP-0007).
 | `kernel.lex_summary` | Source → coverage, counts, first diagnostic span | ASCII admission, token computation, `token_shape` structural verifier |
 | `parser.header` / `kernel.parse_header` | Source → version/module spans, next cursor, first error | ASCII admission then lexical obligations and header grammar; ends at module semicolon |
 | `kernel.same_source` | Two exact byte values → equality | Full length/byte comparison; no hash collisions, no persistent hash claim |
+| `source.line_col` | Byte offset → 1-based (line, column) | Newline count + bytes-since-newline, clamped past the end; byte-exact agreement with Stage-0 spans on the ASCII domain (non-ASCII columns count scalars there: CP-0002) |
 
 The header grammar follows Stage-0: `mncs Version ; module Segment (. Segment)* ;`,
 where Segment is an identifier or the keyword `mncs`. Version syntax is lexical;

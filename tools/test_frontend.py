@@ -72,6 +72,15 @@ class Probe:
         assert self.proc.wait(timeout=30) == 0
 
 
+def ref_line_col(data: bytes, offset: int):
+    """Spec transcription of SourceSpan::at (ASCII domain): 1-based line
+    from newline count, column from bytes since the last newline."""
+    offset = min(offset, len(data))
+    line = data.count(b'\n', 0, offset) + 1
+    line_start = data.rfind(b'\n', 0, offset) + 1
+    return (line, offset - line_start + 1)
+
+
 def suite():
     probe = Probe()
     try:
@@ -102,6 +111,11 @@ def suite():
                 assert (kinds[str(token['kind'])], token['start'], token['end']) == (expected['kind'], span['start'], span['end']), (text, token, expected)
                 if token['diagnostic']:
                     observed_diagnostics.append((f"MNL{token['diagnostic']:03}", token['start'], token['end']))
+                # Oracle-anchored rendering: every token start carries Stage-0's
+                # own (line, column); the MNCS renderer must agree exactly.
+                span = expected['span']
+                rendered = probe.run('source', 'line_col', [blob(text), integer(span['start'])])
+                assert (rendered['line'], rendered['col']) == (span['line'], span['column']), (text, expected, rendered)
                 assert probe.run('kernel', 'token_shape', [blob(text)] + [integer(n) for n in [cursor, token['kind'], token['start'], token['end'], token['diagnostic']]])
                 cursor = token['end']
                 tokens += 1
@@ -109,6 +123,13 @@ def suite():
             assert observed_diagnostics == [(d['code'], d['span']['start'], d['span']['end']) for d in oracle['diagnostics']]
             eof = probe.run('lexer', 'next_token', [blob(text), integer(cursor)])
             assert eof == dict(kind=0, start=cursor, end=cursor, diagnostic=0)
+            # Exhaustive rendering cross-check (strided): every probed
+            # offset must match the SourceSpan::at transcription, including
+            # line starts, newline bytes, EOF, and past-the-end clamping.
+            data = text.encode() if isinstance(text, str) else bytes(text)
+            for offset in sorted(set([0, len(data), len(data) + 5] + list(range(0, len(data) + 1, 7)))):
+                rendered = probe.run('source', 'line_col', [blob(text), integer(offset)])
+                assert (rendered['line'], rendered['col']) == ref_line_col(data, offset), (text, offset, rendered)
         for case in fixtures['headers']:
             text = case['text']
             fact = probe.run('kernel', 'parse_header', [blob(text)])

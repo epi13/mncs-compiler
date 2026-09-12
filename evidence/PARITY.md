@@ -27,7 +27,7 @@ names its evidence; blocked rows name the blocker instead of guessing.
 | Declaration/expression parsing | full | **partial, blocked (CP-0014)**: 22-pos/16-neg structural + first-error-span differential at old pin; 0.13 migration parse-checked; 0.13-syntax gaps open (CP-0015) | `evidence/decl-results.json` (old pin); oracle parse-check |
 | AST construction fidelity | full | **partial, blocked**: structural parity with projection canonicalization; deferred shapes fail explicitly | DECL.md corpus notes |
 | Byte source spans | full | **parity**: exact spans on every compared token/decl/error | all suites |
-| Line/column rendering | full (line/col in every span) | **absent** | — |
+| Line/column rendering | full (line/col in every span) | **parity with known exceptions**: `source.line_col` agrees byte-exactly on ASCII (oracle-anchored per token + strided exhaustive); non-ASCII columns out of scope (CP-0002) | frontend suite |
 | Lexical/parse diagnostics (codes + spans) | full | **substantial**: MNL/MNP codes + spans compared; full message text not compared; recovery not modeled | frontend + segment suites |
 
 ## Semantics
