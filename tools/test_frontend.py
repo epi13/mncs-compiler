@@ -31,10 +31,18 @@ def decode(value):
     return next(iter(value.values()))['value']
 
 
+# Frontend scope: source/lexer/parser/kernel/segment only. `decl` is excluded
+# while CP-0014 (bool-payload regression) blocks its elaboration upstream;
+# this suite proves nothing about the declaration core until then.
+PROBE_MODULES = 'source,lexer,parser,kernel,segment'
+
+
 class Probe:
     def __init__(self):
+        env = dict(os.environ)
+        env['MNCS_PROBE_MODULES'] = PROBE_MODULES
         self.proc = subprocess.Popen(['.bootstrap/target/debug/mncs-compiler-stage0-probe'],
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env)
         self.count = 0
         self.steps = []
         self.digest = hashlib.sha256()
@@ -112,7 +120,11 @@ def suite():
                 assert fact['next_offset'] == module_node['span']['end']
                 oracle = probe.send({'oracle': text[:fact['next_offset']] + ' fn x(v:u64)->(r:u64){return v;}'})
                 if oracle['ast'] is None:
-                    assert all(d['stage'] == 'envelope' for d in oracle['diagnostics']), (case, oracle['diagnostics'])
+                    # Stage-0 discards the AST here and reports envelope rejection;
+                    # since the re-pin it additionally reports a parse-stage
+                    # profile gate (MNP008) for unknown versions. Require the
+                    # envelope diagnostic rather than stage exclusivity.
+                    assert any(d['stage'] == 'envelope' for d in oracle['diagnostics']), (case, oracle['diagnostics'])
                     for key in ['version', 'module']:
                         assert [fact[f'{key}_start'], fact[f'{key}_end']] == case[f'{key}_span']
                     continue

@@ -56,6 +56,12 @@ Use `0000-template.md` for new findings.
 | [CP-0012: payload sequence ban](0012-payload-sequence-ban.md) | Low: cons-list workaround is exact |
 | [CP-0013: keyword field next](0013-keyword-field-next.md) | Low: rename workaround is exact |
 
+## Re-pin pass (Stage-0 `a7a8c05`, profiles 0.13–0.16 available)
+
+| Finding | Priority for the next language run |
+| --- | --- |
+| [CP-0014: bool payload regression](0014-bool-payload-regression.md) | Blocking: decl/sem verticals cannot elaborate until fixed |
+
 The previous pass's closing note is superseded: recursive enums with
 scalar/finite/record payloads elaborate, construct, match, and compile
 (verified with 25 variants and 6-field payloads), and imported record
