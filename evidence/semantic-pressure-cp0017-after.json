@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "stage0_revision": "709ba00810099e6965bb47dec14ed19e9e1ae6f8",
+  "compiler_source_profile": "0.18",
+  "source_profile": "0.10 (historical reproductions retained)",
+  "native_execution_steps_total": 2660256,
+  "cases": [
+    {
+      "case": "binop-left-poison",
+      "source": "mncs 0.10; module t; fn g(a: u64) -> (r: bogus) { return a + 1; }",
+      "source_sha256": "12b95124520ab61d5ebacdbeaa85bda56c2222e6b110e57be4a6b3cf95b4f85d",
+      "rust_parse_diagnostics": [],
+      "rust_elaboration_diagnostics": [
+        {
+          "code": "MNE105",
+          "span": {
+            "start": 41,
+            "end": 46
+          }
+        },
+        {
+          "code": "MNE105",
+          "span": {
+            "start": 41,
+            "end": 46
+          }
+        },
+        {
+          "code": "MNE117",
+          "span": {
+            "start": 57,
+            "end": 58
+          }
+        },
+        {
+          "code": "MNE103",
+          "span": {
+            "start": 57,
+            "end": 62
+          }
+        }
+      ],
+      "native_status": "reproduced_match",
+      "native_identical_repetitions": 2,
+      "native_fail_obligations": [
+        {
+          "code": "MNE105",
+          "start": 41,
+          "end": 46
+        },
+        {
+          "code": "MNE105",
+          "start": 41,
+          "end": 46
+        },
+        {
+          "code": "MNE117",
+          "start": 57,
+          "end": 58
+        },
+        {
+          "code": "MNE103",
+          "start": 57,
+          "end": 62
+        }
+      ],
+      "native_ok": false
+    },
+    {
+      "case": "binop-right-poison",
+      "source": "mncs 0.10; module t; fn g(a: u64) -> (r: bogus) { return 0 + a; }",
+      "source_sha256": "65f29605bc32146e7167c58cd689a336fc00e37110b0aa16389966cb8eba72c0",
+      "rust_parse_diagnostics": [],
+      "rust_elaboration_diagnostics": [
+        {
+          "code": "MNE105",
+          "span": {
+            "start": 41,
+            "end": 46
+          }
+        },
+        {
+          "code": "MNE105",
+          "span": {
+            "start": 41,
+            "end": 46
+          }
+        },
+        {
+          "code": "MNE117",
+          "span": {
+            "start": 61,
+            "end": 62
+          }
+        },
+        {
+          "code": "MNE103",
+          "span": {
+            "start": 57,
+            "end": 62
+          }
+        }
+      ],
+      "native_status": "reproduced_match",
+      "native_identical_repetitions": 2,
+      "native_fail_obligations": [
+        {
+          "code": "MNE105",
+          "start": 41,
+          "end": 46
+        },
+        {
+          "code": "MNE105",
+          "start": 41,
+          "end": 46
+        },
+        {
+          "code": "MNE117",
+          "start": 61,
+          "end": 62
+        },
+        {
+          "code": "MNE103",
+          "start": 57,
+          "end": 62
+        }
+      ],
+      "native_ok": false
+    }
+  ],
+  "scope": "Two current compiler semantic recovery cases; ordered diagnostics and spans compared with current Rust Stage-0, with repeated native proof results."
+}

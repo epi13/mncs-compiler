@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "status": "reproduced_before_resolution",
+  "stage0_revision": "12b260ad4156a3c62918f47d02f8a2c63572a235",
+  "source_profile": "0.18",
+  "workload": {
+    "module": "mncs.compiler.flow.v1",
+    "function": "lower_unit",
+    "source_bytes": 91,
+    "source_sha256": "904c32a5db4ec4d98c23f650eb5d5b031f5efdab4d4b36000760538e46e2eeba",
+    "source": "mncs 0.18; module pressure.flow; fn f(x: bool) -> (r: u64) { if x { return 1; } return 2; }"
+  },
+  "body_execution_session": {
+    "status": "invalid_request",
+    "steps": 956379,
+    "callee": "mncs.compiler.decl.v1::block_step",
+    "argument_index": 5,
+    "reason": "argument does not match parameter st; expected and received values both report record type identity mncs:0.2:record-type:mncs.compiler.decl.v1::BlockState::cursor%3Au64%3Bdone%3Abool%3Berr_end%3Au64%3Berr_start%3Au64%3Bframes%3AFrameList%3Blist%3AStmtList%3Bmode%3Au64%3Bok%3Abool%3B"
+  },
+  "production_typed_call": {
+    "command": "mncs call src/compiler/flow.mncs --module mncs.compiler.flow.v1 --function lower_unit --args .build/flow-args.json --library src --step-budget 8000000 --no-cache",
+    "schema_version": "mncs.application-call/1",
+    "status": "invalid_request",
+    "artifact_identity": "mncs:compiler:backend-artifact:94b2312668b982083008f22bc054f237332897eacc00f903213dd60b6f0e8cad",
+    "artifact_sha256": "bd2bce2b1076a631cf6e0fba22c3951c1a307c96937daeb808855829ec31af51",
+    "backend": "mncs-research-bytecode",
+    "reused_session": true,
+    "steps": 956379,
+    "callee": "mncs.compiler.decl.v1::block_step",
+    "ssa_function_identity": "mncs:0.4:ssa:function:4a4ff75a2c6b658848a21dec6413cf8974a0d435e64d2548b8b7dbaa5cf0b130",
+    "argument_index": 5,
+    "failure_reason": "argument does not match SSA input type; expected and received values report the same BlockState record type identity"
+  },
+  "interpretation": "The two execution paths agree on the first failing imported call. Compilation and typed artifact admission succeed; execution fails after 956379 steps. This is runtime/SSA evidence, not a source parser diagnostic.",
+  "commons_reconciliation": {
+    "searched_head": "1d3d50bb4cc27c0793b97672ae7dd7f8dbad4de6",
+    "related_history": "EVT-5B0D821A94F41F1B",
+    "duplicate_current_record": false,
+    "note": "The related CP-0001/Store sequence-bound relation is about bounded storage. The resolved CP-0008 finite-payload visibility pressure is a compile-time import issue, not this post-compilation typed runtime call failure."
+  }
+}

@@ -2,7 +2,12 @@
 
 ID: CP-0011
 
-Status: partially resolved (2026-09-12)
+Status: partial; structural recursion accepted, general/mutual calls still rejected
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language | compiler-architecture
 
@@ -121,8 +126,9 @@ language | compiler architecture
 ## Evidence / reproduction
 
 The declaration core itself is the evidence: grep for `Frame`,
-`ExprState`, `BlockState`, and the eight-link fuel chains. Step counts
-per request class are recorded in `evidence/decl-results.json`.
+`ExprState`, `BlockState`, and the eight-link fuel chains. Historical step
+counts per request class are recorded in
+`evidence/decl-results-pre-campaign.json`.
 
 ## Upstream tracking
 
@@ -146,8 +152,13 @@ backend. What it does not change: the parser machines (shunting-yard,
 block frames, fuel loops) recurse over *derived* state (operator
 stacks, token cursors, frame stacks), not over a single match-bound
 finite parameter, so they do not fit the admitted shape — the machines
-are retained deliberately, not from inertia. A future pass could move
-pure tree folds (depth/size/counts over `Expr`/`Stmt`) to structural
-recursion once the suites run green (elaboration proof staged after
-CP-0014); the machine patterns stay for everything else. Fuel-
-exhaustion silence (shared with CP-0009) is unaddressed by this change.
+are retained deliberately, not from inertia. The current declaration suites
+now pass, but this campaign found no workload or cost evidence that warrants
+replacing the existing explicit-stack walks. They remain the single
+implementation while the current source/project boundary is addressed.
+Fuel-exhaustion silence (shared with CP-0009) is unaddressed by this language
+change.
+
+## Current reconciliation (2026-09-25)
+
+At profile 0.18 current Stage-0 accepts the recursive enum/tree `depth` reproduction, but rejects numeric self-recursion and mutual `even`/`odd` calls with MNE130. The latter two probes were added to `tools/revalidate_pressures.py`.

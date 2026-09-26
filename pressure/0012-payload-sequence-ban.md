@@ -2,7 +2,12 @@
 
 ID: CP-0012
 
-Status: resolved (2026-09-12)
+Status: resolved upstream for the preserved sequence-payload case
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language | compiler-architecture
 
@@ -125,3 +130,7 @@ the MNE171 refusal, the eleven list/reverse/fuel-loop triples, and the
 verified upside (recursive enums with scalar/finite/record payloads
 were always first-class). If a future tree node wants inline sequences,
 the capability is now available — no pressure remains.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the preserved finite sequence payload fixture at profile 0.18.

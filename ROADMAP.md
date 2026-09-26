@@ -25,44 +25,64 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
-Current evidence-backed slice (see [frontend evidence](evidence/FRONTEND.md),
-[segment evidence](evidence/SEGMENT.md), [declaration evidence](evidence/DECL.md),
-and the [parity matrix](evidence/PARITY.md)):
+## Current evidence-backed campaign state (2026-09-25)
 
-- implemented: bounded immutable byte inputs, guarded reads, span validation,
-  1-based line/column rendering, ASCII lexer, nested comments, lexical errors,
-  coverage evidence and source equality — all as profile-0.13 sources with
-  native negation, total scalar-`match` dispatch, and reused iteration names;
-- implemented (segment vertical, 256-byte units): absolute-offset lexical
-  twins over four chunks with oracle kind/span/diagnostic parity, proven by
-  a dedicated 10679-request twin differential;
-- implemented at the previous pin, migrated to 0.13 and parse-checked,
-  awaiting elaboration proof (blocked: CP-0014 bool-payload regression):
-  declaration parsing with first-error-span parity, function-name symbols,
-  resolve/span walking, depth-checked stack IR; signature facts, bidirectional
-  proof with fused typed lowering, whole-unit proofs, type-stack verifier,
-  and FAIL-obligation parity (49 cases);
-- partially implemented: structured diagnostics and pure source-unit fact requests;
-- resolved since the last update: finite-payload visibility (CP-0008),
-  scalar match dispatch (CP-0010), payload sequence ban (CP-0012), keyword
-  field `next` (CP-0013), boolean comparison/negation (CP-0004); partially
-  resolved: source ceilings 64→1024 (CP-0001), Unicode decoder substrate
-  (CP-0002), iteration reuse + 1024 bounds (CP-0009), structural recursion
-  (CP-0011, machines retained deliberately);
-- blocked for whole-module scale: source storage past 1024 bytes (CP-0001
-  remainder); Unicode property tables (CP-0002 remainder);
-- not started: imports, ownership checks, backend lowering (expression/statement
-  type and effect-cover checks are implemented; capability authorization at
-  calls is signature-level only); version-aware 0.13-syntax parsing (CP-0015);
-- intentionally deferred: persisted fact IDs/cache, service/coordinator, distributed
-  or learned features, Rust succession and self-hosting.
+The lock pins Rust Stage-0 revision
+`709ba00810099e6965bb47dec14ed19e9e1ae6f8` at source Profile 0.18. All seven
+compiler modules declare 0.18. The refreshed [parity matrix](evidence/PARITY.md)
+and machine-readable [ledger](evidence/parity-ledger.json) supersede this
+roadmap's earlier pin-era descriptions.
 
-Next: land the upstream bool-payload fix and re-run the declaration/semantic
-suites; then implement version-aware parsing (CP-0015), split tree layers into
-modules (enabled by CP-0008's fix), and grow unit capacity toward whole
-modules (CP-0001 remainder). Record sequences already elaborate; do not assume
-every collection problem requires a new language feature. Source Profile 0.13
-is the implementation profile on the current pin (`mncs-language.lock.json`).
+- The frontend and declaration implementations are still bounded: the
+  declaration ABI is four 64-byte chunks (256 bytes total). The old Stage-0
+  64-byte source ceiling is stale; current Rust accepts the preserved 65-byte
+  source probe. The 256-byte boundary is a compiler input/representation limit,
+  not a language capacity claim.
+- The five tested Profile 0.18 forms in CP-0015 are accepted by current Rust
+  and rejected by native `decl.parse_unit`; current evidence is in
+  `evidence/profile-surface-results.json`. Unicode and full project-source
+  resolution are also absent from the native frontend.
+- CP-0014's bool-payload regression and compiler-origin CP-0016's nested
+  imported-record runtime rejection are resolved in `mncs-language` revision
+  `709ba008`. The current declaration parse/check differential passes twice;
+  the separate 49-case semantic proof twin plus five verifier verdicts also
+  passes twice at this pin.
+- CP-0017 is compiler semantic drift, not language pressure. Its two minimal
+  poisoned-result cases now match Rust's ordered diagnostics and spans in
+  repeated native runs; the full 49-case semantic twin plus five verifier
+  verdicts also passes twice at the current pin. See
+  `evidence/semantic-pressure-cp0017-after.json` and
+  `evidence/sem-results.json`.
+- `flow.mncs` adds a compiler-owned pass from proved declarations and typed
+  stack operations to explicit branch/jump/return/failure blocks with target
+  and reachable-join checks. Four current-profile CFG cases pass repeated
+  native runs and Rust differential checks, including positive branch/return
+  shape and complete typed-operation preservation. No Rust-equivalent value
+  SSA, native project resolver, or compiler-produced executable artifact is
+  claimed.
+- Historical pressure reproductions are re-run against current Rust in
+  `evidence/pressure-current-results.json`; their old histories remain in
+  `pressure/`. Current statuses distinguish language behavior from compiler,
+  runtime, and tooling ownership.
+- Current-profile declaration, semantic, frontend, and segment twins now have
+  current-pin durable results, and linked artifact compile cost has been
+  remeasured at the current pin. The
+  native parser still rejects the five CP-0015 Profile 0.18 forms, and the
+  four-chunk 256-byte unit plus absent project resolver remain compiler
+  architecture limits.
+- The RAVEL impact query for `flow.lower_unit` returned UNKNOWN after its
+  180-second impact and test-inventory commands timed out. No zero-obligation
+  closure is inferred; the direct current-pin compiler suites are recorded in
+  `evidence/README.md` and the exact RAVEL result in
+  `evidence/ravel-impact-flow.json`.
+
+The highest-leverage next slice is a current-profile project-source path:
+version-aware syntax, module/import resolution, and a source representation
+beyond the legacy 256-byte unit. It should feed the existing declaration/proof
+and CFG passes before attempting Rust's value-carrying body/SSA and target
+lowering.
+Record-sequence acceptance in Stage-0 is not evidence that the native compiler
+has a project collection or module model.
 
 Architecture may already use fact/obligation boundaries even when evaluation is single-threaded and uncached.
 

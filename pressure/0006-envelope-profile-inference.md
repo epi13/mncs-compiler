@@ -1,6 +1,11 @@
 # CP-0006 — Stage-0 envelope inference disagrees with leading-comment syntax
 
-Status: open, re-confirmed (2026-09-12). Category: tooling,
+Status: open; MNE002 reproduced at profile 0.18
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 compiler-architecture. Severity: medium. Frequency: occasional.
 Upstream tracking: none; re-probed at 0.13 (MNE002 persists) and the
 frontend suite now also pins the MNP008 parse-stage companion.
@@ -37,3 +42,7 @@ rather than stage exclusivity — same workaround, wider oracle shape).
 The kernel contract is unchanged and still the right layering: syntax
 facts first, envelope/profile validity as later obligations. No
 language change needed; this stays a Stage-0 tooling agreement issue.
+
+## Current reconciliation (2026-09-25)
+
+The current pinned CLI still emits MNE002 for the preserved leading-comment envelope case. This is Stage-0 tooling/envelope behavior.

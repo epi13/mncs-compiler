@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "stage0_revision": "709ba00810099e6965bb47dec14ed19e9e1ae6f8",
+  "compiler_module_profile": "0.18",
+  "case": "binop-right-poison",
+  "source": "mncs 0.10; module t; fn g(a: u64) -> (r: bogus) { return 0 + a; }",
+  "source_sha256": "65f29605bc32146e7167c58cd689a336fc00e37110b0aa16389966cb8eba72c0",
+  "rust_diagnostics": [
+    {
+      "code": "MNE105",
+      "span": [
+        41,
+        46
+      ]
+    },
+    {
+      "code": "MNE105",
+      "span": [
+        41,
+        46
+      ]
+    },
+    {
+      "code": "MNE117",
+      "span": [
+        61,
+        62
+      ]
+    },
+    {
+      "code": "MNE103",
+      "span": [
+        57,
+        62
+      ]
+    }
+  ],
+  "native_proof": {
+    "ok": false,
+    "fail_obligations": [
+      {
+        "kind": 19,
+        "code": "MNE105",
+        "span": [
+          41,
+          46
+        ],
+        "status": 1
+      },
+      {
+        "kind": 19,
+        "code": "MNE105",
+        "span": [
+          41,
+          46
+        ],
+        "status": 1
+      },
+      {
+        "kind": 3,
+        "code": "MNE118",
+        "span": [
+          57,
+          58
+        ],
+        "status": 1
+      },
+      {
+        "kind": 2,
+        "code": "MNE117",
+        "span": [
+          61,
+          62
+        ],
+        "status": 1
+      },
+      {
+        "kind": 7,
+        "code": "MNE119",
+        "span": [
+          57,
+          62
+        ],
+        "status": 1
+      }
+    ],
+    "raw_fail_obligations": [
+      {
+        "end": 46,
+        "kind": 19,
+        "start": 41,
+        "status": 1
+      },
+      {
+        "end": 46,
+        "kind": 19,
+        "start": 41,
+        "status": 1
+      },
+      {
+        "end": 58,
+        "kind": 3,
+        "start": 57,
+        "status": 1
+      },
+      {
+        "end": 62,
+        "kind": 2,
+        "start": 61,
+        "status": 1
+      },
+      {
+        "end": 62,
+        "kind": 7,
+        "start": 57,
+        "status": 1
+      }
+    ],
+    "steps": 660889
+  },
+  "status": "mismatch"
+}

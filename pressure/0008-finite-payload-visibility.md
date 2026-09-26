@@ -2,7 +2,12 @@
 
 ID: CP-0008
 
-Status: resolved (2026-09-12)
+Status: resolved for the preserved producer/consumer reproductions
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language | backend | compiler-architecture
 
@@ -164,11 +169,15 @@ diagnostics, at both 0.10 and 0.13 profiles: the fix is not
 profile-gated.) The 0.13 three-segment form `t.E.Name { ... }`
 (ENG-0007) also elaborates across modules in the same test.
 
-History preserved above: the homing-rule workaround that forced all
-tree types into `mncs.compiler.decl.v1`, its cost (monolithic core
-module, late lowering-stage discovery), and the grammar limit that
-motivated it. The consolidation is *retained for now* — splitting tree
-layers into separate modules is staged as follow-up work once the
-declaration suites run green again (blocked: CP-0014) — but it is now a
-design choice, not a language constraint. The `decl.mncs` module comment
-was updated to say so.
+History preserved above: the homing-rule workaround that forced all tree
+types into `mncs.compiler.decl.v1`, its cost (monolithic core module, late
+lowering-stage discovery), and the grammar limit that motivated it. The
+compiler still has one tree owner. CP-0014/CP-0016 no longer block passing
+these finite payloads across module boundaries; no split or duplicate tree
+implementation is required for current callers. The source module comment now
+records that placement as the current representation rule, not a language
+constraint.
+
+## Current reconciliation (2026-09-25)
+
+Both staged profile-0.18 producer and imported-consumer fixtures are accepted by current Stage-0. This does not establish that the MNCS compiler owns multi-module source resolution.

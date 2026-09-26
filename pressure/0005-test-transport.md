@@ -1,6 +1,11 @@
 # CP-0005 — Bootstrap differential tests need a host test transport
 
-Status: open, re-confirmed (2026-09-12). Category: tooling,
+Status: open, reduced; retained Rust sessions are now used
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 compiler-architecture. Severity: medium. Frequency: every evidence run.
 Upstream tracking: none; probe gained `MNCS_PROBE_MODULES` narrowing
 (this campaign) but the transport shape is unchanged.
@@ -34,3 +39,7 @@ kernel timing. Determinism: compare normalized values and step counts twice;
 wall time is excluded. Complexity: a small removable adapter and JSON transport.
 Desired capability: reusable raw syntax-fact and MNCS test execution interfaces.
 Likely ownership: tooling and compiler test architecture.
+
+## Current reconciliation (2026-09-25)
+
+The current Stage-0 probe reuses compiled modules and retained execution sessions, but Python still transports requests and oracle facts. This remains removable tooling, not production compiler semantics.

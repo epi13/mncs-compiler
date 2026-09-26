@@ -2,7 +2,12 @@
 
 ID: CP-0015
 
-Status: open
+Status: open; all five Profile 0.18 parser probes reproduced against native decl.parse_unit
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language | compiler-architecture
 
@@ -26,11 +31,11 @@ MNCS frontend layers are version-unaware byte scanners:
 | `next` as field name | ordinary member name | record/finite field parse refusal (old MNP127 shape) |
 | integer `match` arms + `_` | admitted with MNE140 totality | arm parse refusal (old MNP084 shape) |
 
-The `!` row is differentially proven below. The remaining rows are
-predicted from code inspection of `decl.mncs` (which encodes the old
-refusals); their differential proof is pending CP-0014, because the
-declaration core cannot elaborate until the bool-payload regression is
-fixed.
+At the time this finding was first written, only the `!` row had direct
+oracle evidence and the other native refusals were predictions from
+`decl.mncs`. The current Profile 0.18 differential now confirms that Rust
+accepts all five forms and native `decl.parse_unit` rejects all five; see
+[`evidence/profile-surface-results.json`](../evidence/profile-surface-results.json).
 
 ## Compiler workload
 
@@ -141,9 +146,9 @@ implicitly — full program texts).
   diagnostics; `lexer.next_token` on the same bytes yields
   `(kind 7, diagnostic 2)`. Snippet-level control (no header): both
   sides agree on `unknown` + MNL002, which is why current suites pass.
-- Parser rows: `mncs abi` exit 0 on all four programs at 0.13 on the
-  current pin (re-pin survey); MNCS-side divergence predicted from
-  `decl.mncs` refusal shapes, differential proof pending CP-0014.
+- Parser rows: current Profile 0.18 Stage-0 emits no diagnostics for all five
+  source forms; native `decl.parse_unit` returns `parse_ok=false` with the
+  exact spans recorded in `evidence/profile-surface-results.json`.
 
 ## Upstream tracking
 
@@ -151,3 +156,7 @@ implicitly — full program texts).
   upstream only if a test-transport or spec clarification is needed)
 - Resolution revision:
 - Follow-up evidence in this repository:
+
+## Current reconciliation (2026-09-25)
+
+Current Rust Stage-0 accepts all five source forms: `!`, a negative atom, `[v; N]`, a `next` field, and integer `match`. The native declaration parser returns `parse_ok=false` for all five (spans [66,67], [58,59], [60,60], [43,47], [67,67]). Machine evidence: `evidence/profile-surface-results.json`. The current compiler modules now declare profile 0.18; this remains compiler architecture pressure, not missing language syntax.

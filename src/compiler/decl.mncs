@@ -1,4 +1,4 @@
-mncs 0.13;
+mncs 0.18;
 module mncs.compiler.decl.v1;
 use mncs.compiler.source.v1 as source;
 use mncs.compiler.lexer.v1 as lexer;
@@ -10,18 +10,16 @@ use mncs.compiler.parser.v1 as parser;
 // length; every offset below is absolute. This is the bounded laboratory
 // interface from CP-0001, not a whole-module source API.
 //
-// Homing rule (see CP-0008, resolved upstream): every tree type in this
-// module (expressions, statements, declarations, and their lists) is still
-// defined, constructed, and destructured HERE. The cross-module finite
-// payload rejection that forced this consolidation is fixed on the current
-// pin, so a follow-up may split tree layers into separate modules once the
-// declaration suites run green again (blocked: CP-0014). Byte/token/record-
-// only layers stay separate; consumers in other modules may only pass these
-// trees opaquely.
+// Representation rule: this module owns each declaration/expression tree
+// type and its constructors/destructors. Byte, token, and compact record
+// interfaces stay in their focused modules; consumers pass these recursive
+// trees opaquely. Current Stage-0 supports linked finite payloads (CP-0014,
+// CP-0016), so this placement is no longer an upstream workaround.
 //
-// Scope of this slice (profile 0.13 shapes; version-gated 0.13 syntax such
-// as `!`, negative atoms, repeat literals, `next` fields, and integer match
-// arms is staged in CP-0015 and not yet parsed):
+// Scope of the native grammar: the source module itself uses Profile 0.18,
+// while this parser currently accepts only its implemented subset. In
+// particular, `!`, negative atoms, repeat literals, `next` fields, and
+// integer match arms remain reproduced CP-0015 gaps even under a 0.18 header.
 // header, use, record, payload enum, and function declarations; function
 // bodies with let/if-else/fail/terminal-return; expressions over names,
 // integers, booleans, all binary operators, direct calls, and field
@@ -92,9 +90,9 @@ enum Expr {
 enum ExprList { ENil, ECons { head: Expr, tail: ExprList } }
 record ExprParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr, start: u64, end: u64 }
 
-// Predicates negate with the native prefix operator (profile 0.13,
-// CP-0004 resolved). The former `not()` helper was removed in the 0.13
-// migration; `select` remains only for value choice, never negation.
+// Predicates in this compiler source use Profile 0.18 prefix negation.
+// Parsing an input program's `!` token remains a separate CP-0015 gap;
+// `select` remains only for value choice, never negation.
 
 // Operator stack element. Real operators carry the token kind; markers use
 // kind 1000 (parenthesized group) and 1001 (call with callee spans and the
@@ -2812,8 +2810,8 @@ record SemJob { e: Expr, exp: ExpTy }
 enum JobList { JNil, JCons { head: SemJob, tail: JobList } }
 enum SemKont {
     KTop,
-    KBinL { op: u64, right: Expr, start: u64, end: u64 },
-    KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool },
+    KBinL { op: u64, right: Expr, start: u64, end: u64, exp: ExpTy },
+    KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy },
     KCallA { sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy },
     KProj { fstart: u64, fend: u64, bstart: u64, bend: u64, start: u64, end: u64, exp: ExpTy }
 }
@@ -2943,14 +2941,33 @@ fn is_threaded(op: u64) -> (result: bool) {
     if op == 94 || op == 95 || op == 96 { return true; }
     return false;
 }
-fn bin_left_exp(op: u64, exp: ExpTy) -> (result: ExpTy) {
-    if is_threaded(op) { return exp; }
+fn is_integer_literal(e: Expr) -> (result: bool) {
+    return match e {
+        Name { start: s, end: e2 } => false,
+        Integer { start: s, end: e2, value: v, overflow: o } => true,
+        Boolean { start: s, end: e2, value: v } => false,
+        Binary { op: o, left: l, right: r, start: s, end: e2 } => false,
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: p } => false
+    };
+}
+fn bin_left_exp(op: u64, exp: ExpTy, left: Expr) -> (result: ExpTy) {
+    if is_threaded(op) {
+        if exp_is_poison(exp) && is_integer_literal(left) { return ExpTy.XNone; }
+        return exp;
+    }
     return ExpTy.XNone;
 }
+fn exp_is_poison(exp: ExpTy) -> (result: bool) {
+    return match exp {
+        XNone => false,
+        XSome { ty: t } => is_poison(t)
+    };
+}
 fn seed_binop(st: SemState, op: u64, left: Expr, right: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
-    let lexp: ExpTy = bin_left_exp(op, exp);
+    let lexp: ExpTy = bin_left_exp(op, exp, left);
     let job: SemJob = SemJob { e: left, exp: lexp };
-    let kont: SemKont = SemKont.KBinL { op: op, right: right, start: start, end: end };
+    let kont: SemKont = SemKont.KBinL { op: op, right: right, start: start, end: end, exp: exp };
     return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
 fn nonzero_lit(e: Expr) -> (result: bool) {
@@ -2970,22 +2987,31 @@ fn nonzero_val(v: u64) -> (result: bool) {
 fn apply_kont(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, k: SemKont) -> (result: SemState) {
     return match k {
         KTop => SemState { ..st, top_ty: st.last_ty },
-        KBinL { op: o, right: r, start: s, end: e } => apply_bin_l(st, o, r, s, e),
-        KBinR { op: o, lty: l, start: s, end: e, rlit: q } => apply_bin_r(s0, s1, s2, s3, st, o, l, s, e, q),
+        KBinL { op: o, right: r, start: s, end: e, exp: x } => apply_bin_l(st, o, r, s, e, x),
+        KBinR { op: o, lty: l, start: s, end: e, rlit: q, exp: x } => apply_bin_r(s0, s1, s2, s3, st, o, l, s, e, q, x),
         KCallA { sig: g, args: a, ptys: p, start: s, end: e, exp: x } => apply_call_a(s0, s1, s2, s3, st, g, a, p, s, e, x),
         KProj { fstart: fs, fend: fe, bstart: bs, bend: be, start: s, end: e, exp: x } => apply_proj(s0, s1, s2, s3, st, fs, fe, bs, be, s, e, x)
     };
 }
-fn apply_bin_l(st: SemState, op: u64, right: Expr, start: u64, end: u64) -> (result: SemState) {
+fn apply_bin_l(st: SemState, op: u64, right: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let lty: SemType = st.last_ty;
     let job: SemJob = SemJob { e: right, exp: ExpTy.XSome { ty: lty } };
-    let kont: SemKont = SemKont.KBinR { op: op, lty: lty, start: start, end: end, rlit: nonzero_lit(right) };
+    let kont: SemKont = SemKont.KBinR { op: op, lty: lty, start: start, end: end, rlit: nonzero_lit(right), exp: exp };
     return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
-fn apply_bin_r(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, op: u64, lty: SemType, start: u64, end: u64, rlit: bool) -> (result: SemState) {
+fn apply_bin_r(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], st: SemState, op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy) -> (result: SemState) {
     let rty: SemType = st.last_ty;
-    if !(sem_eq(s0, s1, s2, s3, st.total, lty, rty)) { return sem_drain(sem_emit(st, 7, start, end, 1)); }
+    if !(sem_eq(s0, s1, s2, s3, st.total, lty, rty)) {
+        if exp_is_poison(exp) { return recover_poisoned_binop(st, op, lty, start, end); }
+        return sem_drain(sem_emit(st, 7, start, end, 1));
+    }
     return finish_bin_class(s0, s1, s2, s3, st, op, lty, rty, start, end, rlit);
+}
+fn recover_poisoned_binop(st: SemState, op: u64, ty: SemType, start: u64, end: u64) -> (result: SemState) {
+    // Preserve the child's type obligation and let the enclosing return
+    // comparison report the result mismatch, as Stage-0 does for a poisoned
+    // declared result. The enclosing proof remains failed by its obligation.
+    return sem_emit_top(sem_accept(st, ty), TOp.TBin { op: op, ty: ty, start: start, end: end });
 }
 // Operator classes: 0 total arithmetic (checked, wrapping, saturating,
 // bitwise), 1 division/modulo, 2 comparisons, 3 boolean connectives,
@@ -4129,4 +4155,3 @@ fn check_one_payload_field(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte
     let seen: NameList = NameList.NCons { head: NameSpan { start: h.name_start, end: h.name_end }, tail: st.seen };
     return RecFieldState { rest: t, seen: seen, obls: append_obls(s0, s1, s2, s3, tob, st.obls) };
 }
-

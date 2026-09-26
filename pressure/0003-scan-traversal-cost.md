@@ -1,6 +1,11 @@
 # CP-0003 — Cursor scans retain bounded no-op iterations
 
-Status: open, re-confirmed (2026-09-12). Category: language,
+Status: open; language behavior still reproduced
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 compiler-architecture, tooling. Severity: medium in this slice,
 potentially high at larger source sizes. Frequency: pervasive.
 Upstream tracking: none; "loop regions" (Sep-10 language work) checked
@@ -51,3 +56,7 @@ shape matters, but per-token scans still pay their full bound
 `repro/unbounded-scan.mncs` still yields MNP106. The desired capability
 is unchanged: source-length-bounded early termination, or an explicit
 decision that one-pass-with-no-ops is the intended compiler style.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 rejects the preserved while-loop reproduction with MNP106 (+ parser cascades). The compiler continues to use bounded traversal; no upstream change was made because the new flow workload did not require while.

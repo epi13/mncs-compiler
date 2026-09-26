@@ -6,9 +6,9 @@ Temporary test transport; all scanning executes in MNCS or Stage-0. Python
 only moves bytes, splits chunks, and compares against the oracle on every
 run (no goldens).
 
-Covers the profile-0.13 migration of segment.mncs (index-name reuse,
-`!advance`) and the shared `!`/scalar-match edits in lexer.mncs: every
-token of every sample flows through the migrated dispatch.
+Covers segment scanning under the current compiler profile. Sequential
+index-name reuse and prefix negation first entered this implementation during
+the Profile 0.13 migration; current source modules declare Profile 0.18.
 """
 import hashlib
 import json
@@ -23,7 +23,7 @@ os.chdir(ROOT)
 OUT = ROOT / '.build'
 OUT.mkdir(exist_ok=True)
 
-# Segment scope only; `decl` stays excluded while CP-0014 blocks it.
+# Segment scope only; declaration parsing and proof have dedicated suites.
 PROBE_MODULES = 'source,lexer,segment'
 
 

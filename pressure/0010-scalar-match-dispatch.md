@@ -2,7 +2,12 @@
 
 ID: CP-0010
 
-Status: resolved (2026-09-12)
+Status: resolved upstream; native parser gap tracked by CP-0015
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language
 
@@ -114,7 +119,13 @@ total scalar matches. Every punctuation token of the 1586-token
 frontend differential flows through the migrated dispatch
 (`tools/test_frontend.py` green), and interpreter steps dropped ~9%,
 so the branch-chain lowering is measurably cheaper than the if-chains
-it replaced. `decl.mncs` tables are parse-checked with elaboration
-proof staged after CP-0014. History preserved above: the MNP084
+it replaced. At the time, `decl.mncs` tables awaited elaboration proof after
+CP-0014. The current compiler source now loads under Profile 0.18 and its
+declaration and semantic twins pass; parsing integer-match input in a user
+unit remains a separate CP-0015 gap. History preserved above: the MNP084
 refusal, the if-chain workaround, and the silent non-exhaustiveness
 that motivated totality.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the preserved total integer-match fixture at profile 0.18. The native compiler parser rejects this current syntax, recorded independently under CP-0015.

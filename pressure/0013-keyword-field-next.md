@@ -2,7 +2,12 @@
 
 ID: CP-0013
 
-Status: resolved (2026-09-12)
+Status: resolved upstream; native parser still rejects the current-profile form
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language
 
@@ -12,13 +17,11 @@ Frequency: rare
 
 ## `next` was unusable as a record field name (resolved)
 
-Upstream: profile 0.13 contextual `next` fields. Proven in real
-compiler code: `StmtFrame.after` renamed back to `StmtFrame.next`
-(`record`, two constructions, one projection) in the 0.13 migration;
-parse-checked with elaboration proof staged after CP-0014. The 0.10
-`repro/keyword-field-next.mncs` still fails exactly as documented
-(MNP127/128/007), so old-profile behavior is preserved. History
-preserved below.
+Upstream: profile 0.13 contextual `next` fields. The field is accepted by
+current Rust Stage-0; the native source parser still rejects it under Profile
+0.18 as part of CP-0015. Its earlier use in compiler source was migrated and
+checked by Stage-0, while 0.10-profile rejection remains historical behavior.
+The current native gap is recorded below and in `profile-surface-results.json`.
 
 `next` is the iterate-step keyword, and the parser reserves it in field
 position: `record R { next: u64 }` fails with MNP127 (`expected '}' after
@@ -56,3 +59,7 @@ revision `6906d0b1eee7`):
 Rename the field. No semantic consequence; recorded because keyword
 reservation in nominal (non-expression) positions is invisible until a
 real program trips over it.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the preserved `next` field source at profile 0.18. Native `decl.parse_unit` rejects the Profile 0.18 form; see CP-0015 and `evidence/profile-surface-results.json`.

@@ -2,7 +2,12 @@
 
 ID: CP-0014
 
-Status: open
+Status: resolved upstream in mncs-language 709ba008
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language
 
@@ -144,8 +149,8 @@ language
 ## Evidence / reproduction
 
 - Root-plus-cascade triple on the current pin: command above.
-- Previous-pin acceptance: `evidence/decl-results.json` and
-  `evidence/sem-results.json` at revision `6906d0b1...` elaborate the
+- Previous-pin acceptance: `evidence/decl-results-pre-campaign.json` and
+  `evidence/sem-results-pre-campaign.json` at revision `6906d0b1...` elaborate the
   same `bool`-payload `decl.mncs` (e.g. `overflow: bool`,
   `value: bool`, `path: bool`); the gate change arrived with the
   bounded-sequence/canonicalization refactor (language history:
@@ -158,3 +163,7 @@ language
 - `mncs-language` issue/PR:
 - Resolution revision:
 - Follow-up evidence in this repository:
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the preserved bool-payload reproduction under profile 0.18. The generic language regression tests and compiler integration case are in `mncs-language` commit 709ba00810099e6965bb47dec14ed19e9e1ae6f8.

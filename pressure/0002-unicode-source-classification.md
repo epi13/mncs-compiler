@@ -1,6 +1,11 @@
 # CP-0002 — Byte text helpers do not provide Stage-0 Unicode classification
 
-Status: partially resolved (2026-09-12). Category: stdlib-runtime,
+Status: open; reproduced as a native compiler gap
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 compiler-architecture. Severity: high for frontend parity. Frequency:
 common. Upstream tracking: `mncs.std.text_utf8.v1` (INGEST-P-003
 substrate) landed after this pressure; property tables still missing.
@@ -59,3 +64,7 @@ on `step_scalar_generic` and differentially pinned.
 Minimal reproducer for the remainder: any non-ASCII module (e.g. the
 `café` fixture) is still rejected by the ASCII gate on both sides of
 the differential, so parity holds by mutual refusal, not by agreement.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the Unicode module probe under profile 0.18. The compiler-owned frontend remains ASCII-only. This is a frontend parity issue; the language already accepts the input.

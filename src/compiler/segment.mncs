@@ -1,4 +1,4 @@
-mncs 0.13;
+mncs 0.18;
 module mncs.compiler.segment.v1;
 use mncs.compiler.source.v1 as source;
 use mncs.compiler.lexer.v1 as lexer;
@@ -47,8 +47,8 @@ fn ascii_step(total: u64, st: AsciiState, byte: u64) -> (result: AsciiState) {
 }
 
 fn ascii(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: bool) {
-    // Sequential links reuse one index name (profile 0.13 records them
-    // hygienically); the chunk is named by the `over` sequence.
+    // The current profile permits sequential links to reuse this index;
+    // the chunk is named by the `over` sequence.
     iterate i over s0 carrying a: AsciiState = AsciiState { valid: true, index: 0 } {
         next a = ascii_step(total, a, source.byte_at(s0, i) as u64);
     }

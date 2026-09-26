@@ -1,6 +1,6 @@
 # Bounded deterministic frontend slice
 
-This is compiler implementation in MNCS, compiled/elaborated and executed by
+This is compiler code in MNCS, compiled/elaborated and executed by
 pinned Rust Stage-0. It is **not self-hosting**, a standalone compiler executable,
 or evidence of native/backend parity. Rust remains the current compiler.
 
@@ -19,14 +19,17 @@ MNCS_LIBRARY_PATH=src .bootstrap/target/debug/mncs compile src/compiler/kernel.m
 The bootstrap script downloads the exact locked revision into ignored
 `.bootstrap/`; it never reads or writes the sibling checkout. Dependency locks
 are retained for both Stage-0 and the test-only probe. Network is needed for
-first bootstrap; no MNCS ecosystem service is required. Source Profile 0.10 is
-used for byte-view/import contracts already supported by the same pinned
-revision; the initial repository's 0.8 metadata was updated, not the revision.
+first bootstrap; no MNCS ecosystem service is required. The current pin and
+all seven compiler source modules use Profile 0.18. The tests retain older
+profile-less lexical snippets where that isolates version-independent byte
+and token behavior; version-gated syntax is tracked separately in CP-0015.
 
-`frontend-results.json` records two equal normalized execution-result digests,
-request counts, oracle comparisons, and interpreter step counts. It is bounded
-corpus evidence, not a proof of all-input equivalence. `pressure-results.json`
-records actual pinned diagnostics. Re-running writes fresh results to `.build/`.
+The current-pin [`frontend-results.json`](frontend-results.json) records two
+equal normalized execution-result digests over 5,887 requests, 196 lexical
+sources, 1,586 compared tokens, and 18 header cases. It records 3,027,556
+interpreter steps and 190.018 seconds for the twin. This is bounded corpus
+evidence, not a proof of all-input equivalence. Re-running writes fresh results
+to `.build/`.
 [Compilation evidence](compile-results.json) records two byte-identical semantic,
 HIR and SSA emissions. Compilation completed with 242 CMP301 unresolved
 obligations and conservative fallbacks, not a fully discharged proof (CP-0007).

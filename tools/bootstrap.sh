@@ -2,6 +2,11 @@
 # All bootstrap writes are confined to this repository's ignored directories.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Keep the reference build useful in constrained compiler-workload sandboxes.
+# Both artifacts are disposable bootstrap outputs; callers may override these
+# defaults when they want full symbols or incremental compilation.
+export CARGO_PROFILE_DEV_DEBUG="${CARGO_PROFILE_DEV_DEBUG:-0}"
+export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
 revision=$(python3 -c 'import json; print(json.load(open("mncs-language.lock.json"))["revision"])')
 if [[ ! -f .bootstrap/revision ]]; then
     if [[ -e .bootstrap/Cargo.toml ]]; then

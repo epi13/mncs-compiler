@@ -1,13 +1,15 @@
 # Semantic-proof evidence (decl.prove_unit)
 
-Self-hosted MNCS semantic vertical in `src/compiler/decl.mncs`: symbols to
+MNCS semantic vertical in `src/compiler/decl.mncs`: symbols to
 semantic facts/types/contracts/effects (`check_sig`), bidirectional proof
 with fused typed lowering (`prove_expr` explicit-stack machine), statement
 proving (`prove_stmts` frame machine), whole-unit proof (`prove_unit`), and
 a type-stack verifier for the produced typed IR (`verify_tops`). All
-behavior executes in MNCS on the pinned Rust Stage-0 reference interpreter
-unless noted. This is **not self-hosting** and not backend parity; Rust
-remains the current compiler.
+behavior executes in MNCS on Rust Stage-0 revision
+`709ba00810099e6965bb47dec14ed19e9e1ae6f8`, source Profile 0.18. Compiler
+modules declare 0.18; the semantic corpus retains Profile 0.10 source fixtures
+to test supported legacy syntax. This is **not self-hosting** or backend
+parity; Rust remains the current compiler.
 
 ## Reproduce
 
@@ -56,7 +58,7 @@ Adversarial constructors (`sabotage_depth`, `sabotage_call_arity`,
 verifiers; `sound_sample` must pass. Construction and verdict both execute
 in MNCS through the probe; no host-constructed values cross the boundary.
 
-## Oracle-pinned semantics (all verified against Stage-0, 49 cases)
+## Oracle-pinned semantics (all verified against current Stage-0, 49 cases)
 
 - Elaboration order is [all signature type resolutions] then [per function:
   remaining signature obligations, body]. Deduced from duplicated
@@ -64,7 +66,8 @@ in MNCS through the probe; no host-constructed values cross the boundary.
   probes.
 - Poison equals only poison. Every other expected/actual combination
   involving poison records its FAIL (literals, names, arguments, results,
-  conditions included).
+  conditions included). Poisoned-result binary expressions preserve Rust's
+  child and enclosing result diagnostics in both operand orders (CP-0017).
 - Fatal (drain the expression proof): unresolvable names, arity,
   callee, operand inequality, class violations, effect-cover failure,
   bad base/field. Non-fatal (record and continue): literal/argument/
@@ -76,34 +79,46 @@ in MNCS through the probe; no host-constructed values cross the boundary.
 - A body with anything other than exactly one declared output is skipped
   after its signature (MNE101 only).
 
-## Differential results vs Stage-0 oracle
+## Differential results vs current Stage-0 oracle
 
 - Twin differential (`tools/test_sem.py`, two identical runs): 49
-  semantic cases plus 5 intrinsic-proof verdicts, 54 probe requests,
-  0 fails. Interpreter steps total 77081331, max per request 3661553
-  (step budget 8000000). Result digest
-  `c078a3dd1d63b2b6…`, elapsed 5679 s over both runs, Stage-0 lock
-  revision `6906d0b1eee7`. Report: `.build/sem-results.json`.
+  semantic cases plus 5 intrinsic-proof verdicts, 54 requests per run,
+  0 mismatches. Interpreter steps total 73,631,716, max per request
+  3,511,846 (8,000,000 budget). The identical result digest is
+  `bced8deff2157ebdfe2b151f4e29d34b7e20ca1a74cfa7c69c34689e7f1a5e6c`;
+  elapsed time was 5,468.621 seconds over both runs. Stage-0 revision:
+  `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, source Profile 0.18.
+  Promoted report: [`sem-results.json`](sem-results.json).
 - Every case compares FAIL obligations against the oracle `elaborate`
   MNE diagnostics in order with exact spans, plus the proof `ok` verdict
-  and function count. UNKNOWN obligations (overflow 13, div-zero 14,
-  contracts 16) are asserted present where expected and never surfacing
-  as diagnostics.
+  and function count. UNKNOWN obligations for overflow (13) and division by
+  zero (14) are asserted present where expected and never surfaced as
+  diagnostics.
+- The five proof verdict requests reject the four sabotaged proof values and
+  accept the sound sample. The CP-0017 minimal pair is retained in
+  [`semantic-pressure-cp0017-after.json`](semantic-pressure-cp0017-after.json).
+- The superseded profile-0.10 result is preserved as
+  [`sem-results-pre-campaign.json`](sem-results-pre-campaign.json); it is not
+  current-pin parity evidence.
 - Oracle-pinned semantics (all verified against Stage-0, 49 cases):
   the case list in `tools/test_sem.py` `CASES` is the corpus.
 
 ## Scope limits and next target
 
-- MNB body-graph/lowering codes are not modeled (elaboration only).
+- This semantic differential covers elaboration only. The compiler-owned
+  `flow.lower_unit` pass now adds branch/jump/return/fail blocks and MNB038
+  join diagnostics; see [`PARITY.md`](PARITY.md) and
+  [`flow-results.json`](flow-results.json) for its separate current-run
+  evidence.
 - Call authority covers callee effects (MNE134); the capability dimension
   of the oracle check is a signature-level concern (MNE111) here.
-- Cost pressure (CP-0007/CP-0009): proving a ≤256-byte unit costs up to
-  3.66M interpreter steps of the 8M budget; the twin run took 5679 s
-  wall-clock, dominated by probe boots re-elaborating the now 4107-line
-  `decl.mncs` (1942 lines on main before this vertical). Proof cost per function is roughly 2× signature checks
-  plus one body walk; obligation appends are linear each (quadratic
-  accumulation), still well inside fuel for bounded inputs.
-- Strongest next target: lower the verified typed IR to body blocks,
-  which forces reachability/join validation (today's MNB038) into
-  elaboration scope; after that, cross-module `use` resolution, which is
-  the missing semantic piece before any backend lowering.
+- Cost pressure (CP-0007/CP-0009): this 256-byte-unit twin semantic corpus
+  took 5,468.621 seconds and 73.6 million interpreted steps. The heaviest
+  request used 3,511,846 of its 8,000,000-step budget. This is reference
+  interpreter/test cost, not native compiler runtime, and does not establish
+  peak memory or whole-project throughput. Current linked artifact sizes are
+  measured separately in [`compile-results.json`](compile-results.json).
+- Strongest next target after the current flow pass is a current-profile
+  project-source/module-resolution path that feeds the parser, proof, and CFG
+  stages. The flow representation still lacks Rust-equivalent SSA values,
+  callable identities, and executable target output.

@@ -1,0 +1,287 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-09-25",
+  "reference": {
+    "repository": "mncs-language",
+    "revision": "709ba00810099e6965bb47dec14ed19e9e1ae6f8",
+    "source_profile": "0.18",
+    "role": "Rust Stage-0/bootstrap/reference"
+  },
+  "current_native_source_modules": "profile 0.18",
+  "status_vocabulary": [
+    "parity",
+    "parity with explicit exceptions",
+    "partial",
+    "absent",
+    "blocked by reproduced pressure",
+    "intentionally deferred"
+  ],
+  "rows": [
+    {
+      "area": "Stage-0 pin and compiler source profile",
+      "status": "parity with explicit exceptions",
+      "claim": "mncs-compiler is pinned to current Rust Stage-0 709ba008 at Profile 0.18, and the seven current compiler source modules declare Profile 0.18.",
+      "evidence": [
+        "mncs-language.lock.json",
+        "evidence/flow-abi-current.json"
+      ],
+      "exceptions": [
+        "The native parser rejects five sampled Profile 0.18 source forms; see CP-0015."
+      ]
+    },
+    {
+      "area": "Bounded byte equality predicate",
+      "status": "parity",
+      "claim": "kernel.same_source returns the oracle result for empty, identical, unequal, and prefix-related byte fixtures in the current frontend suite.",
+      "evidence": [
+        "evidence/frontend-results.json",
+        "tools/test_frontend.py"
+      ],
+      "exceptions": []
+    },
+    {
+      "area": "ASCII tokenization and spans",
+      "status": "parity with explicit exceptions",
+      "claim": "For the tested bounded ASCII domain, current native token kinds, byte spans, lexical diagnostics, line/column facts, and token-shape invariants match Stage-0.",
+      "evidence": [
+        "evidence/frontend-results.json",
+        "evidence/segment-results.json"
+      ],
+      "exceptions": [
+        "The native source gate remains ASCII-only (CP-0002); this does not claim Unicode parity or whole-module capacity."
+      ]
+    },
+    {
+      "area": "Header parsing",
+      "status": "partial",
+      "claim": "The supported bounded header fixtures match current Stage-0 spans and established module spelling.",
+      "evidence": [
+        "evidence/frontend-results.json"
+      ],
+      "exceptions": [
+        "Leading-comment profile-envelope input still produces MNE002 (CP-0006); declarations after the header are outside this slice."
+      ]
+    },
+    {
+      "area": "Source-unit representation",
+      "status": "partial",
+      "claim": "The declaration and flow interfaces accept source through four byte-sequence chunks capped at 64 bytes each, and the segment corpus exercises total sources up to 256 bytes.",
+      "evidence": [
+        "evidence/flow-abi-current.json",
+        "evidence/decl-results.json",
+        "evidence/segment-results.json"
+      ],
+      "exceptions": [
+        "There is no scalable source-unit/project snapshot representation; 256 bytes is a compiler interface limit, not a language bound."
+      ]
+    },
+    {
+      "area": "Profile 0.18 declaration syntax",
+      "status": "blocked by reproduced pressure",
+      "claim": "Current Stage-0 accepts five tested forms that native decl.parse_unit rejects under current Profile 0.18 compiler modules.",
+      "evidence": [
+        "evidence/profile-surface-results.json",
+        "evidence/pressure-current-results.json"
+      ],
+      "exceptions": [
+        "The five cases are bare !, negative atom, repeat literal, next field, and integer match; this is compiler architecture pressure CP-0015."
+      ]
+    },
+    {
+      "area": "Declaration structure and first-error spans",
+      "status": "partial",
+      "claim": "Three positive and three negative bounded declarations agree structurally or by first-error span; three check_unit symbol/resolve/IR verdicts agree with Stage-0.",
+      "evidence": [
+        "evidence/decl-results.json",
+        "tools/test_decl.py"
+      ],
+      "exceptions": [
+        "This is a bounded grammar subset and not whole-project compilation."
+      ]
+    },
+    {
+      "area": "Single-unit symbol and name resolution",
+      "status": "partial",
+      "claim": "The tested local functions, calls, parameters, lets, records, and field projections pass the native declaration/proof checks.",
+      "evidence": [
+        "evidence/decl-results.json",
+        "evidence/sem-results.json"
+      ],
+      "exceptions": [
+        "Imported names and cross-module type/value resolution are not implemented by the native compiler."
+      ]
+    },
+    {
+      "area": "Type/effect/capability proof",
+      "status": "partial",
+      "claim": "The native prove_unit corpus matches current Stage-0 FAIL codes/spans and proof verdicts over 49 cases, with five verifier verdicts, repeated identically.",
+      "evidence": [
+        "evidence/sem-results.json",
+        "evidence/semantic-pressure-cp0017-after.json"
+      ],
+      "exceptions": [
+        "Contracts, unsupported syntax, and broader Rust proof surfaces are outside the tested native subset."
+      ]
+    },
+    {
+      "area": "Typed stack operations",
+      "status": "partial",
+      "claim": "Native proof constructs typed postfix operations and rejects the tested sabotaged proof values with its stack/type-shape verifier.",
+      "evidence": [
+        "evidence/sem-results.json",
+        "tools/test_sem.py"
+      ],
+      "exceptions": [
+        "The current differential does not establish structural identity with Rust body/SSA values."
+      ]
+    },
+    {
+      "area": "Control-flow CFG lowering",
+      "status": "partial",
+      "claim": "flow.lower_unit emits checked branch/jump/return/fail blocks, attaches each proof operation once in source order, and matches Rust diagnostics/spans and positive branch/return control shape across four cases and 20 repeated requests.",
+      "evidence": [
+        "evidence/flow-results.json",
+        "tools/test_flow.py",
+        "evidence/flow-call-current.json"
+      ],
+      "exceptions": [
+        "Blocks do not carry Rust-equivalent SSA values or merge values and do not emit executable code."
+      ]
+    },
+    {
+      "area": "Project source discovery and import resolution",
+      "status": "absent",
+      "claim": "No native compiler path discovers source modules or resolves imported declarations across a project.",
+      "evidence": [
+        "evidence/PARITY.md",
+        "src/compiler/decl.mncs"
+      ],
+      "exceptions": [
+        "The Stage-0 probe's linked library loader is test/bootstrap transport, not native compiler behavior."
+      ]
+    },
+    {
+      "area": "Unicode source classification",
+      "status": "blocked by reproduced pressure",
+      "claim": "Current Stage-0 accepts the tested Unicode module name while native source admission remains ASCII-only.",
+      "evidence": [
+        "evidence/pressure-current-results.json",
+        "evidence/frontend-results.json"
+      ],
+      "exceptions": [
+        "Native Unicode property classification and scalar-width spans are not implemented."
+      ]
+    },
+    {
+      "area": "Rust value-carrying body/SSA and callable resolution",
+      "status": "absent",
+      "claim": "The native CFG has no SSA value graph, merge values, resolved callable identities, or Rust-compatible body lowering.",
+      "evidence": [
+        "evidence/flow-results.json",
+        "evidence/flow-abi-current.json"
+      ],
+      "exceptions": [
+        "flow-abi-current records Stage-0 callable identities, not native compiler output identities."
+      ]
+    },
+    {
+      "area": "Process lifecycle and resource semantics",
+      "status": "intentionally deferred",
+      "claim": "Native support for current Profile 0.18 process start/observe/cancel/reap and its resource contract was not exercised by this compiler workload.",
+      "evidence": [
+        "evidence/PARITY.md",
+        "mncs-language.lock.json"
+      ],
+      "exceptions": [
+        "No native parity or absence claim is made beyond this campaign's tested slice."
+      ]
+    },
+    {
+      "area": "Generic collection/query compiler surface",
+      "status": "intentionally deferred",
+      "claim": "The current compiler campaign did not exercise native compilation of the generic sequence/query library surface.",
+      "evidence": [
+        "evidence/PARITY.md",
+        "evidence/profile-surface-results.json"
+      ],
+      "exceptions": [
+        "Stage-0 acceptance of sequence syntax is not native compiler parity."
+      ]
+    },
+    {
+      "area": "Structured artifact projection and native artifact contracts",
+      "status": "intentionally deferred",
+      "claim": "The current compiler flow did not project output through typed structured artifact contracts.",
+      "evidence": [
+        "evidence/PARITY.md",
+        "evidence/flow-abi-current.json"
+      ],
+      "exceptions": [
+        "Stage-0 artifact/callable metadata is recorded as authority; it is not reimplemented natively."
+      ]
+    },
+    {
+      "area": "Executable target backend",
+      "status": "absent",
+      "claim": "The MNCS compiler emits no native target executable or Rust-equivalent backend artifact.",
+      "evidence": [
+        "evidence/PARITY.md",
+        "evidence/flow-call-current.json"
+      ],
+      "exceptions": [
+        "The production call result is an artifact for executing MNCS code under Stage-0, not compiled target output."
+      ]
+    },
+    {
+      "area": "Diagnostics",
+      "status": "partial",
+      "claim": "Tested semantic FAIL and flow MNB038 diagnostic codes/spans match current Stage-0.",
+      "evidence": [
+        "evidence/sem-results.json",
+        "evidence/flow-results.json",
+        "evidence/frontend-results.json"
+      ],
+      "exceptions": [
+        "Full message text, recovery behavior, Unicode spans, and the CP-0006 envelope case remain incomplete."
+      ]
+    },
+    {
+      "area": "Determinism",
+      "status": "parity with explicit exceptions",
+      "claim": "Current native declaration, semantic, frontend, segment, and flow suites repeat with identical normalized result digests.",
+      "evidence": [
+        "evidence/decl-results.json",
+        "evidence/sem-results.json",
+        "evidence/frontend-results.json",
+        "evidence/segment-results.json",
+        "evidence/flow-results.json"
+      ],
+      "exceptions": [
+        "Repeated results show determinism only; Rust differential and explicit invariants provide correctness evidence."
+      ]
+    },
+    {
+      "area": "Stage-0 compile and linked artifact cost",
+      "status": "partial",
+      "claim": "The current linked kernel compile completes twice in about 15 seconds with byte-identical semantic/HIR/SSA outputs and 213 CMP301 obligations.",
+      "evidence": [
+        "evidence/compile-results.json"
+      ],
+      "exceptions": [
+        "This is Stage-0 reference cost; native compile cost, peak memory, and complete obligation discharge are unmeasured."
+      ]
+    },
+    {
+      "area": "Self-hosting, incremental workspaces, and cache invalidation",
+      "status": "intentionally deferred",
+      "claim": "No Stage-1/Stage-2 compiler comparison or native incremental project graph is claimed.",
+      "evidence": [
+        "README.md",
+        "evidence/PARITY.md"
+      ],
+      "exceptions": [
+        "Stage-0 still loads and executes all MNCS compiler code."
+      ]
+    }
+  ]
+}

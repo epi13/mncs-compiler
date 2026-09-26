@@ -1,6 +1,11 @@
 # CP-0001 — Whole compiler sources exceed bounded sequence capacity
 
-Status: partially resolved (2026-09-12). Category: language,
+Status: partially resolved; compiler unit API remains 256-byte limited
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 stdlib-runtime, tooling. Severity: high for whole-module compilation
 (was blocking at 64 bytes). Frequency: pervasive. Upstream tracking:
 profile 0.13 raised ceilings (see re-evaluation); no dedicated storage
@@ -62,3 +67,7 @@ four-chunk laboratory interface (256B units) is unchanged. Severity
 drops from blocking to high: chunked compilation can now span 4KB per
 unit-shape change, but whole-module compilation still needs the storage
 API this pressure originally asked for.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 (709ba008) accepts the preserved 65-byte source. The old 64-byte language limit is stale. The native compiler still receives four 64-byte chunks per unit; classify that as compiler architecture, not a request to raise a generic language bound.

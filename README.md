@@ -1,50 +1,22 @@
 # mncs-compiler
 
-Self-hosted next-generation compiler for MNCS, built in `mncs-language` to pressure-test the language, advance incremental and machine-native compilation, and ultimately replace the Rust compiler.
+Experimental MNCS compiler implementation, written in `mncs-language` to
+pressure-test the language and move compiler semantics into MNCS while Rust
+remains the Stage-0/bootstrap/reference implementation.
 
 ## Status
 
-`mncs-compiler` is experimental. The Rust compiler in `mncs-language` remains the canonical Stage-0/reference compiler until this project proves semantic parity, self-hosting, backend coverage, reproducibility, and acceptable cost.
+`mncs-compiler` is experimental. The Rust compiler in `mncs-language` remains the canonical Stage-0/reference compiler. The lock file pins the exact code-bearing Stage-0 revision exercised by this campaign, `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, at source profile 0.18. `origin/main` later advanced by an automated badge-metadata-only commit; no compiler sources changed. All compiler source modules now declare profile 0.18.
 
-The repository exists so active compiler architecture can move into MNCS without destabilizing `mncs-language`. Compiler development runs should work here, record language pressure here, and leave language changes for dedicated follow-up runs in `mncs-language`.
+The repository keeps compiler architecture in MNCS and records compiler-origin pressure here. Generic language/runtime changes are made in a separate `mncs-language` change.
 
 ## Executable slices
 
-The kernel implements **bounded ASCII source processing** in MNCS: lossless
-lexical tokens, byte spans, 1-based line/column rendering, lexical
-diagnostics/coverage evidence, and a parser for the language header and
-qualified module declaration (64-byte inputs). The segment layer mirrors
-the same lexical semantics over four-chunk ≤256-byte units with absolute
-offsets, proven by its own twin differential. All six frontend modules
-are profile-0.13 sources using native negation, total scalar `match`
-dispatch, and reused iteration identities.
+The existing frontend implements bounded ASCII source processing in MNCS: lexical tokens, byte spans, line/column rendering, diagnostics, and header/module parsing. The native compiler unit ABI still accepts four 64-byte chunks (256 bytes total). Unicode and newer current-profile syntax remain reproduced native frontend gaps; see the [current parity ledger](evidence/PARITY.md) and [current pressure results](evidence/pressure-current-results.json).
 
-The declaration vertical (`src/compiler/segment.mncs`, `src/compiler/decl.mncs`)
-extends this to **bounded declaration-scale compilation**: header, `use`,
-`record`, payload `enum`, and `fn` declarations with bodies and expressions
-(256-byte units); function-name symbol collection with duplicate detection; a
-resolve/span walk over every body; and lowering of every expression to a
-postfix stack IR checked by a stack-depth self-verifier. The semantic
-vertical (`decl.prove_unit`) adds signature facts with contracts/effects,
-bidirectional expression proof with fused typed lowering, statement
-proving, whole-unit proofs with FAIL/UNKNOWN obligations, and a type-stack
-verifier for the typed IR — with FAIL-obligation parity vs Stage-0
-diagnostics over a 49-case twin differential. The declaration/semantic
-verticals last ran green at the previous Stage-0 pin and are migrated to
-0.13 (parse-checked); their elaboration proof awaits the upstream
-bool-payload fix (CP-0014). This is not yet a whole-module compiler or
-self-hosting implementation.
+The declaration vertical extends this to bounded declaration-scale compilation: header, `use`, `record`, payload `enum`, and `fn` declarations with bodies and expressions (256-byte units); function-name symbol collection with duplicate detection; a resolve/span walk; stack IR and semantic proof with FAIL/UNKNOWN obligations and a typed-stack verifier. The semantic twin now passes 49 cases plus five verifier verdicts twice at the current pin. `flow.mncs` consumes the proof and attaches each typed postfix operation to a source expression in branch, jump, return, and failure blocks, then checks targets and unreachable joins. Four current-profile programs match Rust diagnostics/spans; both positive cases also match Rust SSA branch/return shape. See [`sem-results.json`](evidence/sem-results.json), [`flow-results.json`](evidence/flow-results.json), and the current-profile [production call](evidence/flow-call-current.json). The block graph is not Rust-equivalent value SSA and does not emit executable code.
 
-Run `tools/bootstrap.sh`, then `python3 tools/test_frontend.py`,
-`python3 tools/test_segment.py`, `python3 tools/test_decl.py`,
-`python3 tools/test_sem.py`, and `python3 tools/test_pressure.py`. See
-[frontend evidence](evidence/FRONTEND.md), [segment evidence](evidence/SEGMENT.md),
-[declaration evidence](evidence/DECL.md), [semantic evidence](evidence/SEM.md),
-[parity matrix](evidence/PARITY.md),
-and the [pressure index](pressure/README.md). All production behavior lives in
-`src/compiler/`; the Rust/Python code under `tools/` is a temporary Stage-0 test
-transport, not a compiler implementation. There is no standalone driver or
-coordinator yet.
+Run `tools/bootstrap.sh`, then the focused and canonical suites documented in [`evidence/README.md`](evidence/README.md). See [frontend evidence](evidence/FRONTEND.md), [segment evidence](evidence/SEGMENT.md), [declaration evidence](evidence/DECL.md), [semantic evidence](evidence/SEM.md), the [current parity ledger](evidence/PARITY.md), and the [pressure index](pressure/README.md). Production compiler behavior lives in `src/compiler/`; Rust/Python code under `tools/` is a temporary Stage-0 test transport, not a compiler implementation. There is no standalone native driver or coordinator yet.
 
 ## Mission
 

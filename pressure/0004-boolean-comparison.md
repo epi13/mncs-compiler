@@ -1,6 +1,11 @@
 # CP-0004 — Boolean equality is rejected in scanner state updates
 
-Status: resolved (2026-09-12). Category: language, tooling. Severity:
+Status: resolved upstream; native parser coverage is tracked by CP-0015
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 low. Frequency: common. Upstream tracking: profile 0.13
 (`BooleanNot`/`BooleanCompare`, MNE119/MNE121 refinement).
 
@@ -45,3 +50,7 @@ differentially proven (`tools/test_frontend.py` green, 3435 requests);
 `decl.mncs` is parse-checked with elaboration proof staged after
 CP-0014. History preserved above: the original MNE121 limitation, the
 `select` workaround, and the missing-negation family note.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the boolean equality and negation probes at profile 0.18. Native parser rejection of current-profile syntax is a separate CP-0015 compiler issue.

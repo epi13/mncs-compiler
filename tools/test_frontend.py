@@ -31,9 +31,9 @@ def decode(value):
     return next(iter(value.values()))['value']
 
 
-# Frontend scope: source/lexer/parser/kernel/segment only. `decl` is excluded
-# while CP-0014 (bool-payload regression) blocks its elaboration upstream;
-# this suite proves nothing about the declaration core until then.
+# Frontend scope: source/lexer/parser/kernel/segment only. Declaration and
+# semantic behavior have dedicated suites with their own differential corpus;
+# this suite isolates the lexical and header surface.
 PROBE_MODULES = 'source,lexer,parser,kernel,segment'
 
 

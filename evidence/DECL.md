@@ -1,12 +1,23 @@
 # Declaration-vertical evidence (segment + decl + check)
 
-Self-hosted MNCS implementation in `src/compiler/`: bounded source
+MNCS compiler implementation in `src/compiler/`: bounded source
 segments (`segment.mncs`), declaration/expression parsing (`decl.mncs`
 through `parse_unit`), symbol collection, resolve/span walking, and a tiny
 stack IR with a depth self-check (`decl.check_unit`). All behavior executes
 in MNCS on the pinned Rust Stage-0 reference interpreter unless noted.
 This is **not self-hosting** and not backend parity; Rust remains the
 current compiler.
+
+## Current pin status (2026-09-25)
+
+The declaration differential passed twice with the compiler modules declaring
+Profile 0.18 and Stage-0 pinned to `709ba00810099e6965bb47dec14ed19e9e1ae6f8`.
+The promoted report [`decl-results.json`](decl-results.json) covers 3 positive
+parses, 3 negative parses with first-error spans, and 3 symbol/resolve/stack-IR
+verdicts. It records 7,188,374 Stage-0 steps, a 2,358,379-step maximum, and
+900.429 seconds for two identical runs. The former CP-0014 bool-payload issue
+is resolved upstream; CP-0017's semantic recovery drift is separately repaired
+and verified by the current full proof twin in [`SEM.md`](SEM.md).
 
 ## Reproduce
 
@@ -53,7 +64,15 @@ chains to `(base, base-span, [(field, span)], total-span)` tuples on both
 sides and compares those; the node tag is our IR choice, the facts are
 shared. Non-name bases compare structurally and directly.
 
-## Differential results vs Stage-0 oracle
+## Historical expanded corpus (pre-campaign pin)
+
+The larger exploratory parser/check corpus below was run before this campaign
+against the older Stage-0 pin and is preserved as historical evidence only.
+It has not been promoted to current Profile 0.18 parity. The current-pin
+declaration differential is the 9-request, two-run report above; the semantic
+proof has its own current 49-case twin in [`SEM.md`](SEM.md).
+
+## Earlier differential results vs Stage-0 oracle
 
 - Unit differential (structural + first-error spans, 22 positive / 16
   negative): 38 requests, 0 fails, max interpreter steps 2995773
@@ -91,15 +110,18 @@ shared. Non-name bases compare structurally and directly.
 ## Coverage and limits
 
 - Every claim above is bounded-corpus evidence, not all-input equivalence.
-  Inputs are capped at 256 bytes by the four-segment laboratory interface
-  (CP-0001); the 64-byte kernel boundary is superseded for declaration
-  work but whole-module sources remain out of reach.
-- The depth self-check is a verifier-completeness tripwire (a rejection is
-  always a lowering bug), not a source-soundness proof. No type checking,
-  exhaustiveness, effect, or borrow reasoning exists yet.
+  Inputs are capped at 256 bytes by the four-segment compiler interface. The
+  historical 64-byte Stage-0 limit is stale; this native representation cap is
+  a compiler architecture boundary, not a language limit. Whole-project source
+  loading remains unimplemented.
+- In `decl.check_unit`, the depth self-check is a verifier-completeness
+  tripwire, not a source-soundness proof. The separate `decl.prove_unit`
+  provides the bounded type/effect proof described in [`SEM.md`](SEM.md);
+  exhaustiveness and borrow reasoning remain outside that proof domain.
 - Host Python only transports bytes and compares against the oracle; it
   never lexes, parses, or hashes source into facts (CP-0005).
-- No new language pressures were found at this layer beyond CP-0008
-  through CP-0012; the version-gate and empty-body divergences turned out
-  to be implementation bugs (fixed) and a wrong harness expectation
-  (corrected), not language gaps.
+- Current compiler pressures are reconciled in [`../pressure/README.md`](../pressure/README.md).
+  CP-0015 reproduces current-profile parser gaps; CP-0016 was fixed in the
+  language runtime from the originating compiler call; CP-0017 was native
+  semantic drift and is fixed in this compiler. No additional language change
+  was inferred from this declaration differential.

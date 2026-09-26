@@ -2,7 +2,12 @@
 
 ID: CP-0009
 
-Status: partially resolved (2026-09-12)
+Status: resolved for the reproduced bound and iteration-identity cases
+
+> Historical description and reproductions below preserve the original
+> finding. See the current reconciliation at the end of this file and the
+> pressure index for live status.
+
 
 Category: language | compiler-architecture
 
@@ -105,7 +110,7 @@ mncs abi pressure/repro/counted-bound-256.mncs     # MNE142
 mncs abi pressure/repro/iteration-identity-dup.mncs # MNE146
 ```
 
-Step counts: `evidence/decl-results.json` records per-request maxima for
+Step counts: `evidence/decl-results-pre-campaign.json` records per-request maxima for
 the chained passes.
 
 ## Upstream tracking
@@ -130,8 +135,10 @@ ta/sg/fk/pb/kk/fh/ec/vx/pf/gs/ty/tr/sm/tv/tc/tq/tp/us/kc/…) to a single
 `i` per function — 317 sites in `decl.mncs` alone, plus the carried-`i`
 collision (`fin`) and the position-index group (`int_value`) handled
 explicitly. `segment.mncs` links are proven by the new
-`tools/test_segment.py` differential (pending final run); `decl.mncs`
-is parse-checked with elaboration proof staged after CP-0014.
+`tools/test_segment.py` differential, which was pending at the time; `decl.mncs`
+was still awaiting the later CP-0014 repair and current-pin declaration run.
+That run has since completed: the current segment twin passes 10,679 requests
+twice, and the declaration/semantic twins pass at the Profile 0.18 pin.
 
 What remains: fuel is still borrowed from input chunking for bounds
 past 1024 and for derived-data passes (operator stacks, worklists);
@@ -139,3 +146,7 @@ fuel-sufficiency arguments still live in comments; silent exhaustion
 still looks like end-of-input; no-op iterations still cost full steps
 (see CP-0003). The pressure is now about *large* bounds and *derived*
 fuel, not everyday loop naming.
+
+## Current reconciliation (2026-09-25)
+
+Current Stage-0 accepts the preserved up_to 256 and repeated-identity probes at profile 0.18. The compiler still uses chunked bounded passes; no larger fixed bound was introduced.
