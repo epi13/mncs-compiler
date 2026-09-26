@@ -9,23 +9,23 @@ use mncs.compiler.source.v1 as source;
 // 7 expected dot or semicolon; 8 unsupported non-ASCII source.
 record Header { code: u64, start: u64, end: u64, version_start: u64, version_end: u64, module_start: u64, module_end: u64, next_offset: u64, state: u64 }
 
-fn header(text: [byte; up_to 64]) -> (result: Header) {
+fn header<N: Nat>(text: [byte; up_to N]) -> (result: Header) {
     let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
-    if source.ascii(text) {
+    if source.ascii<N>(text) {
         iterate i over text carrying st: Header = seed {
-            next st = step(text, st);
+            next st = step<N>(text, st);
         }
-        return finish(text, st);
+        return finish<N>(text, st);
     }
     return Header { ..seed, code: 8, end: text.len };
 }
-fn finish(text: [byte; up_to 64], st: Header) -> (result: Header) {
+fn finish<N: Nat>(text: [byte; up_to N], st: Header) -> (result: Header) {
     if st.code != 0 || st.state == 8 { return st; }
-    return step(text, st);
+    return step<N>(text, st);
 }
-fn step(text: [byte; up_to 64], st: Header) -> (result: Header) {
+fn step<N: Nat>(text: [byte; up_to N], st: Header) -> (result: Header) {
     if st.code != 0 || st.state == 8 { return st; }
-    let token: lexer.Token = lexer.significant(text, st.next_offset);
+    let token: lexer.Token = lexer.significant<N>(text, st.next_offset);
     if token.diagnostic != 0 { return Header { ..st, code: 1, start: token.start, end: token.end }; }
     if st.state == 0 {
         if token.kind == 10 { return Header { ..st, state: 1, next_offset: token.end }; }

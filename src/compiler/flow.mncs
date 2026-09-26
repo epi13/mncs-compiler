@@ -7,13 +7,6 @@ use mncs.compiler.decl.v1 as decl;
 // decl.prove_unit, alongside explicit branch/jump/return/failure edges. The
 // verifier is limited to statement forms admitted by decl.mncs today.
 
-record Fuel {
-    s0: [byte; up_to 64],
-    s1: [byte; up_to 64],
-    s2: [byte; up_to 64],
-    s3: [byte; up_to 64],
-    total: u64
-}
 
 // kind: 0 open builder, 1 branch, 2 jump, 3 return, 4 fail. `instructions`
 // counts retained typed-stack operations in `expressions`.
@@ -109,9 +102,14 @@ fn empty_block(id: u64, live: bool, join: bool) -> (result: Block) {
     };
 }
 
-fn lower_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], s3: [byte; up_to 64], total: u64) -> (result: LoweredUnit) {
-    let fuel: Fuel = Fuel { s0: s0, s1: s1, s2: s2, s3: s3, total: total };
-    let proof: decl.UnitProve = decl.prove_unit(s0, s1, s2, s3, total);
+fn lower_unit<N: Nat>(input: [byte; up_to N]) -> (result: LoweredUnit) {
+    let proof: decl.UnitProve = decl.prove_unit<N>(input);
+    return lower_proven_unit<N>(input, proof);
+}
+
+// Reuse authoritative proof facts supplied by the project pipeline. This is
+// also the one implementation path used by the standalone adapter above.
+fn lower_proven_unit<N: Nat>(input: [byte; up_to N], proof: decl.UnitProve) -> (result: LoweredUnit) {
     if !(proof.ok) {
         return LoweredUnit {
             valid: false, graph_ok: false, proof: proof,
@@ -119,47 +117,44 @@ fn lower_unit(s0: [byte; up_to 64], s1: [byte; up_to 64], s2: [byte; up_to 64], 
             block_count: 0
         };
     }
-    let unit: decl.Unit = decl.parse_unit(s0, s1, s2, s3, total);
-    let fns: FnWalk = lower_functions(fuel, unit.fns, proof.tops);
-    let count: u64 = diagnostic_count(fuel, fns.diagnostics);
+    let unit: decl.Unit = proof.unit;
+    let fns: FnWalk = lower_functions<N>(input, unit.fns, proof.tops);
+    let count: u64 = diagnostic_count<N>(input, fns.diagnostics);
     return LoweredUnit {
         valid: fns.ok && tops_empty(fns.typed_rest) && count == 0,
         graph_ok: fns.ok && tops_empty(fns.typed_rest), proof: proof,
-        functions: reverse_functions(fuel, fns.acc),
-        diagnostics: reverse_diagnostics(fuel, fns.diagnostics),
+        functions: reverse_functions<N>(input, fns.acc),
+        diagnostics: reverse_diagnostics<N>(input, fns.diagnostics),
         block_count: fns.block_count
     };
 }
 
-fn lower_functions(fuel: Fuel, fns: decl.FnList, tops: decl.TopsList) -> (result: FnWalk) {
-    iterate i over fuel.s0 carrying a: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, ok: true } { next a = lower_fn_step(fuel, a); }
-    iterate i over fuel.s1 carrying b: FnWalk = a { next b = lower_fn_step(fuel, b); }
-    iterate i over fuel.s2 carrying c: FnWalk = b { next c = lower_fn_step(fuel, c); }
-    iterate i over fuel.s3 carrying d: FnWalk = c { next d = lower_fn_step(fuel, d); }
+fn lower_functions<N: Nat>(input: [byte; up_to N], fns: decl.FnList, tops: decl.TopsList) -> (result: FnWalk) {
+    iterate i over input carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, ok: true } { next d = lower_fn_step<N>(input, d); }
     return d;
 }
-fn lower_fn_step(fuel: Fuel, st: FnWalk) -> (result: FnWalk) {
+fn lower_fn_step<N: Nat>(input: [byte; up_to N], st: FnWalk) -> (result: FnWalk) {
     return match st.rest {
         decl.FnList.DNil => st,
-        decl.FnList.DCons { head: h, tail: t } => lower_one_fn(fuel, st, h, t)
+        decl.FnList.DCons { head: h, tail: t } => lower_one_fn<N>(input, st, h, t)
     };
 }
-fn lower_one_fn(fuel: Fuel, st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (result: FnWalk) {
+fn lower_one_fn<N: Nat>(input: [byte; up_to N], st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (result: FnWalk) {
     let initial: Build = Build {
         rest: h.body.body, typed_rest: st.typed_rest, frames: Frames.FNil,
         current: empty_block(0, true, false), blocks: BlockList.BNil,
         diagnostics: DiagnosticList.DNil, next_id: 1, done: false, ok: h.ok,
         fn_start: h.fn_start, fn_end: h.fn_end,
-        source_end: fuel.total,
+        source_end: input.len,
         tail: h.body.ret, has_tail: h.body.has_ret
     };
-    let walked: Build = walk(fuel, initial);
+    let walked: Build = walk<N>(input, initial);
     let finished: Build = finish_build(walked);
-    let blocks: BlockList = reverse_blocks(fuel, finished.blocks);
-    let n: u64 = block_count(fuel, blocks);
-    let targets: bool = verify_targets(fuel, blocks, finished.next_id);
+    let blocks: BlockList = reverse_blocks<N>(input, finished.blocks);
+    let n: u64 = block_count<N>(input, blocks);
+    let targets: bool = verify_targets<N>(input, blocks, finished.next_id);
     let verified: bool = finished.ok && targets && n == finished.next_id;
-    let joins: u64 = diagnostic_count(fuel, finished.diagnostics);
+    let joins: u64 = diagnostic_count<N>(input, finished.diagnostics);
     let flow: FunctionFlow = FunctionFlow {
         fn_start: h.fn_start, fn_end: h.fn_end, entry: 0,
         blocks: blocks, block_count: n, unreachable_joins: joins,
@@ -168,52 +163,49 @@ fn lower_one_fn(fuel: Fuel, st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (resu
     return FnWalk {
         rest: t, typed_rest: finished.typed_rest,
         acc: FunctionList.QCons { head: flow, tail: st.acc },
-        diagnostics: append_diagnostics(fuel, st.diagnostics, finished.diagnostics),
+        diagnostics: append_diagnostics<N>(input, st.diagnostics, finished.diagnostics),
         block_count: st.block_count + n, ok: st.ok && verified
     };
 }
 
-fn walk(fuel: Fuel, initial: Build) -> (result: Build) {
-    iterate i over fuel.s0 carrying a: Build = initial { next a = step(fuel, a); }
-    iterate i over fuel.s1 carrying b: Build = a { next b = step(fuel, b); }
-    iterate i over fuel.s2 carrying c: Build = b { next c = step(fuel, c); }
-    iterate i over fuel.s3 carrying d: Build = c { next d = step(fuel, d); }
+fn walk<N: Nat>(input: [byte; up_to N], initial: Build) -> (result: Build) {
+    iterate i over input carrying d: Build = initial { next d = step<N>(input, d); }
     return d;
 }
-fn step(fuel: Fuel, st: Build) -> (result: Build) {
+fn step<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
     if st.done || !(st.ok) { return st; }
     return match st.rest {
-        decl.StmtList.SNil => step_empty(fuel, st),
-        decl.StmtList.SCons { head: h, tail: t } => step_stmt(fuel, st, h, t)
+        decl.StmtList.SNil => step_empty<N>(input, st),
+        decl.StmtList.SCons { head: h, tail: t } => step_stmt<N>(input, st, h, t)
     };
 }
-fn step_empty(fuel: Fuel, st: Build) -> (result: Build) {
+fn step_empty<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
     return match st.frames {
-        Frames.FNil => finish_tail(fuel, st),
-        Frames.FCons { head: f, tail: t } => unwind(fuel, st, f, t)
+        Frames.FNil => finish_tail<N>(input, st),
+        Frames.FCons { head: f, tail: t } => unwind<N>(input, st, f, t)
     };
 }
-fn step_stmt(fuel: Fuel, st: Build, h: decl.Stmt, t: decl.StmtList) -> (result: Build) {
+fn step_stmt<N: Nat>(input: [byte; up_to N], st: Build, h: decl.Stmt, t: decl.StmtList) -> (result: Build) {
     if st.current.kind != 0 { return Build { ..st, done: true, ok: false }; }
     return match h {
-        decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let(fuel, st, t, v),
-        decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch(fuel, st, t, c, tb, eb),
-        decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail(fuel, st, t, s, e),
-        decl.Stmt.Return { value: v, start: s, end: e } => add_return(fuel, st, t, v, s, e)
+        decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let<N>(input, st, t, v),
+        decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch<N>(input, st, t, c, tb, eb),
+        decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail<N>(input, st, t, s, e),
+        decl.Stmt.Return { value: v, start: s, end: e } => add_return<N>(input, st, t, v, s, e)
     };
 }
-fn add_let(fuel: Fuel, st: Build, t: decl.StmtList, value: decl.Expr) -> (result: Build) {
-    let attached: Build = attach_expression(fuel, st, value, 1);
+fn add_let<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr) -> (result: Build) {
+    let attached: Build = attach_expression<N>(input, st, value, 1);
     return Build { ..attached, rest: t };
 }
-fn add_branch(fuel: Fuel, st: Build, t: decl.StmtList, cond: decl.Expr, then_b: decl.StmtList, else_b: decl.StmtList) -> (result: Build) {
-    let attached: Build = attach_expression(fuel, st, cond, 2);
+fn add_branch<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, cond: decl.Expr, then_b: decl.StmtList, else_b: decl.StmtList) -> (result: Build) {
+    let attached: Build = attach_expression<N>(input, st, cond, 2);
     let yes: u64 = attached.next_id;
     let no: u64 = attached.next_id + 1;
     let join: u64 = attached.next_id + 2;
     let branch: Block = Block {
         ..attached.current, kind: 1,
-        expressions: reverse_typed_expressions(fuel, attached.current.expressions),
+        expressions: reverse_typed_expressions<N>(input, attached.current.expressions),
         term_start: decl.expr_start(cond), term_end: decl.expr_end(cond),
         succ0: yes, succ1: no, succ_count: 2
     };
@@ -226,24 +218,24 @@ fn add_branch(fuel: Fuel, st: Build, t: decl.StmtList, cond: decl.Expr, then_b: 
         next_id: attached.next_id + 3
     };
 }
-fn add_return(fuel: Fuel, st: Build, t: decl.StmtList, value: decl.Expr, s: u64, e: u64) -> (result: Build) {
-    let attached: Build = attach_expression(fuel, st, value, 3);
-    let source_order: TypedExprList = reverse_typed_expressions(fuel, attached.current.expressions);
+fn add_return<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr, s: u64, e: u64) -> (result: Build) {
+    let attached: Build = attach_expression<N>(input, st, value, 3);
+    let source_order: TypedExprList = reverse_typed_expressions<N>(input, attached.current.expressions);
     let b: Block = Block { ..attached.current, kind: 3, expressions: source_order, term_start: decl.expr_start(value), term_end: decl.expr_end(value) };
     return Build { ..attached, rest: t, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks } };
 }
-fn add_fail(fuel: Fuel, st: Build, t: decl.StmtList, s: u64, e: u64) -> (result: Build) {
-    let b: Block = Block { ..st.current, kind: 4, expressions: reverse_typed_expressions(fuel, st.current.expressions), term_start: s, term_end: e };
+fn add_fail<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, s: u64, e: u64) -> (result: Build) {
+    let b: Block = Block { ..st.current, kind: 4, expressions: reverse_typed_expressions<N>(input, st.current.expressions), term_start: s, term_end: e };
     return Build { ..st, rest: t, current: b, blocks: BlockList.BCons { head: b, tail: st.blocks } };
 }
 
-fn unwind(fuel: Fuel, st: Build, f: Frame, tail: Frames) -> (result: Build) {
-    if f.phase == 0 { return unwind_then(fuel, st, f, tail); }
-    return unwind_else(fuel, st, f, tail);
+fn unwind<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames) -> (result: Build) {
+    if f.phase == 0 { return unwind_then<N>(input, st, f, tail); }
+    return unwind_else<N>(input, st, f, tail);
 }
-fn unwind_then(fuel: Fuel, st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind_then<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
-    let first: Build = close_to_join(fuel, st, f.join_id);
+    let first: Build = close_to_join<N>(input, st, f.join_id);
     let changed: Frame = Frame { ..f, phase: 1, then_falls: falls };
     return Build {
         ..first, rest: f.else_body,
@@ -251,9 +243,9 @@ fn unwind_then(fuel: Fuel, st: Build, f: Frame, tail: Frames) -> (result: Build)
         current: empty_block(f.else_id, f.parent_live, false)
     };
 }
-fn unwind_else(fuel: Fuel, st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind_else<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
-    let second: Build = close_to_join(fuel, st, f.join_id);
+    let second: Build = close_to_join<N>(input, st, f.join_id);
     let join_live: bool = f.then_falls || falls;
     let diags: DiagnosticList = add_join_diagnostic(second, join_live, 0, st.source_end);
     return Build {
@@ -266,28 +258,28 @@ fn add_join_diagnostic(st: Build, live: bool, start: u64, end: u64) -> (result: 
     if live { return st.diagnostics; }
     return DiagnosticList.DCons { head: Diagnostic { code: 38, start: start, end: end }, tail: st.diagnostics };
 }
-fn close_to_join(fuel: Fuel, st: Build, join_id: u64) -> (result: Build) {
+fn close_to_join<N: Nat>(input: [byte; up_to N], st: Build, join_id: u64) -> (result: Build) {
     if st.current.kind != 0 { return st; }
-    let source_order: TypedExprList = reverse_typed_expressions(fuel, st.current.expressions);
+    let source_order: TypedExprList = reverse_typed_expressions<N>(input, st.current.expressions);
     let b: Block = Block { ..st.current, kind: 2, expressions: source_order, succ0: join_id, succ_count: 1 };
     return Build { ..st, current: b, blocks: BlockList.BCons { head: b, tail: st.blocks } };
 }
-fn finish_tail(fuel: Fuel, st: Build) -> (result: Build) {
+fn finish_tail<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
     if !(st.has_tail) { return Build { ..st, done: true, ok: false }; }
     if st.current.kind != 0 { return Build { ..st, done: true }; }
-    let attached: Build = attach_expression(fuel, st, st.tail, 3);
-    let source_order: TypedExprList = reverse_typed_expressions(fuel, attached.current.expressions);
+    let attached: Build = attach_expression<N>(input, st, st.tail, 3);
+    let source_order: TypedExprList = reverse_typed_expressions<N>(input, attached.current.expressions);
     let b: Block = Block { ..attached.current, kind: 3, expressions: source_order, term_start: decl.expr_start(attached.tail), term_end: decl.expr_end(attached.tail) };
     return Build { ..attached, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks }, done: true };
 }
-fn attach_expression(fuel: Fuel, st: Build, expression: decl.Expr, role: u64) -> (result: Build) {
+fn attach_expression<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64) -> (result: Build) {
     return match st.typed_rest {
         decl.TopsList.TLNil => Build { ..st, done: true, ok: false },
-        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops(fuel, st, expression, role, ops, rest)
+        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<N>(input, st, expression, role, ops, rest)
     };
 }
-fn attach_typed_ops(fuel: Fuel, st: Build, expression: decl.Expr, role: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
-    let n: u64 = decl.count_tops(fuel.s0, fuel.s1, fuel.s2, fuel.s3, ops);
+fn attach_typed_ops<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
+    let n: u64 = decl.count_tops<N>(input, ops);
     if n == 0 { return Build { ..st, done: true, ok: false }; }
     let typed: TypedExpr = TypedExpr { role: role, start: decl.expr_start(expression), end: decl.expr_end(expression), ops: ops, op_count: n };
     let exprs: TypedExprList = TypedExprList.ECons { head: typed, tail: st.current.expressions };
@@ -300,11 +292,8 @@ fn tops_empty(tops: decl.TopsList) -> (result: bool) {
         decl.TopsList.TLCons { head: h, tail: t } => false
     };
 }
-fn reverse_typed_expressions(fuel: Fuel, expressions: TypedExprList) -> (result: TypedExprList) {
-    iterate i over fuel.s0 carrying a: TypedExprRev = TypedExprRev { rest: expressions, acc: TypedExprList.ENil } { next a = reverse_typed_expression_step(a); }
-    iterate i over fuel.s1 carrying b: TypedExprRev = a { next b = reverse_typed_expression_step(b); }
-    iterate i over fuel.s2 carrying c: TypedExprRev = b { next c = reverse_typed_expression_step(c); }
-    iterate i over fuel.s3 carrying d: TypedExprRev = c { next d = reverse_typed_expression_step(d); }
+fn reverse_typed_expressions<N: Nat>(input: [byte; up_to N], expressions: TypedExprList) -> (result: TypedExprList) {
+    iterate i over input carrying d: TypedExprRev = TypedExprRev { rest: expressions, acc: TypedExprList.ENil } { next d = reverse_typed_expression_step(d); }
     return d.acc;
 }
 fn reverse_typed_expression_step(st: TypedExprRev) -> (result: TypedExprRev) {
@@ -318,11 +307,8 @@ fn finish_build(st: Build) -> (result: Build) {
     return Build { ..st, done: true, ok: false };
 }
 
-fn reverse_blocks(fuel: Fuel, list: BlockList) -> (result: BlockList) {
-    iterate i over fuel.s0 carrying a: BlockRev = BlockRev { rest: list, acc: BlockList.BNil } { next a = reverse_block_step(a); }
-    iterate i over fuel.s1 carrying b: BlockRev = a { next b = reverse_block_step(b); }
-    iterate i over fuel.s2 carrying c: BlockRev = b { next c = reverse_block_step(c); }
-    iterate i over fuel.s3 carrying d: BlockRev = c { next d = reverse_block_step(d); }
+fn reverse_blocks<N: Nat>(input: [byte; up_to N], list: BlockList) -> (result: BlockList) {
+    iterate i over input carrying d: BlockRev = BlockRev { rest: list, acc: BlockList.BNil } { next d = reverse_block_step(d); }
     return d.acc;
 }
 fn reverse_block_step(st: BlockRev) -> (result: BlockRev) {
@@ -331,11 +317,8 @@ fn reverse_block_step(st: BlockRev) -> (result: BlockRev) {
         BCons { head: h, tail: t } => BlockRev { rest: t, acc: BlockList.BCons { head: h, tail: st.acc } }
     };
 }
-fn block_count(fuel: Fuel, blocks: BlockList) -> (result: u64) {
-    iterate i over fuel.s0 carrying a: BlockCount = BlockCount { rest: blocks, count: 0 } { next a = block_count_step(a); }
-    iterate i over fuel.s1 carrying b: BlockCount = a { next b = block_count_step(b); }
-    iterate i over fuel.s2 carrying c: BlockCount = b { next c = block_count_step(c); }
-    iterate i over fuel.s3 carrying d: BlockCount = c { next d = block_count_step(d); }
+fn block_count<N: Nat>(input: [byte; up_to N], blocks: BlockList) -> (result: u64) {
+    iterate i over input carrying d: BlockCount = BlockCount { rest: blocks, count: 0 } { next d = block_count_step(d); }
     return d.count;
 }
 fn block_count_step(st: BlockCount) -> (result: BlockCount) {
@@ -344,11 +327,8 @@ fn block_count_step(st: BlockCount) -> (result: BlockCount) {
         BCons { head: h, tail: t } => BlockCount { rest: t, count: st.count + 1 }
     };
 }
-fn verify_targets(fuel: Fuel, blocks: BlockList, limit: u64) -> (result: bool) {
-    iterate i over fuel.s0 carrying a: TargetCheck = TargetCheck { rest: blocks, limit: limit, ok: true } { next a = target_step(a); }
-    iterate i over fuel.s1 carrying b: TargetCheck = a { next b = target_step(b); }
-    iterate i over fuel.s2 carrying c: TargetCheck = b { next c = target_step(c); }
-    iterate i over fuel.s3 carrying d: TargetCheck = c { next d = target_step(d); }
+fn verify_targets<N: Nat>(input: [byte; up_to N], blocks: BlockList, limit: u64) -> (result: bool) {
+    iterate i over input carrying d: TargetCheck = TargetCheck { rest: blocks, limit: limit, ok: true } { next d = target_step(d); }
     return d.ok && block_list_empty(d.rest);
 }
 fn block_list_empty(list: BlockList) -> (result: bool) {
@@ -368,11 +348,8 @@ fn target_check_block(st: TargetCheck, h: Block, t: BlockList) -> (result: Targe
     return TargetCheck { ..st, rest: t, ok: false };
 }
 
-fn diagnostic_count(fuel: Fuel, list: DiagnosticList) -> (result: u64) {
-    iterate i over fuel.s0 carrying a: DiagCount = DiagCount { rest: list, count: 0 } { next a = count_diag_step(a); }
-    iterate i over fuel.s1 carrying b: DiagCount = a { next b = count_diag_step(b); }
-    iterate i over fuel.s2 carrying c: DiagCount = b { next c = count_diag_step(c); }
-    iterate i over fuel.s3 carrying d: DiagCount = c { next d = count_diag_step(d); }
+fn diagnostic_count<N: Nat>(input: [byte; up_to N], list: DiagnosticList) -> (result: u64) {
+    iterate i over input carrying d: DiagCount = DiagCount { rest: list, count: 0 } { next d = count_diag_step(d); }
     return d.count;
 }
 fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
@@ -382,19 +359,13 @@ fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
     };
 }
 
-fn append_diagnostics(fuel: Fuel, first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
-    let rev: DiagnosticList = reverse_diagnostics(fuel, first);
-    iterate i over fuel.s0 carrying a: DiagRev = DiagRev { rest: rev, acc: second } { next a = prepend_diag_step(a); }
-    iterate i over fuel.s1 carrying b: DiagRev = a { next b = prepend_diag_step(b); }
-    iterate i over fuel.s2 carrying c: DiagRev = b { next c = prepend_diag_step(c); }
-    iterate i over fuel.s3 carrying d: DiagRev = c { next d = prepend_diag_step(d); }
+fn append_diagnostics<N: Nat>(input: [byte; up_to N], first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
+    let rev: DiagnosticList = reverse_diagnostics<N>(input, first);
+    iterate i over input carrying d: DiagRev = DiagRev { rest: rev, acc: second } { next d = prepend_diag_step(d); }
     return d.acc;
 }
-fn reverse_diagnostics(fuel: Fuel, list: DiagnosticList) -> (result: DiagnosticList) {
-    iterate i over fuel.s0 carrying a: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } { next a = reverse_diag_step(a); }
-    iterate i over fuel.s1 carrying b: DiagRev = a { next b = reverse_diag_step(b); }
-    iterate i over fuel.s2 carrying c: DiagRev = b { next c = reverse_diag_step(c); }
-    iterate i over fuel.s3 carrying d: DiagRev = c { next d = reverse_diag_step(d); }
+fn reverse_diagnostics<N: Nat>(input: [byte; up_to N], list: DiagnosticList) -> (result: DiagnosticList) {
+    iterate i over input carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } { next d = reverse_diag_step(d); }
     return d.acc;
 }
 fn reverse_diag_step(st: DiagRev) -> (result: DiagRev) {
@@ -410,11 +381,8 @@ fn prepend_diag_step(st: DiagRev) -> (result: DiagRev) {
     };
 }
 
-fn reverse_functions(fuel: Fuel, list: FunctionList) -> (result: FunctionList) {
-    iterate i over fuel.s0 carrying a: FnRev = FnRev { rest: list, acc: FunctionList.QNil } { next a = reverse_fn_step(a); }
-    iterate i over fuel.s1 carrying b: FnRev = a { next b = reverse_fn_step(b); }
-    iterate i over fuel.s2 carrying c: FnRev = b { next c = reverse_fn_step(c); }
-    iterate i over fuel.s3 carrying d: FnRev = c { next d = reverse_fn_step(d); }
+fn reverse_functions<N: Nat>(input: [byte; up_to N], list: FunctionList) -> (result: FunctionList) {
+    iterate i over input carrying d: FnRev = FnRev { rest: list, acc: FunctionList.QNil } { next d = reverse_fn_step(d); }
     return d.acc;
 }
 fn reverse_fn_step(st: FnRev) -> (result: FnRev) {

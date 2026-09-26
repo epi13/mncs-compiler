@@ -44,12 +44,23 @@ architecture; no language feature is justified by these measurements alone.
 
 ## Current reconciliation (2026-09-25)
 
-The old serialized-size evidence is pinned to 6906d0b. The current Profile 0.18
-Stage-0 kernel compile was repeated twice in 15.191 and 15.657 seconds, with
-byte-identical outputs. `semantic.json` is 1,976,559 bytes, `hir.json` is
-11,017,712 bytes, and `ssa.json` is 9,002,374 bytes; the outer `result.json`
-is 23,813,424 bytes and contains the combined compile result. Both reports
-retain 213 CMP301 unresolved obligations and status
-`completed_with_unresolved_obligations`. This measures linked artifact sizes
-and reference compile time, not peak memory or native compiler cost. See
-[`evidence/compile-results.json`](../evidence/compile-results.json).
+The old serialized-size evidence is pinned to 6906d0b. Under current
+Stage-0 `b0f3e644`, the kernel compile was repeated twice in 10.792 and
+10.848 seconds, with byte-identical outputs. `semantic.json` is 1,990,931
+bytes, `hir.json` is 2,459,625 bytes, and `ssa.json` is 2,348,993 bytes;
+the outer `result.json` is 7,240,844 bytes. Both reports retain 213 CMP301
+unresolved obligations and status `completed_with_unresolved_obligations`.
+This preserves the earlier same-pin measurement; its executable mode was
+not recorded, so the timing is not treated as a controlled comparison with
+the release build below. It measures linked artifact sizes and reference
+compile time, not peak memory or native compiler cost.
+
+### Release-mode remeasurement (2026-09-25, Stage-0 `b0f3e644`)
+
+The compiler campaign rebuilt the locked Stage-0 CLI in release mode and
+repeated the exact kernel compile twice. Wall times were 1.099 and 1.128
+seconds, with byte-identical outputs and the same 213 CMP301 unresolved
+obligations. Artifact sizes and hashes are recorded in
+[`evidence/campaign-20260925-compile-cost-results.json`](../evidence/campaign-20260925-compile-cost-results.json).
+This is a current release-mode reference measurement; it does not establish
+peak memory or native compiler cost.

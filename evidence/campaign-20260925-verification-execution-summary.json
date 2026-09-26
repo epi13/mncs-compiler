@@ -1,0 +1,173 @@
+{
+  "additional_current_executions": [
+    {
+      "evidence_file": "campaign-20260925-bootstrap-results.json",
+      "kind": "bootstrap_integrity",
+      "stage0_revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+      "status": "PASS",
+      "wall_seconds": 0.142
+    },
+    {
+      "evidence": "mncs-language docs/development-evidence/ravel-source-subject-provenance-2026-09.md",
+      "evidence_file": "campaign-20260925-language-impact-cli-tests.json",
+      "kind": "Stage-0 CLI source-subject artifact tests",
+      "passed": 40,
+      "status": "PASS",
+      "test": "cargo test --locked -p mncs-cli --test semantic_commands"
+    },
+    {
+      "evidence": "campaign-20260925-tooling-preflight.json",
+      "kind": "RAVEL source obligation planning tests",
+      "passed": 12,
+      "status": "PASS",
+      "test": "PYTHONPATH=<dedicated-RAVEL>/src python3 -m unittest tests.test_impact",
+      "wall_seconds": 13.097
+    },
+    {
+      "evidence_file": "campaign-20260925-backend-comparison.json",
+      "kind": "Matched backend execution",
+      "request": "flow.lower_unit/fallthrough_join",
+      "same_return_hash": true,
+      "status": "PASS"
+    },
+    {
+      "evidence_file": "campaign-20260925-pressure-reconciliation.json",
+      "kind": "current-profile pressure revalidation",
+      "probes": 21,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 0.092
+    }
+  ],
+  "canonical_compiler_obligations_executed": [
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.frontend-differential",
+      "requests_or_cases": 7893,
+      "result_file": "campaign-20260925-frontend-results.json",
+      "retained_sessions": 3,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 31.249
+    },
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.segment-differential",
+      "requests_or_cases": 6564,
+      "result_file": "campaign-20260925-segment-results.json",
+      "retained_sessions": 1,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 16.178
+    },
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.declaration-differential",
+      "requests_or_cases": 9,
+      "result_file": "campaign-20260925-declaration-results.json",
+      "retained_sessions": 1,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 75.341
+    },
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.semantic-proof-differential",
+      "requests_or_cases": 54,
+      "result_file": "campaign-20260925-semantic-results.json",
+      "retained_sessions": 1,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 76.713
+    },
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.flow-cfg-differential",
+      "requests_or_cases": 21,
+      "result_file": "campaign-20260925-flow-results.json",
+      "retained_sessions": 0,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 42.191
+    },
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.project-source-differential",
+      "requests_or_cases": 21,
+      "result_file": "campaign-20260925-project-results.json",
+      "retained_sessions": 0,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 53.083
+    },
+    {
+      "description": "four expected pressure rejections plus one supported record-sequence control",
+      "execution_mode": "external_stage0_cli",
+      "obligation_identity": "mncs-compiler.pressure-reproductions",
+      "requests_or_cases": 5,
+      "result_file": "campaign-20260925-pressure-suite-results.json",
+      "retained_sessions": 0,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 0.0105
+    },
+    {
+      "execution_mode": "retained_cranelift",
+      "obligation_identity": "mncs-compiler.profile-018-syntax",
+      "requests_or_cases": 5,
+      "result_file": "campaign-20260925-profile-surface-results.json",
+      "retained_sessions": 0,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 37.51
+    },
+    {
+      "execution_mode": "locked_stage0_cli",
+      "obligation_identity": "mncs-compiler.production-calls",
+      "requests_or_cases": 2,
+      "result_file": "campaign-20260925-compile-cost-results.json",
+      "retained_sessions": 0,
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "status": "PASS",
+      "wall_seconds": 2.227
+    }
+  ],
+  "final_execution_decision": "RAVEL marked all selected compiler obligations current and required no new execution; canonical suite results were reused with their original b0f3 pin recorded. Bootstrap integrity was executed again at locked 4f9. No result file was relabeled across pins.",
+  "final_ravel_flow_plan": {
+    "new_execution_required": [],
+    "reused_evidence_references": 16,
+    "selected_obligations": [
+      "mncs-compiler.flow-cfg-differential"
+    ],
+    "status": "PASS"
+  },
+  "final_ravel_project_plan": {
+    "new_execution_required": [],
+    "reused_evidence_references": 16,
+    "selected_obligations": [
+      "mncs-compiler.project-source-differential"
+    ],
+    "status": "PASS"
+  },
+  "final_ravel_revision": "4ab04a893b3e27e4de6b8a85ab1e9a6225ed54e4",
+  "final_ravel_source_root_plan": {
+    "evidence_audit": "campaign-20260925-evidence-reuse-audit.json",
+    "new_execution_required": [],
+    "reused_evidence_references": 16,
+    "selected_obligations": [
+      "mncs-compiler.frontend-differential",
+      "mncs-compiler.segment-differential",
+      "mncs-compiler.declaration-differential",
+      "mncs-compiler.semantic-proof-differential",
+      "mncs-compiler.flow-cfg-differential",
+      "mncs-compiler.project-source-differential",
+      "mncs-compiler.pressure-reproductions",
+      "mncs-compiler.profile-018-syntax",
+      "mncs-compiler.production-calls"
+    ],
+    "status": "PASS"
+  },
+  "final_stage0_revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+  "recorded_at": "2026-09-26",
+  "schema_version": "mncs-compiler.verification-execution-summary/1"
+}

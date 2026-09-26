@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+  "stage0_reference_mode": "locked",
+  "source_profile": "0.18",
+  "identical_native_repetitions": 2,
+  "elapsed_seconds": 42.191,
+  "scope": "MNCS typed expression operations assigned to CFG blocks and join reachability vs current Rust Stage-0 diagnostics and SSA control shape",
+  "requests": 21,
+  "result_sha256": "4a21fa8462b50ddb5ed292b32f2c8dda3b2794bf8515557ab49e5a238ab7e1e3",
+  "execution_steps_total": 8,
+  "execution_steps_max": 1,
+  "execution_mode": "retained_cranelift",
+  "retained_execution_sessions": 1,
+  "cases": [
+    {
+      "case": "fallthrough_join",
+      "diagnostics": [],
+      "native_graph": {
+        "functions": 1,
+        "blocks": 4,
+        "branches": 1,
+        "jumps": 1,
+        "returns": 2,
+        "typed_expressions": 4,
+        "typed_operations": 4
+      },
+      "stage0_ssa_shape": [
+        1,
+        2
+      ],
+      "deterministic_repetitions": 2
+    },
+    {
+      "case": "multiple_functions",
+      "diagnostics": [],
+      "native_graph": {
+        "functions": 2,
+        "blocks": 5,
+        "branches": 1,
+        "jumps": 1,
+        "returns": 3,
+        "typed_expressions": 4,
+        "typed_operations": 4
+      },
+      "stage0_ssa_shape": [
+        1,
+        3
+      ],
+      "deterministic_repetitions": 2
+    },
+    {
+      "case": "unreachable_join",
+      "diagnostics": [
+        [
+          "MNB038",
+          0,
+          147
+        ]
+      ],
+      "native_graph": {
+        "functions": 1,
+        "blocks": 4,
+        "branches": 1,
+        "jumps": 0,
+        "returns": 3,
+        "typed_expressions": 4,
+        "typed_operations": 4
+      },
+      "stage0_ssa_shape": null,
+      "deterministic_repetitions": 2
+    },
+    {
+      "case": "nested_unreachable_joins",
+      "diagnostics": [
+        [
+          "MNB038",
+          0,
+          147
+        ],
+        [
+          "MNB038",
+          0,
+          147
+        ]
+      ],
+      "native_graph": {
+        "functions": 1,
+        "blocks": 7,
+        "branches": 2,
+        "jumps": 1,
+        "returns": 4,
+        "typed_expressions": 6,
+        "typed_operations": 6
+      },
+      "stage0_ssa_shape": null,
+      "deterministic_repetitions": 2
+    }
+  ]
+}

@@ -4,9 +4,9 @@ decl.check_unit symbol/resolve/IR verdicts. Temporary test transport; all
 parsing, checking, and lowering execute in MNCS or Stage-0. Python only
 moves bytes and compares against the oracle on every run (no goldens).
 
-Kept small on purpose: reference-interpreter steps cost ~20s per unit
-request, so the broad corpus lives in evidence/DECL.md while this suite
-guards the key properties with a twin determinism run.
+Kept small on purpose: this focused corpus guards key properties with a
+twin determinism run. The retained backend is the normal fast path when
+available; the reference interpreter remains an independent fallback.
 """
 import hashlib
 import json
@@ -16,6 +16,7 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
 OUT = ROOT / '.build'
 OUT.mkdir(exist_ok=True)
@@ -47,17 +48,6 @@ def decode(value):
     if 'boolean' in value:
         return value['boolean']['value']
     return next(iter(value.values()))['value']
-
-
-def split4(data: bytes):
-    n = len(data)
-    cuts = [min(n, 64), min(n, 128), min(n, 192)]
-    parts, prev = [], 0
-    for c in cuts:
-        parts.append(data[prev:c])
-        prev = c
-    parts.append(data[prev:])
-    return parts
 
 
 def flist(v, cons):
@@ -232,11 +222,36 @@ CHECKS = [
     ('mncs 0.10; module t; fn f() -> (r: u64) { return g(1); }', 2),
 ]
 
+SOURCE_BOUND = max(len(text.encode()) for text in POS + NEG + [item[0] for item in CHECKS])
+
+
+def source_bytes(text):
+    raw = text.encode() if isinstance(text, str) else bytes(text)
+    assert len(raw) <= SOURCE_BOUND
+    return raw + b' ' * (SOURCE_BOUND - len(raw))
+
+
+def nat_arg(value):
+    return {'kind': 'nat', 'value': value}
+
 
 class Probe:
     def __init__(self):
-        self.proc = subprocess.Popen(['.bootstrap/target/debug/mncs-compiler-stage0-probe'],
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT)
+        env = dict(os.environ)
+        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+            env.pop("MNCS_PROBE_BACKEND", None)
+        env['MNCS_PROBE_MODULES'] = 'source,lexer,parser,segment,decl'
+        env['MNCS_PROBE_EXECUTION_MODULES'] = 'mncs.compiler.decl.v1'
+        env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+        env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
+            {'module': 'mncs.compiler.decl.v1', 'function': function,
+             'type_arguments': [nat_arg(SOURCE_BOUND)]}
+            for function in ['parse_unit', 'check_unit', 'prove_unit']
+        ])
+        self.proc = subprocess.Popen(
+            [env.get('MNCS_PROBE_BIN', str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=env
+        )
         self.count = 0
         self.steps = []
         self.digest = hashlib.sha256()
@@ -249,8 +264,9 @@ class Probe:
         return json.loads(line)
 
     def run(self, unit, function, args):
+        bound = len(args[0]['sequence']['values'])
         request = {'schema_version': '0.1', 'target': {'module': f'mncs.compiler.{unit}.v1', 'function': function},
-                   'arguments': args, 'step_budget': 8000000}
+                   'arguments': args, 'type_arguments': [nat_arg(bound)], 'step_budget': 8000000}
         result = self.send(request)
         assert result['status'] == 'returned', (function, result)
         self.count += 1
@@ -264,21 +280,21 @@ class Probe:
 
 
 def check_unit_case(probe, text):
-    data = text.encode()
-    assert len(data) <= 256, text
-    args = [blob(p) for p in split4(data)] + [integer(len(data))]
-    return probe.run('decl', 'check_unit', args)
+    return probe.run('decl', 'check_unit', [blob(source_bytes(text))])
 
 
 def suite():
     probe = Probe()
     try:
+        execution_status = probe.send({'execution_status': True})
+        if execution_status.get('backend') == 'cranelift':
+            assert execution_status['backend'] == 'cranelift', execution_status
+            assert execution_status['retained_sessions'] == 1, execution_status
         for text in POS:
-            data = text.encode()
-            assert len(data) <= 256, text
-            args = [blob(p) for p in split4(data)] + [integer(len(data))]
-            got = probe.run('decl', 'parse_unit', args)
-            oracle = probe.send({'oracle': text})
+            data = source_bytes(text)
+            source_text = data.decode()
+            got = probe.run('decl', 'parse_unit', [blob(data)])
+            oracle = probe.send({'oracle': source_text})
             assert not oracle['diagnostics'], (text, oracle['diagnostics'])
             assert got['ok'], (text, got['err_start'], got['err_end'])
             a = oracle['ast']
@@ -307,11 +323,10 @@ def suite():
                                     [('ret', norm_expr(hf['body']['ret'], src))])
                 assert [deep(x) for x in wstmts] == [deep(x) for x in hstmts], (text, hstmts, wstmts)
         for text in NEG:
-            data = text.encode()
-            assert len(data) <= 256, text
-            args = [blob(p) for p in split4(data)] + [integer(len(data))]
-            got = probe.run('decl', 'parse_unit', args)
-            oracle = probe.send({'oracle': text})
+            data = source_bytes(text)
+            source_text = data.decode()
+            got = probe.run('decl', 'parse_unit', [blob(data)])
+            oracle = probe.send({'oracle': source_text})
             odiags = oracle['diagnostics'] or []
             assert odiags, text
             assert not got['ok'], text
@@ -326,7 +341,9 @@ def suite():
                 assert not got['ok'], (text, got)
         return {'requests': probe.count, 'pos': len(POS), 'neg': len(NEG), 'checks': len(CHECKS),
                 'result_sha256': probe.digest.hexdigest(),
-                'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps)}
+                'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
+                'execution_mode': 'retained_cranelift' if execution_status['retained_sessions'] else 'reference_interpreter',
+                'retained_execution_sessions': execution_status['retained_sessions']}
     finally:
         probe.close()
 
@@ -337,6 +354,6 @@ if __name__ == '__main__':
     assert first == second, (first, second)
     report = {'schema_version': 1, 'stage0_revision': json.loads(Path('mncs-language.lock.json').read_text())['revision'],
               'tests': first, 'identical_runs': 2, 'elapsed_seconds': round(time.monotonic() - started, 3),
-              'scope': 'decl.parse_unit structural + first-error-span differential vs Stage-0; decl.check_unit symbol/resolve/IR verdicts; reference interpreter execution'}
+              'scope': 'decl.parse_unit structural + first-error-span differential vs Stage-0; decl.check_unit symbol/resolve/IR verdicts; execution mode and retained-session counts are recorded per run'}
     (OUT / 'decl-results.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))

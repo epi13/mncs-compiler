@@ -1,0 +1,124 @@
+{
+  "after": {
+    "commons_revision": "fa6d38922c18dc7ffe32431af876e856dafe40dd",
+    "direct_source_test_plan": {
+      "plan": "campaign-20260925-final-source-plan.json",
+      "root": "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+      "source_test_inventory_and_impact_sessions": 1,
+      "source_test_inventory_requested": true,
+      "wall_seconds": 0.623
+    },
+    "executed_obligations_during_planning": [],
+    "flow_plan": {
+      "impact_calls": 1,
+      "new_execution_required": [],
+      "obligation_plan": "campaign-20260925-final-flow-obligation-plan.json",
+      "obligation_status": "current",
+      "plan": "campaign-20260925-final-flow-plan.json",
+      "reused_evidence_refs": 16,
+      "selected_obligations": [
+        "mncs-compiler.flow-cfg-differential"
+      ],
+      "selection_level": "direct_dependents",
+      "source_test_inventory_requested": false,
+      "sufficient_to_stop": false,
+      "wall_seconds": 13.169
+    },
+    "interpretation": "RAVEL consumes compiler source_subject facts for repository obligation plans and retains source test inventory when direct source-test selection needs it. Plans report direct_dependents and sufficient_to_stop=false; this is a bounded selection result, not execution or repository-canonical closure.",
+    "inventory_identity": "328cf318950a4074321964cb2ef6a586d001551c5cb0199a8d979fe9b29f3f4e",
+    "project_plan": {
+      "new_execution_required": [],
+      "obligation_plan": "campaign-20260925-final-project-obligation-plan.json",
+      "obligation_status": "current",
+      "plan": "campaign-20260925-final-project-plan.json",
+      "reused_evidence_refs": 16,
+      "selected_obligations": [
+        "mncs-compiler.project-source-differential"
+      ],
+      "source_test_inventory_requested": false,
+      "sufficient_to_stop": false,
+      "wall_seconds": 14.896
+    },
+    "ravel_revision": "4ab04a893b3e27e4de6b8a85ab1e9a6225ed54e4",
+    "source_root_plan": {
+      "all_statuses": "current",
+      "new_execution_required": [],
+      "obligation_plan": "campaign-20260925-final-source-obligations.json",
+      "plan": "campaign-20260925-final-source-obligation-plan.json",
+      "reused_evidence_refs": 16,
+      "selected_obligations": [
+        "mncs-compiler.frontend-differential",
+        "mncs-compiler.segment-differential",
+        "mncs-compiler.declaration-differential",
+        "mncs-compiler.semantic-proof-differential",
+        "mncs-compiler.flow-cfg-differential",
+        "mncs-compiler.project-source-differential",
+        "mncs-compiler.pressure-reproductions",
+        "mncs-compiler.profile-018-syntax",
+        "mncs-compiler.production-calls"
+      ],
+      "source_test_inventory_requested": false,
+      "sufficient_to_stop": false,
+      "wall_seconds": 9.226
+    },
+    "stage0_revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+    "status": "PASS"
+  },
+  "before": {
+    "interpretation": "Both independent cold compiler commands timed out. The result remains UNKNOWN; it was never treated as zero work.",
+    "plan_generated": false,
+    "requests": [
+      {
+        "command": "mncs impact",
+        "result": "timed_out",
+        "timeout_seconds": 180
+      },
+      {
+        "command": "mncs test-inventory",
+        "result": "timed_out",
+        "timeout_seconds": 180
+      }
+    ],
+    "result": "UNKNOWN",
+    "wall_seconds": 360.251
+  },
+  "campaign_started": "2026-09-25",
+  "intermediate": [
+    {
+      "command": "mncs impact --include-test-inventory",
+      "interpretation": "Combined impact and test-inventory acquisition used one front-end session, but did not yet have current reusable flow evidence.",
+      "new_execution_required": [
+        "mncs-compiler.flow-cfg-differential"
+      ],
+      "ravel_revision": "9f706991b03fec59b367602bd67f0274dac36405",
+      "result": "PASS",
+      "reused_evidence": [],
+      "selected_obligations": [
+        "mncs-compiler.flow-cfg-differential"
+      ],
+      "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "wall_seconds": 20.992
+    },
+    {
+      "error": "typed sequence length 0 does not match exact 32",
+      "interpretation": "The impact artifact did not expose compiler-issued source subject identity/fingerprint independently from the optional test inventory.",
+      "request": "source plan without --include-test-inventory",
+      "result": "UNKNOWN",
+      "wall_seconds": 4.32
+    },
+    {
+      "cause": "transient invalid --library argument named a nonexistent compiler/library directory",
+      "disposition": "Corrected to the locked Stage-0 library root; current exact-head RAVEL plans pass.",
+      "result": "UNKNOWN"
+    }
+  ],
+  "last_updated": "2026-09-26",
+  "root": "mncs:0.2:function:mncs.compiler.flow.v1::lower_unit",
+  "schema_version": "mncs-compiler.ravel-planning-campaign/2",
+  "source": "src/compiler/flow.mncs",
+  "starting_heads": {
+    "mncs_commons": "1d3d50bb4cc27c0793b97672ae7dd7f8dbad4de6",
+    "mncs_language": "6b21f1f968996a3886616502e4a2797144175ad9",
+    "ravel": "ebc89f4b063e8cd5bbd9cd30e681893bde25a5dc"
+  }
+}

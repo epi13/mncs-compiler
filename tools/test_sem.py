@@ -9,11 +9,13 @@ Also checks sabotage/soundness verdicts and run-to-run determinism.
 """
 import hashlib
 import json
+import os
 import subprocess
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 
 KIND_TO_MNE = {
     1: 'MNE102', 2: 'MNE117', 3: 'MNE118', 4: 'MNE122', 5: 'MNE110',
@@ -25,6 +27,16 @@ KIND_TO_MNE = {
     34: 'MNE121', 35: 'MNE163', 36: 'MNE173', 37: 'MNE104',
 }
 UNKNOWN_KINDS = {13, 14, 16}
+
+
+def source_bytes(text):
+    raw = text.encode() if isinstance(text, str) else bytes(text)
+    assert len(raw) <= SOURCE_BOUND
+    return raw + b' ' * (SOURCE_BOUND - len(raw))
+
+
+def nat_arg(value):
+    return {'kind': 'nat', 'value': value}
 
 # (name, source, expected UNKNOWN kinds present in our obligations)
 CASES = [
@@ -177,6 +189,8 @@ CASES = [
      set()),
 ]
 
+SOURCE_BOUND = max(max(len(text.encode()) for _, text, _ in CASES), len(b'mncs 0.10; module t;'))
+
 
 def integer(n):
     return {'integer': {'type': {'bits': 64, 'signed': False}, 'value': n}}
@@ -199,17 +213,6 @@ def decode(value):
     return next(iter(value.values()))['value']
 
 
-def split4(data: bytes):
-    n = len(data)
-    cuts = [min(n, 64), min(n, 128), min(n, 192)]
-    parts, prev = [], 0
-    for c in cuts:
-        parts.append(data[prev:c])
-        prev = c
-    parts.append(data[prev:])
-    return parts
-
-
 def flist(v, cons):
     out = []
     while v['$v'] == cons:
@@ -220,8 +223,22 @@ def flist(v, cons):
 
 class Probe:
     def __init__(self):
-        self.proc = subprocess.Popen(['.bootstrap/target/debug/mncs-compiler-stage0-probe'],
-                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT)
+        env = dict(os.environ)
+        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+            env.pop("MNCS_PROBE_BACKEND", None)
+        env['MNCS_PROBE_MODULES'] = 'source,lexer,parser,segment,decl'
+        env['MNCS_PROBE_EXECUTION_MODULES'] = 'mncs.compiler.decl.v1'
+        env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+        env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
+            {'module': 'mncs.compiler.decl.v1', 'function': function,
+             'type_arguments': [nat_arg(SOURCE_BOUND)]}
+            for function in ['prove_unit', 'sabotage_depth', 'sabotage_call_arity',
+                             'sabotage_bin_mismatch', 'sabotage_final_type', 'sound_sample']
+        ])
+        self.proc = subprocess.Popen(
+            [env.get('MNCS_PROBE_BIN', str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=env
+        )
         self.count = 0
         self.steps = []
         self.digest = hashlib.sha256()
@@ -234,8 +251,9 @@ class Probe:
         return json.loads(line)
 
     def run(self, unit, function, args):
+        bound = len(args[0]['sequence']['values'])
         request = {'schema_version': '0.1', 'target': {'module': f'mncs.compiler.{unit}.v1', 'function': function},
-                   'arguments': args, 'step_budget': 8000000}
+                   'arguments': args, 'type_arguments': [nat_arg(bound)], 'step_budget': 8000000}
         result = self.send(request)
         assert result['status'] == 'returned', (function, result)
         self.count += 1
@@ -249,23 +267,24 @@ class Probe:
 
 
 def prove_case(probe, text):
-    data = text.encode()
-    assert len(data) <= 256, text
-    args = [blob(p) for p in split4(data)] + [integer(len(data))]
-    return probe.run('decl', 'prove_unit', args)
+    return probe.run('decl', 'prove_unit', [blob(source_bytes(text))])
 
 
 def suite():
     probe = Probe()
     details = []
     try:
+        execution_status = probe.send({'execution_status': True})
+        if execution_status.get('backend') == 'cranelift':
+            assert execution_status['retained_sessions'] == 1, execution_status
         for name, text, want_unknown in CASES:
-            oracle = probe.send({'oracle': text})
+            source_text = source_bytes(text).decode()
+            oracle = probe.send({'oracle': source_text})
             # Scope: MNE elaboration diagnostics only. MNB body-graph codes
             # (e.g. unreachable blocks after a both-return join) belong to
             # lowering validation, which prove_unit does not model.
             odiags = [(d['code'], d['span']['start'], d['span']['end'])
-                      for d in probe.send({'elaborate': text}) if d['code'].startswith('MNE')]
+                      for d in probe.send({'elaborate': source_text}) if d['code'].startswith('MNE')]
             got = prove_case(probe, text)
             obls = flist(got['obls'], 1)
             fails = [(KIND_TO_MNE[o['kind']], o['start'], o['end']) for o in obls if o['status'] == 1]
@@ -280,8 +299,7 @@ def suite():
             details.append({'case': name, 'fails': len(fails), 'unknowns': sorted(unknowns),
                             'fn_count': got['fn_count']})
         # Intrinsic-proof adversarial verdicts: all sabotage rejected, sound sample passes.
-        data = b'mncs 0.10; module t;'
-        args = [blob(p) for p in split4(data)] + [integer(len(data))]
+        args = [blob(source_bytes(b'mncs 0.10; module t;'))]
         assert probe.run('decl', 'sabotage_depth', args[:4]) is False
         assert probe.run('decl', 'sabotage_call_arity', args) is False
         assert probe.run('decl', 'sabotage_bin_mismatch', args) is False
@@ -290,6 +308,8 @@ def suite():
         return {'requests': probe.count, 'cases': len(CASES),
                 'result_sha256': probe.digest.hexdigest(),
                 'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
+                'execution_mode': 'retained_cranelift' if execution_status['retained_sessions'] else 'reference_interpreter',
+                'retained_execution_sessions': execution_status['retained_sessions'],
                 'details': details}
     finally:
         probe.close()

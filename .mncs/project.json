@@ -1,12 +1,41 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 2,
+  "revision": 8,
   "manifest_location": "in-repository",
-  "authority": {"note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics."},
+  "authority": {
+    "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
+  },
+  "verification": {
+    "schema_version": "mncs-family.verification-obligation-inventory/v1",
+    "obligation_inventory": ".mncs/verification-obligations.json",
+    "test_runner_identity": "mncs-compiler-stage0-differential/0.1"
+  },
   "contracts": {
-    "provides": [{"contract": "compiler-next-generation", "version": "1", "kind": "compiler-research-surface", "stability": "experimental", "fingerprint_sources": ["src/compiler/", "README.md"]}],
-    "consumes": [{"contract": "mncs-language.compiler-inventory", "envelope": {"op": "any"}, "required": false, "evidence_refs": ["README.md"]}],
-    "tests": [{"test": "compiler-front-end", "covers": ["compiler-next-generation"], "obligation": "self", "command": {"argv": ["python3", "tools/test_frontend.py"]}}]
+    "provides": [
+      {
+        "contract": "compiler-next-generation",
+        "version": "1",
+        "kind": "compiler-research-surface",
+        "stability": "experimental",
+        "fingerprint_sources": [
+          "src/compiler/",
+          "README.md"
+        ]
+      }
+    ],
+    "consumes": [
+      {
+        "contract": "mncs-language.compiler-inventory",
+        "envelope": {
+          "op": "any"
+        },
+        "required": false,
+        "evidence_refs": [
+          "README.md"
+        ]
+      }
+    ],
+    "tests": []
   }
 }

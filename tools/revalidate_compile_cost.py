@@ -9,9 +9,10 @@ import time
 from collections import Counter
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
 LOCK = json.loads((ROOT / "mncs-language.lock.json").read_text())
-MNCS = ROOT / ".bootstrap/target/debug/mncs"
+MNCS = Path(os.environ.get("MNCS_CLI_BIN", BOOTSTRAP_TARGET / "release" / "mncs"))
 OUT = ROOT / ".build/current-compile-cost"
 OUT.mkdir(parents=True, exist_ok=True)
 ENV = dict(os.environ, MNCS_LIBRARY_PATH=str(ROOT / "src"))
@@ -76,6 +77,6 @@ report = {
     "runs": [first, second],
     "scope": "Stage-0 linked semantic/HIR/SSA artifact sizes and repeat hashes; not native backend or peak-memory evidence.",
 }
-target = ROOT / "evidence/compile-results.json"
+target = ROOT / "evidence/campaign-20260925-compile-cost-results.json"
 target.write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps(report, indent=2))

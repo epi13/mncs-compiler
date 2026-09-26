@@ -1,0 +1,738 @@
+mncs 0.18;
+module mncs.compiler.project.v1;
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.flow.v1 as flow;
+use mncs.compiler.source.v1 as source;
+
+// Host filesystem discovery is an adapter boundary. The native compiler
+// receives stable path metadata plus exact per-file byte sequences and owns
+// module identity, import matching, semantic proof, and CFG construction.
+// The source count is bounded at 64; each file's actual byte bound is a
+// compile-time sequence parameter rather than a fixed project-wide buffer.
+record ProjectSource {
+    source_id: [byte; up_to 256],
+    source_path: [byte; up_to 256]
+}
+record ProjectSnapshot {
+    fingerprint: [byte; up_to 64],
+    sources: [ProjectSource; up_to 64]
+}
+
+record ParsedModule {
+    source_id: [byte; up_to 256],
+    source_path: [byte; up_to 256],
+    source_index: u64,
+    unit: decl.Unit
+}
+enum ModuleList { MNil, MCons { head: ParsedModule, tail: ModuleList } }
+record ModuleReverse { rest: ModuleList, acc: ModuleList }
+
+record ProjectModule {
+    source_id: [byte; up_to 256],
+    source_path: [byte; up_to 256],
+    source_index: u64,
+    flow: flow.LoweredUnit
+}
+enum ProjectModuleList { PNil, PCons { head: ProjectModule, tail: ProjectModuleList } }
+
+record ImportLink {
+    source_index: u64,
+    target_index: u64,
+    module_start: u64,
+    module_end: u64,
+    alias_start: u64,
+    alias_end: u64,
+    has_alias: bool
+}
+enum ImportList { INil, ICons { head: ImportLink, tail: ImportList } }
+
+enum ProjectDiagnostic {
+    SourceOrder { source_index: u64 },
+    SourceCountMismatch { source_index: u64 },
+    DuplicateModule { source_index: u64, start: u64, end: u64 },
+    MissingImport { source_index: u64, start: u64, end: u64 }
+}
+enum DiagnosticList { DiagNil, DiagCons { head: ProjectDiagnostic, tail: DiagnosticList } }
+record DiagnosticReverse { rest: DiagnosticList, acc: DiagnosticList }
+
+record ProjectResult {
+    valid: bool,
+    fingerprint: [byte; up_to 64],
+    source_count: u64,
+    module_count: u64,
+    import_count: u64,
+    modules: ProjectModuleList,
+    imports: ImportList,
+    diagnostics: DiagnosticList
+}
+
+record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64 }
+fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M]) -> (result: ModuleBuild) {
+    iterate i over sources carrying st: ModuleBuild = ModuleBuild {
+        rest: ModuleList.MNil,
+        acc: ModuleList.MNil,
+        valid: true,
+        count: 0
+    } {
+        next st = build_one_module<M, N>(sources, text_units, i, st);
+    }
+    return st;
+}
+fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], index: u64, st: ModuleBuild) -> (result: ModuleBuild) {
+    if index >= sources.len || index >= text_units.len { return ModuleBuild { rest: st.rest, acc: st.acc, valid: false, count: st.count }; }
+    let item: ProjectSource = sources[index];
+    let text: [byte; up_to N] = text_units[index];
+    let unit: decl.Unit = decl.parse_unit<N>(text);
+    return ModuleBuild {
+        rest: st.rest,
+        acc: ModuleList.MCons {
+            head: ParsedModule {
+                source_id: item.source_id,
+                source_path: item.source_path,
+                source_index: index,
+                unit: unit
+            },
+            tail: st.acc
+        },
+        valid: st.valid && unit.ok,
+        count: st.count + 1
+    };
+}
+
+fn reverse_modules<M: Nat>(sources: [ProjectSource; up_to M], modules: ModuleList) -> (result: ModuleList) {
+    iterate i over sources carrying st: ModuleReverse = ModuleReverse {
+        rest: modules,
+        acc: ModuleList.MNil
+    } {
+        next st = reverse_module_step(st);
+    }
+    return st.acc;
+}
+fn reverse_module_step(st: ModuleReverse) -> (result: ModuleReverse) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: h, tail: t } => ModuleReverse {
+            rest: t,
+            acc: ModuleList.MCons { head: h, tail: st.acc }
+        }
+    };
+}
+
+record OrderState { valid: bool }
+fn source_ordered<M: Nat>(sources: [ProjectSource; up_to M]) -> (result: bool) {
+    iterate i over sources carrying st: OrderState = OrderState { valid: true } {
+        next st = source_order_step(sources, i, st);
+    }
+    return st.valid;
+}
+fn source_order_step<M: Nat>(sources: [ProjectSource; up_to M], index: u64, st: OrderState) -> (result: OrderState) {
+    if !(st.valid) || index == 0 { return st; }
+    let previous: ProjectSource = sources[index - 1];
+    let current: ProjectSource = sources[index];
+    return OrderState { valid: byte_string_before(previous.source_id, current.source_id) };
+}
+
+fn byte_string_before(a: [byte; up_to 256], b: [byte; up_to 256]) -> (result: bool) {
+    iterate i over a carrying st: ByteCompare = ByteCompare {
+        decided: false,
+        less: false
+    } {
+        next st = byte_compare_step(a, b, i, st);
+    }
+    if st.decided { return st.less; }
+    return a.len < b.len;
+}
+record ByteCompare { decided: bool, less: bool }
+fn byte_compare_step(a: [byte; up_to 256], b: [byte; up_to 256], index: u64, st: ByteCompare) -> (result: ByteCompare) {
+    if st.decided || index >= b.len { return st; }
+    let left: u64 = a[index] as u64;
+    let right: u64 = b[index] as u64;
+    if left < right { return ByteCompare { decided: true, less: true }; }
+    if left > right { return ByteCompare { decided: true, less: false }; }
+    return st;
+}
+
+fn duplicate_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: DiagnosticList) {
+    iterate i over sources carrying st: DuplicateState = DuplicateState {
+        rest: modules,
+        all: modules,
+        diagnostics: DiagnosticList.DiagNil
+    } {
+        next st = duplicate_module_step<M, N>(text_units, st);
+    }
+    return reverse_diagnostics(sources, st.diagnostics);
+}
+record DuplicateState { rest: ModuleList, all: ModuleList, diagnostics: DiagnosticList }
+fn duplicate_module_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateState) -> (result: DuplicateState) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: current, tail: tail } => duplicate_module_cons<M, N>(text_units, st, current, tail)
+    };
+}
+fn duplicate_module_cons<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateState, current: ParsedModule, tail: ModuleList) -> (result: DuplicateState) {
+    let found: DuplicateCheck = find_duplicate_module<M, N>(text_units, st.all, current);
+    let diagnostics: DiagnosticList = duplicate_diagnostic(current, found, st.diagnostics);
+    return DuplicateState { rest: tail, all: st.all, diagnostics: diagnostics };
+}
+record DuplicateCheck { found: bool, index: u64, start: u64, end: u64 }
+fn find_duplicate_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule) -> (result: DuplicateCheck) {
+    iterate i over text_units carrying st: DuplicateScan = DuplicateScan {
+        rest: all,
+        current_index: current.source_index,
+        current: current,
+        found: false,
+        index: 0,
+        start: 0,
+        end: 0
+    } {
+        next st = duplicate_scan_step<M, N>(text_units, st);
+    }
+    return DuplicateCheck { found: st.found, index: st.index, start: st.start, end: st.end };
+}
+record DuplicateScan {
+    rest: ModuleList,
+    current_index: u64,
+    current: ParsedModule,
+    found: bool,
+    index: u64,
+    start: u64,
+    end: u64
+}
+fn duplicate_scan_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateScan) -> (result: DuplicateScan) {
+    if st.found { return st; }
+    return match st.rest {
+        MNil => st,
+        MCons { head: candidate, tail: tail } => duplicate_scan_candidate<M, N>(text_units, st, candidate, tail)
+    };
+}
+fn duplicate_scan_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateScan, candidate: ParsedModule, tail: ModuleList) -> (result: DuplicateScan) {
+    if candidate.source_index >= st.current_index { return DuplicateScan {
+        rest: ModuleList.MNil,
+        current_index: st.current_index,
+        current: st.current,
+        found: false,
+        index: 0,
+        start: 0,
+        end: 0
+    }; }
+    let equal: bool = module_names_equal<M, N>(text_units, st.current, candidate);
+    let header: decl.Header = candidate.unit.header;
+    if equal { return DuplicateScan {
+        rest: ModuleList.MNil,
+        current_index: st.current_index,
+        current: st.current,
+        found: true,
+        index: candidate.source_index,
+        start: header.module_start,
+        end: header.module_end
+    }; }
+    return DuplicateScan {
+        rest: tail,
+        current_index: st.current_index,
+        current: st.current,
+        found: st.found,
+        index: st.index,
+        start: st.start,
+        end: st.end
+    };
+}
+fn duplicate_diagnostic(current: ParsedModule, found: DuplicateCheck, diagnostics: DiagnosticList) -> (result: DiagnosticList) {
+    if !(found.found) { return diagnostics; }
+    let header: decl.Header = current.unit.header;
+    return DiagnosticList.DiagCons {
+        head: ProjectDiagnostic.DuplicateModule {
+            source_index: current.source_index,
+            start: header.module_start,
+            end: header.module_end
+        },
+        tail: diagnostics
+    };
+}
+
+record Resolution { valid: bool, count: u64, imports: ImportList, diagnostics: DiagnosticList }
+record ResolveModules {
+    rest: ModuleList,
+    all: ModuleList,
+    imports: ImportList,
+    diagnostics: DiagnosticList,
+    valid: bool,
+    count: u64
+}
+fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: Resolution) {
+    iterate i over sources carrying st: ResolveModules = ResolveModules {
+        rest: modules,
+        all: modules,
+        imports: ImportList.INil,
+        diagnostics: DiagnosticList.DiagNil,
+        valid: true,
+        count: 0
+    } {
+        next st = resolve_module_step<M, N>(text_units, st);
+    }
+    return Resolution {
+        valid: st.valid,
+        count: st.count,
+        imports: reverse_imports(sources, st.imports),
+        diagnostics: reverse_diagnostics(sources, st.diagnostics)
+    };
+}
+fn resolve_module_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ResolveModules) -> (result: ResolveModules) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: current, tail: tail } => resolve_module_uses<M, N>(text_units, st, current, tail)
+    };
+}
+fn resolve_module_uses<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ResolveModules, current: ParsedModule, tail: ModuleList) -> (result: ResolveModules) {
+    let unit: decl.Unit = current.unit;
+    let resolved: UseResolution = resolve_use_list<M, N>(text_units, st.all, current, unit.uses, st.imports, st.diagnostics, st.valid, st.count);
+    return ResolveModules {
+        rest: tail,
+        all: st.all,
+        imports: resolved.imports,
+        diagnostics: resolved.diagnostics,
+        valid: resolved.valid,
+        count: resolved.count
+    };
+}
+record UseResolution { imports: ImportList, diagnostics: DiagnosticList, valid: bool, count: u64 }
+record ResolveUses {
+    rest: decl.UseList,
+    imports: ImportList,
+    diagnostics: DiagnosticList,
+    valid: bool,
+    count: u64
+}
+fn resolve_use_list<M: Nat, N: Nat>(
+    text_units: [[byte; up_to N]; up_to M],
+    all: ModuleList,
+    current: ParsedModule,
+    uses: decl.UseList,
+    imports: ImportList,
+    diagnostics: DiagnosticList,
+    valid: bool,
+    count: u64
+) -> (result: UseResolution) {
+    iterate i over text_units carrying st: ResolveUses = ResolveUses {
+        rest: uses,
+        imports: imports,
+        diagnostics: diagnostics,
+        valid: valid,
+        count: count
+    } {
+        next st = resolve_use_step<M, N>(text_units, all, current, st);
+    }
+    return UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count };
+}
+fn resolve_use_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: ResolveUses) -> (result: ResolveUses) {
+    return match st.rest {
+        UNil => st,
+        UCons { head: usage, tail: tail } => resolve_one_use<M, N>(text_units, all, current, usage, tail, st)
+    };
+}
+fn resolve_one_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl, tail: decl.UseList, st: ResolveUses) -> (result: ResolveUses) {
+    let found: ModuleLookup = find_import_target<M, N>(text_units, all, current, usage);
+    if !(found.found) { return ResolveUses {
+        rest: tail,
+        imports: st.imports,
+        diagnostics: DiagnosticList.DiagCons {
+            head: ProjectDiagnostic.MissingImport {
+                source_index: current.source_index,
+                start: usage.module_start,
+                end: usage.module_end
+            },
+            tail: st.diagnostics
+        },
+        valid: false,
+        count: st.count
+    }; }
+    return ResolveUses {
+        rest: tail,
+        imports: ImportList.ICons {
+            head: ImportLink {
+                source_index: current.source_index,
+                target_index: found.index,
+                module_start: usage.module_start,
+                module_end: usage.module_end,
+                alias_start: usage.alias_start,
+                alias_end: usage.alias_end,
+                has_alias: usage.has_alias
+            },
+            tail: st.imports
+        },
+        diagnostics: st.diagnostics,
+        valid: st.valid,
+        count: st.count + 1
+    };
+}
+record ModuleLookup { found: bool, index: u64 }
+record ModuleLookupState { rest: ModuleList, current: ParsedModule, usage: decl.UseDecl, found: bool, index: u64 }
+fn find_import_target<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl) -> (result: ModuleLookup) {
+    iterate i over text_units carrying st: ModuleLookupState = ModuleLookupState {
+        rest: all,
+        current: current,
+        usage: usage,
+        found: false,
+        index: 0
+    } {
+        next st = module_lookup_step<M, N>(text_units, st);
+    }
+    return ModuleLookup { found: st.found, index: st.index };
+}
+fn module_lookup_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ModuleLookupState) -> (result: ModuleLookupState) {
+    if st.found { return st; }
+    return match st.rest {
+        MNil => st,
+        MCons { head: candidate, tail: tail } => module_lookup_candidate<M, N>(text_units, st, candidate, tail)
+    };
+}
+fn module_lookup_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ModuleLookupState, candidate: ParsedModule, tail: ModuleList) -> (result: ModuleLookupState) {
+    if candidate.source_index == st.current.source_index { return ModuleLookupState {
+        rest: tail,
+        current: st.current,
+        usage: st.usage,
+        found: st.found,
+        index: st.index
+    }; }
+    if use_matches_module<M, N>(text_units, st.current, st.usage, candidate) { return ModuleLookupState {
+        rest: ModuleList.MNil,
+        current: st.current,
+        usage: st.usage,
+        found: true,
+        index: candidate.source_index
+    }; }
+    return ModuleLookupState {
+        rest: tail,
+        current: st.current,
+        usage: st.usage,
+        found: st.found,
+        index: st.index
+    };
+}
+
+fn module_names_equal<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], a: ParsedModule, b: ParsedModule) -> (result: bool) {
+    let left: decl.Header = a.unit.header;
+    let right: decl.Header = b.unit.header;
+    return spans_equal_between<M, N>(text_units, a.source_index, left.module_start, left.module_end, b.source_index, right.module_start, right.module_end);
+}
+fn use_matches_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, usage: decl.UseDecl, target: ParsedModule) -> (result: bool) {
+    let header: decl.Header = target.unit.header;
+    return spans_equal_between<M, N>(text_units, current.source_index, usage.module_start, usage.module_end, target.source_index, header.module_start, header.module_end);
+}
+fn spans_equal_between<M: Nat, N: Nat>(
+    text_units: [[byte; up_to N]; up_to M],
+    left_index: u64,
+    left_start: u64,
+    left_end: u64,
+    right_index: u64,
+    right_start: u64,
+    right_end: u64
+) -> (result: bool) {
+    if left_end < left_start || right_end < right_start { return false; }
+    if left_end - left_start != right_end - right_start { return false; }
+    iterate i up_to 1024 carrying st: SpanCompare = SpanCompare {
+        length: left_end - left_start,
+        left_index: left_index,
+        left_start: left_start,
+        right_index: right_index,
+        right_start: right_start,
+        offset: 0,
+        equal: true
+    } {
+        next st = span_compare_step<M, N>(text_units, st);
+    }
+    return st.equal;
+}
+record SpanCompare {
+    length: u64,
+    left_index: u64,
+    left_start: u64,
+    right_index: u64,
+    right_start: u64,
+    offset: u64,
+    equal: bool
+}
+fn span_compare_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: SpanCompare) -> (result: SpanCompare) {
+    if !(st.equal) || st.offset >= st.length { return st; }
+    let left: [byte; up_to N] = text_units[st.left_index];
+    let right: [byte; up_to N] = text_units[st.right_index];
+    let a: u64 = source.byte_at<N>(left, st.left_start + st.offset);
+    let b: u64 = source.byte_at<N>(right, st.right_start + st.offset);
+    return SpanCompare {
+        length: st.length,
+        left_index: st.left_index,
+        left_start: st.left_start,
+        right_index: st.right_index,
+        right_start: st.right_start,
+        offset: st.offset + 1,
+        equal: a == b
+    };
+}
+
+fn reverse_imports<M: Nat>(sources: [ProjectSource; up_to M], imports: ImportList) -> (result: ImportList) {
+    iterate i over sources carrying st: ImportReverse = ImportReverse { rest: imports, acc: ImportList.INil } {
+        next st = reverse_import_step(st);
+    }
+    return st.acc;
+}
+record ImportReverse { rest: ImportList, acc: ImportList }
+fn reverse_import_step(st: ImportReverse) -> (result: ImportReverse) {
+    return match st.rest {
+        INil => st,
+        ICons { head: h, tail: t } => ImportReverse { rest: t, acc: ImportList.ICons { head: h, tail: st.acc } }
+    };
+}
+fn append_diagnostics<M: Nat>(sources: [ProjectSource; up_to M], first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
+    iterate i over sources carrying st: DiagnosticReverse = DiagnosticReverse { rest: first, acc: second } {
+        next st = append_diagnostic_step(st);
+    }
+    return st.acc;
+}
+fn append_diagnostic_step(st: DiagnosticReverse) -> (result: DiagnosticReverse) {
+    return match st.rest {
+        DiagNil => st,
+        DiagCons { head: h, tail: t } => DiagnosticReverse { rest: t, acc: DiagnosticList.DiagCons { head: h, tail: st.acc } }
+    };
+}
+fn reverse_diagnostics<M: Nat>(sources: [ProjectSource; up_to M], diagnostics: DiagnosticList) -> (result: DiagnosticList) {
+    iterate i over sources carrying st: DiagnosticReverse = DiagnosticReverse { rest: diagnostics, acc: DiagnosticList.DiagNil } {
+        next st = reverse_diagnostic_step(st);
+    }
+    return st.acc;
+}
+fn reverse_diagnostic_step(st: DiagnosticReverse) -> (result: DiagnosticReverse) {
+    return match st.rest {
+        DiagNil => st,
+        DiagCons { head: h, tail: t } => DiagnosticReverse { rest: t, acc: DiagnosticList.DiagCons { head: h, tail: st.acc } }
+    };
+}
+record DiagnosticCount { rest: DiagnosticList, count: u64 }
+fn diagnostics_empty<M: Nat>(sources: [ProjectSource; up_to M], diagnostics: DiagnosticList) -> (result: bool) {
+    iterate i over sources carrying st: DiagnosticCount = DiagnosticCount { rest: diagnostics, count: 0 } {
+        next st = diagnostic_count_step(st);
+    }
+    return st.count == 0;
+}
+fn diagnostic_count_step(st: DiagnosticCount) -> (result: DiagnosticCount) {
+    return match st.rest {
+        DiagNil => st,
+        DiagCons { head: h, tail: t } => DiagnosticCount { rest: t, count: st.count + 1 }
+    };
+}
+fn order_diagnostics<M: Nat>(sources: [ProjectSource; up_to M], ordered: bool, fingerprint_ok: bool, counts_match: bool) -> (result: DiagnosticList) {
+    if !(ordered) { return DiagnosticList.DiagCons { head: ProjectDiagnostic.SourceOrder { source_index: 0 }, tail: DiagnosticList.DiagNil }; }
+    if !(fingerprint_ok) { return DiagnosticList.DiagCons { head: ProjectDiagnostic.SourceOrder { source_index: 0 }, tail: DiagnosticList.DiagNil }; }
+    if !(counts_match) { return DiagnosticList.DiagCons { head: ProjectDiagnostic.SourceCountMismatch { source_index: sources.len }, tail: DiagnosticList.DiagNil }; }
+    return DiagnosticList.DiagNil;
+}
+
+// Build an imported signature environment from the already parsed module
+// facts. Only scalar, effect-free signatures are currently transportable
+// across this semantic boundary; nominal ownership is carried by later
+// project facts and is deliberately not guessed from matching type text.
+record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab }
+record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab }
+record TargetSigWalk { rest: ModuleList, target_index: u64, current: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab }
+record ExportSigWalk { rest: decl.FnList, caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab }
+
+fn imported_signatures<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList) -> (result: decl.SigTab) {
+    let input: [byte; up_to N] = text_units[current.source_index];
+    let calls: decl.CallSiteList = decl.collect_call_sites<N>(input, current.unit.fns);
+    iterate i over input carrying st: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil } {
+        next st = imported_signature_for_call<M, N>(text_units, current, all, st);
+    }
+    return st.acc;
+}
+fn imported_signature_for_call<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, st: CallSigWalk) -> (result: CallSigWalk) {
+    return match st.rest {
+        CNil => st,
+        CCons { head: call, tail: rest } => imported_signature_for_one_call<M, N>(text_units, current, all, call, rest, st.acc)
+    };
+}
+fn imported_signature_for_one_call<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, call: decl.CallSite, rest: decl.CallSiteList, acc: decl.SigTab) -> (result: CallSigWalk) {
+    let input: [byte; up_to N] = text_units[current.source_index];
+    let uses: decl.UseList = current.unit.uses;
+    let found: decl.SigTab = signatures_from_uses<M, N>(text_units, all, current, input, uses, call, acc);
+    return CallSigWalk { rest: rest, acc: found };
+}
+fn signatures_from_uses<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, input: [byte; up_to N], uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab) -> (result: decl.SigTab) {
+    iterate i over input carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc } {
+        next st = signatures_from_use<M, N>(text_units, all, current, input, st);
+    }
+    return st.acc;
+}
+fn signatures_from_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, input: [byte; up_to N], st: UseSigWalk) -> (result: UseSigWalk) {
+    return match st.rest {
+        UNil => st,
+        UCons { head: usage, tail: rest } => signatures_from_one_use<M, N>(text_units, all, current, input, st, usage, rest)
+    };
+}
+fn signatures_from_one_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, input: [byte; up_to N], st: UseSigWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: UseSigWalk) {
+    if !(call_has_import_prefix<N>(input, st.call, usage)) { return UseSigWalk { ..st, rest: rest }; }
+    let target: ModuleLookup = find_import_target<M, N>(text_units, all, current, usage);
+    if !(target.found) { return UseSigWalk { ..st, rest: rest }; }
+    let sigs: decl.SigTab = signatures_from_target<M, N>(text_units, all, current, target.index, usage, st.call, st.acc);
+    return UseSigWalk { rest: rest, call: st.call, acc: sigs };
+}
+fn call_has_import_prefix<N: Nat>(input: [byte; up_to N], call: decl.CallSite, usage: decl.UseDecl) -> (result: bool) {
+    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
+    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
+    if call.end <= call.start || prefix_end <= prefix_start { return false; }
+    let prefix_len: u64 = prefix_end - prefix_start;
+    if call.end - call.start <= prefix_len + 1 { return false; }
+    if !(decl.spans_equal<N>(input, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
+    return source.byte_at<N>(input, call.start + prefix_len) == 46;
+}
+fn signatures_from_target<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, target_index: u64, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab) -> (result: decl.SigTab) {
+    iterate i over text_units carrying st: TargetSigWalk = TargetSigWalk { rest: all, target_index: target_index, current: current, usage: usage, call: call, acc: acc } {
+        next st = signatures_from_target_step<M, N>(text_units, st);
+    }
+    return st.acc;
+}
+fn signatures_from_target_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetSigWalk) -> (result: TargetSigWalk) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: target, tail: rest } => build_signatures_from_candidate<M, N>(text_units, st, target, rest)
+    };
+}
+fn build_signatures_from_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetSigWalk) {
+    if target.source_index != st.target_index { return TargetSigWalk { ..st, rest: rest }; }
+    let input: [byte; up_to N] = text_units[target.source_index];
+    let sigs: decl.SigTabRep = decl.collect_sigtab<N>(input, target.unit.fns, target.unit.records, target.unit.enums);
+    let exported: decl.SigTab = signatures_from_exports<M, N>(text_units, st.current, target, input, st.usage, st.call, sigs.tab, st.acc);
+    return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported };
+}
+fn signatures_from_exports<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, target_text: [byte; up_to N], usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab) -> (result: decl.SigTab) {
+    let caller_text: [byte; up_to N] = text_units[caller.source_index];
+    iterate i over target_text carrying st: ExportSigWalk = ExportSigWalk { rest: target.unit.fns, caller: caller, target: target, usage: usage, call: call, target_sigs: target_sigs, acc: acc } {
+        next st = signatures_from_export<M, N>(text_units, caller_text, target_text, st);
+    }
+    return st.acc;
+}
+fn signatures_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller_text: [byte; up_to N], target_text: [byte; up_to N], st: ExportSigWalk) -> (result: ExportSigWalk) {
+    return match st.rest {
+        DNil => st,
+        DCons { head: function, tail: rest } => signature_from_export<M, N>(text_units, caller_text, target_text, st, function, rest)
+    };
+}
+fn signature_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller_text: [byte; up_to N], target_text: [byte; up_to N], st: ExportSigWalk, function: decl.FnDecl, rest: decl.FnList) -> (result: ExportSigWalk) {
+    let fn_sig: decl.FnSig = function.sig;
+    if !(call_matches_export<M, N>(text_units, st.caller.source_index, caller_text, st.call, st.usage, st.target.source_index, fn_sig.name_start, fn_sig.name_end)) {
+        return ExportSigWalk { ..st, rest: rest };
+    }
+    let found: decl.SigRes = decl.sig_lookup<N>(target_text, st.target_sigs, fn_sig.name_start, fn_sig.name_end);
+    if !(found.found) || !(transportable_signature<N>(target_text, found.sig)) { return ExportSigWalk { ..st, rest: rest }; }
+    let sig: decl.Sig = decl.Sig {
+        start: st.call.start,
+        end: st.call.end,
+        params: found.sig.params,
+        nparams: found.sig.nparams,
+        result: found.sig.result,
+        fx: found.sig.fx,
+        owner: st.target.source_index + 1,
+        decl_start: fn_sig.name_start,
+        decl_end: fn_sig.name_end
+    };
+    return ExportSigWalk { ..st, rest: rest, acc: decl.SigTab.HCons { head: sig, tail: st.acc } };
+}
+fn transportable_signature<N: Nat>(input: [byte; up_to N], sig: decl.Sig) -> (result: bool) {
+    if !(primitive_sem_type(sig.result)) { return false; }
+    if !(effect_list_empty(sig.fx)) { return false; }
+    iterate i over input carrying st: ParamPortability = ParamPortability { rest: sig.params, valid: true } {
+        next st = portable_param_step(st);
+    }
+    return st.valid;
+}
+record ParamPortability { rest: decl.BindList, valid: bool }
+fn portable_param_step(st: ParamPortability) -> (result: ParamPortability) {
+    if !(st.valid) { return st; }
+    return match st.rest {
+        BNil => st,
+        BCons { head: bind, tail: rest } => ParamPortability { rest: rest, valid: primitive_sem_type(bind.ty) }
+    };
+}
+fn primitive_sem_type(ty: decl.SemType) -> (result: bool) {
+    return match ty {
+        TBool => true,
+        TByte => true,
+        TInt { width: w, signed: s } => true,
+        TNamed { start: a, end: b } => false,
+        TSeq => false,
+        TPoison => false
+    };
+}
+fn effect_list_empty(fx: decl.EffectList) -> (result: bool) {
+    return match fx { XNil => true, XCons { head: h, tail: t } => false };
+}
+fn call_matches_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller_index: u64, caller_text: [byte; up_to N], call: decl.CallSite, usage: decl.UseDecl, target_index: u64, member_start: u64, member_end: u64) -> (result: bool) {
+    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
+    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
+    if call.end <= call.start || prefix_end <= prefix_start || member_end < member_start { return false; }
+    let prefix_len: u64 = prefix_end - prefix_start;
+    let member_len: u64 = member_end - member_start;
+    if call.end - call.start != prefix_len + 1 + member_len { return false; }
+    if !(decl.spans_equal<N>(caller_text, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
+    if source.byte_at<N>(caller_text, call.start + prefix_len) != 46 { return false; }
+    return spans_equal_between<M, N>(text_units, caller_index, call.start + prefix_len + 1, call.end, target_index, member_start, member_end);
+}
+
+record ProjectBuild { rest: ModuleList, all: ModuleList, imports: ImportList, acc: ProjectModuleList, valid: bool, count: u64 }
+record ProjectBuildRev { rest: ProjectModuleList, acc: ProjectModuleList }
+fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList) -> (result: ProjectBuild) {
+    iterate i over sources carrying st: ProjectBuild = ProjectBuild { rest: modules, all: modules, imports: imports, acc: ProjectModuleList.PNil, valid: true, count: 0 } {
+        next st = lower_project_one<M, N>(text_units, st);
+    }
+    iterate i over sources carrying rev: ProjectBuildRev = ProjectBuildRev { rest: st.acc, acc: ProjectModuleList.PNil } {
+        next rev = reverse_project_build(rev);
+    }
+    return ProjectBuild { rest: ModuleList.MNil, all: modules, imports: imports, acc: rev.acc, valid: st.valid, count: st.count };
+}
+fn lower_project_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectBuild) -> (result: ProjectBuild) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: parsed, tail: rest } => lower_one_project_module<M, N>(text_units, st, parsed, rest)
+    };
+}
+fn lower_one_project_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectBuild, parsed: ParsedModule, rest: ModuleList) -> (result: ProjectBuild) {
+    let input: [byte; up_to N] = text_units[parsed.source_index];
+    let imported: decl.SigTab = imported_signatures<M, N>(text_units, parsed, st.all);
+    let proof: decl.UnitProve = decl.prove_parsed_unit<N>(input, parsed.unit, imported);
+    let lowered: flow.LoweredUnit = flow.lower_proven_unit<N>(input, proof);
+    return ProjectBuild {
+        rest: rest,
+        all: st.all,
+        imports: st.imports,
+        acc: ProjectModuleList.PCons { head: ProjectModule { source_id: parsed.source_id, source_path: parsed.source_path, source_index: parsed.source_index, flow: lowered }, tail: st.acc },
+        valid: st.valid && lowered.valid,
+        count: st.count + 1
+    };
+}
+fn reverse_project_build(st: ProjectBuildRev) -> (result: ProjectBuildRev) {
+    return match st.rest {
+        PNil => st,
+        PCons { head: built_module, tail: rest } => ProjectBuildRev { rest: rest, acc: ProjectModuleList.PCons { head: built_module, tail: st.acc } }
+    };
+}
+
+fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, text_units: [[byte; up_to N]; up_to M]) -> (result: ProjectResult) {
+    let ordered: bool = source_ordered<64>(snapshot.sources);
+    let counts_match: bool = snapshot.sources.len == text_units.len;
+    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, text_units);
+    let parsed: ModuleList = reverse_modules<64>(snapshot.sources, built.acc);
+    let duplicate: DiagnosticList = duplicate_modules<M, N>(snapshot.sources, text_units, parsed);
+    let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, text_units, parsed);
+    let lowered: ProjectBuild = lower_project_modules<M, N>(snapshot.sources, text_units, parsed, resolved.imports);
+    let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, snapshot.fingerprint.len == 64, counts_match);
+    let diagnostics1: DiagnosticList = append_diagnostics<64>(snapshot.sources, basic, duplicate);
+    let diagnostics: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);
+    let valid: bool = ordered && snapshot.fingerprint.len == 64 && counts_match && built.valid && diagnostics_empty<64>(snapshot.sources, diagnostics) && resolved.valid && lowered.valid;
+    return ProjectResult {
+        valid: valid,
+        fingerprint: snapshot.fingerprint,
+        source_count: snapshot.sources.len,
+        module_count: built.count,
+        import_count: resolved.count,
+        modules: lowered.acc,
+        imports: resolved.imports,
+        diagnostics: diagnostics
+    };
+}

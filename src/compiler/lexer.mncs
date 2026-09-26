@@ -15,96 +15,96 @@ fn letter(c: u64) -> (result: bool) {
 fn space(c: u64) -> (result: bool) {
     return c == 32 || (c >= 9 && c <= 13);
 }
-fn keyword(text: [byte; up_to 64], start: u64, end: u64) -> (result: u64) {
+fn keyword<N: Nat>(text: [byte; up_to N], start: u64, end: u64) -> (result: u64) {
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 109 && source.byte_at(text, start + 1) == 110 && source.byte_at(text, start + 2) == 99 && source.byte_at(text, start + 3) == 115 { return 10; }
+        if source.byte_at<N>(text, start + 0) == 109 && source.byte_at<N>(text, start + 1) == 110 && source.byte_at<N>(text, start + 2) == 99 && source.byte_at<N>(text, start + 3) == 115 { return 10; }
     }
     if end - start == 6 {
-        if source.byte_at(text, start + 0) == 109 && source.byte_at(text, start + 1) == 111 && source.byte_at(text, start + 2) == 100 && source.byte_at(text, start + 3) == 117 && source.byte_at(text, start + 4) == 108 && source.byte_at(text, start + 5) == 101 { return 11; }
+        if source.byte_at<N>(text, start + 0) == 109 && source.byte_at<N>(text, start + 1) == 111 && source.byte_at<N>(text, start + 2) == 100 && source.byte_at<N>(text, start + 3) == 117 && source.byte_at<N>(text, start + 4) == 108 && source.byte_at<N>(text, start + 5) == 101 { return 11; }
     }
     if end - start == 2 {
-        if source.byte_at(text, start + 0) == 102 && source.byte_at(text, start + 1) == 110 { return 12; }
+        if source.byte_at<N>(text, start + 0) == 102 && source.byte_at<N>(text, start + 1) == 110 { return 12; }
     }
     if end - start == 6 {
-        if source.byte_at(text, start + 0) == 114 && source.byte_at(text, start + 1) == 101 && source.byte_at(text, start + 2) == 116 && source.byte_at(text, start + 3) == 117 && source.byte_at(text, start + 4) == 114 && source.byte_at(text, start + 5) == 110 { return 13; }
+        if source.byte_at<N>(text, start + 0) == 114 && source.byte_at<N>(text, start + 1) == 101 && source.byte_at<N>(text, start + 2) == 116 && source.byte_at<N>(text, start + 3) == 117 && source.byte_at<N>(text, start + 4) == 114 && source.byte_at<N>(text, start + 5) == 110 { return 13; }
     }
     if end - start == 3 {
-        if source.byte_at(text, start + 0) == 108 && source.byte_at(text, start + 1) == 101 && source.byte_at(text, start + 2) == 116 { return 14; }
+        if source.byte_at<N>(text, start + 0) == 108 && source.byte_at<N>(text, start + 1) == 101 && source.byte_at<N>(text, start + 2) == 116 { return 14; }
     }
     if end - start == 2 {
-        if source.byte_at(text, start + 0) == 105 && source.byte_at(text, start + 1) == 102 { return 15; }
+        if source.byte_at<N>(text, start + 0) == 105 && source.byte_at<N>(text, start + 1) == 102 { return 15; }
     }
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 101 && source.byte_at(text, start + 1) == 108 && source.byte_at(text, start + 2) == 115 && source.byte_at(text, start + 3) == 101 { return 16; }
+        if source.byte_at<N>(text, start + 0) == 101 && source.byte_at<N>(text, start + 1) == 108 && source.byte_at<N>(text, start + 2) == 115 && source.byte_at<N>(text, start + 3) == 101 { return 16; }
     }
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 102 && source.byte_at(text, start + 1) == 97 && source.byte_at(text, start + 2) == 105 && source.byte_at(text, start + 3) == 108 { return 17; }
+        if source.byte_at<N>(text, start + 0) == 102 && source.byte_at<N>(text, start + 1) == 97 && source.byte_at<N>(text, start + 2) == 105 && source.byte_at<N>(text, start + 3) == 108 { return 17; }
     }
     if end - start == 8 {
-        if source.byte_at(text, start + 0) == 114 && source.byte_at(text, start + 1) == 101 && source.byte_at(text, start + 2) == 113 && source.byte_at(text, start + 3) == 117 && source.byte_at(text, start + 4) == 105 && source.byte_at(text, start + 5) == 114 && source.byte_at(text, start + 6) == 101 && source.byte_at(text, start + 7) == 115 { return 18; }
+        if source.byte_at<N>(text, start + 0) == 114 && source.byte_at<N>(text, start + 1) == 101 && source.byte_at<N>(text, start + 2) == 113 && source.byte_at<N>(text, start + 3) == 117 && source.byte_at<N>(text, start + 4) == 105 && source.byte_at<N>(text, start + 5) == 114 && source.byte_at<N>(text, start + 6) == 101 && source.byte_at<N>(text, start + 7) == 115 { return 18; }
     }
     if end - start == 7 {
-        if source.byte_at(text, start + 0) == 101 && source.byte_at(text, start + 1) == 110 && source.byte_at(text, start + 2) == 115 && source.byte_at(text, start + 3) == 117 && source.byte_at(text, start + 4) == 114 && source.byte_at(text, start + 5) == 101 && source.byte_at(text, start + 6) == 115 { return 19; }
+        if source.byte_at<N>(text, start + 0) == 101 && source.byte_at<N>(text, start + 1) == 110 && source.byte_at<N>(text, start + 2) == 115 && source.byte_at<N>(text, start + 3) == 117 && source.byte_at<N>(text, start + 4) == 114 && source.byte_at<N>(text, start + 5) == 101 && source.byte_at<N>(text, start + 6) == 115 { return 19; }
     }
     if end - start == 7 {
-        if source.byte_at(text, start + 0) == 97 && source.byte_at(text, start + 1) == 115 && source.byte_at(text, start + 2) == 115 && source.byte_at(text, start + 3) == 117 && source.byte_at(text, start + 4) == 109 && source.byte_at(text, start + 5) == 101 && source.byte_at(text, start + 6) == 115 { return 20; }
+        if source.byte_at<N>(text, start + 0) == 97 && source.byte_at<N>(text, start + 1) == 115 && source.byte_at<N>(text, start + 2) == 115 && source.byte_at<N>(text, start + 3) == 117 && source.byte_at<N>(text, start + 4) == 109 && source.byte_at<N>(text, start + 5) == 101 && source.byte_at<N>(text, start + 6) == 115 { return 20; }
     }
     if end - start == 8 {
-        if source.byte_at(text, start + 0) == 112 && source.byte_at(text, start + 1) == 114 && source.byte_at(text, start + 2) == 111 && source.byte_at(text, start + 3) == 112 && source.byte_at(text, start + 4) == 101 && source.byte_at(text, start + 5) == 114 && source.byte_at(text, start + 6) == 116 && source.byte_at(text, start + 7) == 121 { return 21; }
+        if source.byte_at<N>(text, start + 0) == 112 && source.byte_at<N>(text, start + 1) == 114 && source.byte_at<N>(text, start + 2) == 111 && source.byte_at<N>(text, start + 3) == 112 && source.byte_at<N>(text, start + 4) == 101 && source.byte_at<N>(text, start + 5) == 114 && source.byte_at<N>(text, start + 6) == 116 && source.byte_at<N>(text, start + 7) == 121 { return 21; }
     }
     if end - start == 9 {
-        if source.byte_at(text, start + 0) == 105 && source.byte_at(text, start + 1) == 110 && source.byte_at(text, start + 2) == 118 && source.byte_at(text, start + 3) == 97 && source.byte_at(text, start + 4) == 114 && source.byte_at(text, start + 5) == 105 && source.byte_at(text, start + 6) == 97 && source.byte_at(text, start + 7) == 110 && source.byte_at(text, start + 8) == 116 { return 22; }
+        if source.byte_at<N>(text, start + 0) == 105 && source.byte_at<N>(text, start + 1) == 110 && source.byte_at<N>(text, start + 2) == 118 && source.byte_at<N>(text, start + 3) == 97 && source.byte_at<N>(text, start + 4) == 114 && source.byte_at<N>(text, start + 5) == 105 && source.byte_at<N>(text, start + 6) == 97 && source.byte_at<N>(text, start + 7) == 110 && source.byte_at<N>(text, start + 8) == 116 { return 22; }
     }
     if end - start == 11 {
-        if source.byte_at(text, start + 0) == 109 && source.byte_at(text, start + 1) == 101 && source.byte_at(text, start + 2) == 116 && source.byte_at(text, start + 3) == 97 && source.byte_at(text, start + 4) == 109 && source.byte_at(text, start + 5) == 111 && source.byte_at(text, start + 6) == 114 && source.byte_at(text, start + 7) == 112 && source.byte_at(text, start + 8) == 104 && source.byte_at(text, start + 9) == 105 && source.byte_at(text, start + 10) == 99 { return 23; }
+        if source.byte_at<N>(text, start + 0) == 109 && source.byte_at<N>(text, start + 1) == 101 && source.byte_at<N>(text, start + 2) == 116 && source.byte_at<N>(text, start + 3) == 97 && source.byte_at<N>(text, start + 4) == 109 && source.byte_at<N>(text, start + 5) == 111 && source.byte_at<N>(text, start + 6) == 114 && source.byte_at<N>(text, start + 7) == 112 && source.byte_at<N>(text, start + 8) == 104 && source.byte_at<N>(text, start + 9) == 105 && source.byte_at<N>(text, start + 10) == 99 { return 23; }
     }
     if end - start == 6 {
-        if source.byte_at(text, start + 0) == 101 && source.byte_at(text, start + 1) == 102 && source.byte_at(text, start + 2) == 102 && source.byte_at(text, start + 3) == 101 && source.byte_at(text, start + 4) == 99 && source.byte_at(text, start + 5) == 116 { return 24; }
+        if source.byte_at<N>(text, start + 0) == 101 && source.byte_at<N>(text, start + 1) == 102 && source.byte_at<N>(text, start + 2) == 102 && source.byte_at<N>(text, start + 3) == 101 && source.byte_at<N>(text, start + 4) == 99 && source.byte_at<N>(text, start + 5) == 116 { return 24; }
     }
     if end - start == 10 {
-        if source.byte_at(text, start + 0) == 99 && source.byte_at(text, start + 1) == 97 && source.byte_at(text, start + 2) == 112 && source.byte_at(text, start + 3) == 97 && source.byte_at(text, start + 4) == 98 && source.byte_at(text, start + 5) == 105 && source.byte_at(text, start + 6) == 108 && source.byte_at(text, start + 7) == 105 && source.byte_at(text, start + 8) == 116 && source.byte_at(text, start + 9) == 121 { return 25; }
+        if source.byte_at<N>(text, start + 0) == 99 && source.byte_at<N>(text, start + 1) == 97 && source.byte_at<N>(text, start + 2) == 112 && source.byte_at<N>(text, start + 3) == 97 && source.byte_at<N>(text, start + 4) == 98 && source.byte_at<N>(text, start + 5) == 105 && source.byte_at<N>(text, start + 6) == 108 && source.byte_at<N>(text, start + 7) == 105 && source.byte_at<N>(text, start + 8) == 116 && source.byte_at<N>(text, start + 9) == 121 { return 25; }
     }
     if end - start == 13 {
-        if source.byte_at(text, start + 0) == 97 && source.byte_at(text, start + 1) == 117 && source.byte_at(text, start + 2) == 116 && source.byte_at(text, start + 3) == 104 && source.byte_at(text, start + 4) == 111 && source.byte_at(text, start + 5) == 114 && source.byte_at(text, start + 6) == 105 && source.byte_at(text, start + 7) == 122 && source.byte_at(text, start + 8) == 101 && source.byte_at(text, start + 9) == 100 && source.byte_at(text, start + 10) == 95 && source.byte_at(text, start + 11) == 98 && source.byte_at(text, start + 12) == 121 { return 26; }
+        if source.byte_at<N>(text, start + 0) == 97 && source.byte_at<N>(text, start + 1) == 117 && source.byte_at<N>(text, start + 2) == 116 && source.byte_at<N>(text, start + 3) == 104 && source.byte_at<N>(text, start + 4) == 111 && source.byte_at<N>(text, start + 5) == 114 && source.byte_at<N>(text, start + 6) == 105 && source.byte_at<N>(text, start + 7) == 122 && source.byte_at<N>(text, start + 8) == 101 && source.byte_at<N>(text, start + 9) == 100 && source.byte_at<N>(text, start + 10) == 95 && source.byte_at<N>(text, start + 11) == 98 && source.byte_at<N>(text, start + 12) == 121 { return 26; }
     }
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 101 && source.byte_at(text, start + 1) == 110 && source.byte_at(text, start + 2) == 117 && source.byte_at(text, start + 3) == 109 { return 27; }
+        if source.byte_at<N>(text, start + 0) == 101 && source.byte_at<N>(text, start + 1) == 110 && source.byte_at<N>(text, start + 2) == 117 && source.byte_at<N>(text, start + 3) == 109 { return 27; }
     }
     if end - start == 3 {
-        if source.byte_at(text, start + 0) == 117 && source.byte_at(text, start + 1) == 115 && source.byte_at(text, start + 2) == 101 { return 28; }
+        if source.byte_at<N>(text, start + 0) == 117 && source.byte_at<N>(text, start + 1) == 115 && source.byte_at<N>(text, start + 2) == 101 { return 28; }
     }
     if end - start == 6 {
-        if source.byte_at(text, start + 0) == 114 && source.byte_at(text, start + 1) == 101 && source.byte_at(text, start + 2) == 99 && source.byte_at(text, start + 3) == 111 && source.byte_at(text, start + 4) == 114 && source.byte_at(text, start + 5) == 100 { return 29; }
+        if source.byte_at<N>(text, start + 0) == 114 && source.byte_at<N>(text, start + 1) == 101 && source.byte_at<N>(text, start + 2) == 99 && source.byte_at<N>(text, start + 3) == 111 && source.byte_at<N>(text, start + 4) == 114 && source.byte_at<N>(text, start + 5) == 100 { return 29; }
     }
     if end - start == 5 {
-        if source.byte_at(text, start + 0) == 109 && source.byte_at(text, start + 1) == 97 && source.byte_at(text, start + 2) == 116 && source.byte_at(text, start + 3) == 99 && source.byte_at(text, start + 4) == 104 { return 30; }
+        if source.byte_at<N>(text, start + 0) == 109 && source.byte_at<N>(text, start + 1) == 97 && source.byte_at<N>(text, start + 2) == 116 && source.byte_at<N>(text, start + 3) == 99 && source.byte_at<N>(text, start + 4) == 104 { return 30; }
     }
     if end - start == 7 {
-        if source.byte_at(text, start + 0) == 105 && source.byte_at(text, start + 1) == 116 && source.byte_at(text, start + 2) == 101 && source.byte_at(text, start + 3) == 114 && source.byte_at(text, start + 4) == 97 && source.byte_at(text, start + 5) == 116 && source.byte_at(text, start + 6) == 101 { return 31; }
+        if source.byte_at<N>(text, start + 0) == 105 && source.byte_at<N>(text, start + 1) == 116 && source.byte_at<N>(text, start + 2) == 101 && source.byte_at<N>(text, start + 3) == 114 && source.byte_at<N>(text, start + 4) == 97 && source.byte_at<N>(text, start + 5) == 116 && source.byte_at<N>(text, start + 6) == 101 { return 31; }
     }
     if end - start == 5 {
-        if source.byte_at(text, start + 0) == 117 && source.byte_at(text, start + 1) == 112 && source.byte_at(text, start + 2) == 95 && source.byte_at(text, start + 3) == 116 && source.byte_at(text, start + 4) == 111 { return 32; }
+        if source.byte_at<N>(text, start + 0) == 117 && source.byte_at<N>(text, start + 1) == 112 && source.byte_at<N>(text, start + 2) == 95 && source.byte_at<N>(text, start + 3) == 116 && source.byte_at<N>(text, start + 4) == 111 { return 32; }
     }
     if end - start == 8 {
-        if source.byte_at(text, start + 0) == 99 && source.byte_at(text, start + 1) == 97 && source.byte_at(text, start + 2) == 114 && source.byte_at(text, start + 3) == 114 && source.byte_at(text, start + 4) == 121 && source.byte_at(text, start + 5) == 105 && source.byte_at(text, start + 6) == 110 && source.byte_at(text, start + 7) == 103 { return 33; }
+        if source.byte_at<N>(text, start + 0) == 99 && source.byte_at<N>(text, start + 1) == 97 && source.byte_at<N>(text, start + 2) == 114 && source.byte_at<N>(text, start + 3) == 114 && source.byte_at<N>(text, start + 4) == 121 && source.byte_at<N>(text, start + 5) == 105 && source.byte_at<N>(text, start + 6) == 110 && source.byte_at<N>(text, start + 7) == 103 { return 33; }
     }
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 110 && source.byte_at(text, start + 1) == 101 && source.byte_at(text, start + 2) == 120 && source.byte_at(text, start + 3) == 116 { return 34; }
+        if source.byte_at<N>(text, start + 0) == 110 && source.byte_at<N>(text, start + 1) == 101 && source.byte_at<N>(text, start + 2) == 120 && source.byte_at<N>(text, start + 3) == 116 { return 34; }
     }
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 111 && source.byte_at(text, start + 1) == 118 && source.byte_at(text, start + 2) == 101 && source.byte_at(text, start + 3) == 114 { return 35; }
+        if source.byte_at<N>(text, start + 0) == 111 && source.byte_at<N>(text, start + 1) == 118 && source.byte_at<N>(text, start + 2) == 101 && source.byte_at<N>(text, start + 3) == 114 { return 35; }
     }
     if end - start == 2 {
-        if source.byte_at(text, start + 0) == 97 && source.byte_at(text, start + 1) == 115 { return 36; }
+        if source.byte_at<N>(text, start + 0) == 97 && source.byte_at<N>(text, start + 1) == 115 { return 36; }
     }
     if end - start == 5 {
-        if source.byte_at(text, start + 0) == 119 && source.byte_at(text, start + 1) == 104 && source.byte_at(text, start + 2) == 105 && source.byte_at(text, start + 3) == 108 && source.byte_at(text, start + 4) == 101 { return 37; }
+        if source.byte_at<N>(text, start + 0) == 119 && source.byte_at<N>(text, start + 1) == 104 && source.byte_at<N>(text, start + 2) == 105 && source.byte_at<N>(text, start + 3) == 108 && source.byte_at<N>(text, start + 4) == 101 { return 37; }
     }
     if end - start == 4 {
-        if source.byte_at(text, start + 0) == 116 && source.byte_at(text, start + 1) == 114 && source.byte_at(text, start + 2) == 117 && source.byte_at(text, start + 3) == 101 { return 38; }
+        if source.byte_at<N>(text, start + 0) == 116 && source.byte_at<N>(text, start + 1) == 114 && source.byte_at<N>(text, start + 2) == 117 && source.byte_at<N>(text, start + 3) == 101 { return 38; }
     }
     if end - start == 5 {
-        if source.byte_at(text, start + 0) == 102 && source.byte_at(text, start + 1) == 97 && source.byte_at(text, start + 2) == 108 && source.byte_at(text, start + 3) == 115 && source.byte_at(text, start + 4) == 101 { return 39; }
+        if source.byte_at<N>(text, start + 0) == 102 && source.byte_at<N>(text, start + 1) == 97 && source.byte_at<N>(text, start + 2) == 108 && source.byte_at<N>(text, start + 3) == 115 && source.byte_at<N>(text, start + 4) == 101 { return 39; }
     }
     return 4;
 }
@@ -142,11 +142,11 @@ fn punctuation(a: u64, b: u64) -> (result: u64) {
     };
 }
 
-fn next_token(text: [byte; up_to 64], start: u64) -> (result: Token) {
+fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     if start > text.len { return Token { kind: 0, start: text.len, end: text.len, diagnostic: 4 }; }
     if start == text.len { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
-    let a: u64 = source.byte_at(text, start);
-    let b: u64 = source.byte_at(text, start + 1);
+    let a: u64 = source.byte_at<N>(text, start);
+    let b: u64 = source.byte_at<N>(text, start + 1);
     if a >= 128 { return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 }; }
     let line: bool = a == 47 && b == 47;
     let block: bool = a == 47 && b == 42;
@@ -156,19 +156,19 @@ fn next_token(text: [byte; up_to 64], start: u64) -> (result: Token) {
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
         iterate i over text carrying st: Scan = seed {
-            next st = scan_step(text, st, line, block, word, number, ws);
+            next st = scan_step<N>(text, st, line, block, word, number, ws);
         }
-        let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword(text, start, st.end), select(st.dotted, 6, 5)))));
+        let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword<N>(text, start, st.end), select(st.dotted, 6, 5)))));
         return Token { kind: kind, start: start, end: st.end, diagnostic: select(block && st.depth > 0, 1, 0) };
     }
     let kind: u64 = punctuation(a, b);
     return Token { kind: kind, start: start, end: start + select(kind >= 80, 2, 1), diagnostic: select(kind == 7, 2, 0) };
 }
 
-fn scan_step(text: [byte; up_to 64], st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
+fn scan_step<N: Nat>(text: [byte; up_to N], st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
     if st.done || st.end >= text.len { return st; }
-    let a: u64 = source.byte_at(text, st.end);
-    let b: u64 = source.byte_at(text, st.end + 1);
+    let a: u64 = source.byte_at<N>(text, st.end);
+    let b: u64 = source.byte_at<N>(text, st.end + 1);
     if block {
         if a == 47 && b == 42 { return Scan { ..st, end: st.end + 2, depth: st.depth + 1 }; }
         if a == 42 && b == 47 { return Scan { ..st, end: st.end + 2, depth: st.depth - 1, done: st.depth == 1 }; }
@@ -181,14 +181,14 @@ fn scan_step(text: [byte; up_to 64], st: Scan, line: bool, block: bool, word: bo
 }
 
 // Significant-token request; lexical failure is never discarded as trivia.
-fn significant(text: [byte; up_to 64], start: u64) -> (result: Token) {
-    let first: Token = next_token(text, start);
+fn significant<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
+    let first: Token = next_token<N>(text, start);
     iterate i over text carrying token: Token = first {
-        next token = skip_trivia(text, token);
+        next token = skip_trivia<N>(text, token);
     }
     return token;
 }
-fn skip_trivia(text: [byte; up_to 64], token: Token) -> (result: Token) {
-    if token.kind >= 1 && token.kind <= 3 && token.diagnostic == 0 { return next_token(text, token.end); }
+fn skip_trivia<N: Nat>(text: [byte; up_to N], token: Token) -> (result: Token) {
+    if token.kind >= 1 && token.kind <= 3 && token.diagnostic == 0 { return next_token<N>(text, token.end); }
     return token;
 }

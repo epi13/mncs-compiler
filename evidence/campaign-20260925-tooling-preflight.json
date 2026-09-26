@@ -1,0 +1,109 @@
+{
+  "bootstrap": {
+    "both_executables_available": true,
+    "build_wall_seconds": 0.142,
+    "built_revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+    "cli": "/home/epi13/Documents/Projects/.mncs-compiler-campaign-builds/language-target/release/mncs",
+    "evidence": "campaign-20260925-bootstrap-results.json",
+    "lock_file": "../mncs-language.lock.json",
+    "locked_revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+    "stage0_library_source_diff_check": {
+      "changed_paths": [
+        "crates/mncs-cli/src/main.rs",
+        "crates/mncs-cli/tests/semantic_commands.rs",
+        "docs/development-evidence/ravel-source-subject-provenance-2026-09.md",
+        "docs/mncs-badge.json"
+      ],
+      "compiler_model_syntax_codegen_crates_changed": false,
+      "from": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+      "to": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa"
+    },
+    "stage0_probe": "/home/epi13/Documents/Projects/.mncs-compiler-campaign-builds/language-target/release/mncs-compiler-stage0-probe",
+    "version_output": "mncs 0.1.0"
+  },
+  "current_unknowns": [],
+  "evidence_reuse": {
+    "all_16_reference_files_exist_and_hash_match": true,
+    "audit": "campaign-20260925-evidence-reuse-audit.json",
+    "basis": "Stage-0 update changed the CLI source_subject projection, tests and evidence document; mncs-compiler Rust library sources used by differential probe are unchanged.",
+    "current_locked_library_sources_unchanged": true,
+    "final_source_root_evidence_refs": 16,
+    "final_source_root_new_execution_required": 0,
+    "final_source_root_obligations_current": 9,
+    "historical_differential_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+    "input": "campaign-20260925-current-evidence.json",
+    "readable": true
+  },
+  "focused_execution": {
+    "cases": 4,
+    "evidence": "campaign-20260925-flow-results.json",
+    "execution_command": "MNCS_BOOTSTRAP_TARGET_DIR=/home/epi13/Documents/Projects/.mncs-compiler-campaign-builds/language-target python3 tools/test_flow.py",
+    "execution_mode": "retained_cranelift",
+    "identical_native_repetitions": 2,
+    "reported_execution_steps": 8,
+    "requests": 21,
+    "retained_sessions": 1,
+    "selection": "final RAVEL flow plan selected mncs-compiler.flow-cfg-differential",
+    "status": "PASS",
+    "wall_seconds": 42.191
+  },
+  "historical_unknowns": [
+    {
+      "evidence": "campaign-20260925-ravel-planning.json",
+      "resolved_cause": "independent 180-second cold impact and test-inventory timeouts; current plan uses one compiler impact call and repository inventory",
+      "result": "UNKNOWN"
+    },
+    {
+      "evidence": "campaign-20260925-source-plan-without-test-inventory-unknown.json",
+      "resolved_cause": "subject identity/fingerprint were nested only inside test inventory; current mncs impact exposes source_subject independently",
+      "result": "UNKNOWN"
+    },
+    {
+      "evidence": "campaign-20260925-ravel-planning.json",
+      "resolved_cause": "transient plan invocation used a nonexistent compiler/library directory; corrected to the locked Stage-0 library and subsequent current-main plans passed",
+      "result": "UNKNOWN"
+    }
+  ],
+  "ravel": {
+    "affected_test_command": "PYTHONPATH=/tmp/mncs-compiler-campaign/RAVEL-delivery/src python3 -m unittest tests.test_impact",
+    "affected_test_repository": "RAVEL current main 4ab04a893b3e27e4de6b8a85ab1e9a6225ed54e4; worktree HEAD equals origin/main",
+    "affected_test_wall_seconds": 13.097,
+    "affected_tests_passed": 12,
+    "current_source_subject_contract_evidence": "campaign-20260925-language-impact-cli-tests.json",
+    "current_source_subject_contract_passed": true,
+    "current_source_subject_contract_test": "cargo test --locked -p mncs-cli --test semantic_commands source_impact_exposes_subject_identity_without_test_inventory",
+    "current_source_subject_contract_test_passed": 40,
+    "dedicated_checkout": "/tmp/mncs-compiler-campaign/RAVEL-delivery",
+    "final_planning_measurements": "campaign-20260925-ravel-planning.json",
+    "import_pinned_to_dedicated_checkout": true,
+    "python_module": "/tmp/mncs-compiler-campaign/RAVEL-delivery/src/ravel/impact.py",
+    "remote_main": "4ab04a893b3e27e4de6b8a85ab1e9a6225ed54e4"
+  },
+  "recorded_at": "2026-09-26",
+  "schema_version": "mncs-compiler.tooling-preflight/1",
+  "starting_heads_file": "campaign-20260925-start-heads.json",
+  "status": "PASS_WITH_HISTORICAL_UNKNOWNS_PRESERVED",
+  "verification_obligations": {
+    "classification": "honest external Python/Rust integration transports plus a locked bootstrap integrity obligation",
+    "classifications_are_native_mncs_tests": false,
+    "inventory": "../.mncs/verification-obligations.json",
+    "inventory_revision": 7,
+    "isolated_flow_selected": [
+      "mncs-compiler.flow-cfg-differential"
+    ],
+    "locked_bootstrap_integrity": 1,
+    "obligation_count": 10,
+    "repository_owned_external_integrations": 9,
+    "source_parser_root_selected": [
+      "mncs-compiler.frontend-differential",
+      "mncs-compiler.segment-differential",
+      "mncs-compiler.declaration-differential",
+      "mncs-compiler.semantic-proof-differential",
+      "mncs-compiler.flow-cfg-differential",
+      "mncs-compiler.project-source-differential",
+      "mncs-compiler.pressure-reproductions",
+      "mncs-compiler.profile-018-syntax",
+      "mncs-compiler.production-calls"
+    ]
+  }
+}

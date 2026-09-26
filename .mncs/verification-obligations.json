@@ -1,0 +1,494 @@
+{
+  "schema_version": "mncs-family.verification-obligation-inventory/v1",
+  "repository": "mncs-compiler",
+  "revision": 7,
+  "obligations": [
+    {
+      "identity": "mncs-compiler.frontend-differential",
+      "title": "Current frontend facts match pinned Stage-0",
+      "guarantee_domain": "parser_front_end",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.kernel.v1::lex_summary"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/kernel.mncs",
+        "src/compiler/segment.mncs",
+        "tools/test_frontend.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_frontend.py",
+        "argv": [
+          "python3",
+          "tools/test_frontend.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.segment-differential",
+      "title": "Segment token and span facts match pinned Stage-0",
+      "guarantee_domain": "parser_front_end",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.segment.v1::next_token",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/segment.mncs",
+        "tools/test_segment.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_segment.py",
+        "argv": [
+          "python3",
+          "tools/test_segment.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 3600
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.declaration-differential",
+      "title": "Declaration parsing and name checks match pinned Stage-0",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::check_unit",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "tools/test_decl.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_decl.py",
+        "argv": [
+          "python3",
+          "tools/test_decl.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.semantic-proof-differential",
+      "title": "Type, effect, capability, and proof facts match pinned Stage-0",
+      "guarantee_domain": "type_system",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::prove_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::prove_parsed_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::collect_call_sites",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "tools/test_sem.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_sem.py",
+        "argv": [
+          "python3",
+          "tools/test_sem.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 3600
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.flow-cfg-differential",
+      "title": "Typed CFG and proof attachment match pinned Stage-0",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.flow.v1::lower_unit",
+        "mncs:0.2:function:mncs.compiler.flow.v1::lower_proven_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::prove_unit",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "tools/test_flow.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_flow.py",
+        "argv": [
+          "python3",
+          "tools/test_flow.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 3600
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.project-source-differential",
+      "title": "Project source, module links, local proof, and typed CFG are checked against Stage-0",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project",
+        "mncs:0.2:function:mncs.compiler.flow.v1::lower_proven_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::prove_parsed_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::collect_call_sites",
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/project.mncs",
+        "tools/test_project.py",
+        "tools/stage0-probe/src/main.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_project.py",
+        "argv": [
+          "python3",
+          "tools/test_project.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.pressure-reproductions",
+      "title": "Compiler and runtime pressure reproductions retain recorded outcomes",
+      "guarantee_domain": "compiler",
+      "evidence_role": "pressure_reproducer",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.segment.v1::next_token",
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit",
+        "mncs:0.2:function:mncs.compiler.decl.v1::prove_unit",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "tools/test_pressure.py",
+        "tools/revalidate_pressures.py",
+        "evidence/campaign-20260925-pressure-suite-results.json",
+        "evidence/campaign-20260925-pressure-reconciliation.json"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_pressure.py",
+        "argv": [
+          "python3",
+          "tools/test_pressure.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.profile-018-syntax",
+      "title": "Current Profile 0.18 syntax is reconciled against Stage-0",
+      "guarantee_domain": "parser_front_end",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "tools/revalidate_profile_surface.py",
+        "evidence/campaign-20260925-profile-surface-results.json"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/revalidate_profile_surface.py",
+        "argv": [
+          "python3",
+          "tools/revalidate_profile_surface.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.production-calls",
+      "title": "Production compiler calls return valid bounded results",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:program:mncs.compiler.kernel.v1",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/kernel.mncs",
+        "tools/revalidate_compile_cost.py",
+        "evidence/campaign-20260925-compile-cost-results.json"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/revalidate_compile_cost.py",
+        "argv": [
+          "python3",
+          "tools/revalidate_compile_cost.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.bootstrap-integrity",
+      "title": "Locked Stage-0 bootstrap and probe transport remain reproducible",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs-compiler:bootstrap"
+      ],
+      "invalidation_dependencies": [
+        "mncs-language.lock.json",
+        "tools/bootstrap.sh",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/src/main.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "bash tools/bootstrap.sh",
+        "argv": [
+          "bash",
+          "tools/bootstrap.sh"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    }
+  ]
+}

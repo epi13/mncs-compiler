@@ -12,15 +12,14 @@ import subprocess
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
 OUT = ROOT / ".build"
 OUT.mkdir(exist_ok=True)
 
 os.environ["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow"
-
-
-def integer(n):
-    return {"integer": {"type": {"bits": 64, "signed": False}, "value": n}}
+os.environ["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.flow.v1"
+os.environ.setdefault("MNCS_PROBE_BACKEND", "cranelift")
 
 
 def blob(data):
@@ -54,12 +53,25 @@ def flist(value, cons=1):
 
 class Probe:
     def __init__(self):
+        source_bound = max(len(source.encode()) for _, source, _, _ in CASES)
+        lengths = [source_bound]
+        env = os.environ.copy()
+        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+            env.pop("MNCS_PROBE_BACKEND", None)
+        env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([
+            {
+                "module": "mncs.compiler.flow.v1",
+                "function": "lower_unit",
+                "type_arguments": [{"kind": "nat", "value": length}],
+            }
+            for length in lengths
+        ])
         self.proc = subprocess.Popen(
-            [".bootstrap/target/debug/mncs-compiler-stage0-probe"],
+            [os.environ.get("MNCS_PROBE_BIN", str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
-            env=os.environ.copy(),
+            env=env,
         )
         self.digest = hashlib.sha256()
         self.requests = 0
@@ -77,13 +89,11 @@ class Probe:
 
     def run(self, source):
         raw = source.encode()
-        assert len(raw) <= 256, (len(raw), source)
-        chunks = [raw[i : i + 64] for i in range(0, len(raw), 64)]
-        chunks += [b""] * (4 - len(chunks))
         request = {
             "schema_version": "0.1",
             "target": {"module": "mncs.compiler.flow.v1", "function": "lower_unit"},
-            "arguments": [blob(chunk) for chunk in chunks] + [integer(len(raw))],
+            "arguments": [blob(raw)],
+            "type_arguments": [{"kind": "nat", "value": len(raw)}],
             "step_budget": 8_000_000,
         }
         result = self.send(request)
@@ -191,7 +201,15 @@ def suite():
     probe = Probe()
     results = []
     try:
-        for name, source, expected_mnb_count, expected_shape in CASES:
+        execution_status = probe.send({"execution_status": True})
+        if execution_status.get("backend") == "cranelift":
+            assert execution_status["retained_sessions"] == 1, execution_status
+        source_bound = max(len(source.encode()) for _, source, _, _ in CASES)
+        cases = [
+            (name, source.ljust(source_bound), expected_mnb_count, expected_shape)
+            for name, source, expected_mnb_count, expected_shape in CASES
+        ]
+        for name, source, expected_mnb_count, expected_shape in cases:
             native1 = probe.run(source)
             native2 = probe.run(source)
             assert native1 == native2, name
@@ -235,6 +253,8 @@ def suite():
             "result_sha256": probe.digest.hexdigest(),
             "execution_steps_total": sum(probe.steps),
             "execution_steps_max": max(probe.steps),
+            "execution_mode": "retained_cranelift" if execution_status["retained_sessions"] else "reference_interpreter",
+            "retained_execution_sessions": execution_status["retained_sessions"],
             "cases": results,
         }
     finally:
@@ -247,6 +267,7 @@ if __name__ == "__main__":
     report = {
         "schema_version": 1,
         "stage0_revision": json.loads(Path("mncs-language.lock.json").read_text())["revision"],
+        "stage0_reference_mode": os.environ.get("MNCS_PROBE_REFERENCE_MODE", "locked"),
         "source_profile": "0.18",
         "identical_native_repetitions": 2,
         "elapsed_seconds": round(time.monotonic() - started, 3),

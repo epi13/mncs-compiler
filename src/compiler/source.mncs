@@ -1,42 +1,39 @@
 mncs 0.18;
 module mncs.compiler.source.v1;
 
-// Exact immutable input is supplied by the caller. No ambient file access.
-// This bounded bootstrap API cannot accept a whole normal compiler module.
-fn byte_at(source: [byte; up_to 64], offset: u64) -> (result: u64) {
+// A source unit is a bounded byte view whose capacity is inferred from the
+// caller. The actual length remains runtime data; compiler APIs do not impose
+// the old four-times-64-byte experiment limit.
+fn byte_at<N: Nat>(source: [byte; up_to N], offset: u64) -> (result: u64) {
     if offset < source.len {
         return source[offset] as u64;
     }
     return 256;
 }
 
-fn ascii(source: [byte; up_to 64]) -> (result: bool) {
+fn ascii<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
     iterate i over source carrying valid: bool = true {
         next valid = valid && source[i] as u64 < 128;
     }
     return valid;
 }
 
-fn span_valid(source: [byte; up_to 64], start: u64, end: u64) -> (result: bool) {
+fn span_valid<N: Nat>(source: [byte; up_to N], start: u64, end: u64) -> (result: bool) {
     return start <= end && end <= source.len;
 }
 
-// Human rendering of a byte offset: 1-based (line, column) matching
-// Stage-0's SourceSpan convention (line = newlines before the offset +
-// 1; column = bytes since the last newline + 1). Offsets past the end
-// clamp to the end, mirroring SourceSpan::at. Columns count BYTES, so
-// agreement with Stage-0 holds exactly on the admitted ASCII domain;
-// non-ASCII columns count scalar values there and stay out of scope
-// with the rest of CP-0002.
+// Human rendering of a byte offset: 1-based line and column, matching
+// Stage-0's SourceSpan convention. Columns count bytes on the admitted ASCII
+// domain; Unicode scalar columns remain a separately tracked parity item.
 record LineCol { line: u64, col: u64 }
-fn line_col(source: [byte; up_to 64], offset: u64) -> (result: LineCol) {
+fn line_col<N: Nat>(source: [byte; up_to N], offset: u64) -> (result: LineCol) {
     iterate i over source carrying st: LineCol = LineCol { line: 1, col: 1 } {
-        next st = line_step(source, offset, i, st);
+        next st = line_step<N>(source, offset, i, st);
     }
     return st;
 }
-fn line_step(source: [byte; up_to 64], offset: u64, pos: u64, st: LineCol) -> (result: LineCol) {
+fn line_step<N: Nat>(source: [byte; up_to N], offset: u64, pos: u64, st: LineCol) -> (result: LineCol) {
     if pos >= offset { return st; }
-    if byte_at(source, pos) == 10 { return LineCol { line: st.line + 1, col: 1 }; }
+    if byte_at<N>(source, pos) == 10 { return LineCol { line: st.line + 1, col: 1 }; }
     return LineCol { line: st.line, col: st.col + 1 };
 }

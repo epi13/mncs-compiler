@@ -2,7 +2,7 @@
 
 ID: CP-0015
 
-Status: open; all five Profile 0.18 parser probes reproduced against native decl.parse_unit
+Status: partially resolved; `next` fields work, four Profile 0.18 forms remain unsupported
 
 > Historical description and reproductions below preserve the original
 > finding. See the current reconciliation at the end of this file and the
@@ -33,9 +33,8 @@ MNCS frontend layers are version-unaware byte scanners:
 
 At the time this finding was first written, only the `!` row had direct
 oracle evidence and the other native refusals were predictions from
-`decl.mncs`. The current Profile 0.18 differential now confirms that Rust
-accepts all five forms and native `decl.parse_unit` rejects all five; see
-[`evidence/profile-surface-results.json`](../evidence/profile-surface-results.json).
+`decl.mncs`. The historical 709ba008 run confirmed all five initial
+refusals; see [`evidence/profile-surface-results.json`](../evidence/profile-surface-results.json).
 
 ## Compiler workload
 
@@ -157,6 +156,15 @@ implicitly — full program texts).
 - Resolution revision:
 - Follow-up evidence in this repository:
 
-## Current reconciliation (2026-09-25)
+## Current reconciliation (2026-09-26, differential evidence at Stage-0 `b0f3e644`; current CLI/bootstrap pin `4f9e1224`)
 
-Current Rust Stage-0 accepts all five source forms: `!`, a negative atom, `[v; N]`, a `next` field, and integer `match`. The native declaration parser returns `parse_ok=false` for all five (spans [66,67], [58,59], [60,60], [43,47], [67,67]). Machine evidence: `evidence/profile-surface-results.json`. The current compiler modules now declare profile 0.18; this remains compiler architecture pressure, not missing language syntax.
+The locked Rust Stage-0 accepts all five forms with no diagnostics. Native
+`decl.parse_unit` and `decl.prove_unit` now accept the `next` field and
+projection. They still reject `!` at [66,67], the negative atom at [58,59],
+the repeat literal at [60,60], and integer `match` at [67,67]. Exact
+machine evidence is in
+[`evidence/campaign-20260925-profile-surface-results.json`](../evidence/campaign-20260925-profile-surface-results.json).
+
+The `next` row was fixed in the native declaration parser by recognizing it
+as a field token in declaration and projection contexts. The other four
+forms remain compiler architecture work; no language change was made.

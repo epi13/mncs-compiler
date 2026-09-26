@@ -15,11 +15,13 @@ import time
 import shutil
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
 LOCK = json.loads((ROOT / "mncs-language.lock.json").read_text())
 PROFILE = LOCK["source_profile"]
-MNCS = ROOT / ".bootstrap/target/debug/mncs"
+MNCS = Path(os.environ.get("MNCS_CLI_BIN", BOOTSTRAP_TARGET / "release" / "mncs"))
 OUT = ROOT / ".build/current-pressure-repros"
+CAMPAIGN_OUT = ROOT / "evidence/campaign-20260925-pressure-reconciliation.json"
 OUT.mkdir(parents=True, exist_ok=True)
 
 FIXTURES = [
@@ -133,6 +135,7 @@ def main():
     }
     target = ROOT / ".build/pressure-current-results.json"
     target.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
+    CAMPAIGN_OUT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     print(json.dumps({
         "stage0_revision": report["stage0_revision"],
         "source_profile": PROFILE,

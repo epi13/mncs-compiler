@@ -1,6 +1,6 @@
 # CP-0001 — Whole compiler sources exceed bounded sequence capacity
 
-Status: partially resolved; compiler unit API remains 256-byte limited
+Status: partially resolved; native project inputs cross 256 bytes but remain capped at 1,024 bytes per source
 
 > Historical description and reproductions below preserve the original
 > finding. See the current reconciliation at the end of this file and the
@@ -70,4 +70,13 @@ API this pressure originally asked for.
 
 ## Current reconciliation (2026-09-25)
 
-Current Stage-0 (709ba008) accepts the preserved 65-byte source. The old 64-byte language limit is stale. The native compiler still receives four 64-byte chunks per unit; classify that as compiler architecture, not a request to raise a generic language bound.
+Current Stage-0 (`b0f3e644`) accepts the preserved 65-byte source. The old
+64-byte language limit is stale. The native `compile_project` API now receives
+exact per-file byte sequences separately from source metadata; its project
+probe crosses the old 256-byte boundary and exercises one 1,024-byte source.
+The representation has no four-chunk compatibility path. Current Profile 0.18
+caps the generic source length at 1,024 and the snapshot at 64 modules, so this
+does not yet ingest this repository's 268 KB declaration module. The remaining
+gap is compiler source representation/project scale; it is not a request to
+raise a generic language bound. See
+[`evidence/campaign-20260925-project-results.json`](../evidence/campaign-20260925-project-results.json).

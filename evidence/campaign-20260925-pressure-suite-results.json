@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+  "stage0_reference_mode": "locked",
+  "elapsed_seconds": 0.0105,
+  "scope": "pinned diagnostic pressure reproductions plus one supported record-sequence control",
+  "results": [
+    {
+      "repro": "source-65",
+      "exit_code": 1,
+      "diagnostics": [
+        {
+          "code": "MNE105",
+          "stage": "elaboration",
+          "severity": "error",
+          "message": "source profile supports bool, byte, 8/16/32/64-bit integers, declared finite/record types, bounded sequences, and Profile 0.8 integer vec<T, N>/mask<N>",
+          "span": {
+            "start": 53,
+            "end": 69,
+            "line": 3,
+            "column": 17
+          },
+          "expected": [],
+          "found": null
+        },
+        {
+          "code": "MNE105",
+          "stage": "elaboration",
+          "severity": "error",
+          "message": "source profile supports bool, byte, 8/16/32/64-bit integers, declared finite/record types, bounded sequences, and Profile 0.8 integer vec<T, N>/mask<N>",
+          "span": {
+            "start": 53,
+            "end": 69,
+            "line": 3,
+            "column": 17
+          },
+          "expected": [],
+          "found": null
+        },
+        {
+          "code": "MNE161",
+          "stage": "elaboration",
+          "severity": "error",
+          "message": "field projection requires a value of a declared record type",
+          "span": {
+            "start": 97,
+            "end": 101,
+            "line": 3,
+            "column": 61
+          },
+          "expected": [],
+          "found": null
+        }
+      ],
+      "elapsed_seconds": 0.002
+    },
+    {
+      "repro": "bool-equality",
+      "exit_code": 1,
+      "diagnostics": [
+        {
+          "code": "MNE121",
+          "stage": "elaboration",
+          "severity": "error",
+          "message": "comparison operands must have an integer type",
+          "span": {
+            "start": 95,
+            "end": 101,
+            "line": 3,
+            "column": 54
+          },
+          "expected": [],
+          "found": null
+        }
+      ],
+      "elapsed_seconds": 0.0017
+    },
+    {
+      "repro": "unbounded-scan",
+      "exit_code": 1,
+      "diagnostics": [
+        {
+          "code": "MNP106",
+          "stage": "parsing",
+          "severity": "error",
+          "message": "unbounded 'while' iteration is unsupported; Profile 0.4 requires 'iterate ... up_to <literal>'",
+          "span": {
+            "start": 98,
+            "end": 103,
+            "line": 4,
+            "column": 5
+          },
+          "expected": [
+            "iterate_keyword"
+          ],
+          "found": "while_keyword"
+        },
+        {
+          "code": "MNP061",
+          "stage": "parsing",
+          "severity": "error",
+          "message": "expected let, if, fail, return, or bounded iteration",
+          "span": {
+            "start": 104,
+            "end": 108,
+            "line": 4,
+            "column": 11
+          },
+          "expected": [
+            "let_keyword",
+            "if_keyword",
+            "fail_keyword",
+            "return_keyword",
+            "iterate_keyword"
+          ],
+          "found": "true_keyword"
+        },
+        {
+          "code": "MNP061",
+          "stage": "parsing",
+          "severity": "error",
+          "message": "expected let, if, fail, return, or bounded iteration",
+          "span": {
+            "start": 109,
+            "end": 110,
+            "line": 4,
+            "column": 16
+          },
+          "expected": [
+            "let_keyword",
+            "if_keyword",
+            "fail_keyword",
+            "return_keyword",
+            "iterate_keyword"
+          ],
+          "found": "left_brace"
+        },
+        {
+          "code": "MNP007",
+          "stage": "parsing",
+          "severity": "error",
+          "message": "unexpected token after the final function",
+          "span": {
+            "start": 134,
+            "end": 140,
+            "line": 5,
+            "column": 5
+          },
+          "expected": [],
+          "found": "return_keyword"
+        }
+      ],
+      "elapsed_seconds": 0.0016
+    },
+    {
+      "repro": "leading-comment-envelope",
+      "exit_code": 1,
+      "diagnostics": [
+        {
+          "code": "MNE002",
+          "stage": "envelope",
+          "severity": "error",
+          "message": "source header version does not match its envelope",
+          "span": {
+            "start": 27,
+            "end": 31,
+            "line": 1,
+            "column": 28
+          },
+          "expected": [],
+          "found": "version"
+        }
+      ],
+      "elapsed_seconds": 0.0015
+    },
+    {
+      "control": "record sequence",
+      "status": "elaborated; runtime/backend not tested by this control",
+      "elapsed_seconds": 0.0037
+    }
+  ]
+}

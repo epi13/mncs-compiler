@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "stage0_revision": "b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70",
+  "stage0_reference_mode": "locked",
+  "source_profile": "0.18",
+  "elapsed_seconds": 53.083,
+  "scope": "ordered current-profile source snapshot, native module/import/member resolution, scalar imported-signature proof and typed CFG; the tested successful and negative imported calls are compared with locked Rust Stage-0",
+  "imported_signature_scope": {
+    "supported": "scalar, effect-free imported callable signatures with argument/result proof and snapshot-bound callable identity",
+    "remaining": [
+      "nominal imported type ownership and nested type resolution",
+      "imported effect/capability identity and coverage"
+    ]
+  },
+  "requests": 21,
+  "result_sha256": "dc3bc85b4d3594d0b9a7ce4ec50d70df9bd53973049b35e605ca65d2a7cfbf87",
+  "native_execution_steps_total": 10,
+  "native_execution_steps_max": 1,
+  "execution_mode": "retained_cranelift",
+  "requested_execution_backend": "cranelift",
+  "retained_execution_sessions": 1,
+  "snapshot_source_count": 2,
+  "snapshot_bytes": 1103,
+  "former_unit_boundary_crossed": true,
+  "current_profile_source_nat_ceiling": 1024,
+  "native_modules": [
+    {
+      "module": "demo.dep",
+      "functions": 1,
+      "verified": true
+    },
+    {
+      "module": "demo.root",
+      "functions": 1,
+      "verified": true
+    }
+  ],
+  "native_imports": [
+    {
+      "source_index": 1,
+      "target_index": 0,
+      "has_alias": true
+    }
+  ],
+  "stage0_module_resolutions": 1,
+  "stage0_linked_functions": 2,
+  "stage0_ssa_functions": 2,
+  "native_signatures_matched_stage0": [
+    "demo.dep::answer",
+    "demo.root::main"
+  ],
+  "transitive_import_links": [
+    [
+      1,
+      2
+    ],
+    [
+      2,
+      0
+    ]
+  ],
+  "stage0_transitive_linked_functions": 3,
+  "resolved_imported_call": {
+    "native_project_valid": true,
+    "native_import_count": 1,
+    "native_root_proof_ok": true,
+    "native_callable_owner_source_index": 0,
+    "native_callable_member": "answer",
+    "native_argument_count": 1,
+    "stage0_callable_identity": "mncs:0.2:function:demo.dep::answer",
+    "identity_binding": "native source-index plus defining declaration span maps to the Stage-0 home-module/name identity",
+    "stage0_valid": true,
+    "stage0_diagnostics": [],
+    "stage0_linked_functions": 2,
+    "stage0_ssa_functions": 2
+  },
+  "imported_argument_check": {
+    "native_obligation_kind": 26,
+    "native_span": [
+      101,
+      105
+    ],
+    "stage0_diagnostic": "MNE133",
+    "stage0_span": [
+      101,
+      105
+    ],
+    "matching": true
+  },
+  "resolution_edge_cases": {
+    "same_short_name_owners": {
+      "native_valid": true,
+      "stage0_valid": true,
+      "same_short_name_owners": [
+        [
+          0,
+          "answer"
+        ],
+        [
+          1,
+          "answer"
+        ],
+        [
+          2,
+          "answer"
+        ]
+      ],
+      "local_and_two_imported_answers_resolved_separately": true,
+      "stage0_function_count": 6
+    },
+    "missing_import": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 3,
+          "$p": {
+            "end": 47,
+            "source_index": 0,
+            "start": 36
+          }
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNE173",
+          "expected": [],
+          "found": null,
+          "message": "imported module 'demo.absent' is unavailable to the resolver",
+          "severity": "error",
+          "span": {
+            "column": 37,
+            "end": 47,
+            "line": 1,
+            "start": 36
+          },
+          "stage": "elaboration"
+        }
+      ]
+    },
+    "duplicate_module_definitions": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 2,
+          "$p": {
+            "end": 32,
+            "source_index": 1,
+            "start": 18
+          }
+        }
+      ],
+      "stage0_single_key_source_valid": true,
+      "oracle_duplicate_key_limit": "Stage-0 resolver map represents one source per declared module name"
+    },
+    "missing_imported_member": {
+      "native_valid": false,
+      "native_proof_obligations": [
+        {
+          "end": 111,
+          "kind": 32,
+          "start": 91,
+          "status": 1
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNE131",
+          "expected": [],
+          "found": null,
+          "message": "call target does not resolve to a function in this module",
+          "severity": "error",
+          "span": {
+            "column": 92,
+            "end": 111,
+            "line": 1,
+            "start": 91
+          },
+          "stage": "elaboration"
+        }
+      ]
+    },
+    "imported_record_finite_and_nested_nominal_types": {
+      "native_valid": false,
+      "native_diagnostics": [],
+      "native_proof_obligations": [
+        {
+          "end": 97,
+          "kind": 31,
+          "start": 86,
+          "status": 1
+        },
+        {
+          "end": 117,
+          "kind": 31,
+          "start": 106,
+          "status": 1
+        },
+        {
+          "end": 190,
+          "kind": 31,
+          "start": 178,
+          "status": 1
+        },
+        {
+          "end": 211,
+          "kind": 31,
+          "start": 199,
+          "status": 1
+        },
+        {
+          "end": 97,
+          "kind": 31,
+          "start": 86,
+          "status": 1
+        },
+        {
+          "end": 117,
+          "kind": 31,
+          "start": 106,
+          "status": 1
+        },
+        {
+          "end": 145,
+          "kind": 32,
+          "start": 128,
+          "status": 1
+        },
+        {
+          "end": 190,
+          "kind": 31,
+          "start": 178,
+          "status": 1
+        },
+        {
+          "end": 211,
+          "kind": 31,
+          "start": 199,
+          "status": 1
+        },
+        {
+          "end": 239,
+          "kind": 32,
+          "start": 222,
+          "status": 1
+        }
+      ],
+      "stage0_valid": true,
+      "stage0_record_and_finite_types_valid": true,
+      "coverage_gap": true
+    }
+  },
+  "deterministic_repetitions": 2
+}
