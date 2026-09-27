@@ -131,11 +131,12 @@ relabelled as a measurement at the current 843c5bc pin.
 
 ## Commons pressure reconciliation
 
-CP-0014 now elaborates its exact bool-payload reproducer at the current pin;
-the compiler declaration and proof suites also run. The bool-payload
-capability is verified and the stale pressure is resolved. CP-0015 now passes
-positive and negative differential checks for all four previously missing
-forms plus next and older-profile gates; the compiler pressure is resolved.
+CP-0014 remains open. The locked Stage-0 accepts its exact Profile 0.18
+bool-payload reproducer, but the native project parser stops before producing
+a typed CFG; Commons now records the failure as
+`CAPABILITY_AVAILABLE_CONSUMER_NOT_MIGRATED`. CP-0015 passes positive and
+negative differential checks for all four previously missing forms plus
+`next` and older-profile gates, and its compiler pressure is resolved.
 CP-0010 integer match dispatch and CP-0013 next-field behavior were
 revalidated against current and old-profile controls. The campaign's bootstrap
 refresh failure was fixed in compiler tooling and passes against the updated

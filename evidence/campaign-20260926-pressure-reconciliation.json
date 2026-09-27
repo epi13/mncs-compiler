@@ -1,0 +1,142 @@
+{
+  "schema_version": "mncs-compiler-pressure-reconciliation/1",
+  "campaign": "compiler-value-ssa-20260926",
+  "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+  "compiler_head_tested": "f257e699bda7e101649e41ef693a6e5b25ba12f6",
+  "commons_starting_head": "fa6d38922c18dc7ffe32431af876e856dafe40dd",
+  "records": [
+    {
+      "id": "MNCS-COMPILER-378246F62D9D",
+      "pressure": "CP-0001 source-capacity",
+      "observation": "MNCS-COMPILER-378246F62D9D--OBS-C07F3CF40873",
+      "state": "partially_resolved",
+      "remaining": "Current compiler subset works; source sequences over 1,024 bytes per file remain unsupported. Two modules may exceed 1,024 aggregate bytes."
+    },
+    {
+      "id": "MNCS-COMPILER-9E5BAB7F55A8",
+      "pressure": "CP-0002 Unicode classification",
+      "observation": "MNCS-COMPILER-9E5BAB7F55A8--OBS-9B086F5D36CD",
+      "state": "still_reproduces",
+      "remaining": "Stage-0 accepts the Unicode module name; the native kernel returns unsupported-source code 3 without tokens."
+    },
+    {
+      "id": "MNCS-COMPILER-0D3D67141BA4",
+      "pressure": "CP-0003 interpreter scan cost",
+      "observation": "MNCS-COMPILER-0D3D67141BA4--OBS-5C0B98907BAB",
+      "state": "still_reproduces_with_unknown_cost",
+      "remaining": "Unbounded while is rejected with MNP106. Retained Cranelift requests take one native step; interpreter no-op scan cost remains UNKNOWN."
+    },
+    {
+      "id": "MNCS-COMPILER-6AA9F9765B5B",
+      "pressure": "CP-0005 host test transport",
+      "observation": "MNCS-COMPILER-6AA9F9765B5B--OBS-C5D83FF374D8",
+      "state": "still_reproduces",
+      "remaining": "Differential execution still uses the Rust/Python host transport; retained sessions keep the loop bounded but do not remove it."
+    },
+    {
+      "id": "MNCS-COMPILER-38B9F401EC5C",
+      "pressure": "CP-0006 leading-comment envelope inference",
+      "observation": "MNCS-COMPILER-38B9F401EC5C--OBS-4D00958347CD",
+      "state": "still_reproduces",
+      "remaining": "The exact leading-comment probe still returns MNE002 at Profile 0.18."
+    },
+    {
+      "id": "MNCS-COMPILER-2EA21F85084E",
+      "pressure": "CP-0007 linked compile artifact cost",
+      "observation": "MNCS-COMPILER-2EA21F85084E--OBS-935B6AEDFA60",
+      "state": "still_reproduces",
+      "remaining": "Two identical linked builds take 1.113s and 1.109s and emit 8.05 MB of artifacts; no cost fix is claimed."
+    },
+    {
+      "id": "MNCS-COMPILER-48E3919FB30E",
+      "pressure": "CP-0008 finite payload",
+      "observation": "MNCS-COMPILER-48E3919FB30E--OBS-7003245D3749",
+      "state": "resolved_for_registered_reproducer",
+      "remaining": "Exact two-module finite-payload Stage-0 case passes. Its observation records the separately reproduced native imported-nominal gap; that gap is tracked under existing P1-014 evidence, not as a duplicate CP-0008 record."
+    },
+    {
+      "id": "MNCS-COMPILER-4EEFAEBA916A",
+      "pressure": "CP-0009 iteration bounds",
+      "observation": "MNCS-COMPILER-4EEFAEBA916A--OBS-8305E03A2D4F",
+      "state": "partially_resolved",
+      "remaining": "up_to 256 passes; up_to 1,025 rejects with MNE142. Bounded-fuel chains persist and interpreter cost remains UNKNOWN."
+    },
+    {
+      "id": "MNCS-COMPILER-4924C0E45913",
+      "pressure": "CP-0010 integer match",
+      "observation": "MNCS-COMPILER-4924C0E45913--OBS-9F4308A8876E",
+      "state": "resolved",
+      "remaining": "Current positive/negative Profile 0.18 integer-match cases and old-profile control agree with Stage-0."
+    },
+    {
+      "id": "MNCS-COMPILER-33EBFEFE9064",
+      "pressure": "CP-0011 recursive-call/parser-machine boundary",
+      "observation": "MNCS-COMPILER-33EBFEFE9064--OBS-C45226FFB956",
+      "state": "partially_resolved",
+      "remaining": "Stage-0 accepts recursive calls at Profile 0.18; explicit expression and block machines remain in the native compiler."
+    },
+    {
+      "id": "MNCS-COMPILER-360418A1CF7A",
+      "pressure": "CP-0013 contextual next",
+      "observation": "MNCS-COMPILER-360418A1CF7A--OBS-1F8781966566",
+      "state": "resolved",
+      "remaining": "Current positive/negative contextual-next cases and old-profile controls agree with Stage-0."
+    },
+    {
+      "id": "MNCS-COMPILER-BABFB889D075",
+      "pressure": "CP-0014 bool finite payload",
+      "observation": "MNCS-COMPILER-BABFB889D075--OBS-4094EE26D699",
+      "state": "verifying_failed",
+      "remaining": "Stage-0 accepts the exact Profile 0.18 fixture; native project parsing stops at cursor 73, span 142..145, before typed CFG. Classification CAPABILITY_AVAILABLE_CONSUMER_NOT_MIGRATED."
+    },
+    {
+      "id": "MNCS-COMPILER-723468BE594D",
+      "pressure": "CP-0015 current-profile syntax",
+      "observation": "MNCS-COMPILER-723468BE594D--OBS-48E0BFAA265A",
+      "state": "resolved",
+      "transition": "EVT-C301EB0D1D9A5C75",
+      "remaining": "All 21 positive, negative, and old-profile syntax cases pass, including !, negative atoms, repeat literals, next, and integer match."
+    },
+    {
+      "id": "MNCS-COMPILER-2B5AD318F5E5",
+      "pressure": "warm refresh of a marked Stage-0 checkout",
+      "observations": [
+        "MNCS-COMPILER-2B5AD318F5E5--OBS-5DC91AFF955C",
+        "MNCS-COMPILER-2B5AD318F5E5--OBS-06ED5E1DF901"
+      ],
+      "state": "resolved",
+      "transition": "EVT-9F531740083A2A24",
+      "remaining": "The stale marked checkout failed after the lock update; refreshed warm bootstrap now succeeds without relocate/delete workaround."
+    },
+    {
+      "id": "MNCS-LANG-532C63CD5EA3",
+      "pressure": "P1-014 nominal identity at process boundary",
+      "observation": "MNCS-LANG-532C63CD5EA3--OBS-FFD25E2AC0F8",
+      "state": "partially_resolved",
+      "remaining": "Compiler-produced flow now crosses retained SSA with canonical callable identity; Store consumer remains unverified, and imported nominal signatures remain unsupported."
+    }
+  ],
+  "views": {
+    "regenerated": true,
+    "validated": true,
+    "queried_targets": [
+      "mncs-compiler",
+      "mncs-language",
+      "runtime"
+    ]
+  },
+  "commons_suite": "campaign-20260926-commons-tests.json",
+  "ravel": {
+    "planner_repository": "RAVEL",
+    "initial_campaign_plans": 9,
+    "planning_seconds": 95.428,
+    "native_fallback": false,
+    "selected_obligations_current": true,
+    "retained_cranelift_steps_per_request": 1,
+    "cold_speedup_demonstrated": false
+  },
+  "commons_commits": [
+    "85edb4636b7ada42ec750c6412924f1cc1fec0c8",
+    "93e2ec7bebb85b4b0d9f809375d60ddcfc4cabd1"
+  ]
+}
