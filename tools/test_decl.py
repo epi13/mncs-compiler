@@ -70,14 +70,16 @@ def norm_expr(e, src: bytes):
         return ('int', p['value'], (p['start'], p['end']))
     if v == 2:
         return ('bool', p['value'])
-    if v == 3:
+    # Keep these discriminants aligned with decl.Expr after the Profile 0.18
+    # UnaryNot, Repeat, and ScalarMatch variants were added ahead of Binary.
+    if v == 6:
         return ('bin', OPNAME[p['op']], norm_expr(p['left'], src), norm_expr(p['right'], src),
                 (p['start'], p['end']))
-    if v == 4:
+    if v == 7:
         return ('call', src[p['name_start']:p['name_end']].decode(),
                 [norm_expr(a, src) for a in flist(p['args'], 1)],
                 (p['start'], p['end']))
-    if v == 5:
+    if v == 8:
         return ('proj' if not p['path'] else 'pathproj', norm_expr(p['base'], src),
                 (src[p['field_start']:p['field_end']].decode(), (p['field_start'], p['field_end'])),
                 (p['start'], p['end']))

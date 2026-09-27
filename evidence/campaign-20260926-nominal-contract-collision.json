@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "campaign": "compiler-value-ssa-20260926",
+  "stage0_revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+  "compiler_base": "587741b89ad7a0efac4db5352de0e7487b644e21",
+  "workload": {
+    "kind": "native compiler project fact passed to retained backend session",
+    "project_source": "mncs 0.18; module demo.min; fn main() -> (r: u64) { return 1; }",
+    "producer_type": "mncs.compiler.flow.v1::LoweredUnit",
+    "consumer": "mncs.compiler.ssa.v1::lower_value_ssa<N=1024>",
+    "argument_path": "argument 1.functions"
+  },
+  "result": {
+    "status": "invalid_request",
+    "contract_error": "MNCS_VALUE_CONTRACT argument 1.functions: finite value identity mismatch: expected SemanticId(\"mncs:0.2:finite-type:mncs.compiler.ssa.v1::FunctionList\"), received SemanticId(\"mncs:0.2:finite-type:mncs.compiler.flow.v1::FunctionList\")",
+    "retained_backend": "Cranelift",
+    "steps": 0
+  },
+  "classification": "language-owned nested nominal contract construction resolves a field type by short name instead of the enclosing record module; the active SSA module and its imported flow module both declare FunctionList",
+  "existing_commons_pressure": "MNCS-LANG-532C63CD5EA3"
+}

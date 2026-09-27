@@ -5,35 +5,30 @@ Python only builds typed request values and compares compiler outputs. The
 project/module/import interpretation remains in MNCS or the Rust oracle.
 """
 import hashlib
+import copy
 import json
 import os
 from pathlib import Path
+from datetime import datetime, timezone
 import subprocess
 import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", datetime.now(timezone.utc).strftime("%Y%m%d"))
 BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
-os.environ["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow,project"
-os.environ["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.project.v1"
+os.environ["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow,ssa,project"
+os.environ["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.project.v1,mncs.compiler.ssa.v1"
 os.environ.setdefault("MNCS_PROBE_BACKEND", "cranelift")
 os.environ.setdefault("MNCS_PROBE_GENERIC_SEEDS", json.dumps([
-    {"module": "mncs.compiler.project.v1", "function": "compile_project",
-     "type_arguments": [
-         {"kind": "nat", "value": 1},
-         {"kind": "nat", "value": 1024},
-     ]},
-    {"module": "mncs.compiler.project.v1", "function": "compile_project",
-     "type_arguments": [
-         {"kind": "nat", "value": 2},
-         {"kind": "nat", "value": 1024},
-     ]},
     {"module": "mncs.compiler.project.v1", "function": "compile_project",
      "type_arguments": [
          {"kind": "nat", "value": 3},
          {"kind": "nat", "value": 1024},
      ]},
+    {"module": "mncs.compiler.ssa.v1", "function": "verify_function",
+     "type_arguments": [{"kind": "nat", "value": 1024}]},
 ]))
 
 
@@ -72,6 +67,11 @@ def flist(value, nil=0, cons=1):
     return items
 
 
+def identity_text(identity):
+    assert identity["valid"] is True and identity["len"] > 0, identity
+    return bytes(identity["bytes"][:identity["len"]]).decode()
+
+
 class Probe:
     def __init__(self):
         env = os.environ.copy()
@@ -87,6 +87,7 @@ class Probe:
         self.digest = hashlib.sha256()
         self.requests = 0
         self.steps = []
+        self.last_response = None
 
     def send(self, request):
         self.proc.stdin.write(json.dumps(request) + "\n")
@@ -94,6 +95,7 @@ class Probe:
         line = self.proc.stdout.readline()
         assert line, f"Stage-0 probe terminated: {self.proc.poll()}"
         result = json.loads(line)
+        self.last_response = result
         self.digest.update(json.dumps([request, result], sort_keys=True).encode())
         self.requests += 1
         return result
@@ -126,6 +128,58 @@ def record(identities, name, fields):
     }
 
 
+def wire_field(value, name):
+    return next(item for key, item in value["record"]["fields"] if key == name)
+
+
+def set_wire_field(value, name, replacement):
+    fields = value["record"]["fields"]
+    for index, (key, _) in enumerate(fields):
+        if key == name:
+            fields[index] = [key, replacement]
+            return
+    raise KeyError(name)
+
+
+def wire_sequence(value):
+    return value["sequence"]["values"]
+
+
+def wire_flist(value, nil=0, cons=1):
+    items = []
+    while True:
+        finite = value["finite"]
+        if finite["discriminant"] == nil:
+            return items
+        assert finite["discriminant"] == cons, finite
+        payload = {key: item for key, item in finite.get("payload", [])}
+        items.append(payload["head"])
+        value = payload["tail"]
+
+
+def set_wire_variant_field(value, name, replacement):
+    payload = value["finite"].get("payload", [])
+    for index, (key, _) in enumerate(payload):
+        if key == name:
+            payload[index] = [key, replacement]
+            return
+    raise KeyError(name)
+
+
+def wire_number(value):
+    return next(iter(value.values()))["value"]
+
+
+def verify_ssa_function(probe, source, function):
+    return probe.native({
+        "schema_version": "0.1",
+        "target": {"module": "mncs.compiler.ssa.v1", "function": "verify_function"},
+        "arguments": [byte_sequence(source.encode()), function],
+        "type_arguments": [{"kind": "nat", "value": 1024}],
+        "step_budget": 8_000_000,
+    })
+
+
 def source_value(identities, source_id, path):
     return record(identities, "ProjectSource", {
         "source_id": byte_sequence(source_id.encode()),
@@ -148,7 +202,9 @@ def request_value(identities, sources):
         "target": {"module": "mncs.compiler.project.v1", "function": "compile_project"},
         "arguments": [project, {"sequence": {"values": [byte_sequence(text) for _, _, text in sources]}}],
         "type_arguments": [
-            {"kind": "nat", "value": len(sources)},
+            # M is a capacity bound. One retained M=3 instance serves the
+            # one-, two-, and three-module fixtures below.
+            {"kind": "nat", "value": 3},
             # Per-file values remain exact length. N is their common Profile
             # 0.18 sequence ceiling, not padding or semantic source content.
             {"kind": "nat", "value": 1024},
@@ -177,7 +233,7 @@ def run():
             execution_status = probe.send({"execution_status": True})
             if os.environ.get("MNCS_PROBE_BACKEND") == "cranelift":
                 assert execution_status["backend"] == "cranelift", execution_status
-                assert execution_status["retained_sessions"] == 1, execution_status
+                assert execution_status["retained_sessions"] == 2, execution_status
             identities = identity_map(probe)
             native_request = request_value(identities, discovered)
             first = probe.native(native_request)
@@ -193,6 +249,16 @@ def run():
             assert modules[1]["source_index"] == 1
             assert modules[0]["flow"]["proof"]["ok"] is True
             assert modules[1]["flow"]["proof"]["ok"] is True
+            assert first["fingerprint_authenticated"] is False
+            # A caller-supplied digest is unverified metadata; changing it
+            # must not change project semantic validity.
+            tampered_request = request_value(identities, discovered)
+            tampered_request["arguments"][0]["record"]["fields"] = [
+                [key, byte_sequence(b"0" * 64) if key == "fingerprint" else value]
+                for key, value in tampered_request["arguments"][0]["record"]["fields"]
+            ]
+            tampered = probe.native(tampered_request)
+            assert tampered["valid"] is True and tampered["fingerprint_authenticated"] is False
             native_flow = []
             for module in modules:
                 source_text = discovered[module["source_index"]][2]
@@ -249,9 +315,8 @@ def run():
                     assert native_outputs == reference["outputs"], (module_name, name, native_outputs, reference["outputs"])
                     signature_matches.append(f"{module_name}::{name}")
 
-            # The project resolver supplies the imported, scalar signature to
-            # native proof and the resulting typed call retains its defining
-            # source index and declaration span as an artifact-bound identity.
+            # The project resolver supplies the imported scalar signature and
+            # a compiler-built canonical Stage-0 callable identity.
             imported_caller = "mncs 0.18; module demo.imported_call; use demo.dep as dep; fn main() -> (r: u64) { return dep.answer(42); }"
             (project_root / "b-root.mncs").write_text(imported_caller)
             imported_sources = discover_sources(project_root)
@@ -261,7 +326,7 @@ def run():
             imported_obligations = flist(imported_root["flow"]["proof"]["obls"])
             imported_tops = flist(imported_root["flow"]["proof"]["tops"])
             imported_ops = [op for body in imported_tops for op in flist(body)]
-            imported_call_ops = [op["$p"] for op in imported_ops if "owner" in op.get("$p", {})]
+            imported_call_ops = [op["$p"] for op in imported_ops if "identity" in op.get("$p", {})]
             imported_oracle = probe.send({"project_oracle": {
                 "root": imported_caller,
                 "modules": {"demo.dep": dependency},
@@ -271,32 +336,258 @@ def run():
             assert imported_root["flow"]["proof"]["ok"] is True, imported_obligations
             assert len(imported_call_ops) == 1, imported_ops
             resolved_call = imported_call_ops[0]
-            assert resolved_call["owner"] == 1, resolved_call
             assert resolved_call["argc"] == 1, resolved_call
-            dep_text = next(text for source_id, _, text in imported_sources if source_id == "a-dep.mncs")
-            resolved_member = dep_text[resolved_call["decl_start"]:resolved_call["decl_end"]].decode()
-            assert resolved_member == "answer", resolved_call
+            native_identity = resolved_call["identity"]
+            native_identity_text = identity_text(native_identity)
             assert imported_oracle["valid"] is True, imported_oracle["diagnostics"]
             assert imported_oracle["program"] is not None
             assert len(imported_oracle["program"]["functions"]) == 2
             assert imported_oracle["ssa"] is not None
             stage0_callable = next(
                 function for function in imported_oracle["program"]["functions"]
-                if function["home_module"] == "demo.dep" and function["name"] == resolved_member
+                if function["home_module"] == "demo.dep" and function["name"] == "answer"
             )
+            assert native_identity_text == stage0_callable["identity"], (native_identity_text, stage0_callable)
             imported_call_identity = {
                 "native_project_valid": imported_native["valid"],
                 "native_import_count": imported_native["import_count"],
                 "native_root_proof_ok": imported_root["flow"]["proof"]["ok"],
-                "native_callable_owner_source_index": resolved_call["owner"] - 1,
-                "native_callable_member": resolved_member,
+                "native_callable_identity": native_identity_text,
                 "native_argument_count": resolved_call["argc"],
                 "stage0_callable_identity": stage0_callable["identity"],
-                "identity_binding": "native source-index plus defining declaration span maps to the Stage-0 home-module/name identity",
+                "identity_binding": "typed call carries the exact canonical Stage-0 callable identity",
                 "stage0_valid": imported_oracle["valid"],
                 "stage0_diagnostics": imported_oracle["diagnostics"],
                 "stage0_linked_functions": len(imported_oracle["program"]["functions"]),
                 "stage0_ssa_functions": len(imported_oracle["ssa"]["functions"]),
+            }
+
+            # The imported call now reaches value SSA, with its canonical ID
+            # still attached.  Exercise a branch join in the same project so
+            # this checks cross-module identity and block arguments together.
+            imported_ssa = imported_root["value_ssa"]
+            imported_ssa_identity = imported_ssa["first_call_identity"]
+            imported_ssa_identity_text = identity_text(imported_ssa_identity)
+            assert imported_ssa["valid"] is True, imported_ssa
+            assert imported_ssa["call_count"] == 1 and imported_ssa["has_call"] is True
+            assert imported_ssa_identity_text == native_identity_text
+            assert imported_ssa_identity == native_identity
+
+            merge_root = (
+                "mncs 0.18; module demo.merge_root; use demo.dep as dep; "
+                "fn main(flag: bool) -> (r: u64) { "
+                "let value: u64 = dep.answer(17); if flag { } else { } return value; }"
+            )
+            for path in project_root.glob("*.mncs"):
+                path.unlink()
+            (project_root / "a-dep.mncs").write_text(dependency)
+            (project_root / "b-root.mncs").write_text(merge_root)
+            merge_sources = discover_sources(project_root)
+            merge_native = probe.native(request_value(identities, merge_sources))
+            merge_wire_project = copy.deepcopy(probe.last_response["returned"][0])
+            merge_modules = flist(merge_native["modules"])
+            merge_module = next(module for module in merge_modules if module["source_index"] == 1)
+            merge_ssa = merge_module["value_ssa"]
+            merge_ssa_identity = merge_ssa["first_call_identity"]
+            merge_ssa_identity_text = identity_text(merge_ssa_identity)
+            merge_oracle = probe.send({"project_oracle": {
+                "root": merge_root,
+                "modules": {"demo.dep": dependency},
+            }})
+            assert merge_native["valid"] is True, merge_native["diagnostics"]
+            assert merge_native["value_ssa_valid"] is True, [module["value_ssa"] for module in merge_modules]
+            assert merge_module["flow"]["proof"]["ok"] is True
+            assert merge_ssa["valid"] is True, merge_ssa
+            assert merge_ssa["function_count"] == 1
+            assert merge_ssa["call_count"] == 1 and merge_ssa["has_call"] is True
+            assert merge_ssa_identity_text == "mncs:0.2:function:demo.dep::answer"
+            assert merge_ssa["block_count"] >= 4, merge_ssa
+            assert merge_ssa["block_parameter_count"] >= 3, merge_ssa
+            merge_functions = flist(merge_ssa["functions"])
+            assert len(merge_functions) == 1, merge_functions
+            merge_function = merge_functions[0]
+            assert merge_function["supported"] is True and merge_function["verified"] is True
+            native_root_callable_identity = identity_text(merge_function["identity"])
+            merge_blocks = flist(merge_function["blocks"])
+            merge_values = flist(merge_function["values"])
+            merge_value_ids = [value["id"] for value in merge_values]
+            assert len(merge_value_ids) == len(set(merge_value_ids)) == merge_function["value_count"]
+            assert set(merge_value_ids) == set(range(merge_function["value_count"]))
+            merge_instructions = [
+                instruction for block in merge_blocks
+                for instruction in flist(block["instructions"])
+            ]
+            merge_calls = [instruction for instruction in merge_instructions if instruction["kind"] == 3]
+            assert len(merge_calls) == 1, merge_calls
+            assert merge_calls[0]["argc"] == 1
+            assert len(flist(merge_calls[0]["inputs"])) == len(flist(merge_calls[0]["params"])) == 1
+            assert identity_text(merge_calls[0]["identity"]) == merge_ssa_identity_text
+            terminator_kinds = [block["terminator"]["$v"] for block in merge_blocks]
+            assert 0 in terminator_kinds and 1 in terminator_kinds and 2 in terminator_kinds
+            assert 3 not in terminator_kinds, terminator_kinds
+
+            # Check verifier rejection paths using the exact wire graph emitted
+            # by project compilation. These mutations isolate definition,
+            # use-before-definition, call/edge/branch/return types, and targets.
+            merge_wire_modules = wire_flist(wire_field(merge_wire_project, "modules"))
+            merge_wire_module = next(
+                module for module in merge_wire_modules
+                if wire_number(wire_field(module, "source_index")) == 1
+            )
+            merge_wire_ssa = wire_field(merge_wire_module, "value_ssa")
+            merge_wire_functions = wire_flist(wire_field(merge_wire_ssa, "functions"))
+            assert len(merge_wire_functions) == 1
+            merge_wire_function = merge_wire_functions[0]
+            wire_blocks = wire_flist(wire_field(merge_wire_function, "blocks"))
+            wire_values = wire_flist(wire_field(merge_wire_function, "values"))
+            wire_inputs = wire_flist(wire_field(merge_wire_function, "inputs"))
+            wire_instructions = [
+                instruction for block in wire_blocks
+                for instruction in wire_flist(wire_field(block, "instructions"))
+            ]
+            wire_call = next(inst for inst in wire_instructions if wire_number(wire_field(inst, "kind")) == 3)
+            wire_branch_block = next(block for block in wire_blocks if wire_field(block, "terminator")["finite"]["discriminant"] == 0)
+            wire_branch = wire_field(wire_branch_block, "terminator")
+            wire_jump_block = next(block for block in wire_blocks if wire_field(block, "terminator")["finite"]["discriminant"] == 1)
+            wire_jump = wire_field(wire_jump_block, "terminator")
+            wire_return_block = next(block for block in wire_blocks if wire_field(block, "terminator")["finite"]["discriminant"] == 2)
+            wire_return = wire_field(wire_return_block, "terminator")
+            bool_input_id = copy.deepcopy(wire_field(wire_inputs[0], "id"))
+            assert wire_number(wire_field(wire_inputs[0], "kind")) == 0
+            verifier_rejections = {}
+
+            def rejected(name, mutate):
+                candidate = copy.deepcopy(merge_wire_function)
+                mutate(candidate)
+                accepted = verify_ssa_function(probe, merge_root, candidate)
+                assert accepted is False, {"case": name, "accepted": accepted}
+                verifier_rejections[name] = "rejected"
+
+            rejected("duplicate_value_id", lambda function: set_wire_field(
+                wire_flist(wire_field(function, "values"))[1], "id",
+                copy.deepcopy(wire_field(wire_flist(wire_field(function, "values"))[0], "id")),
+            ))
+
+            def invalidate_function_identity(function):
+                identity = wire_field(function, "identity")
+                set_wire_field(identity, "valid", {"boolean": {"value": False}})
+
+            rejected("invalid_function_identity", invalidate_function_identity)
+
+            def replace_call_input_with_result(function):
+                call = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                            for inst in wire_flist(wire_field(block, "instructions"))
+                            if wire_number(wire_field(inst, "kind")) == 3)
+                set_wire_field(wire_flist(wire_field(call, "inputs"))[0], "value",
+                               copy.deepcopy(wire_field(call, "result")))
+
+            rejected("call_use_before_definition", replace_call_input_with_result)
+
+            def replace_call_input_with_bool(function):
+                call = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                            for inst in wire_flist(wire_field(block, "instructions"))
+                            if wire_number(wire_field(inst, "kind")) == 3)
+                argument = wire_flist(wire_field(call, "inputs"))[0]
+                set_wire_field(argument, "value", copy.deepcopy(bool_input_id))
+
+            rejected("imported_call_argument_type", replace_call_input_with_bool)
+
+            def invalidate_call_identity(function):
+                call = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                            for inst in wire_flist(wire_field(block, "instructions"))
+                            if wire_number(wire_field(inst, "kind")) == 3)
+                identity = wire_field(call, "identity")
+                set_wire_field(identity, "valid", {"boolean": {"value": False}})
+
+            rejected("invalid_call_identity", invalidate_call_identity)
+
+            def replace_branch_condition_with_u64(function):
+                block = next(block for block in wire_flist(wire_field(function, "blocks"))
+                             if wire_field(block, "terminator")["finite"]["discriminant"] == 0)
+                term = wire_field(block, "terminator")
+                set_wire_variant_field(term, "condition", copy.deepcopy(wire_field(wire_call, "result")))
+
+            rejected("branch_condition_type", replace_branch_condition_with_u64)
+
+            def replace_branch_argument_with_bool(function):
+                blocks = wire_flist(wire_field(function, "blocks"))
+                block = next(block for block in blocks
+                             if wire_field(block, "terminator")["finite"]["discriminant"] == 0)
+                term = wire_field(block, "terminator")
+                payload = {key: value for key, value in term["finite"]["payload"]}
+                target = wire_number(payload["yes"])
+                target_block = next(candidate for candidate in blocks
+                                    if wire_number(wire_field(candidate, "id")) == target)
+                args = wire_flist(payload["yes_args"])
+                params = wire_flist(wire_field(target_block, "parameters"))
+                bool_type = wire_field(wire_inputs[0], "ty")
+                mismatch = next((argument for argument, parameter in zip(args, params)
+                                 if wire_field(parameter, "ty") != bool_type), None)
+                assert mismatch is not None, "join must carry a non-boolean value to test type rejection"
+                set_wire_field(mismatch, "value", copy.deepcopy(bool_input_id))
+
+            rejected("block_argument_type", replace_branch_argument_with_bool)
+
+            def replace_jump_target(function):
+                block = next(block for block in wire_flist(wire_field(function, "blocks"))
+                             if wire_field(block, "terminator")["finite"]["discriminant"] == 1)
+                set_wire_variant_field(wire_field(block, "terminator"), "target", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            rejected("invalid_terminator_target", replace_jump_target)
+
+            def replace_return_with_bool(function):
+                block = next(block for block in wire_flist(wire_field(function, "blocks"))
+                             if wire_field(block, "terminator")["finite"]["discriminant"] == 2)
+                set_wire_variant_field(wire_field(block, "terminator"), "value", copy.deepcopy(bool_input_id))
+
+            rejected("return_type", replace_return_with_bool)
+            verifier_positive = verify_ssa_function(probe, merge_root, merge_wire_function)
+            assert verifier_positive is True
+            assert merge_oracle["valid"] is True, merge_oracle["diagnostics"]
+            assert merge_oracle["ssa"] is not None
+            merge_oracle_root = next(
+                function for function in merge_oracle["ssa"]["functions"]
+                if function.get("semantic_identity") == "mncs:0.2:function:demo.merge_root::main"
+            )
+            merge_oracle_blocks = merge_oracle_root["blocks"]
+            merge_oracle_normal_blocks = [block for block in merge_oracle_blocks if block["path"] == "normal"]
+            merge_oracle_terminators = [next(iter(block["terminator"])) for block in merge_oracle_normal_blocks]
+            merge_stage0_callable = next(
+                function for function in merge_oracle["program"]["functions"]
+                if function["home_module"] == "demo.dep" and function["name"] == "answer"
+            )
+            merge_stage0_root_callable = next(
+                function for function in merge_oracle["program"]["functions"]
+                if (function.get("home_module") or merge_oracle["program"]["module"]) == "demo.merge_root"
+                and function["name"] == "main"
+            )
+            assert merge_oracle["program"] is not None
+            assert len(merge_oracle_normal_blocks) == merge_ssa["block_count"], merge_oracle_root
+            assert "Branch" in merge_oracle_terminators, merge_oracle_root
+            assert "Return" in merge_oracle_terminators, merge_oracle_root
+            assert merge_stage0_callable["identity"] == merge_ssa_identity_text
+            assert native_root_callable_identity == merge_stage0_root_callable["identity"]
+            multi_module_value_ssa = {
+                "native_project_valid": merge_native["valid"],
+                "native_project_ssa_valid": merge_native["value_ssa_valid"],
+                "native_root_ssa_valid": merge_ssa["valid"],
+                "native_root_blocks": merge_ssa["block_count"],
+                "native_root_block_parameters": merge_ssa["block_parameter_count"],
+                "native_root_values": merge_ssa["value_count"],
+                "native_root_call_identity": merge_ssa_identity_text,
+                "native_root_function_identity": native_root_callable_identity,
+                "native_function_values_have_unique_dense_ids": True,
+                "native_function_blocks_and_terminators": terminator_kinds,
+                "ssa_verifier_positive": verifier_positive,
+                "ssa_verifier_negative_checks": verifier_rejections,
+                "stage0_project_valid": merge_oracle["valid"],
+                "stage0_root_blocks": len(merge_oracle_normal_blocks),
+                "stage0_root_terminators": merge_oracle_terminators,
+                "stage0_imported_callable_identity": merge_stage0_callable["identity"],
+                "stage0_root_callable_identity": merge_stage0_root_callable["identity"],
+                "stage0_has_branch": True,
+                "stage0_has_return": True,
+                "claim": "bounded imported scalar call plus structured branch/join/return verified by native value SSA; not full SSA parity",
             }
 
             # Imported parameter types participate in the same argument
@@ -327,9 +618,8 @@ def run():
                 "matching": True,
             }
 
-            # Distinguish imported short names by their resolved source owner,
-            # including a local declaration with the same name. This catches
-            # accidental text-only dispatch when two imports export `answer`.
+            # Distinguish same-spelled declarations by canonical module and
+            # function identity, independent of source ordering.
             flags = "mncs 0.18; module demo.flags; fn answer(value: bool) -> (r: bool) { return value; }"
             names_root = (
                 "mncs 0.18; module demo.names; use demo.dep as dep; use demo.flags as flags; "
@@ -351,24 +641,25 @@ def run():
             for tops in flist(names_root_module["flow"]["proof"]["tops"]):
                 for operation in flist(tops):
                     payload = operation.get("$p", {})
-                    if "owner" not in payload:
+                    if "identity" not in payload:
                         continue
-                    owner = payload["owner"]
-                    owner_text = names_root.encode() if owner == 0 else names_sources[owner - 1][2]
-                    member = owner_text[payload["decl_start"]:payload["decl_end"]].decode()
-                    names_calls.append((owner, member))
+                    names_calls.append(identity_text(payload["identity"]))
             names_oracle = probe.send({"project_oracle": {
                 "root": names_root,
                 "modules": {"demo.dep": dependency, "demo.flags": flags},
             }})
             assert names_native["valid"] is True, names_native["diagnostics"]
             assert names_root_module["flow"]["proof"]["ok"] is True
-            assert set(names_calls) == {(0, "answer"), (1, "answer"), (2, "answer")}, names_calls
+            assert set(names_calls) == {
+                "mncs:0.2:function:demo.names::answer",
+                "mncs:0.2:function:demo.dep::answer",
+                "mncs:0.2:function:demo.flags::answer",
+            }, names_calls
             assert names_oracle["valid"] is True, names_oracle["diagnostics"]
             namespace_collision_case = {
                 "native_valid": names_native["valid"],
                 "stage0_valid": names_oracle["valid"],
-                "same_short_name_owners": sorted([list(item) for item in set(names_calls)]),
+                "canonical_call_identities": sorted(set(names_calls)),
                 "local_and_two_imported_answers_resolved_separately": True,
                 "stage0_function_count": len(names_oracle["program"]["functions"]),
             }
@@ -526,6 +817,7 @@ def run():
                 "transitive_import_links": [(item["source_index"], item["target_index"]) for item in transitive_imports],
                 "stage0_transitive_linked_functions": len(transitive_oracle["program"]["functions"]),
                 "resolved_imported_call": imported_call_identity,
+                "multi_module_value_ssa": multi_module_value_ssa,
                 "imported_argument_check": imported_argument_check,
                 "resolution_edge_cases": {
                     "same_short_name_owners": namespace_collision_case,
@@ -549,13 +841,17 @@ if __name__ == "__main__":
         "stage0_reference_mode": os.environ.get("MNCS_PROBE_REFERENCE_MODE", "locked"),
         "source_profile": "0.18",
         "elapsed_seconds": round(time.monotonic() - started, 3),
-        "scope": "ordered current-profile source snapshot, native module/import/member resolution, scalar imported-signature proof and typed CFG; the tested successful and negative imported calls are compared with locked Rust Stage-0",
+        "scope": "ordered current-profile project snapshot, native module/import/member resolution, canonical callable identity, scalar imported-signature proof, and verified value SSA; a multi-module imported call crosses a control-flow merge and is compared with locked Rust Stage-0 body/SSA facts",
         "imported_signature_scope": {
-            "supported": "scalar, effect-free imported callable signatures with argument/result proof and snapshot-bound callable identity",
+            "supported": "scalar, effect-free imported callable signatures with argument/result proof and compiler-emitted canonical Stage-0 callable identity",
             "remaining": ["nominal imported type ownership and nested type resolution", "imported effect/capability identity and coverage"],
+        },
+        "project_fingerprint": {
+            "authenticated": False,
+            "authority": "host-supplied advisory metadata; native validity does not depend on an unchecked digest",
         },
         **result,
     }
-    out = ROOT / "evidence" / "campaign-20260925-project-results.json"
+    out = ROOT / "evidence" / f"campaign-{CAMPAIGN_ID}-project-results.json"
     out.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))

@@ -19,7 +19,26 @@ Examples include:
 
 Do not describe a compiler capability as complete because source code for it exists. Link or store executable evidence showing that the behavior works with the pinned toolchain revision.
 
-## Current compiler-parity campaign (2026-09-25)
+## Current compiler-parity campaign (2026-09-26)
+
+The current Stage-0 pin is `843c5bcca7476bb6600218f6410a3da7ef5d96d5`,
+Profile 0.18. See the [current parity report](PARITY.md),
+[parity ledger](parity-ledger.json), [campaign execution summary](campaign-20260926-execution-summary.json),
+[project/value-SSA differential](campaign-20260926-project-results.json),
+[current-profile surface](campaign-20260926-profile-surface-results.json),
+[front-end differential](campaign-20260926-frontend-results.json),
+[segment differential](campaign-20260926-segment-results.json),
+[semantic proof](campaign-20260926-semantic-results.json),
+[typed CFG](campaign-20260926-flow-results.json), and
+[identity-bound RAVEL evidence](campaign-20260926-current-evidence.json).
+The new compiler slice carries imported callable identity into verified
+value-carrying SSA across a two-module control-flow merge. It is not full SSA
+parity and does not emit native executable code.
+
+The 2026-09-25 campaign below is historical; its recorded pins and timings are
+preserved as measured.
+
+## Historical compiler-parity campaign (2026-09-25)
 
 The current Stage-0 pin is `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, profile 0.18.
 See the [refreshed parity ledger](PARITY.md), [current pressure sweep](pressure-current-results.json),

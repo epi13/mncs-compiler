@@ -1,174 +1,211 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "as_of": "2026-09-26",
   "reference": {
     "repository": "mncs-language",
-    "revision": "4f9e1224e7f3cdb67fa4687d8f496717da1354aa",
+    "revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
     "source_profile": "0.18",
-    "role": "Rust Stage-0 bootstrap/reference/oracle",
-    "note": "Exact locked Stage-0 CLI/bootstrap pin. Canonical compiler differential evidence remains recorded at b0f3; only CLI source-subject reporting, tests/docs, and badge data differ, while mncs-compiler Rust compiler/model/syntax/codegen libraries are unchanged."
+    "role": "Exact locked Rust Stage-0 bootstrap, oracle, and current language/runtime reference."
   },
-  "starting_heads_file": "campaign-20260925-start-heads.json",
-  "evidence_namespace": "campaign-20260925-*; older evidence files retain historical pins",
+  "starting_heads_file": "campaign-20260926-start-heads.json",
+  "evidence_namespace": "campaign-20260926-*; prior files keep their exact historical pins and measurements.",
   "rows": [
     {
-      "area": "bootstrap and current pin",
-      "status": "parity with explicit limits",
-      "claim": "Bootstrap and retained probe use the locked 4f9e1224 Stage-0 revision; canonical Rust compiler differential evidence retains its b0f3 revision because those library sources are unchanged between the two pins.",
-      "evidence": [
-        "../mncs-language.lock.json",
-        "campaign-20260925-bootstrap-results.json",
-        "campaign-20260925-tooling-preflight.json",
-        "campaign-20260925-language-impact-cli-tests.json"
-      ],
-      "limits": [
-        "This establishes Stage-0 bootstrap integrity, not self-hosting."
-      ]
-    },
-    {
-      "area": "source snapshot and per-file byte model",
+      "area": "project resolution and fact reuse",
       "status": "partial",
-      "claim": "project.compile_project accepts exact nested source byte sequences with source IDs/paths, stable ordering and a snapshot fingerprint; the checked fixture uses N=1024 and two/three modules.",
+      "claim": "The one project compiler parses tested modules once, resolves module/import aliases, retains parsed/proven facts through typed CFG and value SSA, and returns deterministic project facts.",
       "evidence": [
-        "campaign-20260925-project-results.json",
-        "../src/compiler/project.mncs",
-        "../tools/test_project.py"
+        "campaign-20260926-project-results.json"
       ],
       "limits": [
-        "64-source cap; 256-byte source metadata cap; filesystem discovery remains test-host transport; fingerprint is host-supplied and only length-checked natively; no production loading CLI."
+        "64-source and 256-byte metadata caps; tested per-source ceiling N=1024. Host still discovers files and supplies bytes."
       ]
     },
     {
-      "area": "parse/proof/CFG fact reuse",
+      "area": "snapshot fingerprint",
+      "status": "explicitly unauthenticated",
+      "claim": "The compiler reports fingerprint_authenticated=false. A host-supplied fingerprint is not trusted as semantic authority and changing it does not change the result.",
+      "evidence": [
+        "campaign-20260926-project-results.json"
+      ],
+      "limits": [
+        "The compiler does not yet compute a fingerprint from the project snapshot."
+      ]
+    },
+    {
+      "area": "canonical callable identity",
+      "status": "implemented for imported scalar calls",
+      "claim": "Resolved imported calls carry the canonical Stage-0 callable/declaration identity in compiler typed facts and value SSA.",
+      "evidence": [
+        "campaign-20260926-project-results.json"
+      ],
+      "limits": [
+        "Imported nominal type identity and imported effect/capability resolution remain outside the tested scalar signature slice."
+      ]
+    },
+    {
+      "area": "Profile 0.18 frontend",
+      "status": "parity on recorded forms",
+      "claim": "The native declaration parser/proof agrees with pinned Stage-0 on 21 positive, negative, and version-gate cases including !, negative atoms, repeat literals, next, and integer match.",
+      "evidence": [
+        "campaign-20260926-profile-surface-results.json"
+      ],
+      "limits": [
+        "This does not establish complete Profile 0.18 grammar parity."
+      ]
+    },
+    {
+      "area": "value-carrying SSA",
+      "status": "bounded verified slice",
+      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, and canonical imported scalar calls are verified against Stage-0 body/SSA facts.",
+      "evidence": [
+        "campaign-20260926-project-results.json"
+      ],
+      "limits": [
+        "Not full SSA parity; unsupported operations fail the SSA report closed."
+      ]
+    },
+    {
+      "area": "SSA verifier",
       "status": "partial",
-      "claim": "decl.prove_parsed_unit consumes retained parsed Unit facts; flow.lower_unit proves once, lower_proven_unit consumes the result, and project lowering passes the parsed/proven module into CFG.",
+      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected.",
       "evidence": [
-        "campaign-20260925-declaration-results.json",
-        "campaign-20260925-flow-results.json",
-        "campaign-20260925-project-results.json"
+        "campaign-20260926-project-results.json"
       ],
       "limits": [
-        "Imported scalar signatures are supported; imported nominal type ownership and effect/capability proof are still unsupported."
+        "Verifier coverage is bounded to the emitted instruction/terminator slice."
       ]
     },
     {
-      "area": "frontend differentials",
-      "status": "parity with explicit exceptions",
-      "claim": "The current bounded ASCII frontend/segment corpus matches Stage-0 on the measured lexical, token and span facts.",
+      "area": "RAVEL selection",
+      "status": "current affected closure",
+      "claim": "Nine native plans select the affected source, parser, kernel, declaration, CFG, project, and SSA obligations. Every selected obligation has exact current identity-bound PASS evidence; reference-only Stage-0 pressure probes are excluded from native-source plans.",
       "evidence": [
-        "campaign-20260925-frontend-results.json",
-        "campaign-20260925-segment-results.json"
+        "campaign-20260926-current-evidence.json",
+        "campaign-20260926-final-source-plan.json",
+        "campaign-20260926-final-source-obligation-plan.json",
+        "campaign-20260926-final-project-plan.json",
+        "campaign-20260926-final-project-obligation-plan.json",
+        "campaign-20260926-final-ssa-plan.json",
+        "campaign-20260926-final-ssa-obligation-plan.json",
+        "campaign-20260926-final-decl-plan.json",
+        "campaign-20260926-final-decl-obligation-plan.json",
+        "campaign-20260926-final-parser-plan.json",
+        "campaign-20260926-final-parser-obligation-plan.json",
+        "campaign-20260926-final-kernel-plan.json",
+        "campaign-20260926-final-kernel-obligation-plan.json",
+        "campaign-20260926-final-lexer-plan.json",
+        "campaign-20260926-final-lexer-obligation-plan.json",
+        "campaign-20260926-final-segment-plan.json",
+        "campaign-20260926-final-segment-obligation-plan.json",
+        "campaign-20260926-final-flow-plan.json",
+        "campaign-20260926-final-flow-obligation-plan.json"
       ],
       "limits": [
-        "Unicode is not implemented natively; spans are byte-oriented."
+        "Planning total was 95.428 seconds. Plans are direct_dependents selections and do not execute tests or establish repository-canonical stop sufficiency."
       ]
     },
     {
-      "area": "Profile 0.18 syntax CP-0015",
-      "status": "partially resolved; four forms remain",
-      "claim": "Native parsing/proof accepts next fields/projections. The other four Stage-0-positive probes remain rejected at native spans: ! 66\u201367, negative atom 58\u201359, repeat literal 60\u201360, integer match 67\u201367.",
+      "area": "bootstrap provisioning",
+      "status": "pass after compiler tooling repair",
+      "claim": "The updated locked Stage-0 revision is provisioned and a warm exact bootstrap exits 0.",
       "evidence": [
-        "campaign-20260925-profile-surface-results.json",
-        "campaign-20260925-pressure-reconciliation.json",
-        "../pressure/0015-version-aware-frontend.md"
+        "campaign-20260926-stage0-refresh-repro.json",
+        "campaign-20260926-bootstrap-results.json"
       ],
       "limits": [
-        "CP-0015 remains open; exact native error spans and Stage-0 acceptance are in the profile-surface results."
+        "Bootstrap integrity is not evidence of a self-hosted compiler."
       ]
     },
     {
-      "area": "module/import resolution",
-      "status": "partial",
-      "claim": "Native project resolution owns module headers, import links and aliases, missing imports/members, duplicate module detection, deterministic ordering, and scalar effect-free imported callable proof through CFG. Imported call ownership is a native source-slot/declaration-span locator bound to the Stage-0 callable identity in tests.",
+      "area": "declaration and semantic proof",
+      "status": "partial differential parity",
+      "claim": "Declaration structural/error-span and 49 semantic cases plus five proof verdicts pass twice identically under retained Cranelift.",
       "evidence": [
-        "campaign-20260925-project-results.json",
-        "../src/compiler/project.mncs"
+        "campaign-20260926-declaration-results.json",
+        "campaign-20260926-semantic-results.json"
       ],
       "limits": [
-        "Imported record/finite signatures, nested nominal type ownership, and imported effect/capability proof remain current gaps. Stage-0 Sources maps cannot represent duplicate filesystem entries under one module key."
+        "Only the bounded grammar and recorded proof cases are covered."
       ]
     },
     {
-      "area": "single-module declarations and proof",
-      "status": "partial",
-      "claim": "The bounded declaration and 49-case semantic proof corpora match current Stage-0 diagnostics/verdicts; typed postfix operations are checked.",
+      "area": "typed CFG",
+      "status": "partial differential parity",
+      "claim": "The four recorded branch/join/return/reachability shapes pass the Rust Stage-0 differential twice.",
       "evidence": [
-        "campaign-20260925-declaration-results.json",
-        "campaign-20260925-semantic-results.json"
+        "campaign-20260926-flow-results.json"
       ],
       "limits": [
-        "Grammar, contracts and Rust body/SSA surfaces are narrower."
+        "Typed operations are not yet generally lowered to executable backend code."
       ]
     },
     {
-      "area": "typed control flow",
-      "status": "partial",
-      "claim": "Native typed CFG covers tested branch/jump/return/failure shapes, verifies targets/reachability, and attaches proof operations to source expressions and blocks.",
+      "area": "Commons pressure status",
+      "status": "reconciled for campaign-related records",
+      "claim": "CP-0014 and CP-0015 are resolved after current compiler verification; CP-0010 and CP-0013 have current controls; bootstrap refresh is repaired; source-bound, Unicode, host-transport, envelope, and compile-cost records retain their precise residual gaps; P1-014 is compiler-PASS/store-unverified; the imported-nominal workload is attached to the closest existing CP-0008 candidate without creating a duplicate.",
       "evidence": [
-        "campaign-20260925-flow-results.json"
+        "campaign-20260926-pressure-reconciliation.json"
       ],
       "limits": [
-        "CFG has no SSA values, merge parameters, resolved callable identities or emitted machine code."
+        "Unrelated compiler and ecosystem pressures were left unchanged."
       ]
     },
     {
-      "area": "RAVEL planning and verification topology",
-      "status": "bounded plan PASS; historical UNKNOWNs preserved",
-      "claim": "Current RAVEL combines compiler impact with compiler-issued source_subject facts. Repository-obligation plans omit source test inventory, while direct source-test plans retain it. source.byte_at selects nine current obligations in 9.226s; flow.lower_unit selects one in 13.169s; project.compile_project selects one in 14.896s; all reuse 16 evidence references and require no new execution.",
-      "evidence": [
-        "campaign-20260925-ravel-planning.json",
-        "campaign-20260925-final-ravel-source-obligation-planning.json",
-        "campaign-20260925-final-ravel-flow-planning.json",
-        "campaign-20260925-final-ravel-project-planning.json",
-        "campaign-20260925-source-subject-pressure.json",
-        "../.mncs/verification-obligations.json",
-        "campaign-20260925-verification-execution-summary.json"
-      ],
-      "limits": [
-        "Plans remain direct_dependents with sufficient_to_stop=false; they select obligations but do not execute them or claim repository-canonical stop sufficiency. The original 360.251s two-timeout UNKNOWN and pre-repair 4.32s no-inventory UNKNOWN remain preserved as historical UNKNOWN evidence."
-      ]
-    },
-    {
-      "area": "pressure CP-0016",
-      "status": "resolved upstream",
-      "claim": "The compiler-origin nested record/call runtime failure passes after the generic mncs-language repair.",
-      "evidence": [
-        "../pressure/0016-linked-record-call-validation.md",
-        "campaign-20260925-flow-results.json"
-      ],
-      "limits": []
-    },
-    {
-      "area": "compiler-local diagnostics CP-0017",
-      "status": "resolved in compiler",
-      "claim": "Semantic recovery diagnostics match current Stage-0 on the 49-case proof corpus and repeat deterministically.",
-      "evidence": [
-        "campaign-20260925-semantic-results.json",
-        "../pressure/0017-semantic-poison-recovery.md"
-      ],
-      "limits": []
-    },
-    {
-      "area": "native value SSA and executable output",
+      "area": "native executable output",
       "status": "absent",
-      "claim": "No native SSA value graph or target executable backend exists.",
+      "claim": "No native target backend consumes verified SSA to emit an executable.",
       "evidence": [
-        "campaign-20260925-flow-results.json",
-        "campaign-20260925-project-results.json"
+        "campaign-20260926-project-results.json"
       ],
       "limits": [
-        "The imported-call locator is currently source index plus declaration span, not the canonical SemanticId. The compiler has no SSA values, block parameters/merge values, body verifier, or emitted machine code."
+        "The next vertical is imported nominal/effect-aware facts followed by native target lowering and executable output."
       ]
     },
     {
       "area": "self-hosting",
-      "status": "intentionally deferred",
-      "claim": "Stage-0 still loads and executes mncs-compiler.",
+      "status": "absent",
+      "claim": "Stage-0 remains the compiler/reference executor; no Stage-1/Stage-2 proof exists.",
       "evidence": [
-        "campaign-20260925-tooling-preflight.json"
+        "campaign-20260926-bootstrap-results.json"
       ],
       "limits": [
-        "No Stage-1/Stage-2 build or semantic comparison exists."
+        "No self-hosting claim."
+      ]
+    },
+    {
+      "area": "imported nominal type identity",
+      "status": "current gap reproduced",
+      "claim": "The locked Stage-0 accepts record and finite nominal signatures across two modules; the native project resolver still emits proof failures because imported nominal type identities are not yet canonicalized.",
+      "evidence": [
+        "campaign-20260926-project-results.json"
+      ],
+      "limits": [
+        "The SSA vertical remains limited to scalar imported calls; this is the next type-identity slice."
+      ]
+    },
+    {
+      "area": "Unicode frontend",
+      "status": "gap reproduced",
+      "claim": "The current Profile 0.18 Stage-0 accepts a valid Unicode module name while the native kernel lexer reports unsupported source.",
+      "evidence": [
+        "campaign-20260926-unicode-results.json",
+        "campaign-20260926-frontend-results.json"
+      ],
+      "limits": [
+        "No Unicode decoding/property-table implementation is claimed."
+      ]
+    },
+    {
+      "area": "bounded project source capacity",
+      "status": "partial",
+      "claim": "The project compiler accepts the bounded two-module sample, but uses a 1,024-byte per-source ceiling; the current declaration compiler source is 275,918 bytes.",
+      "evidence": [
+        "campaign-20260926-project-results.json",
+        "campaign-20260926-pressure-suite-results.json"
+      ],
+      "limits": [
+        "No growable/shared source storage or full compiler-source ingestion is implemented."
       ]
     }
   ]

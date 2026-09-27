@@ -129,3 +129,10 @@ that motivated totality.
 ## Current reconciliation (2026-09-25)
 
 Current Stage-0 accepts the preserved total integer-match fixture at profile 0.18. The native compiler parser rejects this current syntax, recorded independently under CP-0015.
+
+## Current compiler verification (2026-09-26)
+
+The Profile 0.18 differential now includes valid integer matches with defaults,
+invalid/non-exhaustive controls, and older-profile gates. Native declaration
+parsing and proof agree with locked Stage-0 on those rows. See
+[`campaign-20260926-profile-surface-results.json`](../evidence/campaign-20260926-profile-surface-results.json).

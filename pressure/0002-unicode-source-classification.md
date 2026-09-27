@@ -65,6 +65,12 @@ Minimal reproducer for the remainder: any non-ASCII module (e.g. the
 `café` fixture) is still rejected by the ASCII gate on both sides of
 the differential, so parity holds by mutual refusal, not by agreement.
 
-## Current reconciliation (2026-09-25)
+## Current reconciliation (2026-09-26)
 
-Current Stage-0 accepts the Unicode module probe under profile 0.18. The compiler-owned frontend remains ASCII-only. This is a frontend parity issue; the language already accepts the input.
+Current Stage-0 accepts a valid Profile 0.18 module named `café` with no
+diagnostics. The native `kernel.lex_summary` returns its unsupported-input
+result for the UTF-8 identifier and the bounded frontend corpus records the
+same ASCII-only boundary. This remains a compiler frontend gap; no missing
+language facility was established. See
+[`campaign-20260926-unicode-results.json`](../evidence/campaign-20260926-unicode-results.json)
+and [`campaign-20260926-frontend-results.json`](../evidence/campaign-20260926-frontend-results.json).

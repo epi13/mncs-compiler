@@ -1,166 +1,164 @@
 # Current Rust Stage-0 parity
 
-The locked Stage-0 reference is `mncs-language` revision
-`4f9e1224e7f3cdb67fa4687d8f496717da1354aa`, Profile 0.18. The release CLI
-and retained probe were bootstrapped from that exact lock. The compiler
-frontend/declaration/model/codegen differential suites were executed at the
-parent reference `b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70`; the only changes
-between those revisions are the CLI `mncs impact` source-subject projection,
-its test, evidence documentation, and badge data. The Rust compiler/model/
-syntax/codegen library trees are unchanged, so RAVEL reuses their existing
-identity-bound evidence. Their result files retain the exact revision at
-which they ran; they have not been relabeled as 4f9 evidence. Earlier result
-files retain their historical pins. The starting heads are in
-[`campaign-20260925-start-heads.json`](campaign-20260925-start-heads.json).
+The campaign uses the exact Profile 0.18 Stage-0 pin at mncs-language
+revision 843c5bcca7476bb6600218f6410a3da7ef5d96d5. The compiler, language,
+RAVEL, and Commons changes began from clean worktrees at the heads recorded in
+[campaign start heads](campaign-20260926-start-heads.json). The focused source,
+SSA, frontend, proof, CFG, pressure, and bootstrap results are retained in the
+campaign evidence files linked below.
 
 ## Current compiler vertical
 
-`mncs-compiler` has one compiler-owned bounded project entry point,
-`project.compile_project<M,N>`. Its immutable request contains ordered source
-IDs and paths, a snapshot fingerprint, and exact per-source byte sequences in
-a generic `up_to N` sequence. The project is capped at 64 sources; the checked
-differential instantiates `N=1024`, beyond the former four by 64 byte ABI. The
-native compiler parses each unit once, retains its `Unit` in `UnitProve`,
-resolves declared module names and `use` edges/aliases against the snapshot,
-detects duplicate modules and missing imports, and returns proof and typed
-CFG facts for each module. Sorting is deterministic and tested against reverse
-filesystem creation order.
+The single native project entry point remains project.compile_project<M,N>.
+It consumes an ordered source snapshot, parses each tested unit once, retains
+the parsed Unit through proof and CFG lowering, resolves module headers and
+use edges/aliases, and passes the established facts downstream. The bounded
+campaign snapshot has two modules and 1,103 source bytes. The test host still
+discovers files and transports their bytes; the compiler owns project
+semantics for the tested subset.
 
-The host boundary is currently `tools/test_project.py`: it walks the fixture
-directory, reads bytes, sorts stable relative IDs, and constructs the native
-snapshot. The compiler itself does not walk the host filesystem, and there is
-not yet a production project-loading CLI. Source IDs/paths are capped at 256
-bytes. The snapshot fingerprint is supplied by the host and native code checks
-its length but does not verify it against the bytes. `N=1024` is the tested
-source bound, not a claim that real compiler source files of any size are
-accepted.
+The host-provided snapshot fingerprint is not semantic authority. The
+compiler cannot derive or authenticate it from the snapshot yet, so results
+explicitly report fingerprint_authenticated=false. A changed fingerprint
+does not change the compilation verdict. Compiler-issued module, callable,
+and typed facts are the semantic inputs to later stages.
 
-Module semantics are partial. The native resolver owns module-header lookup,
-import edges, aliases, missing-module failures, duplicate module names, and
-deterministic source ordering. It resolves imported scalar, effect-free
-callable members, checks argument/result types, and records the resolved
-source slot and declaration span on typed calls. Tests bind that owner to
-Stage-0's semantic callable identity; the native typed IR does not yet carry a
-canonical `SemanticId`. `dep.answer(42)` passes native proof and typed CFG; a
-`bool` argument is rejected at bytes 101–105, matching Stage-0's MNE133 span.
-The Stage-0 reference links both functions and produces two SSA functions.
-Imported nominal type ownership, nested imported type lookup, and imported
-effect/capability identity remain unsupported. The Stage-0 source map can hold
-only one source per module key, so duplicate filesystem entries under one
-module name have only a native duplicate-diagnostic assertion.
+Imported callable resolution now carries the exact compiler identity through
+typed calls. For example, the multi-module fixture carries
+mncs:0.2:function:demo.dep::answer into SSA, alongside the root function
+identity mncs:0.2:function:demo.merge_root::main. The native representation
+constructs these identities from the parsed profile, declaring module, and
+declaration name. The prior source-slot/declaration-span locator may still be
+used to find the declaration, but it no longer stands in for callable
+identity or dispatch.
 
-Proof and CFG share authoritative facts. `decl.prove_parsed_unit` consumes the
-retained parsed `Unit`; `decl.prove_unit` remains the source convenience
-wrapper. `flow.lower_unit` proves once and delegates to
-`flow.lower_proven_unit`; project lowering passes parsed/proven modules to CFG.
-The project path does not parse again to recover declarations already held.
+The imported call slice checks scalar arguments/results and supports
+effect-free callables. Imported nominal types and imported effect/capability
+proof are not implemented by this vertical yet. Local type/effect facts are
+still produced by the existing native proof stage.
 
-## Verification topology and RAVEL planning
+## Bounded value SSA
 
-`.mncs/project.json` points at the repository-owned
-`.mncs/verification-obligations.json`. It declares nine external integration
-obligations and one locked bootstrap integrity obligation. Python/Rust
-transports are classified honestly as external integrations, not native MNCS
-tests. Subjects and invalidation dependencies let an isolated
-`flow.lower_unit` change select only `mncs-compiler.flow-cfg-differential`;
-parser/source changes expand to their frontend, declaration, proof, flow,
-project, pressure, syntax, and production-call closure.
+The new ssa module builds on the typed CFG. It assigns explicit dense SSA value
+identities, types produced and consumed values, represents values crossing
+edges as block arguments, and represents joins with typed block parameters.
+It emits branch, jump, return, and failure terminators for the supported
+slice, with local scalar values and resolved imported scalar calls.
 
-The original two-command RAVEL preflight (`mncs impact` and
-`mncs test-inventory`) took 360.251 seconds before both commands timed out at
-180 seconds. The result remains recorded as UNKNOWN. A later plan without
-source test inventory also returned UNKNOWN because the compiler impact
-artifact omitted its subject identity/fingerprint. That result is preserved in
-[`campaign-20260925-source-plan-without-test-inventory-unknown.json`](campaign-20260925-source-plan-without-test-inventory-unknown.json).
+The verifier checks value definitions and uniqueness, use-before-definition,
+instruction result and input types, callable identity and call argument
+types, branch conditions, block argument arity/types, valid targets, return
+types, and terminators. The two-module fixture has four root blocks, six
+block parameters, and nine dense values. The verifier accepts the valid graph
+and rejects nine targeted invalid mutations. Its facts match the pinned
+Rust Stage-0 body/SSA identities and control-flow shape. This is a bounded SSA
+slice, not full Rust SSA or compiler parity.
 
-The missing fact was a generic compiler command-artifact contract, not a
-language or runtime pressure. `mncs impact` now emits a compact compiler-owned
-`source_subject` with source artifact identity, module, profile, semantic
-program identity, and production fingerprint. RAVEL uses it to bind plans to
-repository-owned external obligations without requesting source test
-inventory or making another frontend call. Direct source-test selection still
-requests `--include-test-inventory` and receives impact plus test cases in one
-front-end session. The finding, Commons search, repair, and evidence are in
-[`campaign-20260925-source-subject-pressure.json`](campaign-20260925-source-subject-pressure.json)
-and the language repository's development evidence.
+Parsing, proof, CFG, and SSA pass their upstream facts forward. No extra parse
+or proof pass is introduced to recover data already available upstream.
 
-At current RAVEL `main` (`4ab04a8`) with current Stage-0 and Commons heads:
+## RAVEL selection and planning
 
-- `source.byte_at` selected nine current obligations in 9.226 seconds, reused
-  16 evidence references, and required no new execution.
-- `flow.lower_unit` selected only the flow CFG obligation in 13.169 seconds,
-  reused 16 references, and required no new execution.
-- `project.compile_project` selected only the project/source obligation in
-  14.896 seconds and required no new execution.
-- A direct source plan with local test inventory took 0.623 seconds.
+RAVEL selected verification from compiler-issued program identities. Its
+native planner initially failed because the checked-in planner descriptor held
+an old interface identity; the descriptor was updated only after `mncs abi`
+reported the current identity. The final native plans used inventory revision
+10, had no Python fallback, and reused current identity-bound PASS evidence for
+every selected obligation. The broad `source.byte_at` plan selected eight
+current obligations; project selected two, SSA one, declarations five, parser
+six, kernel two, segment one, flow one, and lexer selected none. The Stage-0
+pressure suite is correctly retained as `reference_only`, since it does not
+execute native compiler source.
 
-All three obligation plans are bounded `direct_dependents` results with
-`sufficient_to_stop=false`; RAVEL selected the appropriate obligation closure
-but did not execute it or claim repository-canonical stop sufficiency. Their
-exact selected identities and times are recorded in
-[`campaign-20260925-ravel-planning.json`](campaign-20260925-ravel-planning.json).
-The current RAVEL `tests.test_impact` suite passed all 12 tests. Historical
-UNKNOWNs remain UNKNOWN records; they are not rewritten as PASS or zero work.
+The nine final planning requests took 95.428 seconds total (1.534–25.976
+seconds each). Each is a bounded `direct_dependents` plan: it selects and
+validates obligations but does not execute tests or claim repository-wide stop
+sufficiency. Historical UNKNOWN plans remain UNKNOWN. The exact plans,
+obligation decisions, source fingerprints, and evidence hashes are retained in
+the `campaign-20260926-final-*-plan.json` files and
+[`campaign-20260926-current-evidence.json`](campaign-20260926-current-evidence.json).
 
 ## Current evidence
 
-Every result file records its exact Stage-0 revision and backend mode.
+All campaign result files name the exact Stage-0 revision. MNCS code executed
+through retained Cranelift sessions; the Rust Stage-0 probe provides the
+independent differential oracle. The interpreter was used as a secondary
+reference during verifier debugging, not as the normal suite runner.
 
-| Area | Executed evidence | Current boundary |
+| Area | Current executable evidence | Boundary |
 | --- | --- | --- |
-| Bootstrap | Lock `4f9e122`; exact release CLI/probe build; warm integrity check 0.142 s | PASS; the lock and `.bootstrap/revision` match |
-| Frontend | 7,893 requests, 31.249 s, retained Cranelift sessions, b0f3 | Bounded ASCII lexical facts and header spans |
-| Segments | 6,564 requests, 16.178 s, retained Cranelift sessions, b0f3 | Token/span corpus; ASCII and bounded cases |
-| Declarations | 9 requests, 75.341 s, retained Cranelift session, b0f3 | Structures, first-error spans, local name/symbol checks |
-| Semantic proof | 49 cases + 5 verifier verdicts, 76.713 s, b0f3 | Tested proof diagnostics and typed postfix operations, not Rust body/SSA parity |
-| Typed CFG | 4 cases, 21 requests, 42.191 s, one retained Cranelift session, b0f3 | Branch/jump/return/failure blocks, proof attachment, target/reachability checks |
-| Project/import | 21 requests, 53.083 s, `N=1024`, b0f3 | Multi-module imported scalar call and edge cases; nominal/effect/capability imports remain partial |
-| Profile 0.18 syntax | 5 cases, 37.510 s, b0f3 | `next` accepted; four CP-0015 forms remain unsupported |
-| Pressure reconciliation | 21 probes, b0f3 | Historical pressure states retained; see reconciliation JSON |
-| Production calls | Two runs, 1.099/1.128 s, b0f3 | Byte-identical output; 213 CMP301 unresolved obligations remain in reference compile result |
-| Stage-0 source identity artifact | [40 CLI semantic-command tests passed at 4f9](campaign-20260925-language-impact-cli-tests.json) | Impact exposes subject identity without serializing test inventory |
-| RAVEL planning | 12 focused tests passed at `4ab04a8`; plans above | Native selection uses repository obligations and exact reusable evidence |
+| Bootstrap | Updated lock and marked .bootstrap tree match 843c5bc; warm bootstrap exits 0 | Establishes reproducible Stage-0 provisioning, not self-hosting |
+| Profile 0.18 frontend | 21 positive, negative, and old-profile cases; 49.725 s; all conformant | Covers `!`, negative integer atoms, repeat literals, `next`, and integer match; grammar remains bounded |
+| Frontend and segment | 7,893 frontend requests / 196 sources / 1,759 tokens in 32.714 s; 6,564 segment requests / 43 texts / 3,161 tokens in 15.951 s; two identical runs each | Retained Cranelift, one step per request; Unicode remains explicitly unsupported by the native frontend |
+| Declarations | 9 requests, repeated twice identically; one retained Cranelift session; 100.977 s | Structural parsing, first-error spans, and declaration verdicts for the recorded corpus |
+| Semantic proof | 49 cases plus five proof verdicts, repeated twice; 97.732 s | Tested proof diagnostics and typed facts, not full Rust body semantics |
+| Typed CFG | Four control-flow cases, 21 requests, repeated twice; 56.109 s | Branch/jump/return and reachability facts for the tested slice |
+| Project and value SSA | 34 requests; 125.137 s; two modules; canonical imported call identity and verified merge values | Scalar imported calls and structured control flow; no native target code |
+| Stage-0 compile cost | Two identical linked artifact runs in 1.113 / 1.109 s | Four output artifacts per run, byte-identical; not native compiler cost or peak memory |
+| Pressure probes | Four expected rejections and one supported control; 0.0122 s | Locked Stage-0 reference outcomes only; not native compiler verification |
+| RAVEL plans | Nine native plans in 95.428 s total; all selected obligations current | Reuses identity-bound PASS records; direct-dependents plans do not execute tests |
 
-A matched one-request execution comparison used the same 107-byte
-`flow.lower_unit` input at Stage-0 4f9. The reference interpreter took 89.928
-seconds and 2,105,931 steps. The retained Cranelift path took 40.652 seconds
-including cold session compilation, retained one session, and reported one
-execution step. Both returned the same result hash. Full suite timing remains
-in the canonical result files; the interpreter remains an independent but
-much slower comparison path.
+The retained Cranelift request step count is one per request, with one retained
+session per focused module group. This bounds repeated execution cost, but no
+like-for-like wall-time speedup was demonstrated. The project suite grew from
+53.083 s to 125.137 s as it added project identity and SSA verification, while
+declaration, semantic, and CFG suites also grew. RAVEL's nine-root planning pass
+took 95.428 s total and was not faster than its prior warm measurements. The
+edit-to-check loop stayed bounded to the affected closure, while cold execution
+and planner startup remain measurable costs to reduce.
+
+The original interpreter comparison remains historical evidence only: a
+matched 107-byte flow.lower_unit request at Stage-0 4f9e122 took 89.928 s and
+2,105,931 interpreter steps versus 40.652 s on retained Cranelift. It is not
+relabelled as a measurement at the current 843c5bc pin.
 
 ## Current parity matrix
 
-| Capability | State | Executable evidence / limit |
+| Capability | State | Evidence and limit |
 | --- | --- | --- |
-| Stage-0/profile pin | Profile 0.18 at `4f9e122` | Exact bootstrap lock; Rust compiler libraries unchanged from tested b0f3 parent |
-| Source representation | Partial | Generic exact per-file bytes and ordered snapshot; 64-source cap, 256-byte metadata cap, tested `N=1024`; host discovers paths and supplies fingerprint |
-| Parse/proof reuse | Partial | Parsed `Unit` retained through proof and CFG; imported proof facts remain partial |
-| Current-profile parser | Partial; CP-0015 open | `next` fields/projections work; `!`, negative atoms, repeat literals, integer `match` remain unsupported |
-| Module/import resolution | Partial | Native module identity, aliases, imported scalar callable resolution, missing-module diagnostics, duplicate modules, deterministic ordering |
-| Callable/type/effect resolution | Partial | Imported scalar calls carry source-slot/declaration-span ownership; canonical callable identity, imported nominal types and imported effect/capability proof remain absent |
-| Type/effect/capability proof | Partial | 49 semantic cases plus five verifier verdicts agree with tested Stage-0 subset |
-| Typed operations | Partial | Type/span-bearing postfix operations are checked; these are not SSA values |
-| Typed CFG | Partial | Four control-flow cases match tested diagnostics and shape; operations remain attached to source expressions/blocks |
-| Value-carrying SSA | Absent | No SSA value IDs, block parameters/merge values, or native canonical callable IDs |
-| Executable backend | Absent | No native target code or executable compiler output |
-| Diagnostics | Partial | Tested semantic/CFG codes and spans agree; full message/recovery and leading-comment envelope parity remain incomplete |
-| Unicode source | Absent for native frontend | Current Stage-0 accepts tested Unicode cases; native source admission remains ASCII-only (CP-0002) |
-| Self-hosting | Absent | Stage-0 still loads and executes the MNCS compiler; no Stage-1/Stage-2 proof |
+| Stage-0/profile pin | Current | Exact 843c5bc lock and successful bootstrap preflight |
+| Project resolution | Partial | Headers, imports, aliases, duplicate/missing checks, stable ordering, and one-parse fact reuse for the tested snapshot |
+| Snapshot fingerprint | Unauthenticated data | Host value is reported as unauthenticated and does not affect semantic validity |
+| Callable identity | Implemented for tested imported calls | Exact Stage-0 callable/declaration identity reaches typed calls and verified SSA |
+| Imported nominal types and effects | Not implemented | A current two-module record/finite signature reproducer passes Stage-0 but remains a native project proof gap |
+| Current-profile syntax | Current on the tested forms | CP-0015 syntax forms and old-profile gates match Stage-0; unsupported grammar remains explicit |
+| Semantic proof | Partial | 49-case differential and verifier controls |
+| Typed CFG | Partial | Tested branches, joins, returns, and reachability |
+| Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, and body verification |
+| Executable native output | Absent | No backend consumes verified SSA to emit target code |
+| Unicode source | Absent in native frontend | Existing compiler Unicode pressure remains outside this slice |
+| Self-hosting | Absent | Stage-0 still compiles/executes the MNCS compiler; no Stage-1 proof |
 
-CP-0016's compiler-origin nested record/call runtime failure was repaired in
-`mncs-language` at `b0f3e64`; current `main` also contains the source-subject
-artifact repair at `4f9e122`. CP-0017 remains a compiler-local diagnostic fix
-with the semantic differential passing. CP-0015 is partially reconciled:
-`next` passes, while `!` fails at 66–67, a negative atom at 58–59, a repeat
-literal at 60–60, and integer `match` at 67–67; Stage-0 accepts those exact
-Profile 0.18 reproducers. The imported nominal/effect/capability gaps are
-compiler work, not new language/runtime pressures.
+## Commons pressure reconciliation
+
+CP-0014 now elaborates its exact bool-payload reproducer at the current pin;
+the compiler declaration and proof suites also run. The bool-payload
+capability is verified and the stale pressure is resolved. CP-0015 now passes
+positive and negative differential checks for all four previously missing
+forms plus next and older-profile gates; the compiler pressure is resolved.
+CP-0010 integer match dispatch and CP-0013 next-field behavior were
+revalidated against current and old-profile controls. The campaign's bootstrap
+refresh failure was fixed in compiler tooling and passes against the updated
+lock. CP-0001's remaining per-source ceiling, CP-0002 Unicode refusal,
+CP-0005's host test transport, CP-0006's current Stage-0 envelope behavior,
+and CP-0007's linked artifact cost were rechecked. The new imported nominal
+signature gap was compared with the CP-0008 candidate; its original Stage-0
+payload issue remains resolved, while the native project compiler does not yet
+resolve imported nominal identities. The registry observations and lifecycle
+evidence are in Commons.
+
+The compiler-specific part of language pressure P1-014 is partially resolved:
+the compiler-produced nested flow records now cross into retained SSA
+execution successfully after the language codegen fix. The store host's
+nominal record construction remains a separate unresolved boundary. The
+existing host test transport is usable and kept this campaign's suite
+bounded; replacing that transport with an MNCS-native harness remains an open
+tooling pressure.
 
 ## Narrowest next parity step
 
-Add value-carrying SSA values and block parameters for joins, carrying the
-resolved canonical imported callable identity into typed value flow and a body
-verifier. The current imported-call reference is only a source slot and
-declaration span. After that IR is verified, native target emission is the
-next backend boundary.
+Resolve canonical imported nominal type identities and effect/capability-aware
+signatures in the project path, then lower the verified scalar SSA operations
+to a native target backend. That backend must emit and run a small executable
+before the compiler can claim native output. The project-loading driver,
+broader syntax/type coverage, and self-hosting remain separate later work.

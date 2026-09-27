@@ -11,7 +11,7 @@ use mncs.compiler.decl.v1 as decl;
 // kind: 0 open builder, 1 branch, 2 jump, 3 return, 4 fail. `instructions`
 // counts retained typed-stack operations in `expressions`.
 // role: 1 let-value, 2 branch condition, 3 returned value.
-record TypedExpr { role: u64, start: u64, end: u64, ops: decl.TOpList, op_count: u64 }
+record TypedExpr { role: u64, start: u64, end: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, op_count: u64 }
 enum TypedExprList { ENil, ECons { head: TypedExpr, tail: TypedExprList } }
 record TypedExprRev { rest: TypedExprList, acc: TypedExprList }
 record Block {
@@ -92,6 +92,32 @@ record LoweredUnit {
     diagnostics: DiagnosticList,
     block_count: u64
 }
+
+// Narrow accessors used by the value-SSA consumer. They keep the linked
+// function/block collections inside this module's record authority instead
+// of making downstream consumers reconstruct their storage layout.
+record SsaFunctionCount { rest: FunctionList, count: u64 }
+fn ssa_function_count<N: Nat>(input: [byte; up_to N], lowered: LoweredUnit) -> (result: u64) {
+    iterate i over input carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } { next st = ssa_function_count_step(st); }
+    return st.count;
+}
+fn ssa_function_count_step(st: SsaFunctionCount) -> (result: SsaFunctionCount) {
+    return match st.rest { QNil => st, QCons { head: h, tail: t } => SsaFunctionCount { rest: t, count: st.count + 1 } };
+}
+record SsaFunctionLookup { rest: FunctionList, index: u64, wanted: u64, found: bool, function: FunctionFlow }
+fn ssa_function_at<N: Nat>(input: [byte; up_to N], lowered: LoweredUnit, wanted: u64) -> (result: FunctionFlow) {
+    let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, block_count: 0, unreachable_joins: 0, verified: false };
+    iterate i over input carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } { next st = ssa_function_lookup_step(st); }
+    return st.function;
+}
+fn ssa_function_lookup_step(st: SsaFunctionLookup) -> (result: SsaFunctionLookup) {
+    if st.found { return st; }
+    return match st.rest { QNil => st, QCons { head: h, tail: t } => SsaFunctionLookup { rest: t, index: st.index + 1, wanted: st.wanted, found: st.index == st.wanted, function: h } };
+}
+fn ssa_cfg_blocks(function: FunctionFlow) -> (result: BlockList) { return function.blocks; }
+fn ssa_cfg_entry(function: FunctionFlow) -> (result: u64) { return function.entry; }
+fn ssa_cfg_verified(function: FunctionFlow) -> (result: bool) { return function.verified; }
+fn ssa_flow_valid(lowered: LoweredUnit) -> (result: bool) { return lowered.valid && lowered.graph_ok; }
 
 fn empty_block(id: u64, live: bool, join: bool) -> (result: Block) {
     return Block {
@@ -188,18 +214,18 @@ fn step_empty<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
 fn step_stmt<N: Nat>(input: [byte; up_to N], st: Build, h: decl.Stmt, t: decl.StmtList) -> (result: Build) {
     if st.current.kind != 0 { return Build { ..st, done: true, ok: false }; }
     return match h {
-        decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let<N>(input, st, t, v),
+        decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let<N>(input, st, t, v, a, b),
         decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch<N>(input, st, t, c, tb, eb),
         decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail<N>(input, st, t, s, e),
         decl.Stmt.Return { value: v, start: s, end: e } => add_return<N>(input, st, t, v, s, e)
     };
 }
-fn add_let<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr) -> (result: Build) {
-    let attached: Build = attach_expression<N>(input, st, value, 1);
+fn add_let<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr, name_start: u64, name_end: u64) -> (result: Build) {
+    let attached: Build = attach_expression<N>(input, st, value, 1, name_start, name_end);
     return Build { ..attached, rest: t };
 }
 fn add_branch<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, cond: decl.Expr, then_b: decl.StmtList, else_b: decl.StmtList) -> (result: Build) {
-    let attached: Build = attach_expression<N>(input, st, cond, 2);
+    let attached: Build = attach_expression<N>(input, st, cond, 2, 0, 0);
     let yes: u64 = attached.next_id;
     let no: u64 = attached.next_id + 1;
     let join: u64 = attached.next_id + 2;
@@ -219,7 +245,7 @@ fn add_branch<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, cond:
     };
 }
 fn add_return<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr, s: u64, e: u64) -> (result: Build) {
-    let attached: Build = attach_expression<N>(input, st, value, 3);
+    let attached: Build = attach_expression<N>(input, st, value, 3, 0, 0);
     let source_order: TypedExprList = reverse_typed_expressions<N>(input, attached.current.expressions);
     let b: Block = Block { ..attached.current, kind: 3, expressions: source_order, term_start: decl.expr_start(value), term_end: decl.expr_end(value) };
     return Build { ..attached, rest: t, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks } };
@@ -267,21 +293,21 @@ fn close_to_join<N: Nat>(input: [byte; up_to N], st: Build, join_id: u64) -> (re
 fn finish_tail<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
     if !(st.has_tail) { return Build { ..st, done: true, ok: false }; }
     if st.current.kind != 0 { return Build { ..st, done: true }; }
-    let attached: Build = attach_expression<N>(input, st, st.tail, 3);
+    let attached: Build = attach_expression<N>(input, st, st.tail, 3, 0, 0);
     let source_order: TypedExprList = reverse_typed_expressions<N>(input, attached.current.expressions);
     let b: Block = Block { ..attached.current, kind: 3, expressions: source_order, term_start: decl.expr_start(attached.tail), term_end: decl.expr_end(attached.tail) };
     return Build { ..attached, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks }, done: true };
 }
-fn attach_expression<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64) -> (result: Build) {
+fn attach_expression<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64) -> (result: Build) {
     return match st.typed_rest {
         decl.TopsList.TLNil => Build { ..st, done: true, ok: false },
-        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<N>(input, st, expression, role, ops, rest)
+        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<N>(input, st, expression, role, binding_start, binding_end, ops, rest)
     };
 }
-fn attach_typed_ops<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
+fn attach_typed_ops<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
     let n: u64 = decl.count_tops<N>(input, ops);
     if n == 0 { return Build { ..st, done: true, ok: false }; }
-    let typed: TypedExpr = TypedExpr { role: role, start: decl.expr_start(expression), end: decl.expr_end(expression), ops: ops, op_count: n };
+    let typed: TypedExpr = TypedExpr { role: role, start: decl.expr_start(expression), end: decl.expr_end(expression), binding_start: binding_start, binding_end: binding_end, ops: ops, op_count: n };
     let exprs: TypedExprList = TypedExprList.ECons { head: typed, tail: st.current.expressions };
     let current: Block = Block { ..st.current, instructions: st.current.instructions + n, expressions: exprs };
     return Build { ..st, typed_rest: rest, current: current };

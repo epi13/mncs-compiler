@@ -64,3 +64,12 @@ obligations. Artifact sizes and hashes are recorded in
 [`evidence/campaign-20260925-compile-cost-results.json`](../evidence/campaign-20260925-compile-cost-results.json).
 This is a current release-mode reference measurement; it does not establish
 peak memory or native compiler cost.
+
+### Current-pin remeasurement (2026-09-26, Stage-0 `843c5bc`)
+
+The same linked kernel compile completed twice in 1.113 and 1.109 seconds with
+byte-identical semantic, HIR, and SSA artifacts (four files per run). The
+campaign-scoped output is
+[`campaign-20260926-compile-cost-results.json`](../evidence/campaign-20260926-compile-cost-results.json).
+This refreshes the Stage-0 artifact-size measurement; it does not establish
+peak memory or native compiler cost.

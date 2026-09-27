@@ -2,6 +2,7 @@ mncs 0.18;
 module mncs.compiler.project.v1;
 use mncs.compiler.decl.v1 as decl;
 use mncs.compiler.flow.v1 as flow;
+use mncs.compiler.ssa.v1 as ssa;
 use mncs.compiler.source.v1 as source;
 
 // Host filesystem discovery is an adapter boundary. The native compiler
@@ -31,7 +32,8 @@ record ProjectModule {
     source_id: [byte; up_to 256],
     source_path: [byte; up_to 256],
     source_index: u64,
-    flow: flow.LoweredUnit
+    flow: flow.LoweredUnit,
+    value_ssa: ssa.ValueSsaSummary
 }
 enum ProjectModuleList { PNil, PCons { head: ProjectModule, tail: ProjectModuleList } }
 
@@ -58,6 +60,8 @@ record DiagnosticReverse { rest: DiagnosticList, acc: DiagnosticList }
 record ProjectResult {
     valid: bool,
     fingerprint: [byte; up_to 64],
+    fingerprint_authenticated: bool,
+    value_ssa_valid: bool,
     source_count: u64,
     module_count: u64,
     import_count: u64,
@@ -518,9 +522,8 @@ fn diagnostic_count_step(st: DiagnosticCount) -> (result: DiagnosticCount) {
         DiagCons { head: h, tail: t } => DiagnosticCount { rest: t, count: st.count + 1 }
     };
 }
-fn order_diagnostics<M: Nat>(sources: [ProjectSource; up_to M], ordered: bool, fingerprint_ok: bool, counts_match: bool) -> (result: DiagnosticList) {
+fn order_diagnostics<M: Nat>(sources: [ProjectSource; up_to M], ordered: bool, counts_match: bool) -> (result: DiagnosticList) {
     if !(ordered) { return DiagnosticList.DiagCons { head: ProjectDiagnostic.SourceOrder { source_index: 0 }, tail: DiagnosticList.DiagNil }; }
-    if !(fingerprint_ok) { return DiagnosticList.DiagCons { head: ProjectDiagnostic.SourceOrder { source_index: 0 }, tail: DiagnosticList.DiagNil }; }
     if !(counts_match) { return DiagnosticList.DiagCons { head: ProjectDiagnostic.SourceCountMismatch { source_index: sources.len }, tail: DiagnosticList.DiagNil }; }
     return DiagnosticList.DiagNil;
 }
@@ -621,6 +624,7 @@ fn signature_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M],
     }
     let found: decl.SigRes = decl.sig_lookup<N>(target_text, st.target_sigs, fn_sig.name_start, fn_sig.name_end);
     if !(found.found) || !(transportable_signature<N>(target_text, found.sig)) { return ExportSigWalk { ..st, rest: rest }; }
+    let identity: decl.SemanticIdentity = decl.canonical_function_identity<N>(target_text, st.target.unit.header.module_start, st.target.unit.header.module_end, fn_sig.name_start, fn_sig.name_end);
     let sig: decl.Sig = decl.Sig {
         start: st.call.start,
         end: st.call.end,
@@ -628,9 +632,7 @@ fn signature_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M],
         nparams: found.sig.nparams,
         result: found.sig.result,
         fx: found.sig.fx,
-        owner: st.target.source_index + 1,
-        decl_start: fn_sig.name_start,
-        decl_end: fn_sig.name_end
+        identity: identity
     };
     return ExportSigWalk { ..st, rest: rest, acc: decl.SigTab.HCons { head: sig, tail: st.acc } };
 }
@@ -657,6 +659,7 @@ fn primitive_sem_type(ty: decl.SemType) -> (result: bool) {
         TInt { width: w, signed: s } => true,
         TNamed { start: a, end: b } => false,
         TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
         TPoison => false
     };
 }
@@ -675,16 +678,16 @@ fn call_matches_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], c
     return spans_equal_between<M, N>(text_units, caller_index, call.start + prefix_len + 1, call.end, target_index, member_start, member_end);
 }
 
-record ProjectBuild { rest: ModuleList, all: ModuleList, imports: ImportList, acc: ProjectModuleList, valid: bool, count: u64 }
+record ProjectBuild { rest: ModuleList, all: ModuleList, imports: ImportList, acc: ProjectModuleList, valid: bool, ssa_valid: bool, count: u64 }
 record ProjectBuildRev { rest: ProjectModuleList, acc: ProjectModuleList }
 fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList) -> (result: ProjectBuild) {
-    iterate i over sources carrying st: ProjectBuild = ProjectBuild { rest: modules, all: modules, imports: imports, acc: ProjectModuleList.PNil, valid: true, count: 0 } {
+    iterate i over sources carrying st: ProjectBuild = ProjectBuild { rest: modules, all: modules, imports: imports, acc: ProjectModuleList.PNil, valid: true, ssa_valid: true, count: 0 } {
         next st = lower_project_one<M, N>(text_units, st);
     }
     iterate i over sources carrying rev: ProjectBuildRev = ProjectBuildRev { rest: st.acc, acc: ProjectModuleList.PNil } {
         next rev = reverse_project_build(rev);
     }
-    return ProjectBuild { rest: ModuleList.MNil, all: modules, imports: imports, acc: rev.acc, valid: st.valid, count: st.count };
+    return ProjectBuild { rest: ModuleList.MNil, all: modules, imports: imports, acc: rev.acc, valid: st.valid, ssa_valid: st.ssa_valid, count: st.count };
 }
 fn lower_project_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectBuild) -> (result: ProjectBuild) {
     return match st.rest {
@@ -697,12 +700,14 @@ fn lower_one_project_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to 
     let imported: decl.SigTab = imported_signatures<M, N>(text_units, parsed, st.all);
     let proof: decl.UnitProve = decl.prove_parsed_unit<N>(input, parsed.unit, imported);
     let lowered: flow.LoweredUnit = flow.lower_proven_unit<N>(input, proof);
+    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa<N>(input, lowered);
     return ProjectBuild {
         rest: rest,
         all: st.all,
         imports: st.imports,
-        acc: ProjectModuleList.PCons { head: ProjectModule { source_id: parsed.source_id, source_path: parsed.source_path, source_index: parsed.source_index, flow: lowered }, tail: st.acc },
+        acc: ProjectModuleList.PCons { head: ProjectModule { source_id: parsed.source_id, source_path: parsed.source_path, source_index: parsed.source_index, flow: lowered, value_ssa: value_ssa }, tail: st.acc },
         valid: st.valid && lowered.valid,
+        ssa_valid: st.ssa_valid && value_ssa.valid,
         count: st.count + 1
     };
 }
@@ -721,13 +726,17 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, text_units: [[byte
     let duplicate: DiagnosticList = duplicate_modules<M, N>(snapshot.sources, text_units, parsed);
     let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, text_units, parsed);
     let lowered: ProjectBuild = lower_project_modules<M, N>(snapshot.sources, text_units, parsed, resolved.imports);
-    let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, snapshot.fingerprint.len == 64, counts_match);
+    let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, counts_match);
     let diagnostics1: DiagnosticList = append_diagnostics<64>(snapshot.sources, basic, duplicate);
     let diagnostics: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);
-    let valid: bool = ordered && snapshot.fingerprint.len == 64 && counts_match && built.valid && diagnostics_empty<64>(snapshot.sources, diagnostics) && resolved.valid && lowered.valid;
+    // The host-provided fingerprint is advisory metadata only. This native
+    // project pass has not recomputed its digest over the supplied snapshot.
+    let valid: bool = ordered && counts_match && built.valid && diagnostics_empty<64>(snapshot.sources, diagnostics) && resolved.valid && lowered.valid;
     return ProjectResult {
         valid: valid,
         fingerprint: snapshot.fingerprint,
+        fingerprint_authenticated: false,
+        value_ssa_valid: lowered.ssa_valid,
         source_count: snapshot.sources.len,
         module_count: built.count,
         import_count: resolved.count,

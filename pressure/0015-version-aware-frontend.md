@@ -2,7 +2,7 @@
 
 ID: CP-0015
 
-Status: partially resolved; `next` fields work, four Profile 0.18 forms remain unsupported
+Status: resolved for the recorded Profile 0.18 forms; broader grammar remains unclaimed
 
 > Historical description and reproductions below preserve the original
 > finding. See the current reconciliation at the end of this file and the
@@ -156,15 +156,13 @@ implicitly — full program texts).
 - Resolution revision:
 - Follow-up evidence in this repository:
 
-## Current reconciliation (2026-09-26, differential evidence at Stage-0 `b0f3e644`; current CLI/bootstrap pin `4f9e1224`)
+## Current reconciliation (2026-09-26, Stage-0 `843c5bc`)
 
-The locked Rust Stage-0 accepts all five forms with no diagnostics. Native
-`decl.parse_unit` and `decl.prove_unit` now accept the `next` field and
-projection. They still reject `!` at [66,67], the negative atom at [58,59],
-the repeat literal at [60,60], and integer `match` at [67,67]. Exact
-machine evidence is in
-[`evidence/campaign-20260925-profile-surface-results.json`](../evidence/campaign-20260925-profile-surface-results.json).
-
-The `next` row was fixed in the native declaration parser by recognizing it
-as a field token in declaration and projection contexts. The other four
-forms remain compiler architecture work; no language change was made.
+The current native parser and proof agree with Stage-0 on the recorded positive,
+negative, and version-gate cases: bare `!`, negative integer atoms, repeat
+literals, `next` field names, and integer `match` arms with a default. Invalid
+forms and older-profile controls also retain the expected diagnostics. The
+21-case differential is in
+[`campaign-20260926-profile-surface-results.json`](../evidence/campaign-20260926-profile-surface-results.json).
+This closes the recorded CP-0015 forms; it does not establish complete
+Profile 0.18 grammar parity.

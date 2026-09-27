@@ -7,8 +7,10 @@ from pathlib import Path
 import subprocess
 import time
 from collections import Counter
+from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
+CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", datetime.now(timezone.utc).strftime("%Y%m%d"))
 BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
 LOCK = json.loads((ROOT / "mncs-language.lock.json").read_text())
@@ -77,6 +79,6 @@ report = {
     "runs": [first, second],
     "scope": "Stage-0 linked semantic/HIR/SSA artifact sizes and repeat hashes; not native backend or peak-memory evidence.",
 }
-target = ROOT / "evidence/campaign-20260925-compile-cost-results.json"
+target = ROOT / f"evidence/campaign-{CAMPAIGN_ID}-compile-cost-results.json"
 target.write_text(json.dumps(report, indent=2) + "\n")
 print(json.dumps(report, indent=2))

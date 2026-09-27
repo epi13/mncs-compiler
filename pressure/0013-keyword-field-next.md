@@ -63,3 +63,10 @@ real program trips over it.
 ## Current reconciliation (2026-09-25)
 
 Current Stage-0 accepts the preserved `next` field source at profile 0.18. Native `decl.parse_unit` rejects the Profile 0.18 form; see CP-0015 and `evidence/profile-surface-results.json`.
+
+## Current compiler verification (2026-09-26)
+
+The native parser/proof now accepts `next` in the current-profile declaration
+surface and rejects the old-profile form according to Stage-0. This row is
+covered by the same 21-case CP-0015 differential at the locked 843c5bc pin; see
+[`campaign-20260926-profile-surface-results.json`](../evidence/campaign-20260926-profile-surface-results.json).

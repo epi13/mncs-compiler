@@ -68,7 +68,7 @@ drops from blocking to high: chunked compilation can now span 4KB per
 unit-shape change, but whole-module compilation still needs the storage
 API this pressure originally asked for.
 
-## Current reconciliation (2026-09-25)
+## Current reconciliation (2026-09-26)
 
 Current Stage-0 (`b0f3e644`) accepts the preserved 65-byte source. The old
 64-byte language limit is stale. The native `compile_project` API now receives
@@ -79,4 +79,11 @@ caps the generic source length at 1,024 and the snapshot at 64 modules, so this
 does not yet ingest this repository's 268 KB declaration module. The remaining
 gap is compiler source representation/project scale; it is not a request to
 raise a generic language bound. See
-[`evidence/campaign-20260925-project-results.json`](../evidence/campaign-20260925-project-results.json).
+[`evidence/campaign-20260926-project-results.json`](../evidence/campaign-20260926-project-results.json).
+
+The refreshed two-module project run contains 1,103 bytes across two sources
+and uses the current 1,024-byte per-source generic ceiling. The current
+`src/compiler/decl.mncs` is 275,918 bytes, so full compiler-source ingestion
+remains unimplemented. The Profile 0.10 65-byte reproducer still reports MNE105
+as the old-profile control; that does not contradict the larger current-profile
+project representation.

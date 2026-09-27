@@ -181,3 +181,15 @@ constraint.
 ## Current reconciliation (2026-09-25)
 
 Both staged profile-0.18 producer and imported-consumer fixtures are accepted by current Stage-0. This does not establish that the MNCS compiler owns multi-module source resolution.
+
+## Current native project observation (2026-09-26)
+
+The exact Stage-0 cross-module behavior remains accepted. A separate native
+project workload now declares imported record and finite types in signatures
+and calls their exporting functions: Stage-0 accepts it, while
+`project.compile_project` reports proof failures because imported nominal type
+identities are not yet resolved. This is an upstream compiler slice limitation,
+not a regression of the original Stage-0 backend fix. The case and current
+outcomes are retained in
+[`campaign-20260926-project-results.json`](../evidence/campaign-20260926-project-results.json)
+and attached to the closest existing Commons candidate to avoid a duplicate.

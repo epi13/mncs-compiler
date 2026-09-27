@@ -17,18 +17,20 @@ use mncs.compiler.parser.v1 as parser;
 // CP-0016), so this placement is no longer an upstream workaround.
 //
 // Scope of the native grammar: the source module itself uses Profile 0.18,
-// while this parser currently accepts only its implemented subset. In
-// particular, `!`, negative atoms, repeat literals, and integer match arms
-// remain reproduced CP-0015 gaps even under a 0.18 header. The reserved
-// `next` token is accepted where current-profile field names are allowed.
-// header, use, record, payload enum, and function declarations; function
-// bodies with let/if-else/fail/terminal-return; expressions over names,
-// integers, booleans, all binary operators, direct calls, and field
-// projection. Deliberately deferred: iterate statements, match expressions,
-// record/enum construction literals, index/slice/cast, select/replace and
-// host intrinsics, generics, qualified calls, and vec/mask types. Inputs
-// using deferred shapes fail with an explicit local error span; they are
-// never silently accepted.
+// while each parsed unit carries its own version gate. It accepts `!`,
+// signed integer atoms, exact sequence repeat literals, and scalar integer
+// matches with an identifier subject and ordinary expression arm values from
+// Profile 0.13 onward; integer patterns require one final `_` and are
+// range/duplicate checked. The reserved `next` token is accepted where current-profile field
+// names are allowed. Other header, declaration, statement, and expression
+// forms remain bounded: function bodies with let/if-else/fail/terminal-return;
+// names, integers, booleans, binary operators, direct calls, and projections.
+// Deliberately deferred: iterate statements, boolean/finite matches, nested
+// match arm expressions,
+// record/enum construction literals, index/slice/cast, select/replace and host
+// intrinsics, generics, qualified calls, and vec/mask types. Unsupported
+// shapes fail with an explicit local error span; they are never silently
+// accepted.
 //
 // Error policy: first failure wins. Every parse record carries ok plus the
 // failing span. Nodes are valid only when ok is true; on failure records
@@ -84,10 +86,17 @@ enum Expr {
     Name { start: u64, end: u64 },
     Integer { start: u64, end: u64, value: u64, overflow: bool },
     Boolean { start: u64, end: u64, value: bool },
+    UnaryNot { value: Expr, start: u64, end: u64 },
+    Repeat { value: Expr, count_start: u64, count_end: u64, count_kind: u64, start: u64, end: u64 },
+    ScalarMatch { subject: Expr, arms: ScalarMatchArmList, start: u64, end: u64 },
     Binary { op: u64, left: Expr, right: Expr, start: u64, end: u64 },
     Call { name_start: u64, name_end: u64, args: ExprList, start: u64, end: u64 },
     Project { base: Expr, field_start: u64, field_end: u64, start: u64, end: u64, path: bool }
 }
+record ScalarMatchArm { is_default: bool, negative: bool, value: u64, overflow: bool, pattern_start: u64, pattern_end: u64, result: Expr }
+enum ScalarMatchArmList { MNil, MCons { head: ScalarMatchArm, tail: ScalarMatchArmList } }
+record ScalarMatchArmRev { rest: ScalarMatchArmList, acc: ScalarMatchArmList }
+record ScalarMatchResultScan { rest: ScalarMatchArmList, acc: ExprList }
 enum ExprList { ENil, ECons { head: Expr, tail: ExprList } }
 record ExprParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr, start: u64, end: u64 }
 
@@ -143,6 +152,9 @@ fn collect_call_expr<N: Nat>(input: [byte; up_to N], st: CallWalk, expr: Expr, r
         Name { start: s, end: e } => CallWalk { ..st, exprs: rest },
         Integer { start: s, end: e, value: v, overflow: o } => CallWalk { ..st, exprs: rest },
         Boolean { start: s, end: e, value: v } => CallWalk { ..st, exprs: rest },
+        UnaryNot { value: value, start: s, end: e } => CallWalk { ..st, exprs: ExprList.ECons { head: value, tail: rest } },
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => CallWalk { ..st, exprs: ExprList.ECons { head: value, tail: rest } },
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => CallWalk { ..st, exprs: scalar_match_children<N>(input, subject, arms, rest) },
         Binary { op: op, left: left, right: right, start: s, end: e } => CallWalk { ..st, exprs: ExprList.ECons { head: left, tail: ExprList.ECons { head: right, tail: rest } } },
         Call { name_start: s, name_end: e, args: args, start: t, end: n } => CallWalk { ..st, exprs: append_exprs<N>(input, args, rest), calls: CallSiteList.CCons { head: CallSite { start: s, end: e }, tail: st.calls } },
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: p } => CallWalk { ..st, exprs: ExprList.ECons { head: base, tail: rest } }
@@ -155,9 +167,8 @@ fn collect_call_reverse(st: CallSiteRev) -> (result: CallSiteRev) {
     };
 }
 
-// Predicates in this compiler source use Profile 0.18 prefix negation.
-// Parsing an input program's `!` token remains a separate CP-0015 gap;
-// `select` remains only for value choice, never negation.
+// Profile 0.13 introduced prefix negation. The token is explicit so older
+// profiles can keep their historical rejection while current units use it.
 
 // Operator stack element. Real operators carry the token kind; markers use
 // kind 1000 (parenthesized group) and 1001 (call with callee spans and the
@@ -168,13 +179,18 @@ enum OpList { ONil, OCons { head: Op, tail: OpList } }
 // Shunting-yard state. expect_operand distinguishes a leading/continued
 // operand position from an operator/delimiter position so lexical failures
 // and EOF land on the same spans Stage-0 reports.
-record ExprState { ok: bool, err_start: u64, err_end: u64, cursor: u64, operands: ExprList, operators: OpList, depth: u64, done: bool, expect_operand: bool }
+record ExprState { ok: bool, err_start: u64, err_end: u64, cursor: u64, operands: ExprList, operators: OpList, depth: u64, done: bool, expect_operand: bool, profile_013: bool }
+record MatchScan { ok: bool, done: bool, err_start: u64, err_end: u64, cursor: u64, start: u64, end: u64, profile_013: bool, arms: ScalarMatchArmList }
+record MatchPattern { ok: bool, is_default: bool, negative: bool, value: u64, overflow: bool, start: u64, end: u64, cursor: u64 }
 
 fn expr_start(node: Expr) -> (result: u64) {
     return match node {
         Name { start: s, end: e } => s,
         Integer { start: s, end: e, value: v, overflow: o } => s,
         Boolean { start: s, end: e, value: v } => s,
+        UnaryNot { value: v, start: s, end: e } => s,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => s,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => s,
         Binary { op: o, left: l, right: r, start: s, end: e } => s,
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => t,
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => s
@@ -185,6 +201,9 @@ fn expr_end(node: Expr) -> (result: u64) {
         Name { start: s, end: e } => e,
         Integer { start: s, end: e, value: v, overflow: o } => e,
         Boolean { start: s, end: e, value: v } => e,
+        UnaryNot { value: v, start: s, end: e } => e,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => e,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => e,
         Binary { op: o, left: l, right: r, start: s, end: e } => e,
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => n,
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => e
@@ -239,8 +258,8 @@ fn is_operand_start(kind: u64) -> (result: bool) {
 // One directed action per fuel step: shift exactly one token, reduce exactly
 // one operator, or stop/fail. Every action either consumes input, shrinks a
 // stack, or terminates, so byte-count fuel always suffices.
-fn parse_expr<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: ExprParse) {
-    let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true };
+fn parse_expr<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
+    let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true, profile_013: profile_013 };
     iterate i over input carrying d: ExprState = seed {
         next d = expr_step<N>(input, d);
     }
@@ -252,12 +271,32 @@ fn parse_expr<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: ExprParse
     }
     return finish_expr<N>(input, fin);
 }
+// Match arm values use the same expression machine but disable nested match
+// dispatch, keeping the parser call graph acyclic while accepting binary,
+// projection, and direct-call arm results.
+fn parse_expr_base<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
+    let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true, profile_013: profile_013 };
+    iterate i over input carrying d: ExprState = seed { next d = expr_step_base<N>(input, d); }
+    iterate i over input carrying h: ExprState = d { next h = expr_step_base<N>(input, h); }
+    iterate i up_to 32 carrying fin: ExprState = h { next fin = expr_step_base<N>(input, fin); }
+    return finish_expr<N>(input, fin);
+}
 
 fn expr_fail(st: ExprState, start: u64, end: u64) -> (result: ExprState) {
-    return ExprState { ok: false, err_start: start, err_end: end, cursor: st.cursor, operands: st.operands, operators: st.operators, depth: st.depth, done: true, expect_operand: st.expect_operand };
+    return ExprState { ok: false, err_start: start, err_end: end, cursor: st.cursor, operands: st.operands, operators: st.operators, depth: st.depth, done: true, expect_operand: st.expect_operand, profile_013: st.profile_013 };
 }
 
 fn expr_step<N: Nat>(input: [byte; up_to N], st: ExprState) -> (result: ExprState) {
+    if !(st.ok) || st.done { return st; }
+    let tok: lexer.Token = segment.significant<N>(input, st.cursor);
+    // The version-neutral scanner preserves the historical unknown-token
+    // fact for bare `!`; a Profile 0.13+ declaration body reinterprets that
+    // exact byte as prefix negation after its header established the gate.
+    if st.expect_operand && st.profile_013 && tok.kind == 7 && tok.diagnostic == 2 && tok.end == tok.start + 1 && source.byte_at<N>(input, tok.start) == 33 { return prefix_not(st, tok); }
+    if st.expect_operand && tok.diagnostic == 0 && tok.kind == 30 && st.profile_013 { return prefix_scalar_match<N>(input, st, tok); }
+    return expr_step_base<N>(input, st);
+}
+fn expr_step_base<N: Nat>(input: [byte; up_to N], st: ExprState) -> (result: ExprState) {
     if !(st.ok) || st.done { return st; }
     let tok: lexer.Token = segment.significant<N>(input, st.cursor);
     if tok.diagnostic != 0 {
@@ -268,22 +307,35 @@ fn expr_step<N: Nat>(input: [byte; up_to N], st: ExprState) -> (result: ExprStat
         if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
         return close_or_reduce<N>(input, st, tok.start, tok.end);
     }
+    if st.expect_operand && tok.kind == 69 && st.profile_013 {
+        return prefix_repeat(st, tok);
+    }
     if is_operand_start(tok.kind) {
         if !(st.expect_operand) { return close_or_reduce<N>(input, st, tok.start, tok.end); }
         return shift_operand<N>(input, st, tok);
     }
     if tok.kind == 65 {
         if !(st.expect_operand) { return path_call<N>(input, st, tok); }
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1000, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1000, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true, profile_013: st.profile_013 };
     }
     if tok.kind == 66 {
         return close_paren<N>(input, st, tok);
     }
+    if tok.kind == 64 && st.depth == 0 {
+        return close_or_reduce<N>(input, st, tok.start, tok.end);
+    }
     if tok.kind == 64 {
         return comma_step<N>(input, st, tok);
     }
+    if tok.kind == 63 && top_repeat_marker(st.operators) {
+        return finish_repeat<N>(input, st, tok);
+    }
     if tok.kind == 61 {
         return project_step<N>(input, st, tok);
+    }
+    if st.expect_operand && tok.kind == 51 {
+        if st.profile_013 { return shift_negative_integer<N>(input, st, tok); }
+        return expr_fail(st, tok.start, tok.end);
     }
     if prec(tok.kind) > 0 {
         return operator_step(st, tok);
@@ -291,29 +343,241 @@ fn expr_step<N: Nat>(input: [byte; up_to N], st: ExprState) -> (result: ExprStat
     return close_or_reduce<N>(input, st, tok.start, tok.end);
 }
 
+fn prefix_scalar_match<N: Nat>(input: [byte; up_to N], st: ExprState, match_token: lexer.Token) -> (result: ExprState) {
+    let subject_token: lexer.Token = segment.significant<N>(input, match_token.end);
+    if subject_token.diagnostic != 0 || subject_token.kind != 4 { return expr_fail(st, subject_token.start, subject_token.end); }
+    let open: lexer.Token = segment.significant<N>(input, subject_token.end);
+    if open.diagnostic != 0 || open.kind != 67 { return expr_fail(st, open.start, open.end); }
+    let seed: MatchScan = MatchScan { ok: true, done: false, err_start: 0, err_end: 0, cursor: open.end, start: match_token.start, end: open.end, profile_013: st.profile_013, arms: ScalarMatchArmList.MNil };
+    iterate i over input carrying d: MatchScan = seed {
+        next d = scalar_match_arm_step<N>(input, d);
+    }
+    if !(d.ok) || !(d.done) { return expr_fail(st, d.err_start, d.err_end); }
+    let arms: ScalarMatchArmList = reverse_scalar_match_arms<N>(input, d.arms);
+    let subject: Expr = Expr.Name { start: subject_token.start, end: subject_token.end };
+    let node: Expr = Expr.ScalarMatch { subject: subject, arms: arms, start: match_token.start, end: d.end };
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: d.cursor, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 };
+}
+fn scalar_match_arm_step<N: Nat>(input: [byte; up_to N], st: MatchScan) -> (result: MatchScan) {
+    if !(st.ok) || st.done { return st; }
+    let pattern_token: lexer.Token = segment.significant<N>(input, st.cursor);
+    if pattern_token.diagnostic != 0 { return MatchScan { ..st, ok: false, err_start: pattern_token.start, err_end: pattern_token.end }; }
+    if pattern_token.kind == 68 { return MatchScan { ..st, done: true, cursor: pattern_token.end, end: pattern_token.end }; }
+    let pattern: MatchPattern = scalar_match_pattern<N>(input, pattern_token);
+    if !(pattern.ok) { return MatchScan { ..st, ok: false, err_start: pattern.start, err_end: pattern.end }; }
+    let arrow: lexer.Token = segment.significant<N>(input, pattern.cursor);
+    if arrow.diagnostic != 0 || arrow.kind != 81 { return MatchScan { ..st, ok: false, err_start: arrow.start, err_end: arrow.end }; }
+    let value: ExprParse = scalar_match_value<N>(input, arrow.end, st.profile_013);
+    if !(value.ok) { return MatchScan { ..st, ok: false, err_start: value.err_start, err_end: value.err_end }; }
+    let delimiter: lexer.Token = segment.significant<N>(input, value.cursor);
+    if delimiter.diagnostic != 0 || (delimiter.kind != 64 && delimiter.kind != 68) { return MatchScan { ..st, ok: false, err_start: delimiter.start, err_end: delimiter.end }; }
+    let arm: ScalarMatchArm = ScalarMatchArm { is_default: pattern.is_default, negative: pattern.negative, value: pattern.value, overflow: pattern.overflow, pattern_start: pattern.start, pattern_end: pattern.end, result: value.node };
+    let next_cursor: u64 = select(delimiter.kind == 64, delimiter.end, value.cursor);
+    return MatchScan { ..st, cursor: next_cursor, end: delimiter.start, arms: ScalarMatchArmList.MCons { head: arm, tail: st.arms } };
+}
+fn scalar_match_pattern<N: Nat>(input: [byte; up_to N], token: lexer.Token) -> (result: MatchPattern) {
+    if token.kind == 5 {
+        let parsed: IntVal = int_value<N>(input, token.start, token.end);
+        return MatchPattern { ok: true, is_default: false, negative: false, value: parsed.value, overflow: parsed.overflow, start: token.start, end: token.end, cursor: token.end };
+    }
+    if token.kind == 51 {
+        let literal: lexer.Token = segment.significant<N>(input, token.end);
+        if literal.diagnostic != 0 || literal.kind != 5 { return MatchPattern { ok: false, is_default: false, negative: false, value: 0, overflow: false, start: token.start, end: literal.end, cursor: literal.end }; }
+        let parsed: IntVal = int_value<N>(input, literal.start, literal.end);
+        return MatchPattern { ok: true, is_default: false, negative: true, value: parsed.value, overflow: parsed.overflow, start: token.start, end: literal.end, cursor: literal.end };
+    }
+    if token.kind == 4 && scalar_match_underscore<N>(input, token.start, token.end) {
+        return MatchPattern { ok: true, is_default: true, negative: false, value: 0, overflow: false, start: token.start, end: token.end, cursor: token.end };
+    }
+    return MatchPattern { ok: false, is_default: false, negative: false, value: 0, overflow: false, start: token.start, end: token.end, cursor: token.end };
+}
+fn scalar_match_underscore<N: Nat>(input: [byte; up_to N], start: u64, end: u64) -> (result: bool) {
+    return end == start + 1 && segment.byte_at<N>(input, start) == 95;
+}
+fn scalar_match_value<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
+    return parse_expr_base<N>(input, cursor, profile_013);
+}
+fn reverse_scalar_match_arms<N: Nat>(input: [byte; up_to N], arms: ScalarMatchArmList) -> (result: ScalarMatchArmList) {
+    iterate i over input carrying d: ScalarMatchArmRev = ScalarMatchArmRev { rest: arms, acc: ScalarMatchArmList.MNil } {
+        next d = reverse_scalar_match_arms_step(d);
+    }
+    return d.acc;
+}
+fn reverse_scalar_match_arms_step(st: ScalarMatchArmRev) -> (result: ScalarMatchArmRev) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: h, tail: t } => ScalarMatchArmRev { rest: t, acc: ScalarMatchArmList.MCons { head: h, tail: st.acc } }
+    };
+}
+fn scalar_match_result_step(st: ScalarMatchResultScan) -> (result: ScalarMatchResultScan) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: h, tail: t } => ScalarMatchResultScan { rest: t, acc: ExprList.ECons { head: h.result, tail: st.acc } }
+    };
+}
+fn scalar_match_results<N: Nat>(input: [byte; up_to N], arms: ScalarMatchArmList) -> (result: ExprList) {
+    iterate i over input carrying d: ScalarMatchResultScan = ScalarMatchResultScan { rest: arms, acc: ExprList.ENil } {
+        next d = scalar_match_result_step(d);
+    }
+    return reverse_exprs<N>(input, d.acc);
+}
+fn scalar_match_children<N: Nat>(input: [byte; up_to N], subject: Expr, arms: ScalarMatchArmList, rest: ExprList) -> (result: ExprList) {
+    return ExprList.ECons { head: subject, tail: append_exprs<N>(input, scalar_match_results<N>(input, arms), rest) };
+}
+record ScalarMatchCount { rest: ScalarMatchArmList, n: u64, defaults: u64 }
+enum PatternValues { VNil, VCons { head: u64, tail: PatternValues } }
+record PatternCheck { rest: ScalarMatchArmList, seen: PatternValues, subject_ty: SemType, default_seen: bool, ok: bool }
+record PatternFind { rest: PatternValues, value: u64, found: bool }
+fn scalar_match_count_step(st: ScalarMatchCount) -> (result: ScalarMatchCount) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: arm, tail: rest } => ScalarMatchCount { rest: rest, n: st.n + 1, defaults: st.defaults + select(arm.is_default, 1, 0) }
+    };
+}
+fn scalar_match_count<N: Nat>(input: [byte; up_to N], arms: ScalarMatchArmList) -> (result: ScalarMatchCount) {
+    iterate i over input carrying d: ScalarMatchCount = ScalarMatchCount { rest: arms, n: 0, defaults: 0 } {
+        next d = scalar_match_count_step(d);
+    }
+    return d;
+}
+fn pattern_find_step(st: PatternFind) -> (result: PatternFind) {
+    if st.found { return st; }
+    return match st.rest {
+        VNil => st,
+        VCons { head: value, tail: rest } => PatternFind { rest: rest, value: st.value, found: value == st.value }
+    };
+}
+fn pattern_seen<N: Nat>(input: [byte; up_to N], values: PatternValues, value: u64) -> (result: bool) {
+    iterate i over input carrying d: PatternFind = PatternFind { rest: values, value: value, found: false } {
+        next d = pattern_find_step(d);
+    }
+    return d.found;
+}
+fn scalar_pattern_valid(ty: SemType, negative: bool, value: u64, overflow: bool) -> (result: bool) {
+    if overflow { return false; }
+    return match ty {
+        TInt { width: width, signed: signed } => scalar_pattern_valid_int(width, signed, negative, value),
+        TBool => false,
+        TByte => false,
+        TNamed { start: s, end: e } => false,
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
+        TPoison => false
+    };
+}
+fn scalar_pattern_valid_int(width: u64, signed: bool, negative: bool, value: u64) -> (result: bool) {
+    if width != 64 { return false; }
+    if negative {
+        if !(signed) { return false; }
+        return value <= 9223372036854775808;
+    }
+    if signed { return value <= 9223372036854775807; }
+    return true;
+}
+fn scalar_match_pattern_step<N: Nat>(input: [byte; up_to N], st: PatternCheck) -> (result: PatternCheck) {
+    if !(st.ok) || st.default_seen { return st; }
+    return match st.rest {
+        MNil => st,
+        MCons { head: arm, tail: rest } => scalar_match_pattern_check_arm<N>(input, st, arm, rest)
+    };
+}
+fn scalar_match_pattern_check_arm<N: Nat>(input: [byte; up_to N], st: PatternCheck, arm: ScalarMatchArm, rest: ScalarMatchArmList) -> (result: PatternCheck) {
+    if arm.is_default {
+        if !(matches_scalar_arms_empty(rest)) { return PatternCheck { ..st, rest: ScalarMatchArmList.MNil, ok: false }; }
+        return PatternCheck { ..st, rest: ScalarMatchArmList.MNil, default_seen: true, ok: true };
+    }
+    if !(scalar_pattern_valid(st.subject_ty, arm.negative, arm.value, arm.overflow)) { return PatternCheck { ..st, rest: ScalarMatchArmList.MNil, ok: false }; }
+    let payload: u64 = select(arm.negative, negative_payload(arm.value), arm.value);
+    if pattern_seen<N>(input, st.seen, payload) { return PatternCheck { ..st, rest: ScalarMatchArmList.MNil, ok: false }; }
+    return PatternCheck { rest: rest, seen: PatternValues.VCons { head: payload, tail: st.seen }, subject_ty: st.subject_ty, default_seen: false, ok: true };
+}
+fn matches_scalar_arms_empty(arms: ScalarMatchArmList) -> (result: bool) {
+    return match arms { MNil => true, MCons { head: h, tail: t } => false };
+}
+fn scalar_match_patterns_ok<N: Nat>(input: [byte; up_to N], arms: ScalarMatchArmList, subject_ty: SemType) -> (result: bool) {
+    iterate i over input carrying d: PatternCheck = PatternCheck { rest: arms, seen: PatternValues.VNil, subject_ty: subject_ty, default_seen: false, ok: true } {
+        next d = scalar_match_pattern_step<N>(input, d);
+    }
+    return d.ok && d.default_seen;
+}
+
+fn prefix_not(st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1002, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true, profile_013: st.profile_013 };
+}
+fn prefix_repeat(st: ExprState, tok: lexer.Token) -> (result: ExprState) {
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1003, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true, profile_013: st.profile_013 };
+}
+fn top_repeat_marker(operators: OpList) -> (result: bool) {
+    return match operators {
+        ONil => false,
+        OCons { head: op, tail: rest } => op.kind == 1003
+    };
+}
+fn finish_repeat<N: Nat>(input: [byte; up_to N], st: ExprState, semi: lexer.Token) -> (result: ExprState) {
+    if st.depth != 0 || st.expect_operand { return expr_fail(st, semi.start, semi.end); }
+    return match st.operators {
+        ONil => expr_fail(st, semi.start, semi.end),
+        OCons { head: marker, tail: rest } => finish_repeat_element<N>(input, st, semi, marker, rest)
+    };
+}
+fn finish_repeat_element<N: Nat>(input: [byte; up_to N], st: ExprState, semi: lexer.Token, marker: Op, rest: OpList) -> (result: ExprState) {
+    if marker.kind != 1003 { return expr_fail(st, semi.start, semi.end); }
+    let count: lexer.Token = segment.significant<N>(input, semi.end);
+    if count.diagnostic != 0 || (count.kind != 5 && count.kind != 4) { return expr_fail(st, count.start, count.end); }
+    let close: lexer.Token = segment.significant<N>(input, count.end);
+    if close.diagnostic != 0 || close.kind != 70 { return expr_fail(st, close.start, close.end); }
+    return match st.operands {
+        ENil => expr_fail(st, semi.start, semi.end),
+        ECons { head: element, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: close.end, operands: ExprList.ECons { head: Expr.Repeat { value: element, count_start: count.start, count_end: count.end, count_kind: count.kind, start: marker.name_start, end: close.end }, tail: before }, operators: rest, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 }
+    };
+}
+
+// Profile 0.18 admits a signed integer atom. Store its two's-complement
+// payload in the existing integer node so proof and later scalar lowering
+// keep the same typed-operation path as positive literals.
+fn shift_negative_integer<N: Nat>(input: [byte; up_to N], st: ExprState, minus: lexer.Token) -> (result: ExprState) {
+    let literal: lexer.Token = segment.significant<N>(input, minus.end);
+    if literal.diagnostic != 0 || literal.kind != 5 { return expr_fail(st, minus.start, minus.end); }
+    let parsed: IntVal = int_value<N>(input, literal.start, literal.end);
+    let negative: u64 = negative_payload(parsed.value);
+    let node: Expr = Expr.Integer { start: minus.start, end: literal.end, value: negative, overflow: parsed.overflow };
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: literal.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 };
+}
+fn negative_payload(magnitude: u64) -> (result: u64) {
+    if magnitude == 0 { return 0; }
+    return 18446744073709551615 - (magnitude - 1);
+}
+
 // A delimiter (or a second operand, or a closing paren context): drain one
 // pending operator, or finish when the stacks allow it.
 fn close_or_reduce<N: Nat>(input: [byte; up_to N], st: ExprState, err_start: u64, err_end: u64) -> (result: ExprState) {
     if st.depth > 0 { return expr_fail(st, err_start, err_end); }
     return match st.operators {
-        ONil => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: st.operands, operators: st.operators, depth: st.depth, done: true, expect_operand: st.expect_operand },
+        ONil => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: st.operands, operators: st.operators, depth: st.depth, done: true, expect_operand: st.expect_operand, profile_013: st.profile_013 },
         OCons { head: op, tail: rest } => reduce_or_fail(st, op, rest, err_start, err_end)
     };
 }
 fn reduce_or_fail(st: ExprState, op: Op, rest: OpList, err_start: u64, err_end: u64) -> (result: ExprState) {
-    if op.kind >= 1000 { return expr_fail(st, err_start, err_end); }
+    if op.kind >= 1000 && op.kind != 1002 { return expr_fail(st, err_start, err_end); }
     return reduce_one(st, op, rest, err_start, err_end);
 }
 fn reduce_one(st: ExprState, op: Op, rest: OpList, err_start: u64, err_end: u64) -> (result: ExprState) {
+    if op.kind == 1002 { return reduce_not(st, op, rest, err_start, err_end); }
     return match st.operands {
         ENil => expr_fail(st, err_start, err_end),
         ECons { head: r, tail: t1 } => reduce_inner(st, op, rest, r, t1, err_start, err_end)
     };
 }
+fn reduce_not(st: ExprState, op: Op, rest: OpList, err_start: u64, err_end: u64) -> (result: ExprState) {
+    return match st.operands {
+        ENil => expr_fail(st, err_start, err_end),
+        ECons { head: value, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: ExprList.ECons { head: Expr.UnaryNot { value: value, start: op.name_start, end: expr_end(value) }, tail: before }, operators: rest, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 }
+    };
+}
 fn reduce_inner(st: ExprState, op: Op, rest: OpList, r: Expr, t1: ExprList, err_start: u64, err_end: u64) -> (result: ExprState) {
     return match t1 {
         ENil => expr_fail(st, err_start, err_end),
-        ECons { head: l, tail: t2 } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: ExprList.ECons { head: Expr.Binary { op: op.kind, left: l, right: r, start: expr_start(l), end: expr_end(r) }, tail: t2 }, operators: rest, depth: st.depth, done: false, expect_operand: false }
+        ECons { head: l, tail: t2 } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: st.cursor, operands: ExprList.ECons { head: Expr.Binary { op: op.kind, left: l, right: r, start: expr_start(l), end: expr_end(r) }, tail: t2 }, operators: rest, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 }
     };
 }
 
@@ -321,18 +585,18 @@ fn shift_operand<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token
     if tok.kind == 5 {
         let value: IntVal = int_value<N>(input, tok.start, tok.end);
         let node: Expr = Expr.Integer { start: tok.start, end: tok.end, value: value.value, overflow: value.overflow };
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 };
     }
     if tok.kind == 38 || tok.kind == 39 {
         let node: Expr = Expr.Boolean { start: tok.start, end: tok.end, value: tok.kind == 38 };
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 };
     }
     let after: lexer.Token = segment.significant<N>(input, tok.end);
     let node: Expr = Expr.Name { start: tok.start, end: tok.end };
     if after.diagnostic == 0 && after.kind == 65 {
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: after.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: OpList.OCons { head: Op { kind: 1001, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: after.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: OpList.OCons { head: Op { kind: 1001, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true, profile_013: st.profile_013 };
     }
-    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false };
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: st.operands }, operators: st.operators, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 };
 }
 
 fn close_paren<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token) -> (result: ExprState) {
@@ -343,9 +607,10 @@ fn close_paren<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token) 
 }
 fn close_paren_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
     if op.kind < 1000 { return reduce_one(st, op, rest, tok.start, tok.end); }
+    if op.kind == 1002 { return reduce_one(st, op, rest, tok.start, tok.end); }
     if op.kind == 1000 {
         if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
-        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: rest, depth: st.depth - 1, done: false, expect_operand: false };
+        return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: rest, depth: st.depth - 1, done: false, expect_operand: false, profile_013: st.profile_013 };
     }
     return close_call<N>(input, st, tok, op, rest);
 }
@@ -376,9 +641,12 @@ fn close_call_args<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Tok
 // that position is an internal caller error, reported at the paren.
 fn drop_callee(st: ExprState, tok: lexer.Token, rest: OpList, node: Expr, callee: Expr, tail: ExprList) -> (result: ExprState) {
     return match callee {
-        Name { start: s, end: e } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: tail }, operators: rest, depth: st.depth - 1, done: false, expect_operand: false },
+        Name { start: s, end: e } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: node, tail: tail }, operators: rest, depth: st.depth - 1, done: false, expect_operand: false, profile_013: st.profile_013 },
         Integer { start: s, end: e, value: v, overflow: o } => expr_fail(st, tok.start, tok.end),
         Boolean { start: s, end: e, value: v } => expr_fail(st, tok.start, tok.end),
+        UnaryNot { value: v, start: s, end: e } => expr_fail(st, tok.start, tok.end),
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => expr_fail(st, tok.start, tok.end),
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => expr_fail(st, tok.start, tok.end),
         Binary { op: o, left: l, right: r, start: s, end: e } => expr_fail(st, tok.start, tok.end),
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => expr_fail(st, tok.start, tok.end),
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => expr_fail(st, tok.start, tok.end)
@@ -393,11 +661,11 @@ fn comma_step<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token) -
     };
 }
 fn comma_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
-    if op.kind < 1000 { return reduce_one(st, op, rest, tok.start, tok.end); }
+    if op.kind < 1000 || op.kind == 1002 { return reduce_one(st, op, rest, tok.start, tok.end); }
     if op.kind == 1001 {
         return match st.operands {
             ENil => expr_fail(st, tok.start, tok.end),
-            ECons { head: arg, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: before, operators: OpList.OCons { head: Op { kind: 1001, argc: op.argc + 1, name_start: op.name_start, name_end: op.name_end, args: ExprList.ECons { head: arg, tail: op.args } }, tail: rest }, depth: st.depth, done: false, expect_operand: true }
+            ECons { head: arg, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: before, operators: OpList.OCons { head: Op { kind: 1001, argc: op.argc + 1, name_start: op.name_start, name_end: op.name_end, args: ExprList.ECons { head: arg, tail: op.args } }, tail: rest }, depth: st.depth, done: false, expect_operand: true, profile_013: st.profile_013 }
         };
     }
     return expr_fail(st, tok.start, tok.end);
@@ -406,10 +674,10 @@ fn comma_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op
 fn project_step<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token) -> (result: ExprState) {
     if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
     let field: lexer.Token = segment.significant<N>(input, tok.end);
-    if field.diagnostic != 0 || (field.kind != 4 && field.kind != 34) { return expr_fail(st, field.start, field.end); }
+    if field.diagnostic != 0 || (field.kind != 4 && !(field.kind == 34 && st.profile_013)) { return expr_fail(st, field.start, field.end); }
     return match st.operands {
         ENil => expr_fail(st, tok.start, tok.end),
-        ECons { head: base, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: field.end, operands: ExprList.ECons { head: Expr.Project { base: base, field_start: field.start, field_end: field.end, start: expr_start(base), end: field.end, path: base_is_path(base) }, tail: before }, operators: st.operators, depth: st.depth, done: false, expect_operand: false }
+        ECons { head: base, tail: before } => ExprState { ok: true, err_start: 0, err_end: 0, cursor: field.end, operands: ExprList.ECons { head: Expr.Project { base: base, field_start: field.start, field_end: field.end, start: expr_start(base), end: field.end, path: base_is_path(base) }, tail: before }, operators: st.operators, depth: st.depth, done: false, expect_operand: false, profile_013: st.profile_013 }
     };
 }
 // A projection continues a namespace path only over a bare name or a path
@@ -421,6 +689,9 @@ fn base_is_path(base: Expr) -> (result: bool) {
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => p,
         Integer { start: s, end: e, value: v, overflow: o } => false,
         Boolean { start: s, end: e, value: v } => false,
+        UnaryNot { value: v, start: s, end: e } => false,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: o, left: l, right: r, start: s, end: e } => false,
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => false
     };
@@ -439,6 +710,9 @@ fn path_call_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => path_call_project<N>(input, st, tok, s, e, p, before),
         Integer { start: s, end: e, value: v, overflow: o } => close_or_reduce<N>(input, st, tok.start, tok.end),
         Boolean { start: s, end: e, value: v } => close_or_reduce<N>(input, st, tok.start, tok.end),
+        UnaryNot { value: v, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
         Binary { op: o, left: l, right: r, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => close_or_reduce<N>(input, st, tok.start, tok.end)
     };
@@ -451,19 +725,19 @@ fn path_call_project<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.T
 // single stack shape: the callee below the arguments is always a Name.
 fn path_call_push(st: ExprState, tok: lexer.Token, start: u64, end: u64, before: ExprList) -> (result: ExprState) {
     let callee: Expr = Expr.Name { start: start, end: end };
-    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: callee, tail: before }, operators: OpList.OCons { head: Op { kind: 1001, argc: 0, name_start: start, name_end: end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true };
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: ExprList.ECons { head: callee, tail: before }, operators: OpList.OCons { head: Op { kind: 1001, argc: 0, name_start: start, name_end: end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth + 1, done: false, expect_operand: true, profile_013: st.profile_013 };
 }
 
 fn operator_step(st: ExprState, tok: lexer.Token) -> (result: ExprState) {
     if st.expect_operand { return expr_fail(st, tok.start, tok.end); }
     return match st.operators {
-        ONil => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: tok.kind, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true },
+        ONil => ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: tok.kind, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true, profile_013: st.profile_013 },
         OCons { head: op, tail: rest } => operator_top(st, tok, op, rest)
     };
 }
 fn operator_top(st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
-    if op.kind < 1000 && prec(op.kind) >= prec(tok.kind) { return reduce_one(st, op, rest, tok.start, tok.end); }
-    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: tok.kind, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true };
+    if op.kind == 1002 || (op.kind < 1000 && prec(op.kind) >= prec(tok.kind)) { return reduce_one(st, op, rest, tok.start, tok.end); }
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: tok.kind, argc: 0, name_start: 0, name_end: 0, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true, profile_013: st.profile_013 };
 }
 
 fn finish_expr<N: Nat>(input: [byte; up_to N], st: ExprState) -> (result: ExprParse) {
@@ -558,6 +832,15 @@ fn header_step<N: Nat>(input: [byte; up_to N], st: parser.Header) -> (result: pa
     if token.kind == 63 { return parser.Header { ..st, state: 8, next_offset: token.end }; }
     return parser.Header { ..st, code: 7, start: token.start, end: token.end };
 }
+fn profile_at_least_013<N: Nat>(input: [byte; up_to N], start: u64, end: u64) -> (result: bool) {
+    if end <= start || end > input.len { return false; }
+    let major_first: u64 = segment.byte_at<N>(input, start) as u64;
+    if major_first > 48 { return true; }
+    if major_first != 48 || end - start < 3 { return false; }
+    if segment.byte_at<N>(input, start + 1) as u64 != 46 { return false; }
+    let minor: IntVal = int_value<N>(input, start + 2, end);
+    return !(minor.overflow) && minor.value >= 13;
+}
 
 // A term-level name: identifier (4) or the capability keyword (25) used as
 // an identifier. Mirrors Stage-0 value_name positions.
@@ -581,8 +864,8 @@ fn expect<N: Nat>(input: [byte; up_to N], cursor: u64, want: u64) -> (result: Ex
 }
 
 // Parse one name token. mode 0 requires an identifier; mode 1 also accepts
-// the capability keyword in value positions; mode 2 accepts `next` in field
-// declarations, where Profile 0.18 treats it as field syntax.
+// the capability keyword in value positions; mode 2 accepts the contextual
+// `next` field spelling after the caller has checked Profile 0.13+.
 record NameParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, start: u64, end: u64 }
 fn parse_name<N: Nat>(input: [byte; up_to N], cursor: u64, mode: u64) -> (result: NameParse) {
     let token: lexer.Token = segment.significant<N>(input, cursor);
@@ -705,18 +988,19 @@ fn seq_bound<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: NameParse)
 // Shared name:type list for parameters, results, record fields, and payload
 // fields. closer is the terminating kind (66 ')' or 68 '}'); name_mode 0
 // requires identifiers, 1 also accepts `capability` in value positions, and
-// 2 also accepts the reserved `next` field name.
-fn parse_fields<N: Nat>(input: [byte; up_to N], cursor: u64, closer: u64, name_mode: u64) -> (result: FieldsParse) {
+// 2 also accepts `next` after the caller's Profile 0.13+ check.
+fn parse_fields<N: Nat>(input: [byte; up_to N], cursor: u64, closer: u64, name_mode: u64, profile_013: bool) -> (result: FieldsParse) {
     iterate i over input carrying d: FieldsParse = FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil } {
-        next d = fields_step<N>(input, d, closer, name_mode);
+        next d = fields_step<N>(input, d, closer, name_mode, profile_013);
     }
     return finish_fields<N>(input, d);
 }
-fn fields_step<N: Nat>(input: [byte; up_to N], st: FieldsParse, closer: u64, name_mode: u64) -> (result: FieldsParse) {
+fn fields_step<N: Nat>(input: [byte; up_to N], st: FieldsParse, closer: u64, name_mode: u64, profile_013: bool) -> (result: FieldsParse) {
     if !(st.ok) { return st; }
     let token: lexer.Token = segment.significant<N>(input, st.cursor);
-    if token.diagnostic != 0 || token.kind == closer || (!(is_value_name(token.kind)) && token.kind != 4 && !(name_mode == 2 && token.kind == 34)) { return st; }
-    if token.kind != 4 && !(name_mode == 1 && token.kind == 25) && !(name_mode == 2 && token.kind == 34) { return st; }
+    let next_field: bool = name_mode == 2 && token.kind == 34 && profile_013;
+    if token.diagnostic != 0 || token.kind == closer || (!(is_value_name(token.kind)) && token.kind != 4 && !(next_field)) { return st; }
+    if token.kind != 4 && !(name_mode == 1 && token.kind == 25) && !(next_field) { return st; }
     let name: NameParse = parse_name<N>(input, st.cursor, name_mode);
     if !(name.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list }; }
     let colon: Expect = expect<N>(input, name.cursor, 62);
@@ -803,13 +1087,13 @@ fn parse_use_alias<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: Name
 }
 
 // `record Name { fields }`. At least one field is required.
-fn parse_record<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result: RecordDecl) {
+fn parse_record<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64, profile_013: bool) -> (result: RecordDecl) {
     let bad: RecordDecl = RecordDecl { ok: false, err_start: cursor, err_end: cursor, name_start: cursor, name_end: cursor, fields: FieldList.FNil, decl_start: start, decl_end: cursor, cursor: cursor };
     let name: NameParse = parse_name<N>(input, cursor, 0);
     if !(name.ok) { return RecordDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
     let open: Expect = expect<N>(input, name.cursor, 67);
     if !(open.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
-    let fields: FieldsParse = parse_fields<N>(input, open.cursor, 68, 2);
+    let fields: FieldsParse = parse_fields<N>(input, open.cursor, 68, 2, profile_013);
     if !(fields.ok) { return RecordDecl { ..bad, name_start: name.start, name_end: name.end, err_start: fields.err_start, err_end: fields.err_end }; }
     // An empty body reports at the token AFTER the closing brace (or the
     // missing-brace span when `}` is absent), mirroring Stage-0 MNP128.
@@ -826,13 +1110,13 @@ fn parse_record<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (res
 
 // `enum Name { variants }` with optional `{ field: Type, ... }` payloads.
 // At least one variant is required; variant names are strict identifiers.
-fn parse_enum<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result: EnumDecl) {
+fn parse_enum<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64, profile_013: bool) -> (result: EnumDecl) {
     let bad: EnumDecl = EnumDecl { ok: false, err_start: cursor, err_end: cursor, name_start: cursor, name_end: cursor, variants: VariantList.VNil, decl_start: start, decl_end: cursor, cursor: cursor };
     let name: NameParse = parse_name<N>(input, cursor, 0);
     if !(name.ok) { return EnumDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
     let open: Expect = expect<N>(input, name.cursor, 67);
     if !(open.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: open.err_start, err_end: open.err_end }; }
-    let variants: VariantsParse = parse_variants<N>(input, open.cursor);
+    let variants: VariantsParse = parse_variants<N>(input, open.cursor, profile_013);
     if !(variants.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: variants.err_start, err_end: variants.err_end }; }
     let close: Expect = expect<N>(input, variants.cursor, 68);
     if !(close.ok) { return EnumDecl { ..bad, name_start: name.start, name_end: name.end, err_start: close.err_start, err_end: close.err_end }; }
@@ -840,19 +1124,19 @@ fn parse_enum<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (resul
 }
 record VariantsParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList }
 record VariantsState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList, done: bool }
-fn parse_variants<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: VariantsParse) {
+fn parse_variants<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: VariantsParse) {
     iterate i over input carrying d: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
-        next d = variants_step<N>(input, d);
+        next d = variants_step<N>(input, d, profile_013);
     }
     return finish_variants<N>(input, d);
 }
-fn variants_step<N: Nat>(input: [byte; up_to N], st: VariantsState) -> (result: VariantsState) {
+fn variants_step<N: Nat>(input: [byte; up_to N], st: VariantsState, profile_013: bool) -> (result: VariantsState) {
     if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant<N>(input, st.cursor);
     if token.diagnostic != 0 || token.kind != 4 { return VariantsState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, done: true }; }
     let name: NameParse = parse_name<N>(input, st.cursor, 0);
     if !(name.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
-    let payload: FieldsParse = parse_variant_payload<N>(input, name.cursor);
+    let payload: FieldsParse = parse_variant_payload<N>(input, name.cursor, profile_013);
     if !(payload.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: payload.err_start, err_end: payload.err_end, list: st.list, done: true }; }
     let variant: Variant = Variant { name_start: name.start, name_end: name.end, fields: payload.list };
     let comma: lexer.Token = segment.significant<N>(input, payload.cursor);
@@ -861,12 +1145,12 @@ fn variants_step<N: Nat>(input: [byte; up_to N], st: VariantsState) -> (result: 
     }
     return VariantsState { cursor: payload.cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VCons { head: variant, tail: st.list }, done: false };
 }
-fn parse_variant_payload<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: FieldsParse) {
+fn parse_variant_payload<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: FieldsParse) {
     let token: lexer.Token = segment.significant<N>(input, cursor);
     if token.diagnostic != 0 || token.kind != 67 {
         return FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil };
     }
-    let fields: FieldsParse = parse_fields<N>(input, token.end, 68, 2);
+    let fields: FieldsParse = parse_fields<N>(input, token.end, 68, 2, profile_013);
     if !(fields.ok) { return fields; }
     let close: Expect = expect<N>(input, fields.cursor, 68);
     if !(close.ok) { return FieldsParse { cursor: cursor, ok: false, err_start: close.err_start, err_end: close.err_end, list: FieldList.FNil }; }
@@ -901,19 +1185,19 @@ fn reverse_variants_step(st: VariantRev) -> (result: VariantRev) {
 // Statements. `return` parses as a statement for branch bodies; the top
 // body loop stops at `return` itself so mid-body returns keep failing
 // exactly where Stage-0 reports them.
-fn parse_stmt<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: StmtParse) {
+fn parse_stmt<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: StmtParse) {
     let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
     let token: lexer.Token = segment.significant<N>(input, cursor);
     if token.diagnostic != 0 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
-    if token.kind == 14 { return parse_let<N>(input, token.end); }
+    if token.kind == 14 { return parse_let<N>(input, token.end, profile_013); }
     if token.kind == 15 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
     if token.kind == 17 { return parse_fail_stmt<N>(input, token.end); }
-    if token.kind == 13 { return parse_return_stmt<N>(input, token.end); }
+    if token.kind == 13 { return parse_return_stmt<N>(input, token.end, profile_013); }
     if token.kind == 31 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
     if token.kind == 37 { return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad }; }
     return StmtParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad };
 }
-fn parse_let<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: StmtParse) {
+fn parse_let<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: StmtParse) {
     let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
     let name: NameParse = parse_name<N>(input, cursor, 1);
     if !(name.ok) { return StmtParse { cursor: cursor, ok: false, err_start: name.err_start, err_end: name.err_end, node: bad }; }
@@ -923,7 +1207,7 @@ fn parse_let<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: StmtParse)
     if !(ftype.ok) { return StmtParse { cursor: cursor, ok: false, err_start: ftype.err_start, err_end: ftype.err_end, node: bad }; }
     let eq: Expect = expect<N>(input, ftype.cursor, 60);
     if !(eq.ok) { return StmtParse { cursor: cursor, ok: false, err_start: eq.err_start, err_end: eq.err_end, node: bad }; }
-    let value: ExprParse = parse_expr<N>(input, eq.cursor);
+    let value: ExprParse = parse_expr<N>(input, eq.cursor, profile_013);
     if !(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
     let semi: Expect = expect<N>(input, value.cursor, 63);
     if !(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
@@ -939,9 +1223,9 @@ fn parse_fail_stmt<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: Stmt
     let node: Stmt = Stmt.Fail { mode_start: mode.start, mode_end: mode.end, start: mode.start, end: mode.end };
     return StmtParse { cursor: semi.cursor, ok: true, err_start: 0, err_end: 0, node: node };
 }
-fn parse_return_stmt<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: StmtParse) {
+fn parse_return_stmt<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: StmtParse) {
     let bad: Stmt = Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor };
-    let value: ExprParse = parse_expr<N>(input, cursor);
+    let value: ExprParse = parse_expr<N>(input, cursor, profile_013);
     if !(value.ok) { return StmtParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
     let semi: Expect = expect<N>(input, value.cursor, 63);
     if !(semi.ok) { return StmtParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
@@ -957,12 +1241,12 @@ fn parse_return_stmt<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: St
 record BranchParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: StmtList }
 record Frame { cond: Expr, cond_start: u64, cond_end: u64, then_list: StmtList, parent: StmtList, phase: u64 }
 enum FrameList { YNil, YCons { head: Frame, tail: FrameList } }
-record BlockState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: StmtList, frames: FrameList, done: bool, mode: u64 }
-fn parse_branch<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: BranchParse) {
-    return parse_stmts<N>(input, cursor, 0);
+record BlockState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: StmtList, frames: FrameList, done: bool, mode: u64, profile_013: bool }
+fn parse_branch<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: BranchParse) {
+    return parse_stmts<N>(input, cursor, 0, profile_013);
 }
-fn parse_stmts<N: Nat>(input: [byte; up_to N], cursor: u64, mode: u64) -> (result: BranchParse) {
-    iterate i over input carrying d: BlockState = BlockState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YNil, done: false, mode: mode } {
+fn parse_stmts<N: Nat>(input: [byte; up_to N], cursor: u64, mode: u64, profile_013: bool) -> (result: BranchParse) {
+    iterate i over input carrying d: BlockState = BlockState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YNil, done: false, mode: mode, profile_013: profile_013 } {
         next d = block_step<N>(input, d);
     }
     iterate i over input carrying h: BlockState = d {
@@ -971,7 +1255,7 @@ fn parse_stmts<N: Nat>(input: [byte; up_to N], cursor: u64, mode: u64) -> (resul
     return finish_block<N>(input, h);
 }
 fn block_fail(st: BlockState, start: u64, end: u64) -> (result: BlockState) {
-    return BlockState { cursor: st.cursor, ok: false, err_start: start, err_end: end, list: st.list, frames: st.frames, done: true, mode: st.mode };
+    return BlockState { cursor: st.cursor, ok: false, err_start: start, err_end: end, list: st.list, frames: st.frames, done: true, mode: st.mode, profile_013: st.profile_013 };
 }
 fn block_step<N: Nat>(input: [byte; up_to N], st: BlockState) -> (result: BlockState) {
     if !(st.ok) || st.done { return st; }
@@ -982,7 +1266,7 @@ fn block_step<N: Nat>(input: [byte; up_to N], st: BlockState) -> (result: BlockS
     if token.kind == 15 { return block_if<N>(input, st, token); }
     if st.mode == 1 && token.kind == 13 {
         return match st.frames {
-            YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode },
+            YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode, profile_013: st.profile_013 },
             YCons { head: fr, tail: fl } => block_plain_stmt<N>(input, st, token)
         };
     }
@@ -990,13 +1274,13 @@ fn block_step<N: Nat>(input: [byte; up_to N], st: BlockState) -> (result: BlockS
 }
 fn block_eof<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token) -> (result: BlockState) {
     return match st.frames {
-        YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode },
+        YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode, profile_013: st.profile_013 },
         YCons { head: fr, tail: fl } => block_fail(st, token.start, token.end)
     };
 }
 fn block_rbrace<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token) -> (result: BlockState) {
     return match st.frames {
-        YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode },
+        YNil => BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, frames: st.frames, done: true, mode: st.mode, profile_013: st.profile_013 },
         YCons { head: fr, tail: fl } => block_then_close<N>(input, st, token, fr, fl)
     };
 }
@@ -1004,13 +1288,13 @@ fn block_rbrace<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Tok
 fn block_then_close<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
     if fr.phase == 0 {
         let parked: Frame = Frame { cond: fr.cond, cond_start: fr.cond_start, cond_end: fr.cond_end, then_list: st.list, parent: fr.parent, phase: 1 };
-        return BlockState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: parked, tail: fl }, done: false, mode: st.mode };
+        return BlockState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: parked, tail: fl }, done: false, mode: st.mode, profile_013: st.profile_013 };
     }
     return block_else_close<N>(input, st, token, fr, fl);
 }
 fn block_else_close<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
     let node: Stmt = Stmt.If { cond: fr.cond, then_b: reverse_stmts<N>(input, fr.then_list), else_b: reverse_stmts<N>(input, st.list), start: fr.cond_start, end: fr.cond_end };
-    return BlockState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode };
+    return BlockState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode, profile_013: st.profile_013 };
 }
 // After a then-branch: `else {` continues the frame, anything else
 // completes the if with an empty else without consuming the token.
@@ -1019,10 +1303,10 @@ fn block_await_else<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer
         let open: Expect = expect<N>(input, token.end, 67);
         if !(open.ok) { return block_fail(st, open.err_start, open.err_end); }
         let cont: Frame = Frame { cond: fr.cond, cond_start: fr.cond_start, cond_end: fr.cond_end, then_list: fr.then_list, parent: fr.parent, phase: 2 };
-        return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: cont, tail: fl }, done: false, mode: st.mode };
+        return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: cont, tail: fl }, done: false, mode: st.mode, profile_013: st.profile_013 };
     }
     let node: Stmt = Stmt.If { cond: fr.cond, then_b: reverse_stmts<N>(input, fr.then_list), else_b: StmtList.SNil, start: fr.cond_start, end: fr.cond_end };
-    return BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode };
+    return BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode, profile_013: st.profile_013 };
 }
 fn block_if<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token) -> (result: BlockState) {
     return match st.frames {
@@ -1035,18 +1319,18 @@ fn block_if<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token) 
 fn block_if_frame<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token, fr: Frame, fl: FrameList) -> (result: BlockState) {
     if fr.phase == 1 {
         let node: Stmt = Stmt.If { cond: fr.cond, then_b: reverse_stmts<N>(input, fr.then_list), else_b: StmtList.SNil, start: fr.cond_start, end: fr.cond_end };
-        let popped: BlockState = BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode };
+        let popped: BlockState = BlockState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: node, tail: fr.parent }, frames: fl, done: false, mode: st.mode, profile_013: st.profile_013 };
         return block_if_open<N>(input, popped, token);
     }
     return block_if_open<N>(input, st, token);
 }
 fn block_if_open<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token) -> (result: BlockState) {
-    let cond: ExprParse = parse_expr<N>(input, token.end);
+    let cond: ExprParse = parse_expr<N>(input, token.end, st.profile_013);
     if !(cond.ok) { return block_fail(st, cond.err_start, cond.err_end); }
     let open: Expect = expect<N>(input, cond.cursor, 67);
     if !(open.ok) { return block_fail(st, open.err_start, open.err_end); }
     let frame: Frame = Frame { cond: cond.node, cond_start: cond.start, cond_end: cond.end, then_list: StmtList.SNil, parent: st.list, phase: 0 };
-    return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: frame, tail: st.frames }, done: false, mode: st.mode };
+    return BlockState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SNil, frames: FrameList.YCons { head: frame, tail: st.frames }, done: false, mode: st.mode, profile_013: st.profile_013 };
 }
 fn block_plain_stmt<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer.Token) -> (result: BlockState) {
     return match st.frames {
@@ -1055,9 +1339,9 @@ fn block_plain_stmt<N: Nat>(input: [byte; up_to N], st: BlockState, token: lexer
     };
 }
 fn block_top_stmt<N: Nat>(input: [byte; up_to N], st: BlockState) -> (result: BlockState) {
-    let stmt: StmtParse = parse_stmt<N>(input, st.cursor);
+    let stmt: StmtParse = parse_stmt<N>(input, st.cursor, st.profile_013);
     if !(stmt.ok) { return block_fail(st, stmt.err_start, stmt.err_end); }
-    return BlockState { cursor: stmt.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: stmt.node, tail: st.list }, frames: st.frames, done: false, mode: st.mode };
+    return BlockState { cursor: stmt.cursor, ok: true, err_start: 0, err_end: 0, list: StmtList.SCons { head: stmt.node, tail: st.list }, frames: st.frames, done: false, mode: st.mode, profile_013: st.profile_013 };
 }
 fn block_frame_stmt<N: Nat>(input: [byte; up_to N], st: BlockState, fr: Frame, fl: FrameList) -> (result: BlockState) {
     if fr.phase == 1 {
@@ -1168,7 +1452,7 @@ fn reverse_caps_step(st: CapRev) -> (result: CapRev) {
 
 // `fn name(params) -> (results) clauses { body }`. Generic parameter lists
 // are a deferred shape: `<` after the name fails explicitly.
-fn parse_fn<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result: FnDecl) {
+fn parse_fn<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64, profile_013: bool) -> (result: FnDecl) {
     let bad: FnDecl = FnDecl { ok: false, err_start: cursor, err_end: cursor, sig: FnSig { name_start: cursor, name_end: cursor, params: FieldList.FNil, results: FieldList.FNil, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }, body: FnBody { body: StmtList.SNil, ret: Expr.Name { start: cursor, end: cursor }, has_ret: false }, fn_start: start, fn_end: cursor, cursor: cursor };
     let name: NameParse = parse_name<N>(input, cursor, 1);
     if !(name.ok) { return FnDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
@@ -1178,7 +1462,7 @@ fn parse_fn<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result:
     }
     let open: Expect = expect<N>(input, name.cursor, 65);
     if !(open.ok) { return FnDecl { ..bad, err_start: open.err_start, err_end: open.err_end }; }
-    let params: FieldsParse = parse_fields<N>(input, open.cursor, 66, 1);
+    let params: FieldsParse = parse_fields<N>(input, open.cursor, 66, 1, profile_013);
     if !(params.ok) { return FnDecl { ..bad, err_start: params.err_start, err_end: params.err_end }; }
     let close: Expect = expect<N>(input, params.cursor, 66);
     if !(close.ok) { return FnDecl { ..bad, err_start: close.err_start, err_end: close.err_end }; }
@@ -1186,7 +1470,7 @@ fn parse_fn<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result:
     if !(arrow.ok) { return FnDecl { ..bad, err_start: arrow.err_start, err_end: arrow.err_end }; }
     let open2: Expect = expect<N>(input, arrow.cursor, 65);
     if !(open2.ok) { return FnDecl { ..bad, err_start: open2.err_start, err_end: open2.err_end }; }
-    let results: FieldsParse = parse_fields<N>(input, open2.cursor, 66, 1);
+    let results: FieldsParse = parse_fields<N>(input, open2.cursor, 66, 1, profile_013);
     if !(results.ok) { return FnDecl { ..bad, err_start: results.err_start, err_end: results.err_end }; }
     let close2: Expect = expect<N>(input, results.cursor, 66);
     if !(close2.ok) { return FnDecl { ..bad, err_start: close2.err_start, err_end: close2.err_end }; }
@@ -1194,9 +1478,9 @@ fn parse_fn<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result:
     if !(clauses.ok) { return FnDecl { ..bad, err_start: clauses.err_start, err_end: clauses.err_end }; }
     let open3: Expect = expect<N>(input, clauses.cursor, 67);
     if !(open3.ok) { return FnDecl { ..bad, err_start: open3.err_start, err_end: open3.err_end }; }
-    let body: BranchParse = parse_stmts<N>(input, open3.cursor, 1);
+    let body: BranchParse = parse_stmts<N>(input, open3.cursor, 1, profile_013);
     if !(body.ok) { return FnDecl { ..bad, err_start: body.err_start, err_end: body.err_end }; }
-    let tail: ReturnParse = parse_return_tail<N>(input, body.cursor);
+    let tail: ReturnParse = parse_return_tail<N>(input, body.cursor, profile_013);
     if !(tail.ok) { return FnDecl { ..bad, err_start: tail.err_start, err_end: tail.err_end }; }
     let close3: Expect = expect<N>(input, tail.cursor, 68);
     if !(close3.ok) { return FnDecl { ..bad, err_start: close3.err_start, err_end: close3.err_end }; }
@@ -1205,13 +1489,13 @@ fn parse_fn<N: Nat>(input: [byte; up_to N], cursor: u64, start: u64) -> (result:
     return FnDecl { ok: true, err_start: 0, err_end: 0, sig: sig, body: fnbody, fn_start: start, fn_end: close3.cursor, cursor: close3.cursor };
 }
 record ReturnParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr }
-fn parse_return_tail<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: ReturnParse) {
+fn parse_return_tail<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ReturnParse) {
     let bad: Expr = Expr.Name { start: cursor, end: cursor };
     let token: lexer.Token = segment.significant<N>(input, cursor);
     if token.diagnostic != 0 || token.kind != 13 {
         return ReturnParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, node: bad };
     }
-    let value: ExprParse = parse_expr<N>(input, token.end);
+    let value: ExprParse = parse_expr<N>(input, token.end, profile_013);
     if !(value.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: value.err_start, err_end: value.err_end, node: bad }; }
     let semi: Expect = expect<N>(input, value.cursor, 63);
     if !(semi.ok) { return ReturnParse { cursor: cursor, ok: false, err_start: semi.err_start, err_end: semi.err_end, node: bad }; }
@@ -1220,7 +1504,7 @@ fn parse_return_tail<N: Nat>(input: [byte; up_to N], cursor: u64) -> (result: Re
 
 // Whole logical-source unit: header, imports, then interleaved record,
 // enum, and function declarations through EOF.
-record UnitState { cursor: u64, ok: bool, err_start: u64, err_end: u64, uses: UseList, records: RecordList, enums: EnumList, fns: FnList, count: u64, done: bool }
+record UnitState { cursor: u64, ok: bool, err_start: u64, err_end: u64, uses: UseList, records: RecordList, enums: EnumList, fns: FnList, count: u64, done: bool, profile_013: bool }
 fn parse_unit<N: Nat>(input: [byte; up_to N]) -> (result: Unit) {
     let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     let bad: Unit = Unit { ok: false, err_start: 0, err_end: 0, header: empty, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: 0 };
@@ -1228,7 +1512,8 @@ fn parse_unit<N: Nat>(input: [byte; up_to N]) -> (result: Unit) {
     if head.code != 0 { return Unit { ..bad, header: head, err_start: head.start, err_end: head.end, cursor: head.next_offset }; }
     let uses: UsesParse = parse_uses<N>(input, head.next_offset);
     if !(uses.ok) { return Unit { ..bad, header: head, err_start: uses.err_start, err_end: uses.err_end, cursor: uses.cursor }; }
-    iterate i over input carrying d: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false } {
+    let profile_013: bool = profile_at_least_013<N>(input, head.version_start, head.version_end);
+    iterate i over input carrying d: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false, profile_013: profile_013 } {
         next d = unit_step<N>(input, d);
     }
     return finish_unit<N>(input, head, d);
@@ -1266,26 +1551,26 @@ fn reverse_uses_step(st: UseRev) -> (result: UseRev) {
 fn unit_step<N: Nat>(input: [byte; up_to N], st: UnitState) -> (result: UnitState) {
     if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant<N>(input, st.cursor);
-    if token.diagnostic != 0 || token.kind == 0 { return UnitState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
+    if token.diagnostic != 0 || token.kind == 0 { return UnitState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
     if token.kind == 27 { return unit_enum<N>(input, st, token); }
     if token.kind == 29 { return unit_record<N>(input, st, token); }
     if token.kind == 12 { return unit_fn<N>(input, st, token); }
-    return UnitState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true };
+    return UnitState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 };
 }
 fn unit_enum<N: Nat>(input: [byte; up_to N], st: UnitState, token: lexer.Token) -> (result: UnitState) {
-    let decl: EnumDecl = parse_enum<N>(input, token.end, token.start);
-    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
-    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: EnumList.GCons { head: decl, tail: st.enums }, fns: st.fns, count: st.count + 1, done: false };
+    let decl: EnumDecl = parse_enum<N>(input, token.end, token.start, st.profile_013);
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: EnumList.GCons { head: decl, tail: st.enums }, fns: st.fns, count: st.count + 1, done: false, profile_013: st.profile_013 };
 }
 fn unit_record<N: Nat>(input: [byte; up_to N], st: UnitState, token: lexer.Token) -> (result: UnitState) {
-    let decl: RecordDecl = parse_record<N>(input, token.end, token.start);
-    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
-    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: RecordList.RCons { head: decl, tail: st.records }, enums: st.enums, fns: st.fns, count: st.count + 1, done: false };
+    let decl: RecordDecl = parse_record<N>(input, token.end, token.start, st.profile_013);
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: RecordList.RCons { head: decl, tail: st.records }, enums: st.enums, fns: st.fns, count: st.count + 1, done: false, profile_013: st.profile_013 };
 }
 fn unit_fn<N: Nat>(input: [byte; up_to N], st: UnitState, token: lexer.Token) -> (result: UnitState) {
-    let decl: FnDecl = parse_fn<N>(input, token.end, token.start);
-    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true }; }
-    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: FnList.DCons { head: decl, tail: st.fns }, count: st.count + 1, done: false };
+    let decl: FnDecl = parse_fn<N>(input, token.end, token.start, st.profile_013);
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: FnList.DCons { head: decl, tail: st.fns }, count: st.count + 1, done: false, profile_013: st.profile_013 };
 }
 fn finish_unit<N: Nat>(input: [byte; up_to N], head: parser.Header, st: UnitState) -> (result: Unit) {
     let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
@@ -1525,6 +1810,9 @@ fn walk_children<N: Nat>(input: [byte; up_to N], st: WalkState, h: Expr, t: Expr
         Name { start: s, end: e } => WalkState { swords: st.swords, work: t, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
         Integer { start: s, end: e, value: v, overflow: o } => WalkState { swords: st.swords, work: t, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
         Boolean { start: s, end: e, value: v } => WalkState { swords: st.swords, work: t, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        UnaryNot { value: value, start: s, end: e } => WalkState { swords: st.swords, work: ExprList.ECons { head: value, tail: t }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => WalkState { swords: st.swords, work: ExprList.ECons { head: value, tail: t }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => WalkState { swords: st.swords, work: scalar_match_children<N>(input, subject, arms, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
         Binary { op: o, left: l, right: r, start: s, end: e } => WalkState { swords: st.swords, work: ExprList.ECons { head: l, tail: ExprList.ECons { head: r, tail: t } }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => walk_call<N>(input, st, t, acc, ns, ne, a),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => WalkState { swords: st.swords, work: ExprList.ECons { head: b, tail: t }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 }
@@ -1572,6 +1860,9 @@ enum FlatOp {
     PInt { value: u64 },
     PBool { value: bool },
     PName { start: u64, end: u64 },
+    PNot,
+    PRepeat { count: u64 },
+    PMatch { arms: u64 },
     PBin { op: u64 },
     PCall { name_start: u64, name_end: u64, argc: u64 },
     PProj { field_start: u64, field_end: u64, path: bool }
@@ -1598,10 +1889,24 @@ fn lower_one<N: Nat>(input: [byte; up_to N], st: LowerState, h: Expr, t: ExprLis
         Name { start: s, end: e } => LowerState { work: t, out: FlatList.ICons { head: FlatOp.PName { start: s, end: e }, tail: st.out } },
         Integer { start: s, end: e, value: v, overflow: o } => LowerState { work: t, out: FlatList.ICons { head: FlatOp.PInt { value: v }, tail: st.out } },
         Boolean { start: s, end: e, value: v } => LowerState { work: t, out: FlatList.ICons { head: FlatOp.PBool { value: v }, tail: st.out } },
+        UnaryNot { value: value, start: s, end: e } => LowerState { work: ExprList.ECons { head: value, tail: t }, out: FlatList.ICons { head: FlatOp.PNot, tail: st.out } },
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => lower_repeat<N>(input, st, t, value, cs, ce, ck),
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => lower_scalar_match<N>(input, st, t, subject, arms),
         Binary { op: o, left: l, right: r, start: s, end: e } => LowerState { work: ExprList.ECons { head: r, tail: ExprList.ECons { head: l, tail: t } }, out: FlatList.ICons { head: FlatOp.PBin { op: o }, tail: st.out } },
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => lower_call<N>(input, st, t, ns, ne, a),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => LowerState { work: ExprList.ECons { head: b, tail: t }, out: FlatList.ICons { head: FlatOp.PProj { field_start: fs, field_end: fe, path: p }, tail: st.out } }
     };
+}
+fn lower_scalar_match<N: Nat>(input: [byte; up_to N], st: LowerState, t: ExprList, subject: Expr, arms: ScalarMatchArmList) -> (result: LowerState) {
+    let count: ScalarMatchCount = scalar_match_count<N>(input, arms);
+    let children: ExprList = scalar_match_children<N>(input, subject, arms, ExprList.ENil);
+    let rev: ExprList = reverse_exprs<N>(input, children);
+    return LowerState { work: append_exprs<N>(input, rev, t), out: FlatList.ICons { head: FlatOp.PMatch { arms: count.n }, tail: st.out } };
+}
+fn lower_repeat<N: Nat>(input: [byte; up_to N], st: LowerState, t: ExprList, value: Expr, count_start: u64, count_end: u64, count_kind: u64) -> (result: LowerState) {
+    if count_kind != 5 { return LowerState { work: ExprList.ECons { head: value, tail: t }, out: FlatList.ICons { head: FlatOp.PRepeat { count: 0 }, tail: st.out } }; }
+    let count: IntVal = int_value<N>(input, count_start, count_end);
+    return LowerState { work: ExprList.ECons { head: value, tail: t }, out: FlatList.ICons { head: FlatOp.PRepeat { count: count.value }, tail: st.out } };
 }
 fn lower_call<N: Nat>(input: [byte; up_to N], st: LowerState, t: ExprList, ns: u64, ne: u64, args: ExprList) -> (result: LowerState) {
     let argc: u64 = count_exprs<N>(input, args);
@@ -1642,10 +1947,21 @@ fn flat_one(st: DepthState, h: FlatOp, t: FlatList) -> (result: DepthState) {
         PInt { value: v } => DepthState { rest: t, depth: st.depth + 1, ok: true },
         PBool { value: v } => DepthState { rest: t, depth: st.depth + 1, ok: true },
         PName { start: s, end: e } => DepthState { rest: t, depth: st.depth + 1, ok: true },
+        PNot => flat_not(st, t),
+        PRepeat { count: n } => flat_not(st, t),
+        PMatch { arms: n } => flat_match(st, t, n),
         PBin { op: o } => flat_bin(st, t),
         PCall { name_start: ns, name_end: ne, argc: c } => flat_call(st, t, c),
         PProj { field_start: fs, field_end: fe, path: p } => flat_proj(st, t)
     };
+}
+fn flat_match(st: DepthState, t: FlatList, arms: u64) -> (result: DepthState) {
+    if st.depth < arms + 1 { return DepthState { rest: FlatList.INil, depth: 0, ok: false }; }
+    return DepthState { rest: t, depth: st.depth - arms, ok: true };
+}
+fn flat_not(st: DepthState, t: FlatList) -> (result: DepthState) {
+    if st.depth < 1 { return DepthState { rest: FlatList.INil, depth: 0, ok: false }; }
+    return DepthState { rest: t, depth: st.depth, ok: true };
 }
 fn flat_bin(st: DepthState, t: FlatList) -> (result: DepthState) {
     if st.depth < 2 { return DepthState { rest: FlatList.INil, depth: 0, ok: false }; }
@@ -1801,18 +2117,29 @@ fn count_obls_cons(st: OblCount, h: Obligation, t: OblList) -> (result: OblCount
 // Seq is opaque (element validity is established at resolution; no index
 // expressions exist in this subset). TPoison marks error recovery: checks
 // against poison are skipped so one error does not cascade.
+// Canonical callable identity bytes come from the Stage-0 module and
+// declaration name scheme. Typed calls retain this exact value through SSA.
+// Named semantic types still carry source spans in this profile slice and do
+// not yet have project-canonical identities.
+record SemanticIdentity { bytes: [byte; 512], len: u64, valid: bool }
+record SemanticIdentityBuild { bytes: [byte; 512], len: u64, valid: bool }
+fn invalid_semantic_identity() -> (result: SemanticIdentity) {
+    return SemanticIdentity { bytes: [0 as byte; 512], len: 0, valid: false };
+}
+
 enum SemType {
     TBool,
     TByte,
     TInt { width: u64, signed: bool },
     TNamed { start: u64, end: u64 },
     TSeq,
+    TSeqExact { element: SemType, length: u64, length_valid: bool },
     TPoison
 }
 // Required-type input for bidirectional checking: absent, or present.
 enum ExpTy { XNone, XSome { ty: SemType } }
 fn is_poison(ty: SemType) -> (result: bool) {
-    return match ty { TPoison => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false };
+    return match ty { TPoison => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false };
 }
 fn sem_eq<N: Nat>(input: [byte; up_to N], a: SemType, b: SemType) -> (result: bool) {
     return match a {
@@ -1820,18 +2147,19 @@ fn sem_eq<N: Nat>(input: [byte; up_to N], a: SemType, b: SemType) -> (result: bo
         TByte => sem_eq_byte(b),
         TInt { width: w, signed: s } => sem_eq_int(b, w, s),
         TNamed { start: s, end: e } => sem_eq_named<N>(input, b, s, e),
-        TSeq => sem_eq_seq(b),
+        TSeq => sem_eq_seq<N>(input, b),
+        TSeqExact { element: element, length: length, length_valid: length_valid } => sem_eq_seq_exact<N>(input, b, element, length, length_valid),
         TPoison => sem_eq_poison(b)
     };
 }
 fn sem_eq_poison(b: SemType) -> (result: bool) {
-    return match b { TPoison => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false };
+    return match b { TPoison => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false };
 }
 fn sem_eq_bool(b: SemType) -> (result: bool) {
-    return match b { TBool => true, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+    return match b { TBool => true, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false, TPoison => false };
 }
 fn sem_eq_byte(b: SemType) -> (result: bool) {
-    return match b { TBool => false, TByte => true, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+    return match b { TBool => false, TByte => true, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false, TPoison => false };
 }
 fn sem_eq_int(b: SemType, w: u64, s: bool) -> (result: bool) {
     return match b {
@@ -1840,6 +2168,7 @@ fn sem_eq_int(b: SemType, w: u64, s: bool) -> (result: bool) {
         TByte => false,
         TNamed { start: s3, end: e3 } => false,
         TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: length_valid } => false,
         TPoison => false
     };
 }
@@ -1850,24 +2179,47 @@ fn int_eq_extra(w: u64, w2: u64, s: bool, s2: bool) -> (result: bool) {
     if s { return s2; }
     return !(s2);
 }
-fn sem_eq_named<N: Nat>(input: [byte; up_to N], b: SemType, s: u64, e: u64) -> (result: bool) {
+fn sem_eq_named<N: Nat>(input: [byte; up_to N], b: SemType, start: u64, end: u64) -> (result: bool) {
     return match b {
-        TNamed { start: q2, end: g2 } => spans_equal<N>(input, s, e, q2, g2),
+        TNamed { start: q2, end: g2 } => spans_equal<N>(input, start, end, q2, g2),
         TBool => false,
         TByte => false,
         TInt { width: w, signed: g } => false,
         TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: length_valid } => false,
         TPoison => false
     };
 }
-fn sem_eq_seq(b: SemType) -> (result: bool) {
-    return match b { TSeq => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TPoison => false };
+fn sem_eq_seq<N: Nat>(input: [byte; up_to N], b: SemType) -> (result: bool) {
+    return match b { TSeq => true, TSeqExact { element: element, length: length, length_valid: valid } => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TPoison => false };
+}
+fn sem_eq_seq_exact<N: Nat>(input: [byte; up_to N], b: SemType, element: SemType, length: u64, length_valid: bool) -> (result: bool) {
+    return match b {
+        TSeqExact { element: other_element, length: other_length, length_valid: other_valid } => length_valid && other_valid && length == other_length && sem_eq_element<N>(input, element, other_element),
+        TSeq => false,
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: s, end: e } => false,
+        TPoison => false
+    };
+}
+fn sem_eq_element<N: Nat>(input: [byte; up_to N], a: SemType, b: SemType) -> (result: bool) {
+    return match a {
+        TBool => sem_eq_bool(b),
+        TByte => sem_eq_byte(b),
+        TInt { width: w, signed: s } => sem_eq_int(b, w, s),
+        TNamed { start: s, end: e } => sem_eq_named<N>(input, b, s, e),
+        TSeq => false,
+        TSeqExact { element: e, length: n, length_valid: v } => false,
+        TPoison => sem_eq_poison(b)
+    };
 }
 fn is_int_ty(ty: SemType) -> (result: bool) {
-    return match ty { TInt { width: w, signed: s } => true, TBool => false, TByte => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+    return match ty { TInt { width: w, signed: s } => true, TBool => false, TByte => false, TNamed { start: s, end: e } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false, TPoison => false };
 }
 fn is_bool_ty(ty: SemType) -> (result: bool) {
-    return match ty { TBool => true, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TPoison => false };
+    return match ty { TBool => true, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false, TPoison => false };
 }
 
 // Lexical scopes. Bindings never leak out of a block: each if/else branch
@@ -1973,25 +2325,42 @@ fn resolve_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64,
     if kind == 4 { return TyRes { ty: SemType.TByte, ok: true }; }
     if kind == 1 { return TyRes { ty: SemType.TInt { width: 64, signed: false }, ok: true }; }
     if kind == 2 { return TyRes { ty: SemType.TInt { width: 64, signed: true }, ok: true }; }
-    if kind == 7 || kind == 8 { return resolve_seq_type<N>(input, start, end, rectab, enumtab); }
+    if kind == 7 || kind == 8 { return resolve_seq_type<N>(input, kind, start, end, rectab, enumtab); }
     if kind == 5 { return resolve_named_type<N>(input, start, end, rectab, enumtab); }
     return TyRes { ty: SemType.TPoison, ok: false };
 }
-fn resolve_seq_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
     let elem: TypeParse = parse_type<N>(input, start + 1);
     if !(elem.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
     // No back-call into resolve_type (MNE130): sequence elements are flat
-    // by construction (the parser rejects nested `[`), so the element is
-    // resolved by the flat case split below.
-    if elem.node.kind == 7 || elem.node.kind == 8 { return TyRes { ty: SemType.TSeq, ok: true }; }
-    if elem.node.kind == 1 || elem.node.kind == 2 || elem.node.kind == 3 || elem.node.kind == 4 { return TyRes { ty: SemType.TSeq, ok: true }; }
-    if elem.node.kind == 5 { return resolve_seq_elem<N>(input, elem.node.start, elem.node.end, rectab, enumtab); }
+    // by construction (the parser rejects nested `[`). Exact bounds and
+    // element types are retained for repeat-literal proof; viewed sequences
+    // remain the existing opaque shape.
+    if kind == 8 { return TyRes { ty: SemType.TSeq, ok: true }; }
+    let element: TyRes = resolve_sequence_element<N>(input, elem.node, rectab, enumtab);
+    if !(element.ok) { return element; }
+    let semi: Expect = expect<N>(input, elem.cursor, 63);
+    if !(semi.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    let bound: NameParse = seq_bound<N>(input, semi.cursor);
+    if !(bound.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    let close: Expect = expect<N>(input, bound.cursor, 70);
+    if !(close.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    let literal_bound: bool = span_digits<N>(input, bound.start, bound.end);
+    let length: IntVal = int_value<N>(input, bound.start, bound.end);
+    return TyRes { ty: SemType.TSeqExact { element: element.ty, length: length.value, length_valid: literal_bound && !(length.overflow) }, ok: true };
+}
+fn resolve_sequence_element<N: Nat>(input: [byte; up_to N], element: TypeRef, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+    if element.kind == 1 { return TyRes { ty: SemType.TInt { width: 64, signed: false }, ok: true }; }
+    if element.kind == 2 { return TyRes { ty: SemType.TInt { width: 64, signed: true }, ok: true }; }
+    if element.kind == 3 { return TyRes { ty: SemType.TBool, ok: true }; }
+    if element.kind == 4 { return TyRes { ty: SemType.TByte, ok: true }; }
+    if element.kind == 5 { return resolve_seq_elem<N>(input, element.start, element.end, rectab, enumtab); }
     return TyRes { ty: SemType.TPoison, ok: false };
 }
 fn resolve_seq_elem<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
     let inner: TyRes = resolve_named_type<N>(input, start, end, rectab, enumtab);
     if !(inner.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
-    return TyRes { ty: SemType.TSeq, ok: true };
+    return inner;
 }
 fn resolve_named_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
     let sc: SemType = scalar_sem<N>(input, start, end);
@@ -2001,6 +2370,7 @@ fn resolve_named_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rect
         TByte => TyRes { ty: SemType.TByte, ok: true },
         TInt { width: w, signed: g } => TyRes { ty: SemType.TInt { width: w, signed: g }, ok: true },
         TSeq => TyRes { ty: SemType.TSeq, ok: true },
+        TSeqExact { element: element, length: length, length_valid: valid } => TyRes { ty: SemType.TSeqExact { element: element, length: length, length_valid: valid }, ok: true },
         TPoison => TyRes { ty: SemType.TPoison, ok: false }
     };
 }
@@ -2055,9 +2425,58 @@ fn enum_declared_cons<N: Nat>(input: [byte; up_to N], st: EnumScan, h: EnumDecl,
 // authority against declared capabilities, and contract clauses recorded
 // as retained UNKNOWN assumptions (Stage-0 never rejects them, not even
 // for undeclared names or mismatched arities).
-record Sig { start: u64, end: u64, params: BindList, nparams: u64, result: SemType, fx: EffectList, owner: u64, decl_start: u64, decl_end: u64 }
+// Canonical Stage-0 callable identity bytes are produced in the compiler and
+// carried with the typed call. The fixed capacity is an explicit boundary;
+// overflow fails closed and never falls back to source-slot/span identity.
+fn callable_identity_byte(st: SemanticIdentityBuild, value: byte) -> (result: SemanticIdentityBuild) {
+    if !(st.valid) || st.len >= 512 { return SemanticIdentityBuild { ..st, valid: false }; }
+    return SemanticIdentityBuild { ..st, bytes: replace(st.bytes, st.len, value), len: st.len + 1 };
+}
+fn callable_identity_span_step<N: Nat>(input: [byte; up_to N], st: SemanticIdentityBuild, pos: u64, start: u64, end: u64) -> (result: SemanticIdentityBuild) {
+    if !(st.valid) || pos < start || pos >= end { return st; }
+    return callable_identity_byte(st, input[pos]);
+}
+fn callable_identity_span<N: Nat>(input: [byte; up_to N], st: SemanticIdentityBuild, start: u64, end: u64) -> (result: SemanticIdentityBuild) {
+    if end < start || end > input.len { return SemanticIdentityBuild { ..st, valid: false }; }
+    iterate i over input carrying d: SemanticIdentityBuild = st {
+        next d = callable_identity_span_step<N>(input, d, i, start, end);
+    }
+    return d;
+}
+fn canonical_function_identity<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, function_start: u64, function_end: u64) -> (result: SemanticIdentity) {
+    let prefix: [byte; 18] = [109 as byte, 110 as byte, 99 as byte, 115 as byte, 58 as byte, 48 as byte, 46 as byte, 50 as byte, 58 as byte, 102 as byte, 117 as byte, 110 as byte, 99 as byte, 116 as byte, 105 as byte, 111 as byte, 110 as byte, 58 as byte];
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    iterate i over prefix carrying d: SemanticIdentityBuild = seed {
+        next d = callable_identity_byte(d, prefix[i]);
+    }
+    let module_part: SemanticIdentityBuild = callable_identity_span<N>(input, d, module_start, module_end);
+    let sep1: SemanticIdentityBuild = callable_identity_byte(module_part, 58 as byte);
+    let sep2: SemanticIdentityBuild = callable_identity_byte(sep1, 58 as byte);
+    let function_part: SemanticIdentityBuild = callable_identity_span<N>(input, sep2, function_start, function_end);
+    return SemanticIdentity { bytes: function_part.bytes, len: function_part.len, valid: function_part.valid && module_end > module_start && function_end > function_start };
+}
+
+record Sig { start: u64, end: u64, params: BindList, nparams: u64, result: SemType, fx: EffectList, identity: SemanticIdentity }
 enum SigTab { HNil, HCons { head: Sig, tail: SigTab } }
 record SigRep { sig: Sig, obls: OblList }
+
+record SigIdentityWalk { rest: SigTab, acc: SigTab, module_start: u64, module_end: u64 }
+fn bind_local_callable_identities<N: Nat>(input: [byte; up_to N], header: parser.Header, sigs: SigTab) -> (result: SigTab) {
+    iterate i over input carrying st: SigIdentityWalk = SigIdentityWalk { rest: sigs, acc: SigTab.HNil, module_start: header.module_start, module_end: header.module_end } {
+        next st = bind_local_callable_identity<N>(input, st);
+    }
+    return st.acc;
+}
+fn bind_local_callable_identity<N: Nat>(input: [byte; up_to N], st: SigIdentityWalk) -> (result: SigIdentityWalk) {
+    return match st.rest {
+        HNil => st,
+        HCons { head: sig, tail: rest } => bind_local_callable_sig<N>(input, st, sig, rest)
+    };
+}
+fn bind_local_callable_sig<N: Nat>(input: [byte; up_to N], st: SigIdentityWalk, sig: Sig, rest: SigTab) -> (result: SigIdentityWalk) {
+    let identity: SemanticIdentity = canonical_function_identity<N>(input, st.module_start, st.module_end, sig.start, sig.end);
+    return SigIdentityWalk { ..st, rest: rest, acc: SigTab.HCons { head: Sig { ..sig, identity: identity }, tail: st.acc } };
+}
 fn check_sig<N: Nat>(input: [byte; up_to N], h: FnDecl, rectab: RecordList, enumtab: EnumList) -> (result: SigRep) {
     let sg: FnSig = h.sig;
     let ps: ParamRep = check_params<N>(input, sg.params, rectab, enumtab);
@@ -2069,7 +2488,7 @@ fn check_sig<N: Nat>(input: [byte; up_to N], h: FnDecl, rectab: RecordList, enum
     let o2: OblList = append_obls<N>(input, o1, cs.obls);
     let o3: OblList = append_obls<N>(input, o2, es.obls);
     let obls: OblList = append_obls<N>(input, o3, ks);
-    return SigRep { sig: Sig { start: sg.name_start, end: sg.name_end, params: ps.binds, nparams: ps.n, result: rs.ty, fx: es.fx, owner: 0, decl_start: sg.name_start, decl_end: sg.name_end }, obls: obls };
+    return SigRep { sig: Sig { start: sg.name_start, end: sg.name_end, params: ps.binds, nparams: ps.n, result: rs.ty, fx: es.fx, identity: invalid_semantic_identity() }, obls: obls };
 }
 record ParamRep { binds: BindList, n: u64, obls: OblList }
 record ParamState { rest: FieldList, binds: BindList, seen: NameList, n: u64, obls: OblList }
@@ -2223,8 +2642,11 @@ enum TOp {
     TInt { value: u64, ty: SemType, start: u64, end: u64 },
     TBool { value: bool, ty: SemType, start: u64, end: u64 },
     TName { ty: SemType, start: u64, end: u64 },
+    TNot { ty: SemType, start: u64, end: u64 },
+    TRepeat { ty: SemType, element: SemType, count: u64, start: u64, end: u64 },
+    TMatch { ty: SemType, subject_ty: SemType, arms: ScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64 },
     TBin { op: u64, ty: SemType, start: u64, end: u64 },
-    TCall { ty: SemType, argc: u64, start: u64, end: u64, ns: u64, ne: u64, owner: u64, decl_start: u64, decl_end: u64 },
+    TCall { ty: SemType, argc: u64, params: BindList, start: u64, end: u64, ns: u64, ne: u64, identity: SemanticIdentity },
     TProj { ty: SemType, fstart: u64, fend: u64, start: u64, end: u64 }
 }
 enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
@@ -2285,10 +2707,76 @@ fn verify_top_one<N: Nat>(input: [byte; up_to N], st: TDepth, h: TOp, t: TOpList
         TInt { value: v, ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
         TBool { value: v, ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
         TName { ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
+        TNot { ty: ty, start: s, end: e } => verify_top_not<N>(input, st, t, ty),
+        TRepeat { ty: ty, element: element, count: count, start: s, end: e } => verify_top_repeat<N>(input, st, t, ty, element, count),
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => verify_top_match<N>(input, st, t, ty, subject_ty, arms, arm_count, default_count),
         TBin { op: o, ty: ty, start: s, end: e } => verify_top_bin<N>(input, st, t, ty),
-        TCall { ty: ty, argc: c, start: s, end: e, ns: ns, ne: ne, owner: owner, decl_start: ds, decl_end: de } => verify_top_call<N>(input, st, t, ty, c),
+        TCall { ty: ty, argc: c, params: params, start: s, end: e, ns: ns, ne: ne, identity: id } => verify_top_call<N>(input, st, t, ty, c),
         TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => verify_top_proj(st, t, ty)
     };
+}
+fn verify_top_repeat<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, element: SemType, count: u64) -> (result: TDepth) {
+    if is_poison(ty) || is_poison(element) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match ty {
+        TSeqExact { element: expected_element, length: length, length_valid: valid } => verify_top_repeat_exact<N>(input, st, t, ty, element, expected_element, length, valid, count),
+        TBool => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TByte => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TInt { width: w, signed: g } => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TNamed { start: s, end: e } => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TSeq => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TPoison => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }
+    };
+}
+fn verify_top_repeat_exact<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, element: SemType, expected_element: SemType, length: u64, valid: bool, count: u64) -> (result: TDepth) {
+    if !(valid) || length != count || !(sem_eq<N>(input, element, expected_element)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match st.stack {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: actual, tail: rest } => verify_top_repeat_value<N>(input, st, t, ty, element, actual, rest)
+    };
+}
+fn verify_top_repeat_value<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, element: SemType, actual: SemType, rest: TyStack) -> (result: TDepth) {
+    if !(sem_eq<N>(input, actual, element)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth, ok: true };
+}
+fn verify_top_match<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: ScalarMatchArmList, arm_count: u64, default_count: u64) -> (result: TDepth) {
+    let count: ScalarMatchCount = scalar_match_count<N>(input, arms);
+    if is_poison(ty) || !(is_int_ty(subject_ty)) || count.n != arm_count || count.defaults != default_count || default_count != 1 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(scalar_match_patterns_ok<N>(input, arms, subject_ty)) || st.depth < arm_count + 1 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    let popped: MatchStackScan = pop_match_values<N>(input, st.stack, arm_count, ty);
+    if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match popped.rest {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: actual_subject, tail: remaining } => verify_top_match_subject<N>(input, st, t, ty, subject_ty, actual_subject, remaining, arm_count)
+    };
+}
+fn verify_top_match_subject<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, actual: SemType, remaining: TyStack, arms: u64) -> (result: TDepth) {
+    if !(is_int_ty(actual)) || !(sem_eq<N>(input, actual, subject_ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: remaining }, depth: st.depth - arms, ok: true };
+}
+record MatchStackScan { rest: TyStack, remaining: u64, ty: SemType, ok: bool }
+fn match_stack_scan_step<N: Nat>(input: [byte; up_to N], st: MatchStackScan) -> (result: MatchStackScan) {
+    if !(st.ok) || st.remaining == 0 { return st; }
+    return match st.rest {
+        WNil => MatchStackScan { ..st, ok: false },
+        WCons { head: actual, tail: rest } => MatchStackScan { rest: rest, remaining: st.remaining - 1, ty: st.ty, ok: sem_eq<N>(input, actual, st.ty) }
+    };
+}
+fn pop_match_values<N: Nat>(input: [byte; up_to N], stack: TyStack, count: u64, ty: SemType) -> (result: MatchStackScan) {
+    iterate i over input carrying d: MatchStackScan = MatchStackScan { rest: stack, remaining: count, ty: ty, ok: true } {
+        next d = match_stack_scan_step<N>(input, d);
+    }
+    return d;
+}
+fn verify_top_not<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
+    if !(sem_eq<N>(input, ty, SemType.TBool)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match st.stack {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: operand, tail: rest } => verify_top_not_operand<N>(input, st, t, ty, operand, rest)
+    };
+}
+fn verify_top_not_operand<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, operand: SemType, rest: TyStack) -> (result: TDepth) {
+    if !(sem_eq<N>(input, operand, SemType.TBool)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth, ok: true };
 }
 fn verify_top_push(st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
     if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
@@ -2366,7 +2854,7 @@ fn sabotage_depth<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
     return flat_ok<N>(input, bad);
 }
 fn sabotage_call_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
-    let bad: TOpList = TOpList.PCons { head: TOp.TCall { ty: SemType.TInt { width: 64, signed: false }, argc: 2, start: 0, end: 1, ns: 0, ne: 1, owner: 0, decl_start: 0, decl_end: 1 }, tail: TOpList.PNil };
+    let bad: TOpList = TOpList.PCons { head: TOp.TCall { ty: SemType.TInt { width: 64, signed: false }, argc: 2, params: BindList.BNil, start: 0, end: 1, ns: 0, ne: 1, identity: invalid_semantic_identity() }, tail: TOpList.PNil };
     return verify_tops<N>(input, bad, ExpTy.XNone);
 }
 fn sabotage_bin_mismatch<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
@@ -2399,6 +2887,9 @@ record SemJob { e: Expr, exp: ExpTy }
 enum JobList { JNil, JCons { head: SemJob, tail: JobList } }
 enum SemKont {
     KTop,
+    KNot { start: u64, end: u64, exp: ExpTy },
+    KRepeat { count: u64, start: u64, end: u64, exp: ExpTy },
+    KMatchArm { remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64 },
     KBinL { op: u64, right: Expr, start: u64, end: u64, exp: ExpTy },
     KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy },
     KCallA { sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy },
@@ -2449,10 +2940,95 @@ fn sem_job<N: Nat>(input: [byte; up_to N], st: SemState, job: SemJob) -> (result
         Name { start: s, end: e } => finish_name<N>(input, st, s, e, job.exp),
         Integer { start: s, end: e, value: v, overflow: o } => finish_int(st, v, s, e, job.exp),
         Boolean { start: s, end: e, value: v } => finish_bool(st, v, s, e, job.exp),
+        UnaryNot { value: value, start: s, end: e } => seed_not(st, value, s, e, job.exp),
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => seed_repeat<N>(input, st, value, cs, ce, ck, s, e, job.exp),
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => seed_scalar_match<N>(input, st, subject, arms, s, e, job.exp),
         Binary { op: o, left: l, right: r, start: s, end: e } => seed_binop(st, o, l, r, s, e, job.exp),
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => seed_call<N>(input, st, ns, ne, a, s, e, job.exp),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => seed_proj(st, b, fs, fe, s, e, job.exp)
     };
+}
+fn seed_scalar_match<N: Nat>(input: [byte; up_to N], st: SemState, subject: Expr, arms: ScalarMatchArmList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => sem_drain(sem_emit(st, 2, start, end, 1)),
+        XSome { ty: result_ty } => seed_scalar_match_subject<N>(input, st, subject, arms, start, end, result_ty)
+    };
+}
+fn seed_scalar_match_subject<N: Nat>(input: [byte; up_to N], st: SemState, subject: Expr, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType) -> (result: SemState) {
+    return match subject {
+        Name { start: ns, end: ne } => seed_scalar_match_name<N>(input, st, arms, start, end, result_ty, ns, ne),
+        Integer { start: s, end: e, value: v, overflow: o } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        Boolean { start: s, end: e, value: v } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        UnaryNot { value: v, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        ScalarMatch { subject: value, arms: nested, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        Binary { op: op, left: l, right: r, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => sem_drain(sem_emit(st, 2, s, e, 1))
+    };
+}
+fn seed_scalar_match_name<N: Nat>(input: [byte; up_to N], st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType, ns: u64, ne: u64) -> (result: SemState) {
+    let subject: LookupRes = env_lookup<N>(input, st.env, ns, ne);
+    if !(subject.found) { return sem_drain(sem_emit(st, 1, ns, ne, 1)); }
+    if !(is_int_ty(subject.ty)) || !(scalar_match_patterns_ok<N>(input, arms, subject.ty)) { return sem_drain(sem_emit(st, 2, start, end, 1)); }
+    let count: ScalarMatchCount = scalar_match_count<N>(input, arms);
+    if count.defaults != 1 || count.n == 0 { return sem_drain(sem_emit(st, 2, start, end, 1)); }
+    let subject_top: TOp = TOp.TName { ty: subject.ty, start: ns, end: ne };
+    let st1: SemState = sem_emit_top(sem_accept(st, subject.ty), subject_top);
+    return seed_scalar_match_arm(st1, arms, arms, subject.ty, result_ty, count.n, count.defaults, start, end);
+}
+fn seed_scalar_match_arm(st: SemState, remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+    return match remaining {
+        MNil => sem_drain(st),
+        MCons { head: arm, tail: rest } => push_scalar_match_job(st, arm.result, rest, all, subject_ty, result_ty, arm_count, default_count, start, end)
+    };
+}
+fn push_scalar_match_job(st: SemState, value: Expr, remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+    let job: SemJob = SemJob { e: value, exp: ExpTy.XSome { ty: result_ty } };
+    let kont: SemKont = SemKont.KMatchArm { remaining: remaining, all: all, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn continue_scalar_match_arm(st: SemState, remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+    return match remaining {
+        MNil => finish_scalar_match(st, all, subject_ty, result_ty, arm_count, default_count, start, end),
+        MCons { head: arm, tail: rest } => push_scalar_match_job(st, arm.result, rest, all, subject_ty, result_ty, arm_count, default_count, start, end)
+    };
+}
+fn finish_scalar_match(st: SemState, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+    let top: TOp = TOp.TMatch { ty: result_ty, subject_ty: subject_ty, arms: all, arm_count: arm_count, default_count: default_count, start: start, end: end };
+    return sem_emit_top(sem_accept(st, result_ty), top);
+}
+fn seed_repeat<N: Nat>(input: [byte; up_to N], st: SemState, value: Expr, count_start: u64, count_end: u64, count_kind: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if count_kind != 5 { return sem_drain(sem_emit(st, 2, count_start, count_end, 1)); }
+    let parsed: IntVal = int_value<N>(input, count_start, count_end);
+    if parsed.overflow { return sem_drain(sem_emit(st, 2, count_start, count_end, 1)); }
+    return seed_repeat_expected<N>(input, st, value, parsed.value, start, end, exp);
+}
+fn seed_repeat_expected<N: Nat>(input: [byte; up_to N], st: SemState, value: Expr, count: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => seed_repeat_job(st, value, count, start, end, exp, ExpTy.XNone),
+        XSome { ty: expected } => seed_repeat_type<N>(input, st, value, count, start, end, exp, expected)
+    };
+}
+fn seed_repeat_type<N: Nat>(input: [byte; up_to N], st: SemState, value: Expr, count: u64, start: u64, end: u64, exp: ExpTy, expected: SemType) -> (result: SemState) {
+    return match expected {
+        TSeqExact { element: element, length: length, length_valid: valid } => seed_repeat_exact(st, value, count, length, valid, element, start, end, exp),
+        TSeq => seed_repeat_job(st, value, count, start, end, exp, ExpTy.XNone),
+        TBool => sem_drain(sem_emit(st, 2, start, end, 1)),
+        TByte => sem_drain(sem_emit(st, 2, start, end, 1)),
+        TInt { width: w, signed: g } => sem_drain(sem_emit(st, 2, start, end, 1)),
+        TNamed { start: s, end: e } => sem_drain(sem_emit(st, 2, start, end, 1)),
+        TPoison => sem_drain(sem_emit(st, 2, start, end, 1))
+    };
+}
+fn seed_repeat_exact(st: SemState, value: Expr, count: u64, length: u64, valid: bool, element: SemType, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if !(valid) || length != count { return sem_drain(sem_emit(st, 2, start, end, 1)); }
+    return seed_repeat_job(st, value, count, start, end, exp, ExpTy.XSome { ty: element });
+}
+fn seed_repeat_job(st: SemState, value: Expr, count: u64, start: u64, end: u64, exp: ExpTy, element_exp: ExpTy) -> (result: SemState) {
+    let job: SemJob = SemJob { e: value, exp: element_exp };
+    let kont: SemKont = SemKont.KRepeat { count: count, start: start, end: end, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
 fn finish_name<N: Nat>(input: [byte; up_to N], st: SemState, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let got: LookupRes = env_lookup<N>(input, st.env, start, end);
@@ -2486,6 +3062,7 @@ fn finish_int_req(st: SemState, value: u64, r: SemType, start: u64, end: u64) ->
         TBool => finish_int_fail(st, value, start, end),
         TNamed { start: n, end: m } => finish_int_fail(st, value, start, end),
         TSeq => finish_int_fail(st, value, start, end),
+        TSeqExact { element: element, length: length, length_valid: valid } => finish_int_fail(st, value, start, end),
         TPoison => finish_int_fail(st, value, start, end)
     };
 }
@@ -2510,6 +3087,7 @@ fn finish_bool_req(st: SemState, value: bool, r: SemType, start: u64, end: u64) 
         TInt { width: w, signed: g } => finish_bool_fail(st, value, start, end),
         TNamed { start: n, end: m } => finish_bool_fail(st, value, start, end),
         TSeq => finish_bool_fail(st, value, start, end),
+        TSeqExact { element: element, length: length, length_valid: valid } => finish_bool_fail(st, value, start, end),
         TPoison => finish_bool_fail(st, value, start, end)
     };
 }
@@ -2528,6 +3106,9 @@ fn is_integer_literal(e: Expr) -> (result: bool) {
         Name { start: s, end: e2 } => false,
         Integer { start: s, end: e2, value: v, overflow: o } => true,
         Boolean { start: s, end: e2, value: v } => false,
+        UnaryNot { value: value, start: s, end: e2 } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e2 } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e2 } => false,
         Binary { op: o, left: l, right: r, start: s, end: e2 } => false,
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: p } => false
@@ -2557,6 +3138,9 @@ fn nonzero_lit(e: Expr) -> (result: bool) {
         Integer { start: s, end: e2, value: v, overflow: o } => nonzero_val(v),
         Name { start: s, end: e2 } => false,
         Boolean { start: s, end: e2, value: v } => false,
+        UnaryNot { value: value, start: s, end: e2 } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e2 } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e2 } => false,
         Binary { op: o, left: l, right: r, start: s, end: e2 } => false,
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: p } => false
@@ -2566,14 +3150,53 @@ fn nonzero_val(v: u64) -> (result: bool) {
     if v == 0 { return false; }
     return true;
 }
+fn apply_repeat<N: Nat>(input: [byte; up_to N], st: SemState, count: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let element: SemType = st.last_ty;
+    if is_poison(element) { return sem_drain(st); }
+    let result_ty: SemType = SemType.TSeqExact { element: element, length: count, length_valid: true };
+    return apply_repeat_expected<N>(input, st, count, start, end, exp, element, result_ty);
+}
+fn apply_repeat_expected<N: Nat>(input: [byte; up_to N], st: SemState, count: u64, start: u64, end: u64, exp: ExpTy, element: SemType, result_ty: SemType) -> (result: SemState) {
+    return match exp {
+        XNone => sem_emit_top(sem_accept(st, result_ty), TOp.TRepeat { ty: result_ty, element: element, count: count, start: start, end: end }),
+        XSome { ty: expected } => apply_repeat_req<N>(input, st, count, start, end, element, result_ty, expected)
+    };
+}
+fn apply_repeat_req<N: Nat>(input: [byte; up_to N], st: SemState, count: u64, start: u64, end: u64, element: SemType, result_ty: SemType, expected: SemType) -> (result: SemState) {
+    if sem_eq<N>(input, result_ty, expected) { return sem_emit_top(sem_accept(st, result_ty), TOp.TRepeat { ty: result_ty, element: element, count: count, start: start, end: end }); }
+    return sem_emit_top(sem_accept(sem_emit(st, 2, start, end, 1), result_ty), TOp.TRepeat { ty: result_ty, element: element, count: count, start: start, end: end });
+}
 fn apply_kont<N: Nat>(input: [byte; up_to N], st: SemState, k: SemKont) -> (result: SemState) {
     return match k {
         KTop => SemState { ..st, top_ty: st.last_ty },
+        KNot { start: s, end: e, exp: x } => apply_not<N>(input, st, s, e, x),
+        KRepeat { count: count, start: s, end: e, exp: x } => apply_repeat<N>(input, st, count, s, e, x),
+        KMatchArm { remaining: remaining, all: all, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, start: s, end: e } => continue_scalar_match_arm(st, remaining, all, subject_ty, result_ty, arm_count, default_count, s, e),
         KBinL { op: o, right: r, start: s, end: e, exp: x } => apply_bin_l(st, o, r, s, e, x),
         KBinR { op: o, lty: l, start: s, end: e, rlit: q, exp: x } => apply_bin_r<N>(input, st, o, l, s, e, q, x),
         KCallA { sig: g, args: a, ptys: p, start: s, end: e, exp: x } => apply_call_a<N>(input, st, g, a, p, s, e, x),
         KProj { fstart: fs, fend: fe, bstart: bs, bend: be, start: s, end: e, exp: x } => apply_proj<N>(input, st, fs, fe, bs, be, s, e, x)
     };
+}
+fn seed_not(st: SemState, value: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let job: SemJob = SemJob { e: value, exp: ExpTy.XSome { ty: SemType.TBool } };
+    let kont: SemKont = SemKont.KNot { start: start, end: end, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_not<N: Nat>(input: [byte; up_to N], st: SemState, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if !(sem_eq<N>(input, st.last_ty, SemType.TBool)) { return sem_drain(sem_emit(st, 7, start, end, 1)); }
+    let top: TOp = TOp.TNot { ty: SemType.TBool, start: start, end: end };
+    return finish_not_exp<N>(input, st, top, start, end, exp);
+}
+fn finish_not_exp<N: Nat>(input: [byte; up_to N], st: SemState, top: TOp, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => sem_emit_top(sem_accept(st, SemType.TBool), top),
+        XSome { ty: want } => finish_not_req<N>(input, st, top, start, end, want)
+    };
+}
+fn finish_not_req<N: Nat>(input: [byte; up_to N], st: SemState, top: TOp, start: u64, end: u64, want: SemType) -> (result: SemState) {
+    if sem_eq<N>(input, want, SemType.TBool) { return sem_emit_top(sem_accept(st, SemType.TBool), top); }
+    return sem_emit_top(sem_accept(sem_emit(st, 4, start, end, 1), SemType.TBool), top);
 }
 fn apply_bin_l(st: SemState, op: u64, right: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let lty: SemType = st.last_ty;
@@ -2626,6 +3249,7 @@ fn arith_int_or_byte(st: SemState, lty: SemType, start: u64, end: u64) -> (resul
         TBool => sem_emit(st, 8, start, end, 1),
         TNamed { start: n, end: m } => sem_emit(st, 8, start, end, 1),
         TSeq => sem_emit(st, 8, start, end, 1),
+        TSeqExact { element: element, length: length, length_valid: valid } => sem_emit(st, 8, start, end, 1),
         TPoison => sem_emit(st, 8, start, end, 1)
     };
 }
@@ -2636,6 +3260,7 @@ fn arith_failed(st: SemState, lty: SemType) -> (result: bool) {
         TBool => true,
         TNamed { start: n, end: m } => true,
         TSeq => true,
+        TSeqExact { element: element, length: length, length_valid: valid } => true,
         TPoison => true
     };
 }
@@ -2658,6 +3283,7 @@ fn finish_bin_cmp(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -> 
         TBool => sem_drain(sem_emit(st, 9, start, end, 1)),
         TNamed { start: n, end: m } => sem_drain(sem_emit(st, 9, start, end, 1)),
         TSeq => sem_drain(sem_emit(st, 9, start, end, 1)),
+        TSeqExact { element: element, length: length, length_valid: valid } => sem_drain(sem_emit(st, 9, start, end, 1)),
         TPoison => sem_drain(sem_emit(st, 9, start, end, 1))
     };
 }
@@ -2672,6 +3298,7 @@ fn finish_bin_shift(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -
         TBool => sem_drain(sem_emit(st, 11, start, end, 1)),
         TNamed { start: n, end: m } => sem_drain(sem_emit(st, 11, start, end, 1)),
         TSeq => sem_drain(sem_emit(st, 11, start, end, 1)),
+        TSeqExact { element: element, length: length, length_valid: valid } => sem_drain(sem_emit(st, 11, start, end, 1)),
         TPoison => sem_drain(sem_emit(st, 11, start, end, 1))
     };
 }
@@ -2679,7 +3306,7 @@ fn finish_bin_shift(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -
 record SigRes { found: bool, sig: Sig }
 record SigScan { rest: SigTab, start: u64, end: u64, found: bool, sig: Sig }
 fn sig_lookup<N: Nat>(input: [byte; up_to N], sigs: SigTab, start: u64, end: u64) -> (result: SigRes) {
-    iterate i over input carrying d: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil, owner: 0, decl_start: 0, decl_end: 0 } } {
+    iterate i over input carrying d: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil, identity: invalid_semantic_identity() } } {
         next d = sig_lookup_step<N>(input, d);
     }
     return SigRes { found: d.found, sig: d.sig };
@@ -2750,6 +3377,9 @@ fn expr_span(e: Expr) -> (result: ExprSpan) {
         Name { start: s, end: e2 } => ExprSpan { start: s, end: e2 },
         Integer { start: s, end: e2, value: v, overflow: o } => ExprSpan { start: s, end: e2 },
         Boolean { start: s, end: e2, value: v } => ExprSpan { start: s, end: e2 },
+        UnaryNot { value: value, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
         Binary { op: o, left: l, right: r, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: ph } => ExprSpan { start: s, end: e2 }
@@ -2850,7 +3480,7 @@ fn finish_call<N: Nat>(input: [byte; up_to N], st: SemState, sig: Sig, start: u6
     return finish_call_res<N>(input, st2, sig, start, end, exp);
 }
 fn finish_call_res<N: Nat>(input: [byte; up_to N], st: SemState, sig: Sig, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
-    let top: TOp = TOp.TCall { ty: sig.result, argc: sig.nparams, start: start, end: end, ns: sig.start, ne: sig.end, owner: sig.owner, decl_start: sig.decl_start, decl_end: sig.decl_end };
+    let top: TOp = TOp.TCall { ty: sig.result, argc: sig.nparams, params: sig.params, start: start, end: end, ns: sig.start, ne: sig.end, identity: sig.identity };
     return match exp {
         XNone => sem_emit_top(sem_accept(st, sig.result), top),
         XSome { ty: r } => finish_call_req<N>(input, st, sig, top, r, start, end)
@@ -2880,6 +3510,7 @@ fn apply_proj<N: Nat>(input: [byte; up_to N], st: SemState, fs: u64, fe: u64, bs
         TByte => sem_drain(sem_emit(st, 23, bs, be, 1)),
         TInt { width: w, signed: g } => sem_drain(sem_emit(st, 23, bs, be, 1)),
         TSeq => sem_drain(sem_emit(st, 23, bs, be, 1)),
+        TSeqExact { element: element, length: length, length_valid: valid } => sem_drain(sem_emit(st, 23, bs, be, 1)),
         TPoison => sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end })
     };
 }
@@ -3167,6 +3798,9 @@ fn prove_return_val<N: Nat>(input: [byte; up_to N], st: StmtWalk, v: Expr, t: St
         Name { start: ns, end: ne } => prove_return_name<N>(input, st, t, ns, ne, qs, qe),
         Integer { start: s, end: e2, value: vv, overflow: o } => prove_return_expr<N>(input, st, v, t, qs, qe),
         Boolean { start: s, end: e2, value: vv } => prove_return_expr<N>(input, st, v, t, qs, qe),
+        UnaryNot { value: value, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
         Binary { op: o, left: l, right: r, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: ph } => prove_return_expr<N>(input, st, v, t, qs, qe)
@@ -3411,7 +4045,8 @@ fn prove_parsed_unit<N: Nat>(input: [byte; up_to N], u: Unit, imported: SigTab) 
         return UnitProve { ok: false, err_start: dup.start, err_end: dup.end, unit: u, obls: obl, tops: TopsList.TLNil, fn_count: 0 };
     }
     let sigs: SigTabRep = collect_sigtab<N>(input, u.fns, u.records, u.enums);
-    let all_sigs: SigTab = merge_sig_tables<N>(input, sigs.tab, imported);
+    let local_sigs: SigTab = bind_local_callable_identities<N>(input, u.header, sigs.tab);
+    let all_sigs: SigTab = merge_sig_tables<N>(input, local_sigs, imported);
     let done: BodyWalk = prove_bodies<N>(input, BodyWalk { rest: u.fns, tab: all_sigs, rectab: u.records, enumtab: u.enums, total: total, obls: sigs.obls, tops: TopsList.TLNil, ok: true, n: 0 });
     let ok: bool = close_and(done.ok, !(obl_has_fail<N>(input, done.obls)));
     return UnitProve { ok: ok, err_start: 0, err_end: 0, unit: u, obls: done.obls, tops: done.tops, fn_count: done.n };
@@ -3448,6 +4083,7 @@ fn check_named_field_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, 
         TByte => OblList.LNil,
         TInt { width: w, signed: g } => OblList.LNil,
         TSeq => OblList.LNil,
+        TSeqExact { element: element, length: length, length_valid: valid } => OblList.LNil,
         TPoison => OblList.LNil
     };
 }
@@ -3458,7 +4094,7 @@ fn check_declared_field_type<N: Nat>(input: [byte; up_to N], start: u64, end: u6
 }
 fn check_seq_field_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
     if ctx == 2 { return ctx_field_obl(30, start, end); }
-    let inner: TyRes = resolve_seq_type<N>(input, start, end, rectab, enumtab);
+    let inner: TyRes = resolve_seq_type<N>(input, 7, start, end, rectab, enumtab);
     if inner.ok { return OblList.LNil; }
     return ctx_field_obl(kind_ctx_other(ctx), start, end);
 }

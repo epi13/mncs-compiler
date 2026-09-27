@@ -60,3 +60,15 @@ decision that one-pass-with-no-ops is the intended compiler style.
 ## Current reconciliation (2026-09-25)
 
 Current Stage-0 rejects the preserved while-loop reproduction with MNP106 (+ parser cascades). The compiler continues to use bounded traversal; no upstream change was made because the new flow workload did not require while.
+
+## Current execution check (2026-09-26)
+
+The locked Stage-0 pressure suite still reports MNP106 for the preserved
+unbounded-scan source. Frontend and segment differentials now run through
+retained Cranelift with one native step per request, but those wall times do not
+measure the interpreter no-op loop cost described here. The pressure remains
+relevant to later larger-source work; its interpreter scaling is UNKNOWN in
+this campaign. See
+[`campaign-20260926-pressure-suite-results.json`](../evidence/campaign-20260926-pressure-suite-results.json),
+[`campaign-20260926-frontend-results.json`](../evidence/campaign-20260926-frontend-results.json),
+and [`campaign-20260926-segment-results.json`](../evidence/campaign-20260926-segment-results.json).

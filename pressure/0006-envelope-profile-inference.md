@@ -46,3 +46,13 @@ language change needed; this stays a Stage-0 tooling agreement issue.
 ## Current reconciliation (2026-09-25)
 
 The current pinned CLI still emits MNE002 for the preserved leading-comment envelope case. This is Stage-0 tooling/envelope behavior.
+
+## Current execution check (2026-09-26)
+
+The locked CLI still emits MNE002 for `leading-comment-envelope.mncs`. The
+native header parser independently preserves the comment/header spans, while
+the suite does not claim full-program acceptance where Stage-0 discards its
+AST on this envelope error. This remains a reference-tooling behavior, not a
+reason to make the native parser reject a header it can inspect. See
+[`campaign-20260926-pressure-suite-results.json`](../evidence/campaign-20260926-pressure-suite-results.json)
+and [`campaign-20260926-frontend-results.json`](../evidence/campaign-20260926-frontend-results.json).

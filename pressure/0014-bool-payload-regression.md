@@ -2,7 +2,7 @@
 
 ID: CP-0014
 
-Status: resolved upstream in mncs-language 709ba008
+Status: resolved upstream in mncs-language; revalidated at 843c5bc
 
 > Historical description and reproductions below preserve the original
 > finding. See the current reconciliation at the end of this file and the
@@ -167,3 +167,13 @@ language
 ## Current reconciliation (2026-09-25)
 
 Current Stage-0 accepts the preserved bool-payload reproduction under profile 0.18. The generic language regression tests and compiler integration case are in `mncs-language` commit 709ba00810099e6965bb47dec14ed19e9e1ae6f8.
+
+## Current compiler verification (2026-09-26)
+
+At the locked Stage-0 revision `843c5bcca7476bb6600218f6410a3da7ef5d96d5`,
+`mncs abi pressure/repro/bool-payload.mncs` exits 0 with no diagnostics.
+Current declaration and semantic proof differentials also pass twice through
+the retained probe. See
+[`campaign-20260926-cp0014-results.json`](../evidence/campaign-20260926-cp0014-results.json),
+[`campaign-20260926-declaration-results.json`](../evidence/campaign-20260926-declaration-results.json),
+and [`campaign-20260926-semantic-results.json`](../evidence/campaign-20260926-semantic-results.json).

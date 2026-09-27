@@ -1,0 +1,283 @@
+{
+  "evidence": [
+    {
+      "definition_identity": "3ffca1742998a4dbed67c7f4e0abf00e4a2a13b4e0cc4bed9bce4c7f92c7701e",
+      "evidence_file": "evidence/campaign-20260926-project-results.json",
+      "evidence_identity": "sha256:d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c",
+      "evidence_sha256": "d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c",
+      "obligation_identity": "mncs-compiler.project-source-differential",
+      "status": "PASS",
+      "subject_fingerprint": "dc28c9961c29abcada500a72db37385ddc39b9e7789efd146b4cc14a95075ddc",
+      "subject_identity": "mncs:0.2:program:mncs.compiler.project.v1"
+    },
+    {
+      "definition_identity": "3ffca1742998a4dbed67c7f4e0abf00e4a2a13b4e0cc4bed9bce4c7f92c7701e",
+      "evidence_file": "evidence/campaign-20260926-project-results.json",
+      "evidence_identity": "sha256:d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c",
+      "evidence_sha256": "d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c",
+      "obligation_identity": "mncs-compiler.value-ssa-differential",
+      "status": "PASS",
+      "subject_fingerprint": "dc28c9961c29abcada500a72db37385ddc39b9e7789efd146b4cc14a95075ddc",
+      "subject_identity": "mncs:0.2:program:mncs.compiler.project.v1"
+    },
+    {
+      "definition_identity": "3ffca1742998a4dbed67c7f4e0abf00e4a2a13b4e0cc4bed9bce4c7f92c7701e",
+      "evidence_file": "evidence/campaign-20260926-project-results.json",
+      "evidence_identity": "sha256:d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c",
+      "evidence_sha256": "d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c",
+      "obligation_identity": "mncs-compiler.value-ssa-differential",
+      "status": "PASS",
+      "subject_fingerprint": "2e5124a4d36f4ff4c3547a1149179d62c932f22a435a5178b262dc27908dc826",
+      "subject_identity": "mncs:0.2:program:mncs.compiler.ssa.v1"
+    },
+    {
+      "definition_identity": "3ffca1742998a4dbed67c7f4e0abf00e4a2a13b4e0cc4bed9bce4c7f92c7701e",
+      "evidence_file": "evidence/campaign-20260926-profile-surface-results.json",
+      "evidence_identity": "sha256:9b95e2b5000a0d7f877670679edd1b2d1a3296be791459cb93f1fa95b81f8c3c",
+      "evidence_sha256": "9b95e2b5000a0d7f877670679edd1b2d1a3296be791459cb93f1fa95b81f8c3c",
+      "obligation_identity": "mncs-compiler.profile-018-syntax",
+      "status": "PASS",
+      "subject_fingerprint": "5fec569bd0f31fa2e8efad3328836868572a3c04c3f626f00d70409f837b977d",
+      "subject_identity": "mncs:0.2:program:mncs.compiler.decl.v1"
+    }
+  ],
+  "excluded": [
+    {
+      "identity": "mncs-compiler.frontend-differential",
+      "lifecycle": "permanent",
+      "reason": "no compiler-owned subject, dependency, or guarantee-domain intersection"
+    },
+    {
+      "identity": "mncs-compiler.segment-differential",
+      "lifecycle": "permanent",
+      "reason": "no compiler-owned subject, dependency, or guarantee-domain intersection"
+    },
+    {
+      "identity": "mncs-compiler.value-ssa-differential",
+      "lifecycle": "permanent",
+      "reason": "no compiler-owned subject, dependency, or guarantee-domain intersection"
+    },
+    {
+      "identity": "mncs-compiler.production-calls",
+      "lifecycle": "permanent",
+      "reason": "no compiler-owned subject, dependency, or guarantee-domain intersection"
+    },
+    {
+      "identity": "mncs-compiler.bootstrap-integrity",
+      "lifecycle": "permanent",
+      "reason": "no compiler-owned subject, dependency, or guarantee-domain intersection"
+    }
+  ],
+  "impact": {
+    "change_kinds": [
+      "private_implementation"
+    ],
+    "guarantee_domains": [
+      "compiler",
+      "runtime",
+      "semantic"
+    ],
+    "roots": [
+      "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit",
+      "mncs:0.2:function:mncs.compiler.decl.v1::prove_unit"
+    ]
+  },
+  "impact_identity": "4b7c851ddc249e3b5574383de03f696b23610708f8311b1bf18aa30da5ea157f",
+  "inventory": {
+    "identity": "3ffca1742998a4dbed67c7f4e0abf00e4a2a13b4e0cc4bed9bce4c7f92c7701e",
+    "repository": "mncs-compiler",
+    "revision": 8
+  },
+  "obligation_plan_id": "0a17925134d157dddfdd2197ee58524a64a24355403af05e667c5d801fef0c05",
+  "obligations": [
+    {
+      "evidence_identities": [],
+      "evidence_role": "differential_oracle",
+      "executor": {
+        "argv": [
+          "python3",
+          "tools/test_decl.py"
+        ],
+        "declaration_identities": [],
+        "entrypoint": "python3 tools/test_decl.py",
+        "kind": "external_integration",
+        "library_paths": [],
+        "provider": "mncs-compiler",
+        "source_paths": [],
+        "test_case_identities": [],
+        "timeout_seconds": 1800,
+        "working_directory": "."
+      },
+      "guarantee_domain": "semantic",
+      "identity": "mncs-compiler.declaration-differential",
+      "lifecycle": "permanent",
+      "reason": "no identity-bound evidence is available",
+      "scope": "repository_canonical",
+      "status": "new_execution_required",
+      "test_case_identities": []
+    },
+    {
+      "evidence_identities": [],
+      "evidence_role": "differential_oracle",
+      "executor": {
+        "argv": [
+          "python3",
+          "tools/test_sem.py"
+        ],
+        "declaration_identities": [],
+        "entrypoint": "python3 tools/test_sem.py",
+        "kind": "external_integration",
+        "library_paths": [],
+        "provider": "mncs-compiler",
+        "source_paths": [],
+        "test_case_identities": [],
+        "timeout_seconds": 3600,
+        "working_directory": "."
+      },
+      "guarantee_domain": "type_system",
+      "identity": "mncs-compiler.semantic-proof-differential",
+      "lifecycle": "permanent",
+      "reason": "no identity-bound evidence is available",
+      "scope": "repository_canonical",
+      "status": "new_execution_required",
+      "test_case_identities": []
+    },
+    {
+      "evidence_identities": [],
+      "evidence_role": "differential_oracle",
+      "executor": {
+        "argv": [
+          "python3",
+          "tools/test_flow.py"
+        ],
+        "declaration_identities": [],
+        "entrypoint": "python3 tools/test_flow.py",
+        "kind": "external_integration",
+        "library_paths": [],
+        "provider": "mncs-compiler",
+        "source_paths": [],
+        "test_case_identities": [],
+        "timeout_seconds": 3600,
+        "working_directory": "."
+      },
+      "guarantee_domain": "semantic",
+      "identity": "mncs-compiler.flow-cfg-differential",
+      "lifecycle": "permanent",
+      "reason": "no identity-bound evidence is available",
+      "scope": "repository_canonical",
+      "status": "new_execution_required",
+      "test_case_identities": []
+    },
+    {
+      "evidence_identities": [
+        "sha256:d9d733e734c5929088b6d163627e14148e8164c1ed2366494f256dc6b84e750c"
+      ],
+      "evidence_role": "differential_oracle",
+      "executor": {
+        "argv": [
+          "python3",
+          "tools/test_project.py"
+        ],
+        "declaration_identities": [],
+        "entrypoint": "python3 tools/test_project.py",
+        "kind": "external_integration",
+        "library_paths": [],
+        "provider": "mncs-compiler",
+        "source_paths": [],
+        "test_case_identities": [],
+        "timeout_seconds": 900,
+        "working_directory": "."
+      },
+      "guarantee_domain": "semantic",
+      "identity": "mncs-compiler.project-source-differential",
+      "lifecycle": "permanent",
+      "reason": "evidence exists but its subject or definition identity is stale",
+      "scope": "repository_canonical",
+      "status": "stale",
+      "test_case_identities": []
+    },
+    {
+      "evidence_identities": [],
+      "evidence_role": "pressure_reproducer",
+      "executor": {
+        "argv": [
+          "python3",
+          "tools/test_pressure.py"
+        ],
+        "declaration_identities": [],
+        "entrypoint": "python3 tools/test_pressure.py",
+        "kind": "external_integration",
+        "library_paths": [],
+        "provider": "mncs-compiler",
+        "source_paths": [],
+        "test_case_identities": [],
+        "timeout_seconds": 900,
+        "working_directory": "."
+      },
+      "guarantee_domain": "compiler",
+      "identity": "mncs-compiler.pressure-reproductions",
+      "lifecycle": "permanent",
+      "reason": "no identity-bound evidence is available",
+      "scope": "repository_canonical",
+      "status": "new_execution_required",
+      "test_case_identities": []
+    },
+    {
+      "evidence_identities": [
+        "sha256:9b95e2b5000a0d7f877670679edd1b2d1a3296be791459cb93f1fa95b81f8c3c"
+      ],
+      "evidence_role": "differential_oracle",
+      "executor": {
+        "argv": [
+          "python3",
+          "tools/revalidate_profile_surface.py"
+        ],
+        "declaration_identities": [],
+        "entrypoint": "python3 tools/revalidate_profile_surface.py",
+        "kind": "external_integration",
+        "library_paths": [],
+        "provider": "mncs-compiler",
+        "source_paths": [],
+        "test_case_identities": [],
+        "timeout_seconds": 900,
+        "working_directory": "."
+      },
+      "guarantee_domain": "parser_front_end",
+      "identity": "mncs-compiler.profile-018-syntax",
+      "lifecycle": "permanent",
+      "reason": "current identity-bound PASS evidence can be reused",
+      "scope": "repository_canonical",
+      "status": "current",
+      "test_case_identities": []
+    }
+  ],
+  "schema_version": "mncs.verification-obligation-plan/1",
+  "source": {
+    "path": "/home/epi13/Documents/Projects/.worktrees/compiler-value-ssa-20260926/mncs-compiler/src/compiler/decl.mncs",
+    "sha256": "d705d66e4bed9ad8b04247e417bac01d81f52029c8613dac7479191257b799cf"
+  },
+  "stop": {
+    "boundary": "direct_dependents",
+    "escalation_reasons": [
+      "direct_dependents_affected",
+      "evidence_stale"
+    ],
+    "new_execution_required": [
+      "mncs-compiler.declaration-differential",
+      "mncs-compiler.semantic-proof-differential",
+      "mncs-compiler.flow-cfg-differential",
+      "mncs-compiler.project-source-differential",
+      "mncs-compiler.pressure-reproductions"
+    ],
+    "required_obligation_identities": [
+      "mncs-compiler.declaration-differential",
+      "mncs-compiler.semantic-proof-differential",
+      "mncs-compiler.flow-cfg-differential",
+      "mncs-compiler.project-source-differential",
+      "mncs-compiler.pressure-reproductions",
+      "mncs-compiler.profile-018-syntax"
+    ],
+    "sufficient_to_stop": false
+  },
+  "verification_plan_id": "b10e48e76b9986d8fd9db52ffb6cce81f8a06e99faab0c9ad79f50535911ac7b"
+}

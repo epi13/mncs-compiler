@@ -5,9 +5,11 @@ from pathlib import Path
 import os
 import subprocess
 import time
+from datetime import datetime, timezone
 
 os.chdir(Path(__file__).resolve().parents[1])
 ROOT = Path.cwd()
+CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", datetime.now(timezone.utc).strftime("%Y%m%d"))
 BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 LOCK = json.loads((ROOT / 'mncs-language.lock.json').read_text())
 started = time.monotonic()
@@ -31,6 +33,6 @@ report = {
     'scope': 'pinned diagnostic pressure reproductions plus one supported record-sequence control',
     'results': results,
 }
-target = ROOT / 'evidence/campaign-20260925-pressure-suite-results.json'
+target = ROOT / f'evidence/campaign-{CAMPAIGN_ID}-pressure-suite-results.json'
 target.write_text(json.dumps(report, indent=2) + '\n')
 print('Four expected rejection probes and one supported control passed.')

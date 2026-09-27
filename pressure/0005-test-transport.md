@@ -43,3 +43,12 @@ Likely ownership: tooling and compiler test architecture.
 ## Current reconciliation (2026-09-25)
 
 The current Stage-0 probe reuses compiled modules and retained execution sessions, but Python still transports requests and oracle facts. This remains removable tooling, not production compiler semantics.
+
+## Current execution check (2026-09-26)
+
+The frontend, segment, declaration, proof, CFG, project, and SSA suites ran
+against retained Cranelift sessions while the Rust probe supplied reference
+facts. Python still builds requests and compares results, so the transport
+workaround remains. This campaign verifies the transport is usable and bounded;
+it does not remove it. See
+[`campaign-20260926-execution-summary.json`](../evidence/campaign-20260926-execution-summary.json).

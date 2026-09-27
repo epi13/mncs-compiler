@@ -52,12 +52,12 @@ fn main() {
     // without this adapter; then both paths can be retired.
     let include_flow = wanted
         .as_ref()
-        .is_some_and(|names| names.iter().any(|name| name == "flow"));
+        .is_some_and(|names| names.iter().any(|name| matches!(name.as_str(), "flow" | "ssa" | "project")));
     let mut sources = Sources(BTreeMap::new());
     for file in [
-        "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "project",
+        "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "ssa", "project",
     ] {
-        if matches!(file, "flow" | "project") && !include_flow {
+        if matches!(file, "flow" | "ssa" | "project") && !include_flow {
             continue;
         }
         if let Some(names) = &wanted {
