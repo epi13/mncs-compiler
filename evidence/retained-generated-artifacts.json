@@ -1,0 +1,57 @@
+{
+  "schema_version": "mncs.compiler.generated-artifact-retention/1",
+  "policy": {
+    "checked_in": "small results, identities, hashes, provenance, and reproduction instructions",
+    "session_or_build_storage": "full wire facts, SSA dumps, and intermediate compiler payloads",
+    "historical_retrieval": "the exact original blobs remain reachable from their provenance commit; no history was rewritten",
+    "exact_blob_command": "git show ebd00fe57ed59285a3f39597fe5b74f9d17f8365:<repository-path> > <destination>",
+    "reproduction": "run tools/test_imported_nominal_ssa.py from the selected compiler checkout with the listed fixture and mode, using the Environment-selected Language and Stage-0 tools; generated facts are written under MNCS_ENV_SESSION_ARTIFACT_DIR or the ignored .build/campaign-artifacts directory"
+  },
+  "provenance_commit": "ebd00fe57ed59285a3f39597fe5b74f9d17f8365",
+  "artifacts": [
+    {
+      "path": "evidence/campaign-20260927-effects-imported-nominal-resolved-facts.json",
+      "bytes": 8440634,
+      "sha256": "398d9330cae20debf3dd0fb50af045897400c60de2f46ef9213d3093ce20272f",
+      "fixture": "effects",
+      "mode": "all",
+      "compiler_source_sha256": "bc60383ca342a8eb7b7a015bb640ec0a0115a24508bff83b4aa610dab9e51d89",
+      "fixture_sha256": "5dea7f4936fd3ae119bf15eef1cfcbec4fb8aacd353f9308ccc07e67c9b72e83",
+      "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+      "reproduction_command": "MNCS_CAMPAIGN_ID=20260927 MNCS_IMPORTED_NOMINAL_FIXTURE=effects MNCS_IMPORTED_NOMINAL_MODE=all python tools/test_imported_nominal_ssa.py"
+    },
+    {
+      "path": "evidence/campaign-20260927-effects-native-ssa.json",
+      "bytes": 2559925,
+      "sha256": "5d749d1d067881206b5186251e3c8693687955cad6a021b5cf00d154b7876a96",
+      "fixture": "effects",
+      "mode": "all",
+      "compiler_source_sha256": "bc60383ca342a8eb7b7a015bb640ec0a0115a24508bff83b4aa610dab9e51d89",
+      "fixture_sha256": "5dea7f4936fd3ae119bf15eef1cfcbec4fb8aacd353f9308ccc07e67c9b72e83",
+      "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+      "reproduction_command": "MNCS_CAMPAIGN_ID=20260927 MNCS_IMPORTED_NOMINAL_FIXTURE=effects MNCS_IMPORTED_NOMINAL_MODE=all python tools/test_imported_nominal_ssa.py"
+    },
+    {
+      "path": "evidence/campaign-20260927-imported-nominal-resolved-facts.json",
+      "bytes": 3003265,
+      "sha256": "d543221837bfd11fba0e4394efa3ab5f69e73bebec7bebd42e18191cdce7e8e8",
+      "fixture": "record",
+      "mode": "all",
+      "compiler_source_sha256": "cac653e968ff67de46458fb4056c80c9817864e10f28c27c3164f9f2380cf7fd",
+      "fixture_sha256": "fd554f52a62f69cb928ed260f725b4bdeeb18a2f41423389a881c8dc272cbeb4",
+      "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+      "reproduction_command": "MNCS_CAMPAIGN_ID=20260927 MNCS_IMPORTED_NOMINAL_FIXTURE=record MNCS_IMPORTED_NOMINAL_MODE=all python tools/test_imported_nominal_ssa.py"
+    },
+    {
+      "path": "evidence/campaign-20260927-nested-imported-nominal-resolved-facts.json",
+      "bytes": 3772749,
+      "sha256": "43d7030328b9903a815b702cb975c325bf148d61b8bb4d5af235d7c9e07fcea8",
+      "fixture": "nested",
+      "mode": "all",
+      "compiler_source_sha256": "cac653e968ff67de46458fb4056c80c9817864e10f28c27c3164f9f2380cf7fd",
+      "fixture_sha256": "d6f7591f33e565df719cdcbc45301cf4722b5e511d0b8e2576eade836e286a2b",
+      "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+      "reproduction_command": "MNCS_CAMPAIGN_ID=20260927 MNCS_IMPORTED_NOMINAL_FIXTURE=nested MNCS_IMPORTED_NOMINAL_MODE=all python tools/test_imported_nominal_ssa.py"
+    }
+  ]
+}

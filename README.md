@@ -107,3 +107,7 @@ Rust then becomes a frozen Stage-0/reference implementation rather than an indep
 - `mncs-memory`: adaptive historical knowledge, never semantic truth.
 
 See `ARCHITECTURE.md` and the RFCs for the detailed design.
+
+## Generated evidence retention
+
+Commit compact evidence summaries and manifests with source, fixture, compiler, and Stage-0 identities. Keep full resolved-fact wires, SSA dumps, and intermediate payloads in the Environment session artifact store or ignored `.build/campaign-artifacts` directory. The manifest at `evidence/retained-generated-artifacts.json` records the four historical 2026-09-27 payloads, their hashes, and commands for retrieving the exact original blobs from their provenance commit. Their removal from the current tree does not rewrite Git history or remove the audit path.
