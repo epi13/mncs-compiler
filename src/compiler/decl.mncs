@@ -2991,8 +2991,7 @@ fn canonical_finite_type_identity<N: Nat>(input: [byte; up_to N], module_start: 
 record IdentityBytesScan { identity: SemanticIdentity, offset: u64, build: SemanticIdentityBuild }
 fn append_identity_component_step(st: IdentityBytesScan) -> (result: IdentityBytesScan) {
     if !(st.build.valid) || st.offset >= st.identity.len { return st; }
-    let identity: SemanticIdentity = st.identity;
-    let component: byte = identity.bytes[st.offset];
+    let component: byte = st.identity.bytes[st.offset];
     let build: SemanticIdentityBuild = identity_component_byte(st.build, component);
     return IdentityBytesScan { ..st, offset: st.offset + 1, build: build };
 }

@@ -11,15 +11,28 @@ export CARGO_PROFILE_RELEASE_DEBUG="${CARGO_PROFILE_RELEASE_DEBUG:-0}"
 export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
 revision=$(python3 -c 'import json; print(json.load(open("mncs-language.lock.json"))["revision"])')
 target_dir="${MNCS_BOOTSTRAP_TARGET_DIR:-$PWD/.bootstrap/target}"
+extract_locked_source() {
+    local destination="$1"
+    local selected_source="${MNCS_LANGUAGE_ROOT:-}"
+    if [[ -n "$selected_source" && -f "$selected_source/Cargo.toml" ]]; then
+        if git -C "$selected_source" cat-file -e "${revision}^{commit}" 2>/dev/null; then
+            mkdir -p "$destination"
+            git -C "$selected_source" archive "$revision" | tar -x -C "$destination"
+            printf '%s\n' "$revision" > "$destination/revision"
+            return
+        fi
+    fi
+    curl --fail --location "https://api.github.com/repos/epi13/mncs-language/tarball/$revision" -o "$destination/stage0.tar.gz"
+    tar -xzf "$destination/stage0.tar.gz" --strip-components=1 -C "$destination"
+    printf '%s\n' "$revision" > "$destination/revision"
+}
 if [[ ! -f .bootstrap/revision ]]; then
     if [[ -e .bootstrap/Cargo.toml ]]; then
         echo 'Unmarked Stage-0 tree: remove .bootstrap and rerun to establish the pin.' >&2
         exit 1
     fi
     mkdir -p .bootstrap
-    curl --fail --location "https://api.github.com/repos/epi13/mncs-language/tarball/$revision" -o .bootstrap/stage0.tar.gz
-    tar -xzf .bootstrap/stage0.tar.gz --strip-components=1 -C .bootstrap
-    printf '%s\n' "$revision" > .bootstrap/revision
+    extract_locked_source .bootstrap
 fi
 current_revision=$(cat .bootstrap/revision)
 if [[ "$current_revision" != "$revision" ]]; then
@@ -37,9 +50,7 @@ if [[ "$current_revision" != "$revision" ]]; then
             exit 1
         fi
         mkdir -p "$refreshed"
-        curl --fail --location "https://api.github.com/repos/epi13/mncs-language/tarball/$revision" -o "$refreshed/stage0.tar.gz"
-        tar -xzf "$refreshed/stage0.tar.gz" --strip-components=1 -C "$refreshed"
-        printf '%s\n' "$revision" > "$refreshed/revision"
+        extract_locked_source "$refreshed"
     fi
     previous="$stage_root/$current_revision"
     if [[ -e "$previous" ]]; then

@@ -33,6 +33,8 @@ report = {
     'scope': 'pinned diagnostic pressure reproductions plus one supported record-sequence control',
     'results': results,
 }
-target = ROOT / f'evidence/campaign-{CAMPAIGN_ID}-pressure-suite-results.json'
+artifact_root = Path(os.environ.get('MNCS_ENV_SESSION_ARTIFACT_DIR', ROOT / 'evidence'))
+artifact_root.mkdir(parents=True, exist_ok=True)
+target = artifact_root / f'campaign-{CAMPAIGN_ID}-pressure-suite-results.json'
 target.write_text(json.dumps(report, indent=2) + '\n')
 print('Four expected rejection probes and one supported control passed.')

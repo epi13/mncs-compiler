@@ -740,7 +740,7 @@ def run():
             )
             nominal_types = (
                 "mncs 0.18; module demo.nominal; use demo.nominal_leaf as inner; "
-                "record Outer { inner: inner.Inner; entries: [inner.Inner; 2] } "
+                "record Outer { inner: inner.Inner, entries: [inner.Inner; 2] } "
                 "fn echo_record(value: Outer) -> (r: Outer) { let copy: Outer = value; return copy; } "
                 "fn echo_inner(value: inner.Inner) -> (r: inner.Inner) { return value; } "
                 "fn echo_batch(value: [inner.Inner; 2]) -> (r: [inner.Inner; 2]) { return value; } "
@@ -874,6 +874,8 @@ if __name__ == "__main__":
         },
         **result,
     }
-    out = ROOT / "evidence" / f"campaign-{CAMPAIGN_ID}-project-results.json"
+    artifact_root = Path(os.environ.get("MNCS_ENV_SESSION_ARTIFACT_DIR", ROOT / "evidence"))
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    out = artifact_root / f"campaign-{CAMPAIGN_ID}-project-results.json"
     out.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
