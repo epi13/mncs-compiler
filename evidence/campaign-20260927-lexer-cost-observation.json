@@ -1,0 +1,45 @@
+{
+  "schema": "commons.mncs.dev/family-pressure-observation/v1",
+  "version": "1",
+  "kind": "verification",
+  "pressureId": "MNCS-COMPILER-0D3D67141BA4",
+  "repository": "mncs-compiler",
+  "agent": null,
+  "runId": null,
+  "observedAt": "2026-09-27T17:53:36Z",
+  "languageProfile": "0.18",
+  "compiler": {
+    "mncs-compiler": "5e43e5b6a2d390b37b611809a6ec91a3e3ec47dc",
+    "mncs-language": "843c5bcca7476bb6600218f6410a3da7ef5d96d5"
+  },
+  "reproduction": {
+    "status": "PASS",
+    "instructions": "Run the Environment-bound imported-nominal SSA differential with a 100000 native step budget and reference interpreter."
+  },
+  "evidence": [
+    {
+      "id": "campaign-20260927-imported-nominal-budget-probe.json",
+      "status": "PASS"
+    },
+    {
+      "id": "evidence/campaign-20260927-lexer-smoke-results.json",
+      "status": "PASS"
+    },
+    {
+      "id": "imported-nominal-verified-ssa",
+      "status": "UNKNOWN"
+    }
+  ],
+  "sourceRef": {
+    "repository": "mncs-compiler",
+    "ref": "evidence/campaign-20260927-imported-nominal-budget-probe.json",
+    "scope": "compiler-value-ssa-20260927"
+  },
+  "metadata": {
+    "classification": "STILL_REPRODUCES",
+    "currentValidation": true,
+    "owner": "mncs-compiler",
+    "remainingGap": "The 100000-step imported nominal project probe still exhausts before proof or SSA, at lexer.next_token::seqlen. The focused lexical smoke passes, but full project execution cost and nominal SSA remain unverified. Cold Cranelift execution-status initialization exceeded the 75-second capability timeout."
+  },
+  "summary": "The compiler cursor-scan pressure still reproduces. A bounded imported nominal project call exhausted its 100000-step budget after 8.644326 seconds at mncs.compiler.lexer.v1::next_token::seqlen; no semantic proof or value SSA result was returned. The Environment-bound lexical smoke passed against pinned Stage-0 revision 843c5bcca7476bb6600218f6410a3da7ef5d96d5 with 63 requests and 76355 steps. The existing pressure remains unresolved."
+}

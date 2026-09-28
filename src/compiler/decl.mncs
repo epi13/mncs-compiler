@@ -107,11 +107,22 @@ enum CallSiteList { CNil, CCons { head: CallSite, tail: CallSiteList } }
 record CallSiteRev { rest: CallSiteList, acc: CallSiteList }
 record CallWalk { fns: FnList, stmts: StmtList, exprs: ExprList, calls: CallSiteList }
 
+fn call_site_list_empty(calls: CallSiteList) -> (result: bool) {
+    return match calls { CNil => true, CCons { head: head, tail: tail } => false };
+}
+fn call_walk_done(st: CallWalk) -> (result: bool) {
+    return declared_fn_list_empty(st.fns) && stmt_list_empty(st.stmts) && expr_list_empty(st.exprs);
+}
 fn collect_call_sites<N: Nat>(input: [byte; up_to N], fns: FnList) -> (result: CallSiteList) {
     iterate i over input carrying st: CallWalk = CallWalk { fns: fns, stmts: StmtList.SNil, exprs: ExprList.ENil, calls: CallSiteList.CNil } {
+        if call_walk_done(st) { return reverse_call_sites<N>(input, st.calls); }
         next st = collect_call_step<N>(input, st);
     }
-    iterate i over input carrying rev: CallSiteRev = CallSiteRev { rest: st.calls, acc: CallSiteList.CNil } {
+    return reverse_call_sites<N>(input, st.calls);
+}
+fn reverse_call_sites<N: Nat>(input: [byte; up_to N], calls: CallSiteList) -> (result: CallSiteList) {
+    iterate i over input carrying rev: CallSiteRev = CallSiteRev { rest: calls, acc: CallSiteList.CNil } {
+        if call_site_list_empty(rev.rest) { return rev.acc; }
         next rev = collect_call_reverse(rev);
     }
     return rev.acc;
@@ -397,8 +408,54 @@ fn scalar_match_underscore<N: Nat>(input: [byte; up_to N], start: u64, end: u64)
 fn scalar_match_value<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
     return parse_expr_base<N>(input, cursor, profile_013);
 }
+fn scalar_match_arms_empty(list: ScalarMatchArmList) -> (result: bool) {
+    return match list { MNil => true, MCons { head: head, tail: tail } => false };
+}
+fn expr_list_empty(list: ExprList) -> (result: bool) {
+    return match list { ENil => true, ECons { head: head, tail: tail } => false };
+}
+fn variant_list_empty(list: VariantList) -> (result: bool) {
+    return match list { VNil => true, VCons { head: head, tail: tail } => false };
+}
+fn stmt_list_empty(list: StmtList) -> (result: bool) {
+    return match list { SNil => true, SCons { head: head, tail: tail } => false };
+}
+fn clause_list_empty(list: ClauseList) -> (result: bool) {
+    return match list { CNil => true, CCons { head: head, tail: tail } => false };
+}
+fn effect_list_empty(list: EffectList) -> (result: bool) {
+    return match list { XNil => true, XCons { head: head, tail: tail } => false };
+}
+fn cap_list_empty(list: CapList) -> (result: bool) {
+    return match list { ANil => true, ACons { head: head, tail: tail } => false };
+}
+fn use_list_empty(list: UseList) -> (result: bool) {
+    return match list { UNil => true, UCons { head: head, tail: tail } => false };
+}
+fn record_list_empty(list: RecordList) -> (result: bool) {
+    return match list { RNil => true, RCons { head: head, tail: tail } => false };
+}
+fn enum_list_empty(list: EnumList) -> (result: bool) {
+    return match list { GNil => true, GCons { head: head, tail: tail } => false };
+}
+fn declared_fn_list_empty(list: FnList) -> (result: bool) {
+    return match list { DNil => true, DCons { head: head, tail: tail } => false };
+}
+fn name_list_empty(list: NameList) -> (result: bool) {
+    return match list { NNil => true, NCons { head: head, tail: tail } => false };
+}
+fn obligation_list_empty(list: OblList) -> (result: bool) {
+    return match list { LNil => true, LCons { head: head, tail: tail } => false };
+}
+fn top_list_empty(list: TOpList) -> (result: bool) {
+    return match list { PNil => true, PCons { head: head, tail: tail } => false };
+}
+fn type_list_empty(list: TyList) -> (result: bool) {
+    return match list { TyNil => true, TyCons { head: head, tail: tail } => false };
+}
 fn reverse_scalar_match_arms<N: Nat>(input: [byte; up_to N], arms: ScalarMatchArmList) -> (result: ScalarMatchArmList) {
     iterate i over input carrying d: ScalarMatchArmRev = ScalarMatchArmRev { rest: arms, acc: ScalarMatchArmList.MNil } {
+        if scalar_match_arms_empty(d.rest) { return d.acc; }
         next d = reverse_scalar_match_arms_step(d);
     }
     return d.acc;
@@ -760,6 +817,7 @@ fn finish_single(st: ExprState, node: Expr, rest: ExprList) -> (result: ExprPars
 record ExprRev { rest: ExprList, acc: ExprList }
 fn reverse_exprs<N: Nat>(input: [byte; up_to N], list: ExprList) -> (result: ExprList) {
     iterate i over input carrying d: ExprRev = ExprRev { rest: list, acc: ExprList.ENil } {
+        if expr_list_empty(d.rest) { return d.acc; }
         next d = reverse_exprs_step(d);
     }
     return d.acc;
@@ -1038,6 +1096,7 @@ fn finish_fields<N: Nat>(input: [byte; up_to N], st: FieldsParse) -> (result: Fi
 record FieldRev { rest: FieldList, acc: FieldList }
 fn reverse_fields<N: Nat>(input: [byte; up_to N], list: FieldList) -> (result: FieldList) {
     iterate i over input carrying d: FieldRev = FieldRev { rest: list, acc: FieldList.FNil } {
+        if field_list_empty(d.rest) { return d.acc; }
         next d = reverse_fields_step(d);
     }
     return d.acc;
@@ -1174,6 +1233,7 @@ fn finish_variants_empty<N: Nat>(input: [byte; up_to N], st: VariantsState) -> (
 record VariantRev { rest: VariantList, acc: VariantList }
 fn reverse_variants<N: Nat>(input: [byte; up_to N], list: VariantList) -> (result: VariantList) {
     iterate i over input carrying d: VariantRev = VariantRev { rest: list, acc: VariantList.VNil } {
+        if variant_list_empty(d.rest) { return d.acc; }
         next d = reverse_variants_step(d);
     }
     return d.acc;
@@ -1361,6 +1421,7 @@ fn finish_block<N: Nat>(input: [byte; up_to N], st: BlockState) -> (result: Bran
 record StmtRev { rest: StmtList, acc: StmtList }
 fn reverse_stmts<N: Nat>(input: [byte; up_to N], list: StmtList) -> (result: StmtList) {
     iterate i over input carrying d: StmtRev = StmtRev { rest: list, acc: StmtList.SNil } {
+        if stmt_list_empty(d.rest) { return d.acc; }
         next d = reverse_stmts_step(d);
     }
     return d.acc;
@@ -1422,6 +1483,7 @@ fn finish_clauses<N: Nat>(input: [byte; up_to N], st: ClausesState) -> (result: 
 record ClauseRev { rest: ClauseList, acc: ClauseList }
 fn reverse_clauses<N: Nat>(input: [byte; up_to N], list: ClauseList) -> (result: ClauseList) {
     iterate i over input carrying d: ClauseRev = ClauseRev { rest: list, acc: ClauseList.CNil } {
+        if clause_list_empty(d.rest) { return d.acc; }
         next d = reverse_clauses_step(d);
     }
     return d.acc;
@@ -1432,6 +1494,7 @@ fn reverse_clauses_step(st: ClauseRev) -> (result: ClauseRev) {
 record EffectRev { rest: EffectList, acc: EffectList }
 fn reverse_effects<N: Nat>(input: [byte; up_to N], list: EffectList) -> (result: EffectList) {
     iterate i over input carrying d: EffectRev = EffectRev { rest: list, acc: EffectList.XNil } {
+        if effect_list_empty(d.rest) { return d.acc; }
         next d = reverse_effects_step(d);
     }
     return d.acc;
@@ -1442,6 +1505,7 @@ fn reverse_effects_step(st: EffectRev) -> (result: EffectRev) {
 record CapRev { rest: CapList, acc: CapList }
 fn reverse_caps<N: Nat>(input: [byte; up_to N], list: CapList) -> (result: CapList) {
     iterate i over input carrying d: CapRev = CapRev { rest: list, acc: CapList.ANil } {
+        if cap_list_empty(d.rest) { return d.acc; }
         next d = reverse_caps_step(d);
     }
     return d.acc;
@@ -1541,6 +1605,7 @@ fn finish_uses<N: Nat>(input: [byte; up_to N], st: UsesState) -> (result: UsesPa
 record UseRev { rest: UseList, acc: UseList }
 fn reverse_uses<N: Nat>(input: [byte; up_to N], list: UseList) -> (result: UseList) {
     iterate i over input carrying d: UseRev = UseRev { rest: list, acc: UseList.UNil } {
+        if use_list_empty(d.rest) { return d.acc; }
         next d = reverse_uses_step(d);
     }
     return d.acc;
@@ -1586,6 +1651,7 @@ fn finish_unit<N: Nat>(input: [byte; up_to N], head: parser.Header, st: UnitStat
 record RecordRev { rest: RecordList, acc: RecordList }
 fn reverse_records<N: Nat>(input: [byte; up_to N], list: RecordList) -> (result: RecordList) {
     iterate i over input carrying d: RecordRev = RecordRev { rest: list, acc: RecordList.RNil } {
+        if record_list_empty(d.rest) { return d.acc; }
         next d = reverse_records_step(d);
     }
     return d.acc;
@@ -1596,6 +1662,7 @@ fn reverse_records_step(st: RecordRev) -> (result: RecordRev) {
 record EnumRev { rest: EnumList, acc: EnumList }
 fn reverse_enums<N: Nat>(input: [byte; up_to N], list: EnumList) -> (result: EnumList) {
     iterate i over input carrying d: EnumRev = EnumRev { rest: list, acc: EnumList.GNil } {
+        if enum_list_empty(d.rest) { return d.acc; }
         next d = reverse_enums_step(d);
     }
     return d.acc;
@@ -1606,6 +1673,7 @@ fn reverse_enums_step(st: EnumRev) -> (result: EnumRev) {
 record FnRev { rest: FnList, acc: FnList }
 fn reverse_fns<N: Nat>(input: [byte; up_to N], list: FnList) -> (result: FnList) {
     iterate i over input carrying d: FnRev = FnRev { rest: list, acc: FnList.DNil } {
+        if declared_fn_list_empty(d.rest) { return d.acc; }
         next d = reverse_fns_step(d);
     }
     return d.acc;
@@ -1634,6 +1702,7 @@ fn spans_equal<N: Nat>(input: [byte; up_to N], a_start: u64, a_end: u64, b_start
     if a_end < a_start || b_end < b_start { return false; }
     if a_end - a_start != b_end - b_start { return false; }
     iterate i over input carrying d: EqState = EqState { a_start: a_start, len: a_end - a_start, b_start: b_start, off: 0, eq: true } {
+        if !(d.eq) || d.off >= d.len { return d.eq; }
         next d = span_eq_step<N>(input, d);
     }
     return d.eq;
@@ -1666,6 +1735,7 @@ fn collect_fn_names_cons(st: FnNameAcc, h: FnDecl, t: FnList) -> (result: FnName
 record NameRev { rest: NameList, acc: NameList }
 fn reverse_names<N: Nat>(input: [byte; up_to N], list: NameList) -> (result: NameList) {
     iterate i over input carrying d: NameRev = NameRev { rest: list, acc: NameList.NNil } {
+        if name_list_empty(d.rest) { return d.acc; }
         next d = reverse_names_step(d);
     }
     return d.acc;
@@ -2077,6 +2147,7 @@ enum OblList { LNil, LCons { head: Obligation, tail: OblList } }
 record OblRev { rest: OblList, acc: OblList }
 fn reverse_obls<N: Nat>(input: [byte; up_to N], list: OblList) -> (result: OblList) {
     iterate i over input carrying d: OblRev = OblRev { rest: list, acc: OblList.LNil } {
+        if obligation_list_empty(d.rest) { return d.acc; }
         next d = reverse_obls_step(d);
     }
     return d.acc;
@@ -2123,8 +2194,205 @@ fn count_obls_cons(st: OblCount, h: Obligation, t: OblList) -> (result: OblCount
 // not yet have project-canonical identities.
 record SemanticIdentity { bytes: [byte; 512], len: u64, valid: bool }
 record SemanticIdentityBuild { bytes: [byte; 512], len: u64, valid: bool }
+// Signature identities retain both the declaring module and the canonical
+// grant key. Owned identities are used in resolved facts; grant keys preserve
+// Stage-0's effect-coverage rule, which compares declared effect/capability
+// names across a call boundary without using those names to resolve symbols.
+record EffectIdentity { identity: SemanticIdentity, capability_identity: SemanticIdentity, kind_key: SemanticIdentity, capability_key: SemanticIdentity }
+enum EffectIdentityList { EINil, EICons { head: EffectIdentity, tail: EffectIdentityList } }
+record CapabilityIdentity { identity: SemanticIdentity, key: SemanticIdentity }
+enum CapabilityIdentityList { CINil, CICons { head: CapabilityIdentity, tail: CapabilityIdentityList } }
+// Nominal identities are project facts keyed either by a declaration name
+// span (reference=false) or by one resolved imported type-reference span
+// (reference=true). The project resolver supplies the exact declaring-module
+// identity; declaration proof never searches a global short-name table.
+record NominalTypeIdentity { start: u64, end: u64, identity: SemanticIdentity, reference: bool }
+enum NominalTypeIdentityList { NINil, NICons { head: NominalTypeIdentity, tail: NominalTypeIdentityList } }
+record NominalTypeSpan { start: u64, end: u64, kind: u64 }
+enum NominalTypeSpanList { NSNil, NSCons { head: NominalTypeSpan, tail: NominalTypeSpanList } }
+record NominalSpanWalk { fns: FnList, records: RecordList, enums: EnumList, acc: NominalTypeSpanList }
+record NominalFieldWalk { fields: FieldList, acc: NominalTypeSpanList }
+record NominalVariantWalk { variants: VariantList, acc: NominalTypeSpanList }
+record NominalStmtWalk { rest: StmtList, acc: NominalTypeSpanList }
+fn collect_unit_nominal_type_spans<N: Nat>(input: [byte; up_to N], unit: Unit) -> (result: NominalTypeSpanList) {
+    iterate i over input carrying st: NominalSpanWalk = NominalSpanWalk { fns: unit.fns, records: unit.records, enums: unit.enums, acc: NominalTypeSpanList.NSNil } {
+        next st = collect_unit_nominal_span_step<N>(input, st);
+    }
+    return st.acc;
+}
+fn collect_unit_nominal_span_step<N: Nat>(input: [byte; up_to N], st: NominalSpanWalk) -> (result: NominalSpanWalk) {
+    return match st.fns {
+        DCons { head: function, tail: rest } => collect_function_nominal_spans<N>(input, st, function, rest),
+        DNil => collect_record_nominal_spans<N>(input, st)
+    };
+}
+fn collect_function_nominal_spans<N: Nat>(input: [byte; up_to N], st: NominalSpanWalk, function: FnDecl, rest: FnList) -> (result: NominalSpanWalk) {
+    let params: NominalTypeSpanList = collect_field_nominal_spans<N>(input, function.sig.params, st.acc);
+    let results: NominalTypeSpanList = collect_field_nominal_spans<N>(input, function.sig.results, params);
+    let body: NominalTypeSpanList = collect_body_nominal_spans<N>(input, function.body.body, results);
+    return NominalSpanWalk { ..st, fns: rest, acc: body };
+}
+fn collect_body_nominal_spans<N: Nat>(input: [byte; up_to N], body: StmtList, acc: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
+    iterate i over input carrying st: NominalStmtWalk = NominalStmtWalk { rest: body, acc: acc } {
+        next st = collect_body_nominal_span_step<N>(input, st);
+    }
+    return st.acc;
+}
+fn collect_body_nominal_span_step<N: Nat>(input: [byte; up_to N], st: NominalStmtWalk) -> (result: NominalStmtWalk) {
+    return match st.rest {
+        SNil => st,
+        SCons { head: statement, tail: rest } => collect_one_body_nominal_span<N>(input, st, statement, rest)
+    };
+}
+fn collect_one_body_nominal_span<N: Nat>(input: [byte; up_to N], st: NominalStmtWalk, statement: Stmt, rest: StmtList) -> (result: NominalStmtWalk) {
+    return match statement {
+        Let { name_start: ns, name_end: ne, type_start: ts, type_end: te, type_kind: kind, value: value, start: start, end: end } => collect_let_nominal_span<N>(input, st, rest, kind, ts, te),
+        If { cond: cond, then_b: then_body, else_b: else_body, start: start, end: end } => NominalStmtWalk { rest: append_stmts<N>(input, then_body, append_stmts<N>(input, else_body, rest)), acc: st.acc },
+        Fail { mode_start: ms, mode_end: me, start: start, end: end } => NominalStmtWalk { rest: rest, acc: st.acc },
+        Return { value: value, start: start, end: end } => NominalStmtWalk { rest: rest, acc: st.acc }
+    };
+}
+fn collect_let_nominal_span<N: Nat>(input: [byte; up_to N], st: NominalStmtWalk, rest: StmtList, kind: u64, start: u64, end: u64) -> (result: NominalStmtWalk) {
+    if kind == 5 || kind == 6 { return NominalStmtWalk { rest: rest, acc: NominalTypeSpanList.NSCons { head: NominalTypeSpan { start: start, end: end, kind: kind }, tail: st.acc } }; }
+    if kind == 7 || kind == 8 {
+        let element: TypeParse = parse_type<N>(input, start + 1);
+        if element.ok && (element.node.kind == 5 || element.node.kind == 6) {
+            return NominalStmtWalk { rest: rest, acc: NominalTypeSpanList.NSCons { head: NominalTypeSpan { start: element.node.start, end: element.node.end, kind: element.node.kind }, tail: st.acc } };
+        }
+    }
+    return NominalStmtWalk { rest: rest, acc: st.acc };
+}
+fn collect_record_nominal_spans<N: Nat>(input: [byte; up_to N], st: NominalSpanWalk) -> (result: NominalSpanWalk) {
+    return match st.records {
+        RCons { head: record_decl, tail: rest } => collect_one_record_nominal_spans<N>(input, st, record_decl, rest),
+        RNil => collect_enum_nominal_spans<N>(input, st)
+    };
+}
+fn collect_one_record_nominal_spans<N: Nat>(input: [byte; up_to N], st: NominalSpanWalk, record_decl: RecordDecl, rest: RecordList) -> (result: NominalSpanWalk) {
+    let acc: NominalTypeSpanList = collect_field_nominal_spans<N>(input, record_decl.fields, st.acc);
+    return NominalSpanWalk { ..st, records: rest, acc: acc };
+}
+fn collect_enum_nominal_spans<N: Nat>(input: [byte; up_to N], st: NominalSpanWalk) -> (result: NominalSpanWalk) {
+    return match st.enums {
+        GCons { head: enum_decl, tail: rest } => collect_one_enum_nominal_spans<N>(input, st, enum_decl, rest),
+        GNil => st
+    };
+}
+fn collect_one_enum_nominal_spans<N: Nat>(input: [byte; up_to N], st: NominalSpanWalk, enum_decl: EnumDecl, rest: EnumList) -> (result: NominalSpanWalk) {
+    let acc: NominalTypeSpanList = collect_variant_nominal_spans<N>(input, enum_decl.variants, st.acc);
+    return NominalSpanWalk { ..st, enums: rest, acc: acc };
+}
+fn collect_variant_nominal_spans<N: Nat>(input: [byte; up_to N], variants: VariantList, acc: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
+    iterate i over input carrying st: NominalVariantWalk = NominalVariantWalk { variants: variants, acc: acc } {
+        next st = collect_variant_nominal_span_step<N>(input, st);
+    }
+    return st.acc;
+}
+fn collect_variant_nominal_span_step<N: Nat>(input: [byte; up_to N], st: NominalVariantWalk) -> (result: NominalVariantWalk) {
+    return match st.variants {
+        VCons { head: variant, tail: rest } => NominalVariantWalk { variants: rest, acc: collect_field_nominal_spans<N>(input, variant.fields, st.acc) },
+        VNil => st
+    };
+}
+fn collect_field_nominal_spans<N: Nat>(input: [byte; up_to N], fields: FieldList, acc: NominalTypeSpanList) -> (result: NominalTypeSpanList) {
+    iterate i over input carrying st: NominalFieldWalk = NominalFieldWalk { fields: fields, acc: acc } {
+        next st = collect_field_nominal_span_step<N>(input, st);
+    }
+    return st.acc;
+}
+fn collect_field_nominal_span_step<N: Nat>(input: [byte; up_to N], st: NominalFieldWalk) -> (result: NominalFieldWalk) {
+    return match st.fields {
+        FCons { head: field, tail: rest } => collect_one_field_nominal_span<N>(input, st, field, rest),
+        FNil => st
+    };
+}
+fn collect_one_field_nominal_span<N: Nat>(input: [byte; up_to N], st: NominalFieldWalk, field: Field, rest: FieldList) -> (result: NominalFieldWalk) {
+    if field.type_kind == 5 || field.type_kind == 6 {
+        let reference: NominalTypeSpan = NominalTypeSpan { start: field.type_start, end: field.type_end, kind: field.type_kind };
+        return NominalFieldWalk { fields: rest, acc: NominalTypeSpanList.NSCons { head: reference, tail: st.acc } };
+    }
+    if field.type_kind == 7 || field.type_kind == 8 { return collect_sequence_field_nominal_span<N>(input, st, field, rest); }
+    return NominalFieldWalk { fields: rest, acc: st.acc };
+}
+fn collect_sequence_field_nominal_span<N: Nat>(input: [byte; up_to N], st: NominalFieldWalk, field: Field, rest: FieldList) -> (result: NominalFieldWalk) {
+    let element: TypeParse = parse_type<N>(input, field.type_start + 1);
+    if element.ok && (element.node.kind == 5 || element.node.kind == 6) {
+        return NominalFieldWalk { fields: rest, acc: NominalTypeSpanList.NSCons { head: NominalTypeSpan { start: element.node.start, end: element.node.end, kind: element.node.kind }, tail: st.acc } };
+    }
+    return NominalFieldWalk { fields: rest, acc: st.acc };
+}
+record NominalLookup { rest: NominalTypeIdentityList, found: bool, identity: SemanticIdentity }
+record NominalRefLookup { rest: NominalTypeIdentityList, wanted: SemanticIdentity, found: bool, start: u64, end: u64 }
 fn invalid_semantic_identity() -> (result: SemanticIdentity) {
     return SemanticIdentity { bytes: [0 as byte; 512], len: 0, valid: false };
+}
+fn semantic_identity_equal(a: SemanticIdentity, b: SemanticIdentity) -> (result: bool) {
+    if !(a.valid) || !(b.valid) || a.len != b.len { return false; }
+    iterate i over a.bytes carrying same: bool = true {
+        next same = semantic_identity_equal_step(a, b, i, same);
+    }
+    return same;
+}
+fn semantic_identity_equal_step(a: SemanticIdentity, b: SemanticIdentity, i: u64, same: bool) -> (result: bool) {
+    if !(same) || i >= a.len { return same; }
+    return a.bytes[i] == b.bytes[i];
+}
+fn nominal_identity_at<N: Nat>(input: [byte; up_to N], types: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
+    iterate i over input carrying st: NominalLookup = NominalLookup { rest: types, found: false, identity: invalid_semantic_identity() } {
+        next st = nominal_identity_at_step<N>(input, st, start, end);
+    }
+    return st;
+}
+fn nominal_identity_at_step<N: Nat>(input: [byte; up_to N], st: NominalLookup, start: u64, end: u64) -> (result: NominalLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => nominal_identity_at_cons<N>(input, st, item, rest, start, end)
+    };
+}
+fn nominal_identity_at_cons<N: Nat>(input: [byte; up_to N], st: NominalLookup, item: NominalTypeIdentity, rest: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
+    if item.reference && item.start == start && item.end == end && item.identity.valid {
+        return NominalLookup { rest: NominalTypeIdentityList.NINil, found: true, identity: item.identity };
+    }
+    return NominalLookup { rest: rest, found: false, identity: st.identity };
+}
+fn nominal_identity_by_name<N: Nat>(input: [byte; up_to N], types: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
+    iterate i over input carrying st: NominalLookup = NominalLookup { rest: types, found: false, identity: invalid_semantic_identity() } {
+        next st = nominal_identity_by_name_step<N>(input, st, start, end);
+    }
+    return st;
+}
+fn nominal_identity_by_name_step<N: Nat>(input: [byte; up_to N], st: NominalLookup, start: u64, end: u64) -> (result: NominalLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => nominal_identity_by_name_cons<N>(input, st, item, rest, start, end)
+    };
+}
+fn nominal_identity_by_name_cons<N: Nat>(input: [byte; up_to N], st: NominalLookup, item: NominalTypeIdentity, rest: NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalLookup) {
+    if !(item.reference) && spans_equal<N>(input, item.start, item.end, start, end) {
+        return NominalLookup { rest: NominalTypeIdentityList.NINil, found: true, identity: item.identity };
+    }
+    return NominalLookup { rest: rest, found: false, identity: st.identity };
+}
+fn nominal_reference_by_identity<N: Nat>(input: [byte; up_to N], types: NominalTypeIdentityList, wanted: SemanticIdentity) -> (result: NominalRefLookup) {
+    iterate i over input carrying st: NominalRefLookup = NominalRefLookup { rest: types, wanted: wanted, found: false, start: 0, end: 0 } {
+        next st = nominal_reference_by_identity_step(st);
+    }
+    return st;
+}
+fn nominal_reference_by_identity_step(st: NominalRefLookup) -> (result: NominalRefLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => nominal_reference_by_identity_cons(st, item, rest)
+    };
+}
+fn nominal_reference_by_identity_cons(st: NominalRefLookup, item: NominalTypeIdentity, rest: NominalTypeIdentityList) -> (result: NominalRefLookup) {
+    if item.reference && semantic_identity_equal(item.identity, st.wanted) {
+        return NominalRefLookup { rest: NominalTypeIdentityList.NINil, wanted: st.wanted, found: true, start: item.start, end: item.end };
+    }
+    return NominalRefLookup { rest: rest, wanted: st.wanted, found: false, start: st.start, end: st.end };
 }
 
 enum SemType {
@@ -2316,20 +2584,30 @@ fn span_digits_step<N: Nat>(input: [byte; up_to N], st: DigitCheck) -> (result: 
     if byte < 48 || byte > 57 { return DigitCheck { pos: st.pos, end: st.end, ok: false }; }
     return DigitCheck { pos: st.pos + 1, end: st.end, ok: true };
 }
-// Type resolution against scalar spellings and the declared record/enum
-// tables. Qualified (kind 6) and unknown (kind 9) spellings fail here; the
-// caller selects the diagnostic family (MNE105/MNE153/MNE171/MNE173).
+// Type resolution against scalar spellings, local declarations, and the
+// exact imported nominal reference spans supplied by project resolution.
 record TyRes { ty: SemType, ok: bool }
-fn resolve_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+fn resolve_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: TyRes) {
     if kind == 3 { return TyRes { ty: SemType.TBool, ok: true }; }
     if kind == 4 { return TyRes { ty: SemType.TByte, ok: true }; }
     if kind == 1 { return TyRes { ty: SemType.TInt { width: 64, signed: false }, ok: true }; }
     if kind == 2 { return TyRes { ty: SemType.TInt { width: 64, signed: true }, ok: true }; }
-    if kind == 7 || kind == 8 { return resolve_seq_type<N>(input, kind, start, end, rectab, enumtab); }
-    if kind == 5 { return resolve_named_type<N>(input, start, end, rectab, enumtab); }
+    if kind == 6 {
+        let found: NominalLookup = nominal_identity_at<N>(input, nominals, start, end);
+        if found.found { return TyRes { ty: SemType.TNamed { start: start, end: end }, ok: true }; }
+        return TyRes { ty: SemType.TPoison, ok: false };
+    }
+    if kind == 7 || kind == 8 { return resolve_seq_type<N>(input, kind, start, end, rectab, enumtab, nominals); }
+    if kind == 5 {
+        let local: TyRes = resolve_named_type<N>(input, start, end, rectab, enumtab);
+        if local.ok { return local; }
+        let imported: NominalLookup = nominal_identity_at<N>(input, nominals, start, end);
+        if imported.found { return TyRes { ty: SemType.TNamed { start: start, end: end }, ok: true }; }
+        return local;
+    }
     return TyRes { ty: SemType.TPoison, ok: false };
 }
-fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: TyRes) {
     let elem: TypeParse = parse_type<N>(input, start + 1);
     if !(elem.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
     // No back-call into resolve_type (MNE130): sequence elements are flat
@@ -2337,7 +2615,7 @@ fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: 
     // element types are retained for repeat-literal proof; viewed sequences
     // remain the existing opaque shape.
     if kind == 8 { return TyRes { ty: SemType.TSeq, ok: true }; }
-    let element: TyRes = resolve_sequence_element<N>(input, elem.node, rectab, enumtab);
+    let element: TyRes = resolve_sequence_element<N>(input, elem.node, rectab, enumtab, nominals);
     if !(element.ok) { return element; }
     let semi: Expect = expect<N>(input, elem.cursor, 63);
     if !(semi.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
@@ -2349,17 +2627,26 @@ fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: 
     let length: IntVal = int_value<N>(input, bound.start, bound.end);
     return TyRes { ty: SemType.TSeqExact { element: element.ty, length: length.value, length_valid: literal_bound && !(length.overflow) }, ok: true };
 }
-fn resolve_sequence_element<N: Nat>(input: [byte; up_to N], element: TypeRef, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+fn resolve_sequence_element<N: Nat>(input: [byte; up_to N], element: TypeRef, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: TyRes) {
     if element.kind == 1 { return TyRes { ty: SemType.TInt { width: 64, signed: false }, ok: true }; }
     if element.kind == 2 { return TyRes { ty: SemType.TInt { width: 64, signed: true }, ok: true }; }
     if element.kind == 3 { return TyRes { ty: SemType.TBool, ok: true }; }
     if element.kind == 4 { return TyRes { ty: SemType.TByte, ok: true }; }
-    if element.kind == 5 { return resolve_seq_elem<N>(input, element.start, element.end, rectab, enumtab); }
+    if element.kind == 5 { return resolve_seq_elem<N>(input, element.start, element.end, rectab, enumtab, nominals); }
+    if element.kind == 6 {
+        let imported: NominalLookup = nominal_identity_at<N>(input, nominals, element.start, element.end);
+        if imported.found { return TyRes { ty: SemType.TNamed { start: element.start, end: element.end }, ok: true }; }
+        return TyRes { ty: SemType.TPoison, ok: false };
+    }
     return TyRes { ty: SemType.TPoison, ok: false };
 }
-fn resolve_seq_elem<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
+fn resolve_seq_elem<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: TyRes) {
     let inner: TyRes = resolve_named_type<N>(input, start, end, rectab, enumtab);
-    if !(inner.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    if !(inner.ok) {
+        let imported: NominalLookup = nominal_identity_at<N>(input, nominals, start, end);
+        if imported.found { return TyRes { ty: SemType.TNamed { start: start, end: end }, ok: true }; }
+        return TyRes { ty: SemType.TPoison, ok: false };
+    }
     return inner;
 }
 fn resolve_named_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList) -> (result: TyRes) {
@@ -2380,7 +2667,11 @@ fn resolve_declared_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, r
     return TyRes { ty: SemType.TPoison, ok: false };
 }
 fn record_declared<N: Nat>(input: [byte; up_to N], rectab: RecordList, start: u64, end: u64) -> (result: bool) {
+    let empty: bool = match rectab { RNil => true, RCons { head: h, tail: t } => false };
+    if empty { return false; }
     iterate i over input carrying d: RecScan = RecScan { rest: rectab, start: start, end: end, found: false } {
+        let exhausted: bool = match d.rest { RNil => true, RCons { head: h, tail: t } => false };
+        if exhausted { return d.found; }
         next d = record_declared_step<N>(input, d);
     }
     return d.found;
@@ -2400,7 +2691,11 @@ fn record_declared_cons<N: Nat>(input: [byte; up_to N], st: RecScan, h: RecordDe
     return RecScan { rest: t, start: st.start, end: st.end, found: false };
 }
 fn enum_declared<N: Nat>(input: [byte; up_to N], enumtab: EnumList, start: u64, end: u64) -> (result: bool) {
+    let empty: bool = match enumtab { GNil => true, GCons { head: h, tail: t } => false };
+    if empty { return false; }
     iterate i over input carrying d: EnumScan = EnumScan { rest: enumtab, start: start, end: end, found: false } {
+        let exhausted: bool = match d.rest { GNil => true, GCons { head: h, tail: t } => false };
+        if exhausted { return d.found; }
         next d = enum_declared_step<N>(input, d);
     }
     return d.found;
@@ -2456,7 +2751,366 @@ fn canonical_function_identity<N: Nat>(input: [byte; up_to N], module_start: u64
     return SemanticIdentity { bytes: function_part.bytes, len: function_part.len, valid: function_part.valid && module_end > module_start && function_end > function_start };
 }
 
-record Sig { start: u64, end: u64, params: BindList, nparams: u64, result: SemType, fx: EffectList, identity: SemanticIdentity }
+
+fn canonical_effect_identity<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, name_start: u64, name_end: u64) -> (result: SemanticIdentity) {
+    let prefix: [byte; 16] = [109 as byte, 110 as byte, 99 as byte, 115 as byte, 58 as byte, 48 as byte, 46 as byte, 50 as byte, 58 as byte, 101 as byte, 102 as byte, 102 as byte, 101 as byte, 99 as byte, 116 as byte, 58 as byte];
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    iterate i over prefix carrying d: SemanticIdentityBuild = seed { next d = callable_identity_byte(d, prefix[i]); }
+    let owner_bytes: SemanticIdentityBuild = callable_identity_span<N>(input, d, module_start, module_end);
+    let sep1: SemanticIdentityBuild = callable_identity_byte(owner_bytes, 58 as byte);
+    let sep2: SemanticIdentityBuild = callable_identity_byte(sep1, 58 as byte);
+    let name: SemanticIdentityBuild = identity_component_span<N>(input, sep2, name_start, name_end);
+    return SemanticIdentity { bytes: name.bytes, len: name.len, valid: name.valid && module_end > module_start && name_end > name_start };
+}
+fn canonical_capability_identity<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, name_start: u64, name_end: u64) -> (result: SemanticIdentity) {
+    let prefix: [byte; 20] = [109 as byte, 110 as byte, 99 as byte, 115 as byte, 58 as byte, 48 as byte, 46 as byte, 50 as byte, 58 as byte, 99 as byte, 97 as byte, 112 as byte, 97 as byte, 98 as byte, 105 as byte, 108 as byte, 105 as byte, 116 as byte, 121 as byte, 58 as byte];
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    iterate i over prefix carrying d: SemanticIdentityBuild = seed { next d = callable_identity_byte(d, prefix[i]); }
+    let owner_bytes: SemanticIdentityBuild = callable_identity_span<N>(input, d, module_start, module_end);
+    let sep1: SemanticIdentityBuild = callable_identity_byte(owner_bytes, 58 as byte);
+    let sep2: SemanticIdentityBuild = callable_identity_byte(sep1, 58 as byte);
+    let name: SemanticIdentityBuild = identity_component_span<N>(input, sep2, name_start, name_end);
+    return SemanticIdentity { bytes: name.bytes, len: name.len, valid: name.valid && module_end > module_start && name_end > name_start };
+}
+// These component keys are compared only while checking whether a caller's
+// declared grant covers an imported effect. They never resolve an imported
+// declaration; the full owner-qualified identities above remain on the IR.
+fn signature_name_key<N: Nat>(input: [byte; up_to N], start: u64, end: u64) -> (result: SemanticIdentity) {
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    let key: SemanticIdentityBuild = identity_component_span<N>(input, seed, start, end);
+    return SemanticIdentity { bytes: key.bytes, len: key.len, valid: key.valid && end > start };
+}
+record EffectIdentityBuild { rest: EffectList, acc: EffectIdentityList, module_start: u64, module_end: u64 }
+fn canonical_effect_identities<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, effects: EffectList) -> (result: EffectIdentityList) {
+    iterate i over input carrying st: EffectIdentityBuild = EffectIdentityBuild { rest: effects, acc: EffectIdentityList.EINil, module_start: module_start, module_end: module_end } { next st = canonical_effect_identity_step<N>(input, st); }
+    return st.acc;
+}
+fn canonical_effect_identity_step<N: Nat>(input: [byte; up_to N], st: EffectIdentityBuild) -> (result: EffectIdentityBuild) {
+    return match st.rest { XNil => st, XCons { head: effect_fact, tail: rest } => canonical_effect_identity_one<N>(input, st, effect_fact, rest) };
+}
+fn canonical_effect_identity_one<N: Nat>(input: [byte; up_to N], st: EffectIdentityBuild, effect_fact: Effect, rest: EffectList) -> (result: EffectIdentityBuild) {
+    let identity: SemanticIdentity = canonical_effect_identity<N>(input, st.module_start, st.module_end, effect_fact.kind_start, effect_fact.kind_end);
+    let capability_identity: SemanticIdentity = canonical_capability_identity<N>(input, st.module_start, st.module_end, effect_fact.cap_start, effect_fact.cap_end);
+    let item: EffectIdentity = EffectIdentity { identity: identity, capability_identity: capability_identity, kind_key: signature_name_key<N>(input, effect_fact.kind_start, effect_fact.kind_end), capability_key: signature_name_key<N>(input, effect_fact.cap_start, effect_fact.cap_end) };
+    return EffectIdentityBuild { ..st, rest: rest, acc: EffectIdentityList.EICons { head: item, tail: st.acc } };
+}
+record CapabilityIdentityBuild { rest: CapList, acc: CapabilityIdentityList, module_start: u64, module_end: u64 }
+fn canonical_capability_identities<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, capabilities: CapList) -> (result: CapabilityIdentityList) {
+    iterate i over input carrying st: CapabilityIdentityBuild = CapabilityIdentityBuild { rest: capabilities, acc: CapabilityIdentityList.CINil, module_start: module_start, module_end: module_end } { next st = canonical_capability_identity_step<N>(input, st); }
+    return st.acc;
+}
+fn canonical_capability_identity_step<N: Nat>(input: [byte; up_to N], st: CapabilityIdentityBuild) -> (result: CapabilityIdentityBuild) {
+    return match st.rest { ANil => st, ACons { head: cap, tail: rest } => canonical_capability_identity_one<N>(input, st, cap, rest) };
+}
+fn canonical_capability_identity_one<N: Nat>(input: [byte; up_to N], st: CapabilityIdentityBuild, cap: Cap, rest: CapList) -> (result: CapabilityIdentityBuild) {
+    let item: CapabilityIdentity = CapabilityIdentity { identity: canonical_capability_identity<N>(input, st.module_start, st.module_end, cap.start, cap.end), key: signature_name_key<N>(input, cap.start, cap.end) };
+    return CapabilityIdentityBuild { ..st, rest: rest, acc: CapabilityIdentityList.CICons { head: item, tail: st.acc } };
+}
+record CapabilityIdentityLookup { rest: CapabilityIdentityList, identity: SemanticIdentity, found: bool }
+fn capability_identity_contains<N: Nat>(input: [byte; up_to N], capabilities: CapabilityIdentityList, identity: SemanticIdentity) -> (result: bool) {
+    iterate i over input carrying st: CapabilityIdentityLookup = CapabilityIdentityLookup { rest: capabilities, identity: identity, found: false } { next st = capability_identity_lookup_step(st); }
+    return st.found;
+}
+fn capability_identity_lookup_step(st: CapabilityIdentityLookup) -> (result: CapabilityIdentityLookup) {
+    if st.found { return st; }
+    return match st.rest { CapabilityIdentityList.CINil => st, CapabilityIdentityList.CICons { head: item, tail: rest } => capability_identity_lookup_one(st, item, rest) };
+}
+fn capability_identity_lookup_one(st: CapabilityIdentityLookup, item: CapabilityIdentity, rest: CapabilityIdentityList) -> (result: CapabilityIdentityLookup) {
+    if semantic_identity_equal(item.identity, st.identity) { return CapabilityIdentityLookup { rest: CapabilityIdentityList.CINil, identity: st.identity, found: true }; }
+    return CapabilityIdentityLookup { ..st, rest: rest };
+}
+record CapabilityIdentityValidation { rest: CapabilityIdentityList, ok: bool }
+fn capability_identity_list_valid<N: Nat>(input: [byte; up_to N], capabilities: CapabilityIdentityList) -> (result: bool) {
+    iterate i over input carrying st: CapabilityIdentityValidation = CapabilityIdentityValidation { rest: capabilities, ok: true } { next st = capability_identity_valid_step(st); }
+    return st.ok;
+}
+fn capability_identity_valid_step(st: CapabilityIdentityValidation) -> (result: CapabilityIdentityValidation) {
+    if !(st.ok) { return st; }
+    return match st.rest { CapabilityIdentityList.CINil => st, CapabilityIdentityList.CICons { head: item, tail: rest } => CapabilityIdentityValidation { rest: rest, ok: item.identity.valid && item.identity.len > 0 && item.key.valid && item.key.len > 0 } };
+}
+record SignatureIdentityValidation { rest: EffectIdentityList, capabilities: CapabilityIdentityList, ok: bool }
+fn signature_identity_valid<N: Nat>(input: [byte; up_to N], effects: EffectIdentityList, capabilities: CapabilityIdentityList) -> (result: bool) {
+    iterate i over input carrying st: SignatureIdentityValidation = SignatureIdentityValidation { rest: effects, capabilities: capabilities, ok: capability_identity_list_valid<N>(input, capabilities) } { next st = signature_identity_valid_step<N>(input, st); }
+    return st.ok;
+}
+fn signature_identity_valid_step<N: Nat>(input: [byte; up_to N], st: SignatureIdentityValidation) -> (result: SignatureIdentityValidation) {
+    if !(st.ok) { return st; }
+    return match st.rest { EffectIdentityList.EINil => st, EffectIdentityList.EICons { head: item, tail: rest } => SignatureIdentityValidation { rest: rest, capabilities: st.capabilities, ok: item.identity.valid && item.identity.len > 0 && item.capability_identity.valid && item.capability_identity.len > 0 && item.kind_key.valid && item.kind_key.len > 0 && item.capability_key.valid && item.capability_key.len > 0 && capability_identity_contains<N>(input, st.capabilities, item.capability_identity) } };
+}
+record EffectCoverageLookup { rest: EffectIdentityList, want: EffectIdentity, found: bool }
+fn effect_identity_covered<N: Nat>(input: [byte; up_to N], available: EffectIdentityList, want: EffectIdentity) -> (result: bool) {
+    iterate i over input carrying st: EffectCoverageLookup = EffectCoverageLookup { rest: available, want: want, found: false } { next st = effect_coverage_lookup_step(st); }
+    return st.found;
+}
+fn effect_coverage_lookup_step(st: EffectCoverageLookup) -> (result: EffectCoverageLookup) {
+    if st.found { return st; }
+    return match st.rest { EffectIdentityList.EINil => st, EffectIdentityList.EICons { head: item, tail: rest } => effect_coverage_lookup_one(st, item, rest) };
+}
+fn effect_coverage_lookup_one(st: EffectCoverageLookup, item: EffectIdentity, rest: EffectIdentityList) -> (result: EffectCoverageLookup) {
+    if semantic_identity_equal(item.kind_key, st.want.kind_key) && semantic_identity_equal(item.capability_key, st.want.capability_key) { return EffectCoverageLookup { rest: EffectIdentityList.EINil, want: st.want, found: true }; }
+    return EffectCoverageLookup { ..st, rest: rest };
+}
+record EffectNeedScan { rest: EffectIdentityList, ok: bool }
+fn effects_covered<N: Nat>(input: [byte; up_to N], available: EffectIdentityList, need: EffectIdentityList) -> (result: bool) {
+    iterate i over input carrying st: EffectNeedScan = EffectNeedScan { rest: need, ok: true } { next st = effects_covered_step<N>(input, available, st); }
+    return st.ok;
+}
+fn effects_covered_step<N: Nat>(input: [byte; up_to N], available: EffectIdentityList, st: EffectNeedScan) -> (result: EffectNeedScan) {
+    if !(st.ok) { return st; }
+    return match st.rest { EffectIdentityList.EINil => st, EffectIdentityList.EICons { head: effect_fact, tail: rest } => EffectNeedScan { rest: rest, ok: effect_identity_covered<N>(input, available, effect_fact) } };
+}
+
+// Stage-0 semantic identities encode each identity component independently.
+// Record field descriptors form one component and are sorted by field name,
+// matching mncs-model's record_type_id contract.
+fn identity_hex_digit(value: u64) -> (result: byte) {
+    if value < 10 { return (48 + value) as byte; }
+    return (55 + value) as byte;
+}
+fn identity_component_byte(st: SemanticIdentityBuild, value: byte) -> (result: SemanticIdentityBuild) {
+    let raw: u64 = value as u64;
+    if (raw >= 97 && raw <= 122) || (raw >= 65 && raw <= 90) || (raw >= 48 && raw <= 57) || raw == 95 || raw == 45 || raw == 46 {
+        return callable_identity_byte(st, value);
+    }
+    let pct: SemanticIdentityBuild = callable_identity_byte(st, 37 as byte);
+    let high: SemanticIdentityBuild = callable_identity_byte(pct, identity_hex_digit(raw / 16));
+    return callable_identity_byte(high, identity_hex_digit(raw % 16));
+}
+record IdentityComponentSpan { pos: u64, end: u64, build: SemanticIdentityBuild }
+fn identity_component_span_step<N: Nat>(input: [byte; up_to N], st: IdentityComponentSpan) -> (result: IdentityComponentSpan) {
+    if !(st.build.valid) || st.pos >= st.end { return st; }
+    return IdentityComponentSpan { ..st, pos: st.pos + 1, build: identity_component_byte(st.build, input[st.pos]) };
+}
+fn identity_component_span<N: Nat>(input: [byte; up_to N], st: SemanticIdentityBuild, start: u64, end: u64) -> (result: SemanticIdentityBuild) {
+    if end < start || end > input.len { return SemanticIdentityBuild { ..st, valid: false }; }
+    iterate i over input carrying d: IdentityComponentSpan = IdentityComponentSpan { pos: start, end: end, build: st } {
+        next d = identity_component_span_step<N>(input, d);
+    }
+    return d.build;
+}
+fn identity_component_raw_byte(st: SemanticIdentityBuild, value: byte) -> (result: SemanticIdentityBuild) {
+    return identity_component_byte(st, value);
+}
+fn field_list_empty(fields: FieldList) -> (result: bool) {
+    return match fields { FNil => true, FCons { head: head, tail: tail } => false };
+}
+record FieldNameOrder { left: Field, right: Field, offset: u64, order: u64, done: bool }
+fn field_name_order<N: Nat>(input: [byte; up_to N], left: Field, right: Field) -> (result: u64) {
+    iterate i over input carrying st: FieldNameOrder = FieldNameOrder { left: left, right: right, offset: 0, order: 0, done: false } {
+        next st = field_name_order_step<N>(input, st);
+    }
+    if st.done { return st.order; }
+    let left_len: u64 = left.name_end - left.name_start;
+    let right_len: u64 = right.name_end - right.name_start;
+    if left_len < right_len { return 1; }
+    if left_len > right_len { return 2; }
+    return 0;
+}
+fn field_name_order_step<N: Nat>(input: [byte; up_to N], st: FieldNameOrder) -> (result: FieldNameOrder) {
+    if st.done { return st; }
+    let left_len: u64 = st.left.name_end - st.left.name_start;
+    let right_len: u64 = st.right.name_end - st.right.name_start;
+    if st.offset >= left_len || st.offset >= right_len {
+        if left_len < right_len { return FieldNameOrder { ..st, order: 1, done: true }; }
+        if left_len > right_len { return FieldNameOrder { ..st, order: 2, done: true }; }
+        return FieldNameOrder { ..st, done: true };
+    }
+    let left_byte: u64 = source.byte_at<N>(input, st.left.name_start + st.offset);
+    let right_byte: u64 = source.byte_at<N>(input, st.right.name_start + st.offset);
+    if left_byte < right_byte { return FieldNameOrder { ..st, order: 1, done: true }; }
+    if left_byte > right_byte { return FieldNameOrder { ..st, order: 2, done: true }; }
+    return FieldNameOrder { ..st, offset: st.offset + 1 };
+}
+record FieldMinScan { rest: FieldList, found: bool, best: Field }
+fn field_min<N: Nat>(input: [byte; up_to N], fields: FieldList) -> (result: FieldMinScan) {
+    iterate i over input carrying st: FieldMinScan = FieldMinScan { rest: fields, found: false, best: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 } } {
+        if field_list_empty(st.rest) { return st; }
+        next st = field_min_step<N>(input, st);
+    }
+    return st;
+}
+fn field_min_step<N: Nat>(input: [byte; up_to N], st: FieldMinScan) -> (result: FieldMinScan) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: field, tail: rest } => field_min_cons<N>(input, st, field, rest)
+    };
+}
+fn field_min_cons<N: Nat>(input: [byte; up_to N], st: FieldMinScan, field: Field, rest: FieldList) -> (result: FieldMinScan) {
+    if !(st.found) { return FieldMinScan { rest: rest, found: true, best: field }; }
+    if field_name_order<N>(input, field, st.best) == 1 { return FieldMinScan { rest: rest, found: true, best: field }; }
+    return FieldMinScan { rest: rest, found: true, best: st.best };
+}
+record FieldRemove { rest: FieldList, reversed: FieldList, target: Field, removed: bool }
+fn remove_field<N: Nat>(input: [byte; up_to N], fields: FieldList, target: Field) -> (result: FieldList) {
+    iterate i over input carrying st: FieldRemove = FieldRemove { rest: fields, reversed: FieldList.FNil, target: target, removed: false } {
+        if field_list_empty(st.rest) { return reverse_fields<N>(input, st.reversed); }
+        next st = remove_field_step<N>(input, st);
+    }
+    return reverse_fields<N>(input, st.reversed);
+}
+fn remove_field_step<N: Nat>(input: [byte; up_to N], st: FieldRemove) -> (result: FieldRemove) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: field, tail: rest } => remove_field_cons<N>(input, st, field, rest)
+    };
+}
+fn remove_field_cons<N: Nat>(input: [byte; up_to N], st: FieldRemove, field: Field, rest: FieldList) -> (result: FieldRemove) {
+    if !(st.removed) && spans_equal<N>(input, field.name_start, field.name_end, st.target.name_start, st.target.name_end) {
+        return FieldRemove { rest: rest, reversed: st.reversed, target: st.target, removed: true };
+    }
+    return FieldRemove { rest: rest, reversed: FieldList.FCons { head: field, tail: st.reversed }, target: st.target, removed: st.removed };
+}
+fn append_field<N: Nat>(input: [byte; up_to N], fields: FieldList, value: Field) -> (result: FieldList) {
+    let reversed: FieldList = reverse_fields<N>(input, fields);
+    return reverse_fields<N>(input, FieldList.FCons { head: value, tail: reversed });
+}
+record FieldSort { rest: FieldList, sorted: FieldList }
+fn sort_fields_by_name<N: Nat>(input: [byte; up_to N], fields: FieldList) -> (result: FieldList) {
+    iterate i over input carrying st: FieldSort = FieldSort { rest: fields, sorted: FieldList.FNil } {
+        if field_list_empty(st.rest) { return st.sorted; }
+        next st = sort_fields_step<N>(input, st);
+    }
+    return st.sorted;
+}
+fn sort_fields_step<N: Nat>(input: [byte; up_to N], st: FieldSort) -> (result: FieldSort) {
+    let minimum: FieldMinScan = field_min<N>(input, st.rest);
+    if !(minimum.found) { return FieldSort { rest: FieldList.FNil, sorted: st.sorted }; }
+    let rest: FieldList = remove_field<N>(input, st.rest, minimum.best);
+    return FieldSort { rest: rest, sorted: append_field<N>(input, st.sorted, minimum.best) };
+}
+fn canonical_finite_type_identity<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, name_start: u64, name_end: u64) -> (result: SemanticIdentity) {
+    let prefix: [byte; 21] = [109 as byte, 110 as byte, 99 as byte, 115 as byte, 58 as byte, 48 as byte, 46 as byte, 50 as byte, 58 as byte, 102 as byte, 105 as byte, 110 as byte, 105 as byte, 116 as byte, 101 as byte, 45 as byte, 116 as byte, 121 as byte, 112 as byte, 101 as byte, 58 as byte];
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    iterate i over prefix carrying d: SemanticIdentityBuild = seed { next d = callable_identity_byte(d, prefix[i]); }
+    let module_part: SemanticIdentityBuild = identity_component_span<N>(input, d, module_start, module_end);
+    let sep1: SemanticIdentityBuild = callable_identity_byte(module_part, 58 as byte);
+    let sep2: SemanticIdentityBuild = callable_identity_byte(sep1, 58 as byte);
+    let type_part: SemanticIdentityBuild = identity_component_span<N>(input, sep2, name_start, name_end);
+    return SemanticIdentity { bytes: type_part.bytes, len: type_part.len, valid: type_part.valid && module_end > module_start && name_end > name_start };
+}
+record IdentityBytesScan { identity: SemanticIdentity, offset: u64, build: SemanticIdentityBuild }
+fn append_identity_component_step(st: IdentityBytesScan) -> (result: IdentityBytesScan) {
+    if !(st.build.valid) || st.offset >= st.identity.len { return st; }
+    let identity: SemanticIdentity = st.identity;
+    let component: byte = identity.bytes[st.offset];
+    let build: SemanticIdentityBuild = identity_component_byte(st.build, component);
+    return IdentityBytesScan { ..st, offset: st.offset + 1, build: build };
+}
+fn append_identity_component(build: SemanticIdentityBuild, identity: SemanticIdentity) -> (result: SemanticIdentityBuild) {
+    if !(identity.valid) || identity.len == 0 { return SemanticIdentityBuild { ..build, valid: false }; }
+    iterate i over identity.bytes carrying st: IdentityBytesScan = IdentityBytesScan { identity: identity, offset: 0, build: build } {
+        next st = append_identity_component_step(st);
+    }
+    return st.build;
+}
+record RecordIdentityBuild { build: SemanticIdentityBuild, fields: FieldList, nominals: NominalTypeIdentityList, valid: bool }
+fn canonical_record_type_identity<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, declaration: RecordDecl, nominals: NominalTypeIdentityList) -> (result: SemanticIdentity) {
+    let prefix: [byte; 21] = [109 as byte, 110 as byte, 99 as byte, 115 as byte, 58 as byte, 48 as byte, 46 as byte, 50 as byte, 58 as byte, 114 as byte, 101 as byte, 99 as byte, 111 as byte, 114 as byte, 100 as byte, 45 as byte, 116 as byte, 121 as byte, 112 as byte, 101 as byte, 58 as byte];
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    iterate i over prefix carrying d: SemanticIdentityBuild = seed { next d = callable_identity_byte(d, prefix[i]); }
+    let module_part: SemanticIdentityBuild = identity_component_span<N>(input, d, module_start, module_end);
+    let sep1: SemanticIdentityBuild = callable_identity_byte(module_part, 58 as byte);
+    let sep2: SemanticIdentityBuild = callable_identity_byte(sep1, 58 as byte);
+    let name_part: SemanticIdentityBuild = identity_component_span<N>(input, sep2, declaration.name_start, declaration.name_end);
+    let sep3: SemanticIdentityBuild = callable_identity_byte(name_part, 58 as byte);
+    let sep4: SemanticIdentityBuild = callable_identity_byte(sep3, 58 as byte);
+    let sorted: FieldList = sort_fields_by_name<N>(input, declaration.fields);
+    iterate i over input carrying st: RecordIdentityBuild = RecordIdentityBuild { build: sep4, fields: sorted, nominals: nominals, valid: true } {
+        next st = append_record_field_identity<N>(input, st);
+    }
+    return SemanticIdentity { bytes: st.build.bytes, len: st.build.len, valid: st.build.valid && st.valid && module_end > module_start && declaration.name_end > declaration.name_start };
+}
+fn append_record_field_identity<N: Nat>(input: [byte; up_to N], st: RecordIdentityBuild) -> (result: RecordIdentityBuild) {
+    return match st.fields {
+        FNil => st,
+        FCons { head: field, tail: rest } => append_record_field_identity_one<N>(input, st, field, rest)
+    };
+}
+fn append_record_field_identity_one<N: Nat>(input: [byte; up_to N], st: RecordIdentityBuild, field: Field, rest: FieldList) -> (result: RecordIdentityBuild) {
+    let field_name: SemanticIdentityBuild = identity_component_span<N>(input, st.build, field.name_start, field.name_end);
+    let colon: SemanticIdentityBuild = identity_component_raw_byte(field_name, 58 as byte);
+    let ty: SemanticIdentityBuild = record_field_type_identity<N>(input, st.nominals, colon, field);
+    let semi: SemanticIdentityBuild = identity_component_raw_byte(ty, 59 as byte);
+    return RecordIdentityBuild { build: semi, fields: rest, nominals: st.nominals, valid: st.valid };
+}
+fn record_field_type_identity<N: Nat>(input: [byte; up_to N], nominals: NominalTypeIdentityList, build: SemanticIdentityBuild, field: Field) -> (result: SemanticIdentityBuild) {
+    if field.type_kind == 5 || field.type_kind == 6 {
+        // Stage-0's structural record fingerprint retains the declaring
+        // source spelling of each field type. Semantic ownership is carried
+        // separately by nominal references; substituting an imported
+        // identity here would change the canonical record identity.
+        return identity_component_span<N>(input, build, field.type_start, field.type_end);
+    }
+    if field.type_kind == 1 || field.type_kind == 2 || field.type_kind == 3 || field.type_kind == 4 || field.type_kind == 5 || field.type_kind == 7 || field.type_kind == 8 {
+        return identity_component_span<N>(input, build, field.type_start, field.type_end);
+    }
+    return SemanticIdentityBuild { ..build, valid: false };
+}
+
+record DeclNominalWalk { enums: EnumList, records: RecordList, header: parser.Header, acc: NominalTypeIdentityList }
+fn local_nominal_type_identities<N: Nat>(input: [byte; up_to N], unit: Unit) -> (result: NominalTypeIdentityList) {
+    return local_nominal_type_identities_with_references<N>(input, unit, NominalTypeIdentityList.NINil);
+}
+fn local_nominal_type_identities_with_references<N: Nat>(input: [byte; up_to N], unit: Unit, references: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    iterate i over input carrying st: DeclNominalWalk = DeclNominalWalk { enums: unit.enums, records: unit.records, header: unit.header, acc: references } {
+        next st = local_nominal_identity_step<N>(input, st);
+    }
+    return st.acc;
+}
+record NominalReferenceWalk { rest: NominalTypeIdentityList, acc: NominalTypeIdentityList }
+fn nominal_reference_entries<N: Nat>(input: [byte; up_to N], types: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    iterate i over input carrying st: NominalReferenceWalk = NominalReferenceWalk { rest: types, acc: NominalTypeIdentityList.NINil } {
+        next st = nominal_reference_entry_step(st);
+    }
+    return st.acc;
+}
+fn nominal_reference_entry_step(st: NominalReferenceWalk) -> (result: NominalReferenceWalk) {
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => nominal_reference_entry_one(st, item, rest)
+    };
+}
+fn nominal_reference_entry_one(st: NominalReferenceWalk, item: NominalTypeIdentity, rest: NominalTypeIdentityList) -> (result: NominalReferenceWalk) {
+    if item.reference { return NominalReferenceWalk { rest: rest, acc: NominalTypeIdentityList.NICons { head: item, tail: st.acc } }; }
+    return NominalReferenceWalk { rest: rest, acc: st.acc };
+}
+record NominalMergeWalk { rest: NominalTypeIdentityList, acc: NominalTypeIdentityList }
+fn combine_nominal_type_identities<N: Nat>(input: [byte; up_to N], local: NominalTypeIdentityList, references: NominalTypeIdentityList) -> (result: NominalTypeIdentityList) {
+    iterate i over input carrying st: NominalMergeWalk = NominalMergeWalk { rest: local, acc: references } {
+        next st = combine_nominal_type_identity_step(st);
+    }
+    return st.acc;
+}
+fn combine_nominal_type_identity_step(st: NominalMergeWalk) -> (result: NominalMergeWalk) {
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => NominalMergeWalk { rest: rest, acc: NominalTypeIdentityList.NICons { head: item, tail: st.acc } }
+    };
+}
+fn local_nominal_identity_step<N: Nat>(input: [byte; up_to N], st: DeclNominalWalk) -> (result: DeclNominalWalk) {
+    return match st.enums {
+        GCons { head: enum_decl, tail: rest } => local_finite_identity<N>(input, st, enum_decl, rest),
+        GNil => local_record_identity<N>(input, st)
+    };
+}
+fn local_finite_identity<N: Nat>(input: [byte; up_to N], st: DeclNominalWalk, item: EnumDecl, rest: EnumList) -> (result: DeclNominalWalk) {
+    let identity: SemanticIdentity = canonical_finite_type_identity<N>(input, st.header.module_start, st.header.module_end, item.name_start, item.name_end);
+    let nominal: NominalTypeIdentity = NominalTypeIdentity { start: item.name_start, end: item.name_end, identity: identity, reference: false };
+    return DeclNominalWalk { ..st, enums: rest, acc: NominalTypeIdentityList.NICons { head: nominal, tail: st.acc } };
+}
+fn local_record_identity<N: Nat>(input: [byte; up_to N], st: DeclNominalWalk) -> (result: DeclNominalWalk) {
+    return match st.records {
+        RCons { head: record_decl, tail: rest } => local_record_identity_one<N>(input, st, record_decl, rest),
+        RNil => st
+    };
+}
+fn local_record_identity_one<N: Nat>(input: [byte; up_to N], st: DeclNominalWalk, item: RecordDecl, rest: RecordList) -> (result: DeclNominalWalk) {
+    let identity: SemanticIdentity = canonical_record_type_identity<N>(input, st.header.module_start, st.header.module_end, item, st.acc);
+    let nominal: NominalTypeIdentity = NominalTypeIdentity { start: item.name_start, end: item.name_end, identity: identity, reference: false };
+    return DeclNominalWalk { ..st, records: rest, acc: NominalTypeIdentityList.NICons { head: nominal, tail: st.acc } };
+}
+
+record Sig { start: u64, end: u64, params: BindList, nparams: u64, result: SemType, fx: EffectList, raw_capabilities: CapList, effects: EffectIdentityList, capabilities: CapabilityIdentityList, identity: SemanticIdentity }
 enum SigTab { HNil, HCons { head: Sig, tail: SigTab } }
 record SigRep { sig: Sig, obls: OblList }
 
@@ -2474,13 +3128,19 @@ fn bind_local_callable_identity<N: Nat>(input: [byte; up_to N], st: SigIdentityW
     };
 }
 fn bind_local_callable_sig<N: Nat>(input: [byte; up_to N], st: SigIdentityWalk, sig: Sig, rest: SigTab) -> (result: SigIdentityWalk) {
-    let identity: SemanticIdentity = canonical_function_identity<N>(input, st.module_start, st.module_end, sig.start, sig.end);
-    return SigIdentityWalk { ..st, rest: rest, acc: SigTab.HCons { head: Sig { ..sig, identity: identity }, tail: st.acc } };
+    let owned: Sig = bind_callable_signature<N>(input, st.module_start, st.module_end, sig);
+    return SigIdentityWalk { ..st, rest: rest, acc: SigTab.HCons { head: owned, tail: st.acc } };
 }
-fn check_sig<N: Nat>(input: [byte; up_to N], h: FnDecl, rectab: RecordList, enumtab: EnumList) -> (result: SigRep) {
+fn bind_callable_signature<N: Nat>(input: [byte; up_to N], module_start: u64, module_end: u64, sig: Sig) -> (result: Sig) {
+    let identity: SemanticIdentity = canonical_function_identity<N>(input, module_start, module_end, sig.start, sig.end);
+    let effects: EffectIdentityList = canonical_effect_identities<N>(input, module_start, module_end, sig.fx);
+    let capabilities: CapabilityIdentityList = canonical_capability_identities<N>(input, module_start, module_end, sig.raw_capabilities);
+    return Sig { ..sig, effects: effects, capabilities: capabilities, identity: identity };
+}
+fn check_sig<N: Nat>(input: [byte; up_to N], h: FnDecl, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: SigRep) {
     let sg: FnSig = h.sig;
-    let ps: ParamRep = check_params<N>(input, sg.params, rectab, enumtab);
-    let rs: ResultRep = check_results<N>(input, sg.results, h.fn_start, h.fn_end, rectab, enumtab);
+    let ps: ParamRep = check_params<N>(input, sg.params, rectab, enumtab, nominals);
+    let rs: ResultRep = check_results<N>(input, sg.results, h.fn_start, h.fn_end, rectab, enumtab, nominals);
     let cs: CapRep = check_caps<N>(input, sg.capabilities);
     let es: FxRep = check_effects<N>(input, sg.effects, cs.caps);
     let ks: OblList = check_contracts<N>(input, sg.contracts);
@@ -2488,24 +3148,24 @@ fn check_sig<N: Nat>(input: [byte; up_to N], h: FnDecl, rectab: RecordList, enum
     let o2: OblList = append_obls<N>(input, o1, cs.obls);
     let o3: OblList = append_obls<N>(input, o2, es.obls);
     let obls: OblList = append_obls<N>(input, o3, ks);
-    return SigRep { sig: Sig { start: sg.name_start, end: sg.name_end, params: ps.binds, nparams: ps.n, result: rs.ty, fx: es.fx, identity: invalid_semantic_identity() }, obls: obls };
+    return SigRep { sig: Sig { start: sg.name_start, end: sg.name_end, params: ps.binds, nparams: ps.n, result: rs.ty, fx: es.fx, raw_capabilities: sg.capabilities, effects: EffectIdentityList.EINil, capabilities: CapabilityIdentityList.CINil, identity: invalid_semantic_identity() }, obls: obls };
 }
 record ParamRep { binds: BindList, n: u64, obls: OblList }
 record ParamState { rest: FieldList, binds: BindList, seen: NameList, n: u64, obls: OblList }
-fn check_params<N: Nat>(input: [byte; up_to N], params: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ParamRep) {
+fn check_params<N: Nat>(input: [byte; up_to N], params: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ParamRep) {
     iterate i over input carrying d: ParamState = ParamState { rest: params, binds: BindList.BNil, seen: NameList.NNil, n: 0, obls: OblList.LNil } {
-        next d = check_params_step<N>(input, d, rectab, enumtab);
+        next d = check_params_step<N>(input, d, rectab, enumtab, nominals);
     }
     return ParamRep { binds: d.binds, n: d.n, obls: reverse_obls<N>(input, d.obls) };
 }
-fn check_params_step<N: Nat>(input: [byte; up_to N], st: ParamState, rectab: RecordList, enumtab: EnumList) -> (result: ParamState) {
+fn check_params_step<N: Nat>(input: [byte; up_to N], st: ParamState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ParamState) {
     return match st.rest {
         FNil => st,
-        FCons { head: h, tail: t } => check_one_param<N>(input, st, h, t, rectab, enumtab)
+        FCons { head: h, tail: t } => check_one_param<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_param<N: Nat>(input: [byte; up_to N], st: ParamState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ParamState) {
-    let ty: TyRes = resolve_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab);
+fn check_one_param<N: Nat>(input: [byte; up_to N], st: ParamState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ParamState) {
+    let ty: TyRes = resolve_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, nominals);
     let tob: OblList = param_type_obl(h, ty);
     if name_known<N>(input, st.seen, h.name_start, h.name_end) {
         let dob: Obligation = Obligation { kind: 5, start: h.name_start, end: h.name_end, status: 1 };
@@ -2527,20 +3187,20 @@ fn param_bound_type(ty: TyRes) -> (result: SemType) {
 }
 record ResultRep { ty: SemType, obls: OblList }
 record ResultState { rest: FieldList, n: u64, ty: SemType, obls: OblList }
-fn check_results<N: Nat>(input: [byte; up_to N], results: FieldList, fn_start: u64, fn_end: u64, rectab: RecordList, enumtab: EnumList) -> (result: ResultRep) {
+fn check_results<N: Nat>(input: [byte; up_to N], results: FieldList, fn_start: u64, fn_end: u64, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ResultRep) {
     iterate i over input carrying d: ResultState = ResultState { rest: results, n: 0, ty: SemType.TPoison, obls: OblList.LNil } {
-        next d = check_results_step<N>(input, d, rectab, enumtab);
+        next d = check_results_step<N>(input, d, rectab, enumtab, nominals);
     }
     return finish_results<N>(input, d, fn_start, fn_end);
 }
-fn check_results_step<N: Nat>(input: [byte; up_to N], st: ResultState, rectab: RecordList, enumtab: EnumList) -> (result: ResultState) {
+fn check_results_step<N: Nat>(input: [byte; up_to N], st: ResultState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ResultState) {
     return match st.rest {
         FNil => st,
-        FCons { head: h, tail: t } => check_one_result<N>(input, st, h, t, rectab, enumtab)
+        FCons { head: h, tail: t } => check_one_result<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_result<N: Nat>(input: [byte; up_to N], st: ResultState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: ResultState) {
-    let ty: TyRes = resolve_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab);
+fn check_one_result<N: Nat>(input: [byte; up_to N], st: ResultState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ResultState) {
+    let ty: TyRes = resolve_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, nominals);
     let tob: OblList = param_type_obl(h, ty);
     let bound: SemType = param_bound_type(ty);
     let kept: SemType = result_kept_type(st, bound);
@@ -2646,7 +3306,7 @@ enum TOp {
     TRepeat { ty: SemType, element: SemType, count: u64, start: u64, end: u64 },
     TMatch { ty: SemType, subject_ty: SemType, arms: ScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64 },
     TBin { op: u64, ty: SemType, start: u64, end: u64 },
-    TCall { ty: SemType, argc: u64, params: BindList, start: u64, end: u64, ns: u64, ne: u64, identity: SemanticIdentity },
+    TCall { ty: SemType, argc: u64, params: BindList, start: u64, end: u64, ns: u64, ne: u64, identity: SemanticIdentity, effects: EffectIdentityList, capabilities: CapabilityIdentityList },
     TProj { ty: SemType, fstart: u64, fend: u64, start: u64, end: u64 }
 }
 enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
@@ -2656,6 +3316,7 @@ enum TyStack { WNil, WCons { head: SemType, tail: TyStack } }
 record TopsRev { rest: TOpList, acc: TOpList }
 fn reverse_tops<N: Nat>(input: [byte; up_to N], list: TOpList) -> (result: TOpList) {
     iterate i over input carrying d: TopsRev = TopsRev { rest: list, acc: TOpList.PNil } {
+        if top_list_empty(d.rest) { return d.acc; }
         next d = reverse_tops_step(d);
     }
     return d.acc;
@@ -2711,7 +3372,7 @@ fn verify_top_one<N: Nat>(input: [byte; up_to N], st: TDepth, h: TOp, t: TOpList
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => verify_top_repeat<N>(input, st, t, ty, element, count),
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => verify_top_match<N>(input, st, t, ty, subject_ty, arms, arm_count, default_count),
         TBin { op: o, ty: ty, start: s, end: e } => verify_top_bin<N>(input, st, t, ty),
-        TCall { ty: ty, argc: c, params: params, start: s, end: e, ns: ns, ne: ne, identity: id } => verify_top_call<N>(input, st, t, ty, c),
+        TCall { ty: ty, argc: c, params: params, start: s, end: e, ns: ns, ne: ne, identity: id, effects: effects, capabilities: capabilities } => verify_top_call<N>(input, st, t, ty, c, effects, capabilities),
         TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => verify_top_proj(st, t, ty)
     };
 }
@@ -2813,8 +3474,8 @@ fn pop_tys_step(st: PopN) -> (result: PopN) {
         WCons { head: h, tail: t } => PopN { rest: t, n: st.n - 1, ok: true }
     };
 }
-fn verify_top_call<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, argc: u64) -> (result: TDepth) {
-    if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+fn verify_top_call<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, argc: u64, effects: EffectIdentityList, capabilities: CapabilityIdentityList) -> (result: TDepth) {
+    if is_poison(ty) || !(signature_identity_valid<N>(input, effects, capabilities)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     if st.depth < argc { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     let popped: PopN = pop_tys<N>(input, st.stack, argc);
     if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
@@ -2854,7 +3515,7 @@ fn sabotage_depth<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
     return flat_ok<N>(input, bad);
 }
 fn sabotage_call_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
-    let bad: TOpList = TOpList.PCons { head: TOp.TCall { ty: SemType.TInt { width: 64, signed: false }, argc: 2, params: BindList.BNil, start: 0, end: 1, ns: 0, ne: 1, identity: invalid_semantic_identity() }, tail: TOpList.PNil };
+    let bad: TOpList = TOpList.PCons { head: TOp.TCall { ty: SemType.TInt { width: 64, signed: false }, argc: 2, params: BindList.BNil, start: 0, end: 1, ns: 0, ne: 1, identity: invalid_semantic_identity(), effects: EffectIdentityList.EINil, capabilities: CapabilityIdentityList.CINil }, tail: TOpList.PNil };
     return verify_tops<N>(input, bad, ExpTy.XNone);
 }
 fn sabotage_bin_mismatch<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
@@ -2896,12 +3557,12 @@ enum SemKont {
     KProj { fstart: u64, fend: u64, bstart: u64, bend: u64, start: u64, end: u64, exp: ExpTy }
 }
 enum KontList { QNil, QCons { head: SemKont, tail: KontList } }
-record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, fx: EffectList, total: u64 }
+record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, effects: EffectIdentityList, total: u64 }
 record ExprRes { ty: SemType, ok: bool, obls: OblList, tops: TOpList }
-fn prove_expr<N: Nat>(input: [byte; up_to N], env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, fx: EffectList, e: Expr, exp: ExpTy) -> (result: ExprRes) {
+fn prove_expr<N: Nat>(input: [byte; up_to N], env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, effects: EffectIdentityList, e: Expr, exp: ExpTy) -> (result: ExprRes) {
 
     let total: u64 = input.len;
-    iterate i over input carrying d: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, fx: fx, total: total } {
+    iterate i over input carrying d: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, nominals: nominals, effects: effects, total: total } {
         next d = sem_step<N>(input, d);
     }
     return finish_prove_expr<N>(input, d);
@@ -3306,7 +3967,7 @@ fn finish_bin_shift(st: SemState, op: u64, lty: SemType, start: u64, end: u64) -
 record SigRes { found: bool, sig: Sig }
 record SigScan { rest: SigTab, start: u64, end: u64, found: bool, sig: Sig }
 fn sig_lookup<N: Nat>(input: [byte; up_to N], sigs: SigTab, start: u64, end: u64) -> (result: SigRes) {
-    iterate i over input carrying d: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil, identity: invalid_semantic_identity() } } {
+    iterate i over input carrying d: SigScan = SigScan { rest: sigs, start: start, end: end, found: false, sig: Sig { start: 0, end: 0, params: BindList.BNil, nparams: 0, result: SemType.TPoison, fx: EffectList.XNil, raw_capabilities: CapList.ANil, effects: EffectIdentityList.EINil, capabilities: CapabilityIdentityList.CINil, identity: invalid_semantic_identity() } } {
         next d = sig_lookup_step<N>(input, d);
     }
     return SigRes { found: d.found, sig: d.sig };
@@ -3337,6 +3998,7 @@ fn params_to_tys_step(st: TysAcc) -> (result: TysAcc) {
 record TysRev { rest: TyList, acc: TyList }
 fn reverse_tys<N: Nat>(input: [byte; up_to N], list: TyList) -> (result: TyList) {
     iterate i over input carrying d: TysRev = TysRev { rest: list, acc: TyList.TyNil } {
+        if type_list_empty(d.rest) { return d.acc; }
         next d = reverse_tys_step(d);
     }
     return d.acc;
@@ -3425,62 +4087,20 @@ fn push_next_arg(st: SemState, sig: Sig, args: ExprList, ptys: TyList, nh: Expr,
     let kont: SemKont = SemKont.KCallA { sig: sig, args: args, ptys: ptys, start: start, end: end, exp: exp };
     return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
-// Effect coverage (MNE134): every callee effect must already be granted to
-// the caller. The check is fatal and runs after all arguments, before the
-// result check. Capability authorization (MNE111) is a signature-level
-// concern handled by check_sig, not repeated per call.
-fn fx_eq<N: Nat>(input: [byte; up_to N], a: Effect, b: Effect) -> (result: bool) {
-    if !(spans_equal<N>(input, a.kind_start, a.kind_end, b.kind_start, b.kind_end)) { return false; }
-    return spans_equal<N>(input, a.cap_start, a.cap_end, b.cap_start, b.cap_end);
-}
-record FxScan { rest: EffectList, want: Effect, covered: bool }
-fn fx_covered<N: Nat>(input: [byte; up_to N], avail: EffectList, want: Effect) -> (result: bool) {
-    iterate i over input carrying d: FxScan = FxScan { rest: avail, want: want, covered: false } {
-        next d = fx_cover_step<N>(input, d);
-    }
-    return d.covered;
-}
-fn fx_cover_step<N: Nat>(input: [byte; up_to N], st: FxScan) -> (result: FxScan) {
-    if st.covered { return st; }
-    return match st.rest {
-        XNil => st,
-        XCons { head: h, tail: t } => fx_cover_cons<N>(input, st, h, t)
-    };
-}
-fn fx_cover_cons<N: Nat>(input: [byte; up_to N], st: FxScan, h: Effect, t: EffectList) -> (result: FxScan) {
-    if fx_eq<N>(input, h, st.want) {
-        return FxScan { rest: EffectList.XNil, want: st.want, covered: true };
-    }
-    return FxScan { rest: t, want: st.want, covered: false };
-}
-record NeedScan { rest: EffectList, ok: bool }
-fn fx_cover_check<N: Nat>(input: [byte; up_to N], st: SemState, need: EffectList, start: u64, end: u64) -> (result: SemState) {
-    iterate i over input carrying d: NeedScan = NeedScan { rest: need, ok: true } {
-        next d = need_scan_step<N>(input, st, d);
-    }
-    if d.ok { return st; }
+// Effect coverage (MNE134) compares the imported signature's exact effect and
+// capability grant keys with the caller's declared grants. Owner identities
+// remain attached to the call; keys are only used for this coverage rule.
+fn fx_cover_check<N: Nat>(input: [byte; up_to N], st: SemState, need: EffectIdentityList, start: u64, end: u64) -> (result: SemState) {
+    if effects_covered<N>(input, st.effects, need) { return st; }
     return sem_drain(sem_emit(st, 15, start, end, 1));
 }
-fn need_scan_step<N: Nat>(input: [byte; up_to N], st: SemState, acc: NeedScan) -> (result: NeedScan) {
-    if !(acc.ok) { return acc; }
-    return match acc.rest {
-        XNil => acc,
-        XCons { head: h, tail: t } => need_scan_cons<N>(input, st, acc, h, t)
-    };
-}
-fn need_scan_cons<N: Nat>(input: [byte; up_to N], st: SemState, acc: NeedScan, h: Effect, t: EffectList) -> (result: NeedScan) {
-    if fx_covered<N>(input, st.fx, h) {
-        return NeedScan { rest: t, ok: acc.ok };
-    }
-    return NeedScan { rest: EffectList.XNil, ok: false };
-}
 fn finish_call<N: Nat>(input: [byte; up_to N], st: SemState, sig: Sig, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
-    let st2: SemState = fx_cover_check<N>(input, st, sig.fx, start, end);
+    let st2: SemState = fx_cover_check<N>(input, st, sig.effects, start, end);
     if st2.failed { return st2; }
     return finish_call_res<N>(input, st2, sig, start, end, exp);
 }
 fn finish_call_res<N: Nat>(input: [byte; up_to N], st: SemState, sig: Sig, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
-    let top: TOp = TOp.TCall { ty: sig.result, argc: sig.nparams, params: sig.params, start: start, end: end, ns: sig.start, ne: sig.end, identity: sig.identity };
+    let top: TOp = TOp.TCall { ty: sig.result, argc: sig.nparams, params: sig.params, start: start, end: end, ns: sig.start, ne: sig.end, identity: sig.identity, effects: sig.effects, capabilities: sig.capabilities };
     return match exp {
         XNone => sem_emit_top(sem_accept(st, sig.result), top),
         XSome { ty: r } => finish_call_req<N>(input, st, sig, top, r, start, end)
@@ -3561,7 +4181,7 @@ fn proj_named<N: Nat>(input: [byte; up_to N], st: SemState, ns: u64, ne: u64, fs
     if !(got.found) { return sem_drain(sem_emit(st, 23, bs, be, 1)); }
     let fld: FieldScan = field_scan<N>(input, got.decl.fields, fs, fe);
     if !(fld.found) { return sem_drain(sem_emit(st, 22, fs, fe, 1)); }
-    let fty: TyRes = resolve_type<N>(input, fld.field.type_kind, fld.field.type_start, fld.field.type_end, st.rectab, st.enumtab);
+    let fty: TyRes = resolve_type<N>(input, fld.field.type_kind, fld.field.type_start, fld.field.type_end, st.rectab, st.enumtab, st.nominals);
     if !(fty.ok) {
         return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end });
     }
@@ -3640,20 +4260,20 @@ fn want_poison(w: ExpTy) -> (result: bool) {
     return match w { XNone => false, XSome { ty: t } => is_poison(t) };
 }
 record FldObl { rest: FieldList, obls: OblList }
-fn field_type_obls<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+fn field_type_obls<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: OblList) {
     iterate i over input carrying d: FldObl = FldObl { rest: fields, obls: OblList.LNil } {
-        next d = field_obls_step<N>(input, d, rectab, enumtab);
+        next d = field_obls_step<N>(input, d, rectab, enumtab, nominals);
     }
     return reverse_obls<N>(input, d.obls);
 }
-fn field_obls_step<N: Nat>(input: [byte; up_to N], st: FldObl, rectab: RecordList, enumtab: EnumList) -> (result: FldObl) {
+fn field_obls_step<N: Nat>(input: [byte; up_to N], st: FldObl, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: FldObl) {
     return match st.rest {
         FNil => st,
-        FCons { head: h, tail: t } => field_obls_cons<N>(input, st, h, t, rectab, enumtab)
+        FCons { head: h, tail: t } => field_obls_cons<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn field_obls_cons<N: Nat>(input: [byte; up_to N], st: FldObl, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: FldObl) {
-    let ty: TyRes = resolve_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab);
+fn field_obls_cons<N: Nat>(input: [byte; up_to N], st: FldObl, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: FldObl) {
+    let ty: TyRes = resolve_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, nominals);
     let tob: OblList = param_type_obl(h, ty);
     return FldObl { rest: t, obls: append_obls<N>(input, st.obls, tob) };
 }
@@ -3674,7 +4294,7 @@ fn count_results_step(st: ResCount) -> (result: ResCount) {
 // expressions arrive ordered, single obligations append behind them.
 record StmtFrame { next: StmtList, saved_env: ScopeStack, else_b: StmtList, phase: u64 }
 enum StmtFrames { BrNil, BrCons { head: StmtFrame, tail: StmtFrames } }
-record StmtWalk { rest: StmtList, frames: StmtFrames, env: ScopeStack, closed: bool, ok: bool, obls: OblList, tops: TopsList, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList, total: u64 }
+record StmtWalk { rest: StmtList, frames: StmtFrames, env: ScopeStack, closed: bool, ok: bool, obls: OblList, tops: TopsList, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, total: u64 }
 fn prove_stmts<N: Nat>(input: [byte; up_to N], w: StmtWalk) -> (result: StmtWalk) {
     iterate i over input carrying d: StmtWalk = w {
         next d = prove_stmt_step<N>(input, d);
@@ -3723,11 +4343,11 @@ fn prove_one_stmt<N: Nat>(input: [byte; up_to N], st: StmtWalk, h: Stmt, t: Stmt
     };
 }
 fn prove_let<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, a: u64, b: u64, c: u64, d: u64, k: u64, v: Expr, s: u64, e: u64) -> (result: StmtWalk) {
-    let ty: TyRes = resolve_type<N>(input, k, c, d, st.rectab, st.enumtab);
+    let ty: TyRes = resolve_type<N>(input, k, c, d, st.rectab, st.enumtab, st.nominals);
     let tob: OblList = param_type_obl(Field { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k }, ty);
     let declared: SemType = param_bound_type(ty);
     let want: ExpTy = ExpTy.XSome { ty: declared };
-    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, v, want);
+    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, v, want);
     let obls1: OblList = append_obls<N>(input, append_obls<N>(input, st.obls, tob), res.obls);
     if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
     if !(skip_verify(res.ty, want)) {
@@ -3760,7 +4380,7 @@ fn dup_obl<N: Nat>(input: [byte; up_to N], st: StmtWalk, bind: BindRes, obls: Ob
 }
 fn prove_if<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, c: Expr, tb: StmtList, eb: StmtList, s: u64, e: u64) -> (result: StmtWalk) {
     let want: ExpTy = ExpTy.XSome { ty: SemType.TBool };
-    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, c, want);
+    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, c, want);
     let obls1: OblList = append_obls<N>(input, st.obls, res.obls);
     if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
     if !(skip_verify(res.ty, want)) {
@@ -3819,7 +4439,7 @@ fn prove_return_name<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, 
 }
 fn prove_return_expr<N: Nat>(input: [byte; up_to N], st: StmtWalk, v: Expr, t: StmtList, qs: u64, qe: u64) -> (result: StmtWalk) {
     let want: ExpTy = ExpTy.XSome { ty: st.sig.result };
-    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.sig.fx, v, want);
+    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, v, want);
     let obls1: OblList = append_obls<N>(input, st.obls, res.obls);
     if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
     if !(skip_verify(res.ty, want)) {
@@ -3839,15 +4459,15 @@ fn prove_tail<N: Nat>(input: [byte; up_to N], w: StmtWalk, ret: Expr) -> (result
     return prove_return_val<N>(input, w, ret, StmtList.SNil, sp.start, sp.end);
 }
 record FnProve { ok: bool, obls: OblList, tops: TopsList }
-fn prove_fn<N: Nat>(input: [byte; up_to N], h: FnDecl, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList) -> (result: FnProve) {
+fn prove_fn<N: Nat>(input: [byte; up_to N], h: FnDecl, sig: Sig, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: FnProve) {
 
     let total: u64 = input.len;
     let nres: u64 = count_results_fields<N>(input, h.sig.results);
     if nres != 1 { return FnProve { ok: true, obls: OblList.LNil, tops: TopsList.TLNil }; }
-    let par: OblList = field_type_obls<N>(input, h.sig.params, rectab, enumtab);
-    let res: OblList = field_type_obls<N>(input, h.sig.results, rectab, enumtab);
+    let par: OblList = field_type_obls<N>(input, h.sig.params, rectab, enumtab, nominals);
+    let res: OblList = field_type_obls<N>(input, h.sig.results, rectab, enumtab, nominals);
     let env0: ScopeStack = ScopeStack.ZCons { head: Scope { binds: sig.params }, tail: ScopeStack.ZNil };
-    let w0: StmtWalk = StmtWalk { rest: h.body.body, frames: StmtFrames.BrNil, env: env0, closed: false, ok: true, obls: OblList.LNil, tops: TopsList.TLNil, sig: sig, sigs: sigs, rectab: rectab, enumtab: enumtab, total: total };
+    let w0: StmtWalk = StmtWalk { rest: h.body.body, frames: StmtFrames.BrNil, env: env0, closed: false, ok: true, obls: OblList.LNil, tops: TopsList.TLNil, sig: sig, sigs: sigs, rectab: rectab, enumtab: enumtab, nominals: nominals, total: total };
     let w1: StmtWalk = prove_stmts<N>(input, w0);
     if walk_stuck(w1) { return FnProve { ok: false, obls: append_obls<N>(input, par, append_obls<N>(input, res, w1.obls)), tops: topslist_reverse<N>(input, w1.tops) }; }
     let w2: StmtWalk = prove_tail<N>(input, w1, h.body.ret);
@@ -3888,23 +4508,23 @@ fn append_topslist_step(st: TopsLPrepend) -> (result: TopsLPrepend) {
 // (prepend accumulation), which lookup does not observe: after duplicate
 // rejection each name resolves at most once.
 record SigTabRep { tab: SigTab, obls: OblList }
-record SigWalk { rest: FnList, tab: SigTab, obls: OblList }
-fn collect_sigtab<N: Nat>(input: [byte; up_to N], fns: FnList, rectab: RecordList, enumtab: EnumList) -> (result: SigTabRep) {
-    iterate i over input carrying d: SigWalk = SigWalk { rest: fns, tab: SigTab.HNil, obls: OblList.LNil } {
-        next d = collect_sigtab_step<N>(input, d, rectab, enumtab);
+record SigWalk { rest: FnList, tab: SigTab, obls: OblList, nominals: NominalTypeIdentityList }
+fn collect_sigtab<N: Nat>(input: [byte; up_to N], fns: FnList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: SigTabRep) {
+    iterate i over input carrying d: SigWalk = SigWalk { rest: fns, tab: SigTab.HNil, obls: OblList.LNil, nominals: nominals } {
+        next d = collect_sigtab_step<N>(input, d, rectab, enumtab, nominals);
     }
     return SigTabRep { tab: d.tab, obls: d.obls };
 }
-fn collect_sigtab_step<N: Nat>(input: [byte; up_to N], st: SigWalk, rectab: RecordList, enumtab: EnumList) -> (result: SigWalk) {
+fn collect_sigtab_step<N: Nat>(input: [byte; up_to N], st: SigWalk, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: SigWalk) {
     return match st.rest {
         DNil => st,
-        DCons { head: h, tail: t } => collect_one_sig<N>(input, st, h, t, rectab, enumtab)
+        DCons { head: h, tail: t } => collect_one_sig<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn collect_one_sig<N: Nat>(input: [byte; up_to N], st: SigWalk, h: FnDecl, t: FnList, rectab: RecordList, enumtab: EnumList) -> (result: SigWalk) {
-    let rep: SigRep = check_sig<N>(input, h, rectab, enumtab);
+fn collect_one_sig<N: Nat>(input: [byte; up_to N], st: SigWalk, h: FnDecl, t: FnList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: SigWalk) {
+    let rep: SigRep = check_sig<N>(input, h, rectab, enumtab, nominals);
     let tob: OblList = obl_only_types<N>(input, rep.obls);
-    return SigWalk { rest: t, tab: SigTab.HCons { head: rep.sig, tail: st.tab }, obls: append_obls<N>(input, st.obls, tob) };
+    return SigWalk { rest: t, tab: SigTab.HCons { head: rep.sig, tail: st.tab }, obls: append_obls<N>(input, st.obls, tob), nominals: nominals };
 }
 // Signature obligations split across elaboration passes: declaration type
 // validity (TYPE_VALID/QUALIFIED) resolves for every function first; scope,
@@ -3940,7 +4560,7 @@ fn obl_only_types<N: Nat>(input: [byte; up_to N], obls: OblList) -> (result: Obl
     let total: u64 = input.len;
     return obl_filter_types<N>(input, obls, true);
 }
-record BodyWalk { rest: FnList, tab: SigTab, rectab: RecordList, enumtab: EnumList, total: u64, obls: OblList, tops: TopsList, ok: bool, n: u64 }
+record BodyWalk { rest: FnList, tab: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, total: u64, obls: OblList, tops: TopsList, ok: bool, n: u64 }
 fn prove_bodies<N: Nat>(input: [byte; up_to N], st: BodyWalk) -> (result: BodyWalk) {
     iterate i over input carrying d: BodyWalk = st {
         next d = prove_bodies_step<N>(input, d);
@@ -3956,9 +4576,12 @@ fn prove_bodies_step<N: Nat>(input: [byte; up_to N], st: BodyWalk) -> (result: B
 fn prove_one_body<N: Nat>(input: [byte; up_to N], st: BodyWalk, h: FnDecl, t: FnList) -> (result: BodyWalk) {
     let nres: u64 = count_results_fields<N>(input, h.sig.results);
     if nres != 1 { return prove_body_skip<N>(input, st, h, t); }
-    let checked: SigRep = check_sig<N>(input, h, st.rectab, st.enumtab);
+    // The declaration pass already resolved this function into st.tab with
+    // its project-owned callable/effect/capability identities. Reuse that fact
+    // instead of rebuilding a raw signature during body proof.
+    let callable: SigRes = sig_lookup<N>(input, st.tab, h.sig.name_start, h.sig.name_end);
     let rest: OblList = sig_rest_obls<N>(input, st, h);
-    let rep: FnProve = prove_fn<N>(input, h, checked.sig, st.tab, st.rectab, st.enumtab);
+    let rep: FnProve = prove_fn<N>(input, h, callable.sig, st.tab, st.rectab, st.enumtab, st.nominals);
     let obls1: OblList = append_obls<N>(input, st.obls, rest);
     return BodyWalk { ..st, rest: t, obls: append_obls<N>(input, obls1, rep.obls), tops: append_topslist<N>(input, st.tops, rep.tops), ok: close_and(st.ok, rep.ok), n: st.n + 1 };
 }
@@ -3976,7 +4599,7 @@ fn sig_rest_obls<N: Nat>(input: [byte; up_to N], st: BodyWalk, h: FnDecl) -> (re
     let cs: CapRep = check_caps<N>(input, sg.capabilities);
     let es: FxRep = check_effects<N>(input, sg.effects, cs.caps);
     let ks: OblList = check_contracts<N>(input, sg.contracts);
-    let ps: ParamRep = check_params<N>(input, sg.params, st.rectab, st.enumtab);
+    let ps: ParamRep = check_params<N>(input, sg.params, st.rectab, st.enumtab, st.nominals);
     let dup5: OblList = obl_only_kind<N>(input, ps.obls, 5);
     let o1: OblList = append_obls<N>(input, cs.obls, es.obls);
     let o2: OblList = append_obls<N>(input, o1, ks);
@@ -4036,6 +4659,9 @@ fn merge_sig_tables_step(st: SigMerge) -> (result: SigMerge) {
     };
 }
 fn prove_parsed_unit<N: Nat>(input: [byte; up_to N], u: Unit, imported: SigTab) -> (result: UnitProve) {
+    return prove_parsed_unit_with_nominals<N>(input, u, imported, NominalTypeIdentityList.NINil);
+}
+fn prove_parsed_unit_with_nominals<N: Nat>(input: [byte; up_to N], u: Unit, imported: SigTab, nominals: NominalTypeIdentityList) -> (result: UnitProve) {
     let total: u64 = input.len;
     if !(u.ok) { return UnitProve { ok: false, err_start: u.err_start, err_end: u.err_end, unit: u, obls: OblList.LNil, tops: TopsList.TLNil, fn_count: 0 }; }
     let names: NameList = collect_fn_names<N>(input, u.fns);
@@ -4044,10 +4670,10 @@ fn prove_parsed_unit<N: Nat>(input: [byte; up_to N], u: Unit, imported: SigTab) 
         let obl: OblList = OblList.LCons { head: Obligation { kind: 37, start: dup.start, end: dup.end, status: 1 }, tail: OblList.LNil };
         return UnitProve { ok: false, err_start: dup.start, err_end: dup.end, unit: u, obls: obl, tops: TopsList.TLNil, fn_count: 0 };
     }
-    let sigs: SigTabRep = collect_sigtab<N>(input, u.fns, u.records, u.enums);
+    let sigs: SigTabRep = collect_sigtab<N>(input, u.fns, u.records, u.enums, nominals);
     let local_sigs: SigTab = bind_local_callable_identities<N>(input, u.header, sigs.tab);
     let all_sigs: SigTab = merge_sig_tables<N>(input, local_sigs, imported);
-    let done: BodyWalk = prove_bodies<N>(input, BodyWalk { rest: u.fns, tab: all_sigs, rectab: u.records, enumtab: u.enums, total: total, obls: sigs.obls, tops: TopsList.TLNil, ok: true, n: 0 });
+    let done: BodyWalk = prove_bodies<N>(input, BodyWalk { rest: u.fns, tab: all_sigs, rectab: u.records, enumtab: u.enums, nominals: nominals, total: total, obls: sigs.obls, tops: TopsList.TLNil, ok: true, n: 0 });
     let ok: bool = close_and(done.ok, !(obl_has_fail<N>(input, done.obls)));
     return UnitProve { ok: ok, err_start: 0, err_end: 0, unit: u, obls: done.obls, tops: done.tops, fn_count: done.n };
 }
@@ -4055,11 +4681,19 @@ fn prove_parsed_unit<N: Nat>(input: [byte; up_to N], u: Unit, imported: SigTab) 
 // Value positions accept scalars, declared nominals, and sequences with
 // valid elements; record fields the same; enum payloads reject sequences
 // outright. Qualified spellings fail with the context family.
-fn check_field_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
+fn check_field_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64, nominals: NominalTypeIdentityList) -> (result: OblList) {
     if kind == 1 || kind == 2 || kind == 3 || kind == 4 { return OblList.LNil; }
-    if kind == 5 { return check_named_field_type<N>(input, start, end, rectab, enumtab, ctx); }
-    if kind == 6 { return ctx_field_obl(kind_ctx_qualified(ctx), start, end); }
-    if kind == 7 || kind == 8 { return check_seq_field_type<N>(input, start, end, rectab, enumtab, ctx); }
+    if kind == 5 {
+        let imported: NominalLookup = nominal_identity_at<N>(input, nominals, start, end);
+        if imported.found { return OblList.LNil; }
+        return check_named_field_type<N>(input, start, end, rectab, enumtab, ctx);
+    }
+    if kind == 6 {
+        let found: NominalLookup = nominal_identity_at<N>(input, nominals, start, end);
+        if found.found { return OblList.LNil; }
+        return ctx_field_obl(kind_ctx_qualified(ctx), start, end);
+    }
+    if kind == 7 || kind == 8 { return check_seq_field_type<N>(input, start, end, rectab, enumtab, ctx, nominals); }
     return ctx_field_obl(kind_ctx_other(ctx), start, end);
 }
 fn kind_ctx_qualified(ctx: u64) -> (result: u64) {
@@ -4092,44 +4726,44 @@ fn check_declared_field_type<N: Nat>(input: [byte; up_to N], start: u64, end: u6
     if enum_declared<N>(input, enumtab, start, end) { return OblList.LNil; }
     return ctx_field_obl(kind_ctx_other(ctx), start, end);
 }
-fn check_seq_field_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64) -> (result: OblList) {
+fn check_seq_field_type<N: Nat>(input: [byte; up_to N], start: u64, end: u64, rectab: RecordList, enumtab: EnumList, ctx: u64, nominals: NominalTypeIdentityList) -> (result: OblList) {
     if ctx == 2 { return ctx_field_obl(30, start, end); }
-    let inner: TyRes = resolve_seq_type<N>(input, 7, start, end, rectab, enumtab);
+    let inner: TyRes = resolve_seq_type<N>(input, 7, start, end, rectab, enumtab, nominals);
     if inner.ok { return OblList.LNil; }
     return ctx_field_obl(kind_ctx_other(ctx), start, end);
 }
 record RecCheckState { rest: RecordList, obls: OblList }
-fn check_records<N: Nat>(input: [byte; up_to N], recs: RecordList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+fn check_records<N: Nat>(input: [byte; up_to N], recs: RecordList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: OblList) {
     iterate i over input carrying d: RecCheckState = RecCheckState { rest: recs, obls: OblList.LNil } {
-        next d = check_records_step<N>(input, d, rectab, enumtab);
+        next d = check_records_step<N>(input, d, rectab, enumtab, nominals);
     }
     return reverse_obls<N>(input, d.obls);
 }
-fn check_records_step<N: Nat>(input: [byte; up_to N], st: RecCheckState, rectab: RecordList, enumtab: EnumList) -> (result: RecCheckState) {
+fn check_records_step<N: Nat>(input: [byte; up_to N], st: RecCheckState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: RecCheckState) {
     return match st.rest {
         RNil => st,
-        RCons { head: h, tail: t } => check_one_record<N>(input, st, h, t, rectab, enumtab)
+        RCons { head: h, tail: t } => check_one_record<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_record<N: Nat>(input: [byte; up_to N], st: RecCheckState, h: RecordDecl, t: RecordList, rectab: RecordList, enumtab: EnumList) -> (result: RecCheckState) {
-    let obls: OblList = check_record_fields<N>(input, h.fields, rectab, enumtab);
+fn check_one_record<N: Nat>(input: [byte; up_to N], st: RecCheckState, h: RecordDecl, t: RecordList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: RecCheckState) {
+    let obls: OblList = check_record_fields<N>(input, h.fields, rectab, enumtab, nominals);
     return RecCheckState { rest: t, obls: append_obls<N>(input, st.obls, obls) };
 }
 record RecFieldState { rest: FieldList, seen: NameList, obls: OblList }
-fn check_record_fields<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+fn check_record_fields<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: OblList) {
     iterate i over input carrying d: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
-        next d = check_record_fields_step<N>(input, d, rectab, enumtab);
+        next d = check_record_fields_step<N>(input, d, rectab, enumtab, nominals);
     }
     return reverse_obls<N>(input, d.obls);
 }
-fn check_record_fields_step<N: Nat>(input: [byte; up_to N], st: RecFieldState, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
+fn check_record_fields_step<N: Nat>(input: [byte; up_to N], st: RecFieldState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: RecFieldState) {
     return match st.rest {
         FNil => st,
-        FCons { head: h, tail: t } => check_one_record_field<N>(input, st, h, t, rectab, enumtab)
+        FCons { head: h, tail: t } => check_one_record_field<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_record_field<N: Nat>(input: [byte; up_to N], st: RecFieldState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
-    let tob: OblList = check_field_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, 1);
+fn check_one_record_field<N: Nat>(input: [byte; up_to N], st: RecFieldState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: RecFieldState) {
+    let tob: OblList = check_field_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, 1, nominals);
     if name_known<N>(input, st.seen, h.name_start, h.name_end) {
         let dob: Obligation = Obligation { kind: 33, start: h.name_start, end: h.name_end, status: 1 };
         return RecFieldState { rest: t, seen: st.seen, obls: OblList.LCons { head: dob, tail: append_obls<N>(input, tob, st.obls) } };
@@ -4138,37 +4772,37 @@ fn check_one_record_field<N: Nat>(input: [byte; up_to N], st: RecFieldState, h: 
     return RecFieldState { rest: t, seen: seen, obls: append_obls<N>(input, tob, st.obls) };
 }
 record EnumCheckState { rest: EnumList, obls: OblList }
-fn check_enums<N: Nat>(input: [byte; up_to N], enums: EnumList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+fn check_enums<N: Nat>(input: [byte; up_to N], enums: EnumList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: OblList) {
     iterate i over input carrying d: EnumCheckState = EnumCheckState { rest: enums, obls: OblList.LNil } {
-        next d = check_enums_step<N>(input, d, rectab, enumtab);
+        next d = check_enums_step<N>(input, d, rectab, enumtab, nominals);
     }
     return reverse_obls<N>(input, d.obls);
 }
-fn check_enums_step<N: Nat>(input: [byte; up_to N], st: EnumCheckState, rectab: RecordList, enumtab: EnumList) -> (result: EnumCheckState) {
+fn check_enums_step<N: Nat>(input: [byte; up_to N], st: EnumCheckState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: EnumCheckState) {
     return match st.rest {
         GNil => st,
-        GCons { head: h, tail: t } => check_one_enum<N>(input, st, h, t, rectab, enumtab)
+        GCons { head: h, tail: t } => check_one_enum<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_enum<N: Nat>(input: [byte; up_to N], st: EnumCheckState, h: EnumDecl, t: EnumList, rectab: RecordList, enumtab: EnumList) -> (result: EnumCheckState) {
-    let obls: OblList = check_variants<N>(input, h.variants, rectab, enumtab);
+fn check_one_enum<N: Nat>(input: [byte; up_to N], st: EnumCheckState, h: EnumDecl, t: EnumList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: EnumCheckState) {
+    let obls: OblList = check_variants<N>(input, h.variants, rectab, enumtab, nominals);
     return EnumCheckState { rest: t, obls: append_obls<N>(input, st.obls, obls) };
 }
 record VariantState { rest: VariantList, seen: NameList, obls: OblList }
-fn check_variants<N: Nat>(input: [byte; up_to N], variants: VariantList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+fn check_variants<N: Nat>(input: [byte; up_to N], variants: VariantList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: OblList) {
     iterate i over input carrying d: VariantState = VariantState { rest: variants, seen: NameList.NNil, obls: OblList.LNil } {
-        next d = check_variants_step<N>(input, d, rectab, enumtab);
+        next d = check_variants_step<N>(input, d, rectab, enumtab, nominals);
     }
     return reverse_obls<N>(input, d.obls);
 }
-fn check_variants_step<N: Nat>(input: [byte; up_to N], st: VariantState, rectab: RecordList, enumtab: EnumList) -> (result: VariantState) {
+fn check_variants_step<N: Nat>(input: [byte; up_to N], st: VariantState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: VariantState) {
     return match st.rest {
         VNil => st,
-        VCons { head: h, tail: t } => check_one_variant<N>(input, st, h, t, rectab, enumtab)
+        VCons { head: h, tail: t } => check_one_variant<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_variant<N: Nat>(input: [byte; up_to N], st: VariantState, h: Variant, t: VariantList, rectab: RecordList, enumtab: EnumList) -> (result: VariantState) {
-    let pobls: OblList = check_payload_fields<N>(input, h.fields, rectab, enumtab);
+fn check_one_variant<N: Nat>(input: [byte; up_to N], st: VariantState, h: Variant, t: VariantList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: VariantState) {
+    let pobls: OblList = check_payload_fields<N>(input, h.fields, rectab, enumtab, nominals);
     if name_known<N>(input, st.seen, h.name_start, h.name_end) {
         let dob: Obligation = Obligation { kind: 34, start: h.name_start, end: h.name_end, status: 1 };
         return VariantState { rest: t, seen: st.seen, obls: OblList.LCons { head: dob, tail: append_obls<N>(input, pobls, st.obls) } };
@@ -4176,20 +4810,20 @@ fn check_one_variant<N: Nat>(input: [byte; up_to N], st: VariantState, h: Varian
     let seen: NameList = NameList.NCons { head: NameSpan { start: h.name_start, end: h.name_end }, tail: st.seen };
     return VariantState { rest: t, seen: seen, obls: append_obls<N>(input, pobls, st.obls) };
 }
-fn check_payload_fields<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: OblList) {
+fn check_payload_fields<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: OblList) {
     iterate i over input carrying d: RecFieldState = RecFieldState { rest: fields, seen: NameList.NNil, obls: OblList.LNil } {
-        next d = check_payload_fields_step<N>(input, d, rectab, enumtab);
+        next d = check_payload_fields_step<N>(input, d, rectab, enumtab, nominals);
     }
     return reverse_obls<N>(input, d.obls);
 }
-fn check_payload_fields_step<N: Nat>(input: [byte; up_to N], st: RecFieldState, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
+fn check_payload_fields_step<N: Nat>(input: [byte; up_to N], st: RecFieldState, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: RecFieldState) {
     return match st.rest {
         FNil => st,
-        FCons { head: h, tail: t } => check_one_payload_field<N>(input, st, h, t, rectab, enumtab)
+        FCons { head: h, tail: t } => check_one_payload_field<N>(input, st, h, t, rectab, enumtab, nominals)
     };
 }
-fn check_one_payload_field<N: Nat>(input: [byte; up_to N], st: RecFieldState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList) -> (result: RecFieldState) {
-    let tob: OblList = check_field_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, 2);
+fn check_one_payload_field<N: Nat>(input: [byte; up_to N], st: RecFieldState, h: Field, t: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: RecFieldState) {
+    let tob: OblList = check_field_type<N>(input, h.type_kind, h.type_start, h.type_end, rectab, enumtab, 2, nominals);
     if name_known<N>(input, st.seen, h.name_start, h.name_end) {
         let dob: Obligation = Obligation { kind: 33, start: h.name_start, end: h.name_end, status: 1 };
         return RecFieldState { rest: t, seen: st.seen, obls: OblList.LCons { head: dob, tail: append_obls<N>(input, tob, st.obls) } };

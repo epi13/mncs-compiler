@@ -1,0 +1,429 @@
+{
+  "schema_version": 1,
+  "status": "verified",
+  "scope": "saved, verifier-bound two-module scalar SSA with imported call and branch control flow emitted and executed as C11",
+  "native_root_identity": "mncs:0.2:function:a::g",
+  "native_imported_callable_identity": "mncs:0.2:function:b::f",
+  "native_root_blocks": 4,
+  "native_root_block_parameters": 9,
+  "native_verified_functions": 2,
+  "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+  "observable_behavior_equal": true,
+  "native_pipeline_seconds": 32.053359,
+  "pinned_stage0_seconds": 0.051896,
+  "tool_build_seconds": 0.000001,
+  "c11_compile_seconds": 0.062327,
+  "c11_execution_seconds": 0.00054,
+  "readiness_seconds": 0.006935,
+  "planning_seconds": 0,
+  "requests": 2,
+  "retained_sessions": 0,
+  "peak_child_rss_kib": 83968,
+  "native_backend_artifact": {
+    "schema_version": 1,
+    "compiler_checkout": "/workspace/mncs-compiler/.worktrees/compiler-parity-native-20260927",
+    "compiler_source_sha256": "bc60383ca342a8eb7b7a015bb640ec0a0115a24508bff83b4aa610dab9e51d89",
+    "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+    "fixture_sha256": "c0387cd9d9a378bd19d0f29ab49e47b943de26fc13e7ed393c6b07677d0cfd7c",
+    "verified_ssa_facts": {
+      "artifact": "campaign-20260927-native-backend-imported-nominal-resolved-facts.json",
+      "sha256": "9ca7170a9736f9342a4210da680b0ecf6587b47a2ddf81ce60e0ba575466f7cb",
+      "root": {
+        "valid": true,
+        "verified_function_count": 1,
+        "call_count": 1,
+        "block_count": 4,
+        "block_parameter_count": 9
+      },
+      "owner": {
+        "valid": true,
+        "verified_function_count": 1,
+        "call_count": 0,
+        "block_count": 1,
+        "block_parameter_count": 0
+      }
+    },
+    "normalized_native_ssa": {
+      "schema_version": "mncs.native-scalar-ssa/1",
+      "verification_status": "pass",
+      "verifier": "mncs.compiler.ssa.verify",
+      "compiler_source_sha256": "bc60383ca342a8eb7b7a015bb640ec0a0115a24508bff83b4aa610dab9e51d89",
+      "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+      "functions": [
+        {
+          "identity": "mncs:0.2:function:a::g",
+          "params": [
+            {
+              "id": "1",
+              "ty": "u64"
+            },
+            {
+              "id": "0",
+              "ty": "bool"
+            }
+          ],
+          "result_type": "u64",
+          "blocks": [
+            {
+              "id": 0,
+              "params": [],
+              "instructions": [
+                {
+                  "kind": "call",
+                  "dest": {
+                    "id": "2",
+                    "ty": "u64"
+                  },
+                  "callee": "mncs:0.2:function:b::f",
+                  "args": [
+                    "1"
+                  ]
+                }
+              ],
+              "terminator": {
+                "kind": "branch",
+                "condition": "0",
+                "then_target": 1,
+                "then_args": [
+                  "0",
+                  "1",
+                  "2"
+                ],
+                "else_target": 2,
+                "else_args": [
+                  "0",
+                  "1",
+                  "2"
+                ]
+              }
+            },
+            {
+              "id": 1,
+              "params": [
+                {
+                  "id": "5",
+                  "ty": "bool"
+                },
+                {
+                  "id": "4",
+                  "ty": "u64"
+                },
+                {
+                  "id": "3",
+                  "ty": "u64"
+                }
+              ],
+              "instructions": [],
+              "terminator": {
+                "kind": "jump",
+                "target": 3,
+                "args": [
+                  "3",
+                  "4",
+                  "5"
+                ]
+              }
+            },
+            {
+              "id": 2,
+              "params": [
+                {
+                  "id": "8",
+                  "ty": "bool"
+                },
+                {
+                  "id": "7",
+                  "ty": "u64"
+                },
+                {
+                  "id": "6",
+                  "ty": "u64"
+                }
+              ],
+              "instructions": [],
+              "terminator": {
+                "kind": "jump",
+                "target": 3,
+                "args": [
+                  "6",
+                  "7",
+                  "8"
+                ]
+              }
+            },
+            {
+              "id": 3,
+              "params": [
+                {
+                  "id": "11",
+                  "ty": "u64"
+                },
+                {
+                  "id": "10",
+                  "ty": "u64"
+                },
+                {
+                  "id": "9",
+                  "ty": "bool"
+                }
+              ],
+              "instructions": [],
+              "terminator": {
+                "kind": "return",
+                "value": "11"
+              }
+            }
+          ]
+        },
+        {
+          "identity": "mncs:0.2:function:b::f",
+          "params": [
+            {
+              "id": "0",
+              "ty": "u64"
+            }
+          ],
+          "result_type": "u64",
+          "blocks": [
+            {
+              "id": 0,
+              "params": [],
+              "instructions": [],
+              "terminator": {
+                "kind": "return",
+                "value": "0"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "c11_source": "/* MNCS C11 realization 0.2. Not MNCS semantics. No C undefined behavior for integers. */\n#include <stdint.h>\n#include <stdbool.h>\n#include <string.h>\n#include <math.h>\n\nvoid mncs_a__g(int64_t, int32_t, int32_t*, int64_t*, uint64_t);\nvoid mncs_b__f(int64_t, int32_t*, int64_t*, uint64_t);\n\nvoid mncs_a__g(int64_t v0, int32_t v1, int32_t *mncs_status, int64_t *mncs_value, uint64_t mncs_depth) {\n  int64_t v2;\n  int32_t v3;\n  int64_t v4;\n  int64_t v5;\n  int32_t v6;\n  int64_t v7;\n  int64_t v8;\n  int64_t v9;\n  int64_t v10;\n  int32_t v11;\n  if (mncs_depth > 1024u) { *mncs_status = 3; *mncs_value = 0; return; }\n  int32_t mncs_pc = 0;\n  for (;;) {\n    switch (mncs_pc) {\n    case 0: {\n      mncs_b__f(v0, mncs_status, mncs_value, mncs_depth + 1);\n      if (*mncs_status != 0) { return; }\n      v2 = (int64_t)*mncs_value;\n      if (v1) {\n      v3 = v1;\n      v4 = v0;\n      v5 = v2;\n        mncs_pc = 1; continue;\n      } else {\n      v6 = v1;\n      v7 = v0;\n      v8 = v2;\n        mncs_pc = 2; continue;\n      }\n    }\n    case 1: {\n      v9 = v5;\n      v10 = v4;\n      v11 = v3;\n      mncs_pc = 3; continue;\n    }\n    case 2: {\n      v9 = v8;\n      v10 = v7;\n      v11 = v6;\n      mncs_pc = 3; continue;\n    }\n    case 3: {\n      *mncs_status = 0;\n      *mncs_value = (int64_t)v9;\n      return;\n    }\n    default:\n      *mncs_status = 1;\n      *mncs_value = 0;\n      return;\n    }\n  }\n}\n\nvoid mncs_b__f(int64_t v0, int32_t *mncs_status, int64_t *mncs_value, uint64_t mncs_depth) {\n  if (mncs_depth > 1024u) { *mncs_status = 3; *mncs_value = 0; return; }\n  int32_t mncs_pc = 0;\n  for (;;) {\n    switch (mncs_pc) {\n    case 0: {\n      *mncs_status = 0;\n      *mncs_value = (int64_t)v0;\n      return;\n    }\n    default:\n      *mncs_status = 1;\n      *mncs_value = 0;\n      return;\n    }\n  }\n}\n\n",
+    "c11_driver": "#include <stdint.h>\n#include <stdio.h>\nextern void mncs_a__g(uint64_t, uint8_t, int32_t *, int64_t *, uint64_t);\nint main(void) {\n  int32_t status;\n  int64_t value;\n  mncs_a__g(37, 0, &status, &value, 64);\n  printf(\"%d %lld\\n\", status, (long long)value);\n  mncs_a__g(81, 1, &status, &value, 64);\n  printf(\"%d %lld\\n\", status, (long long)value);\n  return 0;\n}\n",
+    "native_entrypoint_parameter_order": [
+      "u64",
+      "bool"
+    ],
+    "pinned_stage0_executions": [
+      {
+        "effects": [],
+        "failure": null,
+        "hir_fingerprint": "5275475a1e4dbac51aa10a8dcf9f533fcd59acb9aa1236c19ca7a5d2235b88bf",
+        "returned": [
+          {
+            "integer": {
+              "type": {
+                "bits": 64,
+                "signed": false
+              },
+              "value": 37
+            }
+          }
+        ],
+        "schema_version": "0.1",
+        "semantic_function_identity": "mncs:0.2:function:a::g",
+        "semantic_program_identity": "mncs:0.2:program:a",
+        "ssa_module_fingerprint": "786868fa648e91f3c747015880526d036bb3eacd3952a37876e230251fe2ec13",
+        "ssa_module_identity": "mncs:0.4:ssa:module:74109c1a55d7ce0320b5cd563229090e56ea4ca9bfeee9c5c766cb69168c4e90",
+        "status": "returned",
+        "steps": 5,
+        "target": {
+          "function": "g",
+          "module": "a"
+        },
+        "trace": [
+          {
+            "block": "mncs:0.2:block:a::g::entry",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:1397671a14db98fab4ae8615d0a10536159345a0f923009399402e4c43916e4c",
+            "step": 0
+          },
+          {
+            "block": "mncs:0.2:block:a::g::entry",
+            "event": "instruction",
+            "hir_identities": [
+              "mncs:0.3:ir:body-operation:ed1f522f00dbd965f151bd26494957b641cddd687e03f70b358ad2eec366396c:0"
+            ],
+            "semantic_identity": "mncs:0.2:operation:a::g::entry::%24mncs%24call%240",
+            "ssa_identity": "mncs:0.4:ssa:instruction:dbcad7ac6f6e7832ad9d123c6c2cfe23b92d8754f434422a05636dcbadb37138",
+            "step": 1
+          },
+          {
+            "block": "mncs:0.2:block:b::f::entry",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:b::f::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:9edd40f5590fad654d5eb291febdf6dcae7c145d5de24180ab927c7445bd8c13",
+            "step": 1
+          },
+          {
+            "block": "mncs:0.2:block:b::f::entry",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:b::f::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:9edd40f5590fad654d5eb291febdf6dcae7c145d5de24180ab927c7445bd8c13",
+            "step": 2
+          },
+          {
+            "block": "mncs:0.2:block:a::g::entry",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:1397671a14db98fab4ae8615d0a10536159345a0f923009399402e4c43916e4c",
+            "step": 3
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b2",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b2",
+            "ssa_identity": "mncs:0.4:ssa:block:7a5ca7dfb36fbb46870ad9057993937b237ddffc0958a02df35f916c86f8bd04",
+            "step": 3
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b2",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b2",
+            "ssa_identity": "mncs:0.4:ssa:block:7a5ca7dfb36fbb46870ad9057993937b237ddffc0958a02df35f916c86f8bd04",
+            "step": 4
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b3",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b3",
+            "ssa_identity": "mncs:0.4:ssa:block:53319d40723b27c2d41fa6e9169f8578acdd1715e1a10da227ab25e902da6770",
+            "step": 4
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b3",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b3",
+            "ssa_identity": "mncs:0.4:ssa:block:53319d40723b27c2d41fa6e9169f8578acdd1715e1a10da227ab25e902da6770",
+            "step": 5
+          }
+        ],
+        "trace_truncated": false
+      },
+      {
+        "effects": [],
+        "failure": null,
+        "hir_fingerprint": "5275475a1e4dbac51aa10a8dcf9f533fcd59acb9aa1236c19ca7a5d2235b88bf",
+        "returned": [
+          {
+            "integer": {
+              "type": {
+                "bits": 64,
+                "signed": false
+              },
+              "value": 81
+            }
+          }
+        ],
+        "schema_version": "0.1",
+        "semantic_function_identity": "mncs:0.2:function:a::g",
+        "semantic_program_identity": "mncs:0.2:program:a",
+        "ssa_module_fingerprint": "786868fa648e91f3c747015880526d036bb3eacd3952a37876e230251fe2ec13",
+        "ssa_module_identity": "mncs:0.4:ssa:module:74109c1a55d7ce0320b5cd563229090e56ea4ca9bfeee9c5c766cb69168c4e90",
+        "status": "returned",
+        "steps": 5,
+        "target": {
+          "function": "g",
+          "module": "a"
+        },
+        "trace": [
+          {
+            "block": "mncs:0.2:block:a::g::entry",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:1397671a14db98fab4ae8615d0a10536159345a0f923009399402e4c43916e4c",
+            "step": 0
+          },
+          {
+            "block": "mncs:0.2:block:a::g::entry",
+            "event": "instruction",
+            "hir_identities": [
+              "mncs:0.3:ir:body-operation:ed1f522f00dbd965f151bd26494957b641cddd687e03f70b358ad2eec366396c:0"
+            ],
+            "semantic_identity": "mncs:0.2:operation:a::g::entry::%24mncs%24call%240",
+            "ssa_identity": "mncs:0.4:ssa:instruction:dbcad7ac6f6e7832ad9d123c6c2cfe23b92d8754f434422a05636dcbadb37138",
+            "step": 1
+          },
+          {
+            "block": "mncs:0.2:block:b::f::entry",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:b::f::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:9edd40f5590fad654d5eb291febdf6dcae7c145d5de24180ab927c7445bd8c13",
+            "step": 1
+          },
+          {
+            "block": "mncs:0.2:block:b::f::entry",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:b::f::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:9edd40f5590fad654d5eb291febdf6dcae7c145d5de24180ab927c7445bd8c13",
+            "step": 2
+          },
+          {
+            "block": "mncs:0.2:block:a::g::entry",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::entry",
+            "ssa_identity": "mncs:0.4:ssa:block:1397671a14db98fab4ae8615d0a10536159345a0f923009399402e4c43916e4c",
+            "step": 3
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b1",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b1",
+            "ssa_identity": "mncs:0.4:ssa:block:b4d2e0f22cb9f6a224bf3ee5b9c5436bcb3a9eabb46123f377365c60715e509e",
+            "step": 3
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b1",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b1",
+            "ssa_identity": "mncs:0.4:ssa:block:b4d2e0f22cb9f6a224bf3ee5b9c5436bcb3a9eabb46123f377365c60715e509e",
+            "step": 4
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b3",
+            "event": "block_enter",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b3",
+            "ssa_identity": "mncs:0.4:ssa:block:53319d40723b27c2d41fa6e9169f8578acdd1715e1a10da227ab25e902da6770",
+            "step": 4
+          },
+          {
+            "block": "mncs:0.2:block:a::g::b3",
+            "event": "terminator",
+            "hir_identities": [],
+            "semantic_identity": "mncs:0.2:block:a::g::b3",
+            "ssa_identity": "mncs:0.4:ssa:block:53319d40723b27c2d41fa6e9169f8578acdd1715e1a10da227ab25e902da6770",
+            "step": 5
+          }
+        ],
+        "trace_truncated": false
+      }
+    ],
+    "emitted_c_executions": [
+      [
+        0,
+        37
+      ],
+      [
+        0,
+        81
+      ]
+    ],
+    "observable_behavior_equal": true
+  }
+}

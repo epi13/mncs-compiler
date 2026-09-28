@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import random
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,11 +47,13 @@ def decode(value):
 class Probe:
     def __init__(self):
         env = dict(os.environ)
-        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+        reference_interpreter = env.get("MNCS_PROBE_BACKEND") == "reference_interpreter"
+        if reference_interpreter:
             env.pop("MNCS_PROBE_BACKEND", None)
         env['MNCS_PROBE_MODULES'] = PROBE_MODULES
         env['MNCS_PROBE_EXECUTION_MODULES'] = 'mncs.compiler.segment.v1'
-        env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+        if not reference_interpreter:
+            env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
         env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
             {'module': 'mncs.compiler.segment.v1', 'function': function,
              'type_arguments': [nat_arg(SOURCE_BOUND)]}
@@ -92,7 +95,9 @@ class Probe:
         assert self.proc.wait(timeout=60) == 0
 
 
-def samples():
+def samples(smoke=False):
+    if smoke:
+        return [b' /* first */ // second\n fn f() -> (r: u64) { return 1; }']
     fixed = [
         b'', b'a', b'mncs 0.13; module a;', b'mncs 0.13; module a.b;',
         b'/*c*/', b'/* /* */', b'/* unterminated',
@@ -114,7 +119,7 @@ def samples():
 NONASCII = [b'mncs 0.13; module caf\xc3\xa9;', b'\xff', b'a\x80b']
 
 
-def suite():
+def suite(smoke=False):
     probe = Probe()
     try:
         execution_status = probe.send({'execution_status': True})
@@ -124,7 +129,7 @@ def suite():
         inv = {value: int(key) for key, value in kinds.items()}
         n_tokens = 0
         n_texts = 0
-        for original in samples():
+        for original in samples(smoke=smoke):
             data = original + b' ' * (SOURCE_BOUND - len(original))
             text = data.decode('ascii')
             oracle = probe.send({'oracle': text})['lexical']
@@ -190,7 +195,7 @@ def suite():
             assert seen[-1]['kind'] == 0 or seen[-1]['diagnostic'] != 0
             n_texts += 1
 
-        for original in NONASCII:
+        for original in (NONASCII[:1] if smoke else NONASCII):
             data = original + b' ' * (SOURCE_BOUND - len(original))
             assert probe.run('ascii', [blob(data)]) is False
             first_bad = next(index for index, byte in enumerate(data) if byte >= 128)
@@ -214,14 +219,21 @@ def suite():
 
 if __name__ == '__main__':
     started = time.monotonic()
-    first, second = suite(), suite()
-    assert first == second, (first, second)
+    smoke = os.environ.get("MNCS_SEGMENT_SMOKE") == "1"
+    if smoke:
+        first = suite(smoke=True)
+        identical_runs = 1
+    else:
+        first, second = suite(), suite()
+        assert first == second, (first, second)
+        identical_runs = 2
     report = {
         'schema_version': 1,
         'stage0_revision': json.loads(Path('mncs-language.lock.json').read_text())['revision'],
         'stage0_reference_mode': os.environ.get('MNCS_PROBE_REFERENCE_MODE', 'locked'),
         'tests': first,
-        'identical_runs': 2,
+        'identical_runs': identical_runs,
+        'smoke': smoke,
         'elapsed_seconds': round(time.monotonic() - started, 3),
         'scope': 'generic source, byte/span adapters, segment token walk, significant-token walk vs Stage-0 lexical facts',
     }

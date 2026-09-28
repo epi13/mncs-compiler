@@ -32,6 +32,8 @@ record Instruction {
     argc: u64,
     params: decl.BindList,
     identity: decl.SemanticIdentity,
+    effects: decl.EffectIdentityList,
+    capabilities: decl.CapabilityIdentityList,
     start: u64,
     end: u64
 }
@@ -50,6 +52,7 @@ record SsaBlockRev { rest: SsaBlockList, acc: SsaBlockList }
 
 record Function {
     identity: decl.SemanticIdentity,
+    nominals: decl.NominalTypeIdentityList,
     inputs: ValueList,
     result_type: decl.SemType,
     blocks: SsaBlockList,
@@ -80,7 +83,7 @@ record ValueSsaSummary {
 record ParamBuild { rest: decl.FieldList, env: Environment, inputs: ValueList, values: ValueList, next_value: u64, ok: bool }
 record Incoming { found: bool, ok: bool, count: u64, bindings: Environment }
 record IncomingScan { rest: EdgeList, target: u64, found: bool, ok: bool, count: u64, bindings: Environment }
-record BlockParamBuild { rest: Environment, env: Environment, params: ValueList, values: ValueList, next_value: u64, parameter_index: u64, block: u64, ok: bool }
+record BlockParamBuild { rest: Environment, env: Environment, params: ValueList, values: ValueList, next_value: u64, parameter_index: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
 
 record ExprBuild {
     rest: decl.TOpList,
@@ -92,6 +95,7 @@ record ExprBuild {
     next_instruction: u64,
     sequence: u64,
     block: u64,
+    nominals: decl.NominalTypeIdentityList,
     ok: bool
 }
 record PopArgs { stack: ValueStack, remaining: u64, arguments: IdList, ok: bool }
@@ -108,6 +112,7 @@ record ExpressionBuild {
     return_value: u64,
     has_branch: bool,
     has_return: bool,
+    nominals: decl.NominalTypeIdentityList,
     ok: bool
 }
 record SsaBuild {
@@ -121,11 +126,12 @@ record SsaBuild {
     next_instruction: u64,
     result_type: decl.SemType,
     identity: decl.SemanticIdentity,
+    nominals: decl.NominalTypeIdentityList,
     entry: u64,
     supported: bool,
     initial_failure_kind: u64
 }
-record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, ok: bool }
+record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
 record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
 record FunctionShape { blocks: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
 record BlockShapeScan { rest: SsaBlockList, blocks: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
@@ -146,12 +152,39 @@ fn scalar_type(ty: decl.SemType) -> (result: bool) {
         TPoison => false
     };
 }
+fn supported_sequence_element<N: Nat>(input: [byte; up_to N], ty: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match ty {
+        TBool => true,
+        TByte => true,
+        TInt { width: w, signed: s } => true,
+        TNamed { start: a, end: b } => nominal_value_type_bound<N>(input, nominals, a, b),
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
+        TPoison => false
+    };
+}
+fn supported_value_type<N: Nat>(input: [byte; up_to N], ty: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match ty {
+        TBool => true,
+        TByte => true,
+        TInt { width: w, signed: s } => true,
+        TNamed { start: a, end: b } => nominal_value_type_bound<N>(input, nominals, a, b),
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => valid && supported_sequence_element<N>(input, element, nominals),
+        TPoison => false
+    };
+}
+fn nominal_value_type_bound<N: Nat>(input: [byte; up_to N], nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    let imported: decl.NominalLookup = decl.nominal_identity_at<N>(input, nominals, start, end);
+    let local: decl.NominalLookup = decl.nominal_identity_by_name<N>(input, nominals, start, end);
+    return (imported.found && imported.identity.valid) || (local.found && local.identity.valid);
+}
 
-fn lower_value_ssa<N: Nat>(input: [byte; up_to N], lowered: flow.LoweredUnit) -> (result: ValueSsaSummary) {
+fn lower_value_ssa<N: Nat>(input: [byte; up_to N], lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList) -> (result: ValueSsaSummary) {
     if !(flow.ssa_flow_valid(lowered)) {
         return empty_ssa_summary(false);
     }
-    iterate i over input carrying st: FunctionWalk = FunctionWalk { fns: lowered.proof.unit.fns, lowered: lowered, index: 0, acc: FunctionList.FNil, count: 0, ok: true } {
+    iterate i over input carrying st: FunctionWalk = FunctionWalk { fns: lowered.proof.unit.fns, lowered: lowered, index: 0, acc: FunctionList.FNil, count: 0, nominals: nominals, ok: true } {
         next st = lower_function_step<N>(input, st, lowered.proof.unit.header);
     }
     let functions: FunctionList = reverse_functions<N>(input, st.acc);
@@ -225,8 +258,8 @@ fn lower_flow_step<N: Nat>(input: [byte; up_to N], st: FunctionWalk, header: par
     return finish_function_step<N>(input, st, header, fn_decl, fns, cfg);
 }
 fn finish_function_step<N: Nat>(input: [byte; up_to N], st: FunctionWalk, header: parser.Header, fn_decl: decl.FnDecl, fns: decl.FnList, cfg: flow.FunctionFlow) -> (result: FunctionWalk) {
-    let lowered: Function = lower_function<N>(input, header, fn_decl, cfg);
-    return FunctionWalk { fns: fns, lowered: st.lowered, index: st.index + 1, acc: FunctionList.FCons { head: lowered, tail: st.acc }, count: st.count + 1, ok: st.ok && lowered.verified };
+    let lowered: Function = lower_function<N>(input, header, fn_decl, cfg, st.lowered.proof.unit.records, st.lowered.proof.unit.enums, st.nominals);
+    return FunctionWalk { fns: fns, lowered: st.lowered, index: st.index + 1, acc: FunctionList.FCons { head: lowered, tail: st.acc }, count: st.count + 1, nominals: st.nominals, ok: st.ok && lowered.verified };
 }
 fn reverse_functions<N: Nat>(input: [byte; up_to N], functions: FunctionList) -> (result: FunctionList) {
     iterate i over input carrying st: FunctionReverse = FunctionReverse { rest: functions, acc: FunctionList.FNil } { next st = reverse_function_step(st); }
@@ -240,25 +273,25 @@ fn reverse_function_step(st: FunctionReverse) -> (result: FunctionReverse) {
     };
 }
 
-fn lower_function<N: Nat>(input: [byte; up_to N], header: parser.Header, fn_decl: decl.FnDecl, cfg: flow.FunctionFlow) -> (result: Function) {
+fn lower_function<N: Nat>(input: [byte; up_to N], header: parser.Header, fn_decl: decl.FnDecl, cfg: flow.FunctionFlow, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: Function) {
     let identity: decl.SemanticIdentity = decl.canonical_function_identity<N>(input, header.module_start, header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end);
-    let parameters: ParamBuild = function_parameters<N>(input, fn_decl.sig.params);
-    let result_type: decl.SemType = function_result_type<N>(input, fn_decl.sig.results);
+    let parameters: ParamBuild = function_parameters<N>(input, fn_decl.sig.params, records, enums, nominals);
+    let result_type: decl.SemType = function_result_type<N>(input, fn_decl.sig.results, records, enums, nominals);
     let cfg_ok: bool = flow.ssa_cfg_verified(cfg);
-    let result_ok: bool = scalar_type(result_type);
+    let result_ok: bool = supported_value_type<N>(input, result_type, nominals);
     let initial_failure: u64 = function_support_failure(cfg_ok, parameters.ok, result_ok, identity.valid);
     let initial: SsaBuild = SsaBuild {
         rest: flow.ssa_cfg_blocks(cfg), edges: EdgeList.ENil, blocks: SsaBlockList.LNil,
         values: parameters.values, inputs: parameters.inputs, entry_env: parameters.env,
         next_value: parameters.next_value, next_instruction: 0,
-        result_type: result_type, identity: identity, entry: flow.ssa_cfg_entry(cfg),
+        result_type: result_type, identity: identity, nominals: nominals, entry: flow.ssa_cfg_entry(cfg),
         supported: cfg_ok && parameters.ok && result_ok && identity.valid,
         initial_failure_kind: initial_failure
     };
     iterate i over input carrying st: SsaBuild = initial { next st = lower_block_step<N>(input, st); }
     let blocks: SsaBlockList = reverse_blocks<N>(input, st.blocks);
     let candidate: Function = Function {
-        identity: st.identity, inputs: st.inputs, result_type: st.result_type,
+        identity: st.identity, nominals: st.nominals, inputs: st.inputs, result_type: st.result_type,
         blocks: blocks, values: st.values, value_count: st.next_value,
         supported: st.supported, verified: false
     };
@@ -272,34 +305,31 @@ fn function_support_failure(cfg_ok: bool, parameters_ok: bool, result_ok: bool, 
     if !(identity_ok) { return 9; }
     return 0;
 }
-fn function_parameters<N: Nat>(input: [byte; up_to N], fields: decl.FieldList) -> (result: ParamBuild) {
-    iterate i over input carrying st: ParamBuild = ParamBuild { rest: fields, env: Environment.EnvNil, inputs: ValueList.VNil, values: ValueList.VNil, next_value: 0, ok: true } { next st = function_parameter_step<N>(input, st); }
+fn function_parameters<N: Nat>(input: [byte; up_to N], fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: ParamBuild) {
+    iterate i over input carrying st: ParamBuild = ParamBuild { rest: fields, env: Environment.EnvNil, inputs: ValueList.VNil, values: ValueList.VNil, next_value: 0, ok: true } { next st = function_parameter_step<N>(input, st, records, enums, nominals); }
     return st;
 }
-fn function_parameter_step<N: Nat>(input: [byte; up_to N], st: ParamBuild) -> (result: ParamBuild) {
+fn function_parameter_step<N: Nat>(input: [byte; up_to N], st: ParamBuild, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: ParamBuild) {
     return match st.rest {
         decl.FieldList.FNil => st,
-        decl.FieldList.FCons { head: field, tail: rest } => add_function_parameter<N>(input, st, field, rest)
+        decl.FieldList.FCons { head: field, tail: rest } => add_function_parameter<N>(input, st, field, rest, records, enums, nominals)
     };
 }
-fn add_function_parameter<N: Nat>(input: [byte; up_to N], st: ParamBuild, field: decl.Field, rest: decl.FieldList) -> (result: ParamBuild) {
-    let ty: decl.SemType = ssa_field_type<N>(input, field);
+fn add_function_parameter<N: Nat>(input: [byte; up_to N], st: ParamBuild, field: decl.Field, rest: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: ParamBuild) {
+    let ty: decl.SemType = ssa_field_type<N>(input, field, records, enums, nominals);
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: 0, kind: 0, index: 0 };
     let binding: Binding = Binding { name_start: field.name_start, name_end: field.name_end, value: value.id, ty: ty };
-    return ParamBuild { rest: rest, env: Environment.EnvCons { head: binding, tail: st.env }, inputs: ValueList.VCons { head: value, tail: st.inputs }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, ok: st.ok && scalar_type(ty) };
+    return ParamBuild { rest: rest, env: Environment.EnvCons { head: binding, tail: st.env }, inputs: ValueList.VCons { head: value, tail: st.inputs }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, ok: st.ok && supported_value_type<N>(input, ty, nominals) };
 }
-fn function_result_type<N: Nat>(input: [byte; up_to N], fields: decl.FieldList) -> (result: decl.SemType) {
+fn function_result_type<N: Nat>(input: [byte; up_to N], fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: decl.SemType) {
     return match fields {
         decl.FieldList.FNil => SemType.TPoison,
-        decl.FieldList.FCons { head: field, tail: rest } => ssa_field_type<N>(input, field)
+        decl.FieldList.FCons { head: field, tail: rest } => ssa_field_type<N>(input, field, records, enums, nominals)
     };
 }
-fn ssa_field_type<N: Nat>(input: [byte; up_to N], field: decl.Field) -> (result: decl.SemType) {
-    if field.type_kind == 1 { return decl.SemType.TInt { width: 64, signed: false }; }
-    if field.type_kind == 2 { return decl.SemType.TInt { width: 64, signed: true }; }
-    if field.type_kind == 3 { return decl.SemType.TBool; }
-    if field.type_kind == 4 { return decl.SemType.TByte; }
-    return decl.scalar_sem<N>(input, field.type_start, field.type_end);
+fn ssa_field_type<N: Nat>(input: [byte; up_to N], field: decl.Field, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: decl.SemType) {
+    let resolved: decl.TyRes = decl.resolve_type<N>(input, field.type_kind, field.type_start, field.type_end, records, enums, nominals);
+    return resolved.ty;
 }
 
 fn lower_block_step<N: Nat>(input: [byte; up_to N], st: SsaBuild) -> (result: SsaBuild) {
@@ -310,7 +340,7 @@ fn lower_block_step<N: Nat>(input: [byte; up_to N], st: SsaBuild) -> (result: Ss
 }
 fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Block, rest: flow.BlockList) -> (result: SsaBuild) {
     let incoming: Incoming = incoming_for<N>(input, block.id, st.edges);
-    let prepared: BlockParamBuild = prepare_block_environment<N>(input, block.id, incoming, st.next_value, st.values);
+    let prepared: BlockParamBuild = prepare_block_environment<N>(input, block.id, incoming, st.next_value, st.values, st.nominals);
     // Entry inputs already carry the parameter environment; non-entry blocks
     // get fresh, typed block parameters matched against predecessor edges.
     let actual_env: Environment = entry_or_parameters(block.id, st.entry, st.entry_env, incoming, prepared.env);
@@ -320,6 +350,7 @@ fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Blo
         values: prepared.values, next_value: prepared.next_value,
         next_instruction: st.next_instruction, sequence: 0, block: block.id,
         branch_value: 0, return_value: 0, has_branch: false, has_return: false,
+        nominals: st.nominals,
         ok: st.supported && (block.id == st.entry || (incoming.found && incoming.ok))
     };
     iterate i over input carrying exprs: ExpressionBuild = expression_seed { next exprs = lower_expression_step<N>(input, exprs); }
@@ -334,7 +365,7 @@ fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Blo
         rest: rest, edges: edges, blocks: SsaBlockList.LCons { head: ssa_block, tail: st.blocks },
         values: exprs.values, inputs: st.inputs, entry_env: st.entry_env, next_value: exprs.next_value,
         next_instruction: exprs.next_instruction, result_type: st.result_type,
-        identity: st.identity, entry: st.entry, supported: block_ok,
+        identity: st.identity, nominals: st.nominals, entry: st.entry, supported: block_ok,
         initial_failure_kind: st.initial_failure_kind
     };
 }
@@ -356,21 +387,21 @@ fn entry_or_parameters(block: u64, entry: u64, entry_env: Environment, incoming:
     return env;
 }
 
-fn prepare_block_environment<N: Nat>(input: [byte; up_to N], block: u64, incoming: Incoming, next_value: u64, values: ValueList) -> (result: BlockParamBuild) {
-    if !(incoming.found) || !(incoming.ok) { return BlockParamBuild { rest: Environment.EnvNil, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, ok: block == 0 }; }
-    iterate i over input carrying st: BlockParamBuild = BlockParamBuild { rest: incoming.bindings, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, ok: true } { next st = block_parameter_step(st); }
+fn prepare_block_environment<N: Nat>(input: [byte; up_to N], block: u64, incoming: Incoming, next_value: u64, values: ValueList, nominals: decl.NominalTypeIdentityList) -> (result: BlockParamBuild) {
+    if !(incoming.found) || !(incoming.ok) { return BlockParamBuild { rest: Environment.EnvNil, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, nominals: nominals, ok: block == 0 }; }
+    iterate i over input carrying st: BlockParamBuild = BlockParamBuild { rest: incoming.bindings, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, nominals: nominals, ok: true } { next st = block_parameter_step<N>(input, st); }
     return st;
 }
-fn block_parameter_step(st: BlockParamBuild) -> (result: BlockParamBuild) {
+fn block_parameter_step<N: Nat>(input: [byte; up_to N], st: BlockParamBuild) -> (result: BlockParamBuild) {
     return match st.rest {
         EnvNil => st,
-        EnvCons { head: binding, tail: rest } => add_block_parameter(st, binding, rest)
+        EnvCons { head: binding, tail: rest } => add_block_parameter<N>(input, st, binding, rest)
     };
 }
-fn add_block_parameter(st: BlockParamBuild, binding: Binding, rest: Environment) -> (result: BlockParamBuild) {
+fn add_block_parameter<N: Nat>(input: [byte; up_to N], st: BlockParamBuild, binding: Binding, rest: Environment) -> (result: BlockParamBuild) {
     let value: Value = Value { id: st.next_value, ty: binding.ty, owner_block: st.block, kind: 1, index: st.parameter_index };
     let mapped: Binding = Binding { name_start: binding.name_start, name_end: binding.name_end, value: value.id, ty: binding.ty };
-    return BlockParamBuild { rest: rest, env: Environment.EnvCons { head: mapped, tail: st.env }, params: ValueList.VCons { head: value, tail: st.params }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, parameter_index: st.parameter_index + 1, block: st.block, ok: st.ok && scalar_type(binding.ty) };
+    return BlockParamBuild { rest: rest, env: Environment.EnvCons { head: mapped, tail: st.env }, params: ValueList.VCons { head: value, tail: st.params }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, parameter_index: st.parameter_index + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, binding.ty, st.nominals) };
 }
 
 fn incoming_for<N: Nat>(input: [byte; up_to N], target: u64, edges: EdgeList) -> (result: Incoming) {
@@ -415,7 +446,7 @@ fn lower_expression_step<N: Nat>(input: [byte; up_to N], st: ExpressionBuild) ->
     };
 }
 fn lower_expression<N: Nat>(input: [byte; up_to N], st: ExpressionBuild, expression: flow.TypedExpr, rest: flow.TypedExprList) -> (result: ExpressionBuild) {
-    let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, ok: st.ok };
+    let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok };
     iterate i over input carrying built: ExprBuild = seed { next built = lower_operation_step<N>(input, built); }
     let value: Value = expression_value(built.stack);
     let one_value: bool = expression_stack_single(built.stack);
@@ -428,6 +459,7 @@ fn lower_expression<N: Nat>(input: [byte; up_to N], st: ExpressionBuild, express
         sequence: built.sequence, block: st.block, branch_value: branch_value,
         return_value: return_value, has_branch: st.has_branch || expression.role == 2,
         has_return: st.has_return || expression.role == 3,
+        nominals: st.nominals,
         ok: built.ok && one_value && (expression.role != 1 || expression.binding_end > expression.binding_start)
     };
 }
@@ -457,15 +489,15 @@ fn lower_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: dec
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false },
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false },
         TBin { op: op, ty: ty, start: s, end: e } => lower_binary<N>(input, st, rest, op, ty, s, e),
-        TCall { ty: ty, argc: argc, params: params, start: s, end: e, ns: ns, ne: ne, identity: identity } => lower_call<N>(input, st, rest, ty, argc, params, identity, s, e),
+        TCall { ty: ty, argc: argc, params: params, start: s, end: e, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => lower_call<N>(input, st, rest, ty, argc, params, identity, effects, capabilities, s, e),
         TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false }
     };
 }
 fn emit_constant(st: ExprBuild, rest: decl.TOpList, kind: u64, integer: u64, boolean: bool, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let payload: u64 = select(kind == 0, integer, boolean_value(boolean));
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: kind, operator: payload, result: value.id, ty: ty, inputs: IdList.INil, argc: 0, params: decl.BindList.BNil, identity: invalid_identity(), start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: st.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, ok: st.ok && scalar_type(ty) };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: kind, operator: payload, result: value.id, ty: ty, inputs: IdList.INil, argc: 0, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: st.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(ty) };
 }
 fn boolean_value(value: bool) -> (result: u64) { return select(value, 1, 0); }
 fn lower_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
@@ -477,14 +509,14 @@ fn lower_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, 
 fn emit_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64, operand: Value, remaining: ValueStack) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let args: IdList = IdList.ICons { head: Id { value: operand.id }, tail: IdList.INil };
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 4, operator: 0, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), start: start, end: end };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 4, operator: 0, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
     let valid: bool = decl.sem_eq<N>(input, operand.ty, decl.SemType.TBool);
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, ok: st.ok && valid && decl.sem_eq<N>(input, ty, decl.SemType.TBool) };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && valid && decl.sem_eq<N>(input, ty, decl.SemType.TBool) };
 }
 fn lower_name<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let found: BindingLookup = lookup_binding<N>(input, st.env, start, end);
     if !(found.found) || !(decl.sem_eq<N>(input, found.binding.ty, ty)) { return ExprBuild { ..st, rest: rest, ok: false }; }
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: Value { id: found.binding.value, ty: found.binding.ty, owner_block: 0, kind: 3, index: 0 }, tail: st.stack }, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, ok: st.ok };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: Value { id: found.binding.value, ty: found.binding.ty, owner_block: 0, kind: 3, index: 0 }, tail: st.stack }, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok };
 }
 record BindingLookup { found: bool, binding: Binding }
 record BindingScan { rest: Environment, start: u64, end: u64, found: bool, binding: Binding }
@@ -516,16 +548,16 @@ fn lower_binary_left<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.T
 fn emit_binary<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, op: u64, ty: decl.SemType, start: u64, end: u64, right: Value, left: Value, tail: ValueStack) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let args: IdList = IdList.ICons { head: Id { value: left.id }, tail: IdList.ICons { head: Id { value: right.id }, tail: IdList.INil } };
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 2, operator: op, result: value.id, ty: ty, inputs: args, argc: 2, params: decl.BindList.BNil, identity: invalid_identity(), start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty) };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 2, operator: op, result: value.id, ty: ty, inputs: args, argc: 2, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty) };
 }
 
-fn lower_call<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, params: decl.BindList, identity: decl.SemanticIdentity, start: u64, end: u64) -> (result: ExprBuild) {
+fn lower_call<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, params: decl.BindList, identity: decl.SemanticIdentity, effects: decl.EffectIdentityList, capabilities: decl.CapabilityIdentityList, start: u64, end: u64) -> (result: ExprBuild) {
     iterate i over input carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: argc, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
-    if !(popped.ok) || popped.remaining != 0 || !(identity.valid) { return ExprBuild { ..st, rest: rest, ok: false }; }
+    if !(popped.ok) || popped.remaining != 0 || !(identity.valid) || !(decl.signature_identity_valid<N>(input, effects, capabilities)) { return ExprBuild { ..st, rest: rest, ok: false }; }
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 3, operator: 0, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: params, identity: identity, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, ok: st.ok && scalar_type(ty) };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 3, operator: 0, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: params, identity: identity, effects: effects, capabilities: capabilities, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals) };
 }
 fn pop_call_arg(st: PopArgs) -> (result: PopArgs) {
     if !(st.ok) || st.remaining == 0 { return st; }
@@ -582,19 +614,19 @@ fn add_block_edges<N: Nat>(input: [byte; up_to N], edges: EdgeList, block: flow.
 }
 
 fn verify_function<N: Nat>(input: [byte; up_to N], function: Function) -> (result: bool) {
-    if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(scalar_type(function.result_type)) || function.value_count == 0 { return false; }
-    if !(verify_value_ids<N>(input, function.values, function.value_count)) || !(verify_function_inputs<N>(input, function)) { return false; }
+    if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(supported_value_type<N>(input, function.result_type, function.nominals)) || function.value_count == 0 { return false; }
+    if !(verify_value_ids<N>(input, function)) || !(verify_function_inputs<N>(input, function)) { return false; }
     if !(verify_blocks<N>(input, function, function.blocks)) || !(verify_definition_counts<N>(input, function)) { return false; }
     return true;
 }
-record ValueIdCheck { rest: ValueList, seen: u64, ok: bool, count: u64 }
-fn verify_value_ids<N: Nat>(input: [byte; up_to N], values: ValueList, count: u64) -> (result: bool) {
-    iterate i over input carrying st: ValueIdCheck = ValueIdCheck { rest: values, seen: 0, ok: true, count: count } { next st = value_id_step<N>(input, st); }
-    return st.ok && st.seen == count && value_list_empty(st.rest);
+record ValueIdCheck { rest: ValueList, seen: u64, ok: bool, count: u64, nominals: decl.NominalTypeIdentityList }
+fn verify_value_ids<N: Nat>(input: [byte; up_to N], function: Function) -> (result: bool) {
+    iterate i over input carrying st: ValueIdCheck = ValueIdCheck { rest: function.values, seen: 0, ok: true, count: function.value_count, nominals: function.nominals } { next st = value_id_step<N>(input, st); }
+    return st.ok && st.seen == st.count && value_list_empty(st.rest);
 }
 fn value_id_step<N: Nat>(input: [byte; up_to N], st: ValueIdCheck) -> (result: ValueIdCheck) {
     if !(st.ok) { return st; }
-    return match st.rest { VNil => st, VCons { head: h, tail: t } => ValueIdCheck { rest: t, seen: st.seen + 1, ok: h.id < st.count && h.kind < 3 && scalar_type(h.ty) && !(value_id_in<N>(input, t, h.id)), count: st.count } };
+    return match st.rest { VNil => st, VCons { head: h, tail: t } => ValueIdCheck { rest: t, seen: st.seen + 1, ok: h.id < st.count && h.kind < 3 && supported_value_type<N>(input, h.ty, st.nominals) && !(value_id_in<N>(input, t, h.id)), count: st.count, nominals: st.nominals } };
 }
 record ValueIdLookup { rest: ValueList, id: u64, found: bool }
 fn value_id_in<N: Nat>(input: [byte; up_to N], values: ValueList, id: u64) -> (result: bool) {
@@ -760,7 +792,7 @@ fn binary_operands_match_class<N: Nat>(input: [byte; up_to N], class: u64, ty: d
     };
 }
 fn verify_call_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
-    return inst.identity.valid && inst.identity.len > 0 && id_count<N>(input, inst.inputs) == inst.argc && bind_count<N>(input, inst.params) == inst.argc && call_argument_types_match<N>(input, function.values, inst.inputs, inst.params) && scalar_type(inst.ty);
+    return inst.identity.valid && inst.identity.len > 0 && decl.signature_identity_valid<N>(input, inst.effects, inst.capabilities) && id_count<N>(input, inst.inputs) == inst.argc && bind_count<N>(input, inst.params) == inst.argc && call_argument_types_match<N>(input, function.values, inst.inputs, inst.params) && supported_value_type<N>(input, inst.ty, function.nominals);
 }
 record BindCount { rest: decl.BindList, count: u64 }
 fn bind_count<N: Nat>(input: [byte; up_to N], params: decl.BindList) -> (result: u64) {

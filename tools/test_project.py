@@ -18,8 +18,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", datetime.now(timezone.utc).strftime("%Y%m%d"))
 BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 os.chdir(ROOT)
-os.environ["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow,ssa,project"
-os.environ["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.project.v1,mncs.compiler.ssa.v1"
+os.environ.setdefault("MNCS_PROBE_MODULES", "source,lexer,parser,segment,decl,flow,ssa,project")
+os.environ.setdefault("MNCS_PROBE_EXECUTION_MODULES", "mncs.compiler.project.v1,mncs.compiler.ssa.v1")
 os.environ.setdefault("MNCS_PROBE_BACKEND", "cranelift")
 os.environ.setdefault("MNCS_PROBE_GENERIC_SEEDS", json.dumps([
     {"module": "mncs.compiler.project.v1", "function": "compile_project",
@@ -170,12 +170,12 @@ def wire_number(value):
     return next(iter(value.values()))["value"]
 
 
-def verify_ssa_function(probe, source, function):
+def verify_ssa_function(probe, source, function, byte_bound=1024):
     return probe.native({
         "schema_version": "0.1",
         "target": {"module": "mncs.compiler.ssa.v1", "function": "verify_function"},
         "arguments": [byte_sequence(source.encode()), function],
-        "type_arguments": [{"kind": "nat", "value": 1024}],
+        "type_arguments": [{"kind": "nat", "value": byte_bound}],
         "step_budget": 8_000_000,
     })
 
@@ -187,7 +187,7 @@ def source_value(identities, source_id, path):
     })
 
 
-def request_value(identities, sources):
+def request_value(identities, sources, module_bound=3, byte_bound=1024):
     project = record(identities, "ProjectSnapshot", {
         "fingerprint": byte_sequence(hashlib.sha256(
             b"".join(len(source[2]).to_bytes(8, "big") + source[2] for source in sources)
@@ -204,10 +204,10 @@ def request_value(identities, sources):
         "type_arguments": [
             # M is a capacity bound. One retained M=3 instance serves the
             # one-, two-, and three-module fixtures below.
-            {"kind": "nat", "value": 3},
+            {"kind": "nat", "value": module_bound},
             # Per-file values remain exact length. N is their common Profile
             # 0.18 sequence ceiling, not padding or semantic source content.
-            {"kind": "nat", "value": 1024},
+            {"kind": "nat", "value": byte_bound},
         ],
         "step_budget": 8_000_000,
     }
@@ -734,39 +734,61 @@ def run():
                 "stage0_diagnostics": missing_member_oracle["diagnostics"],
             }
 
+            nominal_leaf = (
+                "mncs 0.18; module demo.nominal_leaf; record Inner { value: u64 } "
+                "enum Choice { Some { value: u64 }, None }"
+            )
             nominal_types = (
-                "mncs 0.18; module demo.nominal; record Inner { value: u64 } "
-                "record Outer { inner: Inner } enum Choice { Some { value: u64 }, None } "
-                "fn echo_record(value: Outer) -> (r: Outer) { return value; } "
-                "fn echo_choice(value: Choice) -> (r: Choice) { return value; }"
+                "mncs 0.18; module demo.nominal; use demo.nominal_leaf as inner; "
+                "record Outer { inner: inner.Inner; entries: [inner.Inner; 2] } "
+                "fn echo_record(value: Outer) -> (r: Outer) { let copy: Outer = value; return copy; } "
+                "fn echo_inner(value: inner.Inner) -> (r: inner.Inner) { return value; } "
+                "fn echo_batch(value: [inner.Inner; 2]) -> (r: [inner.Inner; 2]) { return value; } "
+                "fn echo_choice(value: inner.Choice) -> (r: inner.Choice) { return value; }"
             )
             nominal_root = (
                 "mncs 0.18; module demo.nominal_user; use demo.nominal as types; "
-                "fn record_call(value: types.Outer) -> (r: types.Outer) { return types.echo_record(value); } "
-                "fn finite_call(value: types.Choice) -> (r: types.Choice) { return types.echo_choice(value); }"
+                "use demo.nominal_leaf as values; "
+                "fn record_call(value: types.Outer) -> (r: types.Outer) { let copy: types.Outer = value; return types.echo_record(copy); } "
+                "fn inner_call(value: values.Inner) -> (r: values.Inner) { return types.echo_inner(value); } "
+                "fn batch_call(value: [values.Inner; 2]) -> (r: [values.Inner; 2]) { return types.echo_batch(value); } "
+                "fn finite_call(value: values.Choice) -> (r: values.Choice) { return types.echo_choice(value); }"
             )
             for path in project_root.glob("*.mncs"):
                 path.unlink()
-            (project_root / "a-nominal.mncs").write_text(nominal_types)
-            (project_root / "b-root.mncs").write_text(nominal_root)
+            (project_root / "a-nominal-bridge.mncs").write_text(nominal_types)
+            (project_root / "b-nominal-leaf.mncs").write_text(nominal_leaf)
+            (project_root / "c-root.mncs").write_text(nominal_root)
             nominal_sources = discover_sources(project_root)
             nominal_native = probe.native(request_value(identities, nominal_sources))
             nominal_root_module = next(
                 module for module in flist(nominal_native["modules"])
-                if module["source_index"] == 1
+                if module["source_index"] == 2
             )
             nominal_oracle = probe.send({"project_oracle": {
                 "root": nominal_root,
-                "modules": {"demo.nominal": nominal_types},
+                "modules": {
+                    "demo.nominal": nominal_types,
+                    "demo.nominal_leaf": nominal_leaf,
+                },
             }})
             assert nominal_oracle["valid"] is True, nominal_oracle
+            assert nominal_native["valid"] is True, nominal_native["diagnostics"]
+            assert nominal_native["value_ssa_valid"] is True, nominal_native
             nominal_type_case = {
                 "native_valid": nominal_native["valid"],
+                "native_value_ssa_valid": nominal_native["value_ssa_valid"],
                 "native_diagnostics": flist(nominal_native["diagnostics"]),
                 "native_proof_obligations": flist(nominal_root_module["flow"]["proof"]["obls"]),
                 "stage0_valid": nominal_oracle["valid"],
-                "stage0_record_and_finite_types_valid": True,
-                "coverage_gap": not nominal_native["valid"],
+                "stage0_module_resolution_count": len(nominal_oracle["module_resolutions"]),
+                "coverage": [
+                    "imported record through a module that imports its nested field type",
+                    "imported finite identity",
+                    "imported exact sequence of a nominal type",
+                    "let-annotation nominal ownership",
+                ],
+                "coverage_gap": False,
             }
 
             # Native project resolution follows transitive `use` edges in the

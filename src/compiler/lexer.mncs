@@ -155,8 +155,13 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     let ws: bool = space(a);
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
-        iterate i over text carrying st: Scan = seed {
-            next st = scan_step<N>(text, st, line, block, word, number, ws);
+        iterate i over text[start..text.len] carrying st: Scan = seed {
+            let advanced: Scan = scan_step<N>(text, st, line, block, word, number, ws);
+            if advanced.done || advanced.end >= text.len {
+                let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword<N>(text, start, advanced.end), select(advanced.dotted, 6, 5)))));
+                return Token { kind: kind, start: start, end: advanced.end, diagnostic: select(block && advanced.depth > 0, 1, 0) };
+            }
+            next st = advanced;
         }
         let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword<N>(text, start, st.end), select(st.dotted, 6, 5)))));
         return Token { kind: kind, start: start, end: st.end, diagnostic: select(block && st.depth > 0, 1, 0) };
@@ -183,12 +188,19 @@ fn scan_step<N: Nat>(text: [byte; up_to N], st: Scan, line: bool, block: bool, w
 // Significant-token request; lexical failure is never discarded as trivia.
 fn significant<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     let first: Token = next_token<N>(text, start);
-    iterate i over text carrying token: Token = first {
+    if !(is_trivia(first)) { return first; }
+    let second: Token = skip_trivia<N>(text, first);
+    if !(is_trivia(second)) { return second; }
+    iterate i over text[second.start..text.len] carrying token: Token = second {
+        if !(is_trivia(token)) { return token; }
         next token = skip_trivia<N>(text, token);
     }
     return token;
 }
+fn is_trivia(token: Token) -> (result: bool) {
+    return token.kind >= 1 && token.kind <= 3 && token.diagnostic == 0;
+}
 fn skip_trivia<N: Nat>(text: [byte; up_to N], token: Token) -> (result: Token) {
-    if token.kind >= 1 && token.kind <= 3 && token.diagnostic == 0 { return next_token<N>(text, token.end); }
+    if is_trivia(token) { return next_token<N>(text, token.end); }
     return token;
 }

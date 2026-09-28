@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 10,
+  "revision": 11,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -520,6 +520,52 @@
         ],
         "working_directory": ".",
         "timeout_seconds": 1800
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.imported-nominal-ssa-differential",
+      "title": "Imported nominal identities reach verified value SSA against Stage-0",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.project.v1::compile_project",
+        "mncs.compiler.ssa.v1::lower_value_ssa",
+        "mncs.compiler.decl.v1::nominal_identity_by_name"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/decl.mncs",
+        "src/compiler/project.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "tools/test_imported_nominal_ssa.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_imported_nominal_ssa.py",
+        "argv": [
+          "python3",
+          "tools/test_imported_nominal_ssa.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900
       },
       "evidence_identity": {
         "subject_fields": [

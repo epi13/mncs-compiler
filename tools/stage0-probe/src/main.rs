@@ -179,6 +179,21 @@ fn main() {
             let result = ReferenceCompiler::default()
                 .front_end_with_resolver(envelope(root.to_owned()), &resolver);
             let ssa = result.program.as_ref().and_then(|program| program.lower_to_ssa().ok());
+            let executions = request
+                .get("calls")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(|call| {
+                    let call: ExecutionRequest = serde_json::from_value(call.clone()).unwrap();
+                    match (result.program.as_ref(), ssa.as_ref()) {
+                        (Some(program), Some(ssa)) => {
+                            json!(mncs_model::execute_ssa_module(program, ssa, &call))
+                        }
+                        _ => json!({"status": "invalid", "reason": "project oracle did not produce executable SSA"}),
+                    }
+                })
+                .collect::<Vec<_>>();
             let program = result.program.as_ref().map(|program| json!({
                 "module": program.module,
                 "dependencies": program.dependencies,
@@ -201,6 +216,7 @@ fn main() {
                 "module_resolutions": result.module_resolutions,
                 "program": program,
                 "ssa": ssa,
+                "executions": executions,
             })
         } else if let Some(text) = input.get("elaborate").and_then(Value::as_str) {
             let result = ReferenceCompiler::default()
