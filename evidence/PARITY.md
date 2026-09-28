@@ -32,10 +32,11 @@ declaration name. The prior source-slot/declaration-span locator may still be
 used to find the declaration, but it no longer stands in for callable
 identity or dispatch.
 
-The imported call slice checks scalar arguments/results and supports
-effect-free callables. Imported nominal types and imported effect/capability
-proof are not implemented by this vertical yet. Local type/effect facts are
-still produced by the existing native proof stage.
+Native project proof and verified SSA now preserve declaring-module ownership
+for imported finite, record, and nested nominal identities, plus effect and
+capability identities; see the imported-nominal SSA evidence. The current C11
+structural adapter remains a narrower scalar, effect-free call slice. Local
+type/effect facts continue to come from the native proof stage.
 
 ## Bounded value SSA
 
@@ -120,33 +121,33 @@ relabelled as a measurement at the current 843c5bc pin.
 | Project resolution | Partial | Headers, imports, aliases, duplicate/missing checks, stable ordering, and one-parse fact reuse for the tested snapshot |
 | Snapshot fingerprint | Unauthenticated data | Host value is reported as unauthenticated and does not affect semantic validity |
 | Callable identity | Implemented for tested imported calls | Exact Stage-0 callable/declaration identity reaches typed calls and verified SSA |
-| Imported nominal types and effects | Not implemented | A current two-module record/finite signature reproducer passes Stage-0 but remains a native project proof gap |
+| Imported nominal types and effects | Partial; verified SSA slice | Declaring-module ownership for imported finite, record, nested nominal, effect, and capability identities reaches verified value SSA; aggregate C11 lowering remains absent |
 | Current-profile syntax | Current on the tested forms | CP-0015 syntax forms and old-profile gates match Stage-0; unsupported grammar remains explicit |
 | Semantic proof | Partial | 49-case differential and verifier controls |
 | Typed CFG | Partial | Tested branches, joins, returns, and reachability |
 | Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, and body verification |
-| Executable native output | Absent | No backend consumes verified SSA to emit target code |
+| Native C11 output | Partial; scalar structural slice | The test harness projects verified imported-call/CFG SSA into explicitly unattested structural input for `mncs-language`; constants, pure scalar imports, `u64` addition, and branch/join execute with pinned Stage-0 parity. No proof-carrying adapter or aggregate lowering. See `campaign-20260928-agent-native-native-backend-vertical.json`. |
 | Unicode source | Absent in native frontend | Existing compiler Unicode pressure remains outside this slice |
 | Self-hosting | Absent | Stage-0 still compiles/executes the MNCS compiler; no Stage-1 proof |
 
 ## Commons pressure reconciliation
 
-CP-0014 remains open. The locked Stage-0 accepts its exact Profile 0.18
-bool-payload reproducer, but the native project parser stops before producing
-a typed CFG; Commons now records the failure as
-`CAPABILITY_AVAILABLE_CONSUMER_NOT_MIGRATED`. CP-0015 passes positive and
-negative differential checks for all four previously missing forms plus
-`next` and older-profile gates, and its compiler pressure is resolved.
-CP-0010 integer match dispatch and CP-0013 next-field behavior were
-revalidated against current and old-profile controls. The campaign's bootstrap
-refresh failure was fixed in compiler tooling and passes against the updated
-lock. CP-0001's remaining per-source ceiling, CP-0002 Unicode refusal,
-CP-0005's host test transport, CP-0006's current Stage-0 envelope behavior,
-and CP-0007's linked artifact cost were rechecked. The new imported nominal
-signature gap was compared with the CP-0008 candidate; its original Stage-0
-payload issue remains resolved, while the native project compiler does not yet
-resolve imported nominal identities. The registry observations and lifecycle
-evidence are in Commons.
+CP-0014 remains open in the native project path. The current compiler head
+rejects the exact bool enum-payload project reproducer that locked Stage-0
+accepts; `campaign-20260928-agent-native-cp0014-current.json` records that
+result. `decl.mncs` still defers finite matches and enum construction, and
+`ssa.mncs` rejects `TMatch`, so the parser-to-SSA path is incomplete. CP-0015
+is resolved for the tested Profile 0.18 syntax, proof failures, and older
+profile controls: all 21 current-head cases conform to locked Stage-0 in
+`campaign-20260928-agent-native-profile-surface-results.json`. CP-0010
+integer match dispatch and CP-0013 next-field behavior remain confirmed, and
+the bootstrap refresh issue is resolved.
+CP-0001's remaining per-source ceiling,
+CP-0002 Unicode refusal, CP-0005's host test transport, CP-0006's current
+Stage-0 envelope behavior, and CP-0007's linked artifact cost were rechecked.
+Imported nominal ownership now reaches verified SSA; aggregate C11 lowering
+and general proof-carrying backend admission remain open. The registry
+observations and lifecycle evidence are in Commons.
 
 The compiler-specific part of language pressure P1-014 is partially resolved:
 the compiler-produced nested flow records now cross into retained SSA
@@ -158,8 +159,9 @@ tooling pressure.
 
 ## Narrowest next parity step
 
-Resolve canonical imported nominal type identities and effect/capability-aware
-signatures in the project path, then lower the verified scalar SSA operations
-to a native target backend. That backend must emit and run a small executable
-before the compiler can claim native output. The project-loading driver,
+Complete CP-0014's finite-match and enum-construction parse/proof/SSA path,
+then extend C11 only as verified aggregate/nominal SSA permits. Replace the
+test-only structural projection with a backend input tied to compiler
+proof/provenance before treating it as authoritative. Do not infer broad
+backend parity from the small scalar executable. The project-loading driver,
 broader syntax/type coverage, and self-hosting remain separate later work.

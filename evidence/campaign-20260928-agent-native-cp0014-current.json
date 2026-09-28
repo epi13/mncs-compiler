@@ -1,0 +1,32 @@
+{
+  "schema_version": "mncs.compiler.pressure-reproduction/1",
+  "pressure_id": "CP-0014",
+  "compiler_commit": "ebd00fe57ed59285a3f39597fe5b74f9d17f8365",
+  "stage0_revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+  "source_profile": "0.18",
+  "historical_fixture": "pressure/repro/bool-payload.mncs",
+  "historical_fixture_sha256": "c1af88de9a2b1cf8b855a7d1e343cbecc5c9662702d96ad6a74af2b22cbb107a",
+  "current_profile_fixture_sha256": "9f8b39fb003e925ec35f82a5503a3aee5cfa38f1072f79705e26fa621fb1a449",
+  "method": "One retained Stage-0 probe process queried current native compile_project and locked Stage-0 project_oracle with the same Profile 0.18 source.",
+  "native_result": {
+    "project_valid": false,
+    "value_ssa_valid": false,
+    "module_count": 1,
+    "diagnostics": [],
+    "steps": 1,
+    "status": "FAIL"
+  },
+  "stage0_result": {
+    "project_valid": true,
+    "diagnostics": [],
+    "status": "PASS"
+  },
+  "probe_requests": 3,
+  "structural_blockers_observed_in_current_sources": {
+    "decl.mncs_sha256": "f45bd4de3ccc2e095bc0f51ea11efbe02d83302b7cc71628dbd3f73abeb66fea",
+    "ssa.mncs_sha256": "58f727cb8cdfd4436b087cfa985d1da6cf63e4a7ca8cf01ff2fe139869f42eaa",
+    "project.mncs_sha256": "883f1b0fdfd4f19c67b4798315e1640dec1e4d513978eca80d9fc364f7e9be4a",
+    "notes": "declaration grammar still defers finite matches and enum construction; SSA expression lowering rejects TMatch"
+  },
+  "interpretation": "CP-0014 remains open in the native project-to-SSA path. This reproduction does not establish which individual source construct first makes the native result invalid because the current project result has no diagnostic."
+}

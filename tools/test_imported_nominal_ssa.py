@@ -33,7 +33,7 @@ elif FIXTURE_KIND == "effects":
     ROOT_FUNCTION_COUNT = 1
 elif FIXTURE_KIND == "backend":
     NOMINAL_TYPES = "mncs 0.18; module b; record T{x:u64} fn f(x:u64)->(r:u64){return x;}"
-    NOMINAL_ROOT = "mncs 0.18; module a; use b; record A{item:b.T} fn g(flag:bool,x:u64)->(r:u64){let value:u64=b.f(x); if flag {} else {} return value;}"
+    NOMINAL_ROOT = "mncs 0.18; module a; use b; record A{item:b.T} fn g(flag:bool,x:u64)->(r:u64){let value:u64=b.f(x); if flag {} else {} return value + 1;}"
     ROOT_FUNCTION_COUNT = 1
 else:
     raise ValueError(f"unsupported imported nominal fixture: {FIXTURE_KIND}")
@@ -87,6 +87,11 @@ ROOT = Path(__file__).resolve().parents[1]
 CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", time.strftime("%Y%m%d", time.gmtime()))
 
 
+def campaign_artifact_directory() -> Path:
+    configured = os.environ.get("MNCS_ENV_SESSION_ARTIFACT_DIR")
+    return Path(configured) if configured else ROOT / ".build" / "campaign-artifacts"
+
+
 def run_native_backend_vertical() -> dict:
     if FIXTURE_KIND != "backend":
         raise ValueError("native backend vertical requires MNCS_IMPORTED_NOMINAL_FIXTURE=backend")
@@ -103,9 +108,7 @@ def run_native_backend_vertical() -> dict:
         digest.update(b"\0")
     compiler_digest = digest.hexdigest()
     lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
-    session_artifacts = Path(os.environ.get(
-        "MNCS_ENV_SESSION_ARTIFACT_DIR", tempfile.gettempdir() + "/mncs-parity-artifacts"
-    ))
+    session_artifacts = campaign_artifact_directory()
     target_dir = Path(os.environ.get("CARGO_TARGET_DIR", session_artifacts / "cargo-target"))
     target_dir.mkdir(parents=True, exist_ok=True)
     build_env = os.environ.copy()
@@ -205,15 +208,33 @@ def run_native_backend_vertical() -> dict:
         for block in flist(function["blocks"]):
             instructions = []
             for instruction in flist(block["instructions"]):
-                if instruction["kind"] != 3:
-                    raise ValueError(f"native SSA instruction kind {instruction['kind']} is outside the imported-call vertical")
-                assert flist(instruction["effects"]) == [] and flist(instruction["capabilities"]) == [], instruction
-                instructions.append({
-                    "kind": "call",
-                    "dest": {"id": str(instruction["result"]), "ty": type_name(instruction["ty"])},
-                    "callee": identity_text(instruction["identity"]),
-                    "args": id_list(instruction["inputs"]),
-                })
+                if instruction["kind"] == 0:
+                    instructions.append({
+                        "kind": "constant",
+                        "dest": {"id": str(instruction["result"]), "ty": type_name(instruction["ty"])},
+                        "value": int(instruction["operator"]),
+                    })
+                elif instruction["kind"] == 2:
+                    if instruction["operator"] != 50:
+                        raise ValueError(f"native SSA binary opcode {instruction['operator']} is outside the C11 slice")
+                    operands = id_list(instruction["inputs"])
+                    if len(operands) != 2 or type_name(instruction["ty"]) != "u64":
+                        raise ValueError("native C11 addition requires two u64 operands and a u64 result")
+                    instructions.append({
+                        "kind": "integer", "operator": "add",
+                        "dest": {"id": str(instruction["result"]), "ty": type_name(instruction["ty"])},
+                        "lhs": operands[0], "rhs": operands[1],
+                    })
+                elif instruction["kind"] == 3:
+                    assert flist(instruction["effects"]) == [] and flist(instruction["capabilities"]) == [], instruction
+                    instructions.append({
+                        "kind": "call",
+                        "dest": {"id": str(instruction["result"]), "ty": type_name(instruction["ty"])},
+                        "callee": identity_text(instruction["identity"]),
+                        "args": id_list(instruction["inputs"]),
+                    })
+                else:
+                    raise ValueError(f"native SSA instruction kind {instruction['kind']} is outside the imported-call/constant/u64-add vertical")
             term = block["terminator"]
             payload = term["$p"]
             if term["$v"] == 0:
@@ -289,11 +310,7 @@ def run_native_backend_vertical() -> dict:
         assert identity_text(owner_function["identity"]) == dep_fn["identity"]
 
         normalized = {
-            "schema_version": "mncs.native-scalar-ssa/1",
-            "verification_status": "pass",
-            "verifier": "mncs.compiler.ssa.verify",
-            "compiler_source_sha256": compiler_digest,
-            "stage0_revision": lock["revision"],
+            "schema_version": "mncs.native-scalar-ssa-structural/1",
             "functions": [normalized_function(root_ssa), normalized_function(owner_ssa)],
         }
         with tempfile.TemporaryDirectory(prefix="mncs-native-c11-") as output_dir:
@@ -304,7 +321,7 @@ def run_native_backend_vertical() -> dict:
             executable_path = output_root / "run"
             input_path.write_text(json.dumps(normalized))
             lowered = subprocess.run(
-                [str(cli_binary), "emit-native-ssa-c11", str(input_path)],
+                [str(cli_binary), "emit-native-ssa-c11-structural", str(input_path)],
                 capture_output=True, text=True, timeout=30,
             )
             if lowered.returncode != 0:
@@ -392,7 +409,7 @@ int main(void) {{
         return {
             "schema_version": 1,
             "status": "verified",
-            "scope": "saved, verifier-bound two-module scalar SSA with imported call and branch control flow emitted and executed as C11",
+            "scope": "test-verified imported two-module SSA was projected into explicitly unattested structural C11 input; emitted execution matched the pinned Stage-0 oracle",
             "native_root_identity": identity_text(root_function["identity"]),
             "native_imported_callable_identity": identity_text(root_ssa["first_call_identity"]),
             "native_root_blocks": root_ssa["block_count"],
@@ -480,19 +497,15 @@ def run() -> dict:
 
     artifact_transport = os.environ.get("MNCS_CAMPAIGN_ARTIFACT_TRANSPORT") == "stdout"
     session_artifact_directory = os.environ.get("MNCS_ENV_SESSION_ARTIFACT_DIR")
-    facts_directory = (
-        Path(session_artifact_directory) / "compiler-facts"
-        if session_artifact_directory else ROOT / "evidence"
-    )
+    facts_directory = campaign_artifact_directory() / "compiler-facts"
     state_path = facts_directory / f"campaign-{CAMPAIGN_ID}-imported-nominal-resolved-facts.json"
 
     def persist_state(value: dict) -> None:
         # Environment-owned session artifacts are the persistent scratch space
         # for read-only bound compiler checkouts. Only final evidence is handed
         # back to the checkout owner for repo-level persistence.
-        if session_artifact_directory or not artifact_transport:
-            state_path.parent.mkdir(parents=True, exist_ok=True)
-            state_path.write_text(json.dumps(value, indent=2) + "\n")
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(value, indent=2) + "\n")
 
     def exported_facts(value: dict) -> dict:
         if not artifact_transport or STAGE_MODE != "ssa":
@@ -873,6 +886,8 @@ def run() -> dict:
 
             if STAGE_MODE == "ssa":
                 combined_stages = state["resolution_stages"] + state["lowering_stages"]
+                facts_bytes = state_path.read_bytes()
+                facts_sha256 = hashlib.sha256(facts_bytes).hexdigest()
                 return {
                     "schema_version": 1,
                     "status": "verified",
@@ -904,6 +919,15 @@ def run() -> dict:
                     "requests": state["probe_requests_total"],
                     "retained_sessions": [item["retained_sessions"] for item in state["stage_runs"]],
                     "facts_artifact": state_path.name,
+                    "facts_evidence": {
+                        "reference": (Path("compiler-facts") / state_path.name).as_posix(),
+                        "identity": f"sha256:{facts_sha256}",
+                        "sha256": facts_sha256,
+                        "bytes": len(facts_bytes),
+                        "retention": ("session-artifact-directory"
+                                      if os.environ.get("MNCS_ENV_SESSION_ARTIFACT_DIR")
+                                      else "ignored-repository-build-directory"),
+                    },
                     **exported_facts(state),
                     "coverage": [
                         "declaring-module ownership for every imported nominal identity in the owner module",
@@ -941,9 +965,12 @@ def run() -> dict:
             "response": failure.response,
             "scope": "bounded staged native project cost diagnostic; no parity claim",
         }
-        (ROOT / "evidence" / f"campaign-{CAMPAIGN_ID}-imported-nominal-budget-probe.json").write_text(
-            json.dumps(report, indent=2) + "\n"
+        session_artifact_directory = campaign_artifact_directory()
+        failed_probe = session_artifact_directory / "compiler-facts" / (
+            f"campaign-{CAMPAIGN_ID}-imported-nominal-budget-probe.json"
         )
+        failed_probe.parent.mkdir(parents=True, exist_ok=True)
+        failed_probe.write_text(json.dumps(report, indent=2) + "\n")
         return report
 
 class StageBudgetFailure(Exception):
@@ -974,8 +1001,36 @@ if __name__ == "__main__":
         )
     else:
         report = run()
-        if STAGE_MODE == "resolve":
-            output = ROOT / "evidence" / f"campaign-{CAMPAIGN_ID}-imported-nominal-resolution.json"
+        session_artifact_directory = campaign_artifact_directory()
+        if (STAGE_MODE == "native-backend"
+                and isinstance(report.get("native_backend_artifact"), dict)):
+            # Keep the full reproducible dump in the owning session artifact
+            # area; commit only its identity, hash, and compact result summary.
+            full_artifact = report.pop("native_backend_artifact")
+            relative_reference = (
+                Path("compiler-facts")
+                / f"campaign-{CAMPAIGN_ID}-native-backend-full-evidence.json"
+            )
+            artifact_path = Path(session_artifact_directory) / relative_reference
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_bytes = (json.dumps(full_artifact, indent=2) + "\n").encode()
+            artifact_path.write_bytes(artifact_bytes)
+            artifact_sha256 = hashlib.sha256(artifact_bytes).hexdigest()
+            report["full_evidence"] = {
+                "reference": relative_reference.as_posix(),
+                "identity": f"sha256:{artifact_sha256}",
+                "sha256": artifact_sha256,
+                "bytes": len(artifact_bytes),
+                "retention": ("session-artifact-directory"
+                              if os.environ.get("MNCS_ENV_SESSION_ARTIFACT_DIR")
+                              else "ignored-repository-build-directory"),
+            }
+        if STAGE_MODE in {"resolve", "signatures", "proof", "cfg"}:
+            artifact_root = session_artifact_directory
+            output = artifact_root / "compiler-facts" / (
+                f"campaign-{CAMPAIGN_ID}-imported-nominal-{STAGE_MODE}.json"
+            )
+            output.parent.mkdir(parents=True, exist_ok=True)
         elif STAGE_MODE == "ssa":
             output = ROOT / "evidence" / f"campaign-{CAMPAIGN_ID}-imported-nominal-ssa.json"
         elif STAGE_MODE == "native-backend":

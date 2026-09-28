@@ -143,9 +143,11 @@
     {
       "area": "Commons pressure status",
       "status": "reconciled for campaign-related records",
-      "claim": "CP-0015, CP-0010, and CP-0013 are resolved on current evidence; the bootstrap refresh issue is resolved; CP-0001, CP-0009, and CP-0011 are partially narrowed; CP-0014 remains in verification after the exact current native parser failure; CP-0002, CP-0003, CP-0005, CP-0006, and CP-0007 retain their recorded gaps. CP-0008 remains resolved for its finite-payload reproducer. P1-014 is compiler-PASS/store-unverified, and the imported-nominal signature gap remains attached to existing evidence rather than duplicated.",
+      "claim": "CP-0014 remains open: current native project compilation rejects the exact bool enum-payload reproducer accepted by locked Stage-0; finite matches and enum construction remain absent from the native parse-to-SSA path. CP-0015 is resolved for 21 current-head Profile 0.18 differential cases against locked Stage-0. CP-0010 and CP-0013 are resolved on current evidence; the bootstrap refresh issue is resolved. CP-0001, CP-0009, and CP-0011 are partially narrowed; CP-0002, CP-0003, CP-0005, CP-0006, and CP-0007 retain their recorded gaps. CP-0008 remains resolved for its finite-payload reproducer. P1-014 is compiler-PASS/store-unverified, and the imported-nominal signature gap remains attached to existing evidence rather than duplicated.",
       "evidence": [
-        "campaign-20260926-pressure-reconciliation.json"
+        "campaign-20260926-pressure-reconciliation.json",
+        "campaign-20260928-agent-native-cp0014-current.json",
+        "campaign-20260928-agent-native-profile-surface-results.json"
       ],
       "limits": [
         "Unrelated compiler and ecosystem pressures were left unchanged. The compiler does not verify imported nominal signatures or the Store facet."
@@ -153,13 +155,24 @@
     },
     {
       "area": "native executable output",
-      "status": "absent",
-      "claim": "No native target backend consumes verified SSA to emit an executable.",
+      "status": "partial; structural scalar C11 slice",
+      "claim": "The test harness projects verified imported-call/CFG SSA into explicitly unattested structural input for C11 emission; a pure scalar imported call, u64 addition, and branch/join match pinned Stage-0 observable behavior.",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260928-agent-native-native-backend-vertical.json"
       ],
       "limits": [
-        "The next vertical is imported nominal/effect-aware facts followed by native target lowering and executable output."
+        "The backend input carries no compiler proof or source binding; aggregate/nominal lowering and broad native parity remain absent."
+      ]
+    },
+    {
+      "area": "CP-0014 bool enum payload",
+      "status": "open; current native reproduction",
+      "claim": "The current native project path returns invalid for the Profile 0.18 bool enum-payload fixture while the locked Stage-0 project oracle accepts it.",
+      "evidence": [
+        "campaign-20260928-agent-native-cp0014-current.json"
+      ],
+      "limits": [
+        "The current result is project-invalid without a structured diagnostic; it does not yet isolate the first unsupported construct."
       ]
     },
     {
@@ -175,13 +188,15 @@
     },
     {
       "area": "imported nominal type identity",
-      "status": "current gap reproduced",
-      "claim": "The locked Stage-0 accepts record and finite nominal signatures across two modules; the native project resolver still emits proof failures because imported nominal type identities are not yet canonicalized.",
+      "status": "partial; verified SSA slice",
+      "claim": "Imported finite, record, nested nominal, effect, and capability identities retain declaring-module ownership through native proof and verified value SSA.",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260927-imported-nominal-ssa.json",
+        "campaign-20260927-effects-imported-nominal-ssa.json",
+        "campaign-20260928-agent-native-imported-nominal-ssa.json"
       ],
       "limits": [
-        "The SSA vertical remains limited to scalar imported calls; this is the next type-identity slice."
+        "Aggregate and nominal C11 representation/lowering remain absent."
       ]
     },
     {
