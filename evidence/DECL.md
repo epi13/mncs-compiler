@@ -70,7 +70,7 @@ The larger exploratory parser/check corpus below was run before this campaign
 against the older Stage-0 pin and is preserved as historical evidence only.
 It has not been promoted to current Profile 0.18 parity. The current-pin
 declaration differential is the 9-request, two-run report above; the semantic
-proof has its own current 49-case twin in [`SEM.md`](SEM.md).
+proof has its own current 103-case twin in [`SEM.md`](SEM.md).
 
 ## Earlier differential results vs Stage-0 oracle
 

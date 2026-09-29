@@ -27,6 +27,12 @@ record ParsedModule {
 }
 enum ModuleList { MNil, MCons { head: ParsedModule, tail: ModuleList } }
 record ModuleReverse { rest: ModuleList, acc: ModuleList }
+// First parse/proof/flow failure across project modules. stage: 0 none,
+// 2 proof, 3 flow (parse failures ride ModuleBuild). Proof carries the unit
+// error span; flow carries the first flow diagnostic. Value-SSA unsupported
+// anchors stay in the module summary: SSA failure must not flip project
+// `valid`, which is a parse/proof/flow verdict.
+record StageFailure { stage: u64, source_index: u64, code: u64, start: u64, end: u64 }
 record NominalModule { source_index: u64, local: decl.NominalTypeIdentityList, resolved: decl.NominalTypeIdentityList }
 enum NominalModuleList { NMNil, NMCons { head: NominalModule, tail: NominalModuleList } }
 record NominalModuleBuild { rest: ModuleList, acc: NominalModuleList }
@@ -57,7 +63,10 @@ enum ProjectDiagnostic {
     SourceOrder { source_index: u64 },
     SourceCountMismatch { source_index: u64 },
     DuplicateModule { source_index: u64, start: u64, end: u64 },
-    MissingImport { source_index: u64, start: u64, end: u64 }
+    MissingImport { source_index: u64, start: u64, end: u64 },
+    ParseFailed { source_index: u64, start: u64, end: u64 },
+    ProofFailed { source_index: u64, start: u64, end: u64 },
+    FlowFailed { source_index: u64, code: u64, start: u64, end: u64 }
 }
 enum DiagnosticList { DiagNil, DiagCons { head: ProjectDiagnostic, tail: DiagnosticList } }
 record DiagnosticReverse { rest: DiagnosticList, acc: DiagnosticList }
@@ -75,20 +84,24 @@ record ProjectResult {
     diagnostics: DiagnosticList
 }
 
-record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64 }
+record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64, parse_failed: bool, parse_index: u64, parse_start: u64, parse_end: u64 }
 fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M]) -> (result: ModuleBuild) {
     iterate i over sources carrying st: ModuleBuild = ModuleBuild {
         rest: ModuleList.MNil,
         acc: ModuleList.MNil,
         valid: true,
-        count: 0
+        count: 0,
+        parse_failed: false,
+        parse_index: 0,
+        parse_start: 0,
+        parse_end: 0
     } {
         next st = build_one_module<M, N>(sources, text_units, i, st);
     }
     return st;
 }
 fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], index: u64, st: ModuleBuild) -> (result: ModuleBuild) {
-    if index >= sources.len || index >= text_units.len { return ModuleBuild { rest: st.rest, acc: st.acc, valid: false, count: st.count }; }
+    if index >= sources.len || index >= text_units.len { return ModuleBuild { rest: st.rest, acc: st.acc, valid: false, count: st.count, parse_failed: true, parse_index: select(st.parse_failed, st.parse_index, index), parse_start: select(st.parse_failed, st.parse_start, 0), parse_end: select(st.parse_failed, st.parse_end, 0) }; }
     let item: ProjectSource = sources[index];
     let text: [byte; up_to N] = text_units[index];
     let unit: decl.Unit = decl.parse_unit<N>(text);
@@ -104,7 +117,11 @@ fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_uni
             tail: st.acc
         },
         valid: st.valid && unit.ok,
-        count: st.count + 1
+        count: st.count + 1,
+        parse_failed: st.parse_failed || !(unit.ok),
+        parse_index: select(st.parse_failed, st.parse_index, index),
+        parse_start: select(st.parse_failed, st.parse_start, unit.err_start),
+        parse_end: select(st.parse_failed, st.parse_end, unit.err_end)
     };
 }
 
@@ -932,10 +949,10 @@ fn call_matches_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], c
     return spans_equal_between<M, N>(text_units, caller_index, call.start + prefix_len + 1, call.end, target_index, member_start, member_end);
 }
 
-record ProjectBuild { rest: ModuleList, all: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, acc: ProjectModuleList, valid: bool, ssa_valid: bool, count: u64 }
+record ProjectBuild { rest: ModuleList, all: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, acc: ProjectModuleList, valid: bool, ssa_valid: bool, count: u64, failed: StageFailure }
 record ProjectBuildRev { rest: ProjectModuleList, acc: ProjectModuleList }
 fn begin_project_lowering(modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList) -> (result: ProjectBuild) {
-    return ProjectBuild { rest: modules, all: modules, imports: imports, nominal_modules: nominal_modules, acc: ProjectModuleList.PNil, valid: true, ssa_valid: true, count: 0 };
+    return ProjectBuild { rest: modules, all: modules, imports: imports, nominal_modules: nominal_modules, acc: ProjectModuleList.PNil, valid: true, ssa_valid: true, count: 0, failed: StageFailure { stage: 0, source_index: 0, code: 0, start: 0, end: 0 } };
 }
 fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList) -> (result: ProjectBuild) {
     let initial: ProjectBuild = begin_project_lowering(modules, imports, nominal_modules);
@@ -945,7 +962,7 @@ fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], tex
     iterate i over sources carrying rev: ProjectBuildRev = ProjectBuildRev { rest: st.acc, acc: ProjectModuleList.PNil } {
         next rev = reverse_project_build(rev);
     }
-    return ProjectBuild { rest: ModuleList.MNil, all: modules, imports: imports, nominal_modules: nominal_modules, acc: rev.acc, valid: st.valid, ssa_valid: st.ssa_valid, count: st.count };
+    return ProjectBuild { rest: ModuleList.MNil, all: modules, imports: imports, nominal_modules: nominal_modules, acc: rev.acc, valid: st.valid, ssa_valid: st.ssa_valid, count: st.count, failed: st.failed };
 }
 fn lower_project_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectBuild) -> (result: ProjectBuild) {
     return match st.rest {
@@ -969,14 +986,34 @@ fn lower_one_project_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to 
         acc: ProjectModuleList.PCons { head: ProjectModule { source_id: parsed.source_id, source_path: parsed.source_path, source_index: parsed.source_index, flow: lowered, value_ssa: value_ssa }, tail: st.acc },
         valid: st.valid && lowered.valid,
         ssa_valid: st.ssa_valid && value_ssa.valid,
-        count: st.count + 1
+        count: st.count + 1,
+        failed: lower_stage_failure(st.failed, parsed.source_index, proof, lowered)
     };
+}
+fn lower_stage_failure(prior: StageFailure, source_index: u64, proof: decl.UnitProve, lowered: flow.LoweredUnit) -> (result: StageFailure) {
+    if prior.stage != 0 { return prior; }
+    if !(proof.ok) { return StageFailure { stage: 2, source_index: source_index, code: 0, start: proof.err_start, end: proof.err_end }; }
+    if !(lowered.valid) {
+        let diag: flow.Diagnostic = flow.first_diagnostic(lowered);
+        return StageFailure { stage: 3, source_index: source_index, code: diag.code, start: diag.start, end: diag.end };
+    }
+    return prior;
 }
 fn reverse_project_build(st: ProjectBuildRev) -> (result: ProjectBuildRev) {
     return match st.rest {
         PNil => st,
         PCons { head: built_module, tail: rest } => ProjectBuildRev { rest: rest, acc: ProjectModuleList.PCons { head: built_module, tail: st.acc } }
     };
+}
+
+// The first failing stage explains itself: a parse/proof/flow/SSA failure
+// always carries its module and span or unsupported anchor, so a project
+// result is never invalid without a reason.
+fn append_stage_diagnostic<M: Nat>(sources: [ProjectSource; up_to M], diagnostics: DiagnosticList, built: ModuleBuild, failed: StageFailure) -> (result: DiagnosticList) {
+    if built.parse_failed { return DiagnosticList.DiagCons { head: ProjectDiagnostic.ParseFailed { source_index: built.parse_index, start: built.parse_start, end: built.parse_end }, tail: diagnostics }; }
+    if failed.stage == 0 { return diagnostics; }
+    if failed.stage == 2 { return DiagnosticList.DiagCons { head: ProjectDiagnostic.ProofFailed { source_index: failed.source_index, start: failed.start, end: failed.end }, tail: diagnostics }; }
+    return DiagnosticList.DiagCons { head: ProjectDiagnostic.FlowFailed { source_index: failed.source_index, code: failed.code, start: failed.start, end: failed.end }, tail: diagnostics };
 }
 
 fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, text_units: [[byte; up_to N]; up_to M]) -> (result: ProjectResult) {
@@ -991,7 +1028,8 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, text_units: [[byte
     let lowered: ProjectBuild = lower_project_modules<M, N>(snapshot.sources, text_units, parsed, resolved.imports, nominal_modules);
     let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, counts_match);
     let diagnostics1: DiagnosticList = append_diagnostics<64>(snapshot.sources, basic, duplicate);
-    let diagnostics: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);
+    let diagnostics2: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);
+    let diagnostics: DiagnosticList = append_stage_diagnostic<64>(snapshot.sources, diagnostics2, built, lowered.failed);
     // The host-provided fingerprint is advisory metadata only. This native
     // project pass has not recomputed its digest over the supplied snapshot.
     let valid: bool = ordered && counts_match && built.valid && diagnostics_empty<64>(snapshot.sources, diagnostics) && resolved.valid && lowered.valid;

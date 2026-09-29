@@ -45,11 +45,13 @@ roadmap's earlier pin-era descriptions.
 - CP-0014's bool-payload regression and compiler-origin CP-0016's nested
   imported-record runtime rejection are resolved in `mncs-language` revision
   `709ba008`. The current declaration parse/check differential passes twice;
-  the separate 49-case semantic proof twin plus five verifier verdicts also
-  passes twice at this pin.
+  the separate 103-case semantic proof twin plus seven verifier verdicts also
+  passes twice at this pin. Native parse/proof now accepts the CP-0014
+  bool-payload project; value SSA explicitly defers finite matches and enum
+  construction with named failure kinds.
 - CP-0017 is compiler semantic drift, not language pressure. Its two minimal
   poisoned-result cases now match Rust's ordered diagnostics and spans in
-  repeated native runs; the full 49-case semantic twin plus five verifier
+  repeated native runs; the full 103-case semantic twin plus seven verifier
   verdicts also passes twice at the current pin. See
   `evidence/semantic-pressure-cp0017-after.json` and
   `evidence/sem-results.json`.

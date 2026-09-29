@@ -607,6 +607,14 @@ def run():
             arg_start = mismatched_caller.index("true")
             assert mismatch_native["valid"] is False
             assert [mismatch["start"], mismatch["end"]] == [arg_start, arg_start + 4]
+            # The failing proof stage explains itself at project level: one
+            # ProofFailed diagnostic (discriminant 5) naming the module and
+            # the proof error span.
+            mismatch_diags = flist(mismatch_native["diagnostics"])
+            proof_failed = [d for d in mismatch_diags if d["$v"] == 5]
+            assert len(proof_failed) == 1, mismatch_diags
+            assert proof_failed[0]["$p"]["source_index"] == 1, proof_failed
+            assert [proof_failed[0]["$p"]["start"], proof_failed[0]["$p"]["end"]] == [arg_start, arg_start + 4], proof_failed
             assert mismatch_oracle["valid"] is False
             stage0_arg_mismatch = next(item for item in mismatch_oracle["diagnostics"] if item["code"] == "MNE133")
             assert [stage0_arg_mismatch["span"]["start"], stage0_arg_mismatch["span"]["end"]] == [arg_start, arg_start + 4]
@@ -734,6 +742,28 @@ def run():
                 "stage0_diagnostics": missing_member_oracle["diagnostics"],
             }
 
+            # A module that does not parse is invalid with a ParseFailed
+            # diagnostic (discriminant 4), never invalid without a reason.
+            broken_root = "mncs 0.18; module demo.broken; fn main( -> (r: u64) { return 1; }"
+            for path in project_root.glob("*.mncs"):
+                path.unlink()
+            (project_root / "a-root.mncs").write_text(broken_root)
+            broken_sources = discover_sources(project_root)
+            broken_native = probe.native(request_value(identities, broken_sources))
+            broken_oracle = probe.send({"project_oracle": {"root": broken_root, "modules": {}}})
+            broken_diags = flist(broken_native["diagnostics"])
+            parse_failed = [d for d in broken_diags if d["$v"] == 4]
+            assert broken_native["valid"] is False
+            assert len(parse_failed) == 1, broken_diags
+            assert parse_failed[0]["$p"]["source_index"] == 0, parse_failed
+            assert broken_oracle["valid"] is False, broken_oracle
+            parse_failure_case = {
+                "native_valid": broken_native["valid"],
+                "native_diagnostics": broken_diags,
+                "stage0_valid": broken_oracle["valid"],
+                "stage0_diagnostics": broken_oracle["diagnostics"],
+            }
+
             nominal_leaf = (
                 "mncs 0.18; module demo.nominal_leaf; record Inner { value: u64 } "
                 "enum Choice { Some { value: u64 }, None }"
@@ -846,6 +876,7 @@ def run():
                     "missing_import": missing_import_case,
                     "duplicate_module_definitions": duplicate_module_case,
                     "missing_imported_member": missing_member_case,
+                    "parse_failure_explains_itself": parse_failure_case,
                     "imported_record_finite_and_nested_nominal_types": nominal_type_case,
                 },
                 "deterministic_repetitions": 2,

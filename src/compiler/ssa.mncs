@@ -73,6 +73,7 @@ record ValueSsaSummary {
     block_count: u64,
     block_parameter_count: u64,
     unsupported_block_count: u64,
+    first_unsupported_function: u64,
     first_unsupported_block: u64,
     first_unsupported_kind: u64,
     call_count: u64,
@@ -96,7 +97,8 @@ record ExprBuild {
     sequence: u64,
     block: u64,
     nominals: decl.NominalTypeIdentityList,
-    ok: bool
+    ok: bool,
+    failure_op: u64
 }
 record PopArgs { stack: ValueStack, remaining: u64, arguments: IdList, ok: bool }
 record ExpressionBuild {
@@ -113,7 +115,8 @@ record ExpressionBuild {
     has_branch: bool,
     has_return: bool,
     nominals: decl.NominalTypeIdentityList,
-    ok: bool
+    ok: bool,
+    failure_op: u64
 }
 record SsaBuild {
     rest: flow.BlockList,
@@ -132,7 +135,7 @@ record SsaBuild {
     initial_failure_kind: u64
 }
 record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
-record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
+record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_function: u64, first_bad_block: u64, first_bad_kind: u64 }
 record FunctionShape { blocks: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
 record BlockShapeScan { rest: SsaBlockList, blocks: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
 record InstructionShapeScan { rest: InstructionList, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity }
@@ -189,16 +192,16 @@ fn lower_value_ssa<N: Nat>(input: [byte; up_to N], lowered: flow.LoweredUnit, no
     }
     let functions: FunctionList = reverse_functions<N>(input, st.acc);
     let summary: FunctionSummaryScan = summarize_functions<N>(input, functions, st.ok && function_list_ended<N>(input, st));
-    return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
+    return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_function: summary.first_bad_function, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
 }
 fn empty_ssa_summary(valid: bool) -> (result: ValueSsaSummary) {
-    return ValueSsaSummary { functions: FunctionList.FNil, valid: valid, function_count: 0, supported_function_count: 0, verified_function_count: 0, value_count: 0, instruction_count: 0, block_count: 0, block_parameter_count: 0, unsupported_block_count: 0, first_unsupported_block: 0, first_unsupported_kind: 0, call_count: 0, has_call: false, first_call_identity: invalid_identity() };
+    return ValueSsaSummary { functions: FunctionList.FNil, valid: valid, function_count: 0, supported_function_count: 0, verified_function_count: 0, value_count: 0, instruction_count: 0, block_count: 0, block_parameter_count: 0, unsupported_block_count: 0, first_unsupported_function: 0, first_unsupported_block: 0, first_unsupported_kind: 0, call_count: 0, has_call: false, first_call_identity: invalid_identity() };
 }
 fn function_list_ended<N: Nat>(input: [byte; up_to N], st: FunctionWalk) -> (result: bool) {
     return match st.fns { DNil => st.index == flow.ssa_function_count<N>(input, st.lowered), DCons { head: h, tail: t } => false };
 }
 fn summarize_functions<N: Nat>(input: [byte; up_to N], functions: FunctionList, source_ok: bool) -> (result: FunctionSummaryScan) {
-    iterate i over input carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_function_step<N>(input, st); }
+    iterate i over input carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_function: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_function_step<N>(input, st); }
     return st;
 }
 fn summarize_function_step<N: Nat>(input: [byte; up_to N], st: FunctionSummaryScan) -> (result: FunctionSummaryScan) {
@@ -209,7 +212,7 @@ fn summarize_function<N: Nat>(input: [byte; up_to N], st: FunctionSummaryScan, f
     let has_call: bool = st.has_call || shape.has_call;
     let first: decl.SemanticIdentity = select_identity(st.has_call, st.first_identity, shape.first_identity);
     let first_bad: bool = st.unsupported == 0 && shape.unsupported > 0;
-    return FunctionSummaryScan { rest: rest, valid: st.valid && function.verified, functions: st.functions + 1, supported: st.supported + select(function.supported, 1, 0), verified: st.verified + select(function.verified, 1, 0), values: st.values + function.value_count, instructions: st.instructions + shape.instructions, blocks: st.blocks + shape.blocks, parameters: st.parameters + shape.parameters, calls: st.calls + shape.calls, has_call: has_call, first_identity: first, unsupported: st.unsupported + shape.unsupported, first_bad_block: select(first_bad, shape.first_bad_block, st.first_bad_block), first_bad_kind: select(first_bad, shape.first_bad_kind, st.first_bad_kind) };
+    return FunctionSummaryScan { rest: rest, valid: st.valid && function.verified, functions: st.functions + 1, supported: st.supported + select(function.supported, 1, 0), verified: st.verified + select(function.verified, 1, 0), values: st.values + function.value_count, instructions: st.instructions + shape.instructions, blocks: st.blocks + shape.blocks, parameters: st.parameters + shape.parameters, calls: st.calls + shape.calls, has_call: has_call, first_identity: first, unsupported: st.unsupported + shape.unsupported, first_bad_block: select(first_bad, shape.first_bad_block, st.first_bad_block), first_bad_kind: select(first_bad, shape.first_bad_kind, st.first_bad_kind), first_bad_function: select(first_bad, st.functions, st.first_bad_function) };
 }
 fn select_identity(already: bool, prior: decl.SemanticIdentity, candidate: decl.SemanticIdentity) -> (result: decl.SemanticIdentity) {
     if already { return prior; }
@@ -351,7 +354,8 @@ fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Blo
         next_instruction: st.next_instruction, sequence: 0, block: block.id,
         branch_value: 0, return_value: 0, has_branch: false, has_return: false,
         nominals: st.nominals,
-        ok: st.supported && (block.id == st.entry || (incoming.found && incoming.ok))
+        ok: st.supported && (block.id == st.entry || (incoming.found && incoming.ok)),
+        failure_op: 0
     };
     iterate i over input carrying exprs: ExpressionBuild = expression_seed { next exprs = lower_expression_step<N>(input, exprs); }
     let instructions: InstructionList = reverse_instructions<N>(input, exprs.instructions);
@@ -369,11 +373,19 @@ fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Blo
         initial_failure_kind: st.initial_failure_kind
     };
 }
+// Block failure taxonomy: 0 ok, 1 missing incoming, 2 bad incoming,
+// 3 other expression failure, 4 terminator shape, 5 prior unsupported,
+// 6 repeat literal, 7 scalar match, 8 field projection, 9 finite match,
+// 10 enum construction. Kinds 6-10 name the first explicitly deferred
+// typed operation in the block.
 fn classify_block_failure(block: flow.Block, entry: u64, incoming: Incoming, exprs: ExpressionBuild, term: Terminator, prior_supported: bool) -> (result: u64) {
     if !(prior_supported) { return 5; }
     if block.id != entry && !(incoming.found) { return 1; }
     if block.id != entry && !(incoming.ok) { return 2; }
-    if !(exprs.ok) { return 3; }
+    if !(exprs.ok) {
+        if exprs.failure_op > 0 { return 5 + exprs.failure_op; }
+        return 3;
+    }
     if !(terminator_shape(block, term)) { return 4; }
     return 0;
 }
@@ -446,7 +458,7 @@ fn lower_expression_step<N: Nat>(input: [byte; up_to N], st: ExpressionBuild) ->
     };
 }
 fn lower_expression<N: Nat>(input: [byte; up_to N], st: ExpressionBuild, expression: flow.TypedExpr, rest: flow.TypedExprList) -> (result: ExpressionBuild) {
-    let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok };
+    let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok, failure_op: 0 };
     iterate i over input carrying built: ExprBuild = seed { next built = lower_operation_step<N>(input, built); }
     let value: Value = expression_value(built.stack);
     let one_value: bool = expression_stack_single(built.stack);
@@ -460,7 +472,8 @@ fn lower_expression<N: Nat>(input: [byte; up_to N], st: ExpressionBuild, express
         return_value: return_value, has_branch: st.has_branch || expression.role == 2,
         has_return: st.has_return || expression.role == 3,
         nominals: st.nominals,
-        ok: built.ok && one_value && (expression.role != 1 || expression.binding_end > expression.binding_start)
+        ok: built.ok && one_value && (expression.role != 1 || expression.binding_end > expression.binding_start),
+        failure_op: select(st.failure_op > 0, st.failure_op, built.failure_op)
     };
 }
 fn bind_let_result(expression: flow.TypedExpr, env: Environment, value: Value) -> (result: Environment) {
@@ -486,18 +499,20 @@ fn lower_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: dec
         TBool { value: v, ty: ty, start: s, end: e } => emit_constant(st, rest, 1, 0, v, ty, s, e),
         TName { ty: ty, start: s, end: e } => lower_name<N>(input, st, rest, ty, s, e),
         TNot { ty: ty, start: s, end: e } => lower_not<N>(input, st, rest, ty, s, e),
-        TRepeat { ty: ty, element: element, count: count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false },
-        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false },
+        TRepeat { ty: ty, element: element, count: count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 1) },
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) },
+        TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 4) },
+        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 5) },
         TBin { op: op, ty: ty, start: s, end: e } => lower_binary<N>(input, st, rest, op, ty, s, e),
         TCall { ty: ty, argc: argc, params: params, start: s, end: e, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => lower_call<N>(input, st, rest, ty, argc, params, identity, effects, capabilities, s, e),
-        TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false }
+        TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 3) }
     };
 }
 fn emit_constant(st: ExprBuild, rest: decl.TOpList, kind: u64, integer: u64, boolean: bool, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let payload: u64 = select(kind == 0, integer, boolean_value(boolean));
     let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: kind, operator: payload, result: value.id, ty: ty, inputs: IdList.INil, argc: 0, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: st.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(ty) };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: st.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(ty), failure_op: st.failure_op };
 }
 fn boolean_value(value: bool) -> (result: u64) { return select(value, 1, 0); }
 fn lower_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
@@ -511,12 +526,12 @@ fn emit_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, t
     let args: IdList = IdList.ICons { head: Id { value: operand.id }, tail: IdList.INil };
     let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 4, operator: 0, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
     let valid: bool = decl.sem_eq<N>(input, operand.ty, decl.SemType.TBool);
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && valid && decl.sem_eq<N>(input, ty, decl.SemType.TBool) };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && valid && decl.sem_eq<N>(input, ty, decl.SemType.TBool), failure_op: st.failure_op };
 }
 fn lower_name<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let found: BindingLookup = lookup_binding<N>(input, st.env, start, end);
     if !(found.found) || !(decl.sem_eq<N>(input, found.binding.ty, ty)) { return ExprBuild { ..st, rest: rest, ok: false }; }
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: Value { id: found.binding.value, ty: found.binding.ty, owner_block: 0, kind: 3, index: 0 }, tail: st.stack }, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: Value { id: found.binding.value, ty: found.binding.ty, owner_block: 0, kind: 3, index: 0 }, tail: st.stack }, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok, failure_op: st.failure_op };
 }
 record BindingLookup { found: bool, binding: Binding }
 record BindingScan { rest: Environment, start: u64, end: u64, found: bool, binding: Binding }
@@ -549,7 +564,7 @@ fn emit_binary<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let args: IdList = IdList.ICons { head: Id { value: left.id }, tail: IdList.ICons { head: Id { value: right.id }, tail: IdList.INil } };
     let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 2, operator: op, result: value.id, ty: ty, inputs: args, argc: 2, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty) };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty), failure_op: st.failure_op };
 }
 
 fn lower_call<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, params: decl.BindList, identity: decl.SemanticIdentity, effects: decl.EffectIdentityList, capabilities: decl.CapabilityIdentityList, start: u64, end: u64) -> (result: ExprBuild) {
@@ -557,7 +572,7 @@ fn lower_call<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList,
     if !(popped.ok) || popped.remaining != 0 || !(identity.valid) || !(decl.signature_identity_valid<N>(input, effects, capabilities)) { return ExprBuild { ..st, rest: rest, ok: false }; }
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 3, operator: 0, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: params, identity: identity, effects: effects, capabilities: capabilities, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals) };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals), failure_op: st.failure_op };
 }
 fn pop_call_arg(st: PopArgs) -> (result: PopArgs) {
     if !(st.ok) || st.remaining == 0 { return st; }

@@ -155,6 +155,15 @@ fn lower_proven_unit<N: Nat>(input: [byte; up_to N], proof: decl.UnitProve) -> (
     };
 }
 
+// First flow diagnostic for project-level reporting: the head diagnostic,
+// or a zero code/span triple when lowering failed without emitting one.
+fn first_diagnostic(lowered: LoweredUnit) -> (result: Diagnostic) {
+    return match lowered.diagnostics {
+        DNil => Diagnostic { code: 0, start: 0, end: 0 },
+        DCons { head: diag, tail: rest } => diag
+    };
+}
+
 fn lower_functions<N: Nat>(input: [byte; up_to N], fns: decl.FnList, tops: decl.TopsList) -> (result: FnWalk) {
     iterate i over input carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, ok: true } { next d = lower_fn_step<N>(input, d); }
     return d;

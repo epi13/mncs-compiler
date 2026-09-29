@@ -123,7 +123,7 @@ relabelled as a measurement at the current 843c5bc pin.
 | Callable identity | Implemented for tested imported calls | Exact Stage-0 callable/declaration identity reaches typed calls and verified SSA |
 | Imported nominal types and effects | Partial; verified SSA slice | Declaring-module ownership for imported finite, record, nested nominal, effect, and capability identities reaches verified value SSA; aggregate C11 lowering remains absent |
 | Current-profile syntax | Current on the tested forms | CP-0015 syntax forms and old-profile gates match Stage-0; unsupported grammar remains explicit |
-| Semantic proof | Partial | 49-case differential and verifier controls |
+| Semantic proof | Partial | 103-case differential and verifier controls, including finite-match subject-shape and enum-construction rows |
 | Typed CFG | Partial | Tested branches, joins, returns, and reachability |
 | Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, and body verification |
 | Native C11 output | Partial; scalar structural slice | The test harness projects verified imported-call/CFG SSA into explicitly unattested structural input for `mncs-language`; constants, pure scalar imports, `u64` addition, and branch/join execute with pinned Stage-0 parity. No proof-carrying adapter or aggregate lowering. See `campaign-20260928-agent-native-native-backend-vertical.json`. |
@@ -132,11 +132,13 @@ relabelled as a measurement at the current 843c5bc pin.
 
 ## Commons pressure reconciliation
 
-CP-0014 remains open in the native project path. The current compiler head
-rejects the exact bool enum-payload project reproducer that locked Stage-0
-accepts; `campaign-20260928-agent-native-cp0014-current.json` records that
-result. `decl.mncs` still defers finite matches and enum construction, and
-`ssa.mncs` rejects `TMatch`, so the parser-to-SSA path is incomplete. CP-0015
+CP-0014's parse/proof path is resolved natively: the current compiler head
+accepts the exact bool enum-payload project reproducer that locked Stage-0
+accepts; `campaign-20260929-agent-native-cp0014.json` records that result.
+`decl.mncs` parses finite matches and enum construction and proves them
+against Stage-0 diagnostics; `ssa.mncs` explicitly defers `TFiniteMatch` and
+`TEnumConstruct` with named failure kinds 9 and 10, and project failures now
+carry ParseFailed/ProofFailed/FlowFailed diagnostics. CP-0015
 is resolved for the tested Profile 0.18 syntax, proof failures, and older
 profile controls: all 21 current-head cases conform to locked Stage-0 in
 `campaign-20260928-agent-native-profile-surface-results.json`. CP-0010
@@ -159,8 +161,9 @@ tooling pressure.
 
 ## Narrowest next parity step
 
-Complete CP-0014's finite-match and enum-construction parse/proof/SSA path,
-then extend C11 only as verified aggregate/nominal SSA permits. Replace the
+Lower CP-0014's explicitly deferred `TFiniteMatch`/`TEnumConstruct` SSA kinds
+(parse/proof already native), then extend C11 only as verified
+aggregate/nominal SSA permits. Replace the
 test-only structural projection with a backend input tied to compiler
 proof/provenance before treating it as authoritative. Do not infer broad
 backend parity from the small scalar executable. The project-loading driver,

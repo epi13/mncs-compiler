@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
+  "stage0_reference_mode": "locked",
+  "source_profile": "0.18",
+  "elapsed_seconds": 194.645,
+  "scope": "ordered current-profile project snapshot, native module/import/member resolution, canonical callable identity, scalar imported-signature proof, and verified value SSA; a multi-module imported call crosses a control-flow merge and is compared with locked Rust Stage-0 body/SSA facts",
+  "imported_signature_scope": {
+    "supported": "scalar, effect-free imported callable signatures with argument/result proof and compiler-emitted canonical Stage-0 callable identity",
+    "remaining": [
+      "nominal imported type ownership and nested type resolution",
+      "imported effect/capability identity and coverage"
+    ]
+  },
+  "project_fingerprint": {
+    "authenticated": false,
+    "authority": "host-supplied advisory metadata; native validity does not depend on an unchecked digest"
+  },
+  "requests": 36,
+  "result_sha256": "1b19ef180915e2160572f99c7ecf62d56c90bcef99ae3317c39a1d977aacd31a",
+  "native_execution_steps_total": 23,
+  "native_execution_steps_max": 1,
+  "execution_mode": "retained_cranelift",
+  "requested_execution_backend": "cranelift",
+  "retained_execution_sessions": 2,
+  "snapshot_source_count": 2,
+  "snapshot_bytes": 1103,
+  "former_unit_boundary_crossed": true,
+  "current_profile_source_nat_ceiling": 1024,
+  "native_modules": [
+    {
+      "module": "demo.dep",
+      "functions": 1,
+      "verified": true
+    },
+    {
+      "module": "demo.root",
+      "functions": 1,
+      "verified": true
+    }
+  ],
+  "native_imports": [
+    {
+      "source_index": 1,
+      "target_index": 0,
+      "has_alias": true
+    }
+  ],
+  "stage0_module_resolutions": 1,
+  "stage0_linked_functions": 2,
+  "stage0_ssa_functions": 2,
+  "native_signatures_matched_stage0": [
+    "demo.dep::answer",
+    "demo.root::main"
+  ],
+  "transitive_import_links": [
+    [
+      1,
+      2
+    ],
+    [
+      2,
+      0
+    ]
+  ],
+  "stage0_transitive_linked_functions": 3,
+  "resolved_imported_call": {
+    "native_project_valid": true,
+    "native_import_count": 1,
+    "native_root_proof_ok": true,
+    "native_callable_identity": "mncs:0.2:function:demo.dep::answer",
+    "native_argument_count": 1,
+    "stage0_callable_identity": "mncs:0.2:function:demo.dep::answer",
+    "identity_binding": "typed call carries the exact canonical Stage-0 callable identity",
+    "stage0_valid": true,
+    "stage0_diagnostics": [],
+    "stage0_linked_functions": 2,
+    "stage0_ssa_functions": 2
+  },
+  "multi_module_value_ssa": {
+    "native_project_valid": true,
+    "native_project_ssa_valid": true,
+    "native_root_ssa_valid": true,
+    "native_root_blocks": 4,
+    "native_root_block_parameters": 6,
+    "native_root_values": 9,
+    "native_root_call_identity": "mncs:0.2:function:demo.dep::answer",
+    "native_root_function_identity": "mncs:0.2:function:demo.merge_root::main",
+    "native_function_values_have_unique_dense_ids": true,
+    "native_function_blocks_and_terminators": [
+      0,
+      1,
+      1,
+      2
+    ],
+    "ssa_verifier_positive": true,
+    "ssa_verifier_negative_checks": {
+      "duplicate_value_id": "rejected",
+      "invalid_function_identity": "rejected",
+      "call_use_before_definition": "rejected",
+      "imported_call_argument_type": "rejected",
+      "invalid_call_identity": "rejected",
+      "branch_condition_type": "rejected",
+      "block_argument_type": "rejected",
+      "invalid_terminator_target": "rejected",
+      "return_type": "rejected"
+    },
+    "stage0_project_valid": true,
+    "stage0_root_blocks": 4,
+    "stage0_root_terminators": [
+      "ConditionalBranch",
+      "Branch",
+      "Branch",
+      "Return"
+    ],
+    "stage0_imported_callable_identity": "mncs:0.2:function:demo.dep::answer",
+    "stage0_root_callable_identity": "mncs:0.2:function:demo.merge_root::main",
+    "stage0_has_branch": true,
+    "stage0_has_return": true,
+    "claim": "bounded imported scalar call plus structured branch/join/return verified by native value SSA; not full SSA parity"
+  },
+  "imported_argument_check": {
+    "native_obligation_kind": 26,
+    "native_span": [
+      101,
+      105
+    ],
+    "stage0_diagnostic": "MNE133",
+    "stage0_span": [
+      101,
+      105
+    ],
+    "matching": true
+  },
+  "resolution_edge_cases": {
+    "same_short_name_owners": {
+      "native_valid": true,
+      "stage0_valid": true,
+      "canonical_call_identities": [
+        "mncs:0.2:function:demo.dep::answer",
+        "mncs:0.2:function:demo.flags::answer",
+        "mncs:0.2:function:demo.names::answer"
+      ],
+      "local_and_two_imported_answers_resolved_separately": true,
+      "stage0_function_count": 6
+    },
+    "missing_import": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 3,
+          "$p": {
+            "end": 47,
+            "source_index": 0,
+            "start": 36
+          }
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNE173",
+          "expected": [],
+          "found": null,
+          "message": "imported module 'demo.absent' is unavailable to the resolver",
+          "severity": "error",
+          "span": {
+            "column": 37,
+            "end": 47,
+            "line": 1,
+            "start": 36
+          },
+          "stage": "elaboration"
+        }
+      ]
+    },
+    "duplicate_module_definitions": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 2,
+          "$p": {
+            "end": 32,
+            "source_index": 1,
+            "start": 18
+          }
+        }
+      ],
+      "stage0_single_key_source_valid": true,
+      "oracle_duplicate_key_limit": "Stage-0 resolver map represents one source per declared module name"
+    },
+    "missing_imported_member": {
+      "native_valid": false,
+      "native_proof_obligations": [
+        {
+          "end": 111,
+          "kind": 32,
+          "start": 91,
+          "status": 1
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNE131",
+          "expected": [],
+          "found": null,
+          "message": "call target does not resolve to a function in this module",
+          "severity": "error",
+          "span": {
+            "column": 92,
+            "end": 111,
+            "line": 1,
+            "start": 91
+          },
+          "stage": "elaboration"
+        }
+      ]
+    },
+    "parse_failure_explains_itself": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 4,
+          "$p": {
+            "end": 42,
+            "source_index": 0,
+            "start": 40
+          }
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNP024",
+          "expected": [
+            "right_paren"
+          ],
+          "found": "arrow",
+          "message": "expected ')' after input parameters",
+          "severity": "error",
+          "span": {
+            "column": 41,
+            "end": 42,
+            "line": 1,
+            "start": 40
+          },
+          "stage": "parsing"
+        }
+      ]
+    },
+    "imported_record_finite_and_nested_nominal_types": {
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "native_diagnostics": [],
+      "native_proof_obligations": [],
+      "stage0_valid": true,
+      "stage0_module_resolution_count": 2,
+      "coverage": [
+        "imported record through a module that imports its nested field type",
+        "imported finite identity",
+        "imported exact sequence of a nominal type",
+        "let-annotation nominal ownership"
+      ],
+      "coverage_gap": false
+    }
+  },
+  "deterministic_repetitions": 2
+}

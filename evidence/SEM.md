@@ -58,7 +58,7 @@ Adversarial constructors (`sabotage_depth`, `sabotage_call_arity`,
 verifiers; `sound_sample` must pass. Construction and verdict both execute
 in MNCS through the probe; no host-constructed values cross the boundary.
 
-## Oracle-pinned semantics (all verified against current Stage-0, 49 cases)
+## Oracle-pinned semantics (all verified against current Stage-0, 103 cases)
 
 - Elaboration order is [all signature type resolutions] then [per function:
   remaining signature obligations, body]. Deduced from duplicated
@@ -81,27 +81,34 @@ in MNCS through the probe; no host-constructed values cross the boundary.
 
 ## Differential results vs current Stage-0 oracle
 
-- Twin differential (`tools/test_sem.py`, two identical runs): 49
-  semantic cases plus 5 intrinsic-proof verdicts, 54 requests per run,
-  0 mismatches. Interpreter steps total 73,631,716, max per request
-  3,511,846 (8,000,000 budget). The identical result digest is
-  `bced8deff2157ebdfe2b151f4e29d34b7e20ca1a74cfa7c69c34689e7f1a5e6c`;
-  elapsed time was 5,468.621 seconds over both runs. Stage-0 revision:
-  `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, source Profile 0.18.
+- Twin differential (`tools/test_sem.py`, two identical runs): 103
+  semantic cases plus 7 intrinsic-proof verdicts (the two new verdicts
+  reject sabotaged finite-match and enum-construction arity), 110
+  requests per run, 0 mismatches. Retained-cranelift execution recorded
+  110 steps total, max 1 per request (8,000,000 budget). The identical
+  result digest is
+  `55e50f0d7e2e16edfdc3d726dd384bbb77d3b0a2494054cc88d627de03d02be9`;
+  elapsed time was 161.128 seconds over both runs. Stage-0 revision:
+  `a3ac17df69e68f6373cbff336db0a572667d73da`, source Profile 0.18.
   Promoted report: [`sem-results.json`](sem-results.json).
 - Every case compares FAIL obligations against the oracle `elaborate`
   MNE diagnostics in order with exact spans, plus the proof `ok` verdict
   and function count. UNKNOWN obligations for overflow (13) and division by
   zero (14) are asserted present where expected and never surfaced as
   diagnostics.
-- The five proof verdict requests reject the four sabotaged proof values and
-  accept the sound sample. The CP-0017 minimal pair is retained in
+- The seven proof verdict requests reject the six sabotaged proof values
+  (depth, call arity, binary mismatch, final type, finite-match arity,
+  construct arity) and accept the sound sample. The CP-0017 minimal pair
+  is retained in
   [`semantic-pressure-cp0017-after.json`](semantic-pressure-cp0017-after.json).
 - The superseded profile-0.10 result is preserved as
   [`sem-results-pre-campaign.json`](sem-results-pre-campaign.json); it is not
   current-pin parity evidence.
-- Oracle-pinned semantics (all verified against Stage-0, 49 cases):
-  the case list in `tools/test_sem.py` `CASES` is the corpus.
+- Oracle-pinned semantics (all verified against Stage-0, 103 cases):
+  the case list in `tools/test_sem.py` `CASES` is the corpus. Finite-match
+  subject-shape rows pin the oracle split: `bool` subjects draw per-arm
+  MNE138 plus MNE140 at the match span, while `u64`/`byte`/sequence/record
+  subjects draw a single MNE136 at the subject span.
 
 ## Scope limits and next target
 
