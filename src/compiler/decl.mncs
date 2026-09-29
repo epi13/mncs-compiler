@@ -3758,13 +3758,15 @@ enum TOp {
     TNot { ty: SemType, start: u64, end: u64 },
     TRepeat { ty: SemType, element: SemType, count: u64, start: u64, end: u64 },
     TMatch { ty: SemType, subject_ty: SemType, arms: ScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64 },
-    TFiniteMatch { ty: SemType, subject_ty: SemType, arms: FiniteMatchArmList, arm_count: u64, start: u64, end: u64 },
-    TEnumConstruct { ty: SemType, variant_start: u64, variant_end: u64, field_count: u64, start: u64, end: u64 },
+    TFiniteMatch { ty: SemType, subject_ty: SemType, arms: TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64 },
+    TEnumConstruct { ty: SemType, variant_start: u64, variant_end: u64, field_count: u64, params: BindList, start: u64, end: u64 },
     TBin { op: u64, ty: SemType, start: u64, end: u64 },
     TCall { ty: SemType, argc: u64, params: BindList, start: u64, end: u64, ns: u64, ne: u64, identity: SemanticIdentity, effects: EffectIdentityList, capabilities: CapabilityIdentityList },
     TProj { ty: SemType, fstart: u64, fend: u64, start: u64, end: u64 }
 }
 enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
+record TypedFiniteMatchArm { variant_start: u64, variant_end: u64, has_payload: bool, bindings: PayloadBindingList, pattern_start: u64, pattern_end: u64, payload_fields: BindList, ops: TOpList, op_count: u64 }
+enum TypedFiniteMatchArmList { TFNil, TFCons { head: TypedFiniteMatchArm, tail: TypedFiniteMatchArmList } }
 enum TopsList { TLNil, TLCons { head: TOpList, tail: TopsList } }
 enum TyList { TyNil, TyCons { head: SemType, tail: TyList } }
 enum TyStack { WNil, WCons { head: SemType, tail: TyStack } }
@@ -3800,16 +3802,101 @@ fn count_tops<N: Nat>(input: [byte; up_to N], list: TOpList) -> (result: u64) {
 fn count_tops_step(st: TopsCount) -> (result: TopsCount) {
     return match st.rest { PNil => st, PCons { head: h, tail: t } => TopsCount { rest: t, n: st.n + 1 } };
 }
+record TopsPrefixSplit { rest: TOpList, taken: TOpList, remaining: u64, ok: bool }
+fn split_tops_prefix<N: Nat>(input: [byte; up_to N], tops: TOpList, count: u64) -> (result: TopsPrefixSplit) {
+    iterate i over input carrying st: TopsPrefixSplit = TopsPrefixSplit { rest: tops, taken: TOpList.PNil, remaining: count, ok: true } {
+        next st = split_tops_prefix_step(st);
+    }
+    return TopsPrefixSplit { ..st, ok: st.ok && st.remaining == 0 };
+}
+fn split_tops_prefix_step(st: TopsPrefixSplit) -> (result: TopsPrefixSplit) {
+    if !(st.ok) || st.remaining == 0 { return st; }
+    return match st.rest {
+        PNil => TopsPrefixSplit { ..st, ok: false },
+        PCons { head: h, tail: t } => TopsPrefixSplit { rest: t, taken: TOpList.PCons { head: h, tail: st.taken }, remaining: st.remaining - 1, ok: true }
+    };
+}
+record TypedFiniteArmRev { rest: TypedFiniteMatchArmList, acc: TypedFiniteMatchArmList }
+fn reverse_typed_finite_match_arms<N: Nat>(input: [byte; up_to N], arms: TypedFiniteMatchArmList) -> (result: TypedFiniteMatchArmList) {
+    iterate i over input carrying st: TypedFiniteArmRev = TypedFiniteArmRev { rest: arms, acc: TypedFiniteMatchArmList.TFNil } {
+        next st = reverse_typed_finite_match_arm_step(st);
+    }
+    return st.acc;
+}
+fn reverse_typed_finite_match_arm_step(st: TypedFiniteArmRev) -> (result: TypedFiniteArmRev) {
+    return match st.rest {
+        TFNil => st,
+        TFCons { head: h, tail: t } => TypedFiniteArmRev { rest: t, acc: TypedFiniteMatchArmList.TFCons { head: h, tail: st.acc } }
+    };
+}
 // Type-stack verification: pushes add one typed slot; TBin needs two
 // equal operand types; TCall needs argc slots; TProj is depth-neutral.
 // A well-formed lowering of one expression ends at depth exactly one;
 // when a final type is required it must equal the established type.
 record TDepth { rest: TOpList, stack: TyStack, depth: u64, ok: bool }
+record VerifyFrame { depth: TDepth, want: ExpTy }
+enum VerifyFrameList { VQNil, VQCons { head: VerifyFrame, tail: VerifyFrameList } }
+record VerifyMachine { current: VerifyFrame, pending: VerifyFrameList, ok: bool, done: bool }
 fn verify_tops<N: Nat>(input: [byte; up_to N], ops: TOpList, want: ExpTy) -> (result: bool) {
-    iterate i over input carrying d: TDepth = TDepth { rest: ops, stack: TyStack.WNil, depth: 0, ok: true } {
-        next d = verify_tops_step<N>(input, d);
+    let first: VerifyFrame = VerifyFrame { depth: TDepth { rest: ops, stack: TyStack.WNil, depth: 0, ok: true }, want: want };
+    iterate i over input carrying st: VerifyMachine = VerifyMachine { current: first, pending: VerifyFrameList.VQNil, ok: true, done: false } {
+        next st = verify_tops_machine_step<N>(input, st);
     }
-    return finish_verify_tops<N>(input, d, want);
+    return st.ok && st.done;
+}
+fn verify_tops_machine_step<N: Nat>(input: [byte; up_to N], st: VerifyMachine) -> (result: VerifyMachine) {
+    if !(st.ok) || st.done { return st; }
+    return match st.current.depth.rest {
+        PNil => finish_verify_frame<N>(input, st),
+        PCons { head: operation, tail: rest } => advance_verify_frame<N>(input, st, operation, rest)
+    };
+}
+fn finish_verify_frame<N: Nat>(input: [byte; up_to N], st: VerifyMachine) -> (result: VerifyMachine) {
+    if !(finish_verify_tops<N>(input, st.current.depth, st.current.want)) { return VerifyMachine { ..st, ok: false }; }
+    return match st.pending {
+        VerifyFrameList.VQNil => VerifyMachine { ..st, done: true },
+        VerifyFrameList.VQCons { head: queued, tail: pending } => VerifyMachine { current: queued, pending: pending, ok: true, done: false }
+    };
+}
+fn advance_verify_frame<N: Nat>(input: [byte; up_to N], st: VerifyMachine, operation: TOp, rest: TOpList) -> (result: VerifyMachine) {
+    let advanced: TDepth = verify_top_one<N>(input, st.current.depth, operation, rest);
+    if !(advanced.ok) { return VerifyMachine { ..st, ok: false }; }
+    let pending: VerifyFrameList = queue_finite_match_checks<N>(input, operation, st.pending);
+    return VerifyMachine { current: VerifyFrame { depth: advanced, want: st.current.want }, pending: pending, ok: true, done: false };
+}
+record TypedVerifyQueue { rest: TypedFiniteMatchArmList, ty: SemType, pending: VerifyFrameList, ok: bool }
+fn queue_finite_match_checks<N: Nat>(input: [byte; up_to N], operation: TOp, pending: VerifyFrameList) -> (result: VerifyFrameList) {
+    return match operation {
+        TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: start, end: end } => queue_typed_finite_match_arms<N>(input, arms, ty, pending),
+        TInt { value: value, ty: ty, start: start, end: end } => pending,
+        TBool { value: value, ty: ty, start: start, end: end } => pending,
+        TName { ty: ty, start: start, end: end } => pending,
+        TNot { ty: ty, start: start, end: end } => pending,
+        TRepeat { ty: ty, element: element, count: count, start: start, end: end } => pending,
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end } => pending,
+        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: count, params: params, start: start, end: end } => pending,
+        TBin { op: op, ty: ty, start: start, end: end } => pending,
+        TCall { ty: ty, argc: argc, params: params, start: start, end: end, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => pending,
+        TProj { ty: ty, fstart: fs, fend: fe, start: start, end: end } => pending
+    };
+}
+fn queue_typed_finite_match_arms<N: Nat>(input: [byte; up_to N], arms: TypedFiniteMatchArmList, ty: SemType, pending: VerifyFrameList) -> (result: VerifyFrameList) {
+    iterate i over input carrying st: TypedVerifyQueue = TypedVerifyQueue { rest: arms, ty: ty, pending: pending, ok: true } {
+        next st = queue_typed_finite_match_arm_step<N>(input, st);
+    }
+    if !(st.ok) { return VerifyFrameList.VQNil; }
+    return st.pending;
+}
+fn queue_typed_finite_match_arm_step<N: Nat>(input: [byte; up_to N], st: TypedVerifyQueue) -> (result: TypedVerifyQueue) {
+    return match st.rest {
+        TFNil => st,
+        TFCons { head: arm, tail: rest } => queue_one_typed_finite_match_arm<N>(input, st, arm, rest)
+    };
+}
+fn queue_one_typed_finite_match_arm<N: Nat>(input: [byte; up_to N], st: TypedVerifyQueue, arm: TypedFiniteMatchArm, rest: TypedFiniteMatchArmList) -> (result: TypedVerifyQueue) {
+    let actual_count: u64 = count_tops<N>(input, arm.ops);
+    let frame: VerifyFrame = VerifyFrame { depth: TDepth { rest: arm.ops, stack: TyStack.WNil, depth: 0, ok: true }, want: ExpTy.XSome { ty: st.ty } };
+    return TypedVerifyQueue { rest: rest, ty: st.ty, pending: VerifyFrameList.VQCons { head: frame, tail: st.pending }, ok: st.ok && arm.op_count > 0 && arm.op_count == actual_count };
 }
 fn verify_tops_step<N: Nat>(input: [byte; up_to N], st: TDepth) -> (result: TDepth) {
     if !(st.ok) { return st; }
@@ -3827,7 +3914,7 @@ fn verify_top_one<N: Nat>(input: [byte; up_to N], st: TDepth, h: TOp, t: TOpList
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => verify_top_repeat<N>(input, st, t, ty, element, count),
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => verify_top_match<N>(input, st, t, ty, subject_ty, arms, arm_count, default_count),
         TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => verify_top_finite_match<N>(input, st, t, ty, subject_ty, arms, arm_count),
-        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, start: s, end: e } => verify_top_enum_construct<N>(input, st, t, ty, f),
+        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => verify_top_enum_construct<N>(input, st, t, ty, f, params, vs, ve, s, e),
         TBin { op: o, ty: ty, start: s, end: e } => verify_top_bin<N>(input, st, t, ty),
         TCall { ty: ty, argc: c, params: params, start: s, end: e, ns: ns, ne: ne, identity: id, effects: effects, capabilities: capabilities } => verify_top_call<N>(input, st, t, ty, c, effects, capabilities),
         TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => verify_top_proj(st, t, ty)
@@ -3871,25 +3958,48 @@ fn verify_top_match_subject<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpLi
     if !(is_int_ty(actual)) || !(sem_eq<N>(input, actual, subject_ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: remaining }, depth: st.depth - arms, ok: true };
 }
-// Finite-match verification mirrors the scalar rule with a nominal subject:
-// every arm value plus the subject are consumed and one result is pushed.
-// Variant coverage is established by the checking step that emitted the
-// operation (the verifier has no enum table); the counts here keep a
-// corrupted arm list from verifying.
-fn verify_top_finite_match<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: FiniteMatchArmList, arm_count: u64) -> (result: TDepth) {
-    let count: FiniteMatchCount = finite_match_count<N>(input, arms);
-    if is_poison(ty) || is_poison(subject_ty) || count.n != arm_count || arm_count == 0 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    if !(is_named_ty(subject_ty)) || st.depth < arm_count + 1 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    let popped: MatchStackScan = pop_match_values<N>(input, st.stack, arm_count, ty);
-    if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    return match popped.rest {
-        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
-        WCons { head: actual_subject, tail: remaining } => verify_top_finite_subject<N>(input, st, t, ty, subject_ty, actual_subject, remaining, arm_count)
+// Arm operations are isolated proof frames and are checked by the same
+// iterative verifier worklist. The parent stack therefore consumes only the
+// nominal subject and replaces it with the match result.
+record TypedFiniteMatchCount { rest: TypedFiniteMatchArmList, count: u64 }
+fn typed_finite_match_count<N: Nat>(input: [byte; up_to N], arms: TypedFiniteMatchArmList) -> (result: u64) {
+    iterate i over input carrying st: TypedFiniteMatchCount = TypedFiniteMatchCount { rest: arms, count: 0 } { next st = typed_finite_match_count_step(st); }
+    return st.count;
+}
+fn typed_finite_match_count_step(st: TypedFiniteMatchCount) -> (result: TypedFiniteMatchCount) {
+    return match st.rest { TFNil => st, TFCons { head: arm, tail: rest } => TypedFiniteMatchCount { rest: rest, count: st.count + 1 } };
+}
+record TypedFiniteArmValidity { rest: TypedFiniteMatchArmList, ok: bool }
+fn typed_finite_match_arms_valid<N: Nat>(input: [byte; up_to N], arms: TypedFiniteMatchArmList) -> (result: bool) {
+    iterate i over input carrying st: TypedFiniteArmValidity = TypedFiniteArmValidity { rest: arms, ok: true } { next st = typed_finite_arm_valid_step<N>(input, st); }
+    return st.ok;
+}
+fn typed_finite_arm_valid_step<N: Nat>(input: [byte; up_to N], st: TypedFiniteArmValidity) -> (result: TypedFiniteArmValidity) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        TFNil => st,
+        TFCons { head: arm, tail: rest } => typed_finite_arm_valid_one<N>(input, arm, rest)
     };
 }
-fn verify_top_finite_subject<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, actual: SemType, remaining: TyStack, arms: u64) -> (result: TDepth) {
+fn typed_finite_arm_valid_one<N: Nat>(input: [byte; up_to N], arm: TypedFiniteMatchArm, rest: TypedFiniteMatchArmList) -> (result: TypedFiniteArmValidity) {
+    let op_count: u64 = count_tops<N>(input, arm.ops);
+    let bind_count_actual: u64 = payload_binding_count<N>(input, arm.bindings);
+    let fields_count: u64 = bind_count<N>(input, arm.payload_fields);
+    let shape: bool = select(arm.has_payload, bind_count_actual == fields_count, bind_count_actual == 0);
+    return TypedFiniteArmValidity { rest: rest, ok: op_count > 0 && arm.op_count == op_count && shape && payload_bindings_match<N>(input, arm.bindings, arm.payload_fields) };
+}
+fn verify_top_finite_match<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: TypedFiniteMatchArmList, arm_count: u64) -> (result: TDepth) {
+    let count: u64 = typed_finite_match_count<N>(input, arms);
+    if is_poison(ty) || is_poison(subject_ty) || count != arm_count || arm_count == 0 || !(typed_finite_match_arms_valid<N>(input, arms)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(is_named_ty(subject_ty)) || st.depth == 0 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match st.stack {
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        WCons { head: actual_subject, tail: remaining } => verify_top_finite_subject<N>(input, st, t, ty, subject_ty, actual_subject, remaining)
+    };
+}
+fn verify_top_finite_subject<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, actual: SemType, remaining: TyStack) -> (result: TDepth) {
     if !(is_named_ty(actual)) || !(sem_eq<N>(input, actual, subject_ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: remaining }, depth: st.depth - arms, ok: true };
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: remaining }, depth: st.depth, ok: true };
 }
 fn is_named_ty(ty: SemType) -> (result: bool) {
     return match ty { TNamed { start: s, end: e } => true, TBool => false, TByte => false, TInt { width: w, signed: g } => false, TSeq => false, TSeqExact { element: t, length: n, length_valid: v } => false, TPoison => false };
@@ -3897,12 +4007,105 @@ fn is_named_ty(ty: SemType) -> (result: bool) {
 // Construction pops one value per checked field occurrence and pushes the
 // enum type. Field identity and value types belong to the checking step;
 // like calls, the verifier checks arity discipline, not the signature.
-fn verify_top_enum_construct<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, field_count: u64) -> (result: TDepth) {
-    if is_poison(ty) || !(is_named_ty(ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+fn verify_top_enum_construct<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, field_count: u64, params: BindList, variant_start: u64, variant_end: u64, start: u64, end: u64) -> (result: TDepth) {
+    if is_poison(ty) || !(is_named_ty(ty)) || bind_count<N>(input, params) != field_count || !(enum_construct_source_valid<N>(input, ty, variant_start, variant_end, params, start, end)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     if st.depth < field_count { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     let popped: PopN = pop_tys<N>(input, st.stack, field_count);
-    if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(popped.ok) || !(construct_operand_types_match<N>(input, st.stack, params)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: popped.rest }, depth: st.depth - field_count + 1, ok: true };
+}
+record ConstructOperandCheck { stack: TyStack, params: BindList, ok: bool }
+fn construct_operand_types_match<N: Nat>(input: [byte; up_to N], stack: TyStack, params: BindList) -> (result: bool) {
+    let reverse: BindList = reverse_binds<N>(input, params);
+    iterate i over input carrying st: ConstructOperandCheck = ConstructOperandCheck { stack: stack, params: reverse, ok: true } { next st = construct_operand_type_step<N>(input, st); }
+    return st.ok && construct_operand_pairs_empty(st.stack, st.params);
+}
+fn construct_operand_type_step<N: Nat>(input: [byte; up_to N], st: ConstructOperandCheck) -> (result: ConstructOperandCheck) {
+    if !(st.ok) { return st; }
+    return match st.stack {
+        WNil => ConstructOperandCheck { ..st, ok: match st.params { BindList.BNil => true, BindList.BCons { head: h, tail: t } => false } },
+        WCons { head: actual, tail: stack } => match st.params {
+            BindList.BNil => ConstructOperandCheck { ..st, stack: stack, ok: false },
+            BindList.BCons { head: parameter, tail: params } => ConstructOperandCheck { stack: stack, params: params, ok: sem_eq<N>(input, actual, parameter.ty) }
+        }
+    };
+}
+fn construct_operand_pairs_empty(stack: TyStack, params: BindList) -> (result: bool) {
+    return match stack { WNil => match params { BindList.BNil => true, BindList.BCons { head: h, tail: t } => false }, WCons { head: h, tail: rest } => false };
+}
+record ConstructSourceCheck { fields: ConstructFieldList, params: BindList, ok: bool }
+fn enum_construct_source_valid<N: Nat>(input: [byte; up_to N], ty: SemType, variant_start: u64, variant_end: u64, params: BindList, start: u64, end: u64) -> (result: bool) {
+    let parsed: ExprParse = parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: es, end: ee } => enum_construct_source_parts<N>(input, ty, variant_start, variant_end, params, start, end, ts, te, vs, ve, fields),
+        Project { base: base, field_start: fs, field_end: fe, start: es, end: ee, path: path } => enum_construct_project_source<N>(input, ty, variant_start, variant_end, params, start, end, base, fs, fe, path),
+        Name { start: ns, end: ne } => false,
+        Integer { start: ns, end: ne, value: value, overflow: overflow } => false,
+        Boolean { start: ns, end: ne, value: value } => false,
+        UnaryNot { value: value, start: ns, end: ne } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: ns, end: ne } => false,
+        ScalarMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
+        Binary { op: op, left: left, right: right, start: ns, end: ne } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: es, end: ee } => false,
+        FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false
+    };
+}
+fn enum_construct_project_source<N: Nat>(input: [byte; up_to N], ty: SemType, variant_start: u64, variant_end: u64, params: BindList, start: u64, end: u64, base: Expr, field_start: u64, field_end: u64, path: bool) -> (result: bool) {
+    if !(path) { return false; }
+    return match base {
+        Name { start: type_start, end: type_end } => enum_construct_source_parts<N>(input, ty, variant_start, variant_end, params, start, end, type_start, type_end, field_start, field_end, ConstructFieldList.CNil),
+        Integer { start: s, end: e, value: value, overflow: overflow } => false,
+        Boolean { start: s, end: e, value: value } => false,
+        UnaryNot { value: value, start: s, end: e } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+    };
+}
+fn enum_construct_source_parts<N: Nat>(input: [byte; up_to N], ty: SemType, variant_start: u64, variant_end: u64, params: BindList, start: u64, end: u64, type_start: u64, type_end: u64, source_variant_start: u64, source_variant_end: u64, fields: ConstructFieldList) -> (result: bool) {
+    let type_ok: bool = match ty {
+        TNamed { start: ts, end: te } => ts == type_start && te == type_end,
+        TBool => false,
+        TByte => false,
+        TInt { width: width, signed: signed } => false,
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
+        TPoison => false
+    };
+    iterate i over input carrying st: ConstructSourceCheck = ConstructSourceCheck { fields: fields, params: params, ok: true } { next st = construct_source_field_step<N>(input, st); }
+    return type_ok && source_variant_start == variant_start && source_variant_end == variant_end && st.ok && construct_fields_empty(st.fields) && bind_list_empty(st.params);
+}
+fn construct_source_field_step<N: Nat>(input: [byte; up_to N], st: ConstructSourceCheck) -> (result: ConstructSourceCheck) {
+    if !(st.ok) { return st; }
+    return match st.fields {
+        CNil => ConstructSourceCheck { ..st, ok: bind_list_empty(st.params) },
+        CCons { head: field, tail: rest } => construct_source_field_parameter<N>(input, st, field, rest)
+    };
+}
+fn construct_source_field_parameter<N: Nat>(input: [byte; up_to N], st: ConstructSourceCheck, field: ConstructField, rest: ConstructFieldList) -> (result: ConstructSourceCheck) {
+    return match st.params {
+        BindList.BNil => ConstructSourceCheck { ..st, fields: rest, ok: false },
+        BindList.BCons { head: parameter, tail: params } => ConstructSourceCheck { fields: rest, params: params, ok: spans_equal<N>(input, field.field_start, field.field_end, parameter.start, parameter.end) }
+    };
+}
+record BindCountScan { rest: BindList, count: u64 }
+fn bind_list_empty(binds: BindList) -> (result: bool) { return match binds { BNil => true, BCons { head: h, tail: t } => false }; }
+fn bind_count<N: Nat>(input: [byte; up_to N], binds: BindList) -> (result: u64) {
+    iterate i over input carrying st: BindCountScan = BindCountScan { rest: binds, count: 0 } {
+        next st = bind_count_step(st);
+    }
+    return st.count;
+}
+fn bind_count_step(st: BindCountScan) -> (result: BindCountScan) {
+    return match st.rest {
+        BindList.BNil => st,
+        BindList.BCons { head: h, tail: t } => BindCountScan { rest: t, count: st.count + 1 }
+    };
 }
 record MatchStackScan { rest: TyStack, remaining: u64, ty: SemType, ok: bool }
 fn match_stack_scan_step<N: Nat>(input: [byte; up_to N], st: MatchStackScan) -> (result: MatchStackScan) {
@@ -4018,14 +4221,15 @@ fn sabotage_final_type<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
     return verify_tops<N>(input, ops, ExpTy.XSome { ty: SemType.TBool });
 }
 fn sabotage_finite_match_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
-    let arm: FiniteMatchArm = FiniteMatchArm { variant_start: 0, variant_end: 1, has_payload: false, bindings: PayloadBindingList.YNil, pattern_start: 0, pattern_end: 1, result: Expr.Name { start: 0, end: 1 } };
-    let arms: FiniteMatchArmList = FiniteMatchArmList.ACons { head: arm, tail: FiniteMatchArmList.ANil };
     let named: SemType = SemType.TNamed { start: 0, end: 1 };
+    let arm_ops: TOpList = TOpList.PCons { head: TOp.TName { ty: SemType.TBool, start: 0, end: 1 }, tail: TOpList.PNil };
+    let arm: TypedFiniteMatchArm = TypedFiniteMatchArm { variant_start: 0, variant_end: 1, has_payload: false, bindings: PayloadBindingList.YNil, pattern_start: 0, pattern_end: 1, payload_fields: BindList.BNil, ops: arm_ops, op_count: 1 };
+    let arms: TypedFiniteMatchArmList = TypedFiniteMatchArmList.TFCons { head: arm, tail: TypedFiniteMatchArmList.TFNil };
     let ops: TOpList = TOpList.PCons { head: TOp.TName { ty: named, start: 0, end: 1 }, tail: TOpList.PCons { head: TOp.TFiniteMatch { ty: SemType.TBool, subject_ty: named, arms: arms, arm_count: 2, start: 0, end: 1 }, tail: TOpList.PNil } };
     return verify_tops<N>(input, ops, ExpTy.XNone);
 }
 fn sabotage_construct_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
-    let ops: TOpList = TOpList.PCons { head: TOp.TEnumConstruct { ty: SemType.TNamed { start: 0, end: 1 }, variant_start: 0, variant_end: 1, field_count: 1, start: 0, end: 1 }, tail: TOpList.PNil };
+    let ops: TOpList = TOpList.PCons { head: TOp.TEnumConstruct { ty: SemType.TNamed { start: 0, end: 1 }, variant_start: 0, variant_end: 1, field_count: 1, params: BindList.BNil, start: 0, end: 1 }, tail: TOpList.PNil };
     return verify_tops<N>(input, ops, ExpTy.XNone);
 }
 fn sound_sample<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
@@ -4057,8 +4261,8 @@ enum SemKont {
     KRepeat { count: u64, start: u64, end: u64, exp: ExpTy },
     KMatchArm { remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, rs: u64, re: u64, start: u64, end: u64 },
     KFiniteSubject { arms: FiniteMatchArmList, result_ty: SemType, ss: u64, se: u64, start: u64, end: u64 },
-    KFiniteArm { remaining: FiniteMatchArmList, all: FiniteMatchArmList, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64 },
-    KConstructField { remaining: ConstructJobList, total: u64, ty: SemType, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy },
+    KFiniteArm { remaining: FiniteMatchArmList, all: FiniteMatchArmList, current: FiniteMatchArm, completed: TypedFiniteMatchArmList, payload_fields: BindList, prior_tops: u64, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64 },
+    KConstructField { remaining: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy },
     KBinL { op: u64, right: Expr, start: u64, end: u64, exp: ExpTy },
     KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy },
     KCallA { sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy },
@@ -4334,6 +4538,61 @@ fn payload_shape_step<N: Nat>(input: [byte; up_to N], st: PayloadShapeScan) -> (
         FCons { head: field, tail: rest } => PayloadShapeScan { rest: rest, bound: st.bound, ok: name_known<N>(input, st.bound, field.name_start, field.name_end) }
     };
 }
+record PayloadTypeScan { rest: FieldList, acc: BindList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList }
+fn payload_field_types<N: Nat>(input: [byte; up_to N], fields: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: BindList) {
+    iterate i over input carrying st: PayloadTypeScan = PayloadTypeScan { rest: fields, acc: BindList.BNil, rectab: rectab, enumtab: enumtab, nominals: nominals } {
+        next st = payload_field_type_step<N>(input, st);
+    }
+    return reverse_binds<N>(input, st.acc);
+}
+fn payload_field_type_step<N: Nat>(input: [byte; up_to N], st: PayloadTypeScan) -> (result: PayloadTypeScan) {
+    return match st.rest {
+        FNil => st,
+        FCons { head: field, tail: rest } => payload_field_type_one<N>(input, st, field, rest)
+    };
+}
+fn payload_field_type_one<N: Nat>(input: [byte; up_to N], st: PayloadTypeScan, field: Field, rest: FieldList) -> (result: PayloadTypeScan) {
+    let resolved: TyRes = resolve_type<N>(input, field.type_kind, field.type_start, field.type_end, st.rectab, st.enumtab, st.nominals);
+    let bind: Bind = Bind { start: field.name_start, end: field.name_end, ty: arm_binding_ty(resolved) };
+    return PayloadTypeScan { rest: rest, acc: BindList.BCons { head: bind, tail: st.acc }, rectab: st.rectab, enumtab: st.enumtab, nominals: st.nominals };
+}
+record PayloadBindingCount { rest: PayloadBindingList, count: u64 }
+fn payload_binding_count<N: Nat>(input: [byte; up_to N], bindings: PayloadBindingList) -> (result: u64) {
+    iterate i over input carrying st: PayloadBindingCount = PayloadBindingCount { rest: bindings, count: 0 } { next st = payload_binding_count_step(st); }
+    return st.count;
+}
+fn payload_binding_count_step(st: PayloadBindingCount) -> (result: PayloadBindingCount) {
+    return match st.rest { YNil => st, YCons { head: h, tail: t } => PayloadBindingCount { rest: t, count: st.count + 1 } };
+}
+record PayloadBindingMatch { rest: PayloadBindingList, fields: BindList, ok: bool }
+fn payload_bindings_match<N: Nat>(input: [byte; up_to N], bindings: PayloadBindingList, fields: BindList) -> (result: bool) {
+    iterate i over input carrying st: PayloadBindingMatch = PayloadBindingMatch { rest: bindings, fields: fields, ok: true } { next st = payload_binding_match_step<N>(input, st); }
+    return st.ok && payload_binding_list_empty(st.rest);
+}
+fn payload_binding_list_empty(bindings: PayloadBindingList) -> (result: bool) { return match bindings { YNil => true, YCons { head: h, tail: t } => false }; }
+fn payload_binding_match_step<N: Nat>(input: [byte; up_to N], st: PayloadBindingMatch) -> (result: PayloadBindingMatch) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        YNil => st,
+        YCons { head: binding, tail: rest } => payload_binding_match_one<N>(input, st, binding, rest)
+    };
+}
+fn payload_binding_match_one<N: Nat>(input: [byte; up_to N], st: PayloadBindingMatch, binding: PayloadBinding, rest: PayloadBindingList) -> (result: PayloadBindingMatch) {
+    let found: bool = payload_field_binding_known<N>(input, st.fields, binding.field_start, binding.field_end);
+    return PayloadBindingMatch { rest: rest, fields: st.fields, ok: found };
+}
+record PayloadFieldLookup { rest: BindList, start: u64, end: u64, found: bool }
+fn payload_field_binding_known<N: Nat>(input: [byte; up_to N], fields: BindList, start: u64, end: u64) -> (result: bool) {
+    iterate i over input carrying st: PayloadFieldLookup = PayloadFieldLookup { rest: fields, start: start, end: end, found: false } { next st = payload_field_binding_step<N>(input, st); }
+    return st.found;
+}
+fn payload_field_binding_step<N: Nat>(input: [byte; up_to N], st: PayloadFieldLookup) -> (result: PayloadFieldLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        BNil => st,
+        BCons { head: field, tail: rest } => PayloadFieldLookup { rest: rest, start: st.start, end: st.end, found: spans_equal<N>(input, field.start, field.end, st.start, st.end) }
+    };
+}
 record CoverageScan { rest: VariantList, covered: NameList, ok: bool }
 fn finite_coverage_check<N: Nat>(input: [byte; up_to N], st: FiniteArmCheck, decl: EnumDecl, start: u64, end: u64) -> (result: FiniteArmCheck) {
     iterate i over input carrying d: CoverageScan = CoverageScan { rest: decl.variants, covered: st.covered, ok: true } {
@@ -4356,31 +4615,42 @@ fn coverage_scan_step<N: Nat>(input: [byte; up_to N], st: CoverageScan) -> (resu
 fn seed_finite_match_arm<N: Nat>(input: [byte; up_to N], st: SemState, remaining: FiniteMatchArmList, all: FiniteMatchArmList, decl: EnumDecl, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
     return match remaining {
         ANil => sem_drain(sem_emit(st, 40, start, end, 1)),
-        ACons { head: arm, tail: rest } => push_finite_match_job<N>(input, st, arm, rest, all, decl, subject_ty, es, ee, result_ty, arm_count, start, end)
+        ACons { head: arm, tail: rest } => push_finite_match_job<N>(input, st, arm, rest, all, TypedFiniteMatchArmList.TFNil, decl, subject_ty, es, ee, result_ty, arm_count, start, end)
     };
 }
-fn push_finite_match_job<N: Nat>(input: [byte; up_to N], st: SemState, arm: FiniteMatchArm, remaining: FiniteMatchArmList, all: FiniteMatchArmList, decl: EnumDecl, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
+fn push_finite_match_job<N: Nat>(input: [byte; up_to N], st: SemState, arm: FiniteMatchArm, remaining: FiniteMatchArmList, all: FiniteMatchArmList, completed: TypedFiniteMatchArmList, decl: EnumDecl, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
     let vsp: ExprSpan = expr_span(arm.result);
     let found: VariantScan = variant_scan<N>(input, decl.variants, arm.variant_start, arm.variant_end);
     let scoped: ScopeStack = bind_arm_scope<N>(input, push_scope(st.env), found.variant.fields, arm.bindings, st.rectab, st.enumtab, st.nominals);
+    let payload_fields: BindList = payload_field_types<N>(input, found.variant.fields, st.rectab, st.enumtab, st.nominals);
+    let prior_tops: u64 = count_tops<N>(input, st.tops);
     let job: SemJob = SemJob { e: arm.result, exp: ExpTy.XSome { ty: result_ty } };
-    let kont: SemKont = SemKont.KFiniteArm { remaining: remaining, all: all, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: st.env, rs: vsp.start, re: vsp.end, start: start, end: end };
+    let kont: SemKont = SemKont.KFiniteArm { remaining: remaining, all: all, current: arm, completed: completed, payload_fields: payload_fields, prior_tops: prior_tops, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: st.env, rs: vsp.start, re: vsp.end, start: start, end: end };
     return SemState { ..st, env: scoped, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
-fn continue_finite_match_arm<N: Nat>(input: [byte; up_to N], st: SemState, remaining: FiniteMatchArmList, all: FiniteMatchArmList, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64) -> (result: SemState) {
+fn continue_finite_match_arm<N: Nat>(input: [byte; up_to N], st: SemState, remaining: FiniteMatchArmList, all: FiniteMatchArmList, current: FiniteMatchArm, completed: TypedFiniteMatchArmList, payload_fields: BindList, prior_tops: u64, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64) -> (result: SemState) {
     let checked: SemState = arm_result_check<N>(input, st, result_ty, rs, re);
-    let restored: SemState = SemState { ..checked, env: env };
+    let total_tops: u64 = count_tops<N>(input, checked.tops);
+    let delta: u64 = select(total_tops >= prior_tops, total_tops - prior_tops, 0);
+    let split: TopsPrefixSplit = split_tops_prefix<N>(input, checked.tops, delta);
+    // split_tops_prefix prepends each consumed operation, converting the
+    // semantic accumulator's reverse order back to executable postfix order.
+    let arm_ops: TOpList = split.taken;
+    let typed_arm: TypedFiniteMatchArm = TypedFiniteMatchArm { variant_start: current.variant_start, variant_end: current.variant_end, has_payload: current.has_payload, bindings: current.bindings, pattern_start: current.pattern_start, pattern_end: current.pattern_end, payload_fields: payload_fields, ops: arm_ops, op_count: count_tops<N>(input, arm_ops) };
+    let completed_next: TypedFiniteMatchArmList = TypedFiniteMatchArmList.TFCons { head: typed_arm, tail: completed };
+    let restored: SemState = SemState { ..checked, tops: split.rest, env: env, failed: checked.failed || total_tops < prior_tops || !(split.ok) };
     return match remaining {
-        ANil => finish_finite_match(restored, all, subject_ty, result_ty, arm_count, start, end),
-        ACons { head: arm, tail: rest } => push_finite_match_next<N>(input, restored, arm, rest, all, es, ee, subject_ty, result_ty, arm_count, start, end)
+        ANil => finish_finite_match<N>(input, restored, completed_next, subject_ty, result_ty, arm_count, start, end),
+        ACons { head: arm, tail: rest } => push_finite_match_next<N>(input, restored, arm, rest, all, completed_next, es, ee, subject_ty, result_ty, arm_count, start, end)
     };
 }
-fn push_finite_match_next<N: Nat>(input: [byte; up_to N], st: SemState, arm: FiniteMatchArm, remaining: FiniteMatchArmList, all: FiniteMatchArmList, es: u64, ee: u64, subject_ty: SemType, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
+fn push_finite_match_next<N: Nat>(input: [byte; up_to N], st: SemState, arm: FiniteMatchArm, remaining: FiniteMatchArmList, all: FiniteMatchArmList, completed: TypedFiniteMatchArmList, es: u64, ee: u64, subject_ty: SemType, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
     let found: EnumFind = enum_lookup<N>(input, st.enumtab, es, ee);
-    return push_finite_match_job<N>(input, st, arm, remaining, all, found.decl, subject_ty, es, ee, result_ty, arm_count, start, end);
+    return push_finite_match_job<N>(input, st, arm, remaining, all, completed, found.decl, subject_ty, es, ee, result_ty, arm_count, start, end);
 }
-fn finish_finite_match(st: SemState, all: FiniteMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
-    let top: TOp = TOp.TFiniteMatch { ty: result_ty, subject_ty: subject_ty, arms: all, arm_count: arm_count, start: start, end: end };
+fn finish_finite_match<N: Nat>(input: [byte; up_to N], st: SemState, completed: TypedFiniteMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, start: u64, end: u64) -> (result: SemState) {
+    let arms: TypedFiniteMatchArmList = reverse_typed_finite_match_arms<N>(input, completed);
+    let top: TOp = TOp.TFiniteMatch { ty: result_ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: start, end: end };
     return sem_emit_top(sem_accept(st, result_ty), top);
 }
 record ArmScopeScan { rest: PayloadBindingList, scope: ScopeStack }
@@ -4420,17 +4690,31 @@ fn seed_enum_construct<N: Nat>(input: [byte; up_to N], st: SemState, ts: u64, te
 // field names first (unknown/duplicate), then known-field values in source
 // order (a hard value failure aborts the rest), then payload shape. Unknown
 // field values are never scheduled.
-record ConstructFieldCheck { rest: ConstructFieldList, seen: NameList, jobs: ConstructJobList, obls: OblList, failed: bool }
+record BindRev { rest: BindList, acc: BindList }
+fn reverse_binds<N: Nat>(input: [byte; up_to N], binds: BindList) -> (result: BindList) {
+    iterate i over input carrying d: BindRev = BindRev { rest: binds, acc: BindList.BNil } {
+        next d = reverse_binds_step(d);
+    }
+    return d.acc;
+}
+fn reverse_binds_step(st: BindRev) -> (result: BindRev) {
+    return match st.rest {
+        BindList.BNil => st,
+        BindList.BCons { head: h, tail: t } => BindRev { rest: t, acc: BindList.BCons { head: h, tail: st.acc } }
+    };
+}
+record ConstructFieldCheck { rest: ConstructFieldList, seen: NameList, jobs: ConstructJobList, params: BindList, obls: OblList, failed: bool }
 fn check_construct_fields<N: Nat>(input: [byte; up_to N], st: SemState, decl: EnumDecl, variant: Variant, fields: ConstructFieldList, ts: u64, te: u64, vs: u64, ve: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
-    iterate i over input carrying d: ConstructFieldCheck = ConstructFieldCheck { rest: fields, seen: NameList.NNil, jobs: ConstructJobList.CJNil, obls: st.obls, failed: false } {
+    iterate i over input carrying d: ConstructFieldCheck = ConstructFieldCheck { rest: fields, seen: NameList.NNil, jobs: ConstructJobList.CJNil, params: BindList.BNil, obls: st.obls, failed: false } {
         next d = construct_field_check_step<N>(input, d, variant.fields, st.rectab, st.enumtab, st.nominals);
     }
     let jobs: ConstructJobList = reverse_construct_jobs<N>(input, d.jobs);
     let total: u64 = count_construct_jobs<N>(input, jobs);
     let st1: SemState = SemState { ..st, obls: d.obls };
     let ty: SemType = SemType.TNamed { start: ts, end: te };
+    let params: BindList = reverse_binds<N>(input, d.params);
     let shape_ok: bool = payload_shape_ok<N>(input, variant.fields, d.seen);
-    return seed_construct_jobs<N>(input, st1, jobs, total, ty, vs, ve, shape_ok, start, end, exp);
+    return seed_construct_jobs<N>(input, st1, jobs, total, ty, params, vs, ve, shape_ok, start, end, exp);
 }
 fn construct_field_check_step<N: Nat>(input: [byte; up_to N], st: ConstructFieldCheck, declared: FieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ConstructFieldCheck) {
     return match st.rest {
@@ -4440,14 +4724,15 @@ fn construct_field_check_step<N: Nat>(input: [byte; up_to N], st: ConstructField
 }
 fn check_one_construct_field<N: Nat>(input: [byte; up_to N], st: ConstructFieldCheck, declared: FieldList, field: ConstructField, rest: ConstructFieldList, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: ConstructFieldCheck) {
     let found: FieldScan = field_scan<N>(input, declared, field.field_start, field.field_end);
-    if !(found.found) { return ConstructFieldCheck { rest: rest, seen: st.seen, jobs: st.jobs, obls: OblList.LCons { head: Obligation { kind: 45, start: field.field_start, end: field.field_end, status: 1 }, tail: st.obls }, failed: true }; }
+    if !(found.found) { return ConstructFieldCheck { rest: rest, seen: st.seen, jobs: st.jobs, params: st.params, obls: OblList.LCons { head: Obligation { kind: 45, start: field.field_start, end: field.field_end, status: 1 }, tail: st.obls }, failed: true }; }
     let seen: NameList = NameList.NCons { head: NameSpan { start: field.field_start, end: field.field_end }, tail: st.seen };
     let vsp: ExprSpan = expr_span(field.value);
     let fty: TyRes = resolve_type<N>(input, found.field.type_kind, found.field.type_start, found.field.type_end, rectab, enumtab, nominals);
     let job: ConstructJob = ConstructJob { value: field.value, ty: arm_binding_ty(fty), vs: vsp.start, ve: vsp.end };
     let jobs: ConstructJobList = ConstructJobList.CJCons { head: job, tail: st.jobs };
-    if name_known<N>(input, st.seen, field.field_start, field.field_end) { return ConstructFieldCheck { rest: rest, seen: seen, jobs: jobs, obls: OblList.LCons { head: Obligation { kind: 48, start: field.field_start, end: field.field_end, status: 1 }, tail: st.obls }, failed: true }; }
-    return ConstructFieldCheck { rest: rest, seen: seen, jobs: jobs, obls: st.obls, failed: st.failed };
+    let params: BindList = BindList.BCons { head: Bind { start: field.field_start, end: field.field_end, ty: arm_binding_ty(fty) }, tail: st.params };
+    if name_known<N>(input, st.seen, field.field_start, field.field_end) { return ConstructFieldCheck { rest: rest, seen: seen, jobs: jobs, params: params, obls: OblList.LCons { head: Obligation { kind: 48, start: field.field_start, end: field.field_end, status: 1 }, tail: st.obls }, failed: true }; }
+    return ConstructFieldCheck { rest: rest, seen: seen, jobs: jobs, params: params, obls: st.obls, failed: st.failed };
 }
 record ConstructJobRev { rest: ConstructJobList, acc: ConstructJobList }
 fn reverse_construct_jobs<N: Nat>(input: [byte; up_to N], jobs: ConstructJobList) -> (result: ConstructJobList) {
@@ -4480,31 +4765,31 @@ fn count_construct_jobs_step(st: ConstructJobCount) -> (result: ConstructJobCoun
         CJCons { head: h, tail: t } => ConstructJobCount { rest: t, n: st.n + 1 }
     };
 }
-fn seed_construct_jobs<N: Nat>(input: [byte; up_to N], st: SemState, jobs: ConstructJobList, total: u64, ty: SemType, vs: u64, ve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+fn seed_construct_jobs<N: Nat>(input: [byte; up_to N], st: SemState, jobs: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     return match jobs {
-        CJNil => finish_enum_construct<N>(input, st, total, ty, vs, ve, shape_ok, start, end, exp),
-        CJCons { head: job, tail: rest } => push_construct_job(st, job, rest, total, ty, vs, ve, shape_ok, start, end, exp)
+        CJNil => finish_enum_construct<N>(input, st, total, ty, params, vs, ve, shape_ok, start, end, exp),
+        CJCons { head: job, tail: rest } => push_construct_job(st, job, rest, total, ty, params, vs, ve, shape_ok, start, end, exp)
     };
 }
-fn push_construct_job(st: SemState, job: ConstructJob, remaining: ConstructJobList, total: u64, ty: SemType, vs: u64, ve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+fn push_construct_job(st: SemState, job: ConstructJob, remaining: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let work: SemJob = SemJob { e: job.value, exp: ExpTy.XSome { ty: job.ty } };
-    let kont: SemKont = SemKont.KConstructField { remaining: remaining, total: total, ty: ty, vs: vs, ve: ve, cty: job.ty, cvs: job.vs, cve: job.ve, shape_ok: shape_ok, start: start, end: end, exp: exp };
+    let kont: SemKont = SemKont.KConstructField { remaining: remaining, total: total, ty: ty, params: params, vs: vs, ve: ve, cty: job.ty, cvs: job.vs, cve: job.ve, shape_ok: shape_ok, start: start, end: end, exp: exp };
     return SemState { ..st, jobs: JobList.JCons { head: work, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
-fn continue_construct_field<N: Nat>(input: [byte; up_to N], st: SemState, remaining: ConstructJobList, total: u64, ty: SemType, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+fn continue_construct_field<N: Nat>(input: [byte; up_to N], st: SemState, remaining: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let checked: SemState = construct_value_check<N>(input, st, cty, cvs, cve);
     return match remaining {
-        CJNil => finish_enum_construct<N>(input, checked, total, ty, vs, ve, shape_ok, start, end, exp),
-        CJCons { head: job, tail: rest } => push_construct_job(checked, job, rest, total, ty, vs, ve, shape_ok, start, end, exp)
+        CJNil => finish_enum_construct<N>(input, checked, total, ty, params, vs, ve, shape_ok, start, end, exp),
+        CJCons { head: job, tail: rest } => push_construct_job(checked, job, rest, total, ty, params, vs, ve, shape_ok, start, end, exp)
     };
 }
 fn construct_value_check<N: Nat>(input: [byte; up_to N], st: SemState, cty: SemType, cvs: u64, cve: u64) -> (result: SemState) {
     if sem_eq<N>(input, st.last_ty, cty) { return st; }
     return sem_emit(st, 50, cvs, cve, 1);
 }
-fn finish_enum_construct<N: Nat>(input: [byte; up_to N], st: SemState, total: u64, ty: SemType, vs: u64, ve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+fn finish_enum_construct<N: Nat>(input: [byte; up_to N], st: SemState, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let shaped: SemState = finish_construct_shape(st, shape_ok, start, end);
-    let top: TOp = TOp.TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: total, start: start, end: end };
+    let top: TOp = TOp.TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: total, params: params, start: start, end: end };
     let emitted: SemState = sem_emit_top(sem_accept(shaped, ty), top);
     return finish_construct_exp<N>(input, emitted, ty, start, end, exp);
 }
@@ -4701,8 +4986,8 @@ fn apply_kont<N: Nat>(input: [byte; up_to N], st: SemState, k: SemKont) -> (resu
         KRepeat { count: count, start: s, end: e, exp: x } => apply_repeat<N>(input, st, count, s, e, x),
         KMatchArm { remaining: remaining, all: all, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, rs: rs, re: re, start: s, end: e } => continue_scalar_match_arm<N>(input, st, remaining, all, subject_ty, result_ty, arm_count, default_count, rs, re, s, e),
         KFiniteSubject { arms: arms, result_ty: result_ty, ss: ss, se: se, start: s, end: e } => apply_finite_subject<N>(input, st, arms, result_ty, ss, se, s, e),
-        KFiniteArm { remaining: remaining, all: all, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: env, rs: rs, re: re, start: s, end: e } => continue_finite_match_arm<N>(input, st, remaining, all, subject_ty, es, ee, result_ty, arm_count, env, rs, re, s, e),
-        KConstructField { remaining: remaining, total: total, ty: ty, vs: vs, ve: ve, cty: cty, cvs: cvs, cve: cve, shape_ok: shape_ok, start: s, end: e, exp: x } => continue_construct_field<N>(input, st, remaining, total, ty, vs, ve, cty, cvs, cve, shape_ok, s, e, x),
+        KFiniteArm { remaining: remaining, all: all, current: current, completed: completed, payload_fields: payload_fields, prior_tops: prior_tops, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: env, rs: rs, re: re, start: s, end: e } => continue_finite_match_arm<N>(input, st, remaining, all, current, completed, payload_fields, prior_tops, subject_ty, es, ee, result_ty, arm_count, env, rs, re, s, e),
+        KConstructField { remaining: remaining, total: total, ty: ty, params: params, vs: vs, ve: ve, cty: cty, cvs: cvs, cve: cve, shape_ok: shape_ok, start: s, end: e, exp: x } => continue_construct_field<N>(input, st, remaining, total, ty, params, vs, ve, cty, cvs, cve, shape_ok, s, e, x),
         KBinL { op: o, right: r, start: s, end: e, exp: x } => apply_bin_l(st, o, r, s, e, x),
         KBinR { op: o, lty: l, start: s, end: e, rlit: q, exp: x } => apply_bin_r<N>(input, st, o, l, s, e, q, x),
         KCallA { sig: g, args: a, ptys: p, start: s, end: e, exp: x } => apply_call_a<N>(input, st, g, a, p, s, e, x),
@@ -5017,7 +5302,7 @@ fn seed_variant_select<N: Nat>(input: [byte; up_to N], st: SemState, decl: EnumD
     if !(variant.found) { return sem_drain(sem_emit(st, 43, fs, fe, 1)); }
     if variant_has_fields<N>(input, variant.variant.fields) { return sem_drain(sem_emit(st, 49, s, e, 1)); }
     let ty: SemType = SemType.TNamed { start: ns, end: ne };
-    let top: TOp = TOp.TEnumConstruct { ty: ty, variant_start: fs, variant_end: fe, field_count: 0, start: s, end: e };
+    let top: TOp = TOp.TEnumConstruct { ty: ty, variant_start: fs, variant_end: fe, field_count: 0, params: BindList.BNil, start: s, end: e };
     let emitted: SemState = sem_emit_top(sem_accept(st, ty), top);
     return finish_construct_exp<N>(input, emitted, ty, s, e, exp);
 }

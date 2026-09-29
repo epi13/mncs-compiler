@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "campaign_date": "2026-09-29",
+  "pressure": "MNCS-COMPILER-BABFB889D075",
+  "compiler_start_revision": "fceb8eeb4b7ab7776257d65dd3902d34422fcc45",
+  "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
+  "language_revision": "a10486e613a20c00e393752bb1b9e451455fe457",
+  "environment_session": "ses_e86dbd34de001d1e",
+  "verification": {
+    "result": "PASS",
+    "capability": "mncs-compiler.value-ssa-differential",
+    "binding": "cap_ecea1a3c9a503ff6",
+    "elapsed_seconds": 466.46,
+    "stage0_reference": "locked",
+    "execution_backend": "retained_cranelift",
+    "result_sha256": "6edaa27ba682f2baf486a9624343d9038be987bf6ca9c68ca86017585a1d626c",
+    "focused_case_sha256": "af77bf07b1cf6838eb7aba5e821bed7003a562c9113f88afa7822c29fa7176b",
+    "environment_artifact": "sessions/ses_e86dbd34de001d1e/artifacts/142eafe3480dc2da/campaign-20260929-project-results.json",
+    "deterministic_repetitions": 2
+  },
+  "cp0014": {
+    "project_valid": true,
+    "value_ssa_valid": true,
+    "stage0_project_valid": true,
+    "verified_functions": 10,
+    "finite_match_switches": 4,
+    "payload_extractions": 4,
+    "enum_construction_instructions": 7,
+    "sequence_repeat_instructions": 1,
+    "corruption_cases_rejected": 10,
+    "covered": [
+      "zero-payload and braced-empty enum variants",
+      "single and ordered multi-field enum payloads",
+      "nested nominal payloads",
+      "finite-match payload binding and wildcard fields",
+      "unused payload bindings",
+      "arm result joins and constructors inside arms",
+      "exact sequence repetition"
+    ]
+  },
+  "next_boundary": {
+    "first_unsupported_value_ssa_operation": "integer scalar TMatch",
+    "backend_lowering": "not verified; enum construction, finite switch, payload extraction, and sequence repeat remain without backend/runtime lowering evidence"
+  },
+  "pressure_lifecycle_guidance": "Keep MNCS-COMPILER-BABFB889D075 verifying: verified value SSA narrows CP-0014, but backend/runtime facets and workaround removal are not established."
+}

@@ -20,6 +20,8 @@ record Binding { name_start: u64, name_end: u64, value: u64, ty: decl.SemType }
 enum Environment { EnvNil, EnvCons { head: Binding, tail: Environment } }
 record Edge { source: u64, target: u64, bindings: Environment, arguments: IdList }
 enum EdgeList { ENil, ECons { head: Edge, tail: EdgeList } }
+record FiniteMatchCase { variant_start: u64, variant_end: u64, target: u64, arguments: IdList }
+enum FiniteMatchCaseList { MCNil, MCCons { head: FiniteMatchCase, tail: FiniteMatchCaseList } }
 
 record Instruction {
     id: u64,
@@ -32,6 +34,11 @@ record Instruction {
     argc: u64,
     params: decl.BindList,
     identity: decl.SemanticIdentity,
+    nominal_identity: decl.SemanticIdentity,
+    variant_start: u64,
+    variant_end: u64,
+    binding_start: u64,
+    binding_end: u64,
     effects: decl.EffectIdentityList,
     capabilities: decl.CapabilityIdentityList,
     start: u64,
@@ -44,7 +51,8 @@ enum Terminator {
     Branch { condition: u64, yes: u64, no: u64, yes_args: IdList, no_args: IdList },
     Jump { target: u64, arguments: IdList },
     Return { value: u64 },
-    Fail
+    Fail,
+    FiniteSwitch { subject: u64, subject_ty: decl.SemType, nominal_identity: decl.SemanticIdentity, result_type: decl.SemType, source_start: u64, source_end: u64, arm_count: u64, join_target: u64, cases: FiniteMatchCaseList }
 }
 record SsaBlock { id: u64, parameters: ValueList, instructions: InstructionList, terminator: Terminator, reachable: bool, lowering_ok: bool, lowering_failure_kind: u64 }
 enum SsaBlockList { LNil, LCons { head: SsaBlock, tail: SsaBlockList } }
@@ -85,6 +93,14 @@ record ParamBuild { rest: decl.FieldList, env: Environment, inputs: ValueList, v
 record Incoming { found: bool, ok: bool, count: u64, bindings: Environment }
 record IncomingScan { rest: EdgeList, target: u64, found: bool, ok: bool, count: u64, bindings: Environment }
 record BlockParamBuild { rest: Environment, env: Environment, params: ValueList, values: ValueList, next_value: u64, parameter_index: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
+record MatchContextBuild { env: Environment, stack: ValueStack, parameters: ValueList, values: ValueList, next_value: u64, parameter_index: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
+record StackParamBuild { rest: ValueStack, parameters_rev: ValueList, stack_rev: ValueStack, values: ValueList, next_value: u64, index: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
+record ValueListReverse { rest: ValueList, acc: ValueList }
+record ValueStackReverse { rest: ValueStack, acc: ValueStack }
+record IdListReverse { rest: IdList, acc: IdList }
+record PayloadLowerBuild { rest: decl.PayloadBindingList, fields: decl.BindList, env: Environment, subject: u64, variant_start: u64, variant_end: u64, nominal: decl.SemanticIdentity, match_start: u64, match_end: u64, instructions: InstructionList, values: ValueList, next_value: u64, next_instruction: u64, sequence: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
+record FiniteArmBuild { rest: decl.TypedFiniteMatchArmList, source: ExprBuild, cases: FiniteMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, nominal: decl.SemanticIdentity, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
+record FiniteArmPrepared { arm: decl.TypedFiniteMatchArm, source: ExprBuild, arm_id: u64, arm_params: ValueList, arm_env: Environment, base_env: Environment, base_stack: ValueStack, subject: Value, nominal: decl.SemanticIdentity, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
 
 record ExprBuild {
     rest: decl.TOpList,
@@ -96,6 +112,9 @@ record ExprBuild {
     next_instruction: u64,
     sequence: u64,
     block: u64,
+    parameters: ValueList,
+    generated_blocks: SsaBlockList,
+    next_block_id: u64,
     nominals: decl.NominalTypeIdentityList,
     ok: bool,
     failure_op: u64
@@ -110,6 +129,9 @@ record ExpressionBuild {
     next_instruction: u64,
     sequence: u64,
     block: u64,
+    parameters: ValueList,
+    generated_blocks: SsaBlockList,
+    next_block_id: u64,
     branch_value: u64,
     return_value: u64,
     has_branch: bool,
@@ -127,6 +149,7 @@ record SsaBuild {
     entry_env: Environment,
     next_value: u64,
     next_instruction: u64,
+    next_block_id: u64,
     result_type: decl.SemType,
     identity: decl.SemanticIdentity,
     nominals: decl.NominalTypeIdentityList,
@@ -286,7 +309,7 @@ fn lower_function<N: Nat>(input: [byte; up_to N], header: parser.Header, fn_decl
     let initial: SsaBuild = SsaBuild {
         rest: flow.ssa_cfg_blocks(cfg), edges: EdgeList.ENil, blocks: SsaBlockList.LNil,
         values: parameters.values, inputs: parameters.inputs, entry_env: parameters.env,
-        next_value: parameters.next_value, next_instruction: 0,
+        next_value: parameters.next_value, next_instruction: 0, next_block_id: cfg.block_count,
         result_type: result_type, identity: identity, nominals: nominals, entry: flow.ssa_cfg_entry(cfg),
         supported: cfg_ok && parameters.ok && result_ok && identity.valid,
         initial_failure_kind: initial_failure
@@ -334,6 +357,85 @@ fn ssa_field_type<N: Nat>(input: [byte; up_to N], field: decl.Field, records: de
     let resolved: decl.TyRes = decl.resolve_type<N>(input, field.type_kind, field.type_start, field.type_end, records, enums, nominals);
     return resolved.ty;
 }
+fn nominal_identity_for_type<N: Nat>(input: [byte; up_to N], nominals: decl.NominalTypeIdentityList, ty: decl.SemType) -> (result: decl.SemanticIdentity) {
+    return match ty {
+        TNamed { start: start, end: end } => nominal_identity_for_span<N>(input, nominals, start, end),
+        TBool => invalid_identity(),
+        TByte => invalid_identity(),
+        TInt { width: width, signed: signed } => invalid_identity(),
+        TSeq => invalid_identity(),
+        TSeqExact { element: element, length: length, length_valid: valid } => invalid_identity(),
+        TPoison => invalid_identity()
+    };
+}
+fn nominal_identity_for_span<N: Nat>(input: [byte; up_to N], nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: decl.SemanticIdentity) {
+    let reference: decl.NominalLookup = decl.nominal_identity_at<N>(input, nominals, start, end);
+    if reference.found { return reference.identity; }
+    let local: decl.NominalLookup = decl.nominal_identity_by_name<N>(input, nominals, start, end);
+    if local.found { return local.identity; }
+    return invalid_identity();
+}
+record ConstructSourceCheck { fields: decl.ConstructFieldList, params: decl.BindList, ok: bool }
+fn enum_construct_source_valid<N: Nat>(input: [byte; up_to N], ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, start: u64, end: u64) -> (result: bool) {
+    let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: es, end: ee } => enum_construct_source_parts<N>(input, ty, variant_start, variant_end, params, start, end, ts, te, vs, ve, fields),
+        Name { start: ns, end: ne } => false,
+        Integer { start: ns, end: ne, value: value, overflow: overflow } => false,
+        Boolean { start: ns, end: ne, value: value } => false,
+        UnaryNot { value: value, start: ns, end: ne } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: ns, end: ne } => false,
+        ScalarMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
+        Binary { op: op, left: left, right: right, start: ns, end: ne } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: es, end: ee } => false,
+        Project { base: base, field_start: fs, field_end: fe, start: es, end: ee, path: path } => enum_construct_project_source<N>(input, ty, variant_start, variant_end, params, start, end, base, fs, fe, path),
+        FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false
+    };
+}
+fn enum_construct_project_source<N: Nat>(input: [byte; up_to N], ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, start: u64, end: u64, base: decl.Expr, field_start: u64, field_end: u64, path: bool) -> (result: bool) {
+    if !(path) { return false; }
+    return match base {
+        Name { start: type_start, end: type_end } => enum_construct_source_parts<N>(input, ty, variant_start, variant_end, params, start, end, type_start, type_end, field_start, field_end, decl.ConstructFieldList.CNil),
+        Integer { start: s, end: e, value: value, overflow: overflow } => false,
+        Boolean { start: s, end: e, value: value } => false,
+        UnaryNot { value: value, start: s, end: e } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+    };
+}
+fn enum_construct_source_parts<N: Nat>(input: [byte; up_to N], ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, start: u64, end: u64, type_start: u64, type_end: u64, source_variant_start: u64, source_variant_end: u64, fields: decl.ConstructFieldList) -> (result: bool) {
+    let type_ok: bool = match ty {
+        TNamed { start: ts, end: te } => ts == type_start && te == type_end,
+        TBool => false,
+        TByte => false,
+        TInt { width: width, signed: signed } => false,
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
+        TPoison => false
+    };
+    let scan: ConstructSourceCheck = ConstructSourceCheck { fields: fields, params: params, ok: true };
+    iterate i over input carrying st: ConstructSourceCheck = scan { next st = construct_source_field_step<N>(input, st); }
+    return type_ok && source_variant_start == variant_start && source_variant_end == variant_end && st.ok && decl.construct_fields_empty(st.fields) && bind_list_empty(st.params);
+}
+fn construct_source_field_step<N: Nat>(input: [byte; up_to N], st: ConstructSourceCheck) -> (result: ConstructSourceCheck) {
+    if !(st.ok) { return st; }
+    return match st.fields {
+        decl.ConstructFieldList.CNil => ConstructSourceCheck { ..st, ok: bind_list_empty(st.params) },
+        decl.ConstructFieldList.CCons { head: field, tail: rest } => construct_source_field_parameter<N>(input, st, field, rest)
+    };
+}
+fn construct_source_field_parameter<N: Nat>(input: [byte; up_to N], st: ConstructSourceCheck, field: decl.ConstructField, rest: decl.ConstructFieldList) -> (result: ConstructSourceCheck) {
+    return match st.params {
+        decl.BindList.BNil => ConstructSourceCheck { ..st, fields: rest, ok: false },
+        decl.BindList.BCons { head: parameter, tail: params } => ConstructSourceCheck { fields: rest, params: params, ok: decl.spans_equal<N>(input, field.field_start, field.field_end, parameter.start, parameter.end) }
+    };
+}
 
 fn lower_block_step<N: Nat>(input: [byte; up_to N], st: SsaBuild) -> (result: SsaBuild) {
     return match st.rest {
@@ -353,6 +455,7 @@ fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Blo
         values: prepared.values, next_value: prepared.next_value,
         next_instruction: st.next_instruction, sequence: 0, block: block.id,
         branch_value: 0, return_value: 0, has_branch: false, has_return: false,
+        parameters: params, generated_blocks: SsaBlockList.LNil, next_block_id: st.next_block_id,
         nominals: st.nominals,
         ok: st.supported && (block.id == st.entry || (incoming.found && incoming.ok)),
         failure_op: 0
@@ -360,18 +463,27 @@ fn lower_one_block<N: Nat>(input: [byte; up_to N], st: SsaBuild, block: flow.Blo
     iterate i over input carrying exprs: ExpressionBuild = expression_seed { next exprs = lower_expression_step<N>(input, exprs); }
     let instructions: InstructionList = reverse_instructions<N>(input, exprs.instructions);
     let term: Terminator = make_terminator<N>(input, block, exprs);
-    let edges: EdgeList = add_block_edges<N>(input, st.edges, block, term, exprs.env);
+    let edges: EdgeList = add_block_edges_from<N>(input, st.edges, exprs.block, block, term, exprs.env);
     let block_ok: bool = exprs.ok && terminator_shape(block, term);
     let local_failure: u64 = classify_block_failure(block, st.entry, incoming, exprs, term, st.supported);
     let failure_kind: u64 = select(st.initial_failure_kind > 0, st.initial_failure_kind, local_failure);
-    let ssa_block: SsaBlock = SsaBlock { id: block.id, parameters: params, instructions: instructions, terminator: term, reachable: block.reachable, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
+    let ssa_block: SsaBlock = SsaBlock { id: exprs.block, parameters: exprs.parameters, instructions: instructions, terminator: term, reachable: block.reachable, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
+    let prior_blocks: SsaBlockList = prepend_generated_blocks<N>(input, exprs.generated_blocks, st.blocks);
     return SsaBuild {
-        rest: rest, edges: edges, blocks: SsaBlockList.LCons { head: ssa_block, tail: st.blocks },
+        rest: rest, edges: edges, blocks: SsaBlockList.LCons { head: ssa_block, tail: prior_blocks },
         values: exprs.values, inputs: st.inputs, entry_env: st.entry_env, next_value: exprs.next_value,
-        next_instruction: exprs.next_instruction, result_type: st.result_type,
+        next_instruction: exprs.next_instruction, next_block_id: exprs.next_block_id, result_type: st.result_type,
         identity: st.identity, nominals: st.nominals, entry: st.entry, supported: block_ok,
         initial_failure_kind: st.initial_failure_kind
     };
+}
+record GeneratedBlockPrepend { rest: SsaBlockList, blocks: SsaBlockList }
+fn prepend_generated_blocks<N: Nat>(input: [byte; up_to N], generated: SsaBlockList, blocks: SsaBlockList) -> (result: SsaBlockList) {
+    iterate i over input carrying st: GeneratedBlockPrepend = GeneratedBlockPrepend { rest: generated, blocks: blocks } { next st = prepend_generated_step(st); }
+    return st.blocks;
+}
+fn prepend_generated_step(st: GeneratedBlockPrepend) -> (result: GeneratedBlockPrepend) {
+    return match st.rest { LNil => st, LCons { head: block, tail: rest } => GeneratedBlockPrepend { rest: rest, blocks: SsaBlockList.LCons { head: block, tail: st.blocks } } };
 }
 // Block failure taxonomy: 0 ok, 1 missing incoming, 2 bad incoming,
 // 3 other expression failure, 4 terminator shape, 5 prior unsupported,
@@ -458,7 +570,7 @@ fn lower_expression_step<N: Nat>(input: [byte; up_to N], st: ExpressionBuild) ->
     };
 }
 fn lower_expression<N: Nat>(input: [byte; up_to N], st: ExpressionBuild, expression: flow.TypedExpr, rest: flow.TypedExprList) -> (result: ExpressionBuild) {
-    let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok, failure_op: 0 };
+    let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok, failure_op: 0 };
     iterate i over input carrying built: ExprBuild = seed { next built = lower_operation_step<N>(input, built); }
     let value: Value = expression_value(built.stack);
     let one_value: bool = expression_stack_single(built.stack);
@@ -468,9 +580,10 @@ fn lower_expression<N: Nat>(input: [byte; up_to N], st: ExpressionBuild, express
     return ExpressionBuild {
         rest: rest, env: env, instructions: built.instructions, values: built.values,
         next_value: built.next_value, next_instruction: built.next_instruction,
-        sequence: built.sequence, block: st.block, branch_value: branch_value,
+        sequence: built.sequence, block: built.block, branch_value: branch_value,
         return_value: return_value, has_branch: st.has_branch || expression.role == 2,
         has_return: st.has_return || expression.role == 3,
+        parameters: built.parameters, generated_blocks: built.generated_blocks, next_block_id: built.next_block_id,
         nominals: st.nominals,
         ok: built.ok && one_value && (expression.role != 1 || expression.binding_end > expression.binding_start),
         failure_op: select(st.failure_op > 0, st.failure_op, built.failure_op)
@@ -499,20 +612,242 @@ fn lower_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: dec
         TBool { value: v, ty: ty, start: s, end: e } => emit_constant(st, rest, 1, 0, v, ty, s, e),
         TName { ty: ty, start: s, end: e } => lower_name<N>(input, st, rest, ty, s, e),
         TNot { ty: ty, start: s, end: e } => lower_not<N>(input, st, rest, ty, s, e),
-        TRepeat { ty: ty, element: element, count: count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 1) },
+        TRepeat { ty: ty, element: element, count: count, start: s, end: e } => lower_repeat<N>(input, st, rest, ty, element, count, s, e),
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) },
-        TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 4) },
-        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 5) },
+        TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => lower_finite_match<N>(input, st, rest, ty, subject_ty, arms, arm_count, s, e),
+        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => lower_enum_construct<N>(input, st, rest, ty, vs, ve, f, params, s, e),
         TBin { op: op, ty: ty, start: s, end: e } => lower_binary<N>(input, st, rest, op, ty, s, e),
         TCall { ty: ty, argc: argc, params: params, start: s, end: e, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => lower_call<N>(input, st, rest, ty, argc, params, identity, effects, capabilities, s, e),
         TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 3) }
     };
 }
+fn lower_finite_match<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64) -> (result: ExprBuild) {
+    return match st.stack {
+        WNil => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 4) },
+        WCons { head: subject, tail: base_stack } => lower_finite_match_subject<N>(input, st, rest, result_ty, subject_ty, arms, arm_count, start, end, subject, base_stack)
+    };
+}
+fn lower_finite_match_subject<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64, subject: Value, base_stack: ValueStack) -> (result: ExprBuild) {
+    let nominal: decl.SemanticIdentity = nominal_identity_for_type<N>(input, st.nominals, subject_ty);
+    let actual_count: u64 = decl.typed_finite_match_count<N>(input, arms);
+    let basic_ok: bool = nominal.valid && actual_count == arm_count && arm_count > 0 && decl.sem_eq<N>(input, subject.ty, subject_ty) && supported_value_type<N>(input, result_ty, st.nominals);
+    if !(basic_ok) { return ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 4) }; }
+    let join_id: u64 = st.next_block_id + arm_count;
+    let join_context: MatchContextBuild = match_context_parameters<N>(input, st.env, base_stack, join_id, st.next_value, st.values, st.nominals);
+    let join_result: Value = Value { id: join_context.next_value, ty: result_ty, owner_block: join_id, kind: 1, index: join_context.parameter_index };
+    let join_params: ValueList = ValueList.VCons { head: join_result, tail: join_context.parameters };
+    let join_values: ValueList = ValueList.VCons { head: join_result, tail: join_context.values };
+    let source_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: subject.id }, tail: IdList.INil }, match_context_ids<N>(input, st.env, base_stack));
+    let source: ExprBuild = ExprBuild { ..st, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block_id: st.next_block_id };
+    let initial: FiniteArmBuild = FiniteArmBuild { rest: arms, source: source, cases: FiniteMatchCaseList.MCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, nominal: nominal, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, ok: join_context.ok };
+    iterate i over input carrying built: FiniteArmBuild = initial { next built = finite_arm_step<N>(input, built); }
+    let ordered_cases: FiniteMatchCaseList = reverse_finite_match_cases<N>(input, built.cases);
+    let source_term: Terminator = Terminator.FiniteSwitch { subject: subject.id, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, join_target: join_id, cases: ordered_cases };
+    let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, instructions: reverse_instructions<N>(input, st.instructions), terminator: source_term, reachable: true, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
+    let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: built.arm_blocks };
+    let all_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_blocks, st.generated_blocks);
+    return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: join_id + 1, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 4)) };
+}
+fn finite_arm_step<N: Nat>(input: [byte; up_to N], st: FiniteArmBuild) -> (result: FiniteArmBuild) {
+    return match st.rest {
+        decl.TypedFiniteMatchArmList.TFNil => st,
+        decl.TypedFiniteMatchArmList.TFCons { head: arm, tail: rest } => lower_finite_arm<N>(input, st, arm, rest)
+    };
+}
+record MatchCaseReverse { rest: FiniteMatchCaseList, acc: FiniteMatchCaseList }
+fn reverse_finite_match_cases<N: Nat>(input: [byte; up_to N], cases: FiniteMatchCaseList) -> (result: FiniteMatchCaseList) {
+    iterate i over input carrying st: MatchCaseReverse = MatchCaseReverse { rest: cases, acc: FiniteMatchCaseList.MCNil } { next st = reverse_finite_match_cases_step(st); }
+    return st.acc;
+}
+fn reverse_finite_match_cases_step(st: MatchCaseReverse) -> (result: MatchCaseReverse) {
+    return match st.rest { FiniteMatchCaseList.MCNil => st, FiniteMatchCaseList.MCCons { head: case, tail: rest } => MatchCaseReverse { rest: rest, acc: FiniteMatchCaseList.MCCons { head: case, tail: st.acc } } };
+}
+fn lower_finite_arm<N: Nat>(input: [byte; up_to N], st: FiniteArmBuild, arm: decl.TypedFiniteMatchArm, rest: decl.TypedFiniteMatchArmList) -> (result: FiniteArmBuild) {
+    let arm_id: u64 = st.source.next_block_id + st.arm_index;
+    let prepared: MatchContextBuild = match_context_parameters<N>(input, st.source.env, st.source.stack, arm_id, st.next_value, st.source.values, st.source.nominals);
+    let subject_param: Value = Value { id: prepared.next_value, ty: st.subject_ty, owner_block: arm_id, kind: 1, index: prepared.parameter_index };
+    let arm_params: ValueList = ValueList.VCons { head: subject_param, tail: prepared.parameters };
+    let values_with_subject: ValueList = ValueList.VCons { head: subject_param, tail: prepared.values };
+    let payloads: PayloadLowerBuild = lower_match_payloads<N>(input, arm.bindings, arm.payload_fields, prepared.env, subject_param.id, arm.variant_start, arm.variant_end, st.nominal, st.match_start, st.match_end, InstructionList.QNil, values_with_subject, prepared.next_value + 1, st.next_instruction, 0, arm_id, st.source.nominals, prepared.ok);
+    let arm_seed: ExprBuild = ExprBuild { rest: arm.ops, env: payloads.env, stack: ValueStack.WNil, instructions: payloads.instructions, values: payloads.values, next_value: payloads.next_value, next_instruction: payloads.next_instruction, sequence: payloads.sequence, block: arm_id, parameters: arm_params, generated_blocks: SsaBlockList.LNil, next_block_id: st.source.next_block_id, nominals: st.source.nominals, ok: payloads.ok, failure_op: 0 };
+    iterate i over input carrying lowered: ExprBuild = arm_seed { next lowered = lower_arm_operation_step<N>(input, lowered); }
+    let result: Value = expression_value(lowered.stack);
+    let result_ok: bool = expression_stack_single(lowered.stack) && decl.sem_eq<N>(input, result.ty, st.result_ty);
+    let jump_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: result.id }, tail: IdList.INil }, match_context_ids<N>(input, prepared.env, prepared.stack));
+    let arm_term: Terminator = Terminator.Jump { target: st.join_id, arguments: jump_args };
+    let arm_block: SsaBlock = SsaBlock { id: arm_id, parameters: arm_params, instructions: reverse_instructions<N>(input, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: lowered.ok && result_ok && prepared.ok, lowering_failure_kind: select(lowered.ok && result_ok && prepared.ok, 0, 9) };
+    let edge_case: FiniteMatchCase = FiniteMatchCase { variant_start: arm.variant_start, variant_end: arm.variant_end, target: arm_id, arguments: st.source_arguments };
+    let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
+    return FiniteArmBuild { rest: rest, source: source_next, cases: FiniteMatchCaseList.MCCons { head: edge_case, tail: st.cases }, arm_blocks: SsaBlockList.LCons { head: arm_block, tail: st.arm_blocks }, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, nominal: st.nominal, subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, ok: st.ok && prepared.ok && payloads.ok && lowered.ok && result_ok };
+}
+fn lower_arm_operation_step<N: Nat>(input: [byte; up_to N], st: ExprBuild) -> (result: ExprBuild) {
+    return match st.rest {
+        decl.TOpList.PNil => st,
+        decl.TOpList.PCons { head: operation, tail: rest } => lower_arm_operation<N>(input, st, operation, rest)
+    };
+}
+fn lower_arm_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: decl.TOp, rest: decl.TOpList) -> (result: ExprBuild) {
+    return match operation {
+        TInt { value: value, ty: ty, start: start, end: end } => emit_constant(st, rest, 0, value, false, ty, start, end),
+        TBool { value: value, ty: ty, start: start, end: end } => emit_constant(st, rest, 1, 0, value, ty, start, end),
+        TName { ty: ty, start: start, end: end } => lower_name<N>(input, st, rest, ty, start, end),
+        TNot { ty: ty, start: start, end: end } => lower_not<N>(input, st, rest, ty, start, end),
+        TRepeat { ty: ty, element: element, count: count, start: start, end: end } => lower_repeat<N>(input, st, rest, ty, element, count, start, end),
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) },
+        TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: start, end: end } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 4) },
+        TEnumConstruct { ty: ty, variant_start: variant_start, variant_end: variant_end, field_count: count, params: params, start: start, end: end } => lower_enum_construct<N>(input, st, rest, ty, variant_start, variant_end, count, params, start, end),
+        TBin { op: op, ty: ty, start: start, end: end } => lower_binary<N>(input, st, rest, op, ty, start, end),
+        TCall { ty: ty, argc: argc, params: params, start: start, end: end, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => lower_call<N>(input, st, rest, ty, argc, params, identity, effects, capabilities, start, end),
+        TProj { ty: ty, fstart: field_start, fend: field_end, start: start, end: end } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 3) }
+    };
+}
+fn match_context_parameters<N: Nat>(input: [byte; up_to N], env: Environment, stack: ValueStack, block: u64, next_value: u64, values: ValueList, nominals: decl.NominalTypeIdentityList) -> (result: MatchContextBuild) {
+    let incoming: Incoming = Incoming { found: true, ok: true, count: 1, bindings: env };
+    let env_params: BlockParamBuild = prepare_block_environment<N>(input, block, incoming, next_value, values, nominals);
+    let initial: StackParamBuild = StackParamBuild { rest: stack, parameters_rev: env_params.params, stack_rev: ValueStack.WNil, values: env_params.values, next_value: env_params.next_value, index: env_params.parameter_index, block: block, nominals: nominals, ok: env_params.ok };
+    iterate i over input carrying built: StackParamBuild = initial { next built = match_stack_parameter_step<N>(input, built); }
+    return MatchContextBuild { env: env_params.env, stack: reverse_value_stack<N>(input, built.stack_rev), parameters: built.parameters_rev, values: built.values, next_value: built.next_value, parameter_index: built.index, block: block, nominals: nominals, ok: built.ok };
+}
+fn match_stack_parameter_step<N: Nat>(input: [byte; up_to N], st: StackParamBuild) -> (result: StackParamBuild) {
+    return match st.rest {
+        ValueStack.WNil => st,
+        ValueStack.WCons { head: old, tail: rest } => match_stack_parameter_one<N>(input, st, old, rest)
+    };
+}
+fn match_stack_parameter_one<N: Nat>(input: [byte; up_to N], st: StackParamBuild, old: Value, rest: ValueStack) -> (result: StackParamBuild) {
+    let value: Value = Value { id: st.next_value, ty: old.ty, owner_block: st.block, kind: 1, index: st.index };
+    return StackParamBuild { rest: rest, parameters_rev: ValueList.VCons { head: value, tail: st.parameters_rev }, stack_rev: ValueStack.WCons { head: value, tail: st.stack_rev }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, index: st.index + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, old.ty, st.nominals) };
+}
+fn reverse_value_list<N: Nat>(input: [byte; up_to N], values: ValueList) -> (result: ValueList) {
+    iterate i over input carrying st: ValueListReverse = ValueListReverse { rest: values, acc: ValueList.VNil } { next st = reverse_value_list_step(st); }
+    return st.acc;
+}
+fn reverse_value_list_step(st: ValueListReverse) -> (result: ValueListReverse) {
+    return match st.rest { ValueList.VNil => st, ValueList.VCons { head: value, tail: rest } => ValueListReverse { rest: rest, acc: ValueList.VCons { head: value, tail: st.acc } } };
+}
+fn reverse_value_stack<N: Nat>(input: [byte; up_to N], stack: ValueStack) -> (result: ValueStack) {
+    iterate i over input carrying st: ValueStackReverse = ValueStackReverse { rest: stack, acc: ValueStack.WNil } { next st = reverse_value_stack_step(st); }
+    return st.acc;
+}
+fn reverse_value_stack_step(st: ValueStackReverse) -> (result: ValueStackReverse) {
+    return match st.rest { ValueStack.WNil => st, ValueStack.WCons { head: value, tail: rest } => ValueStackReverse { rest: rest, acc: ValueStack.WCons { head: value, tail: st.acc } } };
+}
+record ValueListAppend { rest: ValueList, acc: ValueList }
+fn append_value<N: Nat>(input: [byte; up_to N], values: ValueList, value: Value) -> (result: ValueList) {
+    let reversed: ValueList = reverse_value_list<N>(input, values);
+    iterate i over input carrying st: ValueListAppend = ValueListAppend { rest: reversed, acc: ValueList.VCons { head: value, tail: ValueList.VNil } } { next st = append_value_step(st); }
+    return st.acc;
+}
+fn append_value_step(st: ValueListAppend) -> (result: ValueListAppend) {
+    return match st.rest { ValueList.VNil => st, ValueList.VCons { head: value, tail: rest } => ValueListAppend { rest: rest, acc: ValueList.VCons { head: value, tail: st.acc } } };
+}
+fn match_context_ids<N: Nat>(input: [byte; up_to N], env: Environment, stack: ValueStack) -> (result: IdList) {
+    return append_ids<N>(input, reverse_id_list<N>(input, value_stack_ids<N>(input, stack)), binding_ids<N>(input, env));
+}
+record StackIdBuild { rest: ValueStack, acc: IdList }
+fn value_stack_ids<N: Nat>(input: [byte; up_to N], stack: ValueStack) -> (result: IdList) {
+    iterate i over input carrying st: StackIdBuild = StackIdBuild { rest: stack, acc: IdList.INil } { next st = value_stack_id_step(st); }
+    return reverse_id_list<N>(input, st.acc);
+}
+fn value_stack_id_step(st: StackIdBuild) -> (result: StackIdBuild) {
+    return match st.rest { ValueStack.WNil => st, ValueStack.WCons { head: value, tail: rest } => StackIdBuild { rest: rest, acc: IdList.ICons { head: Id { value: value.id }, tail: st.acc } } };
+}
+fn append_id<N: Nat>(input: [byte; up_to N], ids: IdList, value: Id) -> (result: IdList) {
+    return append_ids<N>(input, ids, IdList.ICons { head: value, tail: IdList.INil });
+}
+record IdListAppend { rest: IdList, acc: IdList }
+fn append_ids<N: Nat>(input: [byte; up_to N], left: IdList, right: IdList) -> (result: IdList) {
+    let reversed: IdList = reverse_id_list<N>(input, left);
+    iterate i over input carrying st: IdListAppend = IdListAppend { rest: reversed, acc: right } { next st = append_id_step(st); }
+    return st.acc;
+}
+fn reverse_id_list<N: Nat>(input: [byte; up_to N], ids: IdList) -> (result: IdList) {
+    iterate i over input carrying st: IdListReverse = IdListReverse { rest: ids, acc: IdList.INil } { next st = reverse_id_list_step(st); }
+    return st.acc;
+}
+fn reverse_id_list_step(st: IdListReverse) -> (result: IdListReverse) {
+    return match st.rest { IdList.INil => st, IdList.ICons { head: id, tail: rest } => IdListReverse { rest: rest, acc: IdList.ICons { head: id, tail: st.acc } } };
+}
+fn append_id_step(st: IdListAppend) -> (result: IdListAppend) {
+    return match st.rest { IdList.INil => st, IdList.ICons { head: id, tail: rest } => IdListAppend { rest: rest, acc: IdList.ICons { head: id, tail: st.acc } } };
+}
+fn lower_match_payloads<N: Nat>(input: [byte; up_to N], bindings: decl.PayloadBindingList, fields: decl.BindList, env: Environment, subject: u64, variant_start: u64, variant_end: u64, nominal: decl.SemanticIdentity, match_start: u64, match_end: u64, instructions: InstructionList, values: ValueList, next_value: u64, next_instruction: u64, sequence: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool) -> (result: PayloadLowerBuild) {
+    let initial: PayloadLowerBuild = PayloadLowerBuild { rest: bindings, fields: fields, env: env, subject: subject, variant_start: variant_start, variant_end: variant_end, nominal: nominal, match_start: match_start, match_end: match_end, instructions: instructions, values: values, next_value: next_value, next_instruction: next_instruction, sequence: sequence, block: block, nominals: nominals, ok: ok };
+    iterate i over input carrying st: PayloadLowerBuild = initial { next st = lower_match_payload_step<N>(input, st); }
+    return st;
+}
+fn lower_match_payload_step<N: Nat>(input: [byte; up_to N], st: PayloadLowerBuild) -> (result: PayloadLowerBuild) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        decl.PayloadBindingList.YNil => st,
+        decl.PayloadBindingList.YCons { head: binding, tail: rest } => lower_match_payload_one<N>(input, st, binding, rest)
+    };
+}
+fn lower_match_payload_one<N: Nat>(input: [byte; up_to N], st: PayloadLowerBuild, binding: decl.PayloadBinding, rest: decl.PayloadBindingList) -> (result: PayloadLowerBuild) {
+    let field: PayloadFieldFind = find_match_payload_field<N>(input, st.fields, binding.field_start, binding.field_end);
+    if !(field.found) { return PayloadLowerBuild { ..st, rest: rest, ok: false }; }
+    if match_payload_wildcard<N>(input, binding.name_start, binding.name_end) { return PayloadLowerBuild { ..st, rest: rest }; }
+    let value: Value = Value { id: st.next_value, ty: field.field.ty, owner_block: st.block, kind: 2, index: st.sequence };
+    let input_id: IdList = IdList.ICons { head: Id { value: st.subject }, tail: IdList.INil };
+    let params: decl.BindList = decl.BindList.BCons { head: field.field, tail: decl.BindList.BNil };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 6, operator: 0, result: value.id, ty: value.ty, inputs: input_id, argc: 1, params: params, identity: invalid_identity(), nominal_identity: st.nominal, variant_start: st.variant_start, variant_end: st.variant_end, binding_start: binding.name_start, binding_end: binding.name_end, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: st.match_start, end: st.match_end };
+    let mapped: Binding = Binding { name_start: binding.name_start, name_end: binding.name_end, value: value.id, ty: value.ty };
+    return PayloadLowerBuild { ..st, rest: rest, env: Environment.EnvCons { head: mapped, tail: st.env }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, ok: supported_value_type<N>(input, value.ty, st.nominals) };
+}
+record PayloadFieldFind { rest: decl.BindList, start: u64, end: u64, found: bool, field: decl.Bind }
+fn find_match_payload_field<N: Nat>(input: [byte; up_to N], fields: decl.BindList, start: u64, end: u64) -> (result: PayloadFieldFind) {
+    iterate i over input carrying st: PayloadFieldFind = PayloadFieldFind { rest: fields, start: start, end: end, found: false, field: decl.Bind { start: 0, end: 0, ty: decl.SemType.TPoison } } { next st = find_match_payload_field_step<N>(input, st); }
+    return st;
+}
+fn find_match_payload_field_step<N: Nat>(input: [byte; up_to N], st: PayloadFieldFind) -> (result: PayloadFieldFind) {
+    if st.found { return st; }
+    return match st.rest {
+        decl.BindList.BNil => st,
+        decl.BindList.BCons { head: field, tail: rest } => PayloadFieldFind { rest: rest, start: st.start, end: st.end, found: decl.spans_equal<N>(input, field.start, field.end, st.start, st.end), field: field }
+    };
+}
+fn match_payload_wildcard<N: Nat>(input: [byte; up_to N], start: u64, end: u64) -> (result: bool) {
+    if end != start + 1 || end > input.len { return false; }
+    return input[start] == 95;
+}
+fn lower_enum_construct<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, variant_start: u64, variant_end: u64, field_count: u64, params: decl.BindList, start: u64, end: u64) -> (result: ExprBuild) {
+    iterate i over input carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: field_count, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
+    let nominal: decl.SemanticIdentity = nominal_identity_for_type<N>(input, st.nominals, ty);
+    let shape_ok: bool = popped.ok && popped.remaining == 0 && id_count<N>(input, popped.arguments) == field_count && bind_count<N>(input, params) == field_count;
+    let fields_ok: bool = call_argument_types_match<N>(input, st.values, popped.arguments, params) && enum_construct_source_valid<N>(input, ty, variant_start, variant_end, params, start, end);
+    if !(shape_ok) || !(fields_ok) || !(nominal.valid) { return ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 5) }; }
+    let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 5, operator: 0, result: value.id, ty: ty, inputs: popped.arguments, argc: field_count, params: params, identity: invalid_identity(), nominal_identity: nominal, variant_start: variant_start, variant_end: variant_end, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals), failure_op: st.failure_op };
+}
+fn lower_repeat<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, element_ty: decl.SemType, count: u64, start: u64, end: u64) -> (result: ExprBuild) {
+    return match st.stack {
+        ValueStack.WNil => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 1) },
+        ValueStack.WCons { head: element, tail: remaining } => emit_repeat<N>(input, st, rest, ty, element_ty, count, start, end, element, remaining)
+    };
+}
+fn emit_repeat<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, element_ty: decl.SemType, count: u64, start: u64, end: u64, element: Value, remaining: ValueStack) -> (result: ExprBuild) {
+    let type_ok: bool = match ty {
+        TSeqExact { element: result_element, length: length, length_valid: valid } => valid && length == count && decl.sem_eq<N>(input, result_element, element_ty),
+        TBool => false,
+        TByte => false,
+        TInt { width: width, signed: signed } => false,
+        TNamed { start: named_start, end: named_end } => false,
+        TSeq => false,
+        TPoison => false
+    };
+    let source_ok: bool = repeat_source_count_matches<N>(input, start, end, count);
+    if !(type_ok) || !(source_ok) || !(decl.sem_eq<N>(input, element.ty, element_ty)) || !(supported_value_type<N>(input, ty, st.nominals)) { return ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 1) }; }
+    let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
+    let args: IdList = IdList.ICons { head: Id { value: element.id }, tail: IdList.INil };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 7, operator: count, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok, failure_op: st.failure_op };
+}
 fn emit_constant(st: ExprBuild, rest: decl.TOpList, kind: u64, integer: u64, boolean: bool, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let payload: u64 = select(kind == 0, integer, boolean_value(boolean));
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: kind, operator: payload, result: value.id, ty: ty, inputs: IdList.INil, argc: 0, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: st.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(ty), failure_op: st.failure_op };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: kind, operator: payload, result: value.id, ty: ty, inputs: IdList.INil, argc: 0, params: decl.BindList.BNil, identity: invalid_identity(), nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: st.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && scalar_type(ty), failure_op: st.failure_op };
 }
 fn boolean_value(value: bool) -> (result: u64) { return select(value, 1, 0); }
 fn lower_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
@@ -524,14 +859,14 @@ fn lower_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, 
 fn emit_not<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64, operand: Value, remaining: ValueStack) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let args: IdList = IdList.ICons { head: Id { value: operand.id }, tail: IdList.INil };
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 4, operator: 0, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 4, operator: 0, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
     let valid: bool = decl.sem_eq<N>(input, operand.ty, decl.SemType.TBool);
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && valid && decl.sem_eq<N>(input, ty, decl.SemType.TBool), failure_op: st.failure_op };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && valid && decl.sem_eq<N>(input, ty, decl.SemType.TBool), failure_op: st.failure_op };
 }
 fn lower_name<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let found: BindingLookup = lookup_binding<N>(input, st.env, start, end);
     if !(found.found) || !(decl.sem_eq<N>(input, found.binding.ty, ty)) { return ExprBuild { ..st, rest: rest, ok: false }; }
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: Value { id: found.binding.value, ty: found.binding.ty, owner_block: 0, kind: 3, index: 0 }, tail: st.stack }, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, nominals: st.nominals, ok: st.ok, failure_op: st.failure_op };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: Value { id: found.binding.value, ty: found.binding.ty, owner_block: 0, kind: 3, index: 0 }, tail: st.stack }, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok, failure_op: st.failure_op };
 }
 record BindingLookup { found: bool, binding: Binding }
 record BindingScan { rest: Environment, start: u64, end: u64, found: bool, binding: Binding }
@@ -563,16 +898,16 @@ fn lower_binary_left<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.T
 fn emit_binary<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, op: u64, ty: decl.SemType, start: u64, end: u64, right: Value, left: Value, tail: ValueStack) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let args: IdList = IdList.ICons { head: Id { value: left.id }, tail: IdList.ICons { head: Id { value: right.id }, tail: IdList.INil } };
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 2, operator: op, result: value.id, ty: ty, inputs: args, argc: 2, params: decl.BindList.BNil, identity: invalid_identity(), effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty), failure_op: st.failure_op };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 2, operator: op, result: value.id, ty: ty, inputs: args, argc: 2, params: decl.BindList.BNil, identity: invalid_identity(), nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty), failure_op: st.failure_op };
 }
 
 fn lower_call<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, params: decl.BindList, identity: decl.SemanticIdentity, effects: decl.EffectIdentityList, capabilities: decl.CapabilityIdentityList, start: u64, end: u64) -> (result: ExprBuild) {
     iterate i over input carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: argc, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
     if !(popped.ok) || popped.remaining != 0 || !(identity.valid) || !(decl.signature_identity_valid<N>(input, effects, capabilities)) { return ExprBuild { ..st, rest: rest, ok: false }; }
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
-    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 3, operator: 0, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: params, identity: identity, effects: effects, capabilities: capabilities, start: start, end: end };
-    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals), failure_op: st.failure_op };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 3, operator: 0, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: params, identity: identity, nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: effects, capabilities: capabilities, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals), failure_op: st.failure_op };
 }
 fn pop_call_arg(st: PopArgs) -> (result: PopArgs) {
     if !(st.ok) || st.remaining == 0 { return st; }
@@ -605,10 +940,10 @@ fn make_terminator<N: Nat>(input: [byte; up_to N], block: flow.Block, exprs: Exp
     return Terminator.Fail;
 }
 fn terminator_shape(block: flow.Block, term: Terminator) -> (result: bool) {
-    if block.kind == 1 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => block.succ_count == 2 && y == block.succ0 && n == block.succ1, Jump { target: t, arguments: a } => false, Return { value: v } => false, Fail => false }; }
-    if block.kind == 2 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => block.succ_count == 1 && t == block.succ0, Return { value: v } => false, Fail => false }; }
-    if block.kind == 3 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, Return { value: v } => block.succ_count == 0, Fail => false }; }
-    if block.kind == 4 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, Return { value: v } => false, Fail => block.succ_count == 0 }; }
+    if block.kind == 1 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => block.succ_count == 2 && y == block.succ0 && n == block.succ1, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => false }; }
+    if block.kind == 2 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => block.succ_count == 1 && t == block.succ0, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => false }; }
+    if block.kind == 3 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => block.succ_count == 0, Fail => false }; }
+    if block.kind == 4 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => block.succ_count == 0 }; }
     return false;
 }
 fn binding_ids<N: Nat>(input: [byte; up_to N], bindings: Environment) -> (result: IdList) {
@@ -620,9 +955,13 @@ fn binding_id_step(st: BindingIdBuild) -> (result: BindingIdBuild) {
     return match st.rest { EnvNil => st, EnvCons { head: h, tail: t } => BindingIdBuild { rest: t, acc: IdList.ICons { head: Id { value: h.value }, tail: st.acc } } };
 }
 fn add_block_edges<N: Nat>(input: [byte; up_to N], edges: EdgeList, block: flow.Block, term: Terminator, env: Environment) -> (result: EdgeList) {
+    return add_block_edges_from<N>(input, edges, block.id, block, term, env);
+}
+fn add_block_edges_from<N: Nat>(input: [byte; up_to N], edges: EdgeList, source: u64, block: flow.Block, term: Terminator, env: Environment) -> (result: EdgeList) {
     return match term {
-        Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => EdgeList.ECons { head: Edge { source: block.id, target: n, bindings: env, arguments: na }, tail: EdgeList.ECons { head: Edge { source: block.id, target: y, bindings: env, arguments: ya }, tail: edges } },
-        Jump { target: target, arguments: args } => EdgeList.ECons { head: Edge { source: block.id, target: target, bindings: env, arguments: args }, tail: edges },
+        Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => EdgeList.ECons { head: Edge { source: source, target: n, bindings: env, arguments: na }, tail: EdgeList.ECons { head: Edge { source: source, target: y, bindings: env, arguments: ya }, tail: edges } },
+        Jump { target: target, arguments: args } => EdgeList.ECons { head: Edge { source: source, target: target, bindings: env, arguments: args }, tail: edges },
+        FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => edges,
         Return { value: v } => edges,
         Fail => edges
     };
@@ -768,7 +1107,154 @@ fn verify_instruction<N: Nat>(input: [byte; up_to N], function: Function, block:
     if inst.kind == 2 { return verify_binary_instruction<N>(input, function, inst); }
     if inst.kind == 3 { return verify_call_instruction<N>(input, function, inst); }
     if inst.kind == 4 { return verify_not_instruction<N>(input, function, inst); }
+    if inst.kind == 5 { return verify_enum_construct_instruction<N>(input, function, inst); }
+    if inst.kind == 6 { return verify_match_payload_instruction<N>(input, function, inst); }
+    if inst.kind == 7 { return verify_repeat_instruction<N>(input, function, inst); }
     return false;
+}
+fn verify_repeat_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
+    return match inst.inputs {
+        IdList.INil => false,
+        IdList.ICons { head: element, tail: rest } => verify_repeat_operand<N>(input, function, inst, element, rest)
+    };
+}
+fn verify_repeat_operand<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction, element: Id, rest: IdList) -> (result: bool) {
+    let found: LookupValue = find_value<N>(input, function.values, element.value);
+    let shape_ok: bool = match inst.ty {
+        TSeqExact { element: result_element, length: length, length_valid: valid } => valid && length == inst.operator && decl.sem_eq<N>(input, result_element, found.value.ty),
+        TBool => false,
+        TByte => false,
+        TInt { width: width, signed: signed } => false,
+        TNamed { start: start, end: end } => false,
+        TSeq => false,
+        TPoison => false
+    };
+    let source_ok: bool = repeat_source_count_matches<N>(input, inst.start, inst.end, inst.operator);
+    return id_list_empty(rest) && inst.argc == 1 && found.found && shape_ok && source_ok && decl.bind_list_empty(inst.params) && !(inst.identity.valid) && !(inst.nominal_identity.valid) && inst.variant_start == 0 && inst.variant_end == 0 && inst.binding_start == 0 && inst.binding_end == 0 && decl.signature_identity_valid<N>(input, inst.effects, inst.capabilities) && supported_value_type<N>(input, inst.ty, function.nominals);
+}
+fn repeat_source_count_matches<N: Nat>(input: [byte; up_to N], start: u64, end: u64, expected: u64) -> (result: bool) {
+    let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        Repeat { value: value, count_start: count_start, count_end: count_end, count_kind: count_kind, start: repeat_start, end: repeat_end } => repeat_start == start && repeat_end == end && repeat_count_literal_matches<N>(input, count_kind, count_start, count_end, expected),
+        Name { start: name_start, end: name_end } => false,
+        Integer { start: integer_start, end: integer_end, value: value, overflow: overflow } => false,
+        Boolean { start: boolean_start, end: boolean_end, value: value } => false,
+        UnaryNot { value: value, start: not_start, end: not_end } => false,
+        ScalarMatch { subject: subject, arms: arms, start: match_start, end: match_end } => false,
+        Binary { op: op, left: left, right: right, start: binary_start, end: binary_end } => false,
+        Call { name_start: name_start, name_end: name_end, args: args, start: call_start, end: call_end } => false,
+        Project { base: base, field_start: field_start, field_end: field_end, start: project_start, end: project_end, path: path } => false,
+        FiniteMatch { subject: subject, arms: arms, start: match_start, end: match_end } => false,
+        EnumConstruct { type_start: type_start, type_end: type_end, variant_start: variant_start, variant_end: variant_end, fields: fields, start: construct_start, end: construct_end } => false
+    };
+}
+fn repeat_count_literal_matches<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, expected: u64) -> (result: bool) {
+    let parsed: decl.IntVal = decl.int_value<N>(input, start, end);
+    return kind == 5 && !(parsed.overflow) && parsed.value == expected;
+}
+fn verify_match_payload_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
+    return match inst.inputs {
+        IdList.INil => false,
+        IdList.ICons { head: subject, tail: rest } => verify_match_payload_subject<N>(input, function, inst, subject, rest)
+    };
+}
+fn verify_match_payload_subject<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction, subject: Id, rest: IdList) -> (result: bool) {
+    let found: LookupValue = find_value<N>(input, function.values, subject.value);
+    let expected_nominal: decl.SemanticIdentity = nominal_identity_for_type<N>(input, function.nominals, found.value.ty);
+    let source_ok: bool = payload_extract_source_valid<N>(input, inst.start, inst.end, inst.variant_start, inst.variant_end, inst.binding_start, inst.binding_end, inst.params);
+    let declared_type_ok: bool = payload_declared_field_type<N>(input, function, found.value.ty, inst.variant_start, inst.variant_end, inst.params, inst.ty);
+    let field_type_ok: bool = match inst.params {
+        decl.BindList.BNil => false,
+        decl.BindList.BCons { head: field, tail: fields } => decl.bind_list_empty(fields) && decl.sem_eq<N>(input, field.ty, inst.ty)
+    };
+    return id_list_empty(rest) && inst.argc == 1 && inst.operator == 0 && found.found && is_named_type(found.value.ty) && expected_nominal.valid && decl.semantic_identity_equal(expected_nominal, inst.nominal_identity) && field_type_ok && declared_type_ok && inst.binding_end > inst.binding_start && !(match_payload_wildcard<N>(input, inst.binding_start, inst.binding_end)) && source_ok && !(inst.identity.valid) && decl.signature_identity_valid<N>(input, inst.effects, inst.capabilities) && supported_value_type<N>(input, inst.ty, function.nominals);
+}
+fn payload_declared_field_type<N: Nat>(input: [byte; up_to N], function: Function, subject_ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
+    return match subject_ty {
+        TNamed { start: type_start, end: type_end } => payload_declared_named_field_type<N>(input, function, type_start, type_end, variant_start, variant_end, params, output_ty),
+        TBool => false,
+        TByte => false,
+        TInt { width: width, signed: signed } => false,
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
+        TPoison => false
+    };
+}
+fn payload_declared_named_field_type<N: Nat>(input: [byte; up_to N], function: Function, type_start: u64, type_end: u64, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
+    let unit: decl.Unit = decl.parse_unit<N>(input);
+    let enum_find: decl.EnumFind = decl.enum_lookup<N>(input, unit.enums, type_start, type_end);
+    if !(unit.ok) || !(enum_find.found) { return false; }
+    let variant: decl.VariantScan = decl.variant_scan<N>(input, enum_find.decl.variants, variant_start, variant_end);
+    if !(variant.found) { return false; }
+    return match params {
+        decl.BindList.BNil => false,
+        decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_field_parameter<N>(input, function, variant.variant.fields, parameter, rest, output_ty, unit)
+    };
+}
+fn payload_declared_field_parameter<N: Nat>(input: [byte; up_to N], function: Function, fields: decl.FieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType, unit: decl.Unit) -> (result: bool) {
+    if !(decl.bind_list_empty(rest)) { return false; }
+    let field: decl.FieldScan = decl.field_scan<N>(input, fields, parameter.start, parameter.end);
+    if !(field.found) { return false; }
+    let resolved: decl.TyRes = decl.resolve_type<N>(input, field.field.type_kind, field.field.type_start, field.field.type_end, unit.records, unit.enums, function.nominals);
+    return resolved.ok && decl.sem_eq<N>(input, resolved.ty, parameter.ty) && decl.sem_eq<N>(input, resolved.ty, output_ty);
+}
+fn payload_extract_source_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList) -> (result: bool) {
+    let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        FiniteMatch { subject: subject, arms: arms, start: source_start, end: source_end } => source_start == start && source_end == end && payload_source_arm_found<N>(input, arms, variant_start, variant_end, binding_start, binding_end, params),
+        Name { start: s, end: e } => false,
+        Integer { start: s, end: e, value: value, overflow: overflow } => false,
+        Boolean { start: s, end: e, value: value } => false,
+        UnaryNot { value: value, start: s, end: e } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+    };
+}
+record PayloadSourceArmSearch { rest: decl.FiniteMatchArmList, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList, found: bool }
+fn payload_source_arm_found<N: Nat>(input: [byte; up_to N], arms: decl.FiniteMatchArmList, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList) -> (result: bool) {
+    iterate i over input carrying st: PayloadSourceArmSearch = PayloadSourceArmSearch { rest: arms, variant_start: variant_start, variant_end: variant_end, binding_start: binding_start, binding_end: binding_end, params: params, found: false } { next st = payload_source_arm_step<N>(input, st); }
+    return st.found;
+}
+fn payload_source_arm_step<N: Nat>(input: [byte; up_to N], st: PayloadSourceArmSearch) -> (result: PayloadSourceArmSearch) {
+    if st.found { return st; }
+    return match st.rest {
+        decl.FiniteMatchArmList.ANil => st,
+        decl.FiniteMatchArmList.ACons { head: arm, tail: rest } => payload_source_arm_one<N>(input, st, arm, rest)
+    };
+}
+fn payload_source_arm_one<N: Nat>(input: [byte; up_to N], st: PayloadSourceArmSearch, arm: decl.FiniteMatchArm, rest: decl.FiniteMatchArmList) -> (result: PayloadSourceArmSearch) {
+    if arm.variant_start != st.variant_start || arm.variant_end != st.variant_end { return PayloadSourceArmSearch { ..st, rest: rest }; }
+    return PayloadSourceArmSearch { ..st, rest: rest, found: payload_source_binding_found<N>(input, arm.bindings, st.params, st.binding_start, st.binding_end) };
+}
+fn payload_source_binding_found<N: Nat>(input: [byte; up_to N], bindings: decl.PayloadBindingList, params: decl.BindList, binding_start: u64, binding_end: u64) -> (result: bool) {
+    return match params {
+        decl.BindList.BNil => false,
+        decl.BindList.BCons { head: field, tail: fields } => decl.bind_list_empty(fields) && payload_source_binding_has<N>(input, bindings, field.start, field.end, binding_start, binding_end)
+    };
+}
+record PayloadSourceBindingSearch { rest: decl.PayloadBindingList, field_start: u64, field_end: u64, binding_start: u64, binding_end: u64, found: bool }
+fn payload_source_binding_has<N: Nat>(input: [byte; up_to N], bindings: decl.PayloadBindingList, field_start: u64, field_end: u64, binding_start: u64, binding_end: u64) -> (result: bool) {
+    iterate i over input carrying st: PayloadSourceBindingSearch = PayloadSourceBindingSearch { rest: bindings, field_start: field_start, field_end: field_end, binding_start: binding_start, binding_end: binding_end, found: false } { next st = payload_source_binding_step<N>(input, st); }
+    return st.found;
+}
+fn payload_source_binding_step<N: Nat>(input: [byte; up_to N], st: PayloadSourceBindingSearch) -> (result: PayloadSourceBindingSearch) {
+    if st.found { return st; }
+    return match st.rest {
+        decl.PayloadBindingList.YNil => st,
+        decl.PayloadBindingList.YCons { head: binding, tail: rest } => PayloadSourceBindingSearch { rest: rest, field_start: st.field_start, field_end: st.field_end, binding_start: st.binding_start, binding_end: st.binding_end, found: decl.spans_equal<N>(input, binding.field_start, binding.field_end, st.field_start, st.field_end) && decl.spans_equal<N>(input, binding.name_start, binding.name_end, st.binding_start, st.binding_end) }
+    };
+}
+fn verify_enum_construct_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
+    let nominal: decl.SemanticIdentity = nominal_identity_for_type<N>(input, function.nominals, inst.ty);
+    let shape_ok: bool = inst.argc == id_count<N>(input, inst.inputs) && inst.argc == bind_count<N>(input, inst.params);
+    let fields_ok: bool = call_argument_types_match<N>(input, function.values, inst.inputs, inst.params) && enum_construct_source_valid<N>(input, inst.ty, inst.variant_start, inst.variant_end, inst.params, inst.start, inst.end);
+    return shape_ok && fields_ok && inst.argc == bind_count<N>(input, inst.params) && inst.identity.valid == false && decl.signature_identity_valid<N>(input, inst.effects, inst.capabilities) && supported_value_type<N>(input, inst.ty, function.nominals) && nominal.valid && decl.semantic_identity_equal(nominal, inst.nominal_identity);
 }
 fn verify_not_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
     return match inst.inputs {
@@ -873,8 +1359,127 @@ fn verify_terminator<N: Nat>(input: [byte; up_to N], function: Function, block: 
     return match term {
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => verify_branch_term<N>(input, function, block.id, condition, yes, no, ya, na, instruction_total),
         Jump { target: target, arguments: args } => verify_edge<N>(input, function, block.id, target, args, instruction_total),
+        FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_type, source_start: start, source_end: end, arm_count: arm_count, join_target: join_target, cases: cases } => verify_finite_switch<N>(input, function, block, subject, subject_ty, nominal, result_type, start, end, arm_count, join_target, cases, instruction_total),
         Return { value: value } => verify_return_term<N>(input, function, block.id, value, instruction_total),
         Fail => false
+    };
+}
+record FiniteCaseCount { rest: FiniteMatchCaseList, count: u64 }
+fn finite_case_count<N: Nat>(input: [byte; up_to N], cases: FiniteMatchCaseList) -> (result: u64) {
+    iterate i over input carrying st: FiniteCaseCount = FiniteCaseCount { rest: cases, count: 0 } { next st = finite_case_count_step(st); }
+    return st.count;
+}
+fn finite_case_count_step(st: FiniteCaseCount) -> (result: FiniteCaseCount) {
+    return match st.rest { FiniteMatchCaseList.MCNil => st, FiniteMatchCaseList.MCCons { head: case, tail: rest } => FiniteCaseCount { rest: rest, count: st.count + 1 } };
+}
+fn verify_finite_switch<N: Nat>(input: [byte; up_to N], function: Function, block: SsaBlock, subject: u64, subject_ty: decl.SemType, nominal: decl.SemanticIdentity, result_ty: decl.SemType, start: u64, end: u64, arm_count: u64, join: u64, cases: FiniteMatchCaseList, before: u64) -> (result: bool) {
+    let subject_value: LookupValue = find_value<N>(input, function.values, subject);
+    let expected_nominal: decl.SemanticIdentity = nominal_identity_for_type<N>(input, function.nominals, subject_ty);
+    let join_block: BlockLookup = find_block<N>(input, function.blocks, join);
+    let source_ok: bool = finite_match_source_cases_valid<N>(input, start, end, cases, arm_count);
+    let cases_ok: bool = verify_finite_switch_cases<N>(input, function, block.id, join, result_ty, cases, before);
+    return subject_value.found && value_available<N>(input, function.values, subject, block.id, before) && is_named_type(subject_ty) && decl.sem_eq<N>(input, subject_value.value.ty, subject_ty) && expected_nominal.valid && decl.semantic_identity_equal(expected_nominal, nominal) && supported_value_type<N>(input, result_ty, function.nominals) && arm_count > 0 && finite_case_count<N>(input, cases) == arm_count && source_ok && cases_ok && join_block.found && finite_join_result_type<N>(input, join_block.block.parameters, result_ty);
+}
+fn is_named_type(ty: decl.SemType) -> (result: bool) {
+    return match ty { TNamed { start: start, end: end } => true, TBool => false, TByte => false, TInt { width: width, signed: signed } => false, TSeq => false, TSeqExact { element: element, length: length, length_valid: valid } => false, TPoison => false };
+}
+record FiniteSwitchCaseScan { rest: FiniteMatchCaseList, function: Function, source: u64, join: u64, result_ty: decl.SemType, before: u64, ok: bool }
+fn verify_finite_switch_cases<N: Nat>(input: [byte; up_to N], function: Function, source: u64, join: u64, result_ty: decl.SemType, cases: FiniteMatchCaseList, before: u64) -> (result: bool) {
+    iterate i over input carrying st: FiniteSwitchCaseScan = FiniteSwitchCaseScan { rest: cases, function: function, source: source, join: join, result_ty: result_ty, before: before, ok: true } { next st = verify_finite_switch_case_step<N>(input, st); }
+    return st.ok && finite_match_cases_empty(st.rest);
+}
+fn finite_match_cases_empty(cases: FiniteMatchCaseList) -> (result: bool) { return match cases { FiniteMatchCaseList.MCNil => true, FiniteMatchCaseList.MCCons { head: h, tail: t } => false }; }
+fn verify_finite_switch_case_step<N: Nat>(input: [byte; up_to N], st: FiniteSwitchCaseScan) -> (result: FiniteSwitchCaseScan) {
+    if !(st.ok) { return st; }
+    return match st.rest { FiniteMatchCaseList.MCNil => st, FiniteMatchCaseList.MCCons { head: case, tail: rest } => verify_finite_switch_case<N>(input, st, case, rest) };
+}
+fn verify_finite_switch_case<N: Nat>(input: [byte; up_to N], st: FiniteSwitchCaseScan, case: FiniteMatchCase, rest: FiniteMatchCaseList) -> (result: FiniteSwitchCaseScan) {
+    let target: BlockLookup = find_block<N>(input, st.function.blocks, case.target);
+    let unique: bool = !(finite_match_case_duplicate<N>(input, rest, case));
+    let edge_ok: bool = verify_edge<N>(input, st.function, st.source, case.target, case.arguments, st.before);
+    let target_term_ok: bool = target.found && finite_arm_jumps_to_join<N>(input, st.function, target.block, st.join, st.result_ty);
+    return FiniteSwitchCaseScan { ..st, rest: rest, ok: unique && case.target != st.source && case.target != st.join && case.variant_end > case.variant_start && edge_ok && target_term_ok };
+}
+record DuplicateFiniteCaseScan { rest: FiniteMatchCaseList, variant_start: u64, variant_end: u64, target: u64, found: bool }
+fn finite_match_case_duplicate<N: Nat>(input: [byte; up_to N], cases: FiniteMatchCaseList, candidate: FiniteMatchCase) -> (result: bool) {
+    iterate i over input carrying st: DuplicateFiniteCaseScan = DuplicateFiniteCaseScan { rest: cases, variant_start: candidate.variant_start, variant_end: candidate.variant_end, target: candidate.target, found: false } { next st = finite_match_duplicate_step(st); }
+    return st.found;
+}
+fn finite_match_duplicate_step(st: DuplicateFiniteCaseScan) -> (result: DuplicateFiniteCaseScan) {
+    if st.found { return st; }
+    return match st.rest { FiniteMatchCaseList.MCNil => st, FiniteMatchCaseList.MCCons { head: case, tail: rest } => DuplicateFiniteCaseScan { rest: rest, variant_start: st.variant_start, variant_end: st.variant_end, target: st.target, found: case.target == st.target || (case.variant_start == st.variant_start && case.variant_end == st.variant_end) } };
+}
+fn finite_arm_jumps_to_join<N: Nat>(input: [byte; up_to N], function: Function, block: SsaBlock, join: u64, result_ty: decl.SemType) -> (result: bool) {
+    return match block.terminator {
+        Jump { target: target, arguments: args } => target == join && verify_edge<N>(input, function, block.id, target, args, instruction_count<N>(input, block.instructions)) && first_argument_has_type<N>(input, function.values, args, result_ty),
+        Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => false,
+        FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result, source_start: start, source_end: end, arm_count: count, join_target: target, cases: cases } => false,
+        Return { value: value } => false,
+        Fail => false
+    };
+}
+record LastIdType { rest: IdList, values: ValueList, last: u64, found: bool, ty: decl.SemType }
+fn last_argument_has_type<N: Nat>(input: [byte; up_to N], values: ValueList, args: IdList, want: decl.SemType) -> (result: bool) {
+    iterate i over input carrying st: LastIdType = LastIdType { rest: args, values: values, last: 0, found: false, ty: decl.SemType.TPoison } { next st = last_argument_type_step<N>(input, st); }
+    return st.found && id_list_empty(st.rest) && decl.sem_eq<N>(input, st.ty, want);
+}
+fn last_argument_type_step<N: Nat>(input: [byte; up_to N], st: LastIdType) -> (result: LastIdType) {
+    return match st.rest { IdList.INil => st, IdList.ICons { head: id, tail: rest } => last_argument_type_one<N>(input, st, id, rest) };
+}
+fn last_argument_type_one<N: Nat>(input: [byte; up_to N], st: LastIdType, id: Id, rest: IdList) -> (result: LastIdType) {
+    let found: LookupValue = find_value<N>(input, st.values, id.value);
+    return LastIdType { rest: rest, values: st.values, last: id.value, found: found.found, ty: found.value.ty };
+}
+fn first_argument_has_type<N: Nat>(input: [byte; up_to N], values: ValueList, args: IdList, want: decl.SemType) -> (result: bool) {
+    return match args {
+        IdList.INil => false,
+        IdList.ICons { head: id, tail: rest } => first_argument_type<N>(input, values, id, want)
+    };
+}
+fn first_argument_type<N: Nat>(input: [byte; up_to N], values: ValueList, id: Id, want: decl.SemType) -> (result: bool) {
+    let found: LookupValue = find_value<N>(input, values, id.value);
+    return found.found && decl.sem_eq<N>(input, found.value.ty, want);
+}
+record LastValueType { rest: ValueList, found: bool, ty: decl.SemType }
+fn finite_join_result_type<N: Nat>(input: [byte; up_to N], params: ValueList, want: decl.SemType) -> (result: bool) {
+    return match params { ValueList.VNil => false, ValueList.VCons { head: value, tail: rest } => decl.sem_eq<N>(input, value.ty, want) };
+}
+fn last_value_type_step(st: LastValueType) -> (result: LastValueType) {
+    return match st.rest { ValueList.VNil => st, ValueList.VCons { head: value, tail: rest } => LastValueType { rest: rest, found: true, ty: value.ty } };
+}
+fn finite_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, cases: FiniteMatchCaseList, count: u64) -> (result: bool) {
+    let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        FiniteMatch { subject: subject, arms: arms, start: source_start, end: source_end } => source_start == start && source_end == end && finite_match_source_arm_pairs<N>(input, arms, cases, count),
+        Name { start: s, end: e } => false,
+        Integer { start: s, end: e, value: value, overflow: overflow } => false,
+        Boolean { start: s, end: e, value: value } => false,
+        UnaryNot { value: value, start: s, end: e } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+    };
+}
+record SourceFiniteCasePair { arms: decl.FiniteMatchArmList, cases: FiniteMatchCaseList, count: u64, ok: bool }
+fn finite_match_source_arm_pairs<N: Nat>(input: [byte; up_to N], arms: decl.FiniteMatchArmList, cases: FiniteMatchCaseList, count: u64) -> (result: bool) {
+    iterate i over input carrying st: SourceFiniteCasePair = SourceFiniteCasePair { arms: arms, cases: cases, count: 0, ok: true } { next st = finite_match_source_pair_step(st); }
+    return st.ok && st.count == count && source_match_arms_empty(st.arms) && finite_match_cases_empty(st.cases);
+}
+fn source_match_arms_empty(arms: decl.FiniteMatchArmList) -> (result: bool) { return match arms { ANil => true, ACons { head: h, tail: t } => false }; }
+fn finite_match_source_pair_step(st: SourceFiniteCasePair) -> (result: SourceFiniteCasePair) {
+    return match st.arms {
+        decl.FiniteMatchArmList.ANil => SourceFiniteCasePair { ..st, ok: st.ok && finite_match_cases_empty(st.cases) },
+        decl.FiniteMatchArmList.ACons { head: arm, tail: rest } => finite_match_source_pair_case(st, arm, rest)
+    };
+}
+fn finite_match_source_pair_case(st: SourceFiniteCasePair, arm: decl.FiniteMatchArm, rest: decl.FiniteMatchArmList) -> (result: SourceFiniteCasePair) {
+    return match st.cases {
+        FiniteMatchCaseList.MCNil => SourceFiniteCasePair { ..st, arms: rest, ok: false },
+        FiniteMatchCaseList.MCCons { head: case, tail: cases } => SourceFiniteCasePair { arms: rest, cases: cases, count: st.count + 1, ok: st.ok && arm.variant_start == case.variant_start && arm.variant_end == case.variant_end }
     };
 }
 fn verify_branch_term<N: Nat>(input: [byte; up_to N], function: Function, block: u64, condition: u64, yes: u64, no: u64, yes_args: IdList, no_args: IdList, before: u64) -> (result: bool) {

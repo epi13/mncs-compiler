@@ -229,6 +229,7 @@ def run():
         (project_root / "a-dep.mncs").write_text(dependency)
         discovered = discover_sources(project_root)
         probe = Probe()
+        enum_probe = None
         try:
             execution_status = probe.send({"execution_status": True})
             if os.environ.get("MNCS_PROBE_BACKEND") == "cranelift":
@@ -821,6 +822,262 @@ def run():
                 "coverage_gap": False,
             }
 
+            # Enum values retain their canonical nominal and variant identity
+            # in value SSA. Keep construction and finite-match cases in small
+            # project requests: the selected native runtime has a bounded
+            # canonical arena, and each request is independently installed.
+            enum_probe = Probe()
+            constructor_source = (
+                "mncs 0.18; module demo.construct; "
+                "record Box { value: u64 } "
+                "enum Pair { P { left: u64, right: bool }, Empty } "
+                "enum Wrapped { W { item: Box }, Empty } "
+                "enum Flag { Yes { set: bool }, No } "
+                "fn yes(value: bool) -> (r: Flag) { return Flag.Yes { set: value }; } "
+                "fn no() -> (r: Flag) { return Flag.No; } "
+                "fn no_braces() -> (r: Flag) { return Flag.No { }; } "
+                "fn pair(left: u64, right: bool) -> (r: Pair) { return Pair.P { left: left, right: right }; } "
+                "fn wrapped(value: Box) -> (r: Wrapped) { return Wrapped.W { item: value }; } "
+                "fn repeat(value: u64, wrong: bool) -> (r: [u64; 3]) { return [value; 3]; }"
+            )
+            for path in project_root.glob("*.mncs"):
+                path.unlink()
+            (project_root / "a-construct.mncs").write_text(constructor_source)
+            constructor_native = enum_probe.native(request_value(identities, discover_sources(project_root)))
+            constructor_wire_project = copy.deepcopy(enum_probe.last_response["returned"][0])
+            constructor_modules = flist(constructor_native["modules"])
+            constructor_module = next(module for module in constructor_modules if module["source_index"] == 0)
+            constructor_ssa = constructor_module["value_ssa"]
+            assert constructor_native["valid"] is True, constructor_native["diagnostics"]
+            assert constructor_native["value_ssa_valid"] is True, constructor_ssa
+            assert constructor_ssa["valid"] is True and constructor_ssa["verified_function_count"] == 6, constructor_ssa
+            constructor_functions = flist(constructor_ssa["functions"])
+            constructor_instructions = [
+                instruction for function in constructor_functions
+                for block in flist(function["blocks"])
+                for instruction in flist(block["instructions"])
+                if instruction["kind"] == 5
+            ]
+            assert len(constructor_instructions) == 5, constructor_instructions
+            assert all(instruction["nominal_identity"]["valid"] for instruction in constructor_instructions)
+            assert all(instruction["variant_end"] > instruction["variant_start"] for instruction in constructor_instructions)
+            pair_function = next(function for function in constructor_functions
+                                 if identity_text(function["identity"]).endswith("::pair"))
+            pair_inst = next(instruction for block in flist(pair_function["blocks"])
+                             for instruction in flist(block["instructions"])
+                             if instruction["kind"] == 5)
+            assert pair_inst["argc"] == 2
+            assert len(flist(pair_inst["inputs"])) == len(flist(pair_inst["params"])) == 2
+            repeat_instructions = [
+                instruction for function in constructor_functions
+                for block in flist(function["blocks"])
+                for instruction in flist(block["instructions"])
+                if instruction["kind"] == 7
+            ]
+            assert len(repeat_instructions) == 1, repeat_instructions
+            repeat_instruction = repeat_instructions[0]
+            assert repeat_instruction["operator"] == 3 and repeat_instruction["argc"] == 1
+            assert repeat_instruction["ty"]["$v"] == 5 and repeat_instruction["ty"]["$p"]["length"] == 3
+            constructor_oracle = probe.send({"project_oracle": {"root": constructor_source, "modules": {}}})
+            assert constructor_oracle["valid"] is True, constructor_oracle
+
+            match_source = (
+                "mncs 0.18; module demo.matches; "
+                "enum Flag { Yes { set: bool }, No } "
+                "enum Pair { P { left: u64, right: bool }, Empty } "
+                "fn is_set(value: Flag) -> (r: bool) { return match value { Yes { set: bound } => bound, No => false }; } "
+                "fn ignore_set(value: Flag) -> (r: bool) { return match value { Yes { set: bound } => true, No => false }; } "
+                "fn pair_left(value: Pair) -> (r: u64) { return match value { P { left: left, right: _ } => left, Empty => 0 }; } "
+                "fn normalize(value: Flag) -> (r: Flag) { return match value { Yes { set: bound } => Flag.Yes { set: bound }, No => Flag.No }; }"
+            )
+            for path in project_root.glob("*.mncs"):
+                path.unlink()
+            (project_root / "a-match.mncs").write_text(match_source)
+            match_native = enum_probe.native(request_value(identities, discover_sources(project_root)))
+            match_wire_project = copy.deepcopy(enum_probe.last_response["returned"][0])
+            match_modules = flist(match_native["modules"])
+            match_module = next(module for module in match_modules if module["source_index"] == 0)
+            match_ssa = match_module["value_ssa"]
+            assert match_native["valid"] is True, match_native["diagnostics"]
+            assert match_native["value_ssa_valid"] is True, match_ssa
+            assert match_ssa["valid"] is True and match_ssa["verified_function_count"] == 4, match_ssa
+            match_oracle = probe.send({"project_oracle": {"root": match_source, "modules": {}}})
+            assert match_oracle["valid"] is True, match_oracle
+            match_functions = flist(match_ssa["functions"])
+            enum_functions = constructor_functions + match_functions
+            enum_instructions = [
+                instruction for function in enum_functions
+                for block in flist(function["blocks"])
+                for instruction in flist(block["instructions"])
+                if instruction["kind"] == 5
+            ]
+            assert len(enum_instructions) == 7, enum_instructions
+            assert all(instruction["nominal_identity"]["valid"] for instruction in enum_instructions)
+            assert all(instruction["variant_end"] > instruction["variant_start"] for instruction in enum_instructions)
+            enum_switch_blocks = [
+                (function, block) for function in match_functions
+                for block in flist(function["blocks"])
+                if block["terminator"]["$v"] == 4
+            ]
+            enum_switches = [block["terminator"]["$p"] for _, block in enum_switch_blocks]
+            assert len(enum_switches) == 4, enum_switches
+            assert all(item["arm_count"] == 2 and len(flist(item["cases"])) == 2 for item in enum_switches)
+            payload_instructions = [
+                instruction for function in enum_functions
+                for block in flist(function["blocks"])
+                for instruction in flist(block["instructions"])
+                if instruction["kind"] == 6
+            ]
+            assert len(payload_instructions) == 4, payload_instructions
+
+            constructor_wire_modules = wire_flist(wire_field(constructor_wire_project, "modules"))
+            constructor_wire_module = next(module for module in constructor_wire_modules
+                                    if wire_number(wire_field(module, "source_index")) == 0)
+            constructor_wire_ssa = wire_field(constructor_wire_module, "value_ssa")
+            constructor_wire_functions = wire_flist(wire_field(constructor_wire_ssa, "functions"))
+            match_wire_modules = wire_flist(wire_field(match_wire_project, "modules"))
+            match_wire_module = next(module for module in match_wire_modules
+                                     if wire_number(wire_field(module, "source_index")) == 0)
+            match_wire_ssa = wire_field(match_wire_module, "value_ssa")
+            match_wire_functions = wire_flist(wire_field(match_wire_ssa, "functions"))
+
+            def enum_rejected(name, mutate):
+                candidate = copy.deepcopy(next(
+                    function for function in constructor_wire_functions
+                    if identity_text(decode(wire_field(function, "identity"))).endswith("::pair")
+                ))
+                mutate(candidate)
+                accepted = verify_ssa_function(enum_probe, constructor_source, candidate)
+                assert accepted is False, {"case": name, "accepted": accepted}
+
+            def mutate_enum_identity(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 5)
+                identity = wire_field(instruction, "nominal_identity")
+                set_wire_field(identity, "valid", {"boolean": {"value": False}})
+
+            def mutate_enum_variant(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 5)
+                set_wire_field(instruction, "variant_start", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_enum_arity(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 5)
+                set_wire_field(instruction, "argc", {"integer": {"type": {"bits": 64, "signed": False}, "value": 1}})
+
+            def mutate_enum_payload_type(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 5)
+                inputs = wire_flist(wire_field(function, "inputs"))
+                expected_type = wire_field(wire_flist(wire_field(instruction, "params"))[0], "ty")
+                wrong_type_input = next(value for value in inputs
+                                        if wire_field(value, "ty") != expected_type)
+                set_wire_field(wire_flist(wire_field(instruction, "inputs"))[0], "value",
+                               copy.deepcopy(wire_field(wrong_type_input, "id")))
+
+            enum_rejected("invalid_enum_identity", mutate_enum_identity)
+            enum_rejected("unknown_enum_variant", mutate_enum_variant)
+            enum_rejected("enum_construction_arity", mutate_enum_arity)
+            enum_rejected("enum_payload_type", mutate_enum_payload_type)
+
+            def repeat_rejected(name, mutate):
+                candidate = copy.deepcopy(next(
+                    function for function in constructor_wire_functions
+                    if identity_text(decode(wire_field(function, "identity"))).endswith("::repeat")
+                ))
+                mutate(candidate)
+                accepted = verify_ssa_function(enum_probe, constructor_source, candidate)
+                assert accepted is False, {"case": name, "accepted": accepted}
+
+            def mutate_repeat_count(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 7)
+                set_wire_field(instruction, "operator", {"integer": {"type": {"bits": 64, "signed": False}, "value": 2}})
+
+            def mutate_repeat_operand_type(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 7)
+                wrong_input = next(value for value in wire_flist(wire_field(function, "inputs"))
+                                   if wire_field(value, "ty")["finite"]["discriminant"] == 0)
+                set_wire_field(wire_flist(wire_field(instruction, "inputs"))[0],
+                               "value", copy.deepcopy(wire_field(wrong_input, "id")))
+
+            repeat_rejected("repeat_count", mutate_repeat_count)
+            repeat_rejected("repeat_operand_type", mutate_repeat_operand_type)
+
+            def enum_match_rejected(name, source_function, mutate):
+                candidate = copy.deepcopy(next(
+                    function for function in match_wire_functions
+                    if identity_text(decode(wire_field(function, "identity"))).endswith(f"::{source_function}")
+                ))
+                mutate(candidate)
+                accepted = verify_ssa_function(enum_probe, match_source, candidate)
+                assert accepted is False, {"case": name, "accepted": accepted}
+
+            def mutate_match_variant(function):
+                term = next(wire_field(block, "terminator")
+                            for block in wire_flist(wire_field(function, "blocks"))
+                            if wire_field(block, "terminator")["finite"]["discriminant"] == 4)
+                payload = {key: value for key, value in term["finite"]["payload"]}
+                case = wire_flist(payload["cases"])[0]
+                set_wire_field(case, "variant_start", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_match_target(function):
+                term = next(wire_field(block, "terminator")
+                            for block in wire_flist(wire_field(function, "blocks"))
+                            if wire_field(block, "terminator")["finite"]["discriminant"] == 4)
+                set_wire_variant_field(term, "join_target", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_match_case_arity(function):
+                term = next(wire_field(block, "terminator")
+                            for block in wire_flist(wire_field(function, "blocks"))
+                            if wire_field(block, "terminator")["finite"]["discriminant"] == 4)
+                payload = {key: value for key, value in term["finite"]["payload"]}
+                case = wire_flist(payload["cases"])[0]
+                first_argument = wire_flist(wire_field(case, "arguments"))[0]
+                set_wire_field(first_argument, "value", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_payload_declared_type(function):
+                instruction = next(inst for block in wire_flist(wire_field(function, "blocks"))
+                                   for inst in wire_flist(wire_field(block, "instructions"))
+                                   if wire_number(wire_field(inst, "kind")) == 6)
+                subject_type = copy.deepcopy(wire_field(wire_flist(wire_field(function, "inputs"))[0], "ty"))
+                set_wire_field(instruction, "ty", subject_type)
+                field_parameter = wire_flist(wire_field(instruction, "params"))[0]
+                set_wire_field(field_parameter, "ty", copy.deepcopy(subject_type))
+                result_id = wire_number(wire_field(instruction, "result"))
+                result_value = next(value for value in wire_flist(wire_field(function, "values"))
+                                    if wire_number(wire_field(value, "id")) == result_id)
+                set_wire_field(result_value, "ty", copy.deepcopy(subject_type))
+
+            enum_match_rejected("finite_match_variant", "is_set", mutate_match_variant)
+            enum_match_rejected("finite_match_join_target", "is_set", mutate_match_target)
+            enum_match_rejected("finite_match_edge_arity", "is_set", mutate_match_case_arity)
+            enum_match_rejected("finite_payload_declared_type", "ignore_set", mutate_payload_declared_type)
+            enum_construction_case = {
+                "native_project_valid": constructor_native["valid"] and match_native["valid"],
+                "native_value_ssa_valid": constructor_native["value_ssa_valid"] and match_native["value_ssa_valid"],
+                "stage0_project_valid": constructor_oracle["valid"] and match_oracle["valid"],
+                "verified_functions": constructor_ssa["verified_function_count"] + match_ssa["verified_function_count"],
+                "enum_constructor_instructions": len(enum_instructions),
+                "sequence_repeat_instructions": len(repeat_instructions),
+                "finite_match_switches": len(enum_switches),
+                "payload_extractions": len(payload_instructions),
+                "covered": ["zero payload", "zero payload with braces", "one payload", "multiple ordered fields", "nested nominal payload", "exact sequence repeat", "finite match payload binding", "wildcard payload binding", "unused payload binding", "arm result joins", "constructor inside match arm"],
+                "corruption_rejections": ["invalid enum identity", "unknown variant", "arity", "payload type", "finite match variant", "join target", "edge value", "payload declared type", "repeat count", "repeat operand type"],
+            }
+            enum_construction_case["requests"] = enum_probe.requests
+            enum_construction_case["result_sha256"] = enum_probe.digest.hexdigest()
+            enum_construction_case["native_execution_steps_total"] = sum(enum_probe.steps)
+            enum_probe.close()
+
             # Native project resolution follows transitive `use` edges in the
             # same source snapshot, even when the filesystem walk created the
             # modules in reverse path order.
@@ -879,9 +1136,12 @@ def run():
                     "parse_failure_explains_itself": parse_failure_case,
                     "imported_record_finite_and_nested_nominal_types": nominal_type_case,
                 },
+                "enum_construction_value_ssa": enum_construction_case,
                 "deterministic_repetitions": 2,
             }
         finally:
+            if enum_probe is not None:
+                enum_probe.close()
             probe.close()
 
 
