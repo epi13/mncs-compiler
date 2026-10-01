@@ -6,7 +6,7 @@ remains the Stage-0/bootstrap/reference implementation.
 
 ## Status
 
-`mncs-compiler` is experimental. The Rust compiler in `mncs-language` remains the canonical Stage-0/reference compiler. The lock file pins the exact code-bearing Stage-0 revision exercised by this campaign, `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, at source profile 0.18. `origin/main` later advanced by an automated badge-metadata-only commit; no compiler sources changed. All compiler source modules now declare profile 0.18.
+`mncs-compiler` is experimental. The Rust compiler in `mncs-language` remains the canonical Stage-0/reference compiler. The lock file pins the exact code-bearing Stage-0 revision exercised by this campaign, `a3ac17df69e68f6373cbff336db0a572667d73da`, at source profile 0.18. All compiler source modules now declare profile 0.18. Older pins named in historical campaign evidence (for example `709ba008` on 2026-09-25 and `843c5bc` on 2026-09-26) are preserved as measured and are not relabelled.
 
 The repository keeps compiler architecture in MNCS and records compiler-origin pressure here. Generic language/runtime changes are made in a separate `mncs-language` change.
 
@@ -14,7 +14,7 @@ The repository keeps compiler architecture in MNCS and records compiler-origin p
 
 The existing frontend implements bounded ASCII source processing in MNCS: lexical tokens, byte spans, line/column rendering, diagnostics, and header/module parsing. The native compiler unit ABI still accepts four 64-byte chunks (256 bytes total). Unicode and newer current-profile syntax remain reproduced native frontend gaps; see the [current parity ledger](evidence/PARITY.md) and [current pressure results](evidence/pressure-current-results.json).
 
-The declaration vertical extends this to bounded declaration-scale compilation: header, `use`, `record`, payload `enum`, and `fn` declarations with bodies and expressions (256-byte units); function-name symbol collection with duplicate detection; a resolve/span walk; stack IR and semantic proof with FAIL/UNKNOWN obligations and a typed-stack verifier. The semantic twin now passes 49 cases plus five verifier verdicts twice at the current pin. `flow.mncs` consumes the proof and attaches each typed postfix operation to a source expression in branch, jump, return, and failure blocks, then checks targets and unreachable joins. Four current-profile programs match Rust diagnostics/spans; both positive cases also match Rust SSA branch/return shape. See [`sem-results.json`](evidence/sem-results.json), [`flow-results.json`](evidence/flow-results.json), and the current-profile [production call](evidence/flow-call-current.json). The block graph is not Rust-equivalent value SSA and does not emit executable code.
+The declaration vertical extends this to bounded declaration-scale compilation: header, `use`, `record`, payload `enum`, and `fn` declarations with bodies and expressions (256-byte units); function-name symbol collection with duplicate detection; a resolve/span walk; stack IR and semantic proof with FAIL/UNKNOWN obligations and a typed-stack verifier. The semantic twin now passes 103 cases plus seven verifier verdicts twice at the current pin. `flow.mncs` consumes the proof and attaches each typed postfix operation to a source expression in branch, jump, return, and failure blocks, then checks targets and unreachable joins. Four current-profile programs match Rust diagnostics/spans; both positive cases also match Rust SSA branch/return shape. A bounded verified value-SSA slice now covers finite enum matches and enum construction (finite-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, arm result joins); see the [current parity ledger](evidence/PARITY.md) and the [2026-09-29 value-SSA record](evidence/campaign-20260929-cp0014-value-ssa.json). Native executable output remains a narrow test-only structural scalar C11 slice with no proof-carrying backend adapter; integer scalar `TMatch` is the first unsupported value-SSA operation.
 
 Run `tools/bootstrap.sh`, then the focused and canonical suites documented in [`evidence/README.md`](evidence/README.md). See [frontend evidence](evidence/FRONTEND.md), [segment evidence](evidence/SEGMENT.md), [declaration evidence](evidence/DECL.md), [semantic evidence](evidence/SEM.md), the [current parity ledger](evidence/PARITY.md), and the [pressure index](pressure/README.md). Production compiler behavior lives in `src/compiler/`; Rust/Python code under `tools/` is a temporary Stage-0 test transport, not a compiler implementation. There is no standalone native driver or coordinator yet.
 
@@ -81,23 +81,20 @@ The compiler kernel must also remain directly usable in standalone mode.
 
 ## Succession rule
 
-Self-hosting alone does not replace Rust. The MNCS compiler becomes canonical only after it demonstrates sufficient:
+Self-hosting alone does not replace Rust. A compiler generation developed here is promoted into `mncs-language` as the canonical compiler only after it demonstrates convincing evidence for whole-family compilation, Stage-1→Stage-2 self-hosting, semantics/backend correctness, deterministic reproducibility, conformance/negative behavior, and adequate diagnostics/recovery.
 
-- language and negative-test parity,
-- IR/backend correctness,
-- self-host reliability,
-- reproducibility,
-- diagnostic quality,
-- cold and incremental compilation cost,
-- memory behavior,
-- concurrent-agent behavior,
-- recovery/bootstrap capability.
+Generation promotion is distinct from long-term compiler architecture maturity. Distributed Fabric execution, adaptive/learned optimization, persistent compiler service mode, sophisticated SIMD work, Store-backed reuse, and other advanced capabilities may keep improving across later compiler generations; a generation does not need them before it can be promoted. See `ROADMAP.md` for the phased maturity model.
 
 Rust then becomes a frozen Stage-0/reference implementation rather than an independently evolving compiler.
+
+## Development environment
+
+`mncs-environment` is the preferred development, session, and provider-composition layer for compiler work: canonical entry, selected-artifact caching, durable sessions, verification-obligation execution, and Store-backed artifact retention all run through it. This does not change the bootstrap rule below: Environment, Store, Fabric, Index, Ingest, Learn, Memory, and any persistent service must never become semantic prerequisites of the standalone compiler kernel.
 
 ## Relationship to the MNCS ecosystem
 
 - `mncs-language`: language specification, Stage-0 toolchain, stdlib, RFCs, and upstream pressure fixes.
+- `mncs-environment`: preferred development/session/provider-composition layer; never a semantic bootstrap dependency.
 - `mncs-harness`: differential, conformance, stress, and self-host validation.
 - `mncs-store`: optional future persistent L3 compiler object/cache storage.
 - `mncs-index`: reusable indexing ideas/infrastructure where bootstrap layering permits.

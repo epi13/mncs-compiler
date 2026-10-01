@@ -25,12 +25,45 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
-## Current evidence-backed campaign state (2026-09-25)
+## Current evidence-backed campaign state (2026-09-29)
 
 The lock pins Rust Stage-0 revision
+`a3ac17df69e68f6373cbff336db0a572667d73da` at source Profile 0.18. All
+compiler modules declare 0.18. The [parity matrix](evidence/PARITY.md) and
+machine-readable [ledger](evidence/parity-ledger.json) are current at this
+pin; the 2026-09-25 and 2026-09-26 sections below are preserved as
+historical evidence with their original pins and measurements.
+
+- Verified value SSA now covers finite enum matches and enum construction:
+  finite-match switches, payload extraction, enum construction, exact
+  sequence repetition, nested nominal payloads, and arm result joins, with
+  ten corruption cases rejected and Stage-0 oracle agreement. See
+  `evidence/campaign-20260929-cp0014-value-ssa.json`. The 2026-09-25 note
+  that value SSA "explicitly defers finite matches and enum construction"
+  is superseded.
+- The first unsupported value-SSA operation is integer scalar `TMatch`.
+  Backend/runtime lowering is still unverified for enum construction,
+  finite switch, payload extraction, and sequence repeat. Native
+  executable output remains a narrow test-only structural scalar C11 slice;
+  replacing that projection with backend admission tied to compiler
+  proof/provenance is open work. Do not infer broad backend parity from the
+  small scalar executable.
+- The 21-case Profile 0.18 surface, pressure reproductions, and
+  imported-nominal SSA evidence are re-recorded at this pin in
+  `evidence/campaign-20260929-profile-surface-results.json`,
+  `evidence/campaign-20260929-pressure-suite-results.json`, and
+  `evidence/campaign-20260929-imported-nominal-ssa.json`.
+
+The highest-leverage next slice is integer scalar `TMatch` value SSA plus
+backend lowering for the verified finite/enum SSA operations, fed by
+real-project compilation pulls through the existing project-loading path.
+
+## Historical evidence-backed campaign state (2026-09-25)
+
+The lock pinned Rust Stage-0 revision
 `709ba00810099e6965bb47dec14ed19e9e1ae6f8` at source Profile 0.18. All seven
-compiler modules declare 0.18. The refreshed [parity matrix](evidence/PARITY.md)
-and machine-readable [ledger](evidence/parity-ledger.json) supersede this
+compiler modules declared 0.18. The refreshed [parity matrix](evidence/PARITY.md)
+and machine-readable [ledger](evidence/parity-ledger.json) superseded this
 roadmap's earlier pin-era descriptions.
 
 - The frontend and declaration implementations are still bounded: the
@@ -78,15 +111,17 @@ roadmap's earlier pin-era descriptions.
   `evidence/README.md` and the exact RAVEL result in
   `evidence/ravel-impact-flow.json`.
 
-The highest-leverage next slice is a current-profile project-source path:
-version-aware syntax, module/import resolution, and a source representation
-beyond the legacy 256-byte unit. It should feed the existing declaration/proof
-and CFG passes before attempting Rust's value-carrying body/SSA and target
-lowering.
-Record-sequence acceptance in Stage-0 is not evidence that the native compiler
-has a project collection or module model.
+The 2026-09-25 highest-leverage next slice was a current-profile
+project-source path: version-aware syntax, module/import resolution, and a
+source representation beyond the legacy 256-byte unit. That path has since
+been built (`project.mncs`, one-parse fact reuse, imported identity into
+verified SSA); the current next slice is stated above. The standing caution
+remains: record-sequence acceptance in Stage-0 is not evidence that the
+native compiler has a project collection or module model.
 
 Architecture may already use fact/obligation boundaries even when evaluation is single-threaded and uncached.
+
+`mncs-environment` is the preferred development, session, and provider-composition layer for this roadmap's verification work (canonical entry, selected-artifact caching, durable sessions, obligation execution, Store-backed artifact retention). It must never become a semantic bootstrap dependency of the standalone compiler kernel.
 
 ## Phase 2 — Self-host capable
 
@@ -191,6 +226,15 @@ Every learned path must retain version identity, reproducible fallback behavior,
 
 ## Succession milestone
 
-The Rust compiler becomes frozen Stage-0/reference only when `mncs-compiler` demonstrates a compelling overall result across correctness, backend coverage, reproducibility, self-hosting, diagnostics, compile cost, memory, incremental reuse, concurrent-agent workload, and recovery/bootstrap behavior.
+A compiler generation developed here is promoted into `mncs-language` as the
+canonical compiler once it can reliably compile the MNCS family, self-host
+through Stage-1→Stage-2, maintain semantic/backend correctness, reproduce
+itself deterministically, and satisfy sufficient conformance, diagnostic, and
+recovery evidence. Self-hosting alone is not sufficient for promotion, but
+neither is full architecture maturity required: the Phase 4–8 capabilities
+(incremental graph reuse, persistent coordinator, Store/Fabric integration,
+verified specialization, adaptive optimization) may continue advancing across
+later compiler generations. The Rust compiler then becomes frozen
+Stage-0/reference rather than an independently evolving compiler.
 
 The MNCS compiler does not need to win every microbenchmark; it must be the better canonical architecture without sacrificing trustworthiness.

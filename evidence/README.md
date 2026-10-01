@@ -19,11 +19,39 @@ Examples include:
 
 Do not describe a compiler capability as complete because source code for it exists. Link or store executable evidence showing that the behavior works with the pinned toolchain revision.
 
-## Current compiler-parity campaign (2026-09-26)
+## Current compiler-parity campaign (2026-09-29)
 
-The current Stage-0 pin is `843c5bcca7476bb6600218f6410a3da7ef5d96d5`,
+The current Stage-0 pin is `a3ac17df69e68f6373cbff336db0a572667d73da`,
 Profile 0.18. See the [current parity report](PARITY.md),
-[parity ledger](parity-ledger.json), [campaign execution summary](campaign-20260926-execution-summary.json),
+[parity ledger](parity-ledger.json),
+[finite-match/enum-construction value-SSA record](campaign-20260929-cp0014-value-ssa.json),
+[project/value-SSA differential](campaign-20260929-project-results.json),
+[current-profile surface](campaign-20260929-profile-surface-results.json),
+[pressure reproductions](campaign-20260929-pressure-suite-results.json),
+[imported-nominal SSA](campaign-20260929-imported-nominal-ssa.json), and
+[CP-0014 bool-payload acceptance](campaign-20260929-agent-native-cp0014.json).
+Verified value SSA now covers finite enum matches and enum construction
+(10 verified functions, 4 finite-match switches, 4 payload extractions,
+7 enum constructions, 1 sequence repeat, 10 corruption rejections). The
+first unsupported value-SSA operation is integer scalar `TMatch`, and
+backend/runtime lowering for the finite/enum operations is unverified.
+Native executable output remains a narrow test-only structural scalar C11
+slice; see the [2026-09-28 backend vertical](campaign-20260928-agent-native-native-backend-vertical.json).
+It is not full SSA parity and the projection is not proof-carrying.
+
+The 2026-10-01 baseline re-measures all twelve verification obligations at
+the same pin and compiler head (`3f678c3`); the `campaign-20261001-*`
+files carry those results, including a byte-identical project/value-SSA
+digest (`6edaa27b…`) to the 2026-09-29 run. The 2026-09-29 record above
+remains the original finite/enum slice evidence.
+
+The 2026-09-26 and 2026-09-25 campaigns below are historical; their recorded
+pins and timings are preserved as measured.
+
+## Historical compiler-parity campaign (2026-09-26)
+
+The 2026-09-26 Stage-0 pin was `843c5bcca7476bb6600218f6410a3da7ef5d96d5`,
+Profile 0.18. See the [campaign execution summary](campaign-20260926-execution-summary.json),
 [project/value-SSA differential](campaign-20260926-project-results.json),
 [current-profile surface](campaign-20260926-profile-surface-results.json),
 [front-end differential](campaign-20260926-frontend-results.json),
@@ -35,12 +63,9 @@ The new compiler slice carries imported callable identity into verified
 value-carrying SSA across a two-module control-flow merge. It is not full SSA
 parity and does not emit native executable code.
 
-The 2026-09-25 campaign below is historical; its recorded pins and timings are
-preserved as measured.
-
 ## Historical compiler-parity campaign (2026-09-25)
 
-The current Stage-0 pin is `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, profile 0.18.
+The 2026-09-25 Stage-0 pin was `709ba00810099e6965bb47dec14ed19e9e1ae6f8`, profile 0.18.
 See the [refreshed parity ledger](PARITY.md), [current pressure sweep](pressure-current-results.json),
 [current-profile parser differential](profile-surface-results.json),
 [current semantic twin](sem-results.json), and [typed control-flow differential](flow-results.json).

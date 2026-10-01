@@ -1,21 +1,23 @@
 {
   "schema_version": 3,
-  "as_of": "2026-09-26",
+  "as_of": "2026-09-29",
   "reference": {
     "repository": "mncs-language",
-    "revision": "843c5bcca7476bb6600218f6410a3da7ef5d96d5",
+    "revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
     "source_profile": "0.18",
     "role": "Exact locked Rust Stage-0 bootstrap, oracle, and current language/runtime reference."
   },
-  "starting_heads_file": "campaign-20260926-start-heads.json",
-  "evidence_namespace": "campaign-20260926-*; prior files keep their exact historical pins and measurements.",
+  "starting_heads_file": "campaign-20260929-start-heads.json",
+  "evidence_namespace": "campaign-20261001-* re-measures the 2026-09-29 campaign at the same pin and compiler head; campaign-20260929-* retains the original finite/enum slice record; prior files keep their exact historical pins and measurements.",
   "rows": [
     {
       "area": "project resolution and fact reuse",
       "status": "partial",
       "claim": "The one project compiler parses tested modules once, resolves module/import aliases, retains parsed/proven facts through typed CFG and value SSA, and returns deterministic project facts.",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260929-project-results.json",
+        "campaign-20260929-cp0014-value-ssa.json",
+        "campaign-20261001-project-results.json"
       ],
       "limits": [
         "64-source and 256-byte metadata caps; tested per-source ceiling N=1024. Host still discovers files and supplies bytes."
@@ -26,7 +28,8 @@
       "status": "explicitly unauthenticated",
       "claim": "The compiler reports fingerprint_authenticated=false. A host-supplied fingerprint is not trusted as semantic authority and changing it does not change the result.",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260929-project-results.json",
+        "campaign-20261001-project-results.json"
       ],
       "limits": [
         "The compiler does not yet compute a fingerprint from the project snapshot."
@@ -37,7 +40,8 @@
       "status": "implemented for imported scalar calls",
       "claim": "Resolved imported calls carry the canonical Stage-0 callable/declaration identity in compiler typed facts and value SSA.",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260929-project-results.json",
+        "campaign-20261001-project-results.json"
       ],
       "limits": [
         "Imported nominal type identity and imported effect/capability resolution remain outside the tested scalar signature slice."
@@ -48,7 +52,8 @@
       "status": "parity on recorded forms",
       "claim": "The native declaration parser/proof agrees with pinned Stage-0 on 21 positive, negative, and version-gate cases including !, negative atoms, repeat literals, next, and integer match.",
       "evidence": [
-        "campaign-20260926-profile-surface-results.json"
+        "campaign-20260929-profile-surface-results.json",
+        "campaign-20261001-profile-surface-results.json"
       ],
       "limits": [
         "This does not establish complete Profile 0.18 grammar parity."
@@ -57,20 +62,24 @@
     {
       "area": "value-carrying SSA",
       "status": "bounded verified slice",
-      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, and canonical imported scalar calls are verified against Stage-0 body/SSA facts.",
+      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, and arm result joins are verified against Stage-0 body/SSA facts.",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260929-project-results.json",
+        "campaign-20260929-cp0014-value-ssa.json",
+        "campaign-20261001-project-results.json"
       ],
       "limits": [
-        "Not full SSA parity; unsupported operations fail the SSA report closed."
+        "Not full SSA parity; integer scalar TMatch is the first unsupported value-SSA operation and unsupported operations fail the SSA report closed."
       ]
     },
     {
       "area": "SSA verifier",
       "status": "partial",
-      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected.",
+      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type).",
       "evidence": [
-        "campaign-20260926-project-results.json"
+        "campaign-20260929-project-results.json",
+        "campaign-20260929-cp0014-value-ssa.json",
+        "campaign-20261001-project-results.json"
       ],
       "limits": [
         "Verifier coverage is bounded to the emitted instruction/terminator slice."
@@ -78,7 +87,7 @@
     },
     {
       "area": "RAVEL selection",
-      "status": "current affected closure",
+      "status": "historical affected closure at 2026-09-26 pin",
       "claim": "Nine native plans select the affected source, parser, kernel, declaration, CFG, project, and SSA obligations. Every selected obligation has exact current identity-bound PASS evidence; reference-only Stage-0 pressure probes are excluded from native-source plans.",
       "evidence": [
         "campaign-20260926-current-evidence.json",
@@ -102,16 +111,15 @@
         "campaign-20260926-final-flow-obligation-plan.json"
       ],
       "limits": [
-        "Planning total was 95.428 seconds. Plans are direct_dependents selections and do not execute tests or establish repository-canonical stop sufficiency."
+        "Planning total was 95.428 seconds at pin 843c5bc. Plans are direct_dependents selections and do not execute tests or establish repository-canonical stop sufficiency. No fresh plans cover the finite/enum slice."
       ]
     },
     {
       "area": "bootstrap provisioning",
-      "status": "pass after compiler tooling repair",
-      "claim": "The updated locked Stage-0 revision is provisioned and a warm exact bootstrap exits 0.",
+      "status": "pass",
+      "claim": "The locked Stage-0 revision a3ac17df is reprovisioned from a stale tree and the release builds exit 0 through the Environment verification executor.",
       "evidence": [
-        "campaign-20260926-stage0-refresh-repro.json",
-        "campaign-20260926-bootstrap-results.json"
+        "campaign-20261001-bootstrap.json"
       ],
       "limits": [
         "Bootstrap integrity is not evidence of a self-hosted compiler."
@@ -120,10 +128,10 @@
     {
       "area": "declaration and semantic proof",
       "status": "partial differential parity",
-      "claim": "Declaration structural/error-span and 49 semantic cases plus five proof verdicts pass twice identically under retained Cranelift.",
+      "claim": "Declaration structural/error-span (9 requests) and 103 semantic cases plus seven proof verdicts (110 requests) pass twice identically under retained Cranelift at the current pin.",
       "evidence": [
-        "campaign-20260926-declaration-results.json",
-        "campaign-20260926-semantic-results.json"
+        "campaign-20261001-declaration-results.json",
+        "campaign-20261001-semantic-results.json"
       ],
       "limits": [
         "Only the bounded grammar and recorded proof cases are covered."
@@ -132,9 +140,9 @@
     {
       "area": "typed CFG",
       "status": "partial differential parity",
-      "claim": "The four recorded branch/join/return/reachability shapes pass the Rust Stage-0 differential twice.",
+      "claim": "The four recorded branch/join/return/reachability shapes (21 requests) pass the Rust Stage-0 differential twice at the current pin.",
       "evidence": [
-        "campaign-20260926-flow-results.json"
+        "campaign-20261001-flow-results.json"
       ],
       "limits": [
         "Typed operations are not yet generally lowered to executable backend code."
@@ -143,11 +151,12 @@
     {
       "area": "Commons pressure status",
       "status": "reconciled for campaign-related records",
-      "claim": "CP-0014 remains open: current native project compilation rejects the exact bool enum-payload reproducer accepted by locked Stage-0; finite matches and enum construction remain absent from the native parse-to-SSA path. CP-0015 is resolved for 21 current-head Profile 0.18 differential cases against locked Stage-0. CP-0010 and CP-0013 are resolved on current evidence; the bootstrap refresh issue is resolved. CP-0001, CP-0009, and CP-0011 are partially narrowed; CP-0002, CP-0003, CP-0005, CP-0006, and CP-0007 retain their recorded gaps. CP-0008 remains resolved for its finite-payload reproducer. P1-014 is compiler-PASS/store-unverified, and the imported-nominal signature gap remains attached to existing evidence rather than duplicated.",
+      "claim": "CP-0014 parse/proof is resolved natively and finite matches plus enum construction now lower to verified SSA; backend/runtime lowering for those operations remains open. CP-0015 is resolved for 21 current-head Profile 0.18 differential cases against locked Stage-0. CP-0010 and CP-0013 are resolved on current evidence; the bootstrap refresh issue is resolved. CP-0001, CP-0009, and CP-0011 are partially narrowed; CP-0002, CP-0003, CP-0005, CP-0006, and CP-0007 retain their recorded gaps. CP-0008 remains resolved for its finite-payload reproducer. P1-014 is compiler-PASS/store-unverified, and the imported-nominal signature gap remains attached to existing evidence rather than duplicated.",
       "evidence": [
         "campaign-20260926-pressure-reconciliation.json",
-        "campaign-20260928-agent-native-cp0014-current.json",
-        "campaign-20260928-agent-native-profile-surface-results.json"
+        "campaign-20260929-agent-native-cp0014.json",
+        "campaign-20260929-cp0014-value-ssa.json",
+        "campaign-20260929-profile-surface-results.json"
       ],
       "limits": [
         "Unrelated compiler and ecosystem pressures were left unchanged. The compiler does not verify imported nominal signatures or the Store facet."
@@ -166,13 +175,14 @@
     },
     {
       "area": "CP-0014 bool enum payload",
-      "status": "open; current native reproduction",
-      "claim": "The current native project path returns invalid for the Profile 0.18 bool enum-payload fixture while the locked Stage-0 project oracle accepts it.",
+      "status": "parse/proof resolved; finite/enum value SSA verified",
+      "claim": "The current native project path accepts the Profile 0.18 bool enum-payload fixture that locked Stage-0 accepts, and finite matches plus enum construction lower to verified SSA with Stage-0 oracle agreement.",
       "evidence": [
-        "campaign-20260928-agent-native-cp0014-current.json"
+        "campaign-20260929-agent-native-cp0014.json",
+        "campaign-20260929-cp0014-value-ssa.json"
       ],
       "limits": [
-        "The current result is project-invalid without a structured diagnostic; it does not yet isolate the first unsupported construct."
+        "Backend/runtime lowering for enum construction, finite switch, payload extraction, and sequence repeat remains unverified."
       ]
     },
     {
@@ -180,7 +190,8 @@
       "status": "absent",
       "claim": "Stage-0 remains the compiler/reference executor; no Stage-1/Stage-2 proof exists.",
       "evidence": [
-        "campaign-20260926-bootstrap-results.json"
+        "campaign-20260926-bootstrap-results.json",
+        "campaign-20261001-bootstrap.json"
       ],
       "limits": [
         "No self-hosting claim."
@@ -193,7 +204,9 @@
       "evidence": [
         "campaign-20260927-imported-nominal-ssa.json",
         "campaign-20260927-effects-imported-nominal-ssa.json",
-        "campaign-20260928-agent-native-imported-nominal-ssa.json"
+        "campaign-20260928-agent-native-imported-nominal-ssa.json",
+        "campaign-20260929-imported-nominal-ssa.json",
+        "campaign-20261001-imported-nominal-ssa.json"
       ],
       "limits": [
         "Aggregate and nominal C11 representation/lowering remain absent."
@@ -214,10 +227,10 @@
     {
       "area": "bounded project source capacity",
       "status": "partial",
-      "claim": "The project compiler accepts the bounded two-module sample, but uses a 1,024-byte per-source ceiling; the current declaration compiler source is 275,918 bytes.",
+      "claim": "The project compiler accepts the bounded two-module sample, but uses a 1,024-byte per-source ceiling; the current declaration compiler source is 427,278 bytes.",
       "evidence": [
-        "campaign-20260926-project-results.json",
-        "campaign-20260926-pressure-suite-results.json"
+        "campaign-20261001-project-results.json",
+        "campaign-20261001-pressure-suite-results.json"
       ],
       "limits": [
         "No growable/shared source storage or full compiler-source ingestion is implemented."
