@@ -230,6 +230,7 @@ def run():
         discovered = discover_sources(project_root)
         probe = Probe()
         enum_probe = None
+        scalar_probe = None
         try:
             execution_status = probe.send({"execution_status": True})
             if os.environ.get("MNCS_PROBE_BACKEND") == "cranelift":
@@ -1078,6 +1079,112 @@ def run():
             enum_construction_case["native_execution_steps_total"] = sum(enum_probe.steps)
             enum_probe.close()
 
+            # Integer scalar matches lower to verified SSA switches with
+            # pattern, default-target, and edge checks. Small request again:
+            # each project request is independently installed.
+            scalar_source = (
+                "mncs 0.18; module demo.scalar_matches; "
+                "fn classify(value: u64) -> (r: u64) { return match value { 0 => 10, 1 => 20, _ => 30 }; } "
+                "fn negated(value: i64) -> (r: i64) { return match value { -5 => 1, 0 => 0, _ => 2 }; } "
+                "fn flag(value: u64) -> (r: bool) { return match value { 7 => true, _ => false }; } "
+                "fn doubled(value: u64) -> (r: u64) { let twice: u64 = value + value; return match twice { 2 => 200, _ => twice }; } "
+                "fn called(value: u64) -> (r: u64) { return match value { 3 => classify(value), _ => 0 }; }"
+            )
+            assert len(scalar_source.encode()) <= 1024, len(scalar_source.encode())
+            scalar_probe = Probe()
+            for path in project_root.glob("*.mncs"):
+                path.unlink()
+            (project_root / "a-scalar-match.mncs").write_text(scalar_source)
+            scalar_native = scalar_probe.native(request_value(identities, discover_sources(project_root)))
+            scalar_wire_project = copy.deepcopy(scalar_probe.last_response["returned"][0])
+            scalar_modules = flist(scalar_native["modules"])
+            scalar_module = next(module for module in scalar_modules if module["source_index"] == 0)
+            scalar_ssa = scalar_module["value_ssa"]
+            assert scalar_native["valid"] is True, scalar_native["diagnostics"]
+            assert scalar_native["value_ssa_valid"] is True, scalar_ssa
+            assert scalar_ssa["valid"] is True and scalar_ssa["verified_function_count"] == 5, scalar_ssa
+            scalar_oracle = probe.send({"project_oracle": {"root": scalar_source, "modules": {}}})
+            assert scalar_oracle["valid"] is True, scalar_oracle
+            scalar_functions = flist(scalar_ssa["functions"])
+            scalar_switch_blocks = [
+                (function, block) for function in scalar_functions
+                for block in flist(function["blocks"])
+                if block["terminator"]["$v"] == 5
+            ]
+            scalar_switches = [block["terminator"]["$p"] for _, block in scalar_switch_blocks]
+            assert len(scalar_switches) == 5, scalar_switches
+            assert all(len(flist(item["cases"])) == item["arm_count"] for item in scalar_switches)
+            for item in scalar_switches:
+                cases = flist(item["cases"])
+                defaults = [case for case in cases if case["is_default"] is True]
+                assert len(defaults) == 1, item
+                assert defaults[0]["target"] == item["default_target"], item
+            negated_switch = next(item for item in scalar_switches
+                                  if any(case["negative"] is True for case in flist(item["cases"])))
+            assert negated_switch["subject_ty"]["$v"] == 2 and negated_switch["subject_ty"]["$p"]["signed"] is True
+
+            scalar_wire_modules = wire_flist(wire_field(scalar_wire_project, "modules"))
+            scalar_wire_module = next(module for module in scalar_wire_modules
+                                      if wire_number(wire_field(module, "source_index")) == 0)
+            scalar_wire_ssa = wire_field(scalar_wire_module, "value_ssa")
+            scalar_wire_functions = wire_flist(wire_field(scalar_wire_ssa, "functions"))
+
+            def scalar_match_rejected(name, source_function, mutate):
+                candidate = copy.deepcopy(next(
+                    function for function in scalar_wire_functions
+                    if identity_text(decode(wire_field(function, "identity"))).endswith(f"::{source_function}")
+                ))
+                mutate(candidate)
+                accepted = verify_ssa_function(scalar_probe, scalar_source, candidate)
+                assert accepted is False, {"case": name, "accepted": accepted}
+
+            def scalar_switch_term(function):
+                return next(wire_field(block, "terminator")
+                            for block in wire_flist(wire_field(function, "blocks"))
+                            if wire_field(block, "terminator")["finite"]["discriminant"] == 5)
+
+            def mutate_scalar_pattern(function):
+                term = scalar_switch_term(function)
+                payload = {key: value for key, value in term["finite"]["payload"]}
+                cases = wire_flist(payload["cases"])
+                set_wire_field(cases[0], "value", copy.deepcopy(wire_field(cases[1], "value")))
+
+            def mutate_scalar_default_target(function):
+                term = scalar_switch_term(function)
+                set_wire_variant_field(term, "default_target", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_scalar_case_arity(function):
+                term = scalar_switch_term(function)
+                payload = {key: value for key, value in term["finite"]["payload"]}
+                case = wire_flist(payload["cases"])[0]
+                first_argument = wire_flist(wire_field(case, "arguments"))[0]
+                set_wire_field(first_argument, "value", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_scalar_default_missing(function):
+                term = scalar_switch_term(function)
+                payload = {key: value for key, value in term["finite"]["payload"]}
+                case = next(case for case in wire_flist(payload["cases"])
+                            if decode(wire_field(case, "is_default")) is True)
+                set_wire_field(case, "is_default", {"boolean": {"value": False}})
+
+            scalar_match_rejected("scalar_match_pattern", "classify", mutate_scalar_pattern)
+            scalar_match_rejected("scalar_match_default_target", "classify", mutate_scalar_default_target)
+            scalar_match_rejected("scalar_match_edge_arity", "flag", mutate_scalar_case_arity)
+            scalar_match_rejected("scalar_match_default_missing", "flag", mutate_scalar_default_missing)
+            scalar_match_case = {
+                "native_project_valid": scalar_native["valid"],
+                "native_value_ssa_valid": scalar_native["value_ssa_valid"],
+                "stage0_project_valid": scalar_oracle["valid"],
+                "verified_functions": scalar_ssa["verified_function_count"],
+                "scalar_match_switches": len(scalar_switches),
+                "covered": ["multi-pattern u64 match", "negative i64 pattern", "bool result", "let-bound subject referenced in arm", "call inside arm", "arm result joins"],
+                "corruption_rejections": ["duplicate pattern", "default target", "edge value", "missing default"],
+            }
+            scalar_match_case["requests"] = scalar_probe.requests
+            scalar_match_case["result_sha256"] = scalar_probe.digest.hexdigest()
+            scalar_match_case["native_execution_steps_total"] = sum(scalar_probe.steps)
+            scalar_probe.close()
+
             # Native project resolution follows transitive `use` edges in the
             # same source snapshot, even when the filesystem walk created the
             # modules in reverse path order.
@@ -1137,11 +1244,14 @@ def run():
                     "imported_record_finite_and_nested_nominal_types": nominal_type_case,
                 },
                 "enum_construction_value_ssa": enum_construction_case,
+                "scalar_match_value_ssa": scalar_match_case,
                 "deterministic_repetitions": 2,
             }
         finally:
             if enum_probe is not None:
                 enum_probe.close()
+            if scalar_probe is not None:
+                scalar_probe.close()
             probe.close()
 
 

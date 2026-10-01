@@ -17,7 +17,8 @@
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
-        "campaign-20261001-project-results.json"
+        "campaign-20261001-project-results.json",
+        "campaign-20261001-family-slices.json"
       ],
       "limits": [
         "64-source and 256-byte metadata caps; tested per-source ceiling N=1024. Host still discovers files and supplies bytes."
@@ -62,24 +63,26 @@
     {
       "area": "value-carrying SSA",
       "status": "bounded verified slice",
-      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, and arm result joins are verified against Stage-0 body/SSA facts.",
+      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, and arm result joins are verified against Stage-0 body/SSA facts.",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
-        "campaign-20261001-project-results.json"
+        "campaign-20261001-project-results.json",
+        "campaign-20261001-scalar-match-value-ssa.json"
       ],
       "limits": [
-        "Not full SSA parity; integer scalar TMatch is the first unsupported value-SSA operation and unsupported operations fail the SSA report closed."
+        "Not full SSA parity; TProj record projection is the first unsupported value-SSA operation and unsupported operations fail the SSA report closed."
       ]
     },
     {
       "area": "SSA verifier",
       "status": "partial",
-      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type).",
+      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default).",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
-        "campaign-20261001-project-results.json"
+        "campaign-20261001-project-results.json",
+        "campaign-20261001-scalar-match-value-ssa.json"
       ],
       "limits": [
         "Verifier coverage is bounded to the emitted instruction/terminator slice."
@@ -128,7 +131,7 @@
     {
       "area": "declaration and semantic proof",
       "status": "partial differential parity",
-      "claim": "Declaration structural/error-span (9 requests) and 103 semantic cases plus seven proof verdicts (110 requests) pass twice identically under retained Cranelift at the current pin.",
+      "claim": "Declaration structural/error-span (9 requests) and 103 semantic cases plus eight proof verdicts (111 requests) pass twice identically under retained Cranelift at the current pin.",
       "evidence": [
         "campaign-20261001-declaration-results.json",
         "campaign-20261001-semantic-results.json"
@@ -151,7 +154,7 @@
     {
       "area": "Commons pressure status",
       "status": "reconciled for campaign-related records",
-      "claim": "CP-0014 parse/proof is resolved natively and finite matches plus enum construction now lower to verified SSA; backend/runtime lowering for those operations remains open. CP-0015 is resolved for 21 current-head Profile 0.18 differential cases against locked Stage-0. CP-0010 and CP-0013 are resolved on current evidence; the bootstrap refresh issue is resolved. CP-0001, CP-0009, and CP-0011 are partially narrowed; CP-0002, CP-0003, CP-0005, CP-0006, and CP-0007 retain their recorded gaps. CP-0008 remains resolved for its finite-payload reproducer. P1-014 is compiler-PASS/store-unverified, and the imported-nominal signature gap remains attached to existing evidence rather than duplicated.",
+      "claim": "CP-0014 parse/proof is resolved natively and finite matches plus enum construction now lower to verified SSA; backend/runtime lowering for those operations remains open. CP-0015 is resolved for 21 current-head Profile 0.18 differential cases against locked Stage-0. CP-0010 integer match is covered natively through verified SSA; CP-0013 next-field behavior is resolved on current evidence; the bootstrap refresh issue is resolved. CP-0001, CP-0009, and CP-0011 are partially narrowed; CP-0002, CP-0003, CP-0005, CP-0006, and CP-0007 retain their recorded gaps. CP-0008 remains resolved for its finite-payload reproducer. P1-014 is compiler-PASS/store-unverified, and the imported-nominal signature gap remains attached to existing evidence rather than duplicated. New CP-0018 (verified C11 adapter arithmetic, backend-owned) and CP-0019 (host-intrinsic callee model, compiler-owned) are open; CP-0011 gains a real nested-match reproducer.",
       "evidence": [
         "campaign-20260926-pressure-reconciliation.json",
         "campaign-20260929-agent-native-cp0014.json",

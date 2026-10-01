@@ -45,6 +45,15 @@ files carry those results, including a byte-identical project/value-SSA
 digest (`6edaa27b…`) to the 2026-09-29 run. The 2026-09-29 record above
 remains the original finite/enum slice evidence.
 
+The scalar-match slice lands on top of that baseline: integer scalar
+`TMatch` lowers to verified SSA (5 functions, 5 switches, 4 corruption
+rejections) with a byte-identical repeated digest (`a3c5a13f…`); see
+the [scalar-match record](campaign-20261001-scalar-match-value-ssa.json).
+The first [family campaign](campaign-20261001-family-slices.json)
+compiled real sources natively with two full-slice successes, two exact
+differential agreements, and three classified gaps (new CP-0018/CP-0019
+plus a CP-0011 instance).
+
 The 2026-09-26 and 2026-09-25 campaigns below are historical; their recorded
 pins and timings are preserved as measured.
 

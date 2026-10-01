@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "campaign_date": "2026-10-01",
+  "compiler_start_revision": "e055ddfc2c3e462e5a2382bb88a3ec8b107e3570",
+  "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
+  "language_revision": "425de2016a1273b66fa44609ea75aa25e04f0a0f",
+  "environment_session": "ses_609640b2e75e1a8d",
+  "verification": {
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.value-ssa-differential",
+    "binding": "cap_ecea1a3c9a503ff6",
+    "status": "PASS",
+    "elapsed_seconds": 775.098,
+    "requests": 39,
+    "deterministic_repetitions": 2,
+    "result_sha256": "a3c5a13f2e7e94bb6be23f235fee0eb7d5529b8b8ca50c8332e17ecb2224d132",
+    "results_file": "campaign-20261001-project-results.json"
+  },
+  "scalar_match": {
+    "native_project_valid": true,
+    "native_value_ssa_valid": true,
+    "stage0_project_valid": true,
+    "verified_functions": 5,
+    "scalar_match_switches": 5,
+    "covered": [
+      "multi-pattern u64 match",
+      "negative i64 pattern",
+      "bool result",
+      "let-bound subject referenced in arm",
+      "call inside arm",
+      "arm result joins"
+    ],
+    "corruption_rejections": [
+      "duplicate pattern",
+      "default target",
+      "edge value",
+      "missing default"
+    ]
+  },
+  "proof_changes": {
+    "typed_arms": "TOp.TMatch now carries TypedScalarMatchArmList with per-arm typed operations captured during proof, mirroring TFiniteMatch",
+    "verifier": "isolated-frame discipline (parent stack consumes only the subject); pattern, count, op-count, and arm-frame verification",
+    "verdicts": "sabotage_scalar_match_arity added; semantic suite now 103 cases plus eight proof verdicts"
+  },
+  "next_boundary": {
+    "first_unsupported_value_ssa_operation": "TProj record field projection (block failure kind 8 = 5 + failure_op 3), confirmed by a native-valid probe Stage-0 accepts",
+    "nested_match_parse": "match as an arm result still parses only at depth 0 (CP-0011 instance; real reproducer cre1-evidence-combine.mncs)",
+    "proof": "host-intrinsic callee model absent (CP-0019; kind 32 on real effect calls)",
+    "backend": "runtime lowering still unverified for enum construction, finite switch, payload extraction, sequence repeat, and scalar switch; verified C11 adapter admits no integer arithmetic (CP-0018)"
+  }
+}

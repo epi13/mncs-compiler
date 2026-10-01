@@ -60,9 +60,11 @@ and rejects nine targeted invalid mutations. Its facts match the pinned
 Rust Stage-0 body/SSA identities and control-flow shape. The finite/enum
 slice adds ten verified functions with four finite-match switches, four
 payload extractions, seven enum constructions, one sequence repeat, and ten
-further corruption rejections. This is a bounded SSA
-slice, not full Rust SSA or compiler parity. Integer scalar `TMatch` is the
-first unsupported value-SSA operation.
+further corruption rejections. The scalar-match slice adds five verified
+functions with five scalar switches plus four further corruption
+rejections. This is a bounded SSA
+slice, not full Rust SSA or compiler parity. `TProj` record projection is
+the first unsupported value-SSA operation.
 
 Parsing, proof, CFG, and SSA pass their upstream facts forward. No extra parse
 or proof pass is introduced to recover data already available upstream.
@@ -101,9 +103,9 @@ reference during verifier debugging, not as the normal suite runner.
 | Profile 0.18 frontend | 21 positive, negative, and old-profile cases; 83.255 s; all conformant | Covers `!`, negative integer atoms, repeat literals, `next`, and integer match; grammar remains bounded |
 | Frontend and segment | 7,893 frontend requests / 196 sources / 1,759 tokens in 31.106 s; 6,564 segment requests / 43 texts / 3,161 tokens in 15.625 s; two identical runs each | Retained Cranelift, one step per request; Unicode remains explicitly unsupported by the native frontend |
 | Declarations | 9 requests, repeated twice identically; one retained Cranelift session; 163.271 s | Structural parsing, first-error spans, and declaration verdicts for the recorded corpus |
-| Semantic proof | 103 cases plus seven proof verdicts, repeated twice; 162.925 s | Tested proof diagnostics and typed facts, not full Rust body semantics |
+| Semantic proof | 103 cases plus eight proof verdicts, repeated twice; 162.925 s | Tested proof diagnostics and typed facts, not full Rust body semantics |
 | Typed CFG | Four control-flow cases, 21 requests, repeated twice; 87.615 s | Branch/jump/return and reachability facts for the tested slice |
-| Project and value SSA | 38 requests; 467.351 s; canonical imported call identity, verified merge values, and the finite/enum slice (10 verified functions, 4 switches, 4 payload extractions, 7 constructions, 1 repeat, 10 corruption rejections); result digest identical to 2026-09-29 | Bounded verified slice; integer scalar `TMatch` first unsupported op; no native target code |
+| Project and value SSA | 39 requests; 775.098 s; canonical imported call identity, verified merge values, the finite/enum slice, and the scalar-match slice (5 verified functions, 5 switches, 4 corruption rejections); digest `a3c5a13f…` repeats byte-identically | Bounded verified slice; `TProj` first unsupported op; no native target code |
 | Stage-0 compile cost | Two identical linked artifact runs in 1.090 / 1.088 s | Four output artifacts per run, byte-identical; not native compiler cost or peak memory |
 | Pressure probes | Four expected rejections and one supported control; 0.0954 s | Locked Stage-0 reference outcomes only; not native compiler verification |
 | RAVEL plans | Nine native plans in 95.428 s total at the 2026-09-26 pin; all selected obligations current then | Historical at `843c5bc`; reuses identity-bound PASS records; direct-dependents plans do not execute tests |
@@ -111,8 +113,9 @@ reference during verifier debugging, not as the normal suite runner.
 The retained Cranelift request step count is one per request, with one retained
 session per focused module group. This bounds repeated execution cost, but no
 like-for-like wall-time speedup was demonstrated. The project suite runs
-467.351 s at the current pin including the finite/enum SSA slice (its result
-digest is identical to the 2026-09-29 run). The 2026-09-26 growth note (project
+775.098 s at the current pin including the finite/enum and scalar-match SSA
+slices (its result digest repeats byte-identically across two runs). The
+2026-09-26 growth note (project
 suite 53.083 s to 125.137 s with identity/SSA work; RAVEL nine-root planning
 95.428 s, not faster than prior warm measurements) is preserved as historical.
 The edit-to-check loop stayed bounded to the affected closure, while cold execution
@@ -135,7 +138,7 @@ relabelled as a measurement at the current a3ac17df pin.
 | Current-profile syntax | Current on the tested forms | CP-0015 syntax forms and old-profile gates match Stage-0; unsupported grammar remains explicit |
 | Semantic proof | Partial | 103-case differential and verifier controls, including finite-match subject-shape and enum-construction rows |
 | Typed CFG | Partial | Tested branches, joins, returns, and reachability |
-| Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, body verification, finite-match switches, payload extraction, enum construction, and sequence repetition; integer scalar `TMatch` is the first unsupported operation |
+| Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, body verification, finite/scalar-match switches, payload extraction, enum construction, and sequence repetition; `TProj` record projection is the first unsupported operation |
 | Native C11 output | Partial; scalar structural slice | The test harness projects verified imported-call/CFG SSA into explicitly unattested structural input for `mncs-language`; constants, pure scalar imports, `u64` addition, and branch/join execute with pinned Stage-0 parity. No proof-carrying adapter or aggregate lowering. See `campaign-20260928-agent-native-native-backend-vertical.json`. |
 | Unicode source | Absent in native frontend | Existing compiler Unicode pressure remains outside this slice |
 | Self-hosting | Absent | Stage-0 still compiles/executes the MNCS compiler; no Stage-1 proof |
@@ -173,11 +176,14 @@ tooling pressure.
 
 ## Narrowest next parity step
 
-Lower integer scalar `TMatch` to verified value SSA (the first unsupported
-value-SSA operation), then verify backend/runtime lowering for enum
-construction, finite switch, payload extraction, and sequence repeat.
-Extend C11 only as verified aggregate/nominal SSA permits. Replace the
+Lower `TProj` record projection to verified value SSA (the first
+unsupported value-SSA operation), then verify backend/runtime lowering for
+enum construction, finite switch, scalar switch, payload extraction, and
+sequence repeat. The family campaign additionally pulls a host-intrinsic
+proof model (CP-0019) and nested-match parsing (CP-0011 instance);
+main's proof-bound C11 adapter needs integer arithmetic before the
+structural projection can migrate (CP-0018). Replace the
 test-only structural projection with a backend input tied to compiler
 proof/provenance before treating it as authoritative. Do not infer broad
-backend parity from the small scalar executable. The project-loading driver,
-broader syntax/type coverage, and self-hosting remain separate later work.
+backend parity from the small scalar executable. Broader syntax/type
+coverage and self-hosting remain separate later work.

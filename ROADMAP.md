@@ -54,9 +54,36 @@ historical evidence with their original pins and measurements.
   `evidence/campaign-20260929-pressure-suite-results.json`, and
   `evidence/campaign-20260929-imported-nominal-ssa.json`.
 
-The highest-leverage next slice is integer scalar `TMatch` value SSA plus
-backend lowering for the verified finite/enum SSA operations, fed by
-real-project compilation pulls through the existing project-loading path.
+## Scalar-match value SSA and family campaign (2026-10-01)
+
+At the same pin and compiler head `3f678c3` plus the scalar-match slice:
+
+- Integer scalar `TMatch` now lowers to verified value SSA: proof
+  captures per-arm typed operations, `ssa.mncs` emits `ScalarSwitch`
+  terminators with pattern/default/edge verification and source
+  re-parse agreement, and the suite covers five functions plus four
+  corruption rejections with Stage-0 oracle agreement. See
+  `evidence/campaign-20261001-scalar-match-value-ssa.json`. The
+  semantic suite grows to eight proof verdicts.
+- The full project/value-SSA suite repeats byte-identically
+  (`a3c5a13f…`) across two independent runs.
+- A first real-project campaign compiled family slices natively: two
+  full-slice successes (single-module 0.17 fixture, two-module aliased
+  import pair), two exact differential agreements (bare-`use`
+  rejection, MNE140 non-exhaustive with identical span), and three
+  classified gaps: host-intrinsic callee model (new CP-0019), nested
+  match parsing (CP-0011 instance with a real reproducer), and the
+  1024-byte per-source ceiling (known CP-0001). See
+  `evidence/campaign-20261001-family-slices.json`.
+- Backend pressure is now precise: main's proof-bound C11 adapter
+  admits only Constant/Call (new CP-0018, validated against the
+  adapter's own passing unit tests), blocking migration off the
+  unattested structural projection.
+
+The highest-leverage next slice is `TProj` record-projection value SSA
+(the empirically confirmed next boundary), the host-intrinsic proof
+model pulled by real sources, and backend lowering for the verified
+switch/construct operations.
 
 ## Historical evidence-backed campaign state (2026-09-25)
 

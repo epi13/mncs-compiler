@@ -22,6 +22,8 @@ record Edge { source: u64, target: u64, bindings: Environment, arguments: IdList
 enum EdgeList { ENil, ECons { head: Edge, tail: EdgeList } }
 record FiniteMatchCase { variant_start: u64, variant_end: u64, target: u64, arguments: IdList }
 enum FiniteMatchCaseList { MCNil, MCCons { head: FiniteMatchCase, tail: FiniteMatchCaseList } }
+record ScalarMatchCase { is_default: bool, negative: bool, value: u64, overflow: bool, pattern_start: u64, pattern_end: u64, target: u64, arguments: IdList }
+enum ScalarMatchCaseList { SCNil, SCCons { head: ScalarMatchCase, tail: ScalarMatchCaseList } }
 
 record Instruction {
     id: u64,
@@ -52,7 +54,8 @@ enum Terminator {
     Jump { target: u64, arguments: IdList },
     Return { value: u64 },
     Fail,
-    FiniteSwitch { subject: u64, subject_ty: decl.SemType, nominal_identity: decl.SemanticIdentity, result_type: decl.SemType, source_start: u64, source_end: u64, arm_count: u64, join_target: u64, cases: FiniteMatchCaseList }
+    FiniteSwitch { subject: u64, subject_ty: decl.SemType, nominal_identity: decl.SemanticIdentity, result_type: decl.SemType, source_start: u64, source_end: u64, arm_count: u64, join_target: u64, cases: FiniteMatchCaseList },
+    ScalarSwitch { subject: u64, subject_ty: decl.SemType, result_type: decl.SemType, source_start: u64, source_end: u64, arm_count: u64, default_target: u64, join_target: u64, cases: ScalarMatchCaseList }
 }
 record SsaBlock { id: u64, parameters: ValueList, instructions: InstructionList, terminator: Terminator, reachable: bool, lowering_ok: bool, lowering_failure_kind: u64 }
 enum SsaBlockList { LNil, LCons { head: SsaBlock, tail: SsaBlockList } }
@@ -101,6 +104,7 @@ record IdListReverse { rest: IdList, acc: IdList }
 record PayloadLowerBuild { rest: decl.PayloadBindingList, fields: decl.BindList, env: Environment, subject: u64, variant_start: u64, variant_end: u64, nominal: decl.SemanticIdentity, match_start: u64, match_end: u64, instructions: InstructionList, values: ValueList, next_value: u64, next_instruction: u64, sequence: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
 record FiniteArmBuild { rest: decl.TypedFiniteMatchArmList, source: ExprBuild, cases: FiniteMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, nominal: decl.SemanticIdentity, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
 record FiniteArmPrepared { arm: decl.TypedFiniteMatchArm, source: ExprBuild, arm_id: u64, arm_params: ValueList, arm_env: Environment, base_env: Environment, base_stack: ValueStack, subject: Value, nominal: decl.SemanticIdentity, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
+record ScalarArmBuild { rest: decl.TypedScalarMatchArmList, source: ExprBuild, cases: ScalarMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, default_target: u64, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
 
 record ExprBuild {
     rest: decl.TOpList,
@@ -613,7 +617,7 @@ fn lower_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: dec
         TName { ty: ty, start: s, end: e } => lower_name<N>(input, st, rest, ty, s, e),
         TNot { ty: ty, start: s, end: e } => lower_not<N>(input, st, rest, ty, s, e),
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => lower_repeat<N>(input, st, rest, ty, element, count, s, e),
-        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) },
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => lower_scalar_match<N>(input, st, rest, ty, subject_ty, arms, arm_count, default_count, s, e),
         TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => lower_finite_match<N>(input, st, rest, ty, subject_ty, arms, arm_count, s, e),
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => lower_enum_construct<N>(input, st, rest, ty, vs, ve, f, params, s, e),
         TBin { op: op, ty: ty, start: s, end: e } => lower_binary<N>(input, st, rest, op, ty, s, e),
@@ -679,6 +683,64 @@ fn lower_finite_arm<N: Nat>(input: [byte; up_to N], st: FiniteArmBuild, arm: dec
     let edge_case: FiniteMatchCase = FiniteMatchCase { variant_start: arm.variant_start, variant_end: arm.variant_end, target: arm_id, arguments: st.source_arguments };
     let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
     return FiniteArmBuild { rest: rest, source: source_next, cases: FiniteMatchCaseList.MCCons { head: edge_case, tail: st.cases }, arm_blocks: SsaBlockList.LCons { head: arm_block, tail: st.arm_blocks }, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, nominal: st.nominal, subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, ok: st.ok && prepared.ok && payloads.ok && lowered.ok && result_ok };
+}
+fn lower_scalar_match<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: ExprBuild) {
+    return match st.stack {
+        WNil => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) },
+        WCons { head: subject, tail: base_stack } => lower_scalar_match_subject<N>(input, st, rest, result_ty, subject_ty, arms, arm_count, default_count, start, end, subject, base_stack)
+    };
+}
+fn lower_scalar_match_subject<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64, subject: Value, base_stack: ValueStack) -> (result: ExprBuild) {
+    let actual_count: u64 = typed_scalar_match_arm_total<N>(input, arms);
+    let basic_ok: bool = decl.is_int_ty(subject_ty) && actual_count == arm_count && arm_count > 0 && default_count == 1 && decl.sem_eq<N>(input, subject.ty, subject_ty) && supported_value_type<N>(input, result_ty, st.nominals);
+    if !(basic_ok) { return ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) }; }
+    let join_id: u64 = st.next_block_id + arm_count;
+    let join_context: MatchContextBuild = match_context_parameters<N>(input, st.env, base_stack, join_id, st.next_value, st.values, st.nominals);
+    let join_result: Value = Value { id: join_context.next_value, ty: result_ty, owner_block: join_id, kind: 1, index: join_context.parameter_index };
+    let join_params: ValueList = ValueList.VCons { head: join_result, tail: join_context.parameters };
+    let join_values: ValueList = ValueList.VCons { head: join_result, tail: join_context.values };
+    let source_args: IdList = match_context_ids<N>(input, st.env, base_stack);
+    let source: ExprBuild = ExprBuild { ..st, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block_id: st.next_block_id };
+    let initial: ScalarArmBuild = ScalarArmBuild { rest: arms, source: source, cases: ScalarMatchCaseList.SCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, default_target: 0, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, ok: join_context.ok };
+    iterate i over input carrying built: ScalarArmBuild = initial { next built = scalar_arm_step<N>(input, built); }
+    let ordered_cases: ScalarMatchCaseList = reverse_scalar_match_cases<N>(input, built.cases);
+    let source_term: Terminator = Terminator.ScalarSwitch { subject: subject.id, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, default_target: built.default_target, join_target: join_id, cases: ordered_cases };
+    let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, instructions: reverse_instructions<N>(input, st.instructions), terminator: source_term, reachable: true, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
+    let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: built.arm_blocks };
+    let all_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_blocks, st.generated_blocks);
+    return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: join_id + 1, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 2)) };
+}
+fn typed_scalar_match_arm_total<N: Nat>(input: [byte; up_to N], arms: decl.TypedScalarMatchArmList) -> (result: u64) {
+    let count: decl.TypedScalarMatchCount = decl.typed_scalar_match_count<N>(input, arms);
+    return count.n;
+}
+fn scalar_arm_step<N: Nat>(input: [byte; up_to N], st: ScalarArmBuild) -> (result: ScalarArmBuild) {
+    return match st.rest {
+        decl.TypedScalarMatchArmList.TSNil => st,
+        decl.TypedScalarMatchArmList.TSCons { head: arm, tail: rest } => lower_scalar_arm<N>(input, st, arm, rest)
+    };
+}
+record ScalarCaseReverse { rest: ScalarMatchCaseList, acc: ScalarMatchCaseList }
+fn reverse_scalar_match_cases<N: Nat>(input: [byte; up_to N], cases: ScalarMatchCaseList) -> (result: ScalarMatchCaseList) {
+    iterate i over input carrying st: ScalarCaseReverse = ScalarCaseReverse { rest: cases, acc: ScalarMatchCaseList.SCNil } { next st = reverse_scalar_match_cases_step(st); }
+    return st.acc;
+}
+fn reverse_scalar_match_cases_step(st: ScalarCaseReverse) -> (result: ScalarCaseReverse) {
+    return match st.rest { ScalarMatchCaseList.SCNil => st, ScalarMatchCaseList.SCCons { head: case, tail: rest } => ScalarCaseReverse { rest: rest, acc: ScalarMatchCaseList.SCCons { head: case, tail: st.acc } } };
+}
+fn lower_scalar_arm<N: Nat>(input: [byte; up_to N], st: ScalarArmBuild, arm: decl.TypedScalarMatchArm, rest: decl.TypedScalarMatchArmList) -> (result: ScalarArmBuild) {
+    let arm_id: u64 = st.source.next_block_id + st.arm_index;
+    let prepared: MatchContextBuild = match_context_parameters<N>(input, st.source.env, st.source.stack, arm_id, st.next_value, st.source.values, st.source.nominals);
+    let arm_seed: ExprBuild = ExprBuild { rest: arm.ops, env: prepared.env, stack: ValueStack.WNil, instructions: InstructionList.QNil, values: prepared.values, next_value: prepared.next_value, next_instruction: st.next_instruction, sequence: 0, block: arm_id, parameters: prepared.parameters, generated_blocks: SsaBlockList.LNil, next_block_id: st.source.next_block_id, nominals: st.source.nominals, ok: prepared.ok, failure_op: 0 };
+    iterate i over input carrying lowered: ExprBuild = arm_seed { next lowered = lower_arm_operation_step<N>(input, lowered); }
+    let result: Value = expression_value(lowered.stack);
+    let result_ok: bool = expression_stack_single(lowered.stack) && decl.sem_eq<N>(input, result.ty, st.result_ty);
+    let jump_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: result.id }, tail: IdList.INil }, match_context_ids<N>(input, prepared.env, prepared.stack));
+    let arm_term: Terminator = Terminator.Jump { target: st.join_id, arguments: jump_args };
+    let arm_block: SsaBlock = SsaBlock { id: arm_id, parameters: prepared.parameters, instructions: reverse_instructions<N>(input, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: lowered.ok && result_ok && prepared.ok, lowering_failure_kind: select(lowered.ok && result_ok && prepared.ok, 0, 9) };
+    let edge_case: ScalarMatchCase = ScalarMatchCase { is_default: arm.is_default, negative: arm.negative, value: arm.value, overflow: arm.overflow, pattern_start: arm.pattern_start, pattern_end: arm.pattern_end, target: arm_id, arguments: st.source_arguments };
+    let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
+    return ScalarArmBuild { rest: rest, source: source_next, cases: ScalarMatchCaseList.SCCons { head: edge_case, tail: st.cases }, arm_blocks: SsaBlockList.LCons { head: arm_block, tail: st.arm_blocks }, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, default_target: select(arm.is_default, arm_id, st.default_target), subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, ok: st.ok && prepared.ok && lowered.ok && result_ok };
 }
 fn lower_arm_operation_step<N: Nat>(input: [byte; up_to N], st: ExprBuild) -> (result: ExprBuild) {
     return match st.rest {
@@ -940,10 +1002,10 @@ fn make_terminator<N: Nat>(input: [byte; up_to N], block: flow.Block, exprs: Exp
     return Terminator.Fail;
 }
 fn terminator_shape(block: flow.Block, term: Terminator) -> (result: bool) {
-    if block.kind == 1 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => block.succ_count == 2 && y == block.succ0 && n == block.succ1, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => false }; }
-    if block.kind == 2 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => block.succ_count == 1 && t == block.succ0, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => false }; }
-    if block.kind == 3 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => block.succ_count == 0, Fail => false }; }
-    if block.kind == 4 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => block.succ_count == 0 }; }
+    if block.kind == 1 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => block.succ_count == 2 && y == block.succ0 && n == block.succ1, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => false }; }
+    if block.kind == 2 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => block.succ_count == 1 && t == block.succ0, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => false }; }
+    if block.kind == 3 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: join, cases: cases } => false, Return { value: v } => block.succ_count == 0, Fail => false }; }
+    if block.kind == 4 { return match term { Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false, Jump { target: t, arguments: a } => false, FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => false, ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: join, cases: cases } => false, Return { value: v } => false, Fail => block.succ_count == 0 }; }
     return false;
 }
 fn binding_ids<N: Nat>(input: [byte; up_to N], bindings: Environment) -> (result: IdList) {
@@ -962,6 +1024,7 @@ fn add_block_edges_from<N: Nat>(input: [byte; up_to N], edges: EdgeList, source:
         Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => EdgeList.ECons { head: Edge { source: source, target: n, bindings: env, arguments: na }, tail: EdgeList.ECons { head: Edge { source: source, target: y, bindings: env, arguments: ya }, tail: edges } },
         Jump { target: target, arguments: args } => EdgeList.ECons { head: Edge { source: source, target: target, bindings: env, arguments: args }, tail: edges },
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => edges,
+        ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: join, cases: cases } => edges,
         Return { value: v } => edges,
         Fail => edges
     };
@@ -1360,6 +1423,7 @@ fn verify_terminator<N: Nat>(input: [byte; up_to N], function: Function, block: 
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => verify_branch_term<N>(input, function, block.id, condition, yes, no, ya, na, instruction_total),
         Jump { target: target, arguments: args } => verify_edge<N>(input, function, block.id, target, args, instruction_total),
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_type, source_start: start, source_end: end, arm_count: arm_count, join_target: join_target, cases: cases } => verify_finite_switch<N>(input, function, block, subject, subject_ty, nominal, result_type, start, end, arm_count, join_target, cases, instruction_total),
+        ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_type, source_start: start, source_end: end, arm_count: arm_count, default_target: default_target, join_target: join_target, cases: cases } => verify_scalar_switch<N>(input, function, block, subject, subject_ty, result_type, start, end, arm_count, default_target, join_target, cases, instruction_total),
         Return { value: value } => verify_return_term<N>(input, function, block.id, value, instruction_total),
         Fail => false
     };
@@ -1378,7 +1442,7 @@ fn verify_finite_switch<N: Nat>(input: [byte; up_to N], function: Function, bloc
     let join_block: BlockLookup = find_block<N>(input, function.blocks, join);
     let source_ok: bool = finite_match_source_cases_valid<N>(input, start, end, cases, arm_count);
     let cases_ok: bool = verify_finite_switch_cases<N>(input, function, block.id, join, result_ty, cases, before);
-    return subject_value.found && value_available<N>(input, function.values, subject, block.id, before) && is_named_type(subject_ty) && decl.sem_eq<N>(input, subject_value.value.ty, subject_ty) && expected_nominal.valid && decl.semantic_identity_equal(expected_nominal, nominal) && supported_value_type<N>(input, result_ty, function.nominals) && arm_count > 0 && finite_case_count<N>(input, cases) == arm_count && source_ok && cases_ok && join_block.found && finite_join_result_type<N>(input, join_block.block.parameters, result_ty);
+    return subject_value.found && value_available<N>(input, function.values, subject, block.id, before) && is_named_type(subject_ty) && decl.sem_eq<N>(input, subject_value.value.ty, subject_ty) && expected_nominal.valid && decl.semantic_identity_equal(expected_nominal, nominal) && supported_value_type<N>(input, result_ty, function.nominals) && arm_count > 0 && finite_case_count<N>(input, cases) == arm_count && source_ok && cases_ok && join_block.found && match_join_result_type<N>(input, join_block.block.parameters, result_ty);
 }
 fn is_named_type(ty: decl.SemType) -> (result: bool) {
     return match ty { TNamed { start: start, end: end } => true, TBool => false, TByte => false, TInt { width: width, signed: signed } => false, TSeq => false, TSeqExact { element: element, length: length, length_valid: valid } => false, TPoison => false };
@@ -1397,7 +1461,7 @@ fn verify_finite_switch_case<N: Nat>(input: [byte; up_to N], st: FiniteSwitchCas
     let target: BlockLookup = find_block<N>(input, st.function.blocks, case.target);
     let unique: bool = !(finite_match_case_duplicate<N>(input, rest, case));
     let edge_ok: bool = verify_edge<N>(input, st.function, st.source, case.target, case.arguments, st.before);
-    let target_term_ok: bool = target.found && finite_arm_jumps_to_join<N>(input, st.function, target.block, st.join, st.result_ty);
+    let target_term_ok: bool = target.found && match_arm_jumps_to_join<N>(input, st.function, target.block, st.join, st.result_ty);
     return FiniteSwitchCaseScan { ..st, rest: rest, ok: unique && case.target != st.source && case.target != st.join && case.variant_end > case.variant_start && edge_ok && target_term_ok };
 }
 record DuplicateFiniteCaseScan { rest: FiniteMatchCaseList, variant_start: u64, variant_end: u64, target: u64, found: bool }
@@ -1409,11 +1473,12 @@ fn finite_match_duplicate_step(st: DuplicateFiniteCaseScan) -> (result: Duplicat
     if st.found { return st; }
     return match st.rest { FiniteMatchCaseList.MCNil => st, FiniteMatchCaseList.MCCons { head: case, tail: rest } => DuplicateFiniteCaseScan { rest: rest, variant_start: st.variant_start, variant_end: st.variant_end, target: st.target, found: case.target == st.target || (case.variant_start == st.variant_start && case.variant_end == st.variant_end) } };
 }
-fn finite_arm_jumps_to_join<N: Nat>(input: [byte; up_to N], function: Function, block: SsaBlock, join: u64, result_ty: decl.SemType) -> (result: bool) {
+fn match_arm_jumps_to_join<N: Nat>(input: [byte; up_to N], function: Function, block: SsaBlock, join: u64, result_ty: decl.SemType) -> (result: bool) {
     return match block.terminator {
         Jump { target: target, arguments: args } => target == join && verify_edge<N>(input, function, block.id, target, args, instruction_count<N>(input, block.instructions)) && first_argument_has_type<N>(input, function.values, args, result_ty),
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => false,
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result, source_start: start, source_end: end, arm_count: count, join_target: target, cases: cases } => false,
+        ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: target, cases: cases } => false,
         Return { value: value } => false,
         Fail => false
     };
@@ -1441,11 +1506,105 @@ fn first_argument_type<N: Nat>(input: [byte; up_to N], values: ValueList, id: Id
     return found.found && decl.sem_eq<N>(input, found.value.ty, want);
 }
 record LastValueType { rest: ValueList, found: bool, ty: decl.SemType }
-fn finite_join_result_type<N: Nat>(input: [byte; up_to N], params: ValueList, want: decl.SemType) -> (result: bool) {
+fn match_join_result_type<N: Nat>(input: [byte; up_to N], params: ValueList, want: decl.SemType) -> (result: bool) {
     return match params { ValueList.VNil => false, ValueList.VCons { head: value, tail: rest } => decl.sem_eq<N>(input, value.ty, want) };
 }
 fn last_value_type_step(st: LastValueType) -> (result: LastValueType) {
     return match st.rest { ValueList.VNil => st, ValueList.VCons { head: value, tail: rest } => LastValueType { rest: rest, found: true, ty: value.ty } };
+}
+fn verify_scalar_switch<N: Nat>(input: [byte; up_to N], function: Function, block: SsaBlock, subject: u64, subject_ty: decl.SemType, result_ty: decl.SemType, start: u64, end: u64, arm_count: u64, default_target: u64, join: u64, cases: ScalarMatchCaseList, before: u64) -> (result: bool) {
+    let subject_value: LookupValue = find_value<N>(input, function.values, subject);
+    let join_block: BlockLookup = find_block<N>(input, function.blocks, join);
+    let source_ok: bool = scalar_match_source_cases_valid<N>(input, start, end, cases, arm_count);
+    let cases_ok: bool = verify_scalar_switch_cases<N>(input, function, block.id, join, result_ty, cases, before);
+    let defaults: ScalarDefaultScan = scalar_switch_default_scan<N>(input, cases, default_target);
+    return subject_value.found && value_available<N>(input, function.values, subject, block.id, before) && decl.is_int_ty(subject_ty) && decl.sem_eq<N>(input, subject_value.value.ty, subject_ty) && supported_value_type<N>(input, result_ty, function.nominals) && arm_count > 0 && scalar_case_count<N>(input, cases) == arm_count && defaults.count == 1 && defaults.target_ok && source_ok && cases_ok && join_block.found && match_join_result_type<N>(input, join_block.block.parameters, result_ty);
+}
+record ScalarCaseCount { rest: ScalarMatchCaseList, count: u64 }
+fn scalar_case_count<N: Nat>(input: [byte; up_to N], cases: ScalarMatchCaseList) -> (result: u64) {
+    iterate i over input carrying st: ScalarCaseCount = ScalarCaseCount { rest: cases, count: 0 } { next st = scalar_case_count_step(st); }
+    return st.count;
+}
+fn scalar_case_count_step(st: ScalarCaseCount) -> (result: ScalarCaseCount) {
+    return match st.rest { ScalarMatchCaseList.SCNil => st, ScalarMatchCaseList.SCCons { head: case, tail: rest } => ScalarCaseCount { rest: rest, count: st.count + 1 } };
+}
+record ScalarDefaultScan { rest: ScalarMatchCaseList, default_target: u64, count: u64, target_ok: bool }
+fn scalar_switch_default_scan<N: Nat>(input: [byte; up_to N], cases: ScalarMatchCaseList, default_target: u64) -> (result: ScalarDefaultScan) {
+    iterate i over input carrying st: ScalarDefaultScan = ScalarDefaultScan { rest: cases, default_target: default_target, count: 0, target_ok: true } { next st = scalar_switch_default_step(st); }
+    return st;
+}
+fn scalar_switch_default_step(st: ScalarDefaultScan) -> (result: ScalarDefaultScan) {
+    return match st.rest {
+        ScalarMatchCaseList.SCNil => st,
+        ScalarMatchCaseList.SCCons { head: case, tail: rest } => ScalarDefaultScan { rest: rest, default_target: st.default_target, count: st.count + select(case.is_default, 1, 0), target_ok: st.target_ok && select(case.is_default, case.target == st.default_target, true) }
+    };
+}
+record ScalarSwitchCaseScan { rest: ScalarMatchCaseList, function: Function, source: u64, join: u64, result_ty: decl.SemType, before: u64, ok: bool }
+fn verify_scalar_switch_cases<N: Nat>(input: [byte; up_to N], function: Function, source: u64, join: u64, result_ty: decl.SemType, cases: ScalarMatchCaseList, before: u64) -> (result: bool) {
+    iterate i over input carrying st: ScalarSwitchCaseScan = ScalarSwitchCaseScan { rest: cases, function: function, source: source, join: join, result_ty: result_ty, before: before, ok: true } { next st = verify_scalar_switch_case_step<N>(input, st); }
+    return st.ok && scalar_match_cases_empty(st.rest);
+}
+fn scalar_match_cases_empty(cases: ScalarMatchCaseList) -> (result: bool) { return match cases { ScalarMatchCaseList.SCNil => true, ScalarMatchCaseList.SCCons { head: h, tail: t } => false }; }
+fn verify_scalar_switch_case_step<N: Nat>(input: [byte; up_to N], st: ScalarSwitchCaseScan) -> (result: ScalarSwitchCaseScan) {
+    if !(st.ok) { return st; }
+    return match st.rest { ScalarMatchCaseList.SCNil => st, ScalarMatchCaseList.SCCons { head: case, tail: rest } => verify_scalar_switch_case<N>(input, st, case, rest) };
+}
+fn verify_scalar_switch_case<N: Nat>(input: [byte; up_to N], st: ScalarSwitchCaseScan, case: ScalarMatchCase, rest: ScalarMatchCaseList) -> (result: ScalarSwitchCaseScan) {
+    let target: BlockLookup = find_block<N>(input, st.function.blocks, case.target);
+    let unique: bool = !(scalar_match_case_duplicate<N>(input, rest, case));
+    let edge_ok: bool = verify_edge<N>(input, st.function, st.source, case.target, case.arguments, st.before);
+    let target_term_ok: bool = target.found && match_arm_jumps_to_join<N>(input, st.function, target.block, st.join, st.result_ty);
+    return ScalarSwitchCaseScan { ..st, rest: rest, ok: unique && case.target != st.source && case.target != st.join && case.pattern_end > case.pattern_start && edge_ok && target_term_ok };
+}
+record DuplicateScalarCaseScan { rest: ScalarMatchCaseList, payload: u64, is_default: bool, target: u64, found: bool }
+fn scalar_match_case_duplicate<N: Nat>(input: [byte; up_to N], cases: ScalarMatchCaseList, candidate: ScalarMatchCase) -> (result: bool) {
+    let payload: u64 = select(candidate.negative, decl.negative_payload(candidate.value), candidate.value);
+    iterate i over input carrying st: DuplicateScalarCaseScan = DuplicateScalarCaseScan { rest: cases, payload: payload, is_default: candidate.is_default, target: candidate.target, found: false } { next st = scalar_match_duplicate_step<N>(input, st); }
+    return st.found;
+}
+fn scalar_match_duplicate_step<N: Nat>(input: [byte; up_to N], st: DuplicateScalarCaseScan) -> (result: DuplicateScalarCaseScan) {
+    if st.found { return st; }
+    return match st.rest { ScalarMatchCaseList.SCNil => st, ScalarMatchCaseList.SCCons { head: case, tail: rest } => scalar_match_duplicate_one<N>(input, st, case, rest) };
+}
+fn scalar_match_duplicate_one<N: Nat>(input: [byte; up_to N], st: DuplicateScalarCaseScan, case: ScalarMatchCase, rest: ScalarMatchCaseList) -> (result: DuplicateScalarCaseScan) {
+    let payload: u64 = select(case.negative, decl.negative_payload(case.value), case.value);
+    let clash: bool = case.target == st.target || (!(st.is_default) && !(case.is_default) && payload == st.payload);
+    return DuplicateScalarCaseScan { rest: rest, payload: st.payload, is_default: st.is_default, target: st.target, found: clash };
+}
+fn scalar_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, cases: ScalarMatchCaseList, count: u64) -> (result: bool) {
+    let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        ScalarMatch { subject: subject, arms: arms, start: source_start, end: source_end } => source_start == start && source_end == end && scalar_match_source_arm_pairs<N>(input, arms, cases, count),
+        Name { start: s, end: e } => false,
+        Integer { start: s, end: e, value: value, overflow: overflow } => false,
+        Boolean { start: s, end: e, value: value } => false,
+        UnaryNot { value: value, start: s, end: e } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+    };
+}
+record SourceScalarCasePair { arms: decl.ScalarMatchArmList, cases: ScalarMatchCaseList, count: u64, ok: bool }
+fn scalar_match_source_arm_pairs<N: Nat>(input: [byte; up_to N], arms: decl.ScalarMatchArmList, cases: ScalarMatchCaseList, count: u64) -> (result: bool) {
+    iterate i over input carrying st: SourceScalarCasePair = SourceScalarCasePair { arms: arms, cases: cases, count: 0, ok: true } { next st = scalar_match_source_pair_step(st); }
+    return st.ok && st.count == count && source_scalar_arms_empty(st.arms) && scalar_match_cases_empty(st.cases);
+}
+fn source_scalar_arms_empty(arms: decl.ScalarMatchArmList) -> (result: bool) { return match arms { MNil => true, MCons { head: h, tail: t } => false }; }
+fn scalar_match_source_pair_step(st: SourceScalarCasePair) -> (result: SourceScalarCasePair) {
+    return match st.arms {
+        decl.ScalarMatchArmList.MNil => SourceScalarCasePair { ..st, ok: st.ok && scalar_match_cases_empty(st.cases) },
+        decl.ScalarMatchArmList.MCons { head: arm, tail: rest } => scalar_match_source_pair_case(st, arm, rest)
+    };
+}
+fn scalar_match_source_pair_case(st: SourceScalarCasePair, arm: decl.ScalarMatchArm, rest: decl.ScalarMatchArmList) -> (result: SourceScalarCasePair) {
+    return match st.cases {
+        ScalarMatchCaseList.SCNil => SourceScalarCasePair { ..st, arms: rest, ok: false },
+        ScalarMatchCaseList.SCCons { head: case, tail: cases } => SourceScalarCasePair { arms: rest, cases: cases, count: st.count + 1, ok: st.ok && arm.is_default == case.is_default && arm.negative == case.negative && arm.value == case.value && arm.pattern_start == case.pattern_start && arm.pattern_end == case.pattern_end }
+    };
 }
 fn finite_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, cases: FiniteMatchCaseList, count: u64) -> (result: bool) {
     let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);

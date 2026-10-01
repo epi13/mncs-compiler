@@ -784,6 +784,35 @@ fn scalar_match_patterns_ok<N: Nat>(input: [byte; up_to N], arms: ScalarMatchArm
     }
     return d.ok && d.default_seen;
 }
+// Same pattern rule over proof-emitted typed arms: default last and
+// exactly once, valid width/signed ranges, no duplicate payloads.
+record TypedPatternCheck { rest: TypedScalarMatchArmList, seen: PatternValues, subject_ty: SemType, default_seen: bool, ok: bool }
+fn typed_scalar_match_pattern_step<N: Nat>(input: [byte; up_to N], st: TypedPatternCheck) -> (result: TypedPatternCheck) {
+    if !(st.ok) || st.default_seen { return st; }
+    return match st.rest {
+        TSNil => st,
+        TSCons { head: arm, tail: rest } => typed_scalar_match_pattern_check_arm<N>(input, st, arm, rest)
+    };
+}
+fn typed_scalar_match_pattern_check_arm<N: Nat>(input: [byte; up_to N], st: TypedPatternCheck, arm: TypedScalarMatchArm, rest: TypedScalarMatchArmList) -> (result: TypedPatternCheck) {
+    if arm.is_default {
+        if !(matches_typed_scalar_arms_empty(rest)) { return TypedPatternCheck { ..st, rest: TypedScalarMatchArmList.TSNil, ok: false }; }
+        return TypedPatternCheck { ..st, rest: TypedScalarMatchArmList.TSNil, default_seen: true, ok: true };
+    }
+    if !(scalar_pattern_valid(st.subject_ty, arm.negative, arm.value, arm.overflow)) { return TypedPatternCheck { ..st, rest: TypedScalarMatchArmList.TSNil, ok: false }; }
+    let payload: u64 = select(arm.negative, negative_payload(arm.value), arm.value);
+    if pattern_seen<N>(input, st.seen, payload) { return TypedPatternCheck { ..st, rest: TypedScalarMatchArmList.TSNil, ok: false }; }
+    return TypedPatternCheck { rest: rest, seen: PatternValues.VCons { head: payload, tail: st.seen }, subject_ty: st.subject_ty, default_seen: false, ok: true };
+}
+fn matches_typed_scalar_arms_empty(arms: TypedScalarMatchArmList) -> (result: bool) {
+    return match arms { TSNil => true, TSCons { head: h, tail: t } => false };
+}
+fn typed_scalar_match_patterns_ok<N: Nat>(input: [byte; up_to N], arms: TypedScalarMatchArmList, subject_ty: SemType) -> (result: bool) {
+    iterate i over input carrying d: TypedPatternCheck = TypedPatternCheck { rest: arms, seen: PatternValues.VNil, subject_ty: subject_ty, default_seen: false, ok: true } {
+        next d = typed_scalar_match_pattern_step<N>(input, d);
+    }
+    return d.ok && d.default_seen;
+}
 
 fn prefix_not(st: ExprState, tok: lexer.Token) -> (result: ExprState) {
     return ExprState { ok: true, err_start: 0, err_end: 0, cursor: tok.end, operands: st.operands, operators: OpList.OCons { head: Op { kind: 1002, argc: 0, name_start: tok.start, name_end: tok.end, args: ExprList.ENil }, tail: st.operators }, depth: st.depth, done: false, expect_operand: true, profile_013: st.profile_013, allow_construct: st.allow_construct };
@@ -3757,7 +3786,7 @@ enum TOp {
     TName { ty: SemType, start: u64, end: u64 },
     TNot { ty: SemType, start: u64, end: u64 },
     TRepeat { ty: SemType, element: SemType, count: u64, start: u64, end: u64 },
-    TMatch { ty: SemType, subject_ty: SemType, arms: ScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64 },
+    TMatch { ty: SemType, subject_ty: SemType, arms: TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64 },
     TFiniteMatch { ty: SemType, subject_ty: SemType, arms: TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64 },
     TEnumConstruct { ty: SemType, variant_start: u64, variant_end: u64, field_count: u64, params: BindList, start: u64, end: u64 },
     TBin { op: u64, ty: SemType, start: u64, end: u64 },
@@ -3767,6 +3796,8 @@ enum TOp {
 enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
 record TypedFiniteMatchArm { variant_start: u64, variant_end: u64, has_payload: bool, bindings: PayloadBindingList, pattern_start: u64, pattern_end: u64, payload_fields: BindList, ops: TOpList, op_count: u64 }
 enum TypedFiniteMatchArmList { TFNil, TFCons { head: TypedFiniteMatchArm, tail: TypedFiniteMatchArmList } }
+record TypedScalarMatchArm { is_default: bool, negative: bool, value: u64, overflow: bool, pattern_start: u64, pattern_end: u64, ops: TOpList, op_count: u64 }
+enum TypedScalarMatchArmList { TSNil, TSCons { head: TypedScalarMatchArm, tail: TypedScalarMatchArmList } }
 enum TopsList { TLNil, TLCons { head: TOpList, tail: TopsList } }
 enum TyList { TyNil, TyCons { head: SemType, tail: TyList } }
 enum TyStack { WNil, WCons { head: SemType, tail: TyStack } }
@@ -3829,6 +3860,19 @@ fn reverse_typed_finite_match_arm_step(st: TypedFiniteArmRev) -> (result: TypedF
         TFCons { head: h, tail: t } => TypedFiniteArmRev { rest: t, acc: TypedFiniteMatchArmList.TFCons { head: h, tail: st.acc } }
     };
 }
+record TypedScalarArmRev { rest: TypedScalarMatchArmList, acc: TypedScalarMatchArmList }
+fn reverse_typed_scalar_match_arms<N: Nat>(input: [byte; up_to N], arms: TypedScalarMatchArmList) -> (result: TypedScalarMatchArmList) {
+    iterate i over input carrying st: TypedScalarArmRev = TypedScalarArmRev { rest: arms, acc: TypedScalarMatchArmList.TSNil } {
+        next st = reverse_typed_scalar_match_arm_step(st);
+    }
+    return st.acc;
+}
+fn reverse_typed_scalar_match_arm_step(st: TypedScalarArmRev) -> (result: TypedScalarArmRev) {
+    return match st.rest {
+        TSNil => st,
+        TSCons { head: h, tail: t } => TypedScalarArmRev { rest: t, acc: TypedScalarMatchArmList.TSCons { head: h, tail: st.acc } }
+    };
+}
 // Type-stack verification: pushes add one typed slot; TBin needs two
 // equal operand types; TCall needs argc slots; TProj is depth-neutral.
 // A well-formed lowering of one expression ends at depth exactly one;
@@ -3873,7 +3917,7 @@ fn queue_finite_match_checks<N: Nat>(input: [byte; up_to N], operation: TOp, pen
         TName { ty: ty, start: start, end: end } => pending,
         TNot { ty: ty, start: start, end: end } => pending,
         TRepeat { ty: ty, element: element, count: count, start: start, end: end } => pending,
-        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end } => pending,
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end } => queue_typed_scalar_match_arms<N>(input, arms, ty, pending),
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: count, params: params, start: start, end: end } => pending,
         TBin { op: op, ty: ty, start: start, end: end } => pending,
         TCall { ty: ty, argc: argc, params: params, start: start, end: end, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => pending,
@@ -3897,6 +3941,25 @@ fn queue_one_typed_finite_match_arm<N: Nat>(input: [byte; up_to N], st: TypedVer
     let actual_count: u64 = count_tops<N>(input, arm.ops);
     let frame: VerifyFrame = VerifyFrame { depth: TDepth { rest: arm.ops, stack: TyStack.WNil, depth: 0, ok: true }, want: ExpTy.XSome { ty: st.ty } };
     return TypedVerifyQueue { rest: rest, ty: st.ty, pending: VerifyFrameList.VQCons { head: frame, tail: st.pending }, ok: st.ok && arm.op_count > 0 && arm.op_count == actual_count };
+}
+record TypedScalarVerifyQueue { rest: TypedScalarMatchArmList, ty: SemType, pending: VerifyFrameList, ok: bool }
+fn queue_typed_scalar_match_arms<N: Nat>(input: [byte; up_to N], arms: TypedScalarMatchArmList, ty: SemType, pending: VerifyFrameList) -> (result: VerifyFrameList) {
+    iterate i over input carrying st: TypedScalarVerifyQueue = TypedScalarVerifyQueue { rest: arms, ty: ty, pending: pending, ok: true } {
+        next st = queue_typed_scalar_match_arm_step<N>(input, st);
+    }
+    if !(st.ok) { return VerifyFrameList.VQNil; }
+    return st.pending;
+}
+fn queue_typed_scalar_match_arm_step<N: Nat>(input: [byte; up_to N], st: TypedScalarVerifyQueue) -> (result: TypedScalarVerifyQueue) {
+    return match st.rest {
+        TSNil => st,
+        TSCons { head: arm, tail: rest } => queue_one_typed_scalar_match_arm<N>(input, st, arm, rest)
+    };
+}
+fn queue_one_typed_scalar_match_arm<N: Nat>(input: [byte; up_to N], st: TypedScalarVerifyQueue, arm: TypedScalarMatchArm, rest: TypedScalarMatchArmList) -> (result: TypedScalarVerifyQueue) {
+    let actual_count: u64 = count_tops<N>(input, arm.ops);
+    let frame: VerifyFrame = VerifyFrame { depth: TDepth { rest: arm.ops, stack: TyStack.WNil, depth: 0, ok: true }, want: ExpTy.XSome { ty: st.ty } };
+    return TypedScalarVerifyQueue { rest: rest, ty: st.ty, pending: VerifyFrameList.VQCons { head: frame, tail: st.pending }, ok: st.ok && arm.op_count > 0 && arm.op_count == actual_count };
 }
 fn verify_tops_step<N: Nat>(input: [byte; up_to N], st: TDepth) -> (result: TDepth) {
     if !(st.ok) { return st; }
@@ -3943,20 +4006,18 @@ fn verify_top_repeat_value<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpLis
     if !(sem_eq<N>(input, actual, element)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth, ok: true };
 }
-fn verify_top_match<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: ScalarMatchArmList, arm_count: u64, default_count: u64) -> (result: TDepth) {
-    let count: ScalarMatchCount = scalar_match_count<N>(input, arms);
+fn verify_top_match<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: TypedScalarMatchArmList, arm_count: u64, default_count: u64) -> (result: TDepth) {
+    let count: TypedScalarMatchCount = typed_scalar_match_count<N>(input, arms);
     if is_poison(ty) || !(is_int_ty(subject_ty)) || count.n != arm_count || count.defaults != default_count || default_count != 1 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    if !(scalar_match_patterns_ok<N>(input, arms, subject_ty)) || st.depth < arm_count + 1 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    let popped: MatchStackScan = pop_match_values<N>(input, st.stack, arm_count, ty);
-    if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    return match popped.rest {
+    if !(typed_scalar_match_patterns_ok<N>(input, arms, subject_ty)) || !(typed_scalar_match_arms_valid<N>(input, arms)) || st.depth == 0 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match st.stack {
         WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
-        WCons { head: actual_subject, tail: remaining } => verify_top_match_subject<N>(input, st, t, ty, subject_ty, actual_subject, remaining, arm_count)
+        WCons { head: actual_subject, tail: remaining } => verify_top_match_subject<N>(input, st, t, ty, subject_ty, actual_subject, remaining)
     };
 }
-fn verify_top_match_subject<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, actual: SemType, remaining: TyStack, arms: u64) -> (result: TDepth) {
+fn verify_top_match_subject<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, actual: SemType, remaining: TyStack) -> (result: TDepth) {
     if !(is_int_ty(actual)) || !(sem_eq<N>(input, actual, subject_ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
-    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: remaining }, depth: st.depth - arms, ok: true };
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: remaining }, depth: st.depth, ok: true };
 }
 // Arm operations are isolated proof frames and are checked by the same
 // iterative verifier worklist. The parent stack therefore consumes only the
@@ -3987,6 +4048,33 @@ fn typed_finite_arm_valid_one<N: Nat>(input: [byte; up_to N], arm: TypedFiniteMa
     let fields_count: u64 = bind_count<N>(input, arm.payload_fields);
     let shape: bool = select(arm.has_payload, bind_count_actual == fields_count, bind_count_actual == 0);
     return TypedFiniteArmValidity { rest: rest, ok: op_count > 0 && arm.op_count == op_count && shape && payload_bindings_match<N>(input, arm.bindings, arm.payload_fields) };
+}
+record TypedScalarMatchCount { rest: TypedScalarMatchArmList, n: u64, defaults: u64 }
+fn typed_scalar_match_count<N: Nat>(input: [byte; up_to N], arms: TypedScalarMatchArmList) -> (result: TypedScalarMatchCount) {
+    iterate i over input carrying st: TypedScalarMatchCount = TypedScalarMatchCount { rest: arms, n: 0, defaults: 0 } { next st = typed_scalar_match_count_step(st); }
+    return st;
+}
+fn typed_scalar_match_count_step(st: TypedScalarMatchCount) -> (result: TypedScalarMatchCount) {
+    return match st.rest {
+        TSNil => st,
+        TSCons { head: arm, tail: rest } => TypedScalarMatchCount { rest: rest, n: st.n + 1, defaults: st.defaults + select(arm.is_default, 1, 0) }
+    };
+}
+record TypedScalarArmValidity { rest: TypedScalarMatchArmList, ok: bool }
+fn typed_scalar_match_arms_valid<N: Nat>(input: [byte; up_to N], arms: TypedScalarMatchArmList) -> (result: bool) {
+    iterate i over input carrying st: TypedScalarArmValidity = TypedScalarArmValidity { rest: arms, ok: true } { next st = typed_scalar_arm_valid_step<N>(input, st); }
+    return st.ok;
+}
+fn typed_scalar_arm_valid_step<N: Nat>(input: [byte; up_to N], st: TypedScalarArmValidity) -> (result: TypedScalarArmValidity) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        TSNil => st,
+        TSCons { head: arm, tail: rest } => typed_scalar_arm_valid_one<N>(input, arm, rest)
+    };
+}
+fn typed_scalar_arm_valid_one<N: Nat>(input: [byte; up_to N], arm: TypedScalarMatchArm, rest: TypedScalarMatchArmList) -> (result: TypedScalarArmValidity) {
+    let op_count: u64 = count_tops<N>(input, arm.ops);
+    return TypedScalarArmValidity { rest: rest, ok: op_count > 0 && arm.op_count == op_count };
 }
 fn verify_top_finite_match<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: TypedFiniteMatchArmList, arm_count: u64) -> (result: TDepth) {
     let count: u64 = typed_finite_match_count<N>(input, arms);
@@ -4107,20 +4195,9 @@ fn bind_count_step(st: BindCountScan) -> (result: BindCountScan) {
         BindList.BCons { head: h, tail: t } => BindCountScan { rest: t, count: st.count + 1 }
     };
 }
-record MatchStackScan { rest: TyStack, remaining: u64, ty: SemType, ok: bool }
-fn match_stack_scan_step<N: Nat>(input: [byte; up_to N], st: MatchStackScan) -> (result: MatchStackScan) {
-    if !(st.ok) || st.remaining == 0 { return st; }
-    return match st.rest {
-        WNil => MatchStackScan { ..st, ok: false },
-        WCons { head: actual, tail: rest } => MatchStackScan { rest: rest, remaining: st.remaining - 1, ty: st.ty, ok: sem_eq<N>(input, actual, st.ty) }
-    };
-}
-fn pop_match_values<N: Nat>(input: [byte; up_to N], stack: TyStack, count: u64, ty: SemType) -> (result: MatchStackScan) {
-    iterate i over input carrying d: MatchStackScan = MatchStackScan { rest: stack, remaining: count, ty: ty, ok: true } {
-        next d = match_stack_scan_step<N>(input, d);
-    }
-    return d;
-}
+// Arm operations are isolated proof frames (see verify_top_finite_match), so
+// the parent stack consumes only the match subject; no arm-value popping
+// remains.
 fn verify_top_not<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
     if !(sem_eq<N>(input, ty, SemType.TBool)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return match st.stack {
@@ -4232,6 +4309,14 @@ fn sabotage_construct_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
     let ops: TOpList = TOpList.PCons { head: TOp.TEnumConstruct { ty: SemType.TNamed { start: 0, end: 1 }, variant_start: 0, variant_end: 1, field_count: 1, params: BindList.BNil, start: 0, end: 1 }, tail: TOpList.PNil };
     return verify_tops<N>(input, ops, ExpTy.XNone);
 }
+fn sabotage_scalar_match_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
+    let ints: SemType = SemType.TInt { width: 64, signed: false };
+    let arm_ops: TOpList = TOpList.PCons { head: TOp.TInt { value: 1, ty: ints, start: 0, end: 1 }, tail: TOpList.PNil };
+    let arm: TypedScalarMatchArm = TypedScalarMatchArm { is_default: true, negative: false, value: 0, overflow: false, pattern_start: 0, pattern_end: 1, ops: arm_ops, op_count: 1 };
+    let arms: TypedScalarMatchArmList = TypedScalarMatchArmList.TSCons { head: arm, tail: TypedScalarMatchArmList.TSNil };
+    let ops: TOpList = TOpList.PCons { head: TOp.TName { ty: ints, start: 0, end: 1 }, tail: TOpList.PCons { head: TOp.TMatch { ty: ints, subject_ty: ints, arms: arms, arm_count: 2, default_count: 1, start: 0, end: 1 }, tail: TOpList.PNil } };
+    return verify_tops<N>(input, ops, ExpTy.XNone);
+}
 fn sound_sample<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
 
     let total: u64 = input.len;
@@ -4259,7 +4344,7 @@ enum SemKont {
     KTop,
     KNot { start: u64, end: u64, exp: ExpTy },
     KRepeat { count: u64, start: u64, end: u64, exp: ExpTy },
-    KMatchArm { remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, rs: u64, re: u64, start: u64, end: u64 },
+    KMatchArm { remaining: ScalarMatchArmList, current: ScalarMatchArm, completed: TypedScalarMatchArmList, prior_tops: u64, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, rs: u64, re: u64, start: u64, end: u64 },
     KFiniteSubject { arms: FiniteMatchArmList, result_ty: SemType, ss: u64, se: u64, start: u64, end: u64 },
     KFiniteArm { remaining: FiniteMatchArmList, all: FiniteMatchArmList, current: FiniteMatchArm, completed: TypedFiniteMatchArmList, payload_fields: BindList, prior_tops: u64, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64 },
     KConstructField { remaining: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, shape_ok: bool, start: u64, end: u64, exp: ExpTy },
@@ -4373,7 +4458,7 @@ fn seed_scalar_match_int<N: Nat>(input: [byte; up_to N], st: SemState, arms: Sca
     if count.defaults != 1 || count.n == 0 { return sem_drain(sem_emit(st, 2, start, end, 1)); }
     let subject_top: TOp = TOp.TName { ty: subject_ty, start: ns, end: ne };
     let st1: SemState = sem_emit_top(sem_accept(st, subject_ty), subject_top);
-    return seed_scalar_match_arm(st1, arms, arms, subject_ty, result_ty, count.n, count.defaults, start, end);
+    return seed_scalar_match_arm<N>(input, st1, arms, subject_ty, result_ty, count.n, count.defaults, start, end);
 }
 // Scalar patterns against a bool or finite subject: every arm misfits and
 // coverage fails, exactly the Stage-0 MNE138-per-arm plus MNE140 shape.
@@ -4390,23 +4475,31 @@ fn scalar_mismatch_step(st: ScalarMismatchScan) -> (result: ScalarMismatchScan) 
         MCons { head: arm, tail: rest } => ScalarMismatchScan { rest: rest, obls: OblList.LCons { head: Obligation { kind: 38, start: arm.pattern_start, end: arm.pattern_end, status: 1 }, tail: st.obls } }
     };
 }
-fn seed_scalar_match_arm(st: SemState, remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+fn seed_scalar_match_arm<N: Nat>(input: [byte; up_to N], st: SemState, remaining: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
     return match remaining {
         MNil => sem_drain(st),
-        MCons { head: arm, tail: rest } => push_scalar_match_job(st, arm.result, rest, all, subject_ty, result_ty, arm_count, default_count, start, end)
+        MCons { head: arm, tail: rest } => push_scalar_match_job<N>(input, st, arm, rest, TypedScalarMatchArmList.TSNil, subject_ty, result_ty, arm_count, default_count, start, end)
     };
 }
-fn push_scalar_match_job(st: SemState, value: Expr, remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
-    let vsp: ExprSpan = expr_span(value);
-    let job: SemJob = SemJob { e: value, exp: ExpTy.XSome { ty: result_ty } };
-    let kont: SemKont = SemKont.KMatchArm { remaining: remaining, all: all, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, rs: vsp.start, re: vsp.end, start: start, end: end };
+fn push_scalar_match_job<N: Nat>(input: [byte; up_to N], st: SemState, arm: ScalarMatchArm, remaining: ScalarMatchArmList, completed: TypedScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+    let vsp: ExprSpan = expr_span(arm.result);
+    let prior_tops: u64 = count_tops<N>(input, st.tops);
+    let job: SemJob = SemJob { e: arm.result, exp: ExpTy.XSome { ty: result_ty } };
+    let kont: SemKont = SemKont.KMatchArm { remaining: remaining, current: arm, completed: completed, prior_tops: prior_tops, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, rs: vsp.start, re: vsp.end, start: start, end: end };
     return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
-fn continue_scalar_match_arm<N: Nat>(input: [byte; up_to N], st: SemState, remaining: ScalarMatchArmList, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, rs: u64, re: u64, start: u64, end: u64) -> (result: SemState) {
+fn continue_scalar_match_arm<N: Nat>(input: [byte; up_to N], st: SemState, remaining: ScalarMatchArmList, current: ScalarMatchArm, completed: TypedScalarMatchArmList, prior_tops: u64, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, rs: u64, re: u64, start: u64, end: u64) -> (result: SemState) {
     let checked: SemState = arm_result_check<N>(input, st, result_ty, rs, re);
+    let total_tops: u64 = count_tops<N>(input, checked.tops);
+    let delta: u64 = select(total_tops >= prior_tops, total_tops - prior_tops, 0);
+    let split: TopsPrefixSplit = split_tops_prefix<N>(input, checked.tops, delta);
+    let arm_ops: TOpList = split.taken;
+    let typed_arm: TypedScalarMatchArm = TypedScalarMatchArm { is_default: current.is_default, negative: current.negative, value: current.value, overflow: current.overflow, pattern_start: current.pattern_start, pattern_end: current.pattern_end, ops: arm_ops, op_count: count_tops<N>(input, arm_ops) };
+    let completed_next: TypedScalarMatchArmList = TypedScalarMatchArmList.TSCons { head: typed_arm, tail: completed };
+    let restored: SemState = SemState { ..checked, tops: split.rest, failed: checked.failed || total_tops < prior_tops || !(split.ok) };
     return match remaining {
-        MNil => finish_scalar_match(checked, all, subject_ty, result_ty, arm_count, default_count, start, end),
-        MCons { head: arm, tail: rest } => push_scalar_match_job(checked, arm.result, rest, all, subject_ty, result_ty, arm_count, default_count, start, end)
+        MNil => finish_scalar_match<N>(input, restored, completed_next, subject_ty, result_ty, arm_count, default_count, start, end),
+        MCons { head: arm, tail: rest } => push_scalar_match_job<N>(input, restored, arm, rest, completed_next, subject_ty, result_ty, arm_count, default_count, start, end)
     };
 }
 // An arm result whose established type differs from the match requirement
@@ -4415,8 +4508,9 @@ fn arm_result_check<N: Nat>(input: [byte; up_to N], st: SemState, result_ty: Sem
     if sem_eq<N>(input, st.last_ty, result_ty) { return st; }
     return sem_emit(st, 41, rs, re, 1);
 }
-fn finish_scalar_match(st: SemState, all: ScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
-    let top: TOp = TOp.TMatch { ty: result_ty, subject_ty: subject_ty, arms: all, arm_count: arm_count, default_count: default_count, start: start, end: end };
+fn finish_scalar_match<N: Nat>(input: [byte; up_to N], st: SemState, completed: TypedScalarMatchArmList, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: SemState) {
+    let arms: TypedScalarMatchArmList = reverse_typed_scalar_match_arms<N>(input, completed);
+    let top: TOp = TOp.TMatch { ty: result_ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end };
     return sem_emit_top(sem_accept(st, result_ty), top);
 }
 // Finite-match checking. The subject proves as a general expression; the
@@ -4984,7 +5078,7 @@ fn apply_kont<N: Nat>(input: [byte; up_to N], st: SemState, k: SemKont) -> (resu
         KTop => SemState { ..st, top_ty: st.last_ty },
         KNot { start: s, end: e, exp: x } => apply_not<N>(input, st, s, e, x),
         KRepeat { count: count, start: s, end: e, exp: x } => apply_repeat<N>(input, st, count, s, e, x),
-        KMatchArm { remaining: remaining, all: all, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, rs: rs, re: re, start: s, end: e } => continue_scalar_match_arm<N>(input, st, remaining, all, subject_ty, result_ty, arm_count, default_count, rs, re, s, e),
+        KMatchArm { remaining: remaining, current: current, completed: completed, prior_tops: prior_tops, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, rs: rs, re: re, start: s, end: e } => continue_scalar_match_arm<N>(input, st, remaining, current, completed, prior_tops, subject_ty, result_ty, arm_count, default_count, rs, re, s, e),
         KFiniteSubject { arms: arms, result_ty: result_ty, ss: ss, se: se, start: s, end: e } => apply_finite_subject<N>(input, st, arms, result_ty, ss, se, s, e),
         KFiniteArm { remaining: remaining, all: all, current: current, completed: completed, payload_fields: payload_fields, prior_tops: prior_tops, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: env, rs: rs, re: re, start: s, end: e } => continue_finite_match_arm<N>(input, st, remaining, all, current, completed, payload_fields, prior_tops, subject_ty, es, ee, result_ty, arm_count, env, rs, re, s, e),
         KConstructField { remaining: remaining, total: total, ty: ty, params: params, vs: vs, ve: ve, cty: cty, cvs: cvs, cve: cve, shape_ok: shape_ok, start: s, end: e, exp: x } => continue_construct_field<N>(input, st, remaining, total, ty, params, vs, ve, cty, cvs, cve, shape_ok, s, e, x),

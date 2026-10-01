@@ -3,7 +3,7 @@
   "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
   "stage0_reference_mode": "locked",
   "source_profile": "0.18",
-  "elapsed_seconds": 467.351,
+  "elapsed_seconds": 775.098,
   "scope": "ordered current-profile project snapshot, native module/import/member resolution, canonical callable identity, scalar imported-signature proof, and verified value SSA; a multi-module imported call crosses a control-flow merge and is compared with locked Rust Stage-0 body/SSA facts",
   "imported_signature_scope": {
     "supported": "scalar, effect-free imported callable signatures with argument/result proof and compiler-emitted canonical Stage-0 callable identity",
@@ -16,8 +16,8 @@
     "authenticated": false,
     "authority": "host-supplied advisory metadata; native validity does not depend on an unchecked digest"
   },
-  "requests": 38,
-  "result_sha256": "6edaa27ba682f2baf486a9624343d9038be987bf6ca9c68ca86017585a1d626c",
+  "requests": 39,
+  "result_sha256": "a3c5a13f2e7e94bb6be23f235fee0eb7d5529b8b8ca50c8332e17ecb2224d132",
   "native_execution_steps_total": 23,
   "native_execution_steps_max": 1,
   "execution_mode": "retained_cranelift",
@@ -300,8 +300,32 @@
       "repeat operand type"
     ],
     "requests": 12,
-    "result_sha256": "af77bf07b1cf6838eb7aba5e821bed7003a562c9113f88afa7822c29fa7176b2",
+    "result_sha256": "3977432c1c1f08b049c9e69b1c9e0bfba7dddee0b87d0e442b6fc70b7093abcf",
     "native_execution_steps_total": 12
+  },
+  "scalar_match_value_ssa": {
+    "native_project_valid": true,
+    "native_value_ssa_valid": true,
+    "stage0_project_valid": true,
+    "verified_functions": 5,
+    "scalar_match_switches": 5,
+    "covered": [
+      "multi-pattern u64 match",
+      "negative i64 pattern",
+      "bool result",
+      "let-bound subject referenced in arm",
+      "call inside arm",
+      "arm result joins"
+    ],
+    "corruption_rejections": [
+      "duplicate pattern",
+      "default target",
+      "edge value",
+      "missing default"
+    ],
+    "requests": 5,
+    "result_sha256": "fb446b65cef89e804deafb7dd49d0cab379957c7be746fb417f49c04be079181",
+    "native_execution_steps_total": 5
   },
   "deterministic_repetitions": 2
 }
