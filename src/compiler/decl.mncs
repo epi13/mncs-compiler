@@ -3791,7 +3791,7 @@ enum TOp {
     TEnumConstruct { ty: SemType, variant_start: u64, variant_end: u64, field_count: u64, params: BindList, start: u64, end: u64 },
     TBin { op: u64, ty: SemType, start: u64, end: u64 },
     TCall { ty: SemType, argc: u64, params: BindList, start: u64, end: u64, ns: u64, ne: u64, identity: SemanticIdentity, effects: EffectIdentityList, capabilities: CapabilityIdentityList },
-    TProj { ty: SemType, fstart: u64, fend: u64, start: u64, end: u64 }
+    TProj { ty: SemType, fstart: u64, fend: u64, field_index: u64, start: u64, end: u64 }
 }
 enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
 record TypedFiniteMatchArm { variant_start: u64, variant_end: u64, has_payload: bool, bindings: PayloadBindingList, pattern_start: u64, pattern_end: u64, payload_fields: BindList, ops: TOpList, op_count: u64 }
@@ -3921,7 +3921,7 @@ fn queue_finite_match_checks<N: Nat>(input: [byte; up_to N], operation: TOp, pen
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: count, params: params, start: start, end: end } => pending,
         TBin { op: op, ty: ty, start: start, end: end } => pending,
         TCall { ty: ty, argc: argc, params: params, start: start, end: end, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => pending,
-        TProj { ty: ty, fstart: fs, fend: fe, start: start, end: end } => pending
+        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: start, end: end } => pending
     };
 }
 fn queue_typed_finite_match_arms<N: Nat>(input: [byte; up_to N], arms: TypedFiniteMatchArmList, ty: SemType, pending: VerifyFrameList) -> (result: VerifyFrameList) {
@@ -3980,7 +3980,7 @@ fn verify_top_one<N: Nat>(input: [byte; up_to N], st: TDepth, h: TOp, t: TOpList
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => verify_top_enum_construct<N>(input, st, t, ty, f, params, vs, ve, s, e),
         TBin { op: o, ty: ty, start: s, end: e } => verify_top_bin<N>(input, st, t, ty),
         TCall { ty: ty, argc: c, params: params, start: s, end: e, ns: ns, ne: ne, identity: id, effects: effects, capabilities: capabilities } => verify_top_call<N>(input, st, t, ty, c, effects, capabilities),
-        TProj { ty: ty, fstart: fs, fend: fe, start: s, end: e } => verify_top_proj(st, t, ty)
+        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: s, end: e } => verify_top_proj(st, t, ty)
     };
 }
 fn verify_top_repeat<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, element: SemType, count: u64) -> (result: TDepth) {
@@ -4255,7 +4255,20 @@ fn verify_top_proj(st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
     if is_poison(ty) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return match st.stack {
         WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
-        WCons { head: h, tail: t2 } => TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: t2 }, depth: st.depth, ok: true }
+        WCons { head: h, tail: t2 } => verify_top_proj_base(st, t, ty, h, t2)
+    };
+}
+// Projection consumes a record-typed base: scalar, sequence, and poison
+// bases are rejected even when the pushed result type looks plausible.
+fn verify_top_proj_base(st: TDepth, t: TOpList, ty: SemType, base: SemType, rest: TyStack) -> (result: TDepth) {
+    return match base {
+        TNamed { start: ns, end: ne } => TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth, ok: true },
+        TBool => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TByte => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TInt { width: w, signed: g } => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TSeq => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TSeqExact { element: e, length: l, length_valid: v } => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TPoison => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }
     };
 }
 fn finish_verify_tops<N: Nat>(input: [byte; up_to N], st: TDepth, want: ExpTy) -> (result: bool) {
@@ -4307,6 +4320,11 @@ fn sabotage_finite_match_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool)
 }
 fn sabotage_construct_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
     let ops: TOpList = TOpList.PCons { head: TOp.TEnumConstruct { ty: SemType.TNamed { start: 0, end: 1 }, variant_start: 0, variant_end: 1, field_count: 1, params: BindList.BNil, start: 0, end: 1 }, tail: TOpList.PNil };
+    return verify_tops<N>(input, ops, ExpTy.XNone);
+}
+fn sabotage_proj_base<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
+    let ints: SemType = SemType.TInt { width: 64, signed: false };
+    let ops: TOpList = TOpList.PCons { head: TOp.TInt { value: 7, ty: ints, start: 0, end: 1 }, tail: TOpList.PCons { head: TOp.TProj { ty: ints, fstart: 0, fend: 1, field_index: 0, start: 0, end: 1 }, tail: TOpList.PNil } };
     return verify_tops<N>(input, ops, ExpTy.XNone);
 }
 fn sabotage_scalar_match_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
@@ -5423,7 +5441,7 @@ fn seed_proj_base(st: SemState, b: Expr, fs: u64, fe: u64, s: u64, e: u64, exp: 
 fn apply_proj<N: Nat>(input: [byte; up_to N], st: SemState, fs: u64, fe: u64, bs: u64, be: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let bty: SemType = st.last_ty;
     if is_poison(bty) {
-        return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end });
+        return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, field_index: 0, start: start, end: end });
     }
     return match bty {
         TNamed { start: ns, end: ne } => proj_named<N>(input, st, ns, ne, fs, fe, bs, be, start, end, exp),
@@ -5432,13 +5450,13 @@ fn apply_proj<N: Nat>(input: [byte; up_to N], st: SemState, fs: u64, fe: u64, bs
         TInt { width: w, signed: g } => sem_drain(sem_emit(st, 23, bs, be, 1)),
         TSeq => sem_drain(sem_emit(st, 23, bs, be, 1)),
         TSeqExact { element: element, length: length, length_valid: valid } => sem_drain(sem_emit(st, 23, bs, be, 1)),
-        TPoison => sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end })
+        TPoison => sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, field_index: 0, start: start, end: end })
     };
 }
 // Records resolve by exact name bytes over the collected table; fields
 // resolve by exact name bytes within the record, first declaration wins.
 record RecFind { rest: RecordList, ns: u64, ne: u64, found: bool, decl: RecordDecl }
-record FieldScan { rest: FieldList, fs: u64, fe: u64, found: bool, field: Field }
+record FieldScan { rest: FieldList, fs: u64, fe: u64, found: bool, field: Field, index: u64 }
 fn rec_lookup<N: Nat>(input: [byte; up_to N], rectab: RecordList, ns: u64, ne: u64) -> (result: RecFind) {
     iterate i over input carrying d: RecFind = RecFind { rest: rectab, ns: ns, ne: ne, found: false, decl: RecordDecl { ok: false, err_start: 0, err_end: 0, name_start: 0, name_end: 0, fields: FieldList.FNil, decl_start: 0, decl_end: 0, cursor: 0 } } {
         next d = rec_lookup_step<N>(input, d);
@@ -5459,7 +5477,7 @@ fn rec_lookup_cons<N: Nat>(input: [byte; up_to N], st: RecFind, h: RecordDecl, t
     return RecFind { rest: t, ns: st.ns, ne: st.ne, found: false, decl: st.decl };
 }
 fn field_scan<N: Nat>(input: [byte; up_to N], fields: FieldList, fs: u64, fe: u64) -> (result: FieldScan) {
-    iterate i over input carrying d: FieldScan = FieldScan { rest: fields, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 } } {
+    iterate i over input carrying d: FieldScan = FieldScan { rest: fields, fs: fs, fe: fe, found: false, field: Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 9 }, index: 0 } {
         next d = field_scan_step<N>(input, d);
     }
     return d;
@@ -5473,9 +5491,9 @@ fn field_scan_step<N: Nat>(input: [byte; up_to N], st: FieldScan) -> (result: Fi
 }
 fn field_scan_cons<N: Nat>(input: [byte; up_to N], st: FieldScan, h: Field, t: FieldList) -> (result: FieldScan) {
     if spans_equal<N>(input, h.name_start, h.name_end, st.fs, st.fe) {
-        return FieldScan { rest: FieldList.FNil, fs: st.fs, fe: st.fe, found: true, field: h };
+        return FieldScan { rest: FieldList.FNil, fs: st.fs, fe: st.fe, found: true, field: h, index: st.index };
     }
-    return FieldScan { rest: t, fs: st.fs, fe: st.fe, found: false, field: st.field };
+    return FieldScan { rest: t, fs: st.fs, fe: st.fe, found: false, field: st.field, index: st.index + 1 };
 }
 // Enum/variant resolution mirrors record/field resolution: exact name bytes
 // over the collected tables, first declaration wins.
@@ -5526,12 +5544,12 @@ fn proj_named<N: Nat>(input: [byte; up_to N], st: SemState, ns: u64, ne: u64, fs
     if !(fld.found) { return sem_drain(sem_emit(st, 22, fs, fe, 1)); }
     let fty: TyRes = resolve_type<N>(input, fld.field.type_kind, fld.field.type_start, fld.field.type_end, st.rectab, st.enumtab, st.nominals);
     if !(fty.ok) {
-        return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, start: start, end: end });
+        return sem_emit_top(sem_accept(st, SemType.TPoison), TOp.TProj { ty: SemType.TPoison, fstart: fs, fend: fe, field_index: 0, start: start, end: end });
     }
-    return finish_proj_exp<N>(input, st, fty.ty, fs, fe, start, end, exp);
+    return finish_proj_exp<N>(input, st, fty.ty, fs, fe, fld.index, start, end, exp);
 }
-fn finish_proj_exp<N: Nat>(input: [byte; up_to N], st: SemState, fty: SemType, fs: u64, fe: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
-    let top: TOp = TOp.TProj { ty: fty, fstart: fs, fend: fe, start: start, end: end };
+fn finish_proj_exp<N: Nat>(input: [byte; up_to N], st: SemState, fty: SemType, fs: u64, fe: u64, field_index: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let top: TOp = TOp.TProj { ty: fty, fstart: fs, fend: fe, field_index: field_index, start: start, end: end };
     return match exp {
         XNone => sem_emit_top(sem_accept(st, fty), top),
         XSome { ty: r } => finish_proj_req<N>(input, st, fty, top, r, start, end)

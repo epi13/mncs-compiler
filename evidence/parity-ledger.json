@@ -63,7 +63,7 @@
     {
       "area": "value-carrying SSA",
       "status": "bounded verified slice",
-      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, and arm result joins are verified against Stage-0 body/SSA facts.",
+      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, record field projection, heterogeneous-type match environments, and arm result joins are verified against Stage-0 body/SSA facts.",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
@@ -71,13 +71,13 @@
         "campaign-20261001-scalar-match-value-ssa.json"
       ],
       "limits": [
-        "Not full SSA parity; TProj record projection is the first unsupported value-SSA operation and unsupported operations fail the SSA report closed."
+        "Not full SSA parity; nested matches in arm position, host-intrinsic callees (CP-0019), and over-ceiling sources (CP-0001) remain out of scope, and unsupported operations fail the SSA report closed."
       ]
     },
     {
       "area": "SSA verifier",
       "status": "partial",
-      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default).",
+      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default). The projection slice adds six further corruption rejections (field index, identity invalid, identity mismatch, provenance, result type, forged base).",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
@@ -131,7 +131,7 @@
     {
       "area": "declaration and semantic proof",
       "status": "partial differential parity",
-      "claim": "Declaration structural/error-span (9 requests) and 103 semantic cases plus eight proof verdicts (111 requests) pass twice identically under retained Cranelift at the current pin.",
+      "claim": "Declaration structural/error-span (9 requests) and 103 semantic cases plus nine proof verdicts (111 requests) pass twice identically under retained Cranelift at the current pin.",
       "evidence": [
         "campaign-20261001-declaration-results.json",
         "campaign-20261001-semantic-results.json"

@@ -85,6 +85,33 @@ The highest-leverage next slice is `TProj` record-projection value SSA
 model pulled by real sources, and backend lowering for the verified
 switch/construct operations.
 
+## Record-projection value SSA and match-env fix (2026-10-01)
+
+On top of the scalar-match head:
+
+- `TProj` record projection now lowers to verified value SSA: proof
+  carries the declaration field index, `ssa.mncs` emits kind-8
+  instructions with declared-field, nominal-identity, and source
+  re-parse verification, and the suite covers five functions (including
+  projections in match arms and over let-bound records) plus six
+  corruption rejections with Stage-0 oracle agreement. The semantic
+  suite grows to nine proof verdicts.
+- Landing it exposed a latent shared bug (new CP-0020, resolved in the
+  same slice): match lowering reversed block-parameter environments,
+  misaligning arm-to-join edge arguments for heterogeneous-type envs.
+  The fix at the shared prepare step is covered by mixed-type
+  regressions in the finite/enum and scalar-match sections.
+- The full project/value-SSA suite repeats byte-identically
+  (`da46e431…`, 40 requests) across the local runner and the
+  Environment value-SSA obligation. Family campaign round 2 repeats
+  the round-1 stage classifications on all 9 slices; remaining real-
+  source blocks are the host-intrinsic callee model (CP-0019), nested
+  match parsing (CP-0011 instance), and the 1024-byte ceiling (CP-0001).
+
+The highest-leverage next slice is the CP-0019 host-intrinsic proof
+model pulled by real sources (`structured_write`, `structured_read`,
+`fs_entry_kind_at`), then backend lowering for the verified operations.
+
 ## Historical evidence-backed campaign state (2026-09-25)
 
 The lock pinned Rust Stage-0 revision

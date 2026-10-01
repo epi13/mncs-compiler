@@ -231,6 +231,7 @@ def run():
         probe = Probe()
         enum_probe = None
         scalar_probe = None
+        projection_probe = None
         try:
             execution_status = probe.send({"execution_status": True})
             if os.environ.get("MNCS_PROBE_BACKEND") == "cranelift":
@@ -889,7 +890,8 @@ def run():
                 "fn is_set(value: Flag) -> (r: bool) { return match value { Yes { set: bound } => bound, No => false }; } "
                 "fn ignore_set(value: Flag) -> (r: bool) { return match value { Yes { set: bound } => true, No => false }; } "
                 "fn pair_left(value: Pair) -> (r: u64) { return match value { P { left: left, right: _ } => left, Empty => 0 }; } "
-                "fn normalize(value: Flag) -> (r: Flag) { return match value { Yes { set: bound } => Flag.Yes { set: bound }, No => Flag.No }; }"
+                "fn normalize(value: Flag) -> (r: Flag) { return match value { Yes { set: bound } => Flag.Yes { set: bound }, No => Flag.No }; } "
+                "fn mixed_match(extra: u64, value: Flag) -> (r: u64) { return match value { Yes { set: _ } => extra, No => 0 }; }"
             )
             for path in project_root.glob("*.mncs"):
                 path.unlink()
@@ -901,7 +903,7 @@ def run():
             match_ssa = match_module["value_ssa"]
             assert match_native["valid"] is True, match_native["diagnostics"]
             assert match_native["value_ssa_valid"] is True, match_ssa
-            assert match_ssa["valid"] is True and match_ssa["verified_function_count"] == 4, match_ssa
+            assert match_ssa["valid"] is True and match_ssa["verified_function_count"] == 5, match_ssa
             match_oracle = probe.send({"project_oracle": {"root": match_source, "modules": {}}})
             assert match_oracle["valid"] is True, match_oracle
             match_functions = flist(match_ssa["functions"])
@@ -921,7 +923,7 @@ def run():
                 if block["terminator"]["$v"] == 4
             ]
             enum_switches = [block["terminator"]["$p"] for _, block in enum_switch_blocks]
-            assert len(enum_switches) == 4, enum_switches
+            assert len(enum_switches) == 5, enum_switches
             assert all(item["arm_count"] == 2 and len(flist(item["cases"])) == 2 for item in enum_switches)
             payload_instructions = [
                 instruction for function in enum_functions
@@ -1071,7 +1073,7 @@ def run():
                 "sequence_repeat_instructions": len(repeat_instructions),
                 "finite_match_switches": len(enum_switches),
                 "payload_extractions": len(payload_instructions),
-                "covered": ["zero payload", "zero payload with braces", "one payload", "multiple ordered fields", "nested nominal payload", "exact sequence repeat", "finite match payload binding", "wildcard payload binding", "unused payload binding", "arm result joins", "constructor inside match arm"],
+                "covered": ["zero payload", "zero payload with braces", "one payload", "multiple ordered fields", "nested nominal payload", "exact sequence repeat", "finite match payload binding", "wildcard payload binding", "unused payload binding", "arm result joins", "constructor inside match arm", "heterogeneous-type env across match edges"],
                 "corruption_rejections": ["invalid enum identity", "unknown variant", "arity", "payload type", "finite match variant", "join target", "edge value", "payload declared type", "repeat count", "repeat operand type"],
             }
             enum_construction_case["requests"] = enum_probe.requests
@@ -1088,7 +1090,8 @@ def run():
                 "fn negated(value: i64) -> (r: i64) { return match value { -5 => 1, 0 => 0, _ => 2 }; } "
                 "fn flag(value: u64) -> (r: bool) { return match value { 7 => true, _ => false }; } "
                 "fn doubled(value: u64) -> (r: u64) { let twice: u64 = value + value; return match twice { 2 => 200, _ => twice }; } "
-                "fn called(value: u64) -> (r: u64) { return match value { 3 => classify(value), _ => 0 }; }"
+                "fn called(value: u64) -> (r: u64) { return match value { 3 => classify(value), _ => 0 }; } "
+                "fn mixed_count(value: u64, flag: bool) -> (r: u64) { return match value { 0 => 10, _ => 20 }; }"
             )
             assert len(scalar_source.encode()) <= 1024, len(scalar_source.encode())
             scalar_probe = Probe()
@@ -1102,7 +1105,7 @@ def run():
             scalar_ssa = scalar_module["value_ssa"]
             assert scalar_native["valid"] is True, scalar_native["diagnostics"]
             assert scalar_native["value_ssa_valid"] is True, scalar_ssa
-            assert scalar_ssa["valid"] is True and scalar_ssa["verified_function_count"] == 5, scalar_ssa
+            assert scalar_ssa["valid"] is True and scalar_ssa["verified_function_count"] == 6, scalar_ssa
             scalar_oracle = probe.send({"project_oracle": {"root": scalar_source, "modules": {}}})
             assert scalar_oracle["valid"] is True, scalar_oracle
             scalar_functions = flist(scalar_ssa["functions"])
@@ -1112,7 +1115,7 @@ def run():
                 if block["terminator"]["$v"] == 5
             ]
             scalar_switches = [block["terminator"]["$p"] for _, block in scalar_switch_blocks]
-            assert len(scalar_switches) == 5, scalar_switches
+            assert len(scalar_switches) == 6, scalar_switches
             assert all(len(flist(item["cases"])) == item["arm_count"] for item in scalar_switches)
             for item in scalar_switches:
                 cases = flist(item["cases"])
@@ -1177,13 +1180,139 @@ def run():
                 "stage0_project_valid": scalar_oracle["valid"],
                 "verified_functions": scalar_ssa["verified_function_count"],
                 "scalar_match_switches": len(scalar_switches),
-                "covered": ["multi-pattern u64 match", "negative i64 pattern", "bool result", "let-bound subject referenced in arm", "call inside arm", "arm result joins"],
+                "covered": ["multi-pattern u64 match", "negative i64 pattern", "bool result", "let-bound subject referenced in arm", "call inside arm", "arm result joins", "heterogeneous-type env across match edges"],
                 "corruption_rejections": ["duplicate pattern", "default target", "edge value", "missing default"],
             }
             scalar_match_case["requests"] = scalar_probe.requests
             scalar_match_case["result_sha256"] = scalar_probe.digest.hexdigest()
             scalar_match_case["native_execution_steps_total"] = sum(scalar_probe.steps)
             scalar_probe.close()
+
+            # Record field projections lower to verified SSA instructions
+            # with declared-field, identity, and provenance checks.
+            projection_source = (
+                "mncs 0.18; module demo.projection; "
+                "record Point { x: u64, y: u64 } "
+                "record Wrap { flag: bool, point: Point } "
+                "fn get_x(p: Point) -> (r: u64) { return p.x; } "
+                "fn get_y(p: Point) -> (r: u64) { return p.y; } "
+                "fn get_flag(w: Wrap) -> (r: bool) { return w.flag; } "
+                "fn nested(w: Wrap) -> (r: u64) { let inner: Point = w.point; return inner.y; } "
+                "fn in_match(p: Point, c: u64) -> (r: u64) { return match c { 0 => p.x, _ => p.y }; }"
+            )
+            assert len(projection_source.encode()) <= 1024, len(projection_source.encode())
+            projection_probe = Probe()
+            for path in project_root.glob("*.mncs"):
+                path.unlink()
+            (project_root / "a-projection.mncs").write_text(projection_source)
+            projection_native = projection_probe.native(request_value(identities, discover_sources(project_root)))
+            projection_wire_project = copy.deepcopy(projection_probe.last_response["returned"][0])
+            projection_modules = flist(projection_native["modules"])
+            projection_module = next(module for module in projection_modules if module["source_index"] == 0)
+            projection_ssa = projection_module["value_ssa"]
+            assert projection_native["valid"] is True, projection_native["diagnostics"]
+            assert projection_native["value_ssa_valid"] is True, projection_ssa
+            assert projection_ssa["valid"] is True and projection_ssa["verified_function_count"] == 5, projection_ssa
+            projection_oracle = probe.send({"project_oracle": {"root": projection_source, "modules": {}}})
+            assert projection_oracle["valid"] is True, projection_oracle
+            projection_functions = flist(projection_ssa["functions"])
+
+            def projection_instructions(function_name):
+                function = next(item for item in projection_functions
+                                if identity_text(item["identity"]).endswith(f"::{function_name}"))
+                return [instruction for block in flist(function["blocks"])
+                        for instruction in flist(block["instructions"])
+                        if instruction["kind"] == 8]
+
+            projection_operators = {
+                name: [instruction["operator"] for instruction in projection_instructions(name)]
+                for name in ("get_x", "get_y", "get_flag", "nested", "in_match")
+            }
+            assert projection_operators == {
+                "get_x": [0], "get_y": [1], "get_flag": [0],
+                "nested": [1, 1], "in_match": [0, 1],
+            }, projection_operators
+
+            projection_wire_modules = wire_flist(wire_field(projection_wire_project, "modules"))
+            projection_wire_module = next(module for module in projection_wire_modules
+                                          if wire_number(wire_field(module, "source_index")) == 0)
+            projection_wire_ssa = wire_field(projection_wire_module, "value_ssa")
+            projection_wire_functions = wire_flist(wire_field(projection_wire_ssa, "functions"))
+
+            def projection_rejected(name, source_function, mutate):
+                candidate = copy.deepcopy(next(
+                    function for function in projection_wire_functions
+                    if identity_text(decode(wire_field(function, "identity"))).endswith(f"::{source_function}")
+                ))
+                mutate(candidate)
+                accepted = verify_ssa_function(projection_probe, projection_source, candidate)
+                assert accepted is False, {"case": name, "accepted": accepted}
+
+            def project_instruction(function):
+                return next(inst for block in wire_flist(wire_field(function, "blocks"))
+                            for inst in wire_flist(wire_field(block, "instructions"))
+                            if wire_number(wire_field(inst, "kind")) == 8)
+
+            def mutate_project_index(function):
+                set_wire_field(project_instruction(function), "operator",
+                               {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            def mutate_project_identity_invalid(function):
+                identity = wire_field(project_instruction(function), "nominal_identity")
+                set_wire_field(identity, "valid", {"boolean": {"value": False}})
+
+            def mutate_project_identity_mismatch(function):
+                instructions = [inst for block in wire_flist(wire_field(function, "blocks"))
+                                for inst in wire_flist(wire_field(block, "instructions"))
+                                if wire_number(wire_field(inst, "kind")) == 8]
+                assert len(instructions) == 2, len(instructions)
+                first = copy.deepcopy(wire_field(instructions[0], "nominal_identity"))
+                set_wire_field(instructions[0], "nominal_identity",
+                               copy.deepcopy(wire_field(instructions[1], "nominal_identity")))
+                set_wire_field(instructions[1], "nominal_identity", first)
+
+            def mutate_project_provenance(function):
+                instruction = project_instruction(function)
+                end = wire_number(wire_field(instruction, "binding_end"))
+                set_wire_field(instruction, "binding_end",
+                               {"integer": {"type": {"bits": 64, "signed": False}, "value": end + 1}})
+
+            def mutate_project_result_type(function):
+                instruction = project_instruction(function)
+                base_ref = wire_flist(wire_field(instruction, "inputs"))[0]
+                base_value = next(value for value in wire_flist(wire_field(function, "values"))
+                                  if wire_number(wire_field(value, "id")) == wire_number(wire_field(base_ref, "value")))
+                record_type = copy.deepcopy(wire_field(base_value, "ty"))
+                set_wire_field(instruction, "ty", record_type)
+                result_id = wire_number(wire_field(instruction, "result"))
+                result_value = next(value for value in wire_flist(wire_field(function, "values"))
+                                    if wire_number(wire_field(value, "id")) == result_id)
+                set_wire_field(result_value, "ty", copy.deepcopy(record_type))
+
+            def mutate_project_base(function):
+                instruction = project_instruction(function)
+                first_input = wire_flist(wire_field(instruction, "inputs"))[0]
+                set_wire_field(first_input, "value", {"integer": {"type": {"bits": 64, "signed": False}, "value": 999}})
+
+            projection_rejected("project_index", "get_x", mutate_project_index)
+            projection_rejected("project_identity_invalid", "get_x", mutate_project_identity_invalid)
+            projection_rejected("project_identity_mismatch", "nested", mutate_project_identity_mismatch)
+            projection_rejected("project_provenance", "get_y", mutate_project_provenance)
+            projection_rejected("project_result_type", "get_flag", mutate_project_result_type)
+            projection_rejected("project_base", "get_x", mutate_project_base)
+            projection_case = {
+                "native_project_valid": projection_native["valid"],
+                "native_value_ssa_valid": projection_native["value_ssa_valid"],
+                "stage0_project_valid": projection_oracle["valid"],
+                "verified_functions": projection_ssa["verified_function_count"],
+                "projection_operators": projection_operators,
+                "covered": ["first/second field index", "bool field", "record-typed field", "let-bound record", "projection in match arms"],
+                "corruption_rejections": ["index", "identity invalid", "identity mismatch", "provenance", "result type", "base"],
+            }
+            projection_case["requests"] = projection_probe.requests
+            projection_case["result_sha256"] = projection_probe.digest.hexdigest()
+            projection_case["native_execution_steps_total"] = sum(projection_probe.steps)
+            projection_probe.close()
 
             # Native project resolution follows transitive `use` edges in the
             # same source snapshot, even when the filesystem walk created the
@@ -1245,6 +1374,7 @@ def run():
                 },
                 "enum_construction_value_ssa": enum_construction_case,
                 "scalar_match_value_ssa": scalar_match_case,
+                "projection_value_ssa": projection_case,
                 "deterministic_repetitions": 2,
             }
         finally:
@@ -1252,6 +1382,8 @@ def run():
                 enum_probe.close()
             if scalar_probe is not None:
                 scalar_probe.close()
+            if projection_probe is not None:
+                projection_probe.close()
             probe.close()
 
 

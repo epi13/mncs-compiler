@@ -1,0 +1,370 @@
+{
+  "schema_version": 1,
+  "campaign_id": "20261001",
+  "compiler_revision": "b326721280107a475dee5fef1a0cca952f607556",
+  "compiler_dirty": true,
+  "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
+  "source_profile": "0.18",
+  "source_revisions": {
+    "mncs-doctor": {
+      "revision": "d48256d9412a7c181060375fcff971f157a9cf8b",
+      "dirty": false
+    },
+    "mncs-language": {
+      "revision": "425de2016a1273b66fa44609ea75aa25e04f0a0f",
+      "dirty": false
+    },
+    "mncs-cli": {
+      "revision": "defdf1ac7f64e84f455741965e3a75f5ae4913ce",
+      "dirty": false
+    }
+  },
+  "probe_requests": 18,
+  "probe_steps_total": 8,
+  "slices": [
+    {
+      "file_report": {
+        "fixtures/repos/healthy/src/lib.mncs": {
+          "bytes": 80,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.012,
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "native_diagnostics": [],
+      "stage": "native-full-slice-ok",
+      "detail": {
+        "modules": [
+          {
+            "source_index": 0,
+            "valid": true,
+            "verified": 1,
+            "first_unsupported_kind": 0,
+            "first_unsupported_block": 0
+          }
+        ]
+      },
+      "stage0_oracle_valid": true,
+      "stage0_oracle_diagnostics": [],
+      "slice": "doctor-healthy-lib",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-doctor"
+    },
+    {
+      "file_report": {
+        "fixtures/repos/healthy/src/lib.mncs": {
+          "bytes": 80,
+          "modified": false,
+          "repo_dirty": false
+        },
+        "fixtures/repos/healthy/src/main.mncs": {
+          "bytes": 106,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.017,
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "native_diagnostics": [
+        {
+          "kind": "ProofFailed",
+          "payload": {
+            "end": 100,
+            "source_index": 1,
+            "start": 90
+          }
+        }
+      ],
+      "stage": "native-ProofFailed",
+      "detail": {
+        "end": 100,
+        "source_index": 1,
+        "start": 90
+      },
+      "stage0_oracle_valid": false,
+      "stage0_oracle_diagnostics": [
+        {
+          "code": "MNE131",
+          "expected": [],
+          "found": null,
+          "message": "call target does not resolve to a function in this module",
+          "severity": "error",
+          "span": {
+            "column": 12,
+            "end": 100,
+            "line": 7,
+            "start": 90
+          },
+          "stage": "elaboration"
+        }
+      ],
+      "slice": "doctor-healthy-pair-bare-use",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-doctor"
+    },
+    {
+      "file_report": {
+        "fixtures/repos/healthy/src/lib.mncs": {
+          "bytes": 80,
+          "modified": true,
+          "repo_dirty": false
+        },
+        "fixtures/repos/healthy/src/main.mncs": {
+          "bytes": 106,
+          "modified": true,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.028,
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "native_diagnostics": [],
+      "stage": "native-full-slice-ok",
+      "detail": {
+        "modules": [
+          {
+            "source_index": 0,
+            "valid": true,
+            "verified": 1,
+            "first_unsupported_kind": 0,
+            "first_unsupported_block": 0
+          },
+          {
+            "source_index": 1,
+            "valid": true,
+            "verified": 1,
+            "first_unsupported_kind": 0,
+            "first_unsupported_block": 0
+          }
+        ]
+      },
+      "stage0_oracle_valid": true,
+      "stage0_oracle_diagnostics": [],
+      "slice": "doctor-018-alias-pair",
+      "classification": "minimally-adapted-real-source",
+      "repo": "mncs-doctor",
+      "adapt": {
+        "fixtures/repos/healthy/src/lib.mncs": [
+          {
+            "find": "mncs 0.17;",
+            "replace": "mncs 0.18;"
+          }
+        ],
+        "fixtures/repos/healthy/src/main.mncs": [
+          {
+            "find": "mncs 0.17;",
+            "replace": "mncs 0.18;"
+          },
+          {
+            "find": "use healthy.lib;",
+            "replace": "use healthy.lib as lib;"
+          }
+        ]
+      }
+    },
+    {
+      "file_report": {
+        "examples/source/structured-artifact.mncs": {
+          "bytes": 632,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.051,
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "native_diagnostics": [
+        {
+          "kind": "ProofFailed",
+          "payload": {
+            "end": 394,
+            "source_index": 0,
+            "start": 378
+          }
+        }
+      ],
+      "stage": "native-ProofFailed",
+      "detail": {
+        "end": 394,
+        "source_index": 0,
+        "start": 378
+      },
+      "stage0_oracle_valid": true,
+      "stage0_oracle_diagnostics": [],
+      "slice": "lang-structured-artifact",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-language"
+    },
+    {
+      "file_report": {
+        "examples/source/fs-metadata.mncs": {
+          "bytes": 708,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.043,
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "native_diagnostics": [
+        {
+          "kind": "ProofFailed",
+          "payload": {
+            "end": 399,
+            "source_index": 0,
+            "start": 383
+          }
+        }
+      ],
+      "stage": "native-ProofFailed",
+      "detail": {
+        "end": 399,
+        "source_index": 0,
+        "start": 383
+      },
+      "stage0_oracle_valid": true,
+      "stage0_oracle_diagnostics": [],
+      "slice": "lang-fs-metadata",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-language"
+    },
+    {
+      "file_report": {
+        "examples/source/cre1-evidence-combine.mncs": {
+          "bytes": 708,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.009,
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "native_diagnostics": [
+        {
+          "kind": "ParseFailed",
+          "payload": {
+            "end": 313,
+            "source_index": 0,
+            "start": 313
+          }
+        }
+      ],
+      "stage": "native-ParseFailed",
+      "detail": {
+        "end": 313,
+        "source_index": 0,
+        "start": 313
+      },
+      "stage0_oracle_valid": true,
+      "stage0_oracle_diagnostics": [],
+      "slice": "lang-cre1-combine",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-language"
+    },
+    {
+      "file_report": {
+        "examples/source/cre1-non-exhaustive.mncs": {
+          "bytes": 293,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.013,
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "native_diagnostics": [
+        {
+          "kind": "ProofFailed",
+          "payload": {
+            "end": 290,
+            "source_index": 0,
+            "start": 208
+          }
+        }
+      ],
+      "stage": "native-ProofFailed",
+      "detail": {
+        "end": 290,
+        "source_index": 0,
+        "start": 208
+      },
+      "stage0_oracle_valid": false,
+      "stage0_oracle_diagnostics": [
+        {
+          "code": "MNE140",
+          "expected": [],
+          "found": null,
+          "message": "non-exhaustive match; missing variants: UNKNOWN",
+          "severity": "error",
+          "span": {
+            "column": 12,
+            "end": 290,
+            "line": 9,
+            "start": 208
+          },
+          "stage": "elaboration"
+        }
+      ],
+      "slice": "lang-cre1-non-exhaustive",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-language"
+    },
+    {
+      "file_report": {
+        "src/cli/outcome.mncs": {
+          "bytes": 4364,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "elapsed_seconds": 0.013,
+      "native_valid": null,
+      "native_value_ssa_valid": null,
+      "stage": "transport-capacity",
+      "detail": {
+        "status": "invalid_request",
+        "failure": {
+          "identity": "mncs:compiler:backend-artifact:c1c559ad76641ba0555a8a45987b4fe75e48b44da180806f7946763d3ef53ea5",
+          "reason": "MNCS_VALUE_CONTRACT argument 1[0]: view length exceeds capacity: capacity 1024, received 4364"
+        }
+      },
+      "stage0_oracle_valid": null,
+      "stage0_oracle_diagnostics": null,
+      "slice": "cli-outcome",
+      "classification": "unmodified-real-source",
+      "repo": "mncs-cli"
+    },
+    {
+      "file_report": {
+        "<inline>": {
+          "bytes": 79,
+          "modified": false
+        }
+      },
+      "elapsed_seconds": 0.013,
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "native_diagnostics": [],
+      "stage": "native-full-slice-ok",
+      "detail": {
+        "modules": [
+          {
+            "source_index": 0,
+            "valid": true,
+            "verified": 1,
+            "first_unsupported_kind": 0,
+            "first_unsupported_block": 0
+          }
+        ]
+      },
+      "stage0_oracle_valid": true,
+      "stage0_oracle_diagnostics": [],
+      "slice": "next-proj-boundary",
+      "classification": "synthetic-fixture",
+      "repo": null
+    }
+  ]
+}

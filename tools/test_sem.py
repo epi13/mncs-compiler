@@ -400,7 +400,8 @@ class Probe:
             for function in ['prove_unit', 'sabotage_depth', 'sabotage_call_arity',
                              'sabotage_bin_mismatch', 'sabotage_final_type',
                              'sabotage_finite_match_arity', 'sabotage_construct_arity',
-                             'sabotage_scalar_match_arity', 'sound_sample']
+                             'sabotage_scalar_match_arity', 'sabotage_proj_base',
+                             'sound_sample']
         ])
         self.proc = subprocess.Popen(
             [env.get('MNCS_PROBE_BIN', str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
@@ -474,6 +475,7 @@ def suite():
         assert probe.run('decl', 'sabotage_finite_match_arity', args) is False
         assert probe.run('decl', 'sabotage_construct_arity', args) is False
         assert probe.run('decl', 'sabotage_scalar_match_arity', args) is False
+        assert probe.run('decl', 'sabotage_proj_base', args) is False
         assert probe.run('decl', 'sound_sample', args) is True
         return {'requests': probe.count, 'cases': len(CASES),
                 'result_sha256': probe.digest.hexdigest(),
@@ -497,4 +499,4 @@ if __name__ == '__main__':
               'scope': 'decl.prove_unit FAIL-obligation differential vs Stage-0 diagnostics; UNKNOWN obligations never surface; sabotage/soundness verdicts'}
     Path('.build').mkdir(exist_ok=True)
     Path('.build/sem-results.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(f"{len(CASES)} semantic cases + 8 proof verdicts passed twice identically.")
+    print(f"{len(CASES)} semantic cases + 9 proof verdicts passed twice identically.")

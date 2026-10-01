@@ -54,6 +54,18 @@ compiled real sources natively with two full-slice successes, two exact
 differential agreements, and three classified gaps (new CP-0018/CP-0019
 plus a CP-0011 instance).
 
+The record-projection slice lands next: `TProj` lowers to verified SSA
+(5 functions, 7 project instructions, 6 corruption rejections) with a
+byte-identical repeated digest (`da46e431…`) across the local and
+Environment-obligation runners; see the updated
+`campaign-20261001-project-results.json`. Landing it exposed and fixed a
+latent shared bug (new CP-0020, resolved): match lowering reversed
+block-parameter environments, misaligning arm-to-join edges for
+heterogeneous-type envs. Finite/enum and scalar-match sections each gain
+a mixed-type regression. Family campaign round 2
+(`campaign-20261001-family-results.json`) repeats the round-1 stage
+classifications on all 9 slices.
+
 The 2026-09-26 and 2026-09-25 campaigns below are historical; their recorded
 pins and timings are preserved as measured.
 

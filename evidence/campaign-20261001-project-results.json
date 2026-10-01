@@ -3,7 +3,7 @@
   "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
   "stage0_reference_mode": "locked",
   "source_profile": "0.18",
-  "elapsed_seconds": 775.098,
+  "elapsed_seconds": 1009.099,
   "scope": "ordered current-profile project snapshot, native module/import/member resolution, canonical callable identity, scalar imported-signature proof, and verified value SSA; a multi-module imported call crosses a control-flow merge and is compared with locked Rust Stage-0 body/SSA facts",
   "imported_signature_scope": {
     "supported": "scalar, effect-free imported callable signatures with argument/result proof and compiler-emitted canonical Stage-0 callable identity",
@@ -16,8 +16,8 @@
     "authenticated": false,
     "authority": "host-supplied advisory metadata; native validity does not depend on an unchecked digest"
   },
-  "requests": 39,
-  "result_sha256": "a3c5a13f2e7e94bb6be23f235fee0eb7d5529b8b8ca50c8332e17ecb2224d132",
+  "requests": 40,
+  "result_sha256": "da46e431dfda75f0bf0d2ea54f59fc654401c11c6e469684544ab644f865ea4a",
   "native_execution_steps_total": 23,
   "native_execution_steps_max": 1,
   "execution_mode": "retained_cranelift",
@@ -269,10 +269,10 @@
     "native_project_valid": true,
     "native_value_ssa_valid": true,
     "stage0_project_valid": true,
-    "verified_functions": 10,
+    "verified_functions": 11,
     "enum_constructor_instructions": 7,
     "sequence_repeat_instructions": 1,
-    "finite_match_switches": 4,
+    "finite_match_switches": 5,
     "payload_extractions": 4,
     "covered": [
       "zero payload",
@@ -285,7 +285,8 @@
       "wildcard payload binding",
       "unused payload binding",
       "arm result joins",
-      "constructor inside match arm"
+      "constructor inside match arm",
+      "heterogeneous-type env across match edges"
     ],
     "corruption_rejections": [
       "invalid enum identity",
@@ -300,22 +301,23 @@
       "repeat operand type"
     ],
     "requests": 12,
-    "result_sha256": "3977432c1c1f08b049c9e69b1c9e0bfba7dddee0b87d0e442b6fc70b7093abcf",
+    "result_sha256": "b35f286e6bb117481e6795ac3a104ada372db49850ab0d59a61d757d3ef67662",
     "native_execution_steps_total": 12
   },
   "scalar_match_value_ssa": {
     "native_project_valid": true,
     "native_value_ssa_valid": true,
     "stage0_project_valid": true,
-    "verified_functions": 5,
-    "scalar_match_switches": 5,
+    "verified_functions": 6,
+    "scalar_match_switches": 6,
     "covered": [
       "multi-pattern u64 match",
       "negative i64 pattern",
       "bool result",
       "let-bound subject referenced in arm",
       "call inside arm",
-      "arm result joins"
+      "arm result joins",
+      "heterogeneous-type env across match edges"
     ],
     "corruption_rejections": [
       "duplicate pattern",
@@ -324,8 +326,51 @@
       "missing default"
     ],
     "requests": 5,
-    "result_sha256": "fb446b65cef89e804deafb7dd49d0cab379957c7be746fb417f49c04be079181",
+    "result_sha256": "7df8d9a4bc769f54c798673b9b1035740d628e69d0a0e5b991a1fa89cd38e228",
     "native_execution_steps_total": 5
+  },
+  "projection_value_ssa": {
+    "native_project_valid": true,
+    "native_value_ssa_valid": true,
+    "stage0_project_valid": true,
+    "verified_functions": 5,
+    "projection_operators": {
+      "get_x": [
+        0
+      ],
+      "get_y": [
+        1
+      ],
+      "get_flag": [
+        0
+      ],
+      "nested": [
+        1,
+        1
+      ],
+      "in_match": [
+        0,
+        1
+      ]
+    },
+    "covered": [
+      "first/second field index",
+      "bool field",
+      "record-typed field",
+      "let-bound record",
+      "projection in match arms"
+    ],
+    "corruption_rejections": [
+      "index",
+      "identity invalid",
+      "identity mismatch",
+      "provenance",
+      "result type",
+      "base"
+    ],
+    "requests": 7,
+    "result_sha256": "fbab8fd16d0f08be002bce0f9a7216f14b4e6dc7577d92c2354f7140f1735042",
+    "native_execution_steps_total": 7
   },
   "deterministic_repetitions": 2
 }
