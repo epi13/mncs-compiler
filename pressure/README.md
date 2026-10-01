@@ -6,16 +6,15 @@ backend, tooling, and language separately, then reproduce it at the authority
 that owns the behavior. Preserve each original reproducer and history; use the
 current reconciliation below for live status.
 
-Current locked Stage-0 CLI/bootstrap reference: `4f9e1224e7f3cdb67fa4687d8f496717da1354aa`,
-profile 0.18. The compiler semantic pressure/differential suites were run at
-`b0f3e6447dbdefb5cd9fceeb43da2ab1909a7e70`; the Rust compiler/model/syntax/codegen
-libraries are unchanged between those pins. Their result files retain the exact
-revision. The campaign also preserves the earlier 709ba008 results as historical evidence. Current pressure probes are in
-[`../evidence/campaign-20260925-pressure-reconciliation.json`](../evidence/campaign-20260925-pressure-reconciliation.json),
+Current locked Stage-0 CLI/bootstrap reference: `a3ac17df69e68f6373cbff336db0a572667d73da`,
+profile 0.18. Earlier pins named below (`4f9e122`, `b0f3e64`, `709ba008`,
+`843c5bc`) are preserved as historical evidence with their original
+measurements. Current pressure probes are in
+[`../evidence/campaign-20261001-pressure-suite-results.json`](../evidence/campaign-20261001-pressure-suite-results.json),
 and current native syntax results are in
-[`../evidence/campaign-20260925-profile-surface-results.json`](../evidence/campaign-20260925-profile-surface-results.json).
+[`../evidence/campaign-20261001-profile-surface-results.json`](../evidence/campaign-20261001-profile-surface-results.json).
 
-## Current reconciliation (2026-09-26)
+## Current reconciliation (2026-10-01)
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
@@ -25,17 +24,19 @@ and current native syntax results are in
 | [CP-0004 boolean comparisons](0004-boolean-comparison.md) | Resolved | Current Stage-0 accepts boolean equality and negation. Native parser support for current syntax is tracked by CP-0015. |
 | [CP-0005 test transport](0005-test-transport.md) | Open, reduced | The cached retained-session probe avoids rebuilding sessions, but Python/Rust still transports test requests and oracle facts. Tooling boundary. |
 | [CP-0006 envelope inference](0006-envelope-profile-inference.md) | Open | Leading-comment profile probe still produces MNE002. Stage-0 envelope/tooling behavior. |
-| [CP-0007 bootstrap evidence cost](0007-bootstrap-evidence-cost.md) | Re-measured; unresolved obligations remain | Release-mode linked kernel compile repeats byte-identically in 1.099/1.128 seconds; semantic/HIR/SSA files total 6,799,549 bytes, with 213 CMP301 obligations. An earlier same-pin timing of 10.792/10.848 seconds is retained, with executable mode unknown. Neither measurement establishes native cost or peak memory. |
+| [CP-0007 bootstrap evidence cost](0007-bootstrap-evidence-cost.md) | Re-measured; unresolved obligations remain | Release-mode linked kernel compile repeats byte-identically in 1.090/1.088 seconds at the current pin, with 221 CMP301 obligations. Earlier same-shape timings are retained as historical. No measurement establishes native cost or peak memory. |
 | [CP-0008 finite payload visibility](0008-finite-payload-visibility.md) | Resolved | Current producer and imported consumer fixtures both elaborate. The original backend/source-level authority is Stage-0; it does not imply a native compiler module resolver. |
 | [CP-0009 iteration fuel chaining](0009-iteration-fuel-chaining.md) | Resolved for tested cases | Current profile accepts a counted bound of 256 and repeated iteration identities. The compiler still uses its explicit bounded scans. |
-| [CP-0010 scalar match dispatch](0010-scalar-match-dispatch.md) | Resolved | Current Stage-0 accepts the total integer-match fixture. Native compiler parsing of that Profile 0.18 form remains blocked by CP-0015. |
+| [CP-0010 scalar match dispatch](0010-scalar-match-dispatch.md) | Resolved | Current Stage-0 accepts the total integer-match fixture. Native parse/proof/verified-SSA now cover integer scalar match (5 verified functions, 4 corruption rejections); see the project/value-SSA evidence. |
 | [CP-0011 acyclic-call machines](0011-acyclic-calls-machines.md) | Partial; current scope narrowed | The structural recursive AST/function fixture passes. Numeric self-recursion and mutual recursion still fail with MNE130; explicit current-profile probes are in `pressure-current-results.json`. |
 | [CP-0012 payload sequence ban](0012-payload-sequence-ban.md) | Resolved | Current Stage-0 accepts the finite sequence payload fixture. |
 | [CP-0013 keyword field `next`](0013-keyword-field-next.md) | Resolved | Current Stage-0 and native `decl.parse_unit`/`decl.prove_unit` accept the field and projection under Profile 0.18. |
-| [CP-0014 bool payload regression](0014-bool-payload-regression.md) | Resolved upstream | Current Stage-0 accepts the bool-payload fixture; regression evidence and language fix are linked in the finding. |
-| [CP-0015 version-aware frontend](0015-version-aware-frontend.md) | Partially resolved | Rust accepts all five tested Profile 0.18 syntax examples. Native parsing and proof now accept `next` fields/projections; `!`, negative atoms, repeat literals, and integer `match` still fail. Compiler architecture. |
+| [CP-0014 bool payload regression](0014-bool-payload-regression.md) | Resolved upstream and natively covered | Current Stage-0 accepts the bool-payload fixture; native parse/proof/verified-SSA cover finite matches and enum construction (10 verified functions, 10 corruption rejections). Backend lowering remains open. |
+| [CP-0015 version-aware frontend](0015-version-aware-frontend.md) | Resolved for tested forms | All 21 Profile 0.18 differential cases conform: native parsing and proof accept `!`, negative atoms, repeat literals, `next`, and integer `match` with matching Stage-0 diagnostics. Broader grammar remains bounded. |
 | [CP-0016 linked record call validation](0016-linked-record-call-validation.md) | Resolved upstream | The exact compiler-origin call now returns after a generic language runtime fix for nested nominal payload validation. |
-| [CP-0017 poisoned-result semantic recovery](0017-semantic-poison-recovery.md) | Resolved in compiler; full semantic twin passes | Both operand orders and the 49-case semantic suite match current Rust diagnostics, including ordered codes/spans, with identical repeated native results on the retained backend. |
+| [CP-0017 poisoned-result semantic recovery](0017-semantic-poison-recovery.md) | Resolved in compiler; full semantic twin passes | Both operand orders and the 103-case semantic suite plus eight proof verdicts match current Rust diagnostics, including ordered codes/spans, with identical repeated native results on the retained backend. |
+| [CP-0018 verified native-SSA arithmetic](0018-verified-native-ssa-arithmetic.md) | Open | Main's proof-bound C11 adapter (`mncs.native-scalar-ssa/1`) admits only Constant/Call; no integer arithmetic. Backend ownership. Blocks migration off the unattested structural projection. |
+| [CP-0019 host-intrinsic callee model](0019-host-intrinsic-callee-model.md) | Open | Native proof reports kind 32 for effect-authorized host-intrinsic calls that Stage-0 accepts. Compiler-architecture ownership. Blocks real family modules at proof. |
 
 ## Operating sequence
 

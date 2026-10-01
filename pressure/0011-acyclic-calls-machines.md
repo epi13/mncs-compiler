@@ -162,3 +162,18 @@ change.
 ## Current reconciliation (2026-09-25)
 
 At profile 0.18 current Stage-0 accepts the recursive enum/tree `depth` reproduction, but rejects numeric self-recursion and mutual `even`/`odd` calls with MNE130. The latter two probes were added to `tools/revalidate_pressures.py`.
+
+## Nested match expressions (2026-10-01)
+
+The family campaign pulled a concrete instance: real source nests a
+`match` as a match-arm result
+(`mncs-language/examples/source/cre1-evidence-combine.mncs`, inner match
+at offset 313), which locked Stage-0 accepts but native parse rejects.
+Match-arm results parse through `parse_expr_base`, which deliberately
+disables nested match dispatch to keep the parser call graph acyclic
+(`prefix_match` → arm parse → full `parse_expr` would cycle). Closing
+this needs the match parser converted to an explicit-stack machine in
+the established style — the same treatment the expression, block, and
+proof machines already carry — not a recursion exemption. No new
+pressure identity: this is CP-0011's remaining parser instance with a
+real faithful reproducer.

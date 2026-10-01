@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "campaign_date": "2026-10-01",
+  "compiler_revision": "post-e055ddf working tree with the scalar-match value-SSA slice",
+  "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
+  "driver": "throwaway transport in /tmp/mncs-family-campaign/driver.py feeding real files through native compile_project plus the locked project oracle; no compiler semantics in the driver",
+  "slices": [
+    {
+      "slice": "doctor-healthy-lib",
+      "files": ["mncs-doctor/fixtures/repos/healthy/src/lib.mncs"],
+      "bytes": 80,
+      "stage": "native-full-slice-ok",
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "verified_functions": 1,
+      "stage0_oracle_valid": true,
+      "ownership": "success: real 0.17 source through parse, proof, CFG, and verified SSA with oracle agreement"
+    },
+    {
+      "slice": "doctor-018-alias-pair",
+      "files": ["mncs-doctor healthy lib.mncs + main.mncs, headers bumped to 0.18, `use healthy.lib as lib`"],
+      "stage": "native-full-slice-ok",
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "verified_functions_per_module": [1, 1],
+      "stage0_oracle_valid": true,
+      "ownership": "success: real two-module imported call through verified SSA with oracle agreement"
+    },
+    {
+      "slice": "doctor-healthy-pair-bare-use",
+      "files": ["mncs-doctor healthy lib.mncs + main.mncs unmodified"],
+      "stage": "native-ProofFailed kind 32, Stage-0 MNE131, same call span",
+      "ownership": "correct differential agreement: bare `use` without `as` alias does not resolve in either implementation"
+    },
+    {
+      "slice": "lang-structured-artifact",
+      "files": ["mncs-language/examples/source/structured-artifact.mncs"],
+      "bytes": 632,
+      "stage": "native-ProofFailed kind 32 at structured_write/structured_read call sites",
+      "stage0_oracle_valid": true,
+      "ownership": "compiler architecture: no host-intrinsic callee model (CP-0019)"
+    },
+    {
+      "slice": "lang-fs-metadata",
+      "files": ["mncs-language/examples/source/fs-metadata.mncs"],
+      "bytes": 708,
+      "stage": "native-ProofFailed kind 32 at three fs_entry_kind_at call sites",
+      "stage0_oracle_valid": true,
+      "ownership": "compiler architecture: same CP-0019 root cause"
+    },
+    {
+      "slice": "lang-cre1-combine",
+      "files": ["mncs-language/examples/source/cre1-evidence-combine.mncs"],
+      "bytes": 708,
+      "stage": "native-ParseFailed at offset 313 (nested match as arm result)",
+      "stage0_oracle_valid": true,
+      "ownership": "compiler architecture: match-arm parser disables nested dispatch for acyclicity (CP-0011 instance; trailing commas verified accepted)",
+      "minimization": "v1 trailing-comma-only parses and proves; v2 nesting-only fails parse at the inner match"
+    },
+    {
+      "slice": "lang-cre1-non-exhaustive",
+      "files": ["mncs-language/examples/source/cre1-non-exhaustive.mncs"],
+      "bytes": 293,
+      "stage": "native kind 40 at span 208-290; Stage-0 MNE140 at span 208-290",
+      "ownership": "exact negative agreement: same diagnostic code and span on a real negative case"
+    },
+    {
+      "slice": "cli-outcome",
+      "files": ["mncs-cli/src/cli/outcome.mncs"],
+      "bytes": 4364,
+      "stage": "transport-capacity: invalid_request, view length exceeds capacity 1024",
+      "ownership": "known CP-0001 bounded source storage"
+    },
+    {
+      "slice": "next-proj-boundary",
+      "files": ["minimal record projection probe"],
+      "stage": "native valid, SSA unsupported with first_unsupported_kind 8 (5 + failure_op 3 = TProj)",
+      "stage0_oracle_valid": true,
+      "ownership": "next value-SSA boundary: TProj record field projection"
+    }
+  ]
+}
