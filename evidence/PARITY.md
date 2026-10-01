@@ -58,13 +58,13 @@ types, and terminators. The two-module fixture has four root blocks, six
 block parameters, and nine dense values. The verifier accepts the valid graph
 and rejects nine targeted invalid mutations. Its facts match the pinned
 Rust Stage-0 body/SSA identities and control-flow shape. The finite/enum
-slice adds ten verified functions with four finite-match switches, four
+slice adds eleven verified functions with five finite-match switches, four
 payload extractions, seven enum constructions, one sequence repeat, and ten
-further corruption rejections. The scalar-match slice adds five verified
-functions with five scalar switches plus four further corruption
-rejections. This is a bounded SSA
-slice, not full Rust SSA or compiler parity. `TProj` record projection is
-the first unsupported value-SSA operation.
+further corruption rejections. The scalar-match slice adds six verified
+functions with six scalar switches plus four further corruption
+rejections. The projection slice adds five verified functions with seven
+record-projection instructions plus six further corruption rejections.
+This is a bounded SSA slice, not full Rust SSA or compiler parity.
 
 Parsing, proof, CFG, and SSA pass their upstream facts forward. No extra parse
 or proof pass is introduced to recover data already available upstream.
@@ -138,7 +138,7 @@ relabelled as a measurement at the current a3ac17df pin.
 | Current-profile syntax | Current on the tested forms | CP-0015 syntax forms and old-profile gates match Stage-0; unsupported grammar remains explicit |
 | Semantic proof | Partial | 103-case differential and verifier controls, including finite-match subject-shape and enum-construction rows |
 | Typed CFG | Partial | Tested branches, joins, returns, and reachability |
-| Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, body verification, finite/scalar-match switches, payload extraction, enum construction, and sequence repetition; `TProj` record projection is the first unsupported operation |
+| Value-carrying SSA | Partial | Dense IDs, typed operations, block arguments/parameters, terminators, canonical imported call identity, body verification, finite/scalar-match switches, payload extraction, enum construction, sequence repetition, and record projection |
 | Native C11 output | Partial; scalar structural slice | The test harness projects verified imported-call/CFG SSA into explicitly unattested structural input for `mncs-language`; constants, pure scalar imports, `u64` addition, and branch/join execute with pinned Stage-0 parity. No proof-carrying adapter or aggregate lowering. See `campaign-20260928-agent-native-native-backend-vertical.json`. |
 | Unicode source | Absent in native frontend | Existing compiler Unicode pressure remains outside this slice |
 | Self-hosting | Absent | Stage-0 still compiles/executes the MNCS compiler; no Stage-1 proof |
@@ -176,14 +176,17 @@ tooling pressure.
 
 ## Narrowest next parity step
 
-Lower `TProj` record projection to verified value SSA (the first
-unsupported value-SSA operation), then verify backend/runtime lowering for
-enum construction, finite switch, scalar switch, payload extraction, and
-sequence repeat. The family campaign additionally pulls a host-intrinsic
-proof model (CP-0019) and nested-match parsing (CP-0011 instance);
-main's proof-bound C11 adapter needs integer arithmetic before the
-structural projection can migrate (CP-0018). Replace the
-test-only structural projection with a backend input tied to compiler
-proof/provenance before treating it as authoritative. Do not infer broad
-backend parity from the small scalar executable. Broader syntax/type
-coverage and self-hosting remain separate later work.
+`TProj` record projection is implemented and verified. The next parity
+steps follow real-family evidence: the host-intrinsic/compiler-operation
+proof model (CP-0019) blocking real modules at proof, nested-match
+parsing (CP-0011 instance), and the per-source size ceiling (CP-0001).
+No value-SSA operation is named first-unsupported until a post-TProj
+probe establishes it. Backend/runtime lowering is still unverified for
+enum construction, finite switch, scalar switch, payload extraction,
+sequence repeat, and projection; main's proof-bound C11 adapter needs
+integer arithmetic before the structural projection can migrate
+(CP-0018). Replace the test-only structural projection with a backend
+input tied to compiler proof/provenance before treating it as
+authoritative. Do not infer broad backend parity from the small scalar
+executable. Broader syntax/type coverage and self-hosting remain
+separate later work.

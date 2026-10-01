@@ -83,7 +83,8 @@ At the same pin and compiler head `3f678c3` plus the scalar-match slice:
 The highest-leverage next slice is `TProj` record-projection value SSA
 (the empirically confirmed next boundary), the host-intrinsic proof
 model pulled by real sources, and backend lowering for the verified
-switch/construct operations.
+switch/construct operations. (Update: the TProj slice has since landed;
+see the next section.)
 
 ## Record-projection value SSA and match-env fix (2026-10-01)
 
