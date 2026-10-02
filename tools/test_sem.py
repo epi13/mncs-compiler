@@ -28,6 +28,10 @@ KIND_TO_MNE = {
     48: 'MNE173', 49: 'MNE174', 50: 'MNE175', 51: 'MNE136', 52: 'MNE125',
     29: 'MNE153', 30: 'MNE171', 31: 'MNE173', 32: 'MNE131', 33: 'MNE152',
     34: 'MNE121', 35: 'MNE163', 36: 'MNE173', 37: 'MNE104',
+    53: 'MNE257', 54: 'MNE258', 55: 'MNE261', 56: 'MNE262',
+    57: 'MNE287', 58: 'MNE288', 59: 'MNE289', 60: 'MNE290', 61: 'MNE291',
+    62: 'MNE292', 63: 'MNE293', 64: 'MNE294', 65: 'MNE295', 66: 'MNE296',
+    67: 'MNE297',
 }
 UNKNOWN_KINDS = {13, 14, 16}
 
@@ -352,6 +356,90 @@ CASES = [
     ('finite-bad-shape-bad-result',
      'mncs 0.10; module t; enum Flag { Yes { set: bool }, No } fn f(x: Flag) -> (r: bool) { return match x { Yes => q, No => false }; }',
      set()),
+    ('op-fs-kind-clean',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_kind_at(i); }',
+     set()),
+    ('op-fs-size-clean',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_size_at(i); }',
+     set()),
+    ('op-fs-mtime-clean',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_mtime_at(i); }',
+     set()),
+    ('op-fs-let-clean',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { let k: u64 = fs_entry_kind_at(i); return k; }',
+     set()),
+    ('op-write-clean',
+     'mncs 0.18; module t; record Artifact { count: u64 } fn f(p: [byte; up_to 1024], s: [byte; up_to 64], v: Artifact) -> (r: u64) capability a effect structured_write authorized_by a { return structured_write(p, s, v); }',
+     set()),
+    ('op-read-nominal-clean',
+     'mncs 0.18; module t; record Artifact { count: u64 } fn f(p: [byte; up_to 1024], s: [byte; up_to 64]) -> (r: Artifact) capability a effect structured_read authorized_by a { return structured_read(p, s); }',
+     set()),
+    ('op-read-u64-clean',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64]) -> (r: u64) capability a effect structured_read authorized_by a { return structured_read(p, s); }',
+     set()),
+    ('op-view-let-clean',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 64]) -> (r: u64) { let q: [byte; up_to 64] = s; return 0; }',
+     set()),
+    ('op-exact-view-borrow',
+     'mncs 0.18; module t; fn f(s: [byte; 64]) -> (r: u64) { let q: [byte; up_to 64] = s; return 0; }',
+     set()),
+    ('op-exact-view-refused',
+     'mncs 0.18; module t; fn f(s: [byte; 128]) -> (r: u64) { let q: [byte; up_to 64] = s; return 0; }',
+     set()),
+    ('op-fs-no-effect',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability fs { return fs_entry_kind_at(i); }',
+     set()),
+    ('op-fs-no-cap-effect',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) effect fs_list authorized_by fs { return fs_entry_kind_at(i); }',
+     set()),
+    ('op-fs-double-effect',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability a capability b effect fs_list authorized_by a effect fs_list authorized_by b { return fs_entry_kind_at(i); }',
+     set()),
+    ('op-read-no-effect',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64]) -> (r: u64) capability a { return structured_read(p, s); }',
+     set()),
+    ('op-write-no-effect',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64], v: u64) -> (r: u64) capability a { return structured_write(p, s, v); }',
+     set()),
+    ('op-fs-expected-bool',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: bool) capability fs effect fs_list authorized_by fs { return fs_entry_kind_at(i); }',
+     set()),
+    ('op-write-expected-bool',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64], v: u64) -> (r: bool) capability a effect structured_write authorized_by a { return structured_write(p, s, v); }',
+     set()),
+    ('op-read-expected-bogus',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64]) -> (r: bogus) capability a effect structured_read authorized_by a { return structured_read(p, s); }',
+     set()),
+    ('op-fs-index-bool',
+     'mncs 0.18; module t; fn f() -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_kind_at(true); }',
+     set()),
+    ('op-fs-index-unbound',
+     'mncs 0.18; module t; fn f() -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_kind_at(q); }',
+     set()),
+    ('op-read-path-u64',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 64]) -> (r: u64) capability a effect structured_read authorized_by a { return structured_read(1, s); }',
+     set()),
+    ('op-read-schema-wide',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 128]) -> (r: u64) capability a effect structured_read authorized_by a { return structured_read(p, s); }',
+     set()),
+    ('op-write-path-bool',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 64], v: u64) -> (r: u64) capability a effect structured_write authorized_by a { return structured_write(true, s, v); }',
+     set()),
+    ('op-write-schema-wide',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 128], v: u64) -> (r: u64) capability a effect structured_write authorized_by a { return structured_write(p, s, v); }',
+     set()),
+    ('op-write-value-unbound',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64]) -> (r: u64) capability a effect structured_write authorized_by a { return structured_write(p, s, q); }',
+     set()),
+    ('op-write-value-bogus',
+     'mncs 0.18; module t; fn f(p: [byte; up_to 1024], s: [byte; up_to 64], v: bogus) -> (r: u64) capability a effect structured_write authorized_by a { return structured_write(p, s, v); }',
+     set()),
+    ('op-case-exact',
+     'mncs 0.18; module t; fn f(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return FS_ENTRY_KIND_AT(i); }',
+     set()),
+    ('op-shadow-intrinsic',
+     'mncs 0.18; module t; fn fs_entry_kind_at(x: u64) -> (r: u64) { return x; } fn g() -> (r: u64) { return fs_entry_kind_at(1); }',
+     set()),
 ]
 
 SOURCE_BOUND = max(max(len(text.encode()) for _, text, _ in CASES), len(b'mncs 0.10; module t;'))
@@ -401,6 +489,7 @@ class Probe:
                              'sabotage_bin_mismatch', 'sabotage_final_type',
                              'sabotage_finite_match_arity', 'sabotage_construct_arity',
                              'sabotage_scalar_match_arity', 'sabotage_proj_base',
+                             'sabotage_op_arity', 'sabotage_op_source',
                              'sound_sample']
         ])
         self.proc = subprocess.Popen(
@@ -476,6 +565,8 @@ def suite():
         assert probe.run('decl', 'sabotage_construct_arity', args) is False
         assert probe.run('decl', 'sabotage_scalar_match_arity', args) is False
         assert probe.run('decl', 'sabotage_proj_base', args) is False
+        assert probe.run('decl', 'sabotage_op_arity', args) is False
+        assert probe.run('decl', 'sabotage_op_source', args) is False
         assert probe.run('decl', 'sound_sample', args) is True
         return {'requests': probe.count, 'cases': len(CASES),
                 'result_sha256': probe.digest.hexdigest(),
@@ -499,4 +590,4 @@ if __name__ == '__main__':
               'scope': 'decl.prove_unit FAIL-obligation differential vs Stage-0 diagnostics; UNKNOWN obligations never surface; sabotage/soundness verdicts'}
     Path('.build').mkdir(exist_ok=True)
     Path('.build/sem-results.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(f"{len(CASES)} semantic cases + 9 proof verdicts passed twice identically.")
+    print(f"{len(CASES)} semantic cases + 11 proof verdicts passed twice identically.")

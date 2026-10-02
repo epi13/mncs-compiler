@@ -30,10 +30,14 @@ use mncs.compiler.parser.v1 as parser;
 // names, integers, booleans, binary operators, direct calls, and projections.
 // Deliberately deferred: iterate statements, boolean matches, nested
 // match arm expressions,
-// record construction literals, index/slice/cast, select/replace and host
-// intrinsics, generics, qualified calls, and vec/mask types. Unsupported
-// shapes fail with an explicit local error span; they are never silently
-// accepted.
+// record construction literals, index/slice/cast, pure intrinsics
+// (select/replace/vector/mask), generics, qualified calls, and vec/mask
+// types. The five compiler operations real family sources call
+// (fs_entry_kind_at/size_at/mtime_at, structured_read/write) are parsed
+// to OpCall nodes with parser-enforced arity and proven against their
+// result/operand/authorization contract (CP-0019).
+// Unsupported shapes fail with an explicit local error span; they are
+// never silently accepted.
 //
 // Error policy: first failure wins. Every parse record carries ok plus the
 // failing span. Nodes are valid only when ok is true; on failure records
@@ -96,7 +100,8 @@ enum Expr {
     Call { name_start: u64, name_end: u64, args: ExprList, start: u64, end: u64 },
     Project { base: Expr, field_start: u64, field_end: u64, start: u64, end: u64, path: bool },
     FiniteMatch { subject: Expr, arms: FiniteMatchArmList, start: u64, end: u64 },
-    EnumConstruct { type_start: u64, type_end: u64, variant_start: u64, variant_end: u64, fields: ConstructFieldList, start: u64, end: u64 }
+    EnumConstruct { type_start: u64, type_end: u64, variant_start: u64, variant_end: u64, fields: ConstructFieldList, start: u64, end: u64 },
+    OpCall { slot: u64, name_start: u64, name_end: u64, args: ExprList, start: u64, end: u64 }
 }
 record ScalarMatchArm { is_default: bool, negative: bool, value: u64, overflow: bool, pattern_start: u64, pattern_end: u64, result: Expr }
 enum ScalarMatchArmList { MNil, MCons { head: ScalarMatchArm, tail: ScalarMatchArmList } }
@@ -186,7 +191,8 @@ fn collect_call_expr<N: Nat>(input: [byte; up_to N], st: CallWalk, expr: Expr, r
         Call { name_start: s, name_end: e, args: args, start: t, end: n } => CallWalk { ..st, exprs: append_exprs<N>(input, args, rest), calls: CallSiteList.CCons { head: CallSite { start: s, end: e }, tail: st.calls } },
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: p } => CallWalk { ..st, exprs: ExprList.ECons { head: base, tail: rest } },
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => CallWalk { ..st, exprs: finite_match_children<N>(input, subject, arms, rest) },
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => CallWalk { ..st, exprs: construct_children<N>(input, f, rest) }
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => CallWalk { ..st, exprs: construct_children<N>(input, f, rest) },
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => CallWalk { ..st, exprs: append_exprs<N>(input, a, rest) }
     };
 }
 fn collect_call_reverse(st: CallSiteRev) -> (result: CallSiteRev) {
@@ -229,7 +235,8 @@ fn expr_start(node: Expr) -> (result: u64) {
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => t,
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => s,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => s,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => s
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => s,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => s
     };
 }
 fn expr_end(node: Expr) -> (result: u64) {
@@ -244,7 +251,8 @@ fn expr_end(node: Expr) -> (result: u64) {
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => n,
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => e,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => e,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => e
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => e,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => e
     };
 }
 
@@ -928,9 +936,142 @@ fn close_paren_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Tok
     if op.kind == 1004 { return expr_fail(st, tok.start, tok.end); }
     return close_call<N>(input, st, tok, op, rest);
 }
+// Compiler operations (CP-0019): the host operations real family sources
+// call. Like Stage-0's intrinsic_selection, the parser reserves these
+// names in call head position: a bare call whose name bytes match exactly
+// becomes an OpCall node carrying its operation slot, never a plain Call.
+// Arity is enforced here (Stage-0 reports MNP205/MNP218/MNP220 at parse);
+// operand typing, result typing, and effect/capability authorization
+// belong to the proof. Slots: 0 fs_entry_kind_at, 1 structured_read, 2
+// structured_write, 3 fs_entry_size_at, 4 fs_entry_mtime_at; slot 5 means
+// "not an operation".
+fn op_slot_at<N: Nat>(input: [byte; up_to N], ns: u64, ne: u64) -> (result: u64) {
+    if ne < ns { return 5; }
+    if ne - ns == 15 { return op_slot_len15<N>(input, ns); }
+    if ne - ns == 16 { return op_slot_len16<N>(input, ns); }
+    if ne - ns == 17 { return op_slot_len17<N>(input, ns); }
+    return 5;
+}
+fn op_slot_len15<N: Nat>(input: [byte; up_to N], ns: u64) -> (result: u64) {
+    if span_is_structured_read<N>(input, ns) { return 1; }
+    return 5;
+}
+fn op_slot_len16<N: Nat>(input: [byte; up_to N], ns: u64) -> (result: u64) {
+    if span_is_fs_entry_kind_at<N>(input, ns) { return 0; }
+    if span_is_structured_write<N>(input, ns) { return 2; }
+    if span_is_fs_entry_size_at<N>(input, ns) { return 3; }
+    return 5;
+}
+fn op_slot_len17<N: Nat>(input: [byte; up_to N], ns: u64) -> (result: u64) {
+    if span_is_fs_entry_mtime_at<N>(input, ns) { return 4; }
+    return 5;
+}
+fn span_is_fs_entry_kind_at<N: Nat>(input: [byte; up_to N], a: u64) -> (result: bool) {
+    if segment.byte_at<N>(input, a) != 102 { return false; }
+    if segment.byte_at<N>(input, a + 1) != 115 { return false; }
+    if segment.byte_at<N>(input, a + 2) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 3) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 4) != 110 { return false; }
+    if segment.byte_at<N>(input, a + 5) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 6) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 7) != 121 { return false; }
+    if segment.byte_at<N>(input, a + 8) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 9) != 107 { return false; }
+    if segment.byte_at<N>(input, a + 10) != 105 { return false; }
+    if segment.byte_at<N>(input, a + 11) != 110 { return false; }
+    if segment.byte_at<N>(input, a + 12) != 100 { return false; }
+    if segment.byte_at<N>(input, a + 13) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 14) != 97 { return false; }
+    if segment.byte_at<N>(input, a + 15) != 116 { return false; }
+    return true;
+}
+fn span_is_structured_read<N: Nat>(input: [byte; up_to N], a: u64) -> (result: bool) {
+    if segment.byte_at<N>(input, a) != 115 { return false; }
+    if segment.byte_at<N>(input, a + 1) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 2) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 3) != 117 { return false; }
+    if segment.byte_at<N>(input, a + 4) != 99 { return false; }
+    if segment.byte_at<N>(input, a + 5) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 6) != 117 { return false; }
+    if segment.byte_at<N>(input, a + 7) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 8) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 9) != 100 { return false; }
+    if segment.byte_at<N>(input, a + 10) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 11) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 12) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 13) != 97 { return false; }
+    if segment.byte_at<N>(input, a + 14) != 100 { return false; }
+    return true;
+}
+fn span_is_structured_write<N: Nat>(input: [byte; up_to N], a: u64) -> (result: bool) {
+    if segment.byte_at<N>(input, a) != 115 { return false; }
+    if segment.byte_at<N>(input, a + 1) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 2) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 3) != 117 { return false; }
+    if segment.byte_at<N>(input, a + 4) != 99 { return false; }
+    if segment.byte_at<N>(input, a + 5) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 6) != 117 { return false; }
+    if segment.byte_at<N>(input, a + 7) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 8) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 9) != 100 { return false; }
+    if segment.byte_at<N>(input, a + 10) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 11) != 119 { return false; }
+    if segment.byte_at<N>(input, a + 12) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 13) != 105 { return false; }
+    if segment.byte_at<N>(input, a + 14) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 15) != 101 { return false; }
+    return true;
+}
+fn span_is_fs_entry_size_at<N: Nat>(input: [byte; up_to N], a: u64) -> (result: bool) {
+    if segment.byte_at<N>(input, a) != 102 { return false; }
+    if segment.byte_at<N>(input, a + 1) != 115 { return false; }
+    if segment.byte_at<N>(input, a + 2) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 3) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 4) != 110 { return false; }
+    if segment.byte_at<N>(input, a + 5) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 6) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 7) != 121 { return false; }
+    if segment.byte_at<N>(input, a + 8) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 9) != 115 { return false; }
+    if segment.byte_at<N>(input, a + 10) != 105 { return false; }
+    if segment.byte_at<N>(input, a + 11) != 122 { return false; }
+    if segment.byte_at<N>(input, a + 12) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 13) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 14) != 97 { return false; }
+    if segment.byte_at<N>(input, a + 15) != 116 { return false; }
+    return true;
+}
+fn span_is_fs_entry_mtime_at<N: Nat>(input: [byte; up_to N], a: u64) -> (result: bool) {
+    if segment.byte_at<N>(input, a) != 102 { return false; }
+    if segment.byte_at<N>(input, a + 1) != 115 { return false; }
+    if segment.byte_at<N>(input, a + 2) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 3) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 4) != 110 { return false; }
+    if segment.byte_at<N>(input, a + 5) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 6) != 114 { return false; }
+    if segment.byte_at<N>(input, a + 7) != 121 { return false; }
+    if segment.byte_at<N>(input, a + 8) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 9) != 109 { return false; }
+    if segment.byte_at<N>(input, a + 10) != 116 { return false; }
+    if segment.byte_at<N>(input, a + 11) != 105 { return false; }
+    if segment.byte_at<N>(input, a + 12) != 109 { return false; }
+    if segment.byte_at<N>(input, a + 13) != 101 { return false; }
+    if segment.byte_at<N>(input, a + 14) != 95 { return false; }
+    if segment.byte_at<N>(input, a + 15) != 97 { return false; }
+    if segment.byte_at<N>(input, a + 16) != 116 { return false; }
+    return true;
+}
+fn op_arity(slot: u64) -> (result: u64) {
+    if slot == 1 { return 2; }
+    if slot == 2 { return 3; }
+    if slot == 0 || slot == 3 || slot == 4 { return 1; }
+    return 0;
+}
 fn close_call<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
     if st.expect_operand && op.argc != 0 { return expr_fail(st, tok.start, tok.end); }
     if st.expect_operand {
+        let empty_slot: u64 = op_slot_at<N>(input, op.name_start, op.name_end);
+        if empty_slot != 5 { return expr_fail(st, tok.start, tok.end); }
         let node: Expr = Expr.Call { name_start: op.name_start, name_end: op.name_end, args: ExprList.ENil, start: op.name_start, end: tok.end };
         return match st.operands {
             ENil => expr_fail(st, tok.start, tok.end),
@@ -944,7 +1085,17 @@ fn close_call<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, o
 }
 fn close_call_args<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList, last: Expr, before: ExprList) -> (result: ExprState) {
     let args: ExprList = reverse_exprs<N>(input, ExprList.ECons { head: last, tail: op.args });
+    let slot: u64 = op_slot_at<N>(input, op.name_start, op.name_end);
+    if slot != 5 { return close_op_call<N>(input, st, tok, op, rest, args, slot, before); }
     let node: Expr = Expr.Call { name_start: op.name_start, name_end: op.name_end, args: args, start: op.name_start, end: tok.end };
+    return match before {
+        ENil => expr_fail(st, tok.start, tok.end),
+        ECons { head: callee, tail: tail } => drop_callee(st, tok, rest, node, callee, tail)
+    };
+}
+fn close_op_call<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList, args: ExprList, slot: u64, before: ExprList) -> (result: ExprState) {
+    if op.argc + 1 != op_arity(slot) { return expr_fail(st, tok.start, tok.end); }
+    let node: Expr = Expr.OpCall { slot: slot, name_start: op.name_start, name_end: op.name_end, args: args, start: op.name_start, end: tok.end };
     return match before {
         ENil => expr_fail(st, tok.start, tok.end),
         ECons { head: callee, tail: tail } => drop_callee(st, tok, rest, node, callee, tail)
@@ -965,7 +1116,8 @@ fn drop_callee(st: ExprState, tok: lexer.Token, rest: OpList, node: Expr, callee
         Call { name_start: s, name_end: e, args: a, start: t, end: n } => expr_fail(st, tok.start, tok.end),
         Project { base: b, field_start: f, field_end: g, start: s, end: e, path: p } => expr_fail(st, tok.start, tok.end),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => expr_fail(st, tok.start, tok.end),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => expr_fail(st, tok.start, tok.end)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => expr_fail(st, tok.start, tok.end),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => expr_fail(st, tok.start, tok.end)
     };
 }
 
@@ -1014,7 +1166,8 @@ fn base_is_path(base: Expr) -> (result: bool) {
         Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: o, left: l, right: r, start: s, end: e } => false,
-        Call { name_start: s, name_end: e, args: a, start: t, end: n } => false
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 // A paren after a complete operand: a qualified call over a namespace path,
@@ -1037,7 +1190,8 @@ fn path_call_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token
         Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
         Binary { op: o, left: l, right: r, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
-        Call { name_start: s, name_end: e, args: a, start: t, end: n } => close_or_reduce<N>(input, st, tok.start, tok.end)
+        Call { name_start: s, name_end: e, args: a, start: t, end: n } => close_or_reduce<N>(input, st, tok.start, tok.end),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end)
     };
 }
 fn path_call_project<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, start: u64, end: u64, path: bool, before: ExprList) -> (result: ExprState) {
@@ -1072,7 +1226,8 @@ fn construct_top<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => construct_project<N>(input, st, tok, b, fs, fe, s, before),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => close_or_reduce<N>(input, st, tok.start, tok.end)
     };
 }
 fn construct_project<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, b: Expr, fs: u64, fe: u64, s: u64, before: ExprList) -> (result: ExprState) {
@@ -1087,7 +1242,8 @@ fn construct_project<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.T
         Call { name_start: ns, name_end: ne, args: a, start: x, end: y } => expr_fail(st, tok.start, tok.end),
         Project { base: q, field_start: gs, field_end: ge, start: x, end: y, path: p } => expr_fail(st, tok.start, tok.end),
         FiniteMatch { subject: subject, arms: arms, start: x, end: y } => expr_fail(st, tok.start, tok.end),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: x, end: y } => expr_fail(st, tok.start, tok.end)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: x, end: y } => expr_fail(st, tok.start, tok.end),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: x, end: y } => expr_fail(st, tok.start, tok.end)
     };
 }
 fn construct_push(st: ExprState, tok: lexer.Token, ns: u64, ne: u64, fs: u64, fe: u64, s: u64, before: ExprList) -> (result: ExprState) {
@@ -1122,7 +1278,8 @@ fn colon_name<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, o
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => expr_fail(st, tok.start, tok.end),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => expr_fail(st, tok.start, tok.end),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => expr_fail(st, tok.start, tok.end),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => expr_fail(st, tok.start, tok.end)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => expr_fail(st, tok.start, tok.end),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => expr_fail(st, tok.start, tok.end)
     };
 }
 fn construct_comma<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
@@ -1150,7 +1307,8 @@ fn construct_append(st: ExprState, tok: lexer.Token, op: Op, rest: OpList, value
         Binary { op: o, left: l, right: r, start: s, end: e } => expr_fail(st, tok.start, tok.end),
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => expr_fail(st, tok.start, tok.end),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => expr_fail(st, tok.start, tok.end),
-        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => expr_fail(st, tok.start, tok.end)
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => expr_fail(st, tok.start, tok.end),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => expr_fail(st, tok.start, tok.end)
     };
 }
 fn close_brace<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token) -> (result: ExprState) {
@@ -1180,6 +1338,7 @@ fn close_construct_empty<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lex
 fn close_construct_no_fields<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, rest: OpList, node: Expr, before: ExprList) -> (result: ExprState) {
     return match node {
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => close_construct_finish<N>(input, st, tok, rest, ts, te, vs, ve, f, dummy_construct_field(), false, s, before),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: x, end: y } => expr_fail(st, tok.start, tok.end),
         Name { start: x, end: y } => expr_fail(st, tok.start, tok.end),
         Integer { start: x, end: y, value: v, overflow: o } => expr_fail(st, tok.start, tok.end),
         Boolean { start: x, end: y, value: v } => expr_fail(st, tok.start, tok.end),
@@ -1201,6 +1360,7 @@ fn close_construct_value<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lex
 fn close_construct_field<N: Nat>(input: [byte; up_to N], st: ExprState, tok: lexer.Token, op: Op, rest: OpList, value: Expr, node: Expr, before: ExprList) -> (result: ExprState) {
     return match node {
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => close_construct_finish<N>(input, st, tok, rest, ts, te, vs, ve, f, ConstructField { field_start: op.name_start, field_end: op.name_end, value: value }, true, s, before),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: x, end: y } => expr_fail(st, tok.start, tok.end),
         Name { start: x, end: y } => expr_fail(st, tok.start, tok.end),
         Integer { start: x, end: y, value: v, overflow: o } => expr_fail(st, tok.start, tok.end),
         Boolean { start: x, end: y, value: v } => expr_fail(st, tok.start, tok.end),
@@ -2346,7 +2506,8 @@ fn walk_children<N: Nat>(input: [byte; up_to N], st: WalkState, h: Expr, t: Expr
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => walk_call<N>(input, st, t, acc, ns, ne, a),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => WalkState { swords: st.swords, work: ExprList.ECons { head: b, tail: t }, acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => WalkState { swords: st.swords, work: finite_match_children<N>(input, subject, arms, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => WalkState { swords: st.swords, work: construct_children<N>(input, f, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 }
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => WalkState { swords: st.swords, work: construct_children<N>(input, f, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 },
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => WalkState { swords: st.swords, work: append_exprs<N>(input, a, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 }
     };
 }
 fn walk_call<N: Nat>(input: [byte; up_to N], st: WalkState, t: ExprList, acc: ExprList, ns: u64, ne: u64, args: ExprList) -> (result: WalkState) {
@@ -2428,7 +2589,8 @@ fn lower_one<N: Nat>(input: [byte; up_to N], st: LowerState, h: Expr, t: ExprLis
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => lower_call<N>(input, st, t, ns, ne, a),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => LowerState { work: ExprList.ECons { head: b, tail: t }, out: FlatList.ICons { head: FlatOp.PProj { field_start: fs, field_end: fe, path: p }, tail: st.out } },
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => lower_finite_match<N>(input, st, t, subject, arms),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => lower_construct<N>(input, st, t, f)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => lower_construct<N>(input, st, t, f),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => lower_call<N>(input, st, t, ns, ne, a)
     };
 }
 fn lower_scalar_match<N: Nat>(input: [byte; up_to N], st: LowerState, t: ExprList, subject: Expr, arms: ScalarMatchArmList) -> (result: LowerState) {
@@ -2944,9 +3106,15 @@ fn sem_eq_named<N: Nat>(input: [byte; up_to N], b: SemType, start: u64, end: u64
 fn sem_eq_seq<N: Nat>(input: [byte; up_to N], b: SemType) -> (result: bool) {
     return match b { TSeq => true, TSeqExact { element: element, length: length, length_valid: valid } => true, TBool => false, TByte => false, TInt { width: w, signed: s } => false, TNamed { start: s, end: e } => false, TPoison => false };
 }
+// Exact lengths match only exact lengths, and view bounds only view bounds;
+// a view never equals an exact length even when the numbers coincide.
+fn seq_validity_matches(length_valid: bool, other_valid: bool) -> (result: bool) {
+    if length_valid { return other_valid; }
+    return !(other_valid);
+}
 fn sem_eq_seq_exact<N: Nat>(input: [byte; up_to N], b: SemType, element: SemType, length: u64, length_valid: bool) -> (result: bool) {
     return match b {
-        TSeqExact { element: other_element, length: other_length, length_valid: other_valid } => length_valid && other_valid && length == other_length && sem_eq_element<N>(input, element, other_element),
+        TSeqExact { element: other_element, length: other_length, length_valid: other_valid } => length == other_length && sem_eq_element<N>(input, element, other_element) && seq_validity_matches(length_valid, other_valid),
         TSeq => false,
         TBool => false,
         TByte => false,
@@ -2964,6 +3132,34 @@ fn sem_eq_element<N: Nat>(input: [byte; up_to N], a: SemType, b: SemType) -> (re
         TSeq => false,
         TSeqExact { element: e, length: n, length_valid: v } => false,
         TPoison => sem_eq_poison(b)
+    };
+}
+// Exact-to-view borrow (Stage-0 exact_view_borrow_dimensions): an `[E; N]`
+// value satisfies an `[E; up_to M]` expectation exactly when the elements
+// agree and N <= M. This is the ungated borrow rule, not profile-gated
+// view widen/narrow: only a statically exact actual borrows, and only
+// into a bounded view expectation.
+fn seq_borrow_ok<N: Nat>(input: [byte; up_to N], actual: SemType, expected: SemType) -> (result: bool) {
+    return match actual {
+        TSeqExact { element: element, length: length, length_valid: valid } => seq_borrow_expected<N>(input, expected, element, length, valid),
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: s, end: e } => false,
+        TSeq => false,
+        TPoison => false
+    };
+}
+fn seq_borrow_expected<N: Nat>(input: [byte; up_to N], expected: SemType, element: SemType, length: u64, valid: bool) -> (result: bool) {
+    if !(valid) { return false; }
+    return match expected {
+        TSeqExact { element: other_element, length: other_length, length_valid: other_valid } => !(other_valid) && !(length > other_length) && sem_eq_element<N>(input, element, other_element),
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: s, end: e } => false,
+        TSeq => false,
+        TPoison => false
     };
 }
 fn is_int_ty(ty: SemType) -> (result: bool) {
@@ -3096,8 +3292,10 @@ fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: 
     // No back-call into resolve_type (MNE130): sequence elements are flat
     // by construction (the parser rejects nested `[`). Exact bounds and
     // element types are retained for repeat-literal proof; viewed sequences
-    // remain the existing opaque shape.
-    if kind == 8 { return TyRes { ty: SemType.TSeq, ok: true }; }
+    // keep their bound ceiling with length_valid=false (views are bounded
+    // but not statically exact), so operation bounds and view equality can
+    // observe the ceiling. Non-literal view bounds stay opaque (TSeq).
+    if kind == 8 { return resolve_view_type<N>(input, elem, rectab, enumtab, nominals); }
     let element: TyRes = resolve_sequence_element<N>(input, elem.node, rectab, enumtab, nominals);
     if !(element.ok) { return element; }
     let semi: Expect = expect<N>(input, elem.cursor, 63);
@@ -3109,6 +3307,44 @@ fn resolve_seq_type<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: 
     let literal_bound: bool = span_digits<N>(input, bound.start, bound.end);
     let length: IntVal = int_value<N>(input, bound.start, bound.end);
     return TyRes { ty: SemType.TSeqExact { element: element.ty, length: length.value, length_valid: literal_bound && !(length.overflow) }, ok: true };
+}
+// Viewed sequences (`[byte; up_to 64]`): the element resolves as usual and
+// the ceiling comes from the digit run after the `up_to` keyword. The
+// parser guarantees the keyword prefix for kind 8; a missing or
+// non-literal bound (Nat identifier, overflow) stays opaque.
+fn resolve_view_type<N: Nat>(input: [byte; up_to N], elem: TypeParse, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: TyRes) {
+    let element: TyRes = resolve_sequence_element<N>(input, elem.node, rectab, enumtab, nominals);
+    if !(element.ok) { return element; }
+    let semi: Expect = expect<N>(input, elem.cursor, 63);
+    if !(semi.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    let bound: NameParse = seq_bound<N>(input, semi.cursor);
+    if !(bound.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    let close: Expect = expect<N>(input, bound.cursor, 70);
+    if !(close.ok) { return TyRes { ty: SemType.TPoison, ok: false }; }
+    return resolve_view_bound<N>(input, element.ty, bound.start, bound.end);
+}
+fn resolve_view_bound<N: Nat>(input: [byte; up_to N], element: SemType, start: u64, end: u64) -> (result: TyRes) {
+    let digits: UpToDigits = up_to_digits<N>(input, start, end);
+    if !(digits.ok) { return TyRes { ty: SemType.TSeq, ok: true }; }
+    let length: IntVal = int_value<N>(input, digits.start, digits.end);
+    if length.overflow { return TyRes { ty: SemType.TSeq, ok: true }; }
+    return TyRes { ty: SemType.TSeqExact { element: element, length: length.value, length_valid: false }, ok: true };
+}
+record UpToDigits { ok: bool, start: u64, end: u64 }
+record UpToScan { cursor: u64, end: u64, ok: bool }
+fn up_to_digits<N: Nat>(input: [byte; up_to N], start: u64, end: u64) -> (result: UpToDigits) {
+    if end < start + 6 { return UpToDigits { ok: false, start: start, end: end }; }
+    iterate i over input carrying st: UpToScan = UpToScan { cursor: start + 5, end: end, ok: true } {
+        next st = up_to_space_step<N>(input, st);
+    }
+    if !(st.ok) || !(st.cursor < st.end) { return UpToDigits { ok: false, start: start, end: end }; }
+    if !(span_digits<N>(input, st.cursor, st.end)) { return UpToDigits { ok: false, start: start, end: end }; }
+    return UpToDigits { ok: true, start: st.cursor, end: st.end };
+}
+fn up_to_space_step<N: Nat>(input: [byte; up_to N], st: UpToScan) -> (result: UpToScan) {
+    if !(st.ok) || !(st.cursor < st.end) { return st; }
+    if lexer.space(segment.byte_at<N>(input, st.cursor)) { return UpToScan { cursor: st.cursor + 1, end: st.end, ok: true }; }
+    return UpToScan { cursor: st.cursor, end: st.end, ok: true };
 }
 fn resolve_sequence_element<N: Nat>(input: [byte; up_to N], element: TypeRef, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList) -> (result: TyRes) {
     if element.kind == 1 { return TyRes { ty: SemType.TInt { width: 64, signed: false }, ok: true }; }
@@ -3791,7 +4027,8 @@ enum TOp {
     TEnumConstruct { ty: SemType, variant_start: u64, variant_end: u64, field_count: u64, params: BindList, start: u64, end: u64 },
     TBin { op: u64, ty: SemType, start: u64, end: u64 },
     TCall { ty: SemType, argc: u64, params: BindList, start: u64, end: u64, ns: u64, ne: u64, identity: SemanticIdentity, effects: EffectIdentityList, capabilities: CapabilityIdentityList },
-    TProj { ty: SemType, fstart: u64, fend: u64, field_index: u64, start: u64, end: u64 }
+    TProj { ty: SemType, fstart: u64, fend: u64, field_index: u64, start: u64, end: u64 },
+    TOp { slot: u64, ty: SemType, argc: u64, ns: u64, ne: u64, identity: SemanticIdentity, start: u64, end: u64 }
 }
 enum TOpList { PNil, PCons { head: TOp, tail: TOpList } }
 record TypedFiniteMatchArm { variant_start: u64, variant_end: u64, has_payload: bool, bindings: PayloadBindingList, pattern_start: u64, pattern_end: u64, payload_fields: BindList, ops: TOpList, op_count: u64 }
@@ -3921,7 +4158,8 @@ fn queue_finite_match_checks<N: Nat>(input: [byte; up_to N], operation: TOp, pen
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: count, params: params, start: start, end: end } => pending,
         TBin { op: op, ty: ty, start: start, end: end } => pending,
         TCall { ty: ty, argc: argc, params: params, start: start, end: end, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => pending,
-        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: start, end: end } => pending
+        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: start, end: end } => pending,
+        TOp { slot: slot, ty: ty, argc: argc, ns: ns, ne: ne, identity: identity, start: start, end: end } => pending
     };
 }
 fn queue_typed_finite_match_arms<N: Nat>(input: [byte; up_to N], arms: TypedFiniteMatchArmList, ty: SemType, pending: VerifyFrameList) -> (result: VerifyFrameList) {
@@ -3980,7 +4218,8 @@ fn verify_top_one<N: Nat>(input: [byte; up_to N], st: TDepth, h: TOp, t: TOpList
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => verify_top_enum_construct<N>(input, st, t, ty, f, params, vs, ve, s, e),
         TBin { op: o, ty: ty, start: s, end: e } => verify_top_bin<N>(input, st, t, ty),
         TCall { ty: ty, argc: c, params: params, start: s, end: e, ns: ns, ne: ne, identity: id, effects: effects, capabilities: capabilities } => verify_top_call<N>(input, st, t, ty, c, effects, capabilities),
-        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: s, end: e } => verify_top_proj(st, t, ty)
+        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: s, end: e } => verify_top_proj(st, t, ty),
+        TOp { slot: slot, ty: ty, argc: argc, ns: ns, ne: ne, identity: id, start: s, end: e } => verify_top_op<N>(input, st, t, slot, ty, argc, ns, ne, id, s, e)
     };
 }
 fn verify_top_repeat<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, ty: SemType, element: SemType, count: u64) -> (result: TDepth) {
@@ -4136,7 +4375,8 @@ fn enum_construct_source_valid<N: Nat>(input: [byte; up_to N], ty: SemType, vari
         ScalarMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
         Binary { op: op, left: left, right: right, start: ns, end: ne } => false,
         Call { name_start: ns, name_end: ne, args: args, start: es, end: ee } => false,
-        FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false
+        FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
+        OpCall { slot: slot, name_start: ons, name_end: one, args: a, start: s, end: e } => false
     };
 }
 fn enum_construct_project_source<N: Nat>(input: [byte; up_to N], ty: SemType, variant_start: u64, variant_end: u64, params: BindList, start: u64, end: u64, base: Expr, field_start: u64, field_end: u64, path: bool) -> (result: bool) {
@@ -4152,7 +4392,8 @@ fn enum_construct_project_source<N: Nat>(input: [byte; up_to N], ty: SemType, va
         Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 fn enum_construct_source_parts<N: Nat>(input: [byte; up_to N], ty: SemType, variant_start: u64, variant_end: u64, params: BindList, start: u64, end: u64, type_start: u64, type_end: u64, source_variant_start: u64, source_variant_end: u64, fields: ConstructFieldList) -> (result: bool) {
@@ -4369,15 +4610,16 @@ enum SemKont {
     KBinL { op: u64, right: Expr, start: u64, end: u64, exp: ExpTy },
     KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy },
     KCallA { sig: Sig, args: ExprList, ptys: TyList, start: u64, end: u64, exp: ExpTy },
-    KProj { fstart: u64, fend: u64, bstart: u64, bend: u64, start: u64, end: u64, exp: ExpTy }
+    KProj { fstart: u64, fend: u64, bstart: u64, bend: u64, start: u64, end: u64, exp: ExpTy },
+    KOpA { slot: u64, ns: u64, ne: u64, args: ExprList, index: u64, start: u64, end: u64, exp: ExpTy }
 }
 enum KontList { QNil, QCons { head: SemKont, tail: KontList } }
-record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, effects: EffectIdentityList, total: u64 }
+record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, effects: EffectIdentityList, caller_fx: EffectList, caller_caps: CapList, total: u64 }
 record ExprRes { ty: SemType, ok: bool, obls: OblList, tops: TOpList }
-fn prove_expr<N: Nat>(input: [byte; up_to N], env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, effects: EffectIdentityList, e: Expr, exp: ExpTy) -> (result: ExprRes) {
+fn prove_expr<N: Nat>(input: [byte; up_to N], env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, effects: EffectIdentityList, caller_fx: EffectList, caller_caps: CapList, e: Expr, exp: ExpTy) -> (result: ExprRes) {
 
     let total: u64 = input.len;
-    iterate i over input carrying d: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, nominals: nominals, effects: effects, total: total } {
+    iterate i over input carrying d: SemState = SemState { jobs: JobList.JCons { head: SemJob { e: e, exp: exp }, tail: JobList.JNil }, konts: KontList.QCons { head: SemKont.KTop, tail: KontList.QNil }, obls: OblList.LNil, tops: TOpList.PNil, last_ty: SemType.TPoison, top_ty: SemType.TPoison, failed: false, env: env, sigs: sigs, rectab: rectab, enumtab: enumtab, nominals: nominals, effects: effects, caller_fx: caller_fx, caller_caps: caller_caps, total: total } {
         next d = sem_step<N>(input, d);
     }
     return finish_prove_expr<N>(input, d);
@@ -4423,7 +4665,8 @@ fn sem_job<N: Nat>(input: [byte; up_to N], st: SemState, job: SemJob) -> (result
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => seed_call<N>(input, st, ns, ne, a, s, e, job.exp),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => seed_proj<N>(input, st, b, fs, fe, s, e, job.exp),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => seed_finite_match<N>(input, st, subject, arms, s, e, job.exp),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => seed_enum_construct<N>(input, st, ts, te, vs, ve, f, s, e, job.exp)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => seed_enum_construct<N>(input, st, ts, te, vs, ve, f, s, e, job.exp),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => seed_op<N>(input, st, slot, ns, ne, a, s, e, job.exp)
     };
 }
 fn seed_scalar_match<N: Nat>(input: [byte; up_to N], st: SemState, subject: Expr, arms: ScalarMatchArmList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
@@ -4444,7 +4687,8 @@ fn seed_scalar_match_subject<N: Nat>(input: [byte; up_to N], st: SemState, subje
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => sem_drain(sem_emit(st, 2, s, e, 1)),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1))
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1))
     };
 }
 fn seed_scalar_match_name<N: Nat>(input: [byte; up_to N], st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType, ns: u64, ne: u64) -> (result: SemState) {
@@ -4964,6 +5208,7 @@ fn finish_name_exp<N: Nat>(input: [byte; up_to N], st: SemState, ty: SemType, st
 }
 fn finish_name_req<N: Nat>(input: [byte; up_to N], st: SemState, ty: SemType, r: SemType, start: u64, end: u64) -> (result: SemState) {
     if sem_eq<N>(input, ty, r) { return sem_emit_top(sem_accept(st, ty), TOp.TName { ty: ty, start: start, end: end }); }
+    if seq_borrow_ok<N>(input, ty, r) { return sem_emit_top(sem_accept(st, r), TOp.TName { ty: r, start: start, end: end }); }
     return sem_emit_top(sem_accept(sem_emit(st, 2, start, end, 1), ty), TOp.TName { ty: ty, start: start, end: end });
 }
 fn finish_int(st: SemState, value: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
@@ -5034,7 +5279,8 @@ fn is_integer_literal(e: Expr) -> (result: bool) {
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e2 } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false
     };
 }
 fn bin_left_exp(op: u64, exp: ExpTy, left: Expr) -> (result: ExpTy) {
@@ -5068,7 +5314,8 @@ fn nonzero_lit(e: Expr) -> (result: bool) {
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e2 } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e2 } => false
     };
 }
 fn nonzero_val(v: u64) -> (result: bool) {
@@ -5103,7 +5350,8 @@ fn apply_kont<N: Nat>(input: [byte; up_to N], st: SemState, k: SemKont) -> (resu
         KBinL { op: o, right: r, start: s, end: e, exp: x } => apply_bin_l(st, o, r, s, e, x),
         KBinR { op: o, lty: l, start: s, end: e, rlit: q, exp: x } => apply_bin_r<N>(input, st, o, l, s, e, q, x),
         KCallA { sig: g, args: a, ptys: p, start: s, end: e, exp: x } => apply_call_a<N>(input, st, g, a, p, s, e, x),
-        KProj { fstart: fs, fend: fe, bstart: bs, bend: be, start: s, end: e, exp: x } => apply_proj<N>(input, st, fs, fe, bs, be, s, e, x)
+        KProj { fstart: fs, fend: fe, bstart: bs, bend: be, start: s, end: e, exp: x } => apply_proj<N>(input, st, fs, fe, bs, be, s, e, x),
+        KOpA { slot: slot, ns: ns, ne: ne, args: a, index: i, start: s, end: e, exp: x } => apply_op_a<N>(input, st, slot, ns, ne, a, i, s, e, x)
     };
 }
 fn seed_not(st: SemState, value: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
@@ -5273,6 +5521,344 @@ fn reverse_tys<N: Nat>(input: [byte; up_to N], list: TyList) -> (result: TyList)
 fn reverse_tys_step(st: TysRev) -> (result: TysRev) {
     return match st.rest { TyNil => st, TyCons { head: h, tail: t } => TysRev { rest: t, acc: TyList.TyCons { head: h, tail: st.acc } } };
 }
+// Compiler-operation proof (CP-0019). Each operation slot carries a fixed
+// contract mirroring Stage-0 elaboration: result typing (MNE261/MNE287/
+// MNE292), exactly-one-effect plus authorizing-capability authorization
+// (MNE257/MNE258, MNE288/MNE289, MNE293/MNE294), and per-operand typing
+// (MNE262, MNE290/MNE291, MNE295/MNE296/MNE297). Checking order matches
+// Stage-0: the required type first, authorization second, operands in
+// source order. Obligation kinds 53-67 twin those codes in order.
+fn is_u64_ty(ty: SemType) -> (result: bool) {
+    return match ty {
+        TInt { width: w, signed: s } => w == 64 && !(s),
+        TBool => false,
+        TByte => false,
+        TNamed { start: s, end: e } => false,
+        TSeq => false,
+        TSeqExact { element: element, length: length, length_valid: valid } => false,
+        TPoison => false
+    };
+}
+// A structured path/schema operand is a byte sequence whose ceiling fits
+// the operation bound. Exact bounds and up_to views share the TSeqExact
+// representation (views carry length_valid=false with the bound length),
+// and Stage-0 accepts both through the same ceiling check.
+fn op_view_bound_ok(ty: SemType, max: u64) -> (result: bool) {
+    return match ty {
+        TSeqExact { element: element, length: length, length_valid: valid } => op_view_element_ok(element) && !(length > max),
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: s, end: e } => false,
+        TSeq => false,
+        TPoison => false
+    };
+}
+fn op_view_element_ok(element: SemType) -> (result: bool) {
+    return match element {
+        TByte => true,
+        TBool => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: s, end: e } => false,
+        TSeq => false,
+        TSeqExact { element: e2, length: l2, length_valid: v2 } => false,
+        TPoison => false
+    };
+}
+// Operand contract per slot and source-order index. Returns the MNE-twinned
+// obligation kind for a violation, or 0 when the operand type satisfies
+// its contract. Slot 0 takes one u64 index; slots 1-2 take a path view
+// (bound 1024) and a schema view (bound 64); slot 2 takes a third typed
+// value operand that must be resolved.
+fn op_operand_kind<N: Nat>(input: [byte; up_to N], slot: u64, index: u64, ty: SemType, nominals: NominalTypeIdentityList, rectab: RecordList, enumtab: EnumList) -> (result: u64) {
+    if slot == 1 { return op_read_operand_kind(index, ty); }
+    if slot == 2 { return op_write_operand_kind<N>(input, index, ty, nominals, rectab, enumtab); }
+    return op_fs_operand_kind(index, ty);
+}
+fn op_fs_operand_kind(index: u64, ty: SemType) -> (result: u64) {
+    if index != 0 { return 56; }
+    if is_u64_ty(ty) { return 0; }
+    return 56;
+}
+fn op_read_operand_kind(index: u64, ty: SemType) -> (result: u64) {
+    if index == 0 {
+        if op_view_bound_ok(ty, 1024) { return 0; }
+        return 60;
+    }
+    if op_view_bound_ok(ty, 64) { return 0; }
+    return 61;
+}
+fn op_write_operand_kind<N: Nat>(input: [byte; up_to N], index: u64, ty: SemType, nominals: NominalTypeIdentityList, rectab: RecordList, enumtab: EnumList) -> (result: u64) {
+    if index == 0 {
+        if op_view_bound_ok(ty, 1024) { return 0; }
+        return 65;
+    }
+    if index == 1 {
+        if op_view_bound_ok(ty, 64) { return 0; }
+        return 66;
+    }
+    return op_value_resolved_kind<N>(input, ty, nominals, rectab, enumtab, 67);
+}
+// A structured value (read result, write value operand) is resolved when
+// it is concrete or a nominal the unit declares or imports. Anything else
+// (poison included) violates the operation with the given kind.
+fn op_value_resolved_kind<N: Nat>(input: [byte; up_to N], ty: SemType, nominals: NominalTypeIdentityList, rectab: RecordList, enumtab: EnumList, kind: u64) -> (result: u64) {
+    return match ty {
+        TNamed { start: s, end: e } => op_named_resolved_kind<N>(input, nominals, rectab, enumtab, s, e, kind),
+        TBool => 0,
+        TByte => 0,
+        TInt { width: w, signed: s } => 0,
+        TSeq => 0,
+        TSeqExact { element: element, length: length, length_valid: valid } => 0,
+        TPoison => kind
+    };
+}
+fn op_named_resolved_kind<N: Nat>(input: [byte; up_to N], nominals: NominalTypeIdentityList, rectab: RecordList, enumtab: EnumList, s: u64, e: u64, kind: u64) -> (result: u64) {
+    if op_nominal_resolved<N>(input, nominals, rectab, enumtab, s, e) { return 0; }
+    return kind;
+}
+fn op_nominal_resolved<N: Nat>(input: [byte; up_to N], nominals: NominalTypeIdentityList, rectab: RecordList, enumtab: EnumList, start: u64, end: u64) -> (result: bool) {
+    let imported: NominalLookup = nominal_identity_at<N>(input, nominals, start, end);
+    if imported.found && imported.identity.valid { return true; }
+    let local: NominalLookup = nominal_identity_by_name<N>(input, nominals, start, end);
+    if local.found && local.identity.valid { return true; }
+    let rec: RecFind = rec_lookup<N>(input, rectab, start, end);
+    if rec.found { return true; }
+    let en: EnumFind = enum_lookup<N>(input, enumtab, start, end);
+    if en.found { return true; }
+    return false;
+}
+// Authorization mirrors Stage-0 check_host_authority: the calling function
+// must declare exactly one effect of the operation kind, and that effect's
+// authorizing capability must be a declared capability. Returns the
+// violation kind, or 0 when the call is authorized.
+fn op_auth_kind<N: Nat>(input: [byte; up_to N], slot: u64, fx: EffectList, caps: CapList) -> (result: u64) {
+    let found: OpEffectScan = op_effect_scan<N>(input, slot, fx);
+    if found.count == 0 { return op_auth_missing_kind(slot); }
+    if found.count != 1 { return op_auth_double_kind(slot); }
+    if cap_list_known<N>(input, caps, found.cap_start, found.cap_end) { return 0; }
+    return op_auth_missing_kind(slot);
+}
+record OpEffectScan { count: u64, cap_start: u64, cap_end: u64 }
+record OpEffectWalk { rest: EffectList, count: u64, cap_start: u64, cap_end: u64, slot: u64 }
+fn op_effect_scan<N: Nat>(input: [byte; up_to N], slot: u64, fx: EffectList) -> (result: OpEffectScan) {
+    iterate i over input carrying st: OpEffectWalk = OpEffectWalk { rest: fx, count: 0, cap_start: 0, cap_end: 0, slot: slot } {
+        next st = op_effect_step<N>(input, st);
+    }
+    return OpEffectScan { count: st.count, cap_start: st.cap_start, cap_end: st.cap_end };
+}
+fn op_effect_step<N: Nat>(input: [byte; up_to N], st: OpEffectWalk) -> (result: OpEffectWalk) {
+    return match st.rest {
+        XNil => st,
+        XCons { head: h, tail: t } => op_effect_cons<N>(input, st, h, t)
+    };
+}
+fn op_effect_cons<N: Nat>(input: [byte; up_to N], st: OpEffectWalk, h: Effect, t: EffectList) -> (result: OpEffectWalk) {
+    if op_effect_matches<N>(input, st.slot, h.kind_start, h.kind_end) {
+        return OpEffectWalk { rest: t, count: st.count + 1, cap_start: h.cap_start, cap_end: h.cap_end, slot: st.slot };
+    }
+    return OpEffectWalk { rest: t, count: st.count, cap_start: st.cap_start, cap_end: st.cap_end, slot: st.slot };
+}
+fn op_effect_matches<N: Nat>(input: [byte; up_to N], slot: u64, ks: u64, ke: u64) -> (result: bool) {
+    if ke < ks { return false; }
+    if slot == 0 || slot == 3 || slot == 4 { return op_span_is_fs_list<N>(input, ks, ke); }
+    if slot == 1 { return ke - ks == 15 && span_is_structured_read<N>(input, ks); }
+    if slot == 2 { return ke - ks == 16 && span_is_structured_write<N>(input, ks); }
+    return false;
+}
+fn op_span_is_fs_list<N: Nat>(input: [byte; up_to N], ks: u64, ke: u64) -> (result: bool) {
+    if ke - ks != 7 { return false; }
+    if segment.byte_at<N>(input, ks) != 102 { return false; }
+    if segment.byte_at<N>(input, ks + 1) != 115 { return false; }
+    if segment.byte_at<N>(input, ks + 2) != 95 { return false; }
+    if segment.byte_at<N>(input, ks + 3) != 108 { return false; }
+    if segment.byte_at<N>(input, ks + 4) != 105 { return false; }
+    if segment.byte_at<N>(input, ks + 5) != 115 { return false; }
+    if segment.byte_at<N>(input, ks + 6) != 116 { return false; }
+    return true;
+}
+fn op_auth_missing_kind(slot: u64) -> (result: u64) {
+    if slot == 1 { return 58; }
+    if slot == 2 { return 63; }
+    return 53;
+}
+fn op_auth_double_kind(slot: u64) -> (result: u64) {
+    if slot == 1 { return 59; }
+    if slot == 2 { return 64; }
+    return 54;
+}
+record CapKnownWalk { rest: CapList, start: u64, end: u64, found: bool }
+fn cap_list_known<N: Nat>(input: [byte; up_to N], caps: CapList, start: u64, end: u64) -> (result: bool) {
+    iterate i over input carrying st: CapKnownWalk = CapKnownWalk { rest: caps, start: start, end: end, found: false } {
+        next st = cap_known_step<N>(input, st);
+    }
+    return st.found;
+}
+fn cap_known_step<N: Nat>(input: [byte; up_to N], st: CapKnownWalk) -> (result: CapKnownWalk) {
+    if st.found { return st; }
+    return match st.rest {
+        ANil => st,
+        ACons { head: h, tail: t } => cap_known_cons<N>(input, st, h, t)
+    };
+}
+fn cap_known_cons<N: Nat>(input: [byte; up_to N], st: CapKnownWalk, h: Cap, t: CapList) -> (result: CapKnownWalk) {
+    if spans_equal<N>(input, h.start, h.end, st.start, st.end) { return CapKnownWalk { rest: CapList.ANil, start: st.start, end: st.end, found: true }; }
+    return CapKnownWalk { rest: t, start: st.start, end: st.end, found: false };
+}
+fn seed_op<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if slot > 4 { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
+    return seed_op_expected<N>(input, st, slot, ns, ne, args, start, end, exp);
+}
+fn seed_op_expected<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if slot == 1 { return seed_op_read<N>(input, st, ns, ne, args, start, end, exp); }
+    return seed_op_u64<N>(input, st, slot, ns, ne, args, start, end, exp);
+}
+// Metadata operations produce u64; a required type must equal it (Stage-0
+// MNE261/MNE292 at the operation span).
+fn seed_op_u64<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => seed_op_auth<N>(input, st, slot, ns, ne, args, start, end, exp),
+        XSome { ty: r } => seed_op_u64_req<N>(input, st, slot, ns, ne, args, start, end, exp, r)
+    };
+}
+fn seed_op_u64_req<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy, r: SemType) -> (result: SemState) {
+    if is_u64_ty(r) { return seed_op_auth<N>(input, st, slot, ns, ne, args, start, end, exp); }
+    return sem_drain(sem_emit(st, op_expected_kind(slot), start, end, 1));
+}
+fn op_expected_kind(slot: u64) -> (result: u64) {
+    if slot == 2 { return 62; }
+    return 55;
+}
+// Structured reads produce their required type, which must be present and
+// resolved: a nominal the unit declares or imports, or bounded concrete
+// (Stage-0 MNE287 at the operation span).
+fn seed_op_read<N: Nat>(input: [byte; up_to N], st: SemState, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => sem_drain(sem_emit(st, 57, start, end, 1)),
+        XSome { ty: r } => seed_op_read_req<N>(input, st, ns, ne, args, start, end, exp, r)
+    };
+}
+fn seed_op_read_req<N: Nat>(input: [byte; up_to N], st: SemState, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy, r: SemType) -> (result: SemState) {
+    let bad: u64 = op_value_resolved_kind<N>(input, r, st.nominals, st.rectab, st.enumtab, 57);
+    if bad != 0 { return sem_drain(sem_emit(st, bad, start, end, 1)); }
+    return seed_op_auth<N>(input, st, 1, ns, ne, args, start, end, exp);
+}
+fn seed_op_auth<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let bad: u64 = op_auth_kind<N>(input, slot, st.caller_fx, st.caller_caps);
+    if bad != 0 { return sem_drain(sem_emit(st, bad, start, end, 1)); }
+    return seed_op_args<N>(input, st, slot, ns, ne, args, start, end, exp);
+}
+fn seed_op_args<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let argc: u64 = count_exprs<N>(input, args);
+    if argc != op_arity(slot) { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
+    return match args {
+        ENil => sem_drain(sem_emit(st, 32, ns, ne, 1)),
+        ECons { head: h, tail: t } => push_op_arg(st, slot, ns, ne, args, 0, h, start, end, exp)
+    };
+}
+fn push_op_arg(st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, index: u64, h: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let job: SemJob = SemJob { e: h, exp: op_arg_exp(slot) };
+    let kont: SemKont = SemKont.KOpA { slot: slot, ns: ns, ne: ne, args: args, index: index, start: start, end: end, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+// The filesystem index elaborates against u64 (Stage-0 checks the binding
+// afterwards); structured views and values elaborate unconstrained and the
+// operation validates the established type at the operand span.
+fn op_arg_exp(slot: u64) -> (result: ExpTy) {
+    if slot == 0 || slot == 3 || slot == 4 { return ExpTy.XSome { ty: SemType.TInt { width: 64, signed: false } }; }
+    return ExpTy.XNone;
+}
+fn apply_op_a<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, args: ExprList, index: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match args {
+        ENil => finish_op<N>(input, st, slot, ns, ne, start, end, exp),
+        ECons { head: h, tail: t } => check_op_arg<N>(input, st, slot, ns, ne, h, t, index, start, end, exp)
+    };
+}
+fn check_op_arg<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, h: Expr, t: ExprList, index: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let asp: ExprSpan = expr_span(h);
+    let bad: u64 = op_operand_kind<N>(input, slot, index, st.last_ty, st.nominals, st.rectab, st.enumtab);
+    if bad != 0 { return sem_drain(sem_emit(st, bad, asp.start, asp.end, 1)); }
+    return match t {
+        ENil => finish_op<N>(input, st, slot, ns, ne, start, end, exp),
+        ECons { head: nh, tail: nt } => push_op_arg(st, slot, ns, ne, t, index + 1, nh, start, end, exp)
+    };
+}
+fn finish_op<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => finish_op_ty<N>(input, st, slot, ns, ne, start, end, op_default_result(slot)),
+        XSome { ty: r } => finish_op_req<N>(input, st, slot, ns, ne, start, end, r)
+    };
+}
+fn op_default_result(slot: u64) -> (result: SemType) {
+    if slot == 1 { return SemType.TPoison; }
+    return SemType.TInt { width: 64, signed: false };
+}
+fn finish_op_ty<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, start: u64, end: u64, ty: SemType) -> (result: SemState) {
+    let top: TOp = TOp.TOp { slot: slot, ty: ty, argc: op_arity(slot), ns: ns, ne: ne, identity: canonical_operation_identity<N>(input, ns, ne), start: start, end: end };
+    return sem_emit_top(sem_accept(st, ty), top);
+}
+fn finish_op_req<N: Nat>(input: [byte; up_to N], st: SemState, slot: u64, ns: u64, ne: u64, start: u64, end: u64, r: SemType) -> (result: SemState) {
+    if slot == 1 { return finish_op_ty<N>(input, st, slot, ns, ne, start, end, r); }
+    return finish_op_ty<N>(input, st, slot, ns, ne, start, end, op_u64_result());
+}
+fn op_u64_result() -> (result: SemType) {
+    return SemType.TInt { width: 64, signed: false };
+}
+// Host-operation callable identity: stable per operation name (the same
+// bytes at every call site), owner-free because operations are compiler
+// facilities rather than module declarations.
+fn canonical_operation_identity<N: Nat>(input: [byte; up_to N], ns: u64, ne: u64) -> (result: SemanticIdentity) {
+    let prefix: [byte; 20] = [109 as byte, 110 as byte, 99 as byte, 115 as byte, 58 as byte, 48 as byte, 46 as byte, 50 as byte, 58 as byte, 111 as byte, 112 as byte, 101 as byte, 114 as byte, 97 as byte, 116 as byte, 105 as byte, 111 as byte, 110 as byte, 58 as byte, 58 as byte];
+    let seed: SemanticIdentityBuild = SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    iterate i over prefix carrying d: SemanticIdentityBuild = seed { next d = callable_identity_byte(d, prefix[i]); }
+    let name: SemanticIdentityBuild = identity_component_span<N>(input, d, ns, ne);
+    return SemanticIdentity { bytes: name.bytes, len: name.len, valid: name.valid && ne > ns };
+}
+// Typed operations pop their operands and push the operation result. Like
+// calls, the verifier checks arity discipline and result shape rather than
+// re-deriving the authorization proof; unlike calls, the operation node is
+// source-anchored by re-parsing, mirroring construction verification.
+fn verify_top_op<N: Nat>(input: [byte; up_to N], st: TDepth, t: TOpList, slot: u64, ty: SemType, argc: u64, ns: u64, ne: u64, identity: SemanticIdentity, start: u64, end: u64) -> (result: TDepth) {
+    if slot > 4 || argc != op_arity(slot) || is_poison(ty) || !(identity.valid) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(op_verify_result_ok(slot, ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(semantic_identity_equal(identity, canonical_operation_identity<N>(input, ns, ne))) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if !(op_source_valid<N>(input, slot, ns, ne, argc, start, end)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if st.depth < argc { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    let popped: PopN = pop_tys<N>(input, st.stack, argc);
+    if !(popped.ok) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: popped.rest }, depth: st.depth - argc + 1, ok: true };
+}
+fn op_verify_result_ok(slot: u64, ty: SemType) -> (result: bool) {
+    if slot == 1 { return !(is_poison(ty)); }
+    return is_u64_ty(ty);
+}
+fn op_source_valid<N: Nat>(input: [byte; up_to N], slot: u64, ns: u64, ne: u64, argc: u64, start: u64, end: u64) -> (result: bool) {
+    let parsed: ExprParse = parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        OpCall { slot: found, name_start: fns, name_end: fne, args: a, start: s, end: e } => found == slot && fns == ns && fne == ne && s == start && e == end && count_exprs<N>(input, a) == argc,
+        Name { start: s, end: e } => false,
+        Integer { start: s, end: e, value: v, overflow: o } => false,
+        Boolean { start: s, end: e, value: v } => false,
+        UnaryNot { value: v, start: s, end: e } => false,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: o, left: l, right: r, start: s, end: e } => false,
+        Call { name_start: cns, name_end: cne, args: a, start: s, end: e } => false,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => false
+    };
+}
+fn sabotage_op_arity<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
+    let ops: TOpList = TOpList.PCons { head: TOp.TOp { slot: 0, ty: SemType.TInt { width: 64, signed: false }, argc: 2, ns: 0, ne: 1, identity: invalid_semantic_identity(), start: 0, end: 1 }, tail: TOpList.PNil };
+    return verify_tops<N>(input, ops, ExpTy.XNone);
+}
+fn sabotage_op_source<N: Nat>(input: [byte; up_to N]) -> (result: bool) {
+    let ty: SemType = SemType.TInt { width: 64, signed: false };
+    let ops: TOpList = TOpList.PCons { head: TOp.TInt { value: 1, ty: ty, start: 0, end: 1 }, tail: TOpList.PCons { head: TOp.TOp { slot: 0, ty: ty, argc: 1, ns: 0, ne: 1, identity: canonical_operation_identity<N>(input, 0, 1), start: 0, end: 1 }, tail: TOpList.PNil } };
+    return verify_tops<N>(input, ops, ExpTy.XNone);
+}
 fn seed_call<N: Nat>(input: [byte; up_to N], st: SemState, ns: u64, ne: u64, args: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let got: SigRes = sig_lookup<N>(input, st.sigs, ns, ne);
     if !(got.found) { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
@@ -5313,7 +5899,8 @@ fn expr_span(e: Expr) -> (result: ExprSpan) {
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: ph } => ExprSpan { start: s, end: e2 },
         FiniteMatch { subject: subject, arms: arms, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => ExprSpan { start: s, end: e2 }
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => ExprSpan { start: s, end: e2 },
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e2 } => ExprSpan { start: s, end: e2 }
     };
 }
 // Each argument is checked against its parameter as it completes, mirroring
@@ -5394,7 +5981,8 @@ fn seed_proj<N: Nat>(input: [byte; up_to N], st: SemState, b: Expr, fs: u64, fe:
         Call { name_start: ns, name_end: ne, args: a, start: x, end: y } => seed_proj_base(st, b, fs, fe, s, e, exp),
         Project { base: q, field_start: gs, field_end: ge, start: x, end: y, path: p } => seed_proj_base(st, b, fs, fe, s, e, exp),
         FiniteMatch { subject: subject, arms: arms, start: x, end: y } => seed_proj_base(st, b, fs, fe, s, e, exp),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: x, end: y } => seed_proj_base(st, b, fs, fe, s, e, exp)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: x, end: y } => seed_proj_base(st, b, fs, fe, s, e, exp),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: x, end: y } => seed_proj_base(st, b, fs, fe, s, e, exp)
     };
 }
 // A name-rooted projection resolves the base as an enum type first: a
@@ -5708,7 +6296,7 @@ fn prove_let<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, a: u64, 
     let tob: OblList = param_type_obl(Field { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k }, ty);
     let declared: SemType = param_bound_type(ty);
     let want: ExpTy = ExpTy.XSome { ty: declared };
-    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, v, want);
+    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, st.sig.fx, st.sig.raw_capabilities, v, want);
     let obls1: OblList = append_obls<N>(input, append_obls<N>(input, st.obls, tob), res.obls);
     if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
     if !(skip_verify(res.ty, want)) {
@@ -5731,6 +6319,7 @@ fn finish_let<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, a: u64,
 }
 fn match_obl<N: Nat>(input: [byte; up_to N], st: StmtWalk, actual: SemType, want_ty: SemType, obls: OblList, kind: u64, s: u64, e: u64) -> (result: OblList) {
     if sem_eq<N>(input, actual, want_ty) { return obls; }
+    if seq_borrow_ok<N>(input, actual, want_ty) { return obls; }
     let obl: OblList = OblList.LCons { head: Obligation { kind: kind, start: s, end: e, status: 1 }, tail: OblList.LNil };
     return append_obls<N>(input, obls, obl);
 }
@@ -5741,7 +6330,7 @@ fn dup_obl<N: Nat>(input: [byte; up_to N], st: StmtWalk, bind: BindRes, obls: Ob
 }
 fn prove_if<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, c: Expr, tb: StmtList, eb: StmtList, s: u64, e: u64) -> (result: StmtWalk) {
     let want: ExpTy = ExpTy.XSome { ty: SemType.TBool };
-    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, c, want);
+    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, st.sig.fx, st.sig.raw_capabilities, c, want);
     let obls1: OblList = append_obls<N>(input, st.obls, res.obls);
     if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
     if !(skip_verify(res.ty, want)) {
@@ -5786,7 +6375,8 @@ fn prove_return_val<N: Nat>(input: [byte; up_to N], st: StmtWalk, v: Expr, t: St
         Call { name_start: ns, name_end: ne, args: a, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e2, path: ph } => prove_return_expr<N>(input, st, v, t, qs, qe),
         FiniteMatch { subject: subject, arms: arms, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe)
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe),
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e2 } => prove_return_expr<N>(input, st, v, t, qs, qe)
     };
 }
 fn prove_return_name<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, ns: u64, ne: u64, qs: u64, qe: u64) -> (result: StmtWalk) {
@@ -5802,7 +6392,7 @@ fn prove_return_name<N: Nat>(input: [byte; up_to N], st: StmtWalk, t: StmtList, 
 }
 fn prove_return_expr<N: Nat>(input: [byte; up_to N], st: StmtWalk, v: Expr, t: StmtList, qs: u64, qe: u64) -> (result: StmtWalk) {
     let want: ExpTy = ExpTy.XSome { ty: st.sig.result };
-    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, v, want);
+    let res: ExprRes = prove_expr<N>(input, st.env, st.sigs, st.rectab, st.enumtab, st.nominals, st.sig.effects, st.sig.fx, st.sig.raw_capabilities, v, want);
     let obls1: OblList = append_obls<N>(input, st.obls, res.obls);
     if !(res.ok) { return StmtWalk { ..st, rest: t, obls: obls1 }; }
     if !(skip_verify(res.ty, want)) {
