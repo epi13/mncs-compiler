@@ -213,6 +213,201 @@ def request_value(identities, sources, module_bound=3, byte_bound=1024):
     }
 
 
+def check_operations(project_root, probe, identities):
+    """CP-0019: authorized compiler operations reach proof, typed TOp,
+    CFG, kind-9 SSA, and SSA verification; corruptions are rejected and
+    the unauthorized twin matches Stage-0 at the same span."""
+    operation_source = (
+        "mncs 0.18; module demo.operations; "
+        "record Artifact { count: u64 } "
+        "fn kind_of(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_kind_at(i); } "
+        "fn size_of(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_size_at(i); } "
+        "fn mtime_of(i: u64) -> (r: u64) capability fs effect fs_list authorized_by fs { return fs_entry_mtime_at(i); } "
+        "fn load(p: [byte; up_to 1024], s: [byte; up_to 64]) -> (r: Artifact) capability a effect structured_read authorized_by a { return structured_read(p, s); } "
+        "fn store(p: [byte; up_to 1024], s: [byte; up_to 64], v: Artifact) -> (r: u64) capability a effect structured_write authorized_by a { return structured_write(p, s, v); }"
+    )
+    assert len(operation_source.encode()) <= 1024, len(operation_source.encode())
+    operation_probe = Probe()
+    try:
+        for path in project_root.glob("*.mncs"):
+            path.unlink()
+        (project_root / "a-operations.mncs").write_text(operation_source)
+        operation_native = operation_probe.native(request_value(identities, discover_sources(project_root)))
+        operation_wire_project = copy.deepcopy(operation_probe.last_response["returned"][0])
+        operation_modules = flist(operation_native["modules"])
+        operation_module = next(module for module in operation_modules if module["source_index"] == 0)
+        operation_ssa = operation_module["value_ssa"]
+        assert operation_native["valid"] is True, operation_native["diagnostics"]
+        assert operation_native["value_ssa_valid"] is True, operation_ssa
+        assert operation_ssa["valid"] is True and operation_ssa["verified_function_count"] == 5, operation_ssa
+        operation_oracle = probe.send({"project_oracle": {"root": operation_source, "modules": {}}})
+        assert operation_oracle["valid"] is True, operation_oracle
+        assert operation_oracle["ssa"] is not None
+
+        # Proof reaches typed TOp nodes with canonical operation identity.
+        tops = [op for body in flist(operation_module["flow"]["proof"]["tops"]) for op in flist(body)]
+        top_ops = [op["$p"] for op in tops if "slot" in op.get("$p", {})]
+        assert len(top_ops) == 5, tops
+        assert sorted(op["slot"] for op in top_ops) == [0, 1, 2, 3, 4], top_ops
+        for op in top_ops:
+            name = operation_source[op["ns"]:op["ne"]]
+            assert identity_text(op["identity"]) == f"mncs:0.2:operation::{name}", op
+        operation_functions = flist(operation_ssa["functions"])
+
+        def operation_instructions(function_name):
+            function = next(item for item in operation_functions
+                            if identity_text(item["identity"]).endswith(f"::{function_name}"))
+            return [instruction for block in flist(function["blocks"])
+                    for instruction in flist(block["instructions"])
+                    if instruction["kind"] == 9]
+
+        operation_operators = {
+            name: [(instruction["operator"], instruction["argc"])
+                   for instruction in operation_instructions(name)]
+            for name in ("kind_of", "size_of", "mtime_of", "load", "store")
+        }
+        assert operation_operators == {
+            "kind_of": [(0, 1)], "size_of": [(3, 1)], "mtime_of": [(4, 1)],
+            "load": [(1, 2)], "store": [(2, 3)],
+        }, operation_operators
+        for name in ("kind_of", "size_of", "mtime_of", "load", "store"):
+            for instruction in operation_instructions(name):
+                op_name = operation_source[instruction["binding_start"]:instruction["binding_end"]]
+                assert identity_text(instruction["identity"]) == f"mncs:0.2:operation::{op_name}", instruction
+                assert len(flist(instruction["inputs"])) == instruction["argc"], instruction
+                assert instruction["nominal_identity"]["valid"] is False, instruction
+        load_ty = operation_instructions("load")[0]["ty"]
+        assert load_ty["$v"] == 3, load_ty
+
+        operation_wire_modules = wire_flist(wire_field(operation_wire_project, "modules"))
+        operation_wire_module = next(module for module in operation_wire_modules
+                                     if wire_number(wire_field(module, "source_index")) == 0)
+        operation_wire_ssa = wire_field(operation_wire_module, "value_ssa")
+        operation_wire_functions = wire_flist(wire_field(operation_wire_ssa, "functions"))
+
+        def operation_rejected(name, source_function, mutate):
+            candidate = copy.deepcopy(next(
+                function for function in operation_wire_functions
+                if identity_text(decode(wire_field(function, "identity"))).endswith(f"::{source_function}")
+            ))
+            mutate(candidate)
+            accepted = verify_ssa_function(operation_probe, operation_source, candidate)
+            assert accepted is False, {"case": name, "accepted": accepted}
+
+        def op_instruction(function):
+            return next(inst for block in wire_flist(wire_field(function, "blocks"))
+                        for inst in wire_flist(wire_field(block, "instructions"))
+                        if wire_number(wire_field(inst, "kind")) == 9)
+
+        def mutate_op_slot(function):
+            set_wire_field(op_instruction(function), "operator",
+                           {"integer": {"type": {"bits": 64, "signed": False}, "value": 9}})
+
+        def mutate_op_identity_invalid(function):
+            identity = wire_field(op_instruction(function), "identity")
+            set_wire_field(identity, "valid", {"boolean": {"value": False}})
+
+        def mutate_op_identity_mismatch(function):
+            donor = next(item for item in operation_wire_functions
+                         if identity_text(decode(wire_field(item, "identity"))).endswith("::size_of"))
+            donor_instruction = next(inst for block in wire_flist(wire_field(donor, "blocks"))
+                                     for inst in wire_flist(wire_field(block, "instructions"))
+                                     if wire_number(wire_field(inst, "kind")) == 9)
+            set_wire_field(op_instruction(function), "identity",
+                           copy.deepcopy(wire_field(donor_instruction, "identity")))
+
+        def mutate_op_arity(function):
+            set_wire_field(op_instruction(function), "argc",
+                           {"integer": {"type": {"bits": 64, "signed": False}, "value": 2}})
+
+        def mutate_op_result_type(function):
+            instruction = op_instruction(function)
+            refs = wire_flist(wire_field(instruction, "inputs"))
+            assert len(refs) == 3, len(refs)
+            value_id = wire_number(wire_field(refs[2], "value"))
+            nominal_ty = copy.deepcopy(next(
+                wire_field(value, "ty") for value in wire_flist(wire_field(function, "values"))
+                if wire_number(wire_field(value, "id")) == value_id))
+            set_wire_field(instruction, "ty", nominal_ty)
+            result_id = wire_number(wire_field(instruction, "result"))
+            result_value = next(value for value in wire_flist(wire_field(function, "values"))
+                                if wire_number(wire_field(value, "id")) == result_id)
+            set_wire_field(result_value, "ty", copy.deepcopy(nominal_ty))
+
+        def mutate_op_input_type(function):
+            instruction = op_instruction(function)
+            refs = wire_flist(wire_field(instruction, "inputs"))
+            assert len(refs) == 3, len(refs)
+            path_ref = copy.deepcopy(wire_field(refs[0], "value"))
+            set_wire_field(refs[1], "value", path_ref)
+
+        def mutate_op_provenance(function):
+            instruction = op_instruction(function)
+            end = wire_number(wire_field(instruction, "binding_end"))
+            set_wire_field(instruction, "binding_end",
+                           {"integer": {"type": {"bits": 64, "signed": False}, "value": end + 1}})
+
+        operation_rejected("op_slot", "kind_of", mutate_op_slot)
+        operation_rejected("op_identity_invalid", "kind_of", mutate_op_identity_invalid)
+        operation_rejected("op_identity_mismatch", "kind_of", mutate_op_identity_mismatch)
+        operation_rejected("op_arity", "kind_of", mutate_op_arity)
+        operation_rejected("op_result_type", "store", mutate_op_result_type)
+        operation_rejected("op_input_type", "store", mutate_op_input_type)
+        operation_rejected("op_provenance", "size_of", mutate_op_provenance)
+        operation_positive = verify_ssa_function(
+            operation_probe, operation_source,
+            next(function for function in operation_wire_functions
+                 if identity_text(decode(wire_field(function, "identity"))).endswith("::store")))
+        assert operation_positive is True
+
+        # Unauthorized twin: the same operation without its declared
+        # effect fails natively with kind 53 where Stage-0 reports
+        # MNE257, at the same source span.
+        denied_source = (
+            "mncs 0.18; module demo.denied; "
+            "fn kind_of(i: u64) -> (r: u64) capability fs { return fs_entry_kind_at(i); }"
+        )
+        for path in project_root.glob("*.mncs"):
+            path.unlink()
+        (project_root / "a-denied.mncs").write_text(denied_source)
+        denied_native = operation_probe.native(request_value(identities, discover_sources(project_root)))
+        denied_module = next(module for module in flist(denied_native["modules"])
+                             if module["source_index"] == 0)
+        denied_obligations = flist(denied_module["flow"]["proof"]["obls"])
+        denied_kind = next(item for item in denied_obligations if item["kind"] == 53)
+        denied_oracle = probe.send({"project_oracle": {"root": denied_source, "modules": {}}})
+        assert denied_native["valid"] is False
+        assert denied_oracle["valid"] is False, denied_oracle
+        stage0_denied = next(item for item in denied_oracle["diagnostics"] if item["code"] == "MNE257")
+        op_start = denied_source.index("fs_entry_kind_at(i)")
+        op_span = [op_start, op_start + len("fs_entry_kind_at(i)")]
+        assert [denied_kind["start"], denied_kind["end"]] == op_span, denied_kind
+        assert [stage0_denied["span"]["start"], stage0_denied["span"]["end"]] == op_span, stage0_denied
+        operation_case = {
+            "native_project_valid": operation_native["valid"],
+            "native_value_ssa_valid": operation_native["value_ssa_valid"],
+            "stage0_project_valid": operation_oracle["valid"],
+            "verified_functions": operation_ssa["verified_function_count"],
+            "operation_operators": {name: pairs for name, pairs in operation_operators.items()},
+            "covered": ["fs metadata operations", "nominal Artifact structured read", "nominal Artifact structured write", "canonical operation identity in proof and SSA", "binding-span provenance"],
+            "corruption_rejections": ["slot", "identity invalid", "identity mismatch", "arity", "result type", "input type", "provenance"],
+            "ssa_verifier_positive": operation_positive,
+            "unauthorized_twin": {
+                "native_obligation_kind": denied_kind["kind"],
+                "native_span": [denied_kind["start"], denied_kind["end"]],
+                "stage0_diagnostic": stage0_denied["code"],
+                "stage0_span": [stage0_denied["span"]["start"], stage0_denied["span"]["end"]],
+                "matching": True,
+            },
+        }
+        operation_case["requests"] = operation_probe.requests
+        operation_case["result_sha256"] = operation_probe.digest.hexdigest()
+        operation_case["native_execution_steps_total"] = sum(operation_probe.steps)
+        return operation_case
+    finally:
+        operation_probe.close()
+
+
 def run():
     dependency = "mncs 0.18; module demo.dep; fn answer(value: u64) -> (r: u64) { return value; }"
     root = "mncs 0.18; module demo.root; use demo.dep as dep; fn main() -> (r: u64) { return 1; }"
@@ -1314,6 +1509,10 @@ def run():
             projection_case["native_execution_steps_total"] = sum(projection_probe.steps)
             projection_probe.close()
 
+            # Compiler operations reach proof, typed TOp, CFG, kind-9
+            # SSA, and SSA verification; see check_operations.
+            operation_case = check_operations(project_root, probe, identities)
+
             # Native project resolution follows transitive `use` edges in the
             # same source snapshot, even when the filesystem walk created the
             # modules in reverse path order.
@@ -1375,6 +1574,7 @@ def run():
                 "enum_construction_value_ssa": enum_construction_case,
                 "scalar_match_value_ssa": scalar_match_case,
                 "projection_value_ssa": projection_case,
+                "compiler_operation_value_ssa": operation_case,
                 "deterministic_repetitions": 2,
             }
         finally:
@@ -1388,6 +1588,19 @@ def run():
 
 
 if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "operations":
+        started = time.monotonic()
+        focused_probe = Probe()
+        try:
+            focused_identities = identity_map(focused_probe)
+            with tempfile.TemporaryDirectory(prefix="mncs-project-operations-") as directory:
+                focused_case = check_operations(Path(directory), focused_probe, focused_identities)
+        finally:
+            focused_probe.close()
+        focused_case["elapsed_seconds"] = round(time.monotonic() - started, 3)
+        print(json.dumps(focused_case, indent=2))
+        sys.exit(0)
     started = time.monotonic()
     result = run()
     report = {

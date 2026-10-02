@@ -200,7 +200,7 @@ fn supported_value_type<N: Nat>(input: [byte; up_to N], ty: decl.SemType, nomina
         TInt { width: w, signed: s } => true,
         TNamed { start: a, end: b } => nominal_value_type_bound<N>(input, nominals, a, b),
         TSeq => false,
-        TSeqExact { element: element, length: length, length_valid: valid } => valid && supported_sequence_element<N>(input, element, nominals),
+        TSeqExact { element: element, length: length, length_valid: valid } => supported_sequence_element<N>(input, element, nominals),
         TPoison => false
     };
 }
@@ -394,7 +394,8 @@ fn enum_construct_source_valid<N: Nat>(input: [byte; up_to N], ty: decl.SemType,
         Binary { op: op, left: left, right: right, start: ns, end: ne } => false,
         Call { name_start: ns, name_end: ne, args: args, start: es, end: ee } => false,
         Project { base: base, field_start: fs, field_end: fe, start: es, end: ee, path: path } => enum_construct_project_source<N>(input, ty, variant_start, variant_end, params, start, end, base, fs, fe, path),
-        FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false
+        FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
+        OpCall { slot: slot, name_start: ons, name_end: one, args: a, start: s, end: e } => false
     };
 }
 fn enum_construct_project_source<N: Nat>(input: [byte; up_to N], ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, start: u64, end: u64, base: decl.Expr, field_start: u64, field_end: u64, path: bool) -> (result: bool) {
@@ -410,7 +411,8 @@ fn enum_construct_project_source<N: Nat>(input: [byte; up_to N], ty: decl.SemTyp
         Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 fn enum_construct_source_parts<N: Nat>(input: [byte; up_to N], ty: decl.SemType, variant_start: u64, variant_end: u64, params: decl.BindList, start: u64, end: u64, type_start: u64, type_end: u64, source_variant_start: u64, source_variant_end: u64, fields: decl.ConstructFieldList) -> (result: bool) {
@@ -630,7 +632,8 @@ fn lower_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: dec
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => lower_enum_construct<N>(input, st, rest, ty, vs, ve, f, params, s, e),
         TBin { op: op, ty: ty, start: s, end: e } => lower_binary<N>(input, st, rest, op, ty, s, e),
         TCall { ty: ty, argc: argc, params: params, start: s, end: e, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => lower_call<N>(input, st, rest, ty, argc, params, identity, effects, capabilities, s, e),
-        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: s, end: e } => lower_project<N>(input, st, rest, ty, fs, fe, index, s, e)
+        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: s, end: e } => lower_project<N>(input, st, rest, ty, fs, fe, index, s, e),
+        TOp { slot: slot, ty: ty, argc: argc, ns: ns, ne: ne, identity: identity, start: s, end: e } => lower_top_op<N>(input, st, rest, ty, slot, argc, ns, ne, identity, s, e)
     };
 }
 fn lower_finite_match<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64) -> (result: ExprBuild) {
@@ -768,7 +771,8 @@ fn lower_arm_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation:
         TEnumConstruct { ty: ty, variant_start: variant_start, variant_end: variant_end, field_count: count, params: params, start: start, end: end } => lower_enum_construct<N>(input, st, rest, ty, variant_start, variant_end, count, params, start, end),
         TBin { op: op, ty: ty, start: start, end: end } => lower_binary<N>(input, st, rest, op, ty, start, end),
         TCall { ty: ty, argc: argc, params: params, start: start, end: end, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => lower_call<N>(input, st, rest, ty, argc, params, identity, effects, capabilities, start, end),
-        TProj { ty: ty, fstart: field_start, fend: field_end, field_index: index, start: start, end: end } => lower_project<N>(input, st, rest, ty, field_start, field_end, index, start, end)
+        TProj { ty: ty, fstart: field_start, fend: field_end, field_index: index, start: start, end: end } => lower_project<N>(input, st, rest, ty, field_start, field_end, index, start, end),
+        TOp { slot: slot, ty: ty, argc: argc, ns: ns, ne: ne, identity: identity, start: start, end: end } => lower_top_op<N>(input, st, rest, ty, slot, argc, ns, ne, identity, start, end)
     };
 }
 fn match_context_parameters<N: Nat>(input: [byte; up_to N], env: Environment, stack: ValueStack, block: u64, next_value: u64, values: ValueList, nominals: decl.NominalTypeIdentityList) -> (result: MatchContextBuild) {
@@ -986,6 +990,17 @@ fn emit_binary<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList
     return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: tail }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && scalar_type(left.ty) && decl.sem_eq<N>(input, left.ty, right.ty) && scalar_type(ty), failure_op: st.failure_op };
 }
 
+// Compiler operations lower to kind-9 instructions carrying the operation
+// slot as the operator, the stable operation identity, and the operation
+// name span in the binding fields. Operand typing is the verifier's job
+// (verify_op_instruction), mirroring call lowering.
+fn lower_top_op<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, slot: u64, argc: u64, ns: u64, ne: u64, identity: decl.SemanticIdentity, start: u64, end: u64) -> (result: ExprBuild) {
+    iterate i over input carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: argc, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
+    if !(popped.ok) || popped.remaining != 0 || slot > 4 || argc != decl.op_arity(slot) || !(identity.valid) { return ExprBuild { ..st, rest: rest, ok: false }; }
+    let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 9, operator: slot, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: decl.BindList.BNil, identity: identity, nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: ns, binding_end: ne, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && supported_value_type<N>(input, ty, st.nominals), failure_op: st.failure_op };
+}
 fn lower_call<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, params: decl.BindList, identity: decl.SemanticIdentity, effects: decl.EffectIdentityList, capabilities: decl.CapabilityIdentityList, start: u64, end: u64) -> (result: ExprBuild) {
     iterate i over input carrying popped: PopArgs = PopArgs { stack: st.stack, remaining: argc, arguments: IdList.INil, ok: true } { next popped = pop_call_arg(popped); }
     if !(popped.ok) || popped.remaining != 0 || !(identity.valid) || !(decl.signature_identity_valid<N>(input, effects, capabilities)) { return ExprBuild { ..st, rest: rest, ok: false }; }
@@ -1196,6 +1211,7 @@ fn verify_instruction<N: Nat>(input: [byte; up_to N], function: Function, block:
     if inst.kind == 6 { return verify_match_payload_instruction<N>(input, function, inst); }
     if inst.kind == 7 { return verify_repeat_instruction<N>(input, function, inst); }
     if inst.kind == 8 { return verify_project_instruction<N>(input, function, inst); }
+    if inst.kind == 9 { return verify_op_instruction<N>(input, function, inst); }
     return false;
 }
 fn verify_repeat_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
@@ -1232,7 +1248,8 @@ fn repeat_source_count_matches<N: Nat>(input: [byte; up_to N], start: u64, end: 
         Call { name_start: name_start, name_end: name_end, args: args, start: call_start, end: call_end } => false,
         Project { base: base, field_start: field_start, field_end: field_end, start: project_start, end: project_end, path: path } => false,
         FiniteMatch { subject: subject, arms: arms, start: match_start, end: match_end } => false,
-        EnumConstruct { type_start: type_start, type_end: type_end, variant_start: variant_start, variant_end: variant_end, fields: fields, start: construct_start, end: construct_end } => false
+        EnumConstruct { type_start: type_start, type_end: type_end, variant_start: variant_start, variant_end: variant_end, fields: fields, start: construct_start, end: construct_end } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 fn repeat_count_literal_matches<N: Nat>(input: [byte; up_to N], kind: u64, start: u64, end: u64, expected: u64) -> (result: bool) {
@@ -1286,7 +1303,8 @@ fn project_source_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, fs
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
         Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: os, name_end: oe, args: a, start: s2, end: e2 } => false
     };
 }
 fn verify_match_payload_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
@@ -1349,7 +1367,8 @@ fn payload_extract_source_valid<N: Nat>(input: [byte; up_to N], start: u64, end:
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
         Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 record PayloadSourceArmSearch { rest: decl.FiniteMatchArmList, variant_start: u64, variant_end: u64, binding_start: u64, binding_end: u64, params: decl.BindList, found: bool }
@@ -1426,6 +1445,56 @@ fn binary_operands_match_class<N: Nat>(input: [byte; up_to N], class: u64, ty: d
         TSeq => false,
         TSeqExact { element: element, length: length, length_valid: valid } => false,
         TPoison => false
+    };
+}
+// Kind-9 host-operation instructions: the operator is the operation slot,
+// the binding span names the operation, and the identity must equal the
+// canonical operation identity re-derived from that span. Operands satisfy
+// the same per-slot contract the proof enforces (shared via decl), and the
+// instruction is source-anchored by re-parsing, mirroring projections.
+fn verify_op_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
+    if inst.operator > 4 || inst.argc != decl.op_arity(inst.operator) || !(inst.binding_end > inst.binding_start) { return false; }
+    let expected: decl.SemanticIdentity = decl.canonical_operation_identity<N>(input, inst.binding_start, inst.binding_end);
+    if !(inst.identity.valid) || inst.identity.len == 0 || !(decl.semantic_identity_equal(expected, inst.identity)) { return false; }
+    if !(op_source_valid<N>(input, inst.operator, inst.binding_start, inst.binding_end, inst.argc, inst.start, inst.end)) { return false; }
+    if !(op_result_shape_ok(inst.operator, inst.ty)) { return false; }
+    return id_count<N>(input, inst.inputs) == inst.argc && op_inputs_match<N>(input, function.values, inst.inputs, inst.operator, function.nominals) && bind_list_empty(inst.params) && !(inst.nominal_identity.valid) && inst.variant_start == 0 && inst.variant_end == 0 && decl.signature_identity_valid<N>(input, inst.effects, inst.capabilities) && supported_value_type<N>(input, inst.ty, function.nominals);
+}
+fn op_result_shape_ok(slot: u64, ty: decl.SemType) -> (result: bool) {
+    if slot == 1 { return !(decl.is_poison(ty)); }
+    return decl.is_u64_ty(ty);
+}
+record OpInputCheck { arguments: IdList, values: ValueList, nominals: decl.NominalTypeIdentityList, slot: u64, index: u64, ok: bool }
+fn op_inputs_match<N: Nat>(input: [byte; up_to N], values: ValueList, arguments: IdList, slot: u64, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    iterate i over input carrying st: OpInputCheck = OpInputCheck { arguments: arguments, values: values, nominals: nominals, slot: slot, index: 0, ok: true } { next st = op_input_step<N>(input, st); }
+    return st.ok && id_list_empty(st.arguments);
+}
+fn op_input_step<N: Nat>(input: [byte; up_to N], st: OpInputCheck) -> (result: OpInputCheck) {
+    if !(st.ok) { return st; }
+    return match st.arguments { INil => st, ICons { head: argument, tail: arguments } => op_input_one<N>(input, st, argument, arguments) };
+}
+fn op_input_one<N: Nat>(input: [byte; up_to N], st: OpInputCheck, argument: Id, arguments: IdList) -> (result: OpInputCheck) {
+    let found: LookupValue = find_value<N>(input, st.values, argument.value);
+    if !(found.found) { return OpInputCheck { arguments: arguments, values: st.values, nominals: st.nominals, slot: st.slot, index: st.index + 1, ok: false }; }
+    let bad: u64 = decl.op_operand_kind<N>(input, st.slot, st.index, found.value.ty, st.nominals, decl.RecordList.RNil, decl.EnumList.GNil);
+    return OpInputCheck { arguments: arguments, values: st.values, nominals: st.nominals, slot: st.slot, index: st.index + 1, ok: bad == 0 };
+}
+fn op_source_valid<N: Nat>(input: [byte; up_to N], slot: u64, ns: u64, ne: u64, argc: u64, start: u64, end: u64) -> (result: bool) {
+    let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        OpCall { slot: found, name_start: fns, name_end: fne, args: a, start: s, end: e } => found == slot && fns == ns && fne == ne && s == start && e == end && decl.count_exprs<N>(input, a) == argc,
+        Name { start: s, end: e } => false,
+        Integer { start: s, end: e, value: value, overflow: overflow } => false,
+        Boolean { start: s, end: e, value: value } => false,
+        UnaryNot { value: value, start: s, end: e } => false,
+        Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: cns, name_end: cne, args: a, start: s, end: e } => false,
+        Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
     };
 }
 fn verify_call_instruction<N: Nat>(input: [byte; up_to N], function: Function, inst: Instruction) -> (result: bool) {
@@ -1658,7 +1727,8 @@ fn scalar_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, e
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
         Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 record SourceScalarCasePair { arms: decl.ScalarMatchArmList, cases: ScalarMatchCaseList, count: u64, ok: bool }
@@ -1693,7 +1763,8 @@ fn finite_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, e
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
         Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
 }
 record SourceFiniteCasePair { arms: decl.FiniteMatchArmList, cases: FiniteMatchCaseList, count: u64, ok: bool }
