@@ -66,6 +66,22 @@ a mixed-type regression. Family campaign round 2
 (`campaign-20261001-family-results.json`) repeats the round-1 stage
 classifications on all 9 slices.
 
+The compiler-operation slice (CP-0019) lands next: the five operations
+prove in expected → authority → operand order (kinds 53–67 twinning
+MNE257/MNE258/MNE261/MNE262 and MNE287–MNE297) and lower to verified
+kind-9 SSA (5 functions, 5 operation instructions, 7 corruption
+rejections, kind-53/MNE257 unauthorized twin), with the ungated
+exact→view borrow at name elaboration plus the let/return backstop;
+the semantic suite grows to 131 cases plus eleven proof verdicts and
+the project suite establishes digest `2fb25256…` (42 requests). Family
+campaign round 3 (`campaign-20261002-family-results.json`) moves both
+pulling real sources to verified SSA unmodified
+(`structured-artifact.mncs`, `fs-metadata.mncs`); remaining real-source
+blocks are the CP-0011 nested-match instance and the CP-0001 size
+ceiling. See `campaign-20261002-project-results.json`,
+`campaign-20261002-semantic-results.json`, and the CP-0019 pressure
+record for the explicitly remaining backend/gating/view items.
+
 The 2026-09-26 and 2026-09-25 campaigns below are historical; their recorded
 pins and timings are preserved as measured.
 

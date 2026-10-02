@@ -2,7 +2,54 @@
 
 ID: CP-0019
 
-Status: open
+Status: resolved in compiler through verified SSA (current profile)
+
+## Resolution (2026-10-02)
+
+Native proof now models the five compiler operations real family sources
+call (`fs_entry_kind_at`, `fs_entry_size_at`, `fs_entry_mtime_at`,
+`structured_read`, `structured_write`): parser reservation in call-head
+position with parse-time arity, proof in expected → authority → operand
+order twinning MNE257/MNE258/MNE261/MNE262 and MNE287–MNE297 as native
+obligation kinds 53–67, exactly-one-effect plus declared-capability
+authorization mirroring Stage-0 `check_host_authority`, canonical
+`mncs:0.2:operation::<name>` identities on typed `TOp.TOp` nodes, kind-9
+value-SSA instructions, and SSA verification (slot, arity, identity,
+source, result, inputs). The slice also carries the ungated exact→view
+borrow (`[E; N]` into `[E; up_to M]` when `N <= M`), applied at name
+elaboration with re-annotation to the expected view type plus the
+let/return backstop, mirroring Stage-0
+`exact_view_borrow_dimensions`.
+
+Evidence (locked Stage-0 `a3ac17df`, Profile 0.18):
+
+- `evidence/campaign-20261002-project-results.json`: operation section,
+  5 verified functions, 7 corruption rejections, unauthorized twin
+  kind 53 / MNE257 at identical spans; canonical digest `2fb25256…`.
+- `evidence/campaign-20261002-semantic-results.json`: 131 semantic
+  cases plus 11 proof verdicts pass twice identically (28 operation
+  cases, all Stage-0-agreeing).
+- `evidence/campaign-20261002-family-results.json`: both pulling
+  real sources now reach verified SSA —
+  `examples/source/structured-artifact.mncs` (632 bytes, 2 functions)
+  and `examples/source/fs-metadata.mncs` (708 bytes, 3 functions),
+  unmodified, Stage-0 valid.
+
+Remaining, explicitly out of this slice:
+
+- Backend/runtime lowering for kind-9 operations is unverified; no
+  executable operation support is claimed (backend ownership, adjacent
+  to CP-0018).
+- Operations below their `introduced_profile` are not gated natively:
+  `fs_entry_kind_at` at 0.10 and `structured_read` at 0.17 elaborate
+  natively while Stage-0 rejects them at parse (MNP204/MNP217). Current
+  profiles agree (0.12 admits `fs_entry_kind_at`; 0.18 admits all five).
+  Old-profile parse gating is a separate parser slice with no
+  real-family pull today.
+- Deferred view behaviors stay unimplemented until evidence pulls them:
+  view widen (0.15+), view narrow (0.14+), call-result/projection/
+  repeat → view borrow at non-name sites, and the opaque `TSeq`
+  operand edge.
 
 Category: compiler-architecture
 

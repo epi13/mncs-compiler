@@ -112,6 +112,41 @@ On top of the scalar-match head:
 The highest-leverage next slice is the CP-0019 host-intrinsic proof
 model pulled by real sources (`structured_write`, `structured_read`,
 `fs_entry_kind_at`), then backend lowering for the verified operations.
+(Update: the CP-0019 slice has since landed; see the next section.)
+
+## Compiler-operation proof and value SSA (2026-10-02)
+
+On top of the projection head:
+
+- Compiler operations now prove and lower to verified value SSA:
+  parser reservation of the five operation names with parse-time
+  arity, proof in expected → authority → operand order twinning
+  MNE257/MNE258/MNE261/MNE262 and MNE287–MNE297 as obligation kinds
+  53–67, exactly-one-effect plus declared-capability authorization,
+  canonical `mncs:0.2:operation::<name>` identities on typed
+  `TOp.TOp` nodes, kind-9 SSA instructions with slot/arity/identity/
+  source/result/input verification, and the ungated exact→view borrow
+  at name elaboration plus the let/return backstop. The semantic
+  suite grows to 131 cases plus eleven proof verdicts; the project
+  suite gains an operation section (5 verified functions, 7
+  corruption rejections, unauthorized twin kind 53 / MNE257 at
+  identical spans) with a focused `operations` runner mode.
+- The full project/value-SSA suite establishes a new canonical digest
+  (`2fb25256…`, 42 requests). Both pulling real sources now reach
+  verified SSA unmodified: `structured-artifact.mncs` (632 bytes, 2
+  functions) and `fs-metadata.mncs` (708 bytes, 3 functions). See
+  `evidence/campaign-20261002-project-results.json` and
+  `evidence/campaign-20261002-family-results.json`.
+- Explicitly remaining: backend/runtime lowering for kind-9
+  operations (no executable operation support claimed),
+  introduced-profile gating below 0.12/0.18 (native accepts where
+  Stage-0 reports MNP204/MNP217), and deferred view behaviors (widen,
+  narrow, non-name borrow sites). See the CP-0019 pressure record.
+
+The highest-leverage next slice is now nested-match parsing (CP-0011
+instance, real reproducer `cre1-evidence-combine.mncs`) or the
+per-source size ceiling (CP-0001, real 4364-byte `cli-outcome`
+source), then backend lowering for the verified operations.
 
 ## Historical evidence-backed campaign state (2026-09-25)
 

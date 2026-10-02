@@ -10,11 +10,11 @@ Current locked Stage-0 CLI/bootstrap reference: `a3ac17df69e68f6373cbff336db0a57
 profile 0.18. Earlier pins named below (`4f9e122`, `b0f3e64`, `709ba008`,
 `843c5bc`) are preserved as historical evidence with their original
 measurements. Current pressure probes are in
-[`../evidence/campaign-20261001-pressure-suite-results.json`](../evidence/campaign-20261001-pressure-suite-results.json),
+[`../evidence/campaign-20261002-pressure-suite-results.json`](../evidence/campaign-20261002-pressure-suite-results.json),
 and current native syntax results are in
-[`../evidence/campaign-20261001-profile-surface-results.json`](../evidence/campaign-20261001-profile-surface-results.json).
+[`../evidence/campaign-20261002-profile-surface-results.json`](../evidence/campaign-20261002-profile-surface-results.json).
 
-## Current reconciliation (2026-10-01)
+## Current reconciliation (2026-10-02)
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
@@ -34,9 +34,9 @@ and current native syntax results are in
 | [CP-0014 bool payload regression](0014-bool-payload-regression.md) | Resolved upstream and natively covered | Current Stage-0 accepts the bool-payload fixture; native parse/proof/verified-SSA cover finite matches and enum construction (10 verified functions, 10 corruption rejections). Backend lowering remains open. |
 | [CP-0015 version-aware frontend](0015-version-aware-frontend.md) | Resolved for tested forms | All 21 Profile 0.18 differential cases conform: native parsing and proof accept `!`, negative atoms, repeat literals, `next`, and integer `match` with matching Stage-0 diagnostics. Broader grammar remains bounded. |
 | [CP-0016 linked record call validation](0016-linked-record-call-validation.md) | Resolved upstream | The exact compiler-origin call now returns after a generic language runtime fix for nested nominal payload validation. |
-| [CP-0017 poisoned-result semantic recovery](0017-semantic-poison-recovery.md) | Resolved in compiler; full semantic twin passes | Both operand orders and the 103-case semantic suite plus nine proof verdicts match current Rust diagnostics, including ordered codes/spans, with identical repeated native results on the retained backend. |
+| [CP-0017 poisoned-result semantic recovery](0017-semantic-poison-recovery.md) | Resolved in compiler; full semantic twin passes | Both operand orders and the 131-case semantic suite plus eleven proof verdicts match current Rust diagnostics, including ordered codes/spans, with identical repeated native results on the retained backend. |
 | [CP-0018 verified native-SSA arithmetic](0018-verified-native-ssa-arithmetic.md) | Open | Main's proof-bound C11 adapter (`mncs.native-scalar-ssa/1`) admits only Constant/Call; no integer arithmetic. Backend ownership. Blocks migration off the unattested structural projection. |
-| [CP-0019 host-intrinsic callee model](0019-host-intrinsic-callee-model.md) | Open | Native proof reports kind 32 for effect-authorized host-intrinsic calls that Stage-0 accepts. Compiler-architecture ownership. Blocks real family modules at proof. |
+| [CP-0019 host-intrinsic callee model](0019-host-intrinsic-callee-model.md) | Resolved in compiler through verified SSA (current profile) | Five operations prove (kinds 53–67) and lower to verified kind-9 SSA with canonical identities; both pulling real sources reach verified SSA unmodified. Backend lowering, old-profile gating, and deferred view behaviors remain open; see the finding. |
 | [CP-0020 heterogeneous match env order](0020-heterogeneous-match-env-order.md) | Resolved in compiler | Match lowering reversed block-parameter environments, misaligning arm-to-join edges for mixed-type envs. Fixed at the shared prepare step; scalar/finite/projection sections cover it. |
 
 ## Operating sequence

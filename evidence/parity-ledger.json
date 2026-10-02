@@ -8,7 +8,7 @@
     "role": "Exact locked Rust Stage-0 bootstrap, oracle, and current language/runtime reference."
   },
   "starting_heads_file": "campaign-20260929-start-heads.json",
-  "evidence_namespace": "campaign-20261001-* re-measures the 2026-09-29 campaign at the same pin and compiler head; campaign-20260929-* retains the original finite/enum slice record; prior files keep their exact historical pins and measurements.",
+  "evidence_namespace": "campaign-20261002-* re-measures the obligations plus the CP-0019 compiler-operation slice at the same pin; campaign-20261001-* re-measures the 2026-09-29 campaign at the same pin and compiler head; campaign-20260929-* retains the original finite/enum slice record; prior files keep their exact historical pins and measurements.",
   "rows": [
     {
       "area": "project resolution and fact reuse",
@@ -18,7 +18,9 @@
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
         "campaign-20261001-project-results.json",
-        "campaign-20261001-family-slices.json"
+        "campaign-20261001-family-slices.json",
+        "campaign-20261002-project-results.json",
+        "campaign-20261002-family-results.json"
       ],
       "limits": [
         "64-source and 256-byte metadata caps; tested per-source ceiling N=1024. Host still discovers files and supplies bytes."
@@ -30,7 +32,8 @@
       "claim": "The compiler reports fingerprint_authenticated=false. A host-supplied fingerprint is not trusted as semantic authority and changing it does not change the result.",
       "evidence": [
         "campaign-20260929-project-results.json",
-        "campaign-20261001-project-results.json"
+        "campaign-20261001-project-results.json",
+        "campaign-20261002-project-results.json"
       ],
       "limits": [
         "The compiler does not yet compute a fingerprint from the project snapshot."
@@ -39,10 +42,11 @@
     {
       "area": "canonical callable identity",
       "status": "implemented for imported scalar calls",
-      "claim": "Resolved imported calls carry the canonical Stage-0 callable/declaration identity in compiler typed facts and value SSA.",
+      "claim": "Resolved imported calls carry the canonical Stage-0 callable/declaration identity in compiler typed facts and value SSA. Compiler operations carry canonical mncs:0.2:operation::<name> identities in typed TOp facts and kind-9 SSA.",
       "evidence": [
         "campaign-20260929-project-results.json",
-        "campaign-20261001-project-results.json"
+        "campaign-20261001-project-results.json",
+        "campaign-20261002-project-results.json"
       ],
       "limits": [
         "Imported nominal type identity and imported effect/capability resolution remain outside the tested scalar signature slice."
@@ -54,7 +58,8 @@
       "claim": "The native declaration parser/proof agrees with pinned Stage-0 on 21 positive, negative, and version-gate cases including !, negative atoms, repeat literals, next, and integer match.",
       "evidence": [
         "campaign-20260929-profile-surface-results.json",
-        "campaign-20261001-profile-surface-results.json"
+        "campaign-20261001-profile-surface-results.json",
+        "campaign-20261002-profile-surface-results.json"
       ],
       "limits": [
         "This does not establish complete Profile 0.18 grammar parity."
@@ -63,26 +68,28 @@
     {
       "area": "value-carrying SSA",
       "status": "bounded verified slice",
-      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, record field projection, heterogeneous-type match environments, and arm result joins are verified against Stage-0 body/SSA facts.",
+      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, record field projection, heterogeneous-type match environments, arm result joins, and compiler-operation instructions are verified against Stage-0 body/SSA facts.",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
         "campaign-20261001-project-results.json",
-        "campaign-20261001-scalar-match-value-ssa.json"
+        "campaign-20261001-scalar-match-value-ssa.json",
+        "campaign-20261002-project-results.json"
       ],
       "limits": [
-        "Not full SSA parity; nested matches in arm position, host-intrinsic callees (CP-0019), and over-ceiling sources (CP-0001) remain out of scope, and unsupported operations fail the SSA report closed."
+        "Not full SSA parity; nested matches in arm position and over-ceiling sources (CP-0001) remain out of scope, and unsupported operations fail the SSA report closed."
       ]
     },
     {
       "area": "SSA verifier",
       "status": "partial",
-      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default). The projection slice adds six further corruption rejections (field index, identity invalid, identity mismatch, provenance, result type, forged base).",
+      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default). The projection slice adds six further corruption rejections (field index, identity invalid, identity mismatch, provenance, result type, forged base). The compiler-operation slice adds seven further corruption rejections (slot, identity invalid, identity mismatch, arity, result type, input type, provenance) plus an unauthorized twin matching Stage-0 at the same span.",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
         "campaign-20261001-project-results.json",
-        "campaign-20261001-scalar-match-value-ssa.json"
+        "campaign-20261001-scalar-match-value-ssa.json",
+        "campaign-20261002-project-results.json"
       ],
       "limits": [
         "Verifier coverage is bounded to the emitted instruction/terminator slice."
@@ -131,10 +138,12 @@
     {
       "area": "declaration and semantic proof",
       "status": "partial differential parity",
-      "claim": "Declaration structural/error-span (9 requests) and 103 semantic cases plus nine proof verdicts (111 requests) pass twice identically under retained Cranelift at the current pin.",
+      "claim": "Declaration structural/error-span (9 requests) and 131 semantic cases plus eleven proof verdicts (142 requests) pass twice identically under retained Cranelift at the current pin.",
       "evidence": [
         "campaign-20261001-declaration-results.json",
-        "campaign-20261001-semantic-results.json"
+        "campaign-20261001-semantic-results.json",
+        "campaign-20261002-declaration-results.json",
+        "campaign-20261002-semantic-results.json"
       ],
       "limits": [
         "Only the bounded grammar and recorded proof cases are covered."
@@ -145,7 +154,8 @@
       "status": "partial differential parity",
       "claim": "The four recorded branch/join/return/reachability shapes (21 requests) pass the Rust Stage-0 differential twice at the current pin.",
       "evidence": [
-        "campaign-20261001-flow-results.json"
+        "campaign-20261001-flow-results.json",
+        "campaign-20261002-flow-results.json"
       ],
       "limits": [
         "Typed operations are not yet generally lowered to executable backend code."
@@ -209,7 +219,8 @@
         "campaign-20260927-effects-imported-nominal-ssa.json",
         "campaign-20260928-agent-native-imported-nominal-ssa.json",
         "campaign-20260929-imported-nominal-ssa.json",
-        "campaign-20261001-imported-nominal-ssa.json"
+        "campaign-20261001-imported-nominal-ssa.json",
+        "campaign-20261002-imported-nominal-ssa.json"
       ],
       "limits": [
         "Aggregate and nominal C11 representation/lowering remain absent."
@@ -233,7 +244,9 @@
       "claim": "The project compiler accepts the bounded two-module sample, but uses a 1,024-byte per-source ceiling; the current declaration compiler source is 427,278 bytes.",
       "evidence": [
         "campaign-20261001-project-results.json",
-        "campaign-20261001-pressure-suite-results.json"
+        "campaign-20261001-pressure-suite-results.json",
+        "campaign-20261002-project-results.json",
+        "campaign-20261002-pressure-suite-results.json"
       ],
       "limits": [
         "No growable/shared source storage or full compiler-source ingestion is implemented."
