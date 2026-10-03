@@ -1,5 +1,8 @@
 # Roadmap
 
+<!-- MNCS:generated:begin -->
+<!-- MNCS:generated:end -->
+
 This roadmap separates compiler succession from compiler research. The project should earn each stage with evidence rather than treating self-hosting alone as completion.
 
 ## Phase 0 — Repository foundation

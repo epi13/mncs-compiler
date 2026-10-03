@@ -1,5 +1,8 @@
 # mncs-compiler
 
+<!-- MNCS:generated:begin -->
+<!-- MNCS:generated:end -->
+
 Experimental MNCS compiler implementation, written in `mncs-language` to
 pressure-test the language and move compiler semantics into MNCS while Rust
 remains the Stage-0/bootstrap/reference implementation.
