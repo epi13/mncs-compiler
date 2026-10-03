@@ -6,7 +6,8 @@ use mncs.compiler.source.v1 as source;
 // Header fact only, not a full-module parse. Spans refer to the exact input.
 // code: 0 success; 1 lexical; 2 expected mncs; 3 expected version;
 // 4 expected semicolon; 5 expected module; 6 expected identifier;
-// 7 expected dot or semicolon; 8 unsupported non-ASCII source.
+// 7 expected dot or semicolon; 8 unsupported non-ASCII source;
+// 9 header exceeds the 64-step bounded fuel (global form only).
 record Header { code: u64, start: u64, end: u64, version_start: u64, version_end: u64, module_start: u64, module_end: u64, next_offset: u64, state: u64 }
 
 fn header<N: Nat>(text: [byte; up_to N]) -> (result: Header) {
@@ -26,6 +27,55 @@ fn finish<N: Nat>(text: [byte; up_to N], st: Header) -> (result: Header) {
 fn step<N: Nat>(text: [byte; up_to N], st: Header) -> (result: Header) {
     if st.code != 0 || st.state == 8 { return st; }
     let token: lexer.Token = lexer.significant<N>(text, st.next_offset);
+    if token.diagnostic != 0 { return Header { ..st, code: 1, start: token.start, end: token.end }; }
+    if st.state == 0 {
+        if token.kind == 10 { return Header { ..st, state: 1, next_offset: token.end }; }
+        return Header { ..st, code: 2, start: token.start, end: token.end };
+    }
+    if st.state == 1 {
+        if token.kind == 6 { return Header { ..st, state: 2, next_offset: token.end, version_start: token.start, version_end: token.end }; }
+        return Header { ..st, code: 3, start: token.start, end: token.end };
+    }
+    if st.state == 2 {
+        if token.kind == 63 { return Header { ..st, state: 3, next_offset: token.end }; }
+        return Header { ..st, code: 4, start: token.start, end: token.end };
+    }
+    if st.state == 3 {
+        if token.kind == 11 { return Header { ..st, state: 4, next_offset: token.end }; }
+        return Header { ..st, code: 5, start: token.start, end: token.end };
+    }
+    if st.state == 4 || st.state == 6 {
+        if token.kind == 4 || token.kind == 10 { return Header { ..st, state: 5, next_offset: token.end, module_start: select(st.state == 4, token.start, st.module_start), module_end: token.end }; }
+        return Header { ..st, code: 6, start: token.start, end: token.end };
+    }
+    if token.kind == 61 { return Header { ..st, state: 6, next_offset: token.end }; }
+    if token.kind == 63 { return Header { ..st, state: 8, next_offset: token.end }; }
+    return Header { ..st, code: 7, start: token.start, end: token.end };
+}
+
+// Logical-source header fact (CP-0001): the same eight-state machine over
+// global offsets. A header completes in about one step per significant
+// token, so fixed 64-step fuel replaces the whole-input pass; code 9 marks
+// the fuel-exhausted remainder honestly instead of reporting success.
+fn header_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: Header) {
+    let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
+    if source.ascii_global<P, N>(pages, stride, total) {
+        iterate i up_to 64 carrying st: Header = seed {
+            next st = step_global<P, N>(pages, stride, total, st);
+        }
+        return finish_global<P, N>(pages, stride, total, st);
+    }
+    return Header { ..seed, code: 8, end: total };
+}
+fn finish_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Header) -> (result: Header) {
+    if st.code != 0 || st.state == 8 { return st; }
+    let stepped: Header = step_global<P, N>(pages, stride, total, st);
+    if stepped.code != 0 || stepped.state == 8 { return stepped; }
+    return Header { ..stepped, code: 9 };
+}
+fn step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Header) -> (result: Header) {
+    if st.code != 0 || st.state == 8 { return st; }
+    let token: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, st.next_offset);
     if token.diagnostic != 0 { return Header { ..st, code: 1, start: token.start, end: token.end }; }
     if st.state == 0 {
         if token.kind == 10 { return Header { ..st, state: 1, next_offset: token.end }; }

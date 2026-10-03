@@ -37,3 +37,144 @@ fn line_step<N: Nat>(source: [byte; up_to N], offset: u64, pos: u64, st: LineCol
     if byte_at<N>(source, pos) == 10 { return LineCol { line: st.line + 1, col: 1 }; }
     return LineCol { line: st.line, col: st.col + 1 };
 }
+
+// Logical immutable source (CP-0001): a fixed-stride page composition of
+// bounded views. The host transports pages only; every offset, span, and
+// identity decision below executes in MNCS. Canonical form: stride in
+// 1..=1024; pages.len == ceil(total / stride) (zero pages iff total == 0);
+// every non-terminal page has length exactly stride; the terminal page has
+// length total - (pages.len - 1) * stride. A global offset o in [0, total)
+// addresses page o / stride, intra-page index o % stride: O(1) with no
+// iteration, so per-byte access costs one step regardless of source size.
+// The 1024 sequence ceiling caps one logical source at 1024 pages of 1024
+// bytes (1 MiB); larger corpora are multi-module projects, not one source.
+fn page_count_for(stride: u64, total: u64) -> (result: u64) {
+    if stride == 0 { return 0; }
+    if total == 0 { return 0; }
+    return (total - 1) / stride + 1;
+}
+
+// Structural validation of a transported page composition. Codes: 0 valid;
+// 1 stride is zero; 2 stride exceeds 1024; 3 a page exceeds the stride;
+// 4 a non-terminal page is short; 5 the page count disagrees with
+// ceil(total / stride) (duplicate, missing, or padded pages); 6 the
+// terminal page length disagrees with the claimed total. Validation is
+// O(pages); content identity is a separate fingerprint comparison.
+fn validate_pages<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: u64) {
+    if stride == 0 { return 1; }
+    if stride > 1024 { return 2; }
+    if pages.len != page_count_for(stride, total) { return 5; }
+    if pages.len == 0 { return 0; }
+    iterate i over pages carrying code: u64 = 0 {
+        next code = validate_page_step<P, N>(pages, stride, i, code);
+    }
+    if code != 0 { return code; }
+    let last: u64 = pages.len - 1;
+    if total < last * stride { return 6; }
+    let terminal: [byte; up_to N] = pages[last];
+    if terminal.len != total - last * stride { return 6; }
+    return 0;
+}
+fn validate_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, index: u64, code: u64) -> (result: u64) {
+    if code != 0 { return code; }
+    let page: [byte; up_to N] = pages[index];
+    if page.len > stride { return 3; }
+    if index + 1 < pages.len && page.len != stride { return 4; }
+    return 0;
+}
+
+// Total global byte access: the content byte as u64, or 256 past the end,
+// under a zero stride, or past a transported page edge. Callers validate
+// first; this stays total on malformed input regardless.
+fn byte_at_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64) -> (result: u64) {
+    if stride == 0 { return 256; }
+    if offset >= total { return 256; }
+    let page: u64 = offset / stride;
+    let intra: u64 = offset % stride;
+    if page >= pages.len { return 256; }
+    let view: [byte; up_to N] = pages[page];
+    if intra >= view.len { return 256; }
+    return view[intra] as u64;
+}
+
+// Global spans are stable across stride choices: the same content chunked
+// at any stride lexes to identical spans.
+fn span_valid_global(total: u64, start: u64, end: u64) -> (result: bool) {
+    return start <= end && end <= total;
+}
+
+// The ASCII admission predicate over all transported page bytes. The empty
+// source is vacuously ASCII; a zero stride addresses nothing and likewise
+// admits. Validators run separately; this never fails.
+fn ascii_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: bool) {
+    if stride == 0 || total == 0 { return true; }
+    iterate p over pages carrying valid: bool = true {
+        next valid = ascii_page_step<P, N>(pages, p, valid);
+    }
+    return valid;
+}
+fn ascii_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], index: u64, valid: bool) -> (result: bool) {
+    if !valid { return false; }
+    let page: [byte; up_to N] = pages[index];
+    iterate i over page carrying ok: bool = true {
+        next ok = ok && page[i] as u64 < 128;
+    }
+    return ok;
+}
+
+// FNV-1a/64 content identity, vendored from the mncs.std.fnv1a.v1 step so
+// the compiler owns module identity without a stdlib dependency. Order and
+// duplication sensitive: swapped, duplicated, or dropped pages change the
+// fold. The empty source folds to the basis. Not cryptographic.
+fn fnv_basis() -> (result: u64) { return 14695981039346656037; }
+fn fnv_step(state: u64, value: byte) -> (result: u64) {
+    return (state ^ (value as u64)) *% 1099511628211;
+}
+fn fingerprint_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: u64) {
+    if stride == 0 || total == 0 { return fnv_basis(); }
+    iterate p over pages carrying h: u64 = fnv_basis() {
+        next h = fingerprint_page_step<P, N>(pages, p, h);
+    }
+    return h;
+}
+fn fingerprint_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], index: u64, h: u64) -> (result: u64) {
+    let page: [byte; up_to N] = pages[index];
+    iterate i over page carrying acc: u64 = h {
+        next acc = fnv_step(acc, page[i]);
+    }
+    return acc;
+}
+
+// Global rendering of a byte offset: 1-based line and column under the same
+// convention as line_col. Page p starts at global p * stride; bytes at or
+// past the clamped offset freeze the carry. Out-of-range offsets render the
+// end-of-source position.
+fn line_col_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64) -> (result: LineCol) {
+    let end: u64 = select(offset <= total, offset, total);
+    iterate p over pages carrying st: LineCol = LineCol { line: 1, col: 1 } {
+        next st = line_col_page_step<P, N>(pages, stride, p, end, st);
+    }
+    return st;
+}
+fn line_col_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, index: u64, end: u64, st: LineCol) -> (result: LineCol) {
+    let page: [byte; up_to N] = pages[index];
+    let base: u64 = index * stride;
+    iterate i over page carrying cur: LineCol = st {
+        next cur = line_step_at(base + i, end, page[i] as u64, cur);
+    }
+    return cur;
+}
+fn line_step_at(pos: u64, end: u64, value: u64, st: LineCol) -> (result: LineCol) {
+    if pos >= end { return st; }
+    if value == 10 { return LineCol { line: st.line + 1, col: 1 }; }
+    return LineCol { line: st.line, col: st.col + 1 };
+}
+
+// Static resource accounting for a claimed logical shape: page count,
+// bytes, capacity, and the per-operation step bounds the implementation
+// above honors (byte access O(1), validation O(pages), full scans O(bytes)).
+record LogicalCost { pages: u64, bytes: u64, capacity: u64, byte_at_steps: u64, validate_steps: u64, full_scan_steps: u64 }
+fn accounting(stride: u64, total: u64) -> (result: LogicalCost) {
+    let pages: u64 = page_count_for(stride, total);
+    return LogicalCost { pages: pages, bytes: total, capacity: pages * stride, byte_at_steps: 1, validate_steps: pages, full_scan_steps: total };
+}

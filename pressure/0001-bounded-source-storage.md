@@ -87,3 +87,96 @@ and uses the current 1,024-byte per-source generic ceiling. The current
 remains unimplemented. The Profile 0.10 65-byte reproducer still reports MNE105
 as the old-profile control; that does not contradict the larger current-profile
 project representation.
+
+## Current reconciliation (2026-10-03)
+
+Resolved as MNCS-native source representation; full-pipeline scale remains
+open under CP-0021. This is not a bigger hardcoded limit: the 1,024-byte
+single-view ceiling is unchanged, and no Store-backed kernel semantics or
+host-side tokenizing/parsing was introduced.
+
+Stage-0 (`a3ac17df`, profile 0.18) still caps one bounded view at 1,024
+bytes, and that ceiling is no longer the compiler's source limit. The
+compiler now owns a standalone logical immutable source
+(`src/compiler/source.mncs`): fixed-stride page compositions of bounded
+views (stride 1..1024, at most 1,024 pages, 1 MiB per source) with
+canonical-form validation (codes 0-6), O(1) global byte access by
+quotient/remainder, stride-stable spans, FNV-1a content identity, global
+line/column rendering, and static resource accounting — all executing in
+MNCS, with the host transporting page bytes only. The lexer, segment
+cursor surface, header parser, and kernel shape/evidence entry points
+consume the logical abstraction (`next_token_global`,
+`significant_global`, the `lex_tokens_from` batch traversal,
+`header_global`, `token_shape_global`, `lex_step_global`) with
+cross-boundary token continuation, exact EOF, an 8,192-step per-call scan
+budget (trivia prefixes, diagnostic 6, continue; overlong significant
+tokens refuse as diagnostic 5), and header fuel accounting (code 9 past 64
+steps). Single-view entry points are untouched.
+
+Proof (`tools/test_cp0001.py`, tiers A-D; evidence
+`.build/cp0001-results.json` / `.build/cp0001-matrix.json`, reproduced by
+one command — see below):
+
+- Tier A: 738 strided small-input cases (fixed samples plus seeded fuzz)
+  with full-token oracle equality at strides 1-256, single/batch/
+  significant-walk equivalence, cross-stride fingerprint stability, and
+  single-view triple equivalence including host-driven `lex_step_global`
+  accumulation equal to whole-source `lex_summary`.
+- Tier B: boundary grid (lengths 0-4,097; exact page fills, off-by-ones,
+  straddling tokens, EOF-on-boundary) with 114 batch/single differential
+  cases, plus two-page splits at every position of two samples (42
+  canonical halves lexed identically, 40 non-canonical halves rejected
+  with precise codes).
+- Tier C: every validation code (strides, over-length/short/empty pages,
+  count and terminal mismatches), order/duplication transport faults
+  detected by identity, oversized indexes, empty sources, trivia-prefix
+  and overlong budget edges, header facts including the fuel code,
+  line/column rendering, and accounting checks.
+- Tier D self-host-distance matrix (actual working-tree bytes; the
+  solution itself grew parser/kernel/lexer, which the matrix measures):
+
+| milestone | bytes | transport/lex/parse/proof/CFG/SSA | first failure | pressure |
+| --- | --- | --- | --- | --- |
+| parser | 5,950 | 1/1/0/0/0/0 | parse [1024,1025] | CP-0021 |
+| kernel | 6,297 | 1/0/0/0/0/0 | lex [1262,1263] | CP-0022 |
+| cli-outcome | 4,364 | 1/0/0/0/0/0 | lex [35,36] admission | CP-0002 |
+| lexer | 39,629 | 1/0/0/0/0/0 | lex [14102,14103] | CP-0022 |
+| flow | 20,980 | 1/0/0/0/0/0 | lex [5504,5505] | CP-0022 |
+| project | 63,283 | 1/0/0/0/0/0 | lex [5115,5116] | CP-0022 |
+| ssa | 196,528 | 1/0/0/0/0/0 | lex [12536,12537] | CP-0022 |
+| decl | 490,607 | 1/0/0/0/0/0 | lex [21434,21435] | CP-0022 |
+| synthetic-1024 | 1,024 | 1/1/1/1/1/1 | none | none |
+
+Every milestone lexes stride-invariant (strides min/256/1024) with exact
+global spans modulo the classified CP-0022 `not` pairs (2-267 per file;
+the comparator raises on any second divergence), exact EOF and coverage,
+cross-stride identity, and header facts on all ASCII milestones
+(`outcome.mncs` is byte-exact too — `oracle_exact` at every stride — but
+not admitted: one em dash, header code 8, CP-0002). Oracle maximum
+significant token is 45 bytes and maximum trivia 88 bytes across all
+milestones, against the 8,192-step budget. The synthetic two-module
+project at the 1,024-byte ceiling runs the full native pipeline green
+with oracle agreement (valid, SSA present). No milestone shows a
+non-resolution oracle diagnostic: Stage-0 parses every file (the lone
+MNE173 per file is the single-file-elaborate resolver artifact, split
+out in the matrix script, not a file defect).
+
+First size-free gaps, classified as progress: bare `!` diverges lexically
+by deliberate version-neutral-scanner design (native `(7, MNL002)` vs
+oracle `not`; CP-0022); `outcome.mncs` carries one non-ASCII em dash the
+ASCII-only frontend rejects at admission (CP-0002). Parse/proof/CFG/
+verified-SSA past 1,024 bytes need declaration-stage logical-source fuel
+(CP-0021); the matrix records first-failure span [1024, 1025] there.
+
+Observed digests (cranelift retained sessions): tiers ABC `2789f7e3…bda619`
+(136,301 requests, 95,895 tokens); tier D `8081aec1…d6f6f` (890 requests,
+738,393 tokens, 1,107 s). One cranelift session-thread panic
+(`TryFromIntError(NegOverflow)`) appeared on stderr during tier D; every
+asserted call returned normally and the run exited 0 — unattributed,
+pending a clean rerun.
+
+Reproduce: `python3 tools/test_cp0001.py` (tiers ABCD; `MNCS_CP0001_TIERS`
+selects; `MNCS_CP0001_SMOKE=1` for a fast cut). Existing suite
+revalidation (`test_segment.py` et al. over the additively extended
+modules) and a single full-ABCD evidence capture remain to be run — see
+the CP-0001 child report for the exact commands.

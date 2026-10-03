@@ -18,7 +18,7 @@ and current native syntax results are in
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
-| [CP-0001 bounded source storage](0001-bounded-source-storage.md) | Partial | Current Rust accepts the preserved 65-byte case. Native project input now carries exact per-file byte sequences beyond 256 bytes (tested at 1,024 bytes), but Profile 0.18 caps the current generic source bound at 1,024 and the project snapshot at 64 modules. |
+| [CP-0001 bounded source storage](0001-bounded-source-storage.md) | Resolved as representation; pipeline scale open (CP-0021) | Native logical immutable source (fixed-stride page compositions to 1 MiB) with cross-boundary lexing, headers, and identity proven to 490,607 bytes (`tools/test_cp0001.py`, tier-D matrix). Single-view ceiling unchanged. Parse/proof/CFG/SSA past 1,024 bytes need declaration-stage fuel (CP-0021). |
 | [CP-0002 Unicode classification](0002-unicode-source-classification.md) | Open | Current Rust accepts the Unicode module probe; the native frontend remains ASCII-only. Compiler/frontend gap, not a missing generic language feature. |
 | [CP-0003 bounded scan cost](0003-scan-traversal-cost.md) | Open | Current Rust still rejects the `while` reproducer with MNP106. Bounded traversal remains the compiler workaround; no upstream change was required for the CFG workload. |
 | [CP-0004 boolean comparisons](0004-boolean-comparison.md) | Resolved | Current Stage-0 accepts boolean equality and negation. Native parser support for current syntax is tracked by CP-0015. |
@@ -38,6 +38,8 @@ and current native syntax results are in
 | [CP-0018 verified native-SSA arithmetic](0018-verified-native-ssa-arithmetic.md) | Open | Main's proof-bound C11 adapter (`mncs.native-scalar-ssa/1`) admits only Constant/Call; no integer arithmetic. Backend ownership. Blocks migration off the unattested structural projection. |
 | [CP-0019 host-intrinsic callee model](0019-host-intrinsic-callee-model.md) | Resolved in compiler through verified SSA (current profile) | Five operations prove (kinds 53–67) and lower to verified kind-9 SSA with canonical identities; both pulling real sources reach verified SSA unmodified. Backend lowering, old-profile gating, and deferred view behaviors remain open; see the finding. |
 | [CP-0020 heterogeneous match env order](0020-heterogeneous-match-env-order.md) | Resolved in compiler | Match lowering reversed block-parameter environments, misaligning arm-to-join edges for mixed-type envs. Fixed at the shared prepare step; scalar/finite/projection sections cover it. |
+| [CP-0021 declaration logical-source fuel](0021-declaration-logical-source-fuel.md) | Open | `decl`/`flow`/`ssa`/`project` consume single bounded views; modules past 1,024 bytes are unrepresentable as their input (matrix span [1024,1025]). Needs pages-outer fuel refactor; no language change. Compiler architecture. |
+| [CP-0022 native lexical `not` kind](0022-native-lexical-not-kind.md) | Open | Native scanner has no `not` kind (bare `!` stays `(7, MNL002)` by version-neutral design; oracle emits `not`). Token-stream differentials compare modulo the classified pair. Needs an owning vocabulary decision. |
 
 ## Operating sequence
 
