@@ -58,13 +58,15 @@ def fixed_bytes(data, bound=SOURCE_BOUND):
 class Probe:
     def __init__(self):
         env = dict(os.environ)
-        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+        reference_interpreter = env.get("MNCS_PROBE_BACKEND") == "reference_interpreter"
+        if reference_interpreter:
             env.pop("MNCS_PROBE_BACKEND", None)
         env['MNCS_PROBE_MODULES'] = PROBE_MODULES
         env['MNCS_PROBE_EXECUTION_MODULES'] = ','.join(
             f'mncs.compiler.{unit}.v1' for unit in ['source', 'lexer', 'kernel']
         )
-        env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+        if not reference_interpreter:
+            env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
         env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
             {'module': f'mncs.compiler.{unit}.v1', 'function': function,
              'type_arguments': [nat_arg(bound)]}

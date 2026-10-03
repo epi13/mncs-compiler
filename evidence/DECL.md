@@ -1,5 +1,12 @@
 # Declaration-vertical evidence (segment + decl + check)
 
+> Status note (2026-10-03): the interface tables and byte caps below
+> describe the pre-CP-0001 four-chunk ≤256-byte / single-view spellings
+> and are preserved as history. The current pipeline consumes logical
+> pages with global positions (CP-0001/CP-0021, proven to 558,004
+> bytes); see [`cp0001-matrix.json`](cp0001-matrix.json),
+> [`PARITY.md`](PARITY.md), and the pressure index for live status.
+
 MNCS compiler implementation in `src/compiler/`: bounded source
 segments (`segment.mncs`), declaration/expression parsing (`decl.mncs`
 through `parse_unit`), symbol collection, resolve/span walking, and a tiny

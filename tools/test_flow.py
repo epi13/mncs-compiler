@@ -26,6 +26,27 @@ def blob(data):
     return {"sequence": {"values": [{"byte": {"value": n}} for n in data]}}
 
 
+# CP-0021: flow entry points consume the logical paged source; this suite
+# transports each case as one canonical single-page composition.
+PAGE_BOUND = 1024
+STRIDE_BOUND = 1024
+
+
+def integer(n):
+    return {"integer": {"type": {"bits": 64, "signed": False}, "value": n}}
+
+
+def pages_value(chunks):
+    return {"sequence": {"values": [blob(chunk) for chunk in chunks]}}
+
+
+def logical_args(data, stride=STRIDE_BOUND):
+    total = len(data)
+    assert total <= STRIDE_BOUND
+    pages = [data] if total else []
+    return [pages_value(pages), integer(stride), integer(total)]
+
+
 def decode(value):
     if "record" in value:
         return {key: decode(item) for key, item in value["record"]["fields"]}
@@ -62,7 +83,7 @@ class Probe:
             {
                 "module": "mncs.compiler.flow.v1",
                 "function": "lower_unit",
-                "type_arguments": [{"kind": "nat", "value": length}],
+                "type_arguments": [{"kind": "nat", "value": PAGE_BOUND}, {"kind": "nat", "value": STRIDE_BOUND}],
             }
             for length in lengths
         ])
@@ -92,8 +113,8 @@ class Probe:
         request = {
             "schema_version": "0.1",
             "target": {"module": "mncs.compiler.flow.v1", "function": "lower_unit"},
-            "arguments": [blob(raw)],
-            "type_arguments": [{"kind": "nat", "value": len(raw)}],
+            "arguments": logical_args(raw),
+            "type_arguments": [{"kind": "nat", "value": PAGE_BOUND}, {"kind": "nat", "value": STRIDE_BOUND}],
             "step_budget": 8_000_000,
         }
         result = self.send(request)

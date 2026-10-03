@@ -51,6 +51,23 @@ def blob(data):
     return {"sequence": {"values": [{"byte": {"value": item}} for item in data]}}
 
 
+# CP-0021: decl entry points consume the logical paged source; each padded
+# case travels as one canonical single-page composition (stride 1024).
+PAGE_BOUND = 1024
+STRIDE_BOUND = 1024
+
+
+def pages_value(chunks):
+    return {"sequence": {"values": [blob(chunk) for chunk in chunks]}}
+
+
+def logical_args(data, stride=STRIDE_BOUND):
+    total = len(data)
+    assert total <= STRIDE_BOUND
+    pages = [data] if total else []
+    return [pages_value(pages), integer(stride), integer(total)]
+
+
 def decode(value):
     if "record" in value:
         return {key: decode(item) for key, item in value["record"]["fields"]}
@@ -67,15 +84,17 @@ def decode(value):
 class Probe:
     def __init__(self):
         environment = dict(os.environ)
-        if environment.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+        reference_interpreter = environment.get("MNCS_PROBE_BACKEND") == "reference_interpreter"
+        if reference_interpreter:
             environment.pop("MNCS_PROBE_BACKEND", None)
         environment["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl"
         environment["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.decl.v1"
-        environment.setdefault("MNCS_PROBE_BACKEND", "cranelift")
+        if not reference_interpreter:
+            environment.setdefault("MNCS_PROBE_BACKEND", "cranelift")
         environment["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([{
             "module": "mncs.compiler.decl.v1",
             "function": function,
-            "type_arguments": [nat_arg(SOURCE_BOUND)],
+            "type_arguments": [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
         } for function in ("parse_unit", "prove_unit")])
         self.process = subprocess.Popen(
             [environment.get("MNCS_PROBE_BIN", str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
@@ -114,8 +133,8 @@ def main():
             request = {
                 "schema_version": "0.1",
                 "target": {"module": "mncs.compiler.decl.v1", "function": "parse_unit"},
-                "arguments": [blob(raw)],
-                "type_arguments": [nat_arg(SOURCE_BOUND)],
+                "arguments": logical_args(raw),
+                "type_arguments": [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
                 "step_budget": 8_000_000,
             }
             native = probe.send(request)

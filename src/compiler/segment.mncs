@@ -35,6 +35,10 @@ fn byte_at_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     return source.byte_at_global<P, N>(pages, stride, total, offset);
 }
 
+fn ascii_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: bool) {
+    return source.ascii_global<P, N>(pages, stride, total);
+}
+
 fn span_valid_global(total: u64, start: u64, end: u64) -> (result: bool) {
     return source.span_valid_global(total, start, end);
 }

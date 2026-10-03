@@ -1,5 +1,12 @@
 # Semantic-proof evidence (decl.prove_unit)
 
+> Status note (2026-10-03): the interface spellings and byte caps below
+> describe the pre-CP-0001 four-chunk ≤256-byte forms and are preserved
+> as history. The current pipeline consumes logical pages with global
+> positions (CP-0001/CP-0021, proven to 558,004 bytes); see
+> [`cp0001-matrix.json`](cp0001-matrix.json),
+> [`PARITY.md`](PARITY.md), and the pressure index for live status.
+
 MNCS semantic vertical in `src/compiler/decl.mncs`: symbols to
 semantic facts/types/contracts/effects (`check_sig`), bidirectional proof
 with fused typed lowering (`prove_expr` explicit-stack machine), statement

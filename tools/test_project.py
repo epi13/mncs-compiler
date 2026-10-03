@@ -32,16 +32,36 @@ os.environ.setdefault("MNCS_PROBE_BACKEND", "cranelift")
 os.environ.setdefault("MNCS_PROBE_GENERIC_SEEDS", json.dumps([
     {"module": "mncs.compiler.project.v1", "function": "compile_project",
      "type_arguments": [
-         {"kind": "nat", "value": 3},
+         {"kind": "nat", "value": 1024},
          {"kind": "nat", "value": 1024},
      ]},
     {"module": "mncs.compiler.ssa.v1", "function": "verify_function",
-     "type_arguments": [{"kind": "nat", "value": 1024}]},
+     "type_arguments": [{"kind": "nat", "value": 1024}, {"kind": "nat", "value": 1024}]},
 ]))
 
 
 def byte_sequence(raw):
     return {"sequence": {"values": [{"byte": {"value": value}} for value in raw]}}
+
+
+# CP-0021: the project entry consumes one flat page array plus per-module
+# page descriptors. Fixtures transport each module as canonical pages at
+# the requested stride (default 1024: one page per fixture module).
+PAGE_BOUND = 1024
+STRIDE_DEFAULT = 1024
+
+
+def integer(n):
+    return {"integer": {"type": {"bits": 64, "signed": False}, "value": n}}
+
+
+def pages_value(chunks):
+    return {"sequence": {"values": [byte_sequence(chunk) for chunk in chunks]}}
+
+
+def chunk(data, stride):
+    assert stride >= 1
+    return [data[i:i + stride] for i in range(0, len(data), stride)] or []
 
 
 def discover_sources(root):
@@ -267,44 +287,57 @@ def wire_number(value):
     return next(iter(value.values()))["value"]
 
 
-def verify_ssa_function(probe, source, function, byte_bound=1024):
+def verify_ssa_function(probe, source, function, stride=STRIDE_DEFAULT):
+    raw = source.encode()
+    total = len(raw)
+    chunks = chunk(raw, stride)
+    assert chunks or total == 0
     return probe.native({
         "schema_version": "0.1",
         "target": {"module": "mncs.compiler.ssa.v1", "function": "verify_function"},
-        "arguments": [byte_sequence(source.encode()), function],
-        "type_arguments": [{"kind": "nat", "value": byte_bound}],
+        "arguments": [pages_value(chunks), integer(stride), integer(total), function],
+        "type_arguments": [{"kind": "nat", "value": PAGE_BOUND}, {"kind": "nat", "value": 1024}],
         "step_budget": 8_000_000,
     })
 
 
-def source_value(identities, source_id, path):
+def source_value(identities, source_id, path, page_start, page_count, stride, total):
     return record(identities, "ProjectSource", {
         "source_id": byte_sequence(source_id.encode()),
         "source_path": byte_sequence(path.encode()),
+        "page_start": integer(page_start),
+        "page_count": integer(page_count),
+        "stride": integer(stride),
+        "total": integer(total),
     })
 
 
-def request_value(identities, sources, module_bound=3, byte_bound=1024):
+def request_value(identities, sources, stride=STRIDE_DEFAULT):
+    flat = []
+    descriptors = []
+    for source_id, _, text in sources:
+        chunks = chunk(text, stride)
+        descriptors.append((source_id, len(flat), len(chunks), stride, len(text)))
+        flat.extend(chunks)
     project = record(identities, "ProjectSnapshot", {
         "fingerprint": byte_sequence(hashlib.sha256(
             b"".join(len(source[2]).to_bytes(8, "big") + source[2] for source in sources)
         ).hexdigest().encode()),
         "sources": {"sequence": {"values": [
-            source_value(identities, source_id, source_id)
-            for source_id, _, _ in sources
+            source_value(identities, source_id, source_id, start, count, st, total)
+            for source_id, start, count, st, total in descriptors
         ]}},
     })
     return {
         "schema_version": "0.1",
         "target": {"module": "mncs.compiler.project.v1", "function": "compile_project"},
-        "arguments": [project, {"sequence": {"values": [byte_sequence(text) for _, _, text in sources]}}],
+        "arguments": [project, pages_value(flat)],
         "type_arguments": [
-            # M is a capacity bound. One retained M=3 instance serves the
-            # one-, two-, and three-module fixtures below.
-            {"kind": "nat", "value": module_bound},
-            # Per-file values remain exact length. N is their common Profile
-            # 0.18 sequence ceiling, not padding or semantic source content.
-            {"kind": "nat", "value": byte_bound},
+            # M bounds the flat page array; N bounds each page. Both sit
+            # at the Profile 0.18 sequence ceiling; per-module bytes stay
+            # exact length inside canonical page compositions.
+            {"kind": "nat", "value": PAGE_BOUND},
+            {"kind": "nat", "value": 1024},
         ],
         "step_budget": 8_000_000,
     }

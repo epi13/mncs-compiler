@@ -2,7 +2,7 @@
 
 ID: CP-0021
 
-Status: open (filed from CP-0001 tier-D matrix evidence)
+Status: resolved in mncs-compiler (revalidated by the committed suite + full ABCD matrix)
 
 Category: compiler-architecture
 
@@ -63,6 +63,27 @@ compared).
 ## Ownership
 
 Compiler architecture (declaration/proof/lowering fuel domains); no
-language change is implicated. Until this lands, whole-module native
-compilation stays capped at one bounded view per module, and growing
-`decl.mncs` further widens the self-host distance the matrix measures.
+language change was implicated, and none was needed.
+
+## Resolution (2026-10-03, performance campaign)
+
+The pages-outer refactor landed without raising any bound:
+`decl.parse_unit`/`prove_unit`, `flow.lower_proven_unit`,
+`ssa.lower_value_ssa`, and `project.compile_project` take
+`(pages, stride, total)` with global positions; `project` transports
+one flat page array plus per-module `ProjectSource` descriptors with a
+`descriptors_cover` partition check; `segment.ascii_global` covers the
+paged admission path. Whole-module native compilation is no longer
+capped at one bounded view per module.
+
+Evidence: full ABCD matrix (`evidence/cp0001-matrix.json`, 10 rows,
+zero CP-0021 rows); full project closure green in 1,362 s (baseline
+1,406 s); `test_decl.py` digest byte-identical (`820ac042…`);
+`test_sem.py` 170+11 twice-identical; staged imported-nominal chain
+verified through the new ABI on Cranelift.
+
+Known remaining ceilings (follow-ups, not regressions): the
+`spans_equal_between` 1024-byte counted comparison refuses
+prefix-equal verdicts past fuel (fail closed), and per-module page
+arrays bind at M=1024. Both need measured follow-up once real
+modules press them.

@@ -48,9 +48,9 @@ STAGE_CONFIG = {
         "mncs.compiler.project.v1",
     ),
     "signatures": ((("imported_signatures", [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND]),), "mncs.compiler.project.v1"),
-    "proof": ((("prove_parsed_unit_with_nominals", [NOMINAL_BYTE_BOUND]),), "mncs.compiler.decl.v1"),
-    "cfg": ((("lower_proven_unit", [NOMINAL_BYTE_BOUND]),), "mncs.compiler.flow.v1"),
-    "ssa": ((("lower_value_ssa", [NOMINAL_BYTE_BOUND]),), "mncs.compiler.ssa.v1"),
+    "proof": ((("prove_parsed_unit_with_nominals", [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND]),), "mncs.compiler.decl.v1"),
+    "cfg": ((("lower_proven_unit", [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND]),), "mncs.compiler.flow.v1"),
+    "ssa": ((("lower_value_ssa", [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND]),), "mncs.compiler.ssa.v1"),
 }
 if STAGE_MODE not in {*STAGE_CONFIG, "all", "native-backend"}:
     raise ValueError(f"unsupported imported nominal mode: {STAGE_MODE}")
@@ -77,11 +77,26 @@ from test_project import (
     discover_sources,
     flist,
     identity_map,
+    integer,
     request_value,
     wire_field,
     wire_flist,
     wire_number,
 )
+
+
+def module_logical_args(state, index):
+    """CP-0021: rebuild one module's (pages, stride, total) triple from the
+    persisted flat pages plus its page descriptor in the source wires."""
+    # Descriptors persist in source order, so position equals source_index.
+    meta = state["source_wires"]["sequence"]["values"][index]
+    start = wire_number(wire_field(meta, "page_start"))
+    count = wire_number(wire_field(meta, "page_count"))
+    stride = wire_number(wire_field(meta, "stride"))
+    total = wire_number(wire_field(meta, "total"))
+    flat = state["flat_pages"]["sequence"]["values"]
+    module_pages = {"sequence": {"values": flat[start:start + count]}}
+    return [module_pages, integer(stride), integer(total)]
 
 ROOT = Path(__file__).resolve().parents[1]
 CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", time.strftime("%Y%m%d", time.gmtime()))
@@ -557,15 +572,14 @@ def run() -> dict:
                         assert execution["retained_sessions"] == 1, execution
                     identities = identity_map(probe)
                     native_request = request_value(
-                        identities, sources, module_bound=NOMINAL_MODULE_BOUND,
-                        byte_bound=NOMINAL_BYTE_BOUND,
+                        identities, sources, stride=NOMINAL_BYTE_BOUND,
                     )
-                    snapshot, text_units = native_request["arguments"]
+                    snapshot, flat_pages = native_request["arguments"]
                     source_wires = wire_field(snapshot, "sources")
 
                     built_wire, built = invoke_stage(
                         probe, "build_modules", "mncs.compiler.project.v1",
-                        [source_wires, text_units],
+                        [source_wires, flat_pages],
                         [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                         stage_reports, stage_budget,
                     )
@@ -580,7 +594,7 @@ def run() -> dict:
 
                     imports_wire, imports = invoke_stage(
                         probe, "resolve_imports", "mncs.compiler.project.v1",
-                        [source_wires, text_units, parsed_wire],
+                        [source_wires, flat_pages, parsed_wire],
                         [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                         stage_reports, stage_budget,
                     )
@@ -588,13 +602,13 @@ def run() -> dict:
 
                     local_wire, local_modules = invoke_stage(
                         probe, "collect_local_nominal_modules", "mncs.compiler.project.v1",
-                        [text_units, parsed_wire],
+                        [source_wires, flat_pages, parsed_wire],
                         [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                         stage_reports, stage_budget,
                     )
                     nominal_wire, nominal_modules = invoke_stage(
                         probe, "resolve_project_nominal_modules", "mncs.compiler.project.v1",
-                        [text_units, parsed_wire, local_wire],
+                        [source_wires, flat_pages, parsed_wire, local_wire],
                         [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                         stage_reports, stage_budget,
                     )
@@ -657,7 +671,7 @@ def run() -> dict:
                         "project_source_ids": ["a-root.mncs", "b-nominal-dep.mncs"],
                         "module_bounds": [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                         "source_wires": source_wires,
-                        "text_units": text_units,
+                        "flat_pages": flat_pages,
                         "parsed_wire": parsed_wire,
                         "imports_wire": wire_field(imports_wire, "imports"),
                         "nominal_wire": nominal_wire,
@@ -665,7 +679,7 @@ def run() -> dict:
                         "root_nominals_wire": wire_field(root_nominal_wire, "resolved"),
                         "owner_parsed_wire": owner_parsed_wire,
                         "owner_nominals_wire": wire_field(owner_nominal_wire, "resolved"),
-                        "owner_input": text_units["sequence"]["values"][1],
+                        "owner_descriptor": "rebuilt from flat_pages + source_wires by module_logical_args",
                         "initial_lowering_wire": initial_wire,
                         "native_owner_identity": identity_text(owner_identity),
                         "native_imported_reference_identity": identity_text(imported_reference["identity"]),
@@ -722,58 +736,59 @@ def run() -> dict:
             execution = probe.send({"execution_status": True})
             readiness_seconds = time.monotonic() - started
             progress("stage0-probe-ready")
-            root_input = state["text_units"]["sequence"]["values"][0]
+            root_args = module_logical_args(state, 0)
+            owner_args = module_logical_args(state, 1)
             root_parsed = state["root_parsed_wire"]
             root_nominals = state["root_nominals_wire"]
 
             if STAGE_MODE == "signatures":
                 imported_wire, _ = invoke_stage(
                     probe, "imported_signatures", STAGE_MODULES,
-                    [state["text_units"], root_parsed, state["parsed_wire"], root_nominals, state["nominal_wire"]],
+                    [state["source_wires"], state["flat_pages"], root_parsed, state["parsed_wire"], root_nominals, state["nominal_wire"]],
                     [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                 )
                 state["imported_signatures_wire"] = imported_wire
                 if FIXTURE_KIND == "backend":
                     owner_imported_wire, _ = invoke_stage(
                         probe, "imported_signatures", STAGE_MODULES,
-                        [state["text_units"], state["owner_parsed_wire"], state["parsed_wire"], state["owner_nominals_wire"], state["nominal_wire"]],
+                        [state["source_wires"], state["flat_pages"], state["owner_parsed_wire"], state["parsed_wire"], state["owner_nominals_wire"], state["nominal_wire"]],
                         [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                     )
                     state["owner_imported_signatures_wire"] = owner_imported_wire
             elif STAGE_MODE == "proof":
                 proof_wire, proof = invoke_stage(
                     probe, "prove_parsed_unit_with_nominals", STAGE_MODULES,
-                    [root_input, wire_field(root_parsed, "unit"), state["imported_signatures_wire"], root_nominals],
-                    [NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
+                    [*root_args, wire_field(root_parsed, "unit"), state["imported_signatures_wire"], root_nominals],
+                    [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                 )
                 assert proof["ok"] is True, proof
                 state["proof_wire"] = proof_wire
                 if FIXTURE_KIND == "backend":
                     owner_proof_wire, owner_proof = invoke_stage(
                         probe, "prove_parsed_unit_with_nominals", STAGE_MODULES,
-                        [state["owner_input"], wire_field(state["owner_parsed_wire"], "unit"), state["owner_imported_signatures_wire"], state["owner_nominals_wire"]],
-                        [NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
+                        [*owner_args, wire_field(state["owner_parsed_wire"], "unit"), state["owner_imported_signatures_wire"], state["owner_nominals_wire"]],
+                        [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                     )
                     assert owner_proof["ok"] is True, owner_proof
                     state["owner_proof_wire"] = owner_proof_wire
             elif STAGE_MODE == "cfg":
                 lowered_wire, lowered = invoke_stage(
                     probe, "lower_proven_unit", STAGE_MODULES,
-                    [root_input, state["proof_wire"]], [NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
+                    [*root_args, state["proof_wire"]], [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                 )
                 assert lowered["valid"] is True, lowered
                 state["flow_wire"] = lowered_wire
                 if FIXTURE_KIND == "backend":
                     owner_lowered_wire, owner_lowered = invoke_stage(
                         probe, "lower_proven_unit", STAGE_MODULES,
-                        [state["owner_input"], state["owner_proof_wire"]], [NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
+                        [*owner_args, state["owner_proof_wire"]], [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                     )
                     assert owner_lowered["valid"] is True, owner_lowered
                     state["owner_flow_wire"] = owner_lowered_wire
             elif STAGE_MODE == "ssa":
                 ssa_wire, value_ssa = invoke_stage(
                     probe, "lower_value_ssa", STAGE_MODULES,
-                    [root_input, state["flow_wire"], root_nominals], [NOMINAL_BYTE_BOUND],
+                    [*root_args, state["flow_wire"], root_nominals], [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                     stage_reports, stage_budget,
                 )
                 assert value_ssa["valid"] is True, value_ssa
@@ -783,8 +798,8 @@ def run() -> dict:
                 if FIXTURE_KIND == "backend":
                     owner_ssa_wire, owner_value_ssa = invoke_stage(
                         probe, "lower_value_ssa", STAGE_MODULES,
-                        [state["owner_input"], state["owner_flow_wire"], state["owner_nominals_wire"]],
-                        [NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
+                        [*owner_args, state["owner_flow_wire"], state["owner_nominals_wire"]],
+                        [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND], stage_reports, stage_budget,
                     )
                     assert owner_value_ssa["valid"] is True and owner_value_ssa["verified_function_count"] == 1, owner_value_ssa
                     assert owner_value_ssa["call_count"] == 0, owner_value_ssa

@@ -31,34 +31,42 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
-## Current evidence-backed campaign state (2026-09-29)
+## Current evidence-backed campaign state (2026-10-03)
 
 The lock pins Rust Stage-0 revision
 `a3ac17df69e68f6373cbff336db0a572667d73da` at source Profile 0.18. All
 compiler modules declare 0.18. The [parity matrix](evidence/PARITY.md) and
 machine-readable [ledger](evidence/parity-ledger.json) are current at this
-pin; the 2026-09-25 and 2026-09-26 sections below are preserved as
-historical evidence with their original pins and measurements.
+pin; the dated sections below are preserved as historical evidence with
+their original pins and measurements.
 
-- Verified value SSA now covers finite enum matches and enum construction:
-  finite-match switches, payload extraction, enum construction, exact
-  sequence repetition, nested nominal payloads, and arm result joins, with
-  ten corruption cases rejected and Stage-0 oracle agreement. See
-  `evidence/campaign-20260929-cp0014-value-ssa.json`. The 2026-09-25 note
-  that value SSA "explicitly defers finite matches and enum construction"
-  is superseded.
-- The first unsupported value-SSA operation is integer scalar `TMatch`.
-  Backend/runtime lowering is still unverified for enum construction,
-  finite switch, payload extraction, and sequence repeat. Native
-  executable output remains a narrow test-only structural scalar C11 slice;
+- Verified value SSA covers finite enum matches, enum construction,
+  scalar matches, record projection, nested matches (CP-0011, modulo
+  the outer stack-temp / payload-binding residual), and compiler
+  operations (CP-0019), with Stage-0 oracle agreement throughout.
+  Full project closure: 43 requests in 1,362.503 s. See
+  `evidence/campaign-20261003-project-results.json`.
+- The native pipeline consumes logical paged sources past the old
+  1,024-byte views (CP-0001/CP-0021): tier D proves stride-variant
+  transport to 558,004 bytes with precise feature-gap spans, and the
+  `synthetic-2049` anchor runs the whole pipeline green. See
+  `evidence/cp0001-matrix.json` (10 rows, zero ceiling rows).
+- Backend/runtime lowering is still unverified for enum construction,
+  finite switch, scalar switch, payload extraction, sequence repeat,
+  projection, and compiler operations (CP-0018). Native executable
+  output remains a narrow test-only structural scalar C11 slice;
   replacing that projection with backend admission tied to compiler
-  proof/provenance is open work. Do not infer broad backend parity from the
-  small scalar executable.
-- The 21-case Profile 0.18 surface, pressure reproductions, and
-  imported-nominal SSA evidence are re-recorded at this pin in
-  `evidence/campaign-20260929-profile-surface-results.json`,
-  `evidence/campaign-20260929-pressure-suite-results.json`, and
-  `evidence/campaign-20260929-imported-nominal-ssa.json`.
+  proof/provenance is open work. Do not infer broad backend parity
+  from the small scalar executable.
+- The 21-case Profile 0.18 surface, pressure reproductions,
+  imported-nominal SSA, family slices, and CP-0001 ABCD evidence are
+  re-recorded at this pin in
+  `evidence/campaign-20261003-profile-surface-results.json`,
+  `evidence/campaign-20261003-pressure-suite-results.json`,
+  `evidence/campaign-20261003-imported-nominal-ssa.json`,
+  `evidence/campaign-20261003-family-results.json`,
+  `evidence/cp0001-results.json`, and
+  `evidence/cp0001-matrix.json`.
 
 ## Scalar-match value SSA and family campaign (2026-10-01)
 
@@ -153,6 +161,48 @@ The highest-leverage next slice is now nested-match parsing (CP-0011
 instance, real reproducer `cre1-evidence-combine.mncs`) or the
 per-source size ceiling (CP-0001, real 4364-byte `cli-outcome`
 source), then backend lowering for the verified operations.
+
+## Performance, scalability, and memory campaign (2026-10-03)
+
+On top of the CP-0011/CP-0001 self-ingestion head (`0e63ec1`):
+
+- CP-0021 resolved without raising any bound: `decl`, `flow`, `ssa`,
+  and `project` consume logical pages with global positions
+  (pages-outer fuel; flat pages plus `ProjectSource` descriptors with
+  a `descriptors_cover` partition check). The full ABCD matrix proves
+  stride-variant transport to 558,004 bytes with precise feature-gap
+  spans and zero ceiling rows; `synthetic-2049` runs the whole native
+  pipeline green. See `evidence/cp0001-matrix.json`.
+- CP-0003 hot loops restructured with conditional chunk-chains (total
+  fuel unchanged, existing `if` + `iterate` idiom only): 1-function
+  reference steps 901811→352537, 10-function exhausted→returned. The
+  same reduction relieved every CP-0023 backend-arena exhaustion on
+  the milestones (workload half done; the 16 MiB backend cap itself
+  is unchanged and still unconfigurable).
+- CP-0022 decided: the version-neutral scanner stays — bare `!` is
+  kind 7 + MNL002 with the `decl` 0.13-gated reinterpretation, no
+  `not` kind. Parse/proof conformance stands via CP-0015.
+- Full revalidation green: project closure 1,362.503 s (43 requests,
+  23 native steps, prior pin 1,406.305 s), `test_decl.py` digest
+  byte-identical, `test_sem.py` 170+11 twice-identical, staged
+  imported-nominal chain verified through the new ABI, family
+  campaign 9/9 with oracle agreement. Reference-backend merge
+  section 10/10 green; the 8M-step enum-constructor exhaustion there
+  reproduces identically on the base tree (pre-existing, not a
+  regression).
+- Measured resource contracts: ~4.5 GB per Cranelift project probe,
+  ~3.4 GB per ssa probe (fixed images, unchanged by the refactor),
+  ~15 GB peak for the 4-probe `match-ssa` overlap — the suite's
+  first OOM victim under multi-agent contention. Vector/SIMD
+  audited: semantic foundation sound, but every backend scalarizes
+  and bulk load / find-first primitives are missing, so no
+  compiler vectorization was profitable in this campaign. See
+  `evidence/campaign-20261003-perf.json` and the CP-0023 record.
+
+The highest-leverage next slice is the CP-0015 grammar gaps tier D
+now names with precise spans (generics `<` first-failures), CP-0002
+non-ASCII admission, probe-image/topology memory (backend
+ownership), and the CP-0018 backend-lowering path.
 
 ## Historical evidence-backed campaign state (2026-09-25)
 

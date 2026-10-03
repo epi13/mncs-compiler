@@ -2,8 +2,7 @@
 
 ID: CP-0022
 
-Status: open (filed from CP-0001 tier-D matrix evidence; deliberate-design
-consequence, see below — not a regression)
+Status: decided (2026-10-03): the version-neutral scanner is the native lexical contract; no `not` kind
 
 Category: compiler-architecture (lexical vocabulary)
 
@@ -59,5 +58,22 @@ can hide behind this one.
 ## Ownership
 
 Compiler architecture (lexical vocabulary); Stage-0 behavior is the
-reference. Until decided, token-stream differentials must carry the
-CP-0022 classification the way tier D does.
+reference.
+
+## Decision (2026-10-03, performance campaign)
+
+Keep the version-neutral scanner. The native lexical contract for bare
+`!` is kind 7 (`unknown`) with diagnostic 2 (MNL002) on the exact
+single byte 33, reinterpreted as prefix negation by `decl.expr_step`
+only when the header established the Profile 0.13 gate. No kind 71
+`not` is introduced.
+
+Rationale: there is no correctness gap (CP-0015 proves parse/proof
+conformance for `!` through the gate); a version-neutral `not` kind
+would either break scanner version-neutrality or change old-profile
+`!` rejection shape; the only cost is lexical-differential exactness,
+already handled by the tier-D `compare_modulo_not` precedent with its
+raise-on-other-divergence guard; and the churn (every `(7, 2)`-keyed
+suite plus full revalidation) has zero semantic or performance
+leverage. Token-stream differentials must keep carrying the CP-0022
+classification the way tier D does.
