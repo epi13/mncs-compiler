@@ -1,6 +1,19 @@
 # mncs-compiler
 
 <!-- MNCS:generated:begin -->
+## Project entry
+
+Experimental MNCS compiler implementation, written in mncs-language to pressure-test the language and move compiler semantics into MNCS while Rust remains the Stage-0/bootstrap/reference implementation.
+
+```bash
+tools/bootstrap.sh
+```
+
+Declared capabilities (declarations do not establish execution health):
+
+- `compiler-next-generation/1` — compiler-research-surface (experimental)
+
+Semantic sources and ownership: `.mncs/projections.json`.
 <!-- MNCS:generated:end -->
 
 Experimental MNCS compiler implementation, written in `mncs-language` to

@@ -1,6 +1,9 @@
 # Roadmap
 
 <!-- MNCS:generated:begin -->
+## Evidence-bound roadmap
+
+- **complete** — Declared ambient projection surfaces satisfy their contract (`mncs-compiler:projection-conformance`)
 <!-- MNCS:generated:end -->
 
 This roadmap separates compiler succession from compiler research. The project should earn each stage with evidence rather than treating self-hosting alone as completion.
