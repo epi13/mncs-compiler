@@ -97,17 +97,17 @@ record LoweredUnit {
 // function/block collections inside this module's record authority instead
 // of making downstream consumers reconstruct their storage layout.
 record SsaFunctionCount { rest: FunctionList, count: u64 }
-fn ssa_function_count<N: Nat>(input: [byte; up_to N], lowered: LoweredUnit) -> (result: u64) {
-    iterate i over input carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } { next st = ssa_function_count_step(st); }
+fn ssa_function_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit) -> (result: u64) {
+    iterate i up_to 1024 carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } { next st = ssa_function_count_step(st); }
     return st.count;
 }
 fn ssa_function_count_step(st: SsaFunctionCount) -> (result: SsaFunctionCount) {
     return match st.rest { QNil => st, QCons { head: h, tail: t } => SsaFunctionCount { rest: t, count: st.count + 1 } };
 }
 record SsaFunctionLookup { rest: FunctionList, index: u64, wanted: u64, found: bool, function: FunctionFlow }
-fn ssa_function_at<N: Nat>(input: [byte; up_to N], lowered: LoweredUnit, wanted: u64) -> (result: FunctionFlow) {
+fn ssa_function_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit, wanted: u64) -> (result: FunctionFlow) {
     let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, block_count: 0, unreachable_joins: 0, verified: false };
-    iterate i over input carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } { next st = ssa_function_lookup_step(st); }
+    iterate i up_to 1024 carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } { next st = ssa_function_lookup_step(st); }
     return st.function;
 }
 fn ssa_function_lookup_step(st: SsaFunctionLookup) -> (result: SsaFunctionLookup) {
@@ -128,14 +128,14 @@ fn empty_block(id: u64, live: bool, join: bool) -> (result: Block) {
     };
 }
 
-fn lower_unit<N: Nat>(input: [byte; up_to N]) -> (result: LoweredUnit) {
-    let proof: decl.UnitProve = decl.prove_unit<N>(input);
-    return lower_proven_unit<N>(input, proof);
+fn lower_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: LoweredUnit) {
+    let proof: decl.UnitProve = decl.prove_unit<P, N>(pages, stride, total);
+    return lower_proven_unit<P, N>(pages, stride, total, proof);
 }
 
 // Reuse authoritative proof facts supplied by the project pipeline. This is
 // also the one implementation path used by the standalone adapter above.
-fn lower_proven_unit<N: Nat>(input: [byte; up_to N], proof: decl.UnitProve) -> (result: LoweredUnit) {
+fn lower_proven_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, proof: decl.UnitProve) -> (result: LoweredUnit) {
     if !(proof.ok) {
         return LoweredUnit {
             valid: false, graph_ok: false, proof: proof,
@@ -144,13 +144,13 @@ fn lower_proven_unit<N: Nat>(input: [byte; up_to N], proof: decl.UnitProve) -> (
         };
     }
     let unit: decl.Unit = proof.unit;
-    let fns: FnWalk = lower_functions<N>(input, unit.fns, proof.tops);
-    let count: u64 = diagnostic_count<N>(input, fns.diagnostics);
+    let fns: FnWalk = lower_functions<P, N>(pages, stride, total, unit.fns, proof.tops);
+    let count: u64 = diagnostic_count<P, N>(pages, stride, total, fns.diagnostics);
     return LoweredUnit {
         valid: fns.ok && tops_empty(fns.typed_rest) && count == 0,
         graph_ok: fns.ok && tops_empty(fns.typed_rest), proof: proof,
-        functions: reverse_functions<N>(input, fns.acc),
-        diagnostics: reverse_diagnostics<N>(input, fns.diagnostics),
+        functions: reverse_functions<P, N>(pages, stride, total, fns.acc),
+        diagnostics: reverse_diagnostics<P, N>(pages, stride, total, fns.diagnostics),
         block_count: fns.block_count
     };
 }
@@ -164,32 +164,32 @@ fn first_diagnostic(lowered: LoweredUnit) -> (result: Diagnostic) {
     };
 }
 
-fn lower_functions<N: Nat>(input: [byte; up_to N], fns: decl.FnList, tops: decl.TopsList) -> (result: FnWalk) {
-    iterate i over input carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, ok: true } { next d = lower_fn_step<N>(input, d); }
+fn lower_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: decl.FnList, tops: decl.TopsList) -> (result: FnWalk) {
+    iterate i up_to 1024 carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, ok: true } { next d = lower_fn_step<P, N>(pages, stride, total, d); }
     return d;
 }
-fn lower_fn_step<N: Nat>(input: [byte; up_to N], st: FnWalk) -> (result: FnWalk) {
+fn lower_fn_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FnWalk) -> (result: FnWalk) {
     return match st.rest {
         decl.FnList.DNil => st,
-        decl.FnList.DCons { head: h, tail: t } => lower_one_fn<N>(input, st, h, t)
+        decl.FnList.DCons { head: h, tail: t } => lower_one_fn<P, N>(pages, stride, total, st, h, t)
     };
 }
-fn lower_one_fn<N: Nat>(input: [byte; up_to N], st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (result: FnWalk) {
+fn lower_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (result: FnWalk) {
     let initial: Build = Build {
         rest: h.body.body, typed_rest: st.typed_rest, frames: Frames.FNil,
         current: empty_block(0, true, false), blocks: BlockList.BNil,
         diagnostics: DiagnosticList.DNil, next_id: 1, done: false, ok: h.ok,
         fn_start: h.fn_start, fn_end: h.fn_end,
-        source_end: input.len,
+        source_end: total,
         tail: h.body.ret, has_tail: h.body.has_ret
     };
-    let walked: Build = walk<N>(input, initial);
+    let walked: Build = walk<P, N>(pages, stride, total, initial);
     let finished: Build = finish_build(walked);
-    let blocks: BlockList = reverse_blocks<N>(input, finished.blocks);
-    let n: u64 = block_count<N>(input, blocks);
-    let targets: bool = verify_targets<N>(input, blocks, finished.next_id);
+    let blocks: BlockList = reverse_blocks<P, N>(pages, stride, total, finished.blocks);
+    let n: u64 = block_count<P, N>(pages, stride, total, blocks);
+    let targets: bool = verify_targets<P, N>(pages, stride, total, blocks, finished.next_id);
     let verified: bool = finished.ok && targets && n == finished.next_id;
-    let joins: u64 = diagnostic_count<N>(input, finished.diagnostics);
+    let joins: u64 = diagnostic_count<P, N>(pages, stride, total, finished.diagnostics);
     let flow: FunctionFlow = FunctionFlow {
         fn_start: h.fn_start, fn_end: h.fn_end, entry: 0,
         blocks: blocks, block_count: n, unreachable_joins: joins,
@@ -198,49 +198,49 @@ fn lower_one_fn<N: Nat>(input: [byte; up_to N], st: FnWalk, h: decl.FnDecl, t: d
     return FnWalk {
         rest: t, typed_rest: finished.typed_rest,
         acc: FunctionList.QCons { head: flow, tail: st.acc },
-        diagnostics: append_diagnostics<N>(input, st.diagnostics, finished.diagnostics),
+        diagnostics: append_diagnostics<P, N>(pages, stride, total, st.diagnostics, finished.diagnostics),
         block_count: st.block_count + n, ok: st.ok && verified
     };
 }
 
-fn walk<N: Nat>(input: [byte; up_to N], initial: Build) -> (result: Build) {
-    iterate i over input carrying d: Build = initial { next d = step<N>(input, d); }
+fn walk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: Build) -> (result: Build) {
+    iterate i up_to 1024 carrying d: Build = initial { next d = step<P, N>(pages, stride, total, d); }
     return d;
 }
-fn step<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
+fn step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build) -> (result: Build) {
     if st.done || !(st.ok) { return st; }
     return match st.rest {
-        decl.StmtList.SNil => step_empty<N>(input, st),
-        decl.StmtList.SCons { head: h, tail: t } => step_stmt<N>(input, st, h, t)
+        decl.StmtList.SNil => step_empty<P, N>(pages, stride, total, st),
+        decl.StmtList.SCons { head: h, tail: t } => step_stmt<P, N>(pages, stride, total, st, h, t)
     };
 }
-fn step_empty<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
+fn step_empty<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build) -> (result: Build) {
     return match st.frames {
-        Frames.FNil => finish_tail<N>(input, st),
-        Frames.FCons { head: f, tail: t } => unwind<N>(input, st, f, t)
+        Frames.FNil => finish_tail<P, N>(pages, stride, total, st),
+        Frames.FCons { head: f, tail: t } => unwind<P, N>(pages, stride, total, st, f, t)
     };
 }
-fn step_stmt<N: Nat>(input: [byte; up_to N], st: Build, h: decl.Stmt, t: decl.StmtList) -> (result: Build) {
+fn step_stmt<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, h: decl.Stmt, t: decl.StmtList) -> (result: Build) {
     if st.current.kind != 0 { return Build { ..st, done: true, ok: false }; }
     return match h {
-        decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let<N>(input, st, t, v, a, b),
-        decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch<N>(input, st, t, c, tb, eb),
-        decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail<N>(input, st, t, s, e),
-        decl.Stmt.Return { value: v, start: s, end: e } => add_return<N>(input, st, t, v, s, e)
+        decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let<P, N>(pages, stride, total, st, t, v, a, b),
+        decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch<P, N>(pages, stride, total, st, t, c, tb, eb),
+        decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail<P, N>(pages, stride, total, st, t, s, e),
+        decl.Stmt.Return { value: v, start: s, end: e } => add_return<P, N>(pages, stride, total, st, t, v, s, e)
     };
 }
-fn add_let<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr, name_start: u64, name_end: u64) -> (result: Build) {
-    let attached: Build = attach_expression<N>(input, st, value, 1, name_start, name_end);
+fn add_let<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, value: decl.Expr, name_start: u64, name_end: u64) -> (result: Build) {
+    let attached: Build = attach_expression<P, N>(pages, stride, total, st, value, 1, name_start, name_end);
     return Build { ..attached, rest: t };
 }
-fn add_branch<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, cond: decl.Expr, then_b: decl.StmtList, else_b: decl.StmtList) -> (result: Build) {
-    let attached: Build = attach_expression<N>(input, st, cond, 2, 0, 0);
+fn add_branch<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, cond: decl.Expr, then_b: decl.StmtList, else_b: decl.StmtList) -> (result: Build) {
+    let attached: Build = attach_expression<P, N>(pages, stride, total, st, cond, 2, 0, 0);
     let yes: u64 = attached.next_id;
     let no: u64 = attached.next_id + 1;
     let join: u64 = attached.next_id + 2;
     let branch: Block = Block {
         ..attached.current, kind: 1,
-        expressions: reverse_typed_expressions<N>(input, attached.current.expressions),
+        expressions: reverse_typed_expressions<P, N>(pages, stride, total, attached.current.expressions),
         term_start: decl.expr_start(cond), term_end: decl.expr_end(cond),
         succ0: yes, succ1: no, succ_count: 2
     };
@@ -253,24 +253,24 @@ fn add_branch<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, cond:
         next_id: attached.next_id + 3
     };
 }
-fn add_return<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, value: decl.Expr, s: u64, e: u64) -> (result: Build) {
-    let attached: Build = attach_expression<N>(input, st, value, 3, 0, 0);
-    let source_order: TypedExprList = reverse_typed_expressions<N>(input, attached.current.expressions);
+fn add_return<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, value: decl.Expr, s: u64, e: u64) -> (result: Build) {
+    let attached: Build = attach_expression<P, N>(pages, stride, total, st, value, 3, 0, 0);
+    let source_order: TypedExprList = reverse_typed_expressions<P, N>(pages, stride, total, attached.current.expressions);
     let b: Block = Block { ..attached.current, kind: 3, expressions: source_order, term_start: decl.expr_start(value), term_end: decl.expr_end(value) };
     return Build { ..attached, rest: t, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks } };
 }
-fn add_fail<N: Nat>(input: [byte; up_to N], st: Build, t: decl.StmtList, s: u64, e: u64) -> (result: Build) {
-    let b: Block = Block { ..st.current, kind: 4, expressions: reverse_typed_expressions<N>(input, st.current.expressions), term_start: s, term_end: e };
+fn add_fail<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, s: u64, e: u64) -> (result: Build) {
+    let b: Block = Block { ..st.current, kind: 4, expressions: reverse_typed_expressions<P, N>(pages, stride, total, st.current.expressions), term_start: s, term_end: e };
     return Build { ..st, rest: t, current: b, blocks: BlockList.BCons { head: b, tail: st.blocks } };
 }
 
-fn unwind<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames) -> (result: Build) {
-    if f.phase == 0 { return unwind_then<N>(input, st, f, tail); }
-    return unwind_else<N>(input, st, f, tail);
+fn unwind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: Frame, tail: Frames) -> (result: Build) {
+    if f.phase == 0 { return unwind_then<P, N>(pages, stride, total, st, f, tail); }
+    return unwind_else<P, N>(pages, stride, total, st, f, tail);
 }
-fn unwind_then<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind_then<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: Frame, tail: Frames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
-    let first: Build = close_to_join<N>(input, st, f.join_id);
+    let first: Build = close_to_join<P, N>(pages, stride, total, st, f.join_id);
     let changed: Frame = Frame { ..f, phase: 1, then_falls: falls };
     return Build {
         ..first, rest: f.else_body,
@@ -278,9 +278,9 @@ fn unwind_then<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames
         current: empty_block(f.else_id, f.parent_live, false)
     };
 }
-fn unwind_else<N: Nat>(input: [byte; up_to N], st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind_else<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: Frame, tail: Frames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
-    let second: Build = close_to_join<N>(input, st, f.join_id);
+    let second: Build = close_to_join<P, N>(pages, stride, total, st, f.join_id);
     let join_live: bool = f.then_falls || falls;
     let diags: DiagnosticList = add_join_diagnostic(second, join_live, 0, st.source_end);
     return Build {
@@ -293,28 +293,28 @@ fn add_join_diagnostic(st: Build, live: bool, start: u64, end: u64) -> (result: 
     if live { return st.diagnostics; }
     return DiagnosticList.DCons { head: Diagnostic { code: 38, start: start, end: end }, tail: st.diagnostics };
 }
-fn close_to_join<N: Nat>(input: [byte; up_to N], st: Build, join_id: u64) -> (result: Build) {
+fn close_to_join<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, join_id: u64) -> (result: Build) {
     if st.current.kind != 0 { return st; }
-    let source_order: TypedExprList = reverse_typed_expressions<N>(input, st.current.expressions);
+    let source_order: TypedExprList = reverse_typed_expressions<P, N>(pages, stride, total, st.current.expressions);
     let b: Block = Block { ..st.current, kind: 2, expressions: source_order, succ0: join_id, succ_count: 1 };
     return Build { ..st, current: b, blocks: BlockList.BCons { head: b, tail: st.blocks } };
 }
-fn finish_tail<N: Nat>(input: [byte; up_to N], st: Build) -> (result: Build) {
+fn finish_tail<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build) -> (result: Build) {
     if !(st.has_tail) { return Build { ..st, done: true, ok: false }; }
     if st.current.kind != 0 { return Build { ..st, done: true }; }
-    let attached: Build = attach_expression<N>(input, st, st.tail, 3, 0, 0);
-    let source_order: TypedExprList = reverse_typed_expressions<N>(input, attached.current.expressions);
+    let attached: Build = attach_expression<P, N>(pages, stride, total, st, st.tail, 3, 0, 0);
+    let source_order: TypedExprList = reverse_typed_expressions<P, N>(pages, stride, total, attached.current.expressions);
     let b: Block = Block { ..attached.current, kind: 3, expressions: source_order, term_start: decl.expr_start(attached.tail), term_end: decl.expr_end(attached.tail) };
     return Build { ..attached, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks }, done: true };
 }
-fn attach_expression<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64) -> (result: Build) {
+fn attach_expression<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64) -> (result: Build) {
     return match st.typed_rest {
         decl.TopsList.TLNil => Build { ..st, done: true, ok: false },
-        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<N>(input, st, expression, role, binding_start, binding_end, ops, rest)
+        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<P, N>(pages, stride, total, st, expression, role, binding_start, binding_end, ops, rest)
     };
 }
-fn attach_typed_ops<N: Nat>(input: [byte; up_to N], st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
-    let n: u64 = decl.count_tops<N>(input, ops);
+fn attach_typed_ops<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
+    let n: u64 = decl.count_tops<P, N>(pages, stride, total, ops);
     if n == 0 { return Build { ..st, done: true, ok: false }; }
     let typed: TypedExpr = TypedExpr { role: role, start: decl.expr_start(expression), end: decl.expr_end(expression), binding_start: binding_start, binding_end: binding_end, ops: ops, op_count: n };
     let exprs: TypedExprList = TypedExprList.ECons { head: typed, tail: st.current.expressions };
@@ -327,8 +327,8 @@ fn tops_empty(tops: decl.TopsList) -> (result: bool) {
         decl.TopsList.TLCons { head: h, tail: t } => false
     };
 }
-fn reverse_typed_expressions<N: Nat>(input: [byte; up_to N], expressions: TypedExprList) -> (result: TypedExprList) {
-    iterate i over input carrying d: TypedExprRev = TypedExprRev { rest: expressions, acc: TypedExprList.ENil } { next d = reverse_typed_expression_step(d); }
+fn reverse_typed_expressions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, expressions: TypedExprList) -> (result: TypedExprList) {
+    iterate i up_to 1024 carrying d: TypedExprRev = TypedExprRev { rest: expressions, acc: TypedExprList.ENil } { next d = reverse_typed_expression_step(d); }
     return d.acc;
 }
 fn reverse_typed_expression_step(st: TypedExprRev) -> (result: TypedExprRev) {
@@ -342,8 +342,8 @@ fn finish_build(st: Build) -> (result: Build) {
     return Build { ..st, done: true, ok: false };
 }
 
-fn reverse_blocks<N: Nat>(input: [byte; up_to N], list: BlockList) -> (result: BlockList) {
-    iterate i over input carrying d: BlockRev = BlockRev { rest: list, acc: BlockList.BNil } { next d = reverse_block_step(d); }
+fn reverse_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: BlockList) -> (result: BlockList) {
+    iterate i up_to 1024 carrying d: BlockRev = BlockRev { rest: list, acc: BlockList.BNil } { next d = reverse_block_step(d); }
     return d.acc;
 }
 fn reverse_block_step(st: BlockRev) -> (result: BlockRev) {
@@ -352,8 +352,8 @@ fn reverse_block_step(st: BlockRev) -> (result: BlockRev) {
         BCons { head: h, tail: t } => BlockRev { rest: t, acc: BlockList.BCons { head: h, tail: st.acc } }
     };
 }
-fn block_count<N: Nat>(input: [byte; up_to N], blocks: BlockList) -> (result: u64) {
-    iterate i over input carrying d: BlockCount = BlockCount { rest: blocks, count: 0 } { next d = block_count_step(d); }
+fn block_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList) -> (result: u64) {
+    iterate i up_to 1024 carrying d: BlockCount = BlockCount { rest: blocks, count: 0 } { next d = block_count_step(d); }
     return d.count;
 }
 fn block_count_step(st: BlockCount) -> (result: BlockCount) {
@@ -362,8 +362,8 @@ fn block_count_step(st: BlockCount) -> (result: BlockCount) {
         BCons { head: h, tail: t } => BlockCount { rest: t, count: st.count + 1 }
     };
 }
-fn verify_targets<N: Nat>(input: [byte; up_to N], blocks: BlockList, limit: u64) -> (result: bool) {
-    iterate i over input carrying d: TargetCheck = TargetCheck { rest: blocks, limit: limit, ok: true } { next d = target_step(d); }
+fn verify_targets<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList, limit: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying d: TargetCheck = TargetCheck { rest: blocks, limit: limit, ok: true } { next d = target_step(d); }
     return d.ok && block_list_empty(d.rest);
 }
 fn block_list_empty(list: BlockList) -> (result: bool) {
@@ -383,8 +383,8 @@ fn target_check_block(st: TargetCheck, h: Block, t: BlockList) -> (result: Targe
     return TargetCheck { ..st, rest: t, ok: false };
 }
 
-fn diagnostic_count<N: Nat>(input: [byte; up_to N], list: DiagnosticList) -> (result: u64) {
-    iterate i over input carrying d: DiagCount = DiagCount { rest: list, count: 0 } { next d = count_diag_step(d); }
+fn diagnostic_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: u64) {
+    iterate i up_to 1024 carrying d: DiagCount = DiagCount { rest: list, count: 0 } { next d = count_diag_step(d); }
     return d.count;
 }
 fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
@@ -394,13 +394,13 @@ fn count_diag_step(st: DiagCount) -> (result: DiagCount) {
     };
 }
 
-fn append_diagnostics<N: Nat>(input: [byte; up_to N], first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
-    let rev: DiagnosticList = reverse_diagnostics<N>(input, first);
-    iterate i over input carrying d: DiagRev = DiagRev { rest: rev, acc: second } { next d = prepend_diag_step(d); }
+fn append_diagnostics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, first: DiagnosticList, second: DiagnosticList) -> (result: DiagnosticList) {
+    let rev: DiagnosticList = reverse_diagnostics<P, N>(pages, stride, total, first);
+    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: rev, acc: second } { next d = prepend_diag_step(d); }
     return d.acc;
 }
-fn reverse_diagnostics<N: Nat>(input: [byte; up_to N], list: DiagnosticList) -> (result: DiagnosticList) {
-    iterate i over input carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } { next d = reverse_diag_step(d); }
+fn reverse_diagnostics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: DiagnosticList) {
+    iterate i up_to 1024 carrying d: DiagRev = DiagRev { rest: list, acc: DiagnosticList.DNil } { next d = reverse_diag_step(d); }
     return d.acc;
 }
 fn reverse_diag_step(st: DiagRev) -> (result: DiagRev) {
@@ -416,8 +416,8 @@ fn prepend_diag_step(st: DiagRev) -> (result: DiagRev) {
     };
 }
 
-fn reverse_functions<N: Nat>(input: [byte; up_to N], list: FunctionList) -> (result: FunctionList) {
-    iterate i over input carrying d: FnRev = FnRev { rest: list, acc: FunctionList.QNil } { next d = reverse_fn_step(d); }
+fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: FunctionList) -> (result: FunctionList) {
+    iterate i up_to 1024 carrying d: FnRev = FnRev { rest: list, acc: FunctionList.QNil } { next d = reverse_fn_step(d); }
     return d.acc;
 }
 fn reverse_fn_step(st: FnRev) -> (result: FnRev) {

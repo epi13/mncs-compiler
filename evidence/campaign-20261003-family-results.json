@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "campaign_id": "20261003",
-  "compiler_revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+  "compiler_revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
   "compiler_dirty": true,
   "stage0_revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
   "source_profile": "0.18",
@@ -19,8 +19,8 @@
       "dirty": false
     }
   },
-  "probe_requests": 18,
-  "probe_steps_total": 8,
+  "probe_requests": 19,
+  "probe_steps_total": 9,
   "slices": [
     {
       "file_report": {
@@ -30,7 +30,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.013,
+      "elapsed_seconds": 0.017,
       "native_valid": true,
       "native_value_ssa_valid": true,
       "native_diagnostics": [],
@@ -65,7 +65,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.018,
+      "elapsed_seconds": 0.024,
       "native_valid": false,
       "native_value_ssa_valid": false,
       "native_diagnostics": [
@@ -118,7 +118,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.03,
+      "elapsed_seconds": 0.04,
       "native_valid": true,
       "native_value_ssa_valid": true,
       "native_diagnostics": [],
@@ -173,7 +173,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.093,
+      "elapsed_seconds": 0.084,
       "native_valid": true,
       "native_value_ssa_valid": true,
       "native_diagnostics": [],
@@ -203,7 +203,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.09,
+      "elapsed_seconds": 0.084,
       "native_valid": true,
       "native_value_ssa_valid": true,
       "native_diagnostics": [],
@@ -233,7 +233,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.089,
+      "elapsed_seconds": 0.1,
       "native_valid": true,
       "native_value_ssa_valid": true,
       "native_diagnostics": [],
@@ -263,7 +263,7 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.014,
+      "elapsed_seconds": 0.016,
       "native_valid": false,
       "native_value_ssa_valid": false,
       "native_diagnostics": [
@@ -311,19 +311,42 @@
           "repo_dirty": false
         }
       },
-      "elapsed_seconds": 0.015,
-      "native_valid": null,
-      "native_value_ssa_valid": null,
-      "stage": "transport-capacity",
-      "detail": {
-        "status": "invalid_request",
-        "failure": {
-          "identity": "mncs:compiler:backend-artifact:4f267e065048c277de4787461283cdaddb647646d5cd76b93d15f393068774ed",
-          "reason": "MNCS_VALUE_CONTRACT argument 1[0]: view length exceeds capacity: capacity 1024, received 4364"
+      "elapsed_seconds": 0.017,
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "native_diagnostics": [
+        {
+          "kind": "ParseFailed",
+          "payload": {
+            "end": 4364,
+            "source_index": 0,
+            "start": 0
+          }
         }
+      ],
+      "stage": "native-ParseFailed",
+      "detail": {
+        "end": 4364,
+        "source_index": 0,
+        "start": 0
       },
-      "stage0_oracle_valid": null,
-      "stage0_oracle_diagnostics": null,
+      "stage0_oracle_valid": false,
+      "stage0_oracle_diagnostics": [
+        {
+          "code": "MNE173",
+          "expected": [],
+          "found": null,
+          "message": "imported module 'mncs.std.application.v1' is unavailable to the resolver",
+          "severity": "error",
+          "span": {
+            "column": 5,
+            "end": 1036,
+            "line": 26,
+            "start": 1013
+          },
+          "stage": "elaboration"
+        }
+      ],
       "slice": "cli-outcome",
       "classification": "unmodified-real-source",
       "repo": "mncs-cli"
@@ -335,7 +358,7 @@
           "modified": false
         }
       },
-      "elapsed_seconds": 0.015,
+      "elapsed_seconds": 0.018,
       "native_valid": true,
       "native_value_ssa_valid": true,
       "native_diagnostics": [],

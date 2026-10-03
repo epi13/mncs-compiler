@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "as_of": "2026-09-29",
+  "as_of": "2026-10-03",
   "reference": {
     "repository": "mncs-language",
     "revision": "a3ac17df69e68f6373cbff336db0a572667d73da",
@@ -8,7 +8,7 @@
     "role": "Exact locked Rust Stage-0 bootstrap, oracle, and current language/runtime reference."
   },
   "starting_heads_file": "campaign-20260929-start-heads.json",
-  "evidence_namespace": "campaign-20261002-* re-measures the obligations plus the CP-0019 compiler-operation slice at the same pin; campaign-20261001-* re-measures the 2026-09-29 campaign at the same pin and compiler head; campaign-20260929-* retains the original finite/enum slice record; prior files keep their exact historical pins and measurements.",
+  "evidence_namespace": "campaign-20261003-* re-measures the obligations plus the CP-0011 nested-match slice, the CP-0001/CP-0021 logical-page pipeline, and the CP-0003/CP-0022/CP-0023 reconciliations at the same pin; campaign-20261002-* re-measures the obligations plus the CP-0019 compiler-operation slice at the same pin; campaign-20261001-* re-measures the 2026-09-29 campaign at the same pin and compiler head; campaign-20260929-* retains the original finite/enum slice record; prior files keep their exact historical pins and measurements.",
   "rows": [
     {
       "area": "project resolution and fact reuse",
@@ -20,10 +20,13 @@
         "campaign-20261001-project-results.json",
         "campaign-20261001-family-slices.json",
         "campaign-20261002-project-results.json",
-        "campaign-20261002-family-results.json"
+        "campaign-20261002-family-results.json",
+        "campaign-20261003-project-results.json",
+        "campaign-20261003-family-results.json",
+        "cp0001-matrix.json"
       ],
       "limits": [
-        "64-source and 256-byte metadata caps; tested per-source ceiling N=1024. Host still discovers files and supplies bytes."
+        "64-source and 256-byte metadata caps; per-module sources ride logical pages (proven to 558,004 bytes) with feature-gap spans past parser coverage. Host still discovers files and supplies bytes."
       ]
     },
     {
@@ -46,7 +49,8 @@
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20261001-project-results.json",
-        "campaign-20261002-project-results.json"
+        "campaign-20261002-project-results.json",
+        "campaign-20261003-project-results.json"
       ],
       "limits": [
         "Imported nominal type identity and imported effect/capability resolution remain outside the tested scalar signature slice."
@@ -59,7 +63,8 @@
       "evidence": [
         "campaign-20260929-profile-surface-results.json",
         "campaign-20261001-profile-surface-results.json",
-        "campaign-20261002-profile-surface-results.json"
+        "campaign-20261002-profile-surface-results.json",
+        "campaign-20261003-profile-surface-results.json"
       ],
       "limits": [
         "This does not establish complete Profile 0.18 grammar parity."
@@ -68,28 +73,30 @@
     {
       "area": "value-carrying SSA",
       "status": "bounded verified slice",
-      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, record field projection, heterogeneous-type match environments, arm result joins, and compiler-operation instructions are verified against Stage-0 body/SSA facts.",
+      "claim": "Dense explicit value IDs, typed instructions, edge arguments, join block parameters, branch/jump/return terminators, local scalar values, canonical imported scalar calls, finite-match switches, scalar-match switches, payload extraction, enum construction, sequence repetition, nested nominal payloads, record field projection, heterogeneous-type match environments, arm result joins, nested matches, and compiler-operation instructions are verified against Stage-0 body/SSA facts.",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
         "campaign-20261001-project-results.json",
         "campaign-20261001-scalar-match-value-ssa.json",
-        "campaign-20261002-project-results.json"
+        "campaign-20261002-project-results.json",
+        "campaign-20261003-project-results.json"
       ],
       "limits": [
-        "Not full SSA parity; nested matches in arm position and over-ceiling sources (CP-0001) remain out of scope, and unsupported operations fail the SSA report closed."
+        "Not full SSA parity; nested matches with outer stack temps / payload bindings fail closed, and unsupported operations fail the SSA report closed."
       ]
     },
     {
       "area": "SSA verifier",
       "status": "partial",
-      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default). The projection slice adds six further corruption rejections (field index, identity invalid, identity mismatch, provenance, result type, forged base). The compiler-operation slice adds seven further corruption rejections (slot, identity invalid, identity mismatch, arity, result type, input type, provenance) plus an unauthorized twin matching Stage-0 at the same span.",
+      "claim": "The valid two-module merge passes; nine targeted malformed identity, definition/use, type, argument, target, and return mutations are rejected. The finite/enum slice adds ten further corruption rejections (enum identity, variant, arity, payload type, match variant, join target, edge value, payload declared type, repeat count, repeat operand type). The scalar-match slice adds four further corruption rejections (duplicate pattern, default target, edge value, missing default). The nested-match slice adds eight further corruption rejections. The projection slice adds six further corruption rejections (field index, identity invalid, identity mismatch, provenance, result type, forged base). The compiler-operation slice adds seven further corruption rejections (slot, identity invalid, identity mismatch, arity, result type, input type, provenance) plus an unauthorized twin matching Stage-0 at the same span.",
       "evidence": [
         "campaign-20260929-project-results.json",
         "campaign-20260929-cp0014-value-ssa.json",
         "campaign-20261001-project-results.json",
         "campaign-20261001-scalar-match-value-ssa.json",
-        "campaign-20261002-project-results.json"
+        "campaign-20261002-project-results.json",
+        "campaign-20261003-project-results.json"
       ],
       "limits": [
         "Verifier coverage is bounded to the emitted instruction/terminator slice."
@@ -240,16 +247,17 @@
     },
     {
       "area": "bounded project source capacity",
-      "status": "partial",
-      "claim": "The project compiler accepts the bounded two-module sample, but uses a 1,024-byte per-source ceiling; the current declaration compiler source is 427,278 bytes.",
+      "status": "logical pages to 1 MiB/source; feature gaps past parser coverage",
+      "claim": "The project compiler transports per-module sources as logical pages (proven to 558,004 bytes, the current declaration compiler source) and the decl/proof/CFG/SSA pipeline consumes them with global positions; large real modules reach precise feature-gap spans, not ceiling blocks.",
       "evidence": [
         "campaign-20261001-project-results.json",
         "campaign-20261001-pressure-suite-results.json",
         "campaign-20261002-project-results.json",
-        "campaign-20261002-pressure-suite-results.json"
+        "campaign-20261002-pressure-suite-results.json",
+        "cp0001-matrix.json"
       ],
       "limits": [
-        "No growable/shared source storage or full compiler-source ingestion is implemented."
+        "No growable/shared source storage is implemented; span-compare past 1024 bytes fails closed and per-module page arrays bind at M=1024."
       ]
     }
   ]

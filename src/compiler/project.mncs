@@ -12,11 +12,54 @@ use mncs.compiler.source.v1 as source;
 // compile-time sequence parameter rather than a fixed project-wide buffer.
 record ProjectSource {
     source_id: [byte; up_to 256],
-    source_path: [byte; up_to 256]
+    source_path: [byte; up_to 256],
+    page_start: u64,
+    page_count: u64,
+    stride: u64,
+    total: u64
 }
 record ProjectSnapshot {
     fingerprint: [byte; up_to 64],
     sources: [ProjectSource; up_to 64]
+}
+
+// CP-0021: every module's bytes live in one flat page array; each
+// ProjectSource descriptor selects its module's logical source slice
+// (page_start, page_count) plus its (stride, total) addressing. Slices
+// are validated by the declaration gate on first parse; the project
+// entry additionally requires the descriptors to partition the flat
+// array in source order (no gaps, overlaps, or trailing pages).
+fn module_pages<P: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to P], index: u64) -> (result: [[byte; up_to N]; up_to 1024]) {
+    // Total on hostile descriptors: out-of-range slices degrade to the
+    // empty slice, which the declaration validation gate (or the header
+    // parse for total 0) fails closed. Callers pass indices derived from
+    // guarded construction (build loop, ParsedModule owners), never raw
+    // transport integers, so sources[index] itself cannot trap.
+    let meta: ProjectSource = sources[index];
+    if meta.page_start > flat_pages.len { return flat_pages[0..0]; }
+    if meta.page_count > flat_pages.len - meta.page_start { return flat_pages[0..0]; }
+    return flat_pages[meta.page_start..meta.page_start + meta.page_count];
+}
+fn module_stride(sources: [ProjectSource; up_to 64], index: u64) -> (result: u64) {
+    let meta: ProjectSource = sources[index];
+    return meta.stride;
+}
+fn module_total(sources: [ProjectSource; up_to 64], index: u64) -> (result: u64) {
+    let meta: ProjectSource = sources[index];
+    return meta.total;
+}
+record CoverState { index: u64, cursor: u64, ok: bool }
+fn descriptors_cover<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M]) -> (result: bool) {
+    iterate i over sources carrying st: CoverState = CoverState { index: 0, cursor: 0, ok: true } {
+        next st = cover_step(sources, st);
+    }
+    return st.ok && st.cursor == flat_pages.len;
+}
+fn cover_step(sources: [ProjectSource; up_to 64], st: CoverState) -> (result: CoverState) {
+    if !(st.ok) || st.index >= sources.len { return st; }
+    let meta: ProjectSource = sources[st.index];
+    if meta.page_start != st.cursor { return CoverState { index: st.index + 1, cursor: st.cursor, ok: false }; }
+    return CoverState { index: st.index + 1, cursor: st.cursor + meta.page_count, ok: true };
 }
 
 record ParsedModule {
@@ -85,7 +128,7 @@ record ProjectResult {
 }
 
 record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64, parse_failed: bool, parse_index: u64, parse_start: u64, parse_end: u64 }
-fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M]) -> (result: ModuleBuild) {
+fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M]) -> (result: ModuleBuild) {
     iterate i over sources carrying st: ModuleBuild = ModuleBuild {
         rest: ModuleList.MNil,
         acc: ModuleList.MNil,
@@ -96,15 +139,15 @@ fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units:
         parse_start: 0,
         parse_end: 0
     } {
-        next st = build_one_module<M, N>(sources, text_units, i, st);
+        next st = build_one_module<M, N>(sources, flat_pages, i, st);
     }
     return st;
 }
-fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], index: u64, st: ModuleBuild) -> (result: ModuleBuild) {
-    if index >= sources.len || index >= text_units.len { return ModuleBuild { rest: st.rest, acc: st.acc, valid: false, count: st.count, parse_failed: true, parse_index: select(st.parse_failed, st.parse_index, index), parse_start: select(st.parse_failed, st.parse_start, 0), parse_end: select(st.parse_failed, st.parse_end, 0) }; }
+fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, st: ModuleBuild) -> (result: ModuleBuild) {
+    if index >= sources.len { return ModuleBuild { rest: st.rest, acc: st.acc, valid: false, count: st.count, parse_failed: true, parse_index: select(st.parse_failed, st.parse_index, index), parse_start: select(st.parse_failed, st.parse_start, 0), parse_end: select(st.parse_failed, st.parse_end, 0) }; }
     let item: ProjectSource = sources[index];
-    let text: [byte; up_to N] = text_units[index];
-    let unit: decl.Unit = decl.parse_unit<N>(text);
+    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, index);
+    let unit: decl.Unit = decl.parse_unit<1024, N>(pages, item.stride, item.total);
     return ModuleBuild {
         rest: st.rest,
         acc: ModuleList.MCons {
@@ -178,31 +221,31 @@ fn byte_compare_step(a: [byte; up_to 256], b: [byte; up_to 256], index: u64, st:
     return st;
 }
 
-fn duplicate_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: DiagnosticList) {
+fn duplicate_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: DiagnosticList) {
     iterate i over sources carrying st: DuplicateState = DuplicateState {
         rest: modules,
         all: modules,
         diagnostics: DiagnosticList.DiagNil
     } {
-        next st = duplicate_module_step<M, N>(text_units, st);
+        next st = duplicate_module_step<M, N>(sources, flat_pages, st);
     }
     return reverse_diagnostics(sources, st.diagnostics);
 }
 record DuplicateState { rest: ModuleList, all: ModuleList, diagnostics: DiagnosticList }
-fn duplicate_module_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateState) -> (result: DuplicateState) {
+fn duplicate_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: DuplicateState) -> (result: DuplicateState) {
     return match st.rest {
         MNil => st,
-        MCons { head: current, tail: tail } => duplicate_module_cons<M, N>(text_units, st, current, tail)
+        MCons { head: current, tail: tail } => duplicate_module_cons<M, N>(sources, flat_pages, st, current, tail)
     };
 }
-fn duplicate_module_cons<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateState, current: ParsedModule, tail: ModuleList) -> (result: DuplicateState) {
-    let found: DuplicateCheck = find_duplicate_module<M, N>(text_units, st.all, current);
+fn duplicate_module_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: DuplicateState, current: ParsedModule, tail: ModuleList) -> (result: DuplicateState) {
+    let found: DuplicateCheck = find_duplicate_module<M, N>(sources, flat_pages, st.all, current);
     let diagnostics: DiagnosticList = duplicate_diagnostic(current, found, st.diagnostics);
     return DuplicateState { rest: tail, all: st.all, diagnostics: diagnostics };
 }
 record DuplicateCheck { found: bool, index: u64, start: u64, end: u64 }
-fn find_duplicate_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule) -> (result: DuplicateCheck) {
-    iterate i over text_units carrying st: DuplicateScan = DuplicateScan {
+fn find_duplicate_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule) -> (result: DuplicateCheck) {
+    iterate i over sources carrying st: DuplicateScan = DuplicateScan {
         rest: all,
         current_index: current.source_index,
         current: current,
@@ -211,7 +254,7 @@ fn find_duplicate_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M],
         start: 0,
         end: 0
     } {
-        next st = duplicate_scan_step<M, N>(text_units, st);
+        next st = duplicate_scan_step<M, N>(sources, flat_pages, st);
     }
     return DuplicateCheck { found: st.found, index: st.index, start: st.start, end: st.end };
 }
@@ -224,14 +267,14 @@ record DuplicateScan {
     start: u64,
     end: u64
 }
-fn duplicate_scan_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateScan) -> (result: DuplicateScan) {
+fn duplicate_scan_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: DuplicateScan) -> (result: DuplicateScan) {
     if st.found { return st; }
     return match st.rest {
         MNil => st,
-        MCons { head: candidate, tail: tail } => duplicate_scan_candidate<M, N>(text_units, st, candidate, tail)
+        MCons { head: candidate, tail: tail } => duplicate_scan_candidate<M, N>(sources, flat_pages, st, candidate, tail)
     };
 }
-fn duplicate_scan_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: DuplicateScan, candidate: ParsedModule, tail: ModuleList) -> (result: DuplicateScan) {
+fn duplicate_scan_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: DuplicateScan, candidate: ParsedModule, tail: ModuleList) -> (result: DuplicateScan) {
     if candidate.source_index >= st.current_index { return DuplicateScan {
         rest: ModuleList.MNil,
         current_index: st.current_index,
@@ -241,7 +284,7 @@ fn duplicate_scan_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to 
         start: 0,
         end: 0
     }; }
-    let equal: bool = module_names_equal<M, N>(text_units, st.current, candidate);
+    let equal: bool = module_names_equal<M, N>(sources, flat_pages, st.current, candidate);
     let header: decl.Header = candidate.unit.header;
     if equal { return DuplicateScan {
         rest: ModuleList.MNil,
@@ -284,7 +327,7 @@ record ResolveModules {
     valid: bool,
     count: u64
 }
-fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: Resolution) {
+fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: Resolution) {
     iterate i over sources carrying st: ResolveModules = ResolveModules {
         rest: modules,
         all: modules,
@@ -293,7 +336,7 @@ fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_unit
         valid: true,
         count: 0
     } {
-        next st = resolve_module_step<M, N>(text_units, st);
+        next st = resolve_module_step<M, N>(sources, flat_pages, st);
     }
     return Resolution {
         valid: st.valid,
@@ -302,15 +345,15 @@ fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_unit
         diagnostics: reverse_diagnostics(sources, st.diagnostics)
     };
 }
-fn resolve_module_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ResolveModules) -> (result: ResolveModules) {
+fn resolve_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ResolveModules) -> (result: ResolveModules) {
     return match st.rest {
         MNil => st,
-        MCons { head: current, tail: tail } => resolve_module_uses<M, N>(text_units, st, current, tail)
+        MCons { head: current, tail: tail } => resolve_module_uses<M, N>(sources, flat_pages, st, current, tail)
     };
 }
-fn resolve_module_uses<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ResolveModules, current: ParsedModule, tail: ModuleList) -> (result: ResolveModules) {
+fn resolve_module_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ResolveModules, current: ParsedModule, tail: ModuleList) -> (result: ResolveModules) {
     let unit: decl.Unit = current.unit;
-    let resolved: UseResolution = resolve_use_list<M, N>(text_units, st.all, current, unit.uses, st.imports, st.diagnostics, st.valid, st.count);
+    let resolved: UseResolution = resolve_use_list<M, N>(sources, flat_pages, st.all, current, unit.uses, st.imports, st.diagnostics, st.valid, st.count);
     return ResolveModules {
         rest: tail,
         all: st.all,
@@ -329,7 +372,8 @@ record ResolveUses {
     count: u64
 }
 fn resolve_use_list<M: Nat, N: Nat>(
-    text_units: [[byte; up_to N]; up_to M],
+    sources: [ProjectSource; up_to 64],
+    flat_pages: [[byte; up_to N]; up_to M],
     all: ModuleList,
     current: ParsedModule,
     uses: decl.UseList,
@@ -338,25 +382,25 @@ fn resolve_use_list<M: Nat, N: Nat>(
     valid: bool,
     count: u64
 ) -> (result: UseResolution) {
-    iterate i over text_units carrying st: ResolveUses = ResolveUses {
+    iterate i over sources carrying st: ResolveUses = ResolveUses {
         rest: uses,
         imports: imports,
         diagnostics: diagnostics,
         valid: valid,
         count: count
     } {
-        next st = resolve_use_step<M, N>(text_units, all, current, st);
+        next st = resolve_use_step<M, N>(sources, flat_pages, all, current, st);
     }
     return UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count };
 }
-fn resolve_use_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: ResolveUses) -> (result: ResolveUses) {
+fn resolve_use_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: ResolveUses) -> (result: ResolveUses) {
     return match st.rest {
         UNil => st,
-        UCons { head: usage, tail: tail } => resolve_one_use<M, N>(text_units, all, current, usage, tail, st)
+        UCons { head: usage, tail: tail } => resolve_one_use<M, N>(sources, flat_pages, all, current, usage, tail, st)
     };
 }
-fn resolve_one_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl, tail: decl.UseList, st: ResolveUses) -> (result: ResolveUses) {
-    let found: ModuleLookup = find_import_target<M, N>(text_units, all, current, usage);
+fn resolve_one_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl, tail: decl.UseList, st: ResolveUses) -> (result: ResolveUses) {
+    let found: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, current, usage);
     if !(found.found) { return ResolveUses {
         rest: tail,
         imports: st.imports,
@@ -392,26 +436,26 @@ fn resolve_one_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: 
 }
 record ModuleLookup { found: bool, index: u64 }
 record ModuleLookupState { rest: ModuleList, current: ParsedModule, usage: decl.UseDecl, found: bool, index: u64 }
-fn find_import_target<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl) -> (result: ModuleLookup) {
-    iterate i over text_units carrying st: ModuleLookupState = ModuleLookupState {
+fn find_import_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl) -> (result: ModuleLookup) {
+    iterate i over sources carrying st: ModuleLookupState = ModuleLookupState {
         rest: all,
         current: current,
         usage: usage,
         found: false,
         index: 0
     } {
-        next st = module_lookup_step<M, N>(text_units, st);
+        next st = module_lookup_step<M, N>(sources, flat_pages, st);
     }
     return ModuleLookup { found: st.found, index: st.index };
 }
-fn module_lookup_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ModuleLookupState) -> (result: ModuleLookupState) {
+fn module_lookup_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ModuleLookupState) -> (result: ModuleLookupState) {
     if st.found { return st; }
     return match st.rest {
         MNil => st,
-        MCons { head: candidate, tail: tail } => module_lookup_candidate<M, N>(text_units, st, candidate, tail)
+        MCons { head: candidate, tail: tail } => module_lookup_candidate<M, N>(sources, flat_pages, st, candidate, tail)
     };
 }
-fn module_lookup_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ModuleLookupState, candidate: ParsedModule, tail: ModuleList) -> (result: ModuleLookupState) {
+fn module_lookup_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ModuleLookupState, candidate: ParsedModule, tail: ModuleList) -> (result: ModuleLookupState) {
     if candidate.source_index == st.current.source_index { return ModuleLookupState {
         rest: tail,
         current: st.current,
@@ -419,7 +463,7 @@ fn module_lookup_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M
         found: st.found,
         index: st.index
     }; }
-    if use_matches_module<M, N>(text_units, st.current, st.usage, candidate) { return ModuleLookupState {
+    if use_matches_module<M, N>(sources, flat_pages, st.current, st.usage, candidate) { return ModuleLookupState {
         rest: ModuleList.MNil,
         current: st.current,
         usage: st.usage,
@@ -435,14 +479,14 @@ fn module_lookup_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M
     };
 }
 
-fn module_names_equal<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], a: ParsedModule, b: ParsedModule) -> (result: bool) {
+fn module_names_equal<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], a: ParsedModule, b: ParsedModule) -> (result: bool) {
     let left: decl.Header = a.unit.header;
     let right: decl.Header = b.unit.header;
-    return spans_equal_between<M, N>(text_units, a.source_index, left.module_start, left.module_end, b.source_index, right.module_start, right.module_end);
+    return spans_equal_between<M, N>(sources, flat_pages, a.source_index, left.module_start, left.module_end, b.source_index, right.module_start, right.module_end);
 }
-fn use_matches_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, usage: decl.UseDecl, target: ParsedModule) -> (result: bool) {
+fn use_matches_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, usage: decl.UseDecl, target: ParsedModule) -> (result: bool) {
     let header: decl.Header = target.unit.header;
-    return spans_equal_between<M, N>(text_units, current.source_index, usage.module_start, usage.module_end, target.source_index, header.module_start, header.module_end);
+    return spans_equal_between<M, N>(sources, flat_pages, current.source_index, usage.module_start, usage.module_end, target.source_index, header.module_start, header.module_end);
 }
 
 // Nominal names are resolved from exact parsed type-reference spans and the
@@ -453,26 +497,28 @@ record NominalUseWalk { uses: decl.UseList, current: ParsedModule, all: ModuleLi
 record TargetIdentityWalk { modules: ModuleList, locals: NominalModuleList, target_index: u64, caller_index: u64, name_start: u64, name_end: u64, found: bool, identity: decl.SemanticIdentity }
 record TargetTypeWalk { enums: decl.EnumList, records: decl.RecordList, local: decl.NominalTypeIdentityList, target_index: u64, caller_index: u64, name_start: u64, name_end: u64, found: bool, identity: decl.SemanticIdentity }
 
-fn collect_local_nominal_modules<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: NominalModuleList) {
-    iterate i over text_units carrying st: NominalModuleBuild = NominalModuleBuild { rest: modules, acc: NominalModuleList.NMNil } {
-        next st = collect_local_nominal_module<M, N>(text_units, st);
+fn collect_local_nominal_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: NominalModuleList) {
+    iterate i over sources carrying st: NominalModuleBuild = NominalModuleBuild { rest: modules, acc: NominalModuleList.NMNil } {
+        next st = collect_local_nominal_module<M, N>(sources, flat_pages, st);
     }
     return st.acc;
 }
-fn collect_local_nominal_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: NominalModuleBuild) -> (result: NominalModuleBuild) {
+fn collect_local_nominal_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: NominalModuleBuild) -> (result: NominalModuleBuild) {
     return match st.rest {
         MNil => st,
-        MCons { head: parsed, tail: rest } => collect_local_nominal_module_one<M, N>(text_units, st, parsed, rest)
+        MCons { head: parsed, tail: rest } => collect_local_nominal_module_one<M, N>(sources, flat_pages, st, parsed, rest)
     };
 }
-fn collect_local_nominal_module_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: NominalModuleBuild, parsed: ParsedModule, rest: ModuleList) -> (result: NominalModuleBuild) {
-    let input: [byte; up_to N] = text_units[parsed.source_index];
-    let local: decl.NominalTypeIdentityList = decl.local_nominal_type_identities<N>(input, parsed.unit);
+fn collect_local_nominal_module_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: NominalModuleBuild, parsed: ParsedModule, rest: ModuleList) -> (result: NominalModuleBuild) {
+    let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, parsed.source_index);
+    let input_stride: u64 = module_stride(sources, parsed.source_index);
+    let input_total: u64 = module_total(sources, parsed.source_index);
+    let local: decl.NominalTypeIdentityList = decl.local_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, parsed.unit);
     return NominalModuleBuild { rest: rest, acc: NominalModuleList.NMCons { head: NominalModule { source_index: parsed.source_index, local: local, resolved: decl.NominalTypeIdentityList.NINil }, tail: st.acc } };
 }
-fn nominal_module_by_index<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], modules: NominalModuleList, source_index: u64) -> (result: NominalModuleLookup) {
+fn nominal_module_by_index<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: NominalModuleList, source_index: u64) -> (result: NominalModuleLookup) {
     let empty: NominalModule = NominalModule { source_index: 0, local: decl.NominalTypeIdentityList.NINil, resolved: decl.NominalTypeIdentityList.NINil };
-    iterate i over text_units carrying st: NominalModuleLookup = NominalModuleLookup { rest: modules, source_index: source_index, found: false, facts: empty } {
+    iterate i over sources carrying st: NominalModuleLookup = NominalModuleLookup { rest: modules, source_index: source_index, found: false, facts: empty } {
         next st = nominal_module_lookup_step(st);
     }
     return st;
@@ -488,70 +534,70 @@ fn nominal_module_lookup_one(st: NominalModuleLookup, item: NominalModule, rest:
     if item.source_index == st.source_index { return NominalModuleLookup { ..st, rest: NominalModuleList.NMNil, found: true, facts: item }; }
     return NominalModuleLookup { ..st, rest: rest };
 }
-fn resolve_project_nominal_modules<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], modules: ModuleList, locals: NominalModuleList) -> (result: NominalModuleList) {
-    iterate i over text_units carrying st: NominalResolutionBuild = NominalResolutionBuild { rest: modules, all: modules, locals: locals, acc: NominalModuleList.NMNil } {
-        next st = resolve_project_nominal_module<M, N>(text_units, st);
+fn resolve_project_nominal_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList, locals: NominalModuleList) -> (result: NominalModuleList) {
+    iterate i over sources carrying st: NominalResolutionBuild = NominalResolutionBuild { rest: modules, all: modules, locals: locals, acc: NominalModuleList.NMNil } {
+        next st = resolve_project_nominal_module<M, N>(sources, flat_pages, st);
     }
     return st.acc;
 }
-fn resolve_project_nominal_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: NominalResolutionBuild) -> (result: NominalResolutionBuild) {
+fn resolve_project_nominal_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: NominalResolutionBuild) -> (result: NominalResolutionBuild) {
     return match st.rest {
         MNil => st,
-        MCons { head: parsed, tail: rest } => resolve_project_nominal_module_one<M, N>(text_units, st, parsed, rest)
+        MCons { head: parsed, tail: rest } => resolve_project_nominal_module_one<M, N>(sources, flat_pages, st, parsed, rest)
     };
 }
-fn resolve_project_nominal_module_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: NominalResolutionBuild, parsed: ParsedModule, rest: ModuleList) -> (result: NominalResolutionBuild) {
-    let found: NominalModuleLookup = nominal_module_by_index<M, N>(text_units, st.locals, parsed.source_index);
-    let resolved: decl.NominalTypeIdentityList = project_nominal_type_identities<M, N>(text_units, parsed, st.all, st.locals, found.facts.local);
+fn resolve_project_nominal_module_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: NominalResolutionBuild, parsed: ParsedModule, rest: ModuleList) -> (result: NominalResolutionBuild) {
+    let found: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.locals, parsed.source_index);
+    let resolved: decl.NominalTypeIdentityList = project_nominal_type_identities<M, N>(sources, flat_pages, parsed, st.all, st.locals, found.facts.local);
     let cached: NominalModule = NominalModule { source_index: parsed.source_index, local: found.facts.local, resolved: resolved };
     return NominalResolutionBuild { ..st, rest: rest, acc: NominalModuleList.NMCons { head: cached, tail: st.acc } };
 }
 
-fn project_nominal_type_identities<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, locals: NominalModuleList, local: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
-    let input: [byte; up_to N] = text_units[current.source_index];
-    let spans: decl.NominalTypeSpanList = decl.collect_unit_nominal_type_spans<N>(input, current.unit);
-    iterate i over input carrying st: ProjectNominalWalk = ProjectNominalWalk { spans: spans, current: current, all: all, locals: locals, acc: local } {
-        next st = project_nominal_span_step<M, N>(text_units, st);
+fn project_nominal_type_identities<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, locals: NominalModuleList, local: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
+    let input_stride: u64 = module_stride(sources, current.source_index);
+    let input_total: u64 = module_total(sources, current.source_index);
+    let spans: decl.NominalTypeSpanList = decl.collect_unit_nominal_type_spans<1024, N>(input_pages, input_stride, input_total, current.unit);
+    iterate i up_to 1024 carrying st: ProjectNominalWalk = ProjectNominalWalk { spans: spans, current: current, all: all, locals: locals, acc: local } {
+        next st = project_nominal_span_step<M, N>(sources, flat_pages, input_pages, input_stride, input_total, st);
     }
-    let references: decl.NominalTypeIdentityList = decl.nominal_reference_entries<N>(input, st.acc);
-    return decl.combine_nominal_type_identities<N>(input, local, references);
+    let references: decl.NominalTypeIdentityList = decl.nominal_reference_entries<1024, N>(input_pages, input_stride, input_total, st.acc);
+    return decl.combine_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, local, references);
 }
-fn project_nominal_span_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectNominalWalk) -> (result: ProjectNominalWalk) {
+fn project_nominal_span_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], input_pages: [[byte; up_to N]; up_to 1024], input_stride: u64, input_total: u64, st: ProjectNominalWalk) -> (result: ProjectNominalWalk) {
     return match st.spans {
         decl.NominalTypeSpanList.NSNil => st,
-        decl.NominalTypeSpanList.NSCons { head: span, tail: rest } => project_nominal_span_one<M, N>(text_units, st, span, rest)
+        decl.NominalTypeSpanList.NSCons { head: span, tail: rest } => project_nominal_span_one<M, N>(sources, flat_pages, input_pages, input_stride, input_total, st, span, rest)
     };
 }
-fn project_nominal_span_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectNominalWalk, span: decl.NominalTypeSpan, rest: decl.NominalTypeSpanList) -> (result: ProjectNominalWalk) {
-    let input: [byte; up_to N] = text_units[st.current.source_index];
-    let local: decl.NominalLookup = decl.nominal_identity_by_name<N>(input, st.acc, span.start, span.end);
+fn project_nominal_span_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], input_pages: [[byte; up_to N]; up_to 1024], input_stride: u64, input_total: u64, st: ProjectNominalWalk, span: decl.NominalTypeSpan, rest: decl.NominalTypeSpanList) -> (result: ProjectNominalWalk) {
+    let local: decl.NominalLookup = decl.nominal_identity_by_name<1024, N>(input_pages, input_stride, input_total, st.acc, span.start, span.end);
     if span.kind == 5 && local.found { return ProjectNominalWalk { ..st, spans: rest }; }
-    let uses: NominalUseWalk = resolve_nominal_in_uses<M, N>(text_units, st.current, st.all, st.locals, span);
+    let uses: NominalUseWalk = resolve_nominal_in_uses<M, N>(sources, flat_pages, input_pages, input_stride, input_total, st.current, st.all, st.locals, span);
     if !(uses.found) || uses.count != 1 || !(uses.identity.valid) { return ProjectNominalWalk { ..st, spans: rest }; }
     let reference: decl.NominalTypeIdentity = decl.NominalTypeIdentity { start: span.start, end: span.end, identity: uses.identity, reference: true };
     return ProjectNominalWalk { ..st, spans: rest, acc: decl.NominalTypeIdentityList.NICons { head: reference, tail: st.acc } };
 }
-fn resolve_nominal_in_uses<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, locals: NominalModuleList, span: decl.NominalTypeSpan) -> (result: NominalUseWalk) {
-    let input: [byte; up_to N] = text_units[current.source_index];
-    iterate i over input carrying st: NominalUseWalk = NominalUseWalk { uses: current.unit.uses, current: current, all: all, locals: locals, span: span, found: false, count: 0, identity: decl.invalid_semantic_identity() } {
-        next st = resolve_nominal_use_step<M, N>(text_units, input, st);
+fn resolve_nominal_in_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], input_pages: [[byte; up_to N]; up_to 1024], input_stride: u64, input_total: u64, current: ParsedModule, all: ModuleList, locals: NominalModuleList, span: decl.NominalTypeSpan) -> (result: NominalUseWalk) {
+    iterate i up_to 1024 carrying st: NominalUseWalk = NominalUseWalk { uses: current.unit.uses, current: current, all: all, locals: locals, span: span, found: false, count: 0, identity: decl.invalid_semantic_identity() } {
+        next st = resolve_nominal_use_step<M, N>(sources, flat_pages, input_pages, input_stride, input_total, st);
     }
     return st;
 }
-fn resolve_nominal_use_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], input: [byte; up_to N], st: NominalUseWalk) -> (result: NominalUseWalk) {
+fn resolve_nominal_use_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], input_pages: [[byte; up_to N]; up_to 1024], input_stride: u64, input_total: u64, st: NominalUseWalk) -> (result: NominalUseWalk) {
     return match st.uses {
         decl.UseList.UNil => st,
-        decl.UseList.UCons { head: usage, tail: rest } => resolve_nominal_use_one<M, N>(text_units, input, st, usage, rest)
+        decl.UseList.UCons { head: usage, tail: rest } => resolve_nominal_use_one<M, N>(sources, flat_pages, input_pages, input_stride, input_total, st, usage, rest)
     };
 }
-fn resolve_nominal_use_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], input: [byte; up_to N], st: NominalUseWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: NominalUseWalk) {
-    if !(nominal_span_matches_use<N>(input, st.span, usage)) { return NominalUseWalk { ..st, uses: rest }; }
-    let target: ModuleLookup = find_import_target<M, N>(text_units, st.all, st.current, usage);
+fn resolve_nominal_use_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], input_pages: [[byte; up_to N]; up_to 1024], input_stride: u64, input_total: u64, st: NominalUseWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: NominalUseWalk) {
+    if !(nominal_span_matches_use<N>(input_pages, input_stride, input_total, st.span, usage)) { return NominalUseWalk { ..st, uses: rest }; }
+    let target: ModuleLookup = find_import_target<M, N>(sources, flat_pages, st.all, st.current, usage);
     if !(target.found) { return NominalUseWalk { ..st, uses: rest }; }
     let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
     let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
     let name_start: u64 = select(st.span.kind == 6, st.span.start + (prefix_end - prefix_start) + 1, st.span.start);
-    let identity: decl.SemanticIdentity = nominal_identity_from_target<M, N>(text_units, st.all, st.locals, target.index, st.current.source_index, name_start, st.span.end);
+    let identity: decl.SemanticIdentity = nominal_identity_from_target<M, N>(sources, flat_pages, st.all, st.locals, target.index, st.current.source_index, name_start, st.span.end);
     if !(identity.valid) { return NominalUseWalk { ..st, uses: rest }; }
     let first: bool = st.count == 0;
     let same: bool = first || decl.semantic_identity_equal(st.identity, identity);
@@ -559,87 +605,93 @@ fn resolve_nominal_use_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M
     if first { return NominalUseWalk { ..st, uses: rest, found: true, count: st.count + 1, identity: previous_identity }; }
     return NominalUseWalk { ..st, uses: rest, found: st.found && same, count: st.count + 1, identity: previous_identity };
 }
-fn nominal_span_matches_use<N: Nat>(input: [byte; up_to N], span: decl.NominalTypeSpan, usage: decl.UseDecl) -> (result: bool) {
+fn nominal_span_matches_use<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, span: decl.NominalTypeSpan, usage: decl.UseDecl) -> (result: bool) {
     if span.end <= span.start { return false; }
-    if span.kind == 5 { return !(usage.has_alias) && spans_equal<N>(input, span.start, span.end, span.start, span.end); }
+    if span.kind == 5 { return !(usage.has_alias) && decl.spans_equal<1024, N>(pages, stride, total, span.start, span.end, span.start, span.end); }
     let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
     let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
     if prefix_end <= prefix_start || span.end - span.start <= prefix_end - prefix_start + 1 { return false; }
-    if !(spans_equal<N>(input, span.start, span.start + (prefix_end - prefix_start), prefix_start, prefix_end)) { return false; }
-    return source.byte_at<N>(input, span.start + (prefix_end - prefix_start)) == 46;
+    if !(decl.spans_equal<1024, N>(pages, stride, total, span.start, span.start + (prefix_end - prefix_start), prefix_start, prefix_end)) { return false; }
+    return source.byte_at_global<1024, N>(pages, stride, total, span.start + (prefix_end - prefix_start)) == 46;
 }
 fn select_semantic_identity(first: bool, candidate: decl.SemanticIdentity, previous: decl.SemanticIdentity) -> (result: decl.SemanticIdentity) {
     if first { return candidate; }
     return previous;
 }
-fn nominal_identity_from_target<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], modules: ModuleList, locals: NominalModuleList, target_index: u64, caller_index: u64, name_start: u64, name_end: u64) -> (result: decl.SemanticIdentity) {
-    iterate i over text_units carrying st: TargetIdentityWalk = TargetIdentityWalk { modules: modules, locals: locals, target_index: target_index, caller_index: caller_index, name_start: name_start, name_end: name_end, found: false, identity: decl.invalid_semantic_identity() } {
-        next st = nominal_target_step<M, N>(text_units, st);
+fn nominal_identity_from_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList, locals: NominalModuleList, target_index: u64, caller_index: u64, name_start: u64, name_end: u64) -> (result: decl.SemanticIdentity) {
+    iterate i over sources carrying st: TargetIdentityWalk = TargetIdentityWalk { modules: modules, locals: locals, target_index: target_index, caller_index: caller_index, name_start: name_start, name_end: name_end, found: false, identity: decl.invalid_semantic_identity() } {
+        next st = nominal_target_step<M, N>(sources, flat_pages, st);
     }
     return st.identity;
 }
-fn nominal_target_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetIdentityWalk) -> (result: TargetIdentityWalk) {
+fn nominal_target_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetIdentityWalk) -> (result: TargetIdentityWalk) {
     if st.found { return st; }
     return match st.modules {
         MNil => st,
-        MCons { head: target, tail: rest } => nominal_target_candidate<M, N>(text_units, st, target, rest)
+        MCons { head: target, tail: rest } => nominal_target_candidate<M, N>(sources, flat_pages, st, target, rest)
     };
 }
-fn nominal_target_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetIdentityWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetIdentityWalk) {
+fn nominal_target_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetIdentityWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetIdentityWalk) {
     if target.source_index != st.target_index { return TargetIdentityWalk { ..st, modules: rest }; }
-    let target_input: [byte; up_to N] = text_units[target.source_index];
-    let local: NominalModuleLookup = nominal_module_by_index<M, N>(text_units, st.locals, target.source_index);
-    let matched: decl.SemanticIdentity = target_nominal_by_name<M, N>(text_units, target_input, target, local.facts.local, st.caller_index, st.name_start, st.name_end);
+    let local: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.locals, target.source_index);
+    let matched: decl.SemanticIdentity = target_nominal_by_name<M, N>(sources, flat_pages, target, local.facts.local, st.caller_index, st.name_start, st.name_end);
     return TargetIdentityWalk { ..st, modules: ModuleList.MNil, found: matched.valid, identity: matched };
 }
-fn target_nominal_by_name<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], target_input: [byte; up_to N], target: ParsedModule, local: decl.NominalTypeIdentityList, caller_index: u64, name_start: u64, name_end: u64) -> (result: decl.SemanticIdentity) {
-    let records: TargetTypeWalk = search_target_records<M, N>(text_units, target_input, target, local, caller_index, name_start, name_end);
+fn target_nominal_by_name<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target: ParsedModule, local: decl.NominalTypeIdentityList, caller_index: u64, name_start: u64, name_end: u64) -> (result: decl.SemanticIdentity) {
+    let records: TargetTypeWalk = search_target_records<M, N>(sources, flat_pages, target, local, caller_index, name_start, name_end);
     if records.found { return records.identity; }
-    let enums: TargetTypeWalk = search_target_enums<M, N>(text_units, records, target_input, target.unit.enums);
+    let enums: TargetTypeWalk = search_target_enums<M, N>(sources, flat_pages, records, target.unit.enums);
     return enums.identity;
 }
-fn search_target_records<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], target_input: [byte; up_to N], target: ParsedModule, local: decl.NominalTypeIdentityList, caller_index: u64, name_start: u64, name_end: u64) -> (result: TargetTypeWalk) {
-    iterate i over target_input carrying st: TargetTypeWalk = TargetTypeWalk { enums: decl.EnumList.GNil, records: target.unit.records, local: local, target_index: target.source_index, caller_index: caller_index, name_start: name_start, name_end: name_end, found: false, identity: decl.invalid_semantic_identity() } {
-        next st = search_target_record_step<M, N>(text_units, target_input, st);
+fn search_target_records<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target: ParsedModule, local: decl.NominalTypeIdentityList, caller_index: u64, name_start: u64, name_end: u64) -> (result: TargetTypeWalk) {
+    let target_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
+    let target_stride: u64 = module_stride(sources, target.source_index);
+    let target_total: u64 = module_total(sources, target.source_index);
+    iterate i up_to 1024 carrying st: TargetTypeWalk = TargetTypeWalk { enums: decl.EnumList.GNil, records: target.unit.records, local: local, target_index: target.source_index, caller_index: caller_index, name_start: name_start, name_end: name_end, found: false, identity: decl.invalid_semantic_identity() } {
+        next st = search_target_record_step<M, N>(sources, flat_pages, target_pages, target_stride, target_total, st);
     }
     return st;
 }
-fn search_target_record_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], target_input: [byte; up_to N], st: TargetTypeWalk) -> (result: TargetTypeWalk) {
+fn search_target_record_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_pages: [[byte; up_to N]; up_to 1024], target_stride: u64, target_total: u64, st: TargetTypeWalk) -> (result: TargetTypeWalk) {
     if st.found { return st; }
     return match st.records {
         decl.RecordList.RNil => st,
-        decl.RecordList.RCons { head: item, tail: rest } => search_target_record_one<M, N>(text_units, target_input, st, item, rest)
+        decl.RecordList.RCons { head: item, tail: rest } => search_target_record_one<M, N>(sources, flat_pages, target_pages, target_stride, target_total, st, item, rest)
     };
 }
-fn search_target_record_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], target_input: [byte; up_to N], st: TargetTypeWalk, item: decl.RecordDecl, rest: decl.RecordList) -> (result: TargetTypeWalk) {
-    if spans_equal_between<M, N>(text_units, st.caller_index, st.name_start, st.name_end, st.target_index, item.name_start, item.name_end) {
-        let found: decl.NominalLookup = decl.nominal_identity_by_name<N>(target_input, st.local, item.name_start, item.name_end);
+fn search_target_record_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_pages: [[byte; up_to N]; up_to 1024], target_stride: u64, target_total: u64, st: TargetTypeWalk, item: decl.RecordDecl, rest: decl.RecordList) -> (result: TargetTypeWalk) {
+    if spans_equal_between<M, N>(sources, flat_pages, st.caller_index, st.name_start, st.name_end, st.target_index, item.name_start, item.name_end) {
+        let found: decl.NominalLookup = decl.nominal_identity_by_name<1024, N>(target_pages, target_stride, target_total, st.local, item.name_start, item.name_end);
         return TargetTypeWalk { ..st, records: decl.RecordList.RNil, found: found.found, identity: found.identity };
     }
     return TargetTypeWalk { ..st, records: rest };
 }
-fn search_target_enums<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetTypeWalk, target_input: [byte; up_to N], enums: decl.EnumList) -> (result: TargetTypeWalk) {
-    iterate i over target_input carrying current: TargetTypeWalk = TargetTypeWalk { ..st, enums: enums } {
-        next current = search_target_enum_step<M, N>(text_units, target_input, current);
+fn search_target_enums<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetTypeWalk, enums: decl.EnumList) -> (result: TargetTypeWalk) {
+    let target_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.target_index);
+    let target_stride: u64 = module_stride(sources, st.target_index);
+    let target_total: u64 = module_total(sources, st.target_index);
+    iterate i up_to 1024 carrying current: TargetTypeWalk = TargetTypeWalk { ..st, enums: enums } {
+        next current = search_target_enum_step<M, N>(sources, flat_pages, target_pages, target_stride, target_total, current);
     }
     return current;
 }
-fn search_target_enum_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], target_input: [byte; up_to N], st: TargetTypeWalk) -> (result: TargetTypeWalk) {
+fn search_target_enum_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_pages: [[byte; up_to N]; up_to 1024], target_stride: u64, target_total: u64, st: TargetTypeWalk) -> (result: TargetTypeWalk) {
     if st.found { return st; }
     return match st.enums {
         decl.EnumList.GNil => st,
-        decl.EnumList.GCons { head: item, tail: rest } => search_target_enum_one<M, N>(text_units, target_input, st, item, rest)
+        decl.EnumList.GCons { head: item, tail: rest } => search_target_enum_one<M, N>(sources, flat_pages, target_pages, target_stride, target_total, st, item, rest)
     };
 }
-fn search_target_enum_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], target_input: [byte; up_to N], st: TargetTypeWalk, item: decl.EnumDecl, rest: decl.EnumList) -> (result: TargetTypeWalk) {
-    if spans_equal_between<M, N>(text_units, st.caller_index, st.name_start, st.name_end, st.target_index, item.name_start, item.name_end) {
-        let found: decl.NominalLookup = decl.nominal_identity_by_name<N>(target_input, st.local, item.name_start, item.name_end);
+fn search_target_enum_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_pages: [[byte; up_to N]; up_to 1024], target_stride: u64, target_total: u64, st: TargetTypeWalk, item: decl.EnumDecl, rest: decl.EnumList) -> (result: TargetTypeWalk) {
+    if spans_equal_between<M, N>(sources, flat_pages, st.caller_index, st.name_start, st.name_end, st.target_index, item.name_start, item.name_end) {
+        let found: decl.NominalLookup = decl.nominal_identity_by_name<1024, N>(target_pages, target_stride, target_total, st.local, item.name_start, item.name_end);
         return TargetTypeWalk { ..st, enums: decl.EnumList.GNil, found: found.found, identity: found.identity };
     }
     return TargetTypeWalk { ..st, enums: rest };
 }
 fn spans_equal_between<M: Nat, N: Nat>(
-    text_units: [[byte; up_to N]; up_to M],
+    sources: [ProjectSource; up_to 64],
+    flat_pages: [[byte; up_to N]; up_to M],
     left_index: u64,
     left_start: u64,
     left_end: u64,
@@ -649,8 +701,20 @@ fn spans_equal_between<M: Nat, N: Nat>(
 ) -> (result: bool) {
     if left_end < left_start || right_end < right_start { return false; }
     if left_end - left_start != right_end - right_start { return false; }
-    let left: [byte; up_to N] = text_units[left_index];
-    iterate i over left carrying st: SpanCompare = SpanCompare {
+    // CP-0021: counted byte fuel replaces the old view-length fuel. The
+    // 1024-byte compared-span ceiling matches the old view ceiling; the
+    // post-check keeps longer spans exact by refusing prefix-equal
+    // verdicts when fuel runs out (fail closed, never trap).
+    // The module slices resolve once here, never per step: page slicing
+    // allocates, and per-step slicing over multi-page modules exhausts
+    // the backend value arena (16 MiB) on real compiler modules.
+    let left_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, left_index);
+    let left_stride: u64 = module_stride(sources, left_index);
+    let left_total: u64 = module_total(sources, left_index);
+    let right_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, right_index);
+    let right_stride: u64 = module_stride(sources, right_index);
+    let right_total: u64 = module_total(sources, right_index);
+    iterate i up_to 1024 carrying st: SpanCompare = SpanCompare {
         length: left_end - left_start,
         left_index: left_index,
         left_start: left_start,
@@ -659,9 +723,9 @@ fn spans_equal_between<M: Nat, N: Nat>(
         offset: 0,
         equal: true
     } {
-        next st = span_compare_step<M, N>(text_units, st);
+        next st = span_compare_step<N>(left_pages, left_stride, left_total, right_pages, right_stride, right_total, st);
     }
-    return st.equal;
+    return st.equal && st.offset >= st.length;
 }
 record SpanCompare {
     length: u64,
@@ -672,12 +736,10 @@ record SpanCompare {
     offset: u64,
     equal: bool
 }
-fn span_compare_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: SpanCompare) -> (result: SpanCompare) {
+fn span_compare_step<N: Nat>(left_pages: [[byte; up_to N]; up_to 1024], left_stride: u64, left_total: u64, right_pages: [[byte; up_to N]; up_to 1024], right_stride: u64, right_total: u64, st: SpanCompare) -> (result: SpanCompare) {
     if !(st.equal) || st.offset >= st.length { return st; }
-    let left: [byte; up_to N] = text_units[st.left_index];
-    let right: [byte; up_to N] = text_units[st.right_index];
-    let a: u64 = source.byte_at<N>(left, st.left_start + st.offset);
-    let b: u64 = source.byte_at<N>(right, st.right_start + st.offset);
+    let a: u64 = source.byte_at_global<1024, N>(left_pages, left_stride, left_total, st.left_start + st.offset);
+    let b: u64 = source.byte_at_global<1024, N>(right_pages, right_stride, right_total, st.right_start + st.offset);
     return SpanCompare {
         length: st.length,
         left_index: st.left_index,
@@ -754,99 +816,107 @@ record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab, n
 record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, current: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList }
 record ExportSigWalk { rest: decl.FnList, caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab }
 
-fn imported_signatures<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
-    let input: [byte; up_to N] = text_units[current.source_index];
-    let calls: decl.CallSiteList = decl.collect_call_sites<N>(input, current.unit.fns);
-    iterate i over input carrying st: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules } {
-        next st = imported_signature_for_call<M, N>(text_units, current, all, st);
+fn imported_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
+    let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
+    let input_stride: u64 = module_stride(sources, current.source_index);
+    let input_total: u64 = module_total(sources, current.source_index);
+    let calls: decl.CallSiteList = decl.collect_call_sites<1024, N>(input_pages, input_stride, input_total, current.unit.fns);
+    iterate i up_to 1024 carrying st: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules } {
+        next st = imported_signature_for_call<M, N>(sources, flat_pages, current, all, st);
     }
     return st.acc;
 }
-fn imported_signature_for_call<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, st: CallSigWalk) -> (result: CallSigWalk) {
+fn imported_signature_for_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, st: CallSigWalk) -> (result: CallSigWalk) {
     return match st.rest {
         CNil => st,
-        CCons { head: call, tail: rest } => imported_signature_for_one_call<M, N>(text_units, current, all, call, rest, st)
+        CCons { head: call, tail: rest } => imported_signature_for_one_call<M, N>(sources, flat_pages, current, all, call, rest, st)
     };
 }
-fn imported_signature_for_one_call<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, call: decl.CallSite, rest: decl.CallSiteList, st: CallSigWalk) -> (result: CallSigWalk) {
-    let input: [byte; up_to N] = text_units[current.source_index];
+fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, call: decl.CallSite, rest: decl.CallSiteList, st: CallSigWalk) -> (result: CallSigWalk) {
     let uses: decl.UseList = current.unit.uses;
-    let found: decl.SigTab = signatures_from_uses<M, N>(text_units, all, current, input, uses, call, st.acc, st.nominals, st.modules);
+    let found: decl.SigTab = signatures_from_uses<M, N>(sources, flat_pages, all, current, uses, call, st.acc, st.nominals, st.modules);
     return CallSigWalk { rest: rest, acc: found, nominals: st.nominals, modules: st.modules };
 }
-fn signatures_from_uses<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, input: [byte; up_to N], uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
-    iterate i over input carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc, nominals: nominals, modules: nominal_modules } {
-        next st = signatures_from_use<M, N>(text_units, all, current, input, st);
+fn signatures_from_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
+    iterate i up_to 1024 carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc, nominals: nominals, modules: nominal_modules } {
+        next st = signatures_from_use<M, N>(sources, flat_pages, all, current, st);
     }
     return st.acc;
 }
-fn signatures_from_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, input: [byte; up_to N], st: UseSigWalk) -> (result: UseSigWalk) {
+fn signatures_from_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: UseSigWalk) -> (result: UseSigWalk) {
     return match st.rest {
         UNil => st,
-        UCons { head: usage, tail: rest } => signatures_from_one_use<M, N>(text_units, all, current, input, st, usage, rest)
+        UCons { head: usage, tail: rest } => signatures_from_one_use<M, N>(sources, flat_pages, all, current, st, usage, rest)
     };
 }
-fn signatures_from_one_use<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, input: [byte; up_to N], st: UseSigWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: UseSigWalk) {
-    if !(call_has_import_prefix<N>(input, st.call, usage)) { return UseSigWalk { ..st, rest: rest }; }
-    let target: ModuleLookup = find_import_target<M, N>(text_units, all, current, usage);
+fn signatures_from_one_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: UseSigWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: UseSigWalk) {
+    if !(call_has_import_prefix<M, N>(sources, flat_pages, current.source_index, st.call, usage)) { return UseSigWalk { ..st, rest: rest }; }
+    let target: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, current, usage);
     if !(target.found) { return UseSigWalk { ..st, rest: rest }; }
-    let sigs: decl.SigTab = signatures_from_target<M, N>(text_units, all, st.modules, current, target.index, usage, st.call, st.acc, st.nominals);
+    let sigs: decl.SigTab = signatures_from_target<M, N>(sources, flat_pages, all, st.modules, current, target.index, usage, st.call, st.acc, st.nominals);
     return UseSigWalk { rest: rest, call: st.call, acc: sigs, nominals: st.nominals, modules: st.modules };
 }
-fn call_has_import_prefix<N: Nat>(input: [byte; up_to N], call: decl.CallSite, usage: decl.UseDecl) -> (result: bool) {
+fn call_has_import_prefix<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, call: decl.CallSite, usage: decl.UseDecl) -> (result: bool) {
+    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, index);
+    let stride: u64 = module_stride(sources, index);
+    let total: u64 = module_total(sources, index);
     let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
     let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
     if call.end <= call.start || prefix_end <= prefix_start { return false; }
     let prefix_len: u64 = prefix_end - prefix_start;
     if call.end - call.start <= prefix_len + 1 { return false; }
-    if !(decl.spans_equal<N>(input, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
-    return source.byte_at<N>(input, call.start + prefix_len) == 46;
+    if !(decl.spans_equal<1024, N>(pages, stride, total, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
+    return source.byte_at_global<1024, N>(pages, stride, total, call.start + prefix_len) == 46;
 }
-fn signatures_from_target<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, target_index: u64, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList) -> (result: decl.SigTab) {
-    iterate i over text_units carrying st: TargetSigWalk = TargetSigWalk { rest: all, modules: nominal_modules, target_index: target_index, current: current, usage: usage, call: call, acc: acc, caller_nominals: caller_nominals } {
-        next st = signatures_from_target_step<M, N>(text_units, st);
+fn signatures_from_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, target_index: u64, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList) -> (result: decl.SigTab) {
+    iterate i over sources carrying st: TargetSigWalk = TargetSigWalk { rest: all, modules: nominal_modules, target_index: target_index, current: current, usage: usage, call: call, acc: acc, caller_nominals: caller_nominals } {
+        next st = signatures_from_target_step<M, N>(sources, flat_pages, st);
     }
     return st.acc;
 }
-fn signatures_from_target_step<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetSigWalk) -> (result: TargetSigWalk) {
+fn signatures_from_target_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk) -> (result: TargetSigWalk) {
     return match st.rest {
         MNil => st,
-        MCons { head: target, tail: rest } => build_signatures_from_candidate<M, N>(text_units, st, target, rest)
+        MCons { head: target, tail: rest } => build_signatures_from_candidate<M, N>(sources, flat_pages, st, target, rest)
     };
 }
-fn build_signatures_from_candidate<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetSigWalk) {
+fn build_signatures_from_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetSigWalk) {
     if target.source_index != st.target_index { return TargetSigWalk { ..st, rest: rest }; }
-    let input: [byte; up_to N] = text_units[target.source_index];
-    let target_facts: NominalModuleLookup = nominal_module_by_index<M, N>(text_units, st.modules, target.source_index);
+    let t_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
+    let t_stride: u64 = module_stride(sources, target.source_index);
+    let t_total: u64 = module_total(sources, target.source_index);
+    let target_facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.modules, target.source_index);
     let target_nominals: decl.NominalTypeIdentityList = target_facts.facts.resolved;
-    let sigs: decl.SigTabRep = decl.collect_sigtab<N>(input, target.unit.fns, target.unit.records, target.unit.enums, target_nominals);
-    let owned_sigs: decl.SigTab = decl.bind_local_callable_identities<N>(input, target.unit.header, sigs.tab);
-    let exported: decl.SigTab = signatures_from_exports<M, N>(text_units, st.current, target, input, st.usage, st.call, owned_sigs, st.acc, st.caller_nominals, target_nominals);
+    let sigs: decl.SigTabRep = decl.collect_sigtab<1024, N>(t_pages, t_stride, t_total, target.unit.fns, target.unit.records, target.unit.enums, target_nominals);
+    let owned_sigs: decl.SigTab = decl.bind_local_callable_identities<1024, N>(t_pages, t_stride, t_total, target.unit.header, sigs.tab);
+    let exported: decl.SigTab = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, owned_sigs, st.acc, st.caller_nominals, target_nominals);
     return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported };
 }
-fn signatures_from_exports<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, target_text: [byte; up_to N], usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: decl.SigTab) {
-    let caller_text: [byte; up_to N] = text_units[caller.source_index];
-    iterate i over target_text carrying st: ExportSigWalk = ExportSigWalk { rest: target.unit.fns, caller: caller, target: target, usage: usage, call: call, target_sigs: target_sigs, caller_nominals: caller_nominals, target_nominals: target_nominals, acc: acc } {
-        next st = signatures_from_export<M, N>(text_units, caller_text, target_text, st);
+fn signatures_from_exports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: decl.SigTab) {
+    iterate i up_to 1024 carrying st: ExportSigWalk = ExportSigWalk { rest: target.unit.fns, caller: caller, target: target, usage: usage, call: call, target_sigs: target_sigs, caller_nominals: caller_nominals, target_nominals: target_nominals, acc: acc } {
+        next st = signatures_from_export<M, N>(sources, flat_pages, st);
     }
     return st.acc;
 }
-fn signatures_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller_text: [byte; up_to N], target_text: [byte; up_to N], st: ExportSigWalk) -> (result: ExportSigWalk) {
+fn signatures_from_export<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ExportSigWalk) -> (result: ExportSigWalk) {
     return match st.rest {
         DNil => st,
-        DCons { head: function, tail: rest } => signature_from_export<M, N>(text_units, caller_text, target_text, st, function, rest)
+        DCons { head: function, tail: rest } => signature_from_export<M, N>(sources, flat_pages, st, function, rest)
     };
 }
-fn signature_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller_text: [byte; up_to N], target_text: [byte; up_to N], st: ExportSigWalk, function: decl.FnDecl, rest: decl.FnList) -> (result: ExportSigWalk) {
+fn signature_from_export<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ExportSigWalk, function: decl.FnDecl, rest: decl.FnList) -> (result: ExportSigWalk) {
     let fn_sig: decl.FnSig = function.sig;
-    if !(call_matches_export<M, N>(text_units, st.caller.source_index, caller_text, st.call, st.usage, st.target.source_index, fn_sig.name_start, fn_sig.name_end)) {
+    if !(call_matches_export<M, N>(sources, flat_pages, st.caller.source_index, st.call, st.usage, st.target.source_index, fn_sig.name_start, fn_sig.name_end)) {
         return ExportSigWalk { ..st, rest: rest };
     }
-    let found: decl.SigRes = decl.sig_lookup<N>(target_text, st.target_sigs, fn_sig.name_start, fn_sig.name_end);
+    let target_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.target.source_index);
+    let target_stride: u64 = module_stride(sources, st.target.source_index);
+    let target_total: u64 = module_total(sources, st.target.source_index);
+    let found: decl.SigRes = decl.sig_lookup<1024, N>(target_pages, target_stride, target_total, st.target_sigs, fn_sig.name_start, fn_sig.name_end);
     if !(found.found) { return ExportSigWalk { ..st, rest: rest }; }
-    let transported: SignatureTransport = transport_signature<N>(target_text, caller_text, found.sig, st.target_nominals, st.caller_nominals);
+    let transported: SignatureTransport = transport_signature<M, N>(sources, flat_pages, st.caller.source_index, st.target.source_index, found.sig, st.target_nominals, st.caller_nominals);
     if !(transported.ok) { return ExportSigWalk { ..st, rest: rest }; }
-    let identity: decl.SemanticIdentity = decl.canonical_function_identity<N>(target_text, st.target.unit.header.module_start, st.target.unit.header.module_end, fn_sig.name_start, fn_sig.name_end);
+    let identity: decl.SemanticIdentity = decl.canonical_function_identity<1024, N>(target_pages, target_stride, target_total, st.target.unit.header.module_start, st.target.unit.header.module_end, fn_sig.name_start, fn_sig.name_end);
     let sig: decl.Sig = decl.Sig {
         start: st.call.start,
         end: st.call.end,
@@ -864,29 +934,29 @@ fn signature_from_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M],
 record TypeTransport { ty: decl.SemType, ok: bool }
 record ParameterTransport { rest: decl.BindList, acc: decl.BindList, ok: bool }
 record SignatureTransport { params: decl.BindList, result: decl.SemType, ok: bool }
-fn transport_signature<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], sig: decl.Sig, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: SignatureTransport) {
-    let result: TypeTransport = transport_type<N>(target_text, caller_text, sig.result, target_nominals, caller_nominals);
-    iterate i over target_text carrying st: ParameterTransport = ParameterTransport { rest: sig.params, acc: decl.BindList.BNil, ok: result.ok } {
-        next st = transport_parameter_step<N>(target_text, caller_text, st, target_nominals, caller_nominals);
+fn transport_signature<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, sig: decl.Sig, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: SignatureTransport) {
+    let result: TypeTransport = transport_type<M, N>(sources, flat_pages, caller_index, target_index, sig.result, target_nominals, caller_nominals);
+    iterate i up_to 1024 carrying st: ParameterTransport = ParameterTransport { rest: sig.params, acc: decl.BindList.BNil, ok: result.ok } {
+        next st = transport_parameter_step<M, N>(sources, flat_pages, caller_index, target_index, st, target_nominals, caller_nominals);
     }
     return SignatureTransport { params: st.acc, result: result.ty, ok: st.ok && bind_list_empty(st.rest) };
 }
-fn transport_parameter_step<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], st: ParameterTransport, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: ParameterTransport) {
+fn transport_parameter_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, st: ParameterTransport, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: ParameterTransport) {
     if !(st.ok) { return st; }
     return match st.rest {
         decl.BindList.BNil => st,
-        decl.BindList.BCons { head: parameter, tail: rest } => transport_one_parameter<N>(target_text, caller_text, st, parameter, rest, target_nominals, caller_nominals)
+        decl.BindList.BCons { head: parameter, tail: rest } => transport_one_parameter<M, N>(sources, flat_pages, caller_index, target_index, st, parameter, rest, target_nominals, caller_nominals)
     };
 }
-fn transport_one_parameter<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], st: ParameterTransport, parameter: decl.Bind, rest: decl.BindList, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: ParameterTransport) {
-    let ty: TypeTransport = transport_type<N>(target_text, caller_text, parameter.ty, target_nominals, caller_nominals);
+fn transport_one_parameter<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, st: ParameterTransport, parameter: decl.Bind, rest: decl.BindList, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: ParameterTransport) {
+    let ty: TypeTransport = transport_type<M, N>(sources, flat_pages, caller_index, target_index, parameter.ty, target_nominals, caller_nominals);
     let rebound: decl.Bind = decl.Bind { ..parameter, ty: ty.ty };
     return ParameterTransport { rest: rest, acc: decl.BindList.BCons { head: rebound, tail: st.acc }, ok: ty.ok };
 }
 fn bind_list_empty(params: decl.BindList) -> (result: bool) { return match params { decl.BindList.BNil => true, decl.BindList.BCons { head: h, tail: t } => false }; }
 record BindReverse { rest: decl.BindList, acc: decl.BindList }
-fn reverse_transported_parameters<N: Nat>(input: [byte; up_to N], params: decl.BindList) -> (result: decl.BindList) {
-    iterate i over input carrying st: BindReverse = BindReverse { rest: params, acc: decl.BindList.BNil } { next st = reverse_transported_parameter_step(st); }
+fn reverse_transported_parameters(params: decl.BindList) -> (result: decl.BindList) {
+    iterate i up_to 1024 carrying st: BindReverse = BindReverse { rest: params, acc: decl.BindList.BNil } { next st = reverse_transported_parameter_step(st); }
     return st.acc;
 }
 fn reverse_transported_parameter_step(st: BindReverse) -> (result: BindReverse) {
@@ -895,38 +965,44 @@ fn reverse_transported_parameter_step(st: BindReverse) -> (result: BindReverse) 
         decl.BindList.BCons { head: h, tail: rest } => BindReverse { rest: rest, acc: decl.BindList.BCons { head: h, tail: st.acc } }
     };
 }
-fn transport_type<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], ty: decl.SemType, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+fn transport_type<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, ty: decl.SemType, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
     return match ty {
         TBool => TypeTransport { ty: ty, ok: true },
         TByte => TypeTransport { ty: ty, ok: true },
         TInt { width: w, signed: s } => TypeTransport { ty: ty, ok: true },
-        TNamed { start: a, end: b } => transport_nominal_type<N>(target_text, caller_text, a, b, target_nominals, caller_nominals),
+        TNamed { start: a, end: b } => transport_nominal_type<M, N>(sources, flat_pages, caller_index, target_index, a, b, target_nominals, caller_nominals),
         TSeq => TypeTransport { ty: decl.SemType.TPoison, ok: false },
-        TSeqExact { element: element, length: length, length_valid: valid } => transport_sequence_type<N>(target_text, caller_text, element, length, valid, target_nominals, caller_nominals),
+        TSeqExact { element: element, length: length, length_valid: valid } => transport_sequence_type<M, N>(sources, flat_pages, caller_index, target_index, element, length, valid, target_nominals, caller_nominals),
         TPoison => TypeTransport { ty: decl.SemType.TPoison, ok: false }
     };
 }
-fn transport_sequence_type<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], element: decl.SemType, length: u64, length_valid: bool, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
-    let transported: TypeTransport = transport_sequence_element<N>(target_text, caller_text, element, target_nominals, caller_nominals);
+fn transport_sequence_type<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, element: decl.SemType, length: u64, length_valid: bool, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    let transported: TypeTransport = transport_sequence_element<M, N>(sources, flat_pages, caller_index, target_index, element, target_nominals, caller_nominals);
     if !(length_valid) || !(transported.ok) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
     return TypeTransport { ty: decl.SemType.TSeqExact { element: transported.ty, length: length, length_valid: length_valid }, ok: true };
 }
-fn transport_sequence_element<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], element: decl.SemType, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+fn transport_sequence_element<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, element: decl.SemType, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
     return match element {
         TBool => TypeTransport { ty: element, ok: true },
         TByte => TypeTransport { ty: element, ok: true },
         TInt { width: width, signed: signed } => TypeTransport { ty: element, ok: true },
-        TNamed { start: start, end: end } => transport_nominal_type<N>(target_text, caller_text, start, end, target_nominals, caller_nominals),
+        TNamed { start: start, end: end } => transport_nominal_type<M, N>(sources, flat_pages, caller_index, target_index, start, end, target_nominals, caller_nominals),
         TSeq => TypeTransport { ty: decl.SemType.TPoison, ok: false },
         TSeqExact { element: nested, length: count, length_valid: valid } => TypeTransport { ty: decl.SemType.TPoison, ok: false },
         TPoison => TypeTransport { ty: decl.SemType.TPoison, ok: false }
     };
 }
-fn transport_nominal_type<N: Nat>(target_text: [byte; up_to N], caller_text: [byte; up_to N], start: u64, end: u64, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
-    let imported: decl.NominalLookup = decl.nominal_identity_at<N>(target_text, target_nominals, start, end);
-    let target: decl.NominalLookup = select_nominal_lookup(imported.found, imported, decl.nominal_identity_by_name<N>(target_text, target_nominals, start, end));
+fn transport_nominal_type<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, start: u64, end: u64, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    let target_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target_index);
+    let target_stride: u64 = module_stride(sources, target_index);
+    let target_total: u64 = module_total(sources, target_index);
+    let caller_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, caller_index);
+    let caller_stride: u64 = module_stride(sources, caller_index);
+    let caller_total: u64 = module_total(sources, caller_index);
+    let imported: decl.NominalLookup = decl.nominal_identity_at<1024, N>(target_pages, target_stride, target_total, target_nominals, start, end);
+    let target: decl.NominalLookup = select_nominal_lookup(imported.found, imported, decl.nominal_identity_by_name<1024, N>(target_pages, target_stride, target_total, target_nominals, start, end));
     if !(target.found) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
-    let caller: decl.NominalRefLookup = decl.nominal_reference_by_identity<N>(caller_text, caller_nominals, target.identity);
+    let caller: decl.NominalRefLookup = decl.nominal_reference_by_identity<1024, N>(caller_pages, caller_stride, caller_total, caller_nominals, target.identity);
     if !(caller.found) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
     return TypeTransport { ty: decl.SemType.TNamed { start: caller.start, end: caller.end }, ok: true };
 }
@@ -937,16 +1013,19 @@ fn select_nominal_lookup(imported_first: bool, imported: decl.NominalLookup, loc
 fn effect_list_empty(fx: decl.EffectList) -> (result: bool) {
     return match fx { XNil => true, XCons { head: h, tail: t } => false };
 }
-fn call_matches_export<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], caller_index: u64, caller_text: [byte; up_to N], call: decl.CallSite, usage: decl.UseDecl, target_index: u64, member_start: u64, member_end: u64) -> (result: bool) {
+fn call_matches_export<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, call: decl.CallSite, usage: decl.UseDecl, target_index: u64, member_start: u64, member_end: u64) -> (result: bool) {
+    let caller_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, caller_index);
+    let caller_stride: u64 = module_stride(sources, caller_index);
+    let caller_total: u64 = module_total(sources, caller_index);
     let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
     let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
     if call.end <= call.start || prefix_end <= prefix_start || member_end < member_start { return false; }
     let prefix_len: u64 = prefix_end - prefix_start;
     let member_len: u64 = member_end - member_start;
     if call.end - call.start != prefix_len + 1 + member_len { return false; }
-    if !(decl.spans_equal<N>(caller_text, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
-    if source.byte_at<N>(caller_text, call.start + prefix_len) != 46 { return false; }
-    return spans_equal_between<M, N>(text_units, caller_index, call.start + prefix_len + 1, call.end, target_index, member_start, member_end);
+    if !(decl.spans_equal<1024, N>(caller_pages, caller_stride, caller_total, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
+    if source.byte_at_global<1024, N>(caller_pages, caller_stride, caller_total, call.start + prefix_len) != 46 { return false; }
+    return spans_equal_between<M, N>(sources, flat_pages, caller_index, call.start + prefix_len + 1, call.end, target_index, member_start, member_end);
 }
 
 record ProjectBuild { rest: ModuleList, all: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, acc: ProjectModuleList, valid: bool, ssa_valid: bool, count: u64, failed: StageFailure }
@@ -954,30 +1033,32 @@ record ProjectBuildRev { rest: ProjectModuleList, acc: ProjectModuleList }
 fn begin_project_lowering(modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList) -> (result: ProjectBuild) {
     return ProjectBuild { rest: modules, all: modules, imports: imports, nominal_modules: nominal_modules, acc: ProjectModuleList.PNil, valid: true, ssa_valid: true, count: 0, failed: StageFailure { stage: 0, source_index: 0, code: 0, start: 0, end: 0 } };
 }
-fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], text_units: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList) -> (result: ProjectBuild) {
+fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList) -> (result: ProjectBuild) {
     let initial: ProjectBuild = begin_project_lowering(modules, imports, nominal_modules);
     iterate i over sources carrying st: ProjectBuild = initial {
-        next st = lower_project_one<M, N>(text_units, st);
+        next st = lower_project_one<M, N>(sources, flat_pages, st);
     }
     iterate i over sources carrying rev: ProjectBuildRev = ProjectBuildRev { rest: st.acc, acc: ProjectModuleList.PNil } {
         next rev = reverse_project_build(rev);
     }
     return ProjectBuild { rest: ModuleList.MNil, all: modules, imports: imports, nominal_modules: nominal_modules, acc: rev.acc, valid: st.valid, ssa_valid: st.ssa_valid, count: st.count, failed: st.failed };
 }
-fn lower_project_one<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectBuild) -> (result: ProjectBuild) {
+fn lower_project_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectBuild) -> (result: ProjectBuild) {
     return match st.rest {
         MNil => st,
-        MCons { head: parsed, tail: rest } => lower_one_project_module<M, N>(text_units, st, parsed, rest)
+        MCons { head: parsed, tail: rest } => lower_one_project_module<M, N>(sources, flat_pages, st, parsed, rest)
     };
 }
-fn lower_one_project_module<M: Nat, N: Nat>(text_units: [[byte; up_to N]; up_to M], st: ProjectBuild, parsed: ParsedModule, rest: ModuleList) -> (result: ProjectBuild) {
-    let input: [byte; up_to N] = text_units[parsed.source_index];
-    let facts: NominalModuleLookup = nominal_module_by_index<M, N>(text_units, st.nominal_modules, parsed.source_index);
+fn lower_one_project_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectBuild, parsed: ParsedModule, rest: ModuleList) -> (result: ProjectBuild) {
+    let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, parsed.source_index);
+    let input_stride: u64 = module_stride(sources, parsed.source_index);
+    let input_total: u64 = module_total(sources, parsed.source_index);
+    let facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.nominal_modules, parsed.source_index);
     let nominals: decl.NominalTypeIdentityList = facts.facts.resolved;
-    let imported: decl.SigTab = imported_signatures<M, N>(text_units, parsed, st.all, nominals, st.nominal_modules);
-    let proof: decl.UnitProve = decl.prove_parsed_unit_with_nominals<N>(input, parsed.unit, imported, nominals);
-    let lowered: flow.LoweredUnit = flow.lower_proven_unit<N>(input, proof);
-    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa<N>(input, lowered, nominals);
+    let imported: decl.SigTab = imported_signatures<M, N>(sources, flat_pages, parsed, st.all, nominals, st.nominal_modules);
+    let proof: decl.UnitProve = decl.prove_parsed_unit_with_nominals<1024, N>(input_pages, input_stride, input_total, parsed.unit, imported, nominals);
+    let lowered: flow.LoweredUnit = flow.lower_proven_unit<1024, N>(input_pages, input_stride, input_total, proof);
+    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa<1024, N>(input_pages, input_stride, input_total, lowered, nominals);
     return ProjectBuild {
         rest: rest,
         all: st.all,
@@ -1016,16 +1097,19 @@ fn append_stage_diagnostic<M: Nat>(sources: [ProjectSource; up_to M], diagnostic
     return DiagnosticList.DiagCons { head: ProjectDiagnostic.FlowFailed { source_index: failed.source_index, code: failed.code, start: failed.start, end: failed.end }, tail: diagnostics };
 }
 
-fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, text_units: [[byte; up_to N]; up_to M]) -> (result: ProjectResult) {
+fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M]) -> (result: ProjectResult) {
     let ordered: bool = source_ordered<64>(snapshot.sources);
-    let counts_match: bool = snapshot.sources.len == text_units.len;
-    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, text_units);
+    // CP-0021: the per-module page descriptors must partition the flat
+    // page array in source order; a gap, overlap, or trailing page fails
+    // the project exactly like the old source/view count mismatch did.
+    let counts_match: bool = descriptors_cover<M, N>(snapshot.sources, flat_pages);
+    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, flat_pages);
     let parsed: ModuleList = reverse_modules<64>(snapshot.sources, built.acc);
-    let duplicate: DiagnosticList = duplicate_modules<M, N>(snapshot.sources, text_units, parsed);
-    let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, text_units, parsed);
-    let local_nominals: NominalModuleList = collect_local_nominal_modules<M, N>(text_units, parsed);
-    let nominal_modules: NominalModuleList = resolve_project_nominal_modules<M, N>(text_units, parsed, local_nominals);
-    let lowered: ProjectBuild = lower_project_modules<M, N>(snapshot.sources, text_units, parsed, resolved.imports, nominal_modules);
+    let duplicate: DiagnosticList = duplicate_modules<M, N>(snapshot.sources, flat_pages, parsed);
+    let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, flat_pages, parsed);
+    let local_nominals: NominalModuleList = collect_local_nominal_modules<M, N>(snapshot.sources, flat_pages, parsed);
+    let nominal_modules: NominalModuleList = resolve_project_nominal_modules<M, N>(snapshot.sources, flat_pages, parsed, local_nominals);
+    let lowered: ProjectBuild = lower_project_modules<M, N>(snapshot.sources, flat_pages, parsed, resolved.imports, nominal_modules);
     let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, counts_match);
     let diagnostics1: DiagnosticList = append_diagnostics<64>(snapshot.sources, basic, duplicate);
     let diagnostics2: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);

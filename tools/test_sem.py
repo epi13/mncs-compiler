@@ -45,6 +45,24 @@ def source_bytes(text):
 def nat_arg(value):
     return {'kind': 'nat', 'value': value}
 
+
+# CP-0021: declaration/proof entry points consume the logical paged source.
+# Unit suites transport each padded view as one canonical single-page
+# composition (stride 1024, total = view length).
+PAGE_BOUND = 1024
+STRIDE_BOUND = 1024
+
+
+def pages_value(chunks):
+    return {'sequence': {'values': [blob(chunk) for chunk in chunks]}}
+
+
+def logical_args(data, stride=STRIDE_BOUND):
+    total = len(data)
+    assert total <= STRIDE_BOUND
+    pages = [data] if total else []
+    return [pages_value(pages), integer(stride), integer(total)]
+
 # (name, source, expected UNKNOWN kinds present in our obligations)
 CASES = [
     ('clean-add',
@@ -594,14 +612,16 @@ def flist(v, cons):
 class Probe:
     def __init__(self):
         env = dict(os.environ)
-        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+        reference_interpreter = env.get("MNCS_PROBE_BACKEND") == "reference_interpreter"
+        if reference_interpreter:
             env.pop("MNCS_PROBE_BACKEND", None)
         env['MNCS_PROBE_MODULES'] = 'source,lexer,parser,segment,decl'
         env['MNCS_PROBE_EXECUTION_MODULES'] = 'mncs.compiler.decl.v1'
-        env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+        if not reference_interpreter:
+            env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
         env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
             {'module': 'mncs.compiler.decl.v1', 'function': function,
-             'type_arguments': [nat_arg(SOURCE_BOUND)]}
+             'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)]}
             for function in ['prove_unit', 'sabotage_depth', 'sabotage_call_arity',
                              'sabotage_bin_mismatch', 'sabotage_final_type',
                              'sabotage_finite_match_arity', 'sabotage_construct_arity',
@@ -625,9 +645,8 @@ class Probe:
         return json.loads(line)
 
     def run(self, unit, function, args):
-        bound = len(args[0]['sequence']['values'])
         request = {'schema_version': '0.1', 'target': {'module': f'mncs.compiler.{unit}.v1', 'function': function},
-                   'arguments': args, 'type_arguments': [nat_arg(bound)], 'step_budget': 8000000}
+                   'arguments': args, 'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)], 'step_budget': 8000000}
         result = self.send(request)
         assert result['status'] == 'returned', (function, result)
         self.count += 1
@@ -641,7 +660,7 @@ class Probe:
 
 
 def prove_case(probe, text):
-    return probe.run('decl', 'prove_unit', [blob(source_bytes(text))])
+    return probe.run('decl', 'prove_unit', logical_args(source_bytes(text)))
 
 
 def suite():
@@ -673,7 +692,7 @@ def suite():
             details.append({'case': name, 'fails': len(fails), 'unknowns': sorted(unknowns),
                             'fn_count': got['fn_count']})
         # Intrinsic-proof adversarial verdicts: all sabotage rejected, sound sample passes.
-        args = [blob(source_bytes(b'mncs 0.10; module t;'))]
+        args = logical_args(source_bytes(b'mncs 0.10; module t;'))
         assert probe.run('decl', 'sabotage_depth', args[:4]) is False
         assert probe.run('decl', 'sabotage_call_arity', args) is False
         assert probe.run('decl', 'sabotage_bin_mismatch', args) is False

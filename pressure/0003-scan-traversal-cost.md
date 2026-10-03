@@ -1,6 +1,6 @@
 # CP-0003 — Cursor scans retain bounded no-op iterations
 
-Status: open; language behavior still reproduced
+Status: workload restructured in mncs-compiler (measured); language behavior still reproduced, no upstream change required
 
 > Historical description and reproductions below preserve the original
 > finding. See the current reconciliation at the end of this file and the
@@ -72,3 +72,22 @@ this campaign. See
 [`campaign-20260926-pressure-suite-results.json`](../evidence/campaign-20260926-pressure-suite-results.json),
 [`campaign-20260926-frontend-results.json`](../evidence/campaign-20260926-frontend-results.json),
 and [`campaign-20260926-segment-results.json`](../evidence/campaign-20260926-segment-results.json).
+
+## Reconciliation (2026-10-03, performance campaign)
+
+The hot traversal loops were restructured without any language change,
+using only the existing `if` + `iterate` conditional chunk-chain idiom
+(precedent: `decl.header`, `lexer.next_token`). Total fuel is
+unchanged; finished state machines skip whole chunks via their `done`
+flags. Landed in `parse_expr` (64+960+1024+32), `parse_fields` /
+`parse_clauses` (16+1008), `parse_stmts` (16+1008+1024), `parse_unit`
+(64x16), and `TypeParse` / qualified paths (16+1008). Measured
+reference-interpreter steps: 1-expression 1137645→588260, 1-function
+901811→352537, 10-function budget-exhausted→5206166 returned. The same
+reduction relieved the CP-0023 backend-arena exhaustion on every tier-D
+milestone (the `ssa`/`decl` rows now reach parse verdicts). The
+`while`/MNP106 language behavior is unchanged and still reproduced by
+the (green) pressure suite — correctly so, since the compiler
+workload no longer needs early termination from the language here.
+Remaining terminal-state dispatch in colder loops is unmeasured and
+explicitly deferred.

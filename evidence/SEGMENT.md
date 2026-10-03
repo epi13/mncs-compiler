@@ -1,5 +1,12 @@
 # Segment-vertical evidence (absolute offsets over four chunks)
 
+> Status note (2026-10-03): the four-chunk ≤256-byte interface below is
+> the pre-CP-0001 spelling, preserved as history. The current pipeline
+> consumes logical pages with global positions (CP-0001/CP-0021,
+> proven to 558,004 bytes); see
+> [`cp0001-matrix.json`](cp0001-matrix.json),
+> [`PARITY.md`](PARITY.md), and the pressure index for live status.
+
 MNCS compiler implementation in `src/compiler/segment.mncs`: the same
 lexical semantics as the single-chunk `source`/`lexer` modules over a
 four-chunk logical source (≤256 bytes) with absolute offsets. All

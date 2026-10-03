@@ -10,17 +10,17 @@ Current locked Stage-0 CLI/bootstrap reference: `a3ac17df69e68f6373cbff336db0a57
 profile 0.18. Earlier pins named below (`4f9e122`, `b0f3e64`, `709ba008`,
 `843c5bc`) are preserved as historical evidence with their original
 measurements. Current pressure probes are in
-[`../evidence/campaign-20261002-pressure-suite-results.json`](../evidence/campaign-20261002-pressure-suite-results.json),
+[`../evidence/campaign-20261003-pressure-suite-results.json`](../evidence/campaign-20261003-pressure-suite-results.json),
 and current native syntax results are in
-[`../evidence/campaign-20261002-profile-surface-results.json`](../evidence/campaign-20261002-profile-surface-results.json).
+[`../evidence/campaign-20261003-profile-surface-results.json`](../evidence/campaign-20261003-profile-surface-results.json).
 
-## Current reconciliation (2026-10-02)
+## Current reconciliation (2026-10-03)
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
-| [CP-0001 bounded source storage](0001-bounded-source-storage.md) | Resolved as representation; pipeline scale open (CP-0021) | Native logical immutable source (fixed-stride page compositions to 1 MiB) with cross-boundary lexing, headers, and identity proven to 490,607 bytes (`tools/test_cp0001.py`, tier-D matrix). Single-view ceiling unchanged. Parse/proof/CFG/SSA past 1,024 bytes need declaration-stage fuel (CP-0021). |
+| [CP-0001 bounded source storage](0001-bounded-source-storage.md) | Resolved (representation + pipeline scale) | Native logical immutable source (fixed-stride page compositions to 1 MiB) proven to 558,004 bytes, and the decl/proof/CFG/SSA pipeline now consumes it (CP-0021 pages-outer refactor). Full ABCD matrix: 10 rows, zero ceiling rows; `synthetic-2049` fully green. Single-view spellings survive only as unit-test compositions. |
 | [CP-0002 Unicode classification](0002-unicode-source-classification.md) | Open | Current Rust accepts the Unicode module probe; the native frontend remains ASCII-only. Compiler/frontend gap, not a missing generic language feature. |
-| [CP-0003 bounded scan cost](0003-scan-traversal-cost.md) | Open | Current Rust still rejects the `while` reproducer with MNP106. Bounded traversal remains the compiler workaround; no upstream change was required for the CFG workload. |
+| [CP-0003 bounded scan cost](0003-scan-traversal-cost.md) | Workload restructured (measured); language unchanged | Hot parser loops now use conditional chunk-chains (`if !done` skips; total fuel unchanged): 1-fn 901811→352537 steps, 10-fn exhausted→returned. The `while`/MNP106 behavior still reproduces (green pressure suite) but the compiler workload no longer needs it here. |
 | [CP-0004 boolean comparisons](0004-boolean-comparison.md) | Resolved | Current Stage-0 accepts boolean equality and negation. Native parser support for current syntax is tracked by CP-0015. |
 | [CP-0005 test transport](0005-test-transport.md) | Open, reduced | The cached retained-session probe avoids rebuilding sessions, but Python/Rust still transports test requests and oracle facts. Tooling boundary. |
 | [CP-0006 envelope inference](0006-envelope-profile-inference.md) | Open | Leading-comment profile probe still produces MNE002. Stage-0 envelope/tooling behavior. |
@@ -28,7 +28,7 @@ and current native syntax results are in
 | [CP-0008 finite payload visibility](0008-finite-payload-visibility.md) | Resolved | Current producer and imported consumer fixtures both elaborate. The original backend/source-level authority is Stage-0; it does not imply a native compiler module resolver. |
 | [CP-0009 iteration fuel chaining](0009-iteration-fuel-chaining.md) | Resolved for tested cases | Current profile accepts a counted bound of 256 and repeated iteration identities. The compiler still uses its explicit bounded scans. |
 | [CP-0010 scalar match dispatch](0010-scalar-match-dispatch.md) | Resolved | Current Stage-0 accepts the total integer-match fixture. Native parse/proof/verified-SSA now cover integer scalar match (6 verified functions, 4 corruption rejections); see the project/value-SSA evidence. |
-| [CP-0011 acyclic-call machines](0011-acyclic-calls-machines.md) | Partial; current scope narrowed | The structural recursive AST/function fixture passes. Numeric self-recursion and mutual recursion still fail with MNE130; explicit current-profile probes are in `pressure-current-results.json`. |
+| [CP-0011 acyclic-call machines](0011-acyclic-calls-machines.md) | Partial; nested-match scope resolved | Nested-match parsing/verified-SSA resolved via explicit machines (`cre1-evidence-combine` green unmodified; residual: outer stack temps / payload bindings fail closed). The structural recursive AST/function fixture passes. Numeric self-recursion and mutual recursion still fail with MNE130; explicit current-profile probes are in `pressure-current-results.json`. |
 | [CP-0012 payload sequence ban](0012-payload-sequence-ban.md) | Resolved | Current Stage-0 accepts the finite sequence payload fixture. |
 | [CP-0013 keyword field `next`](0013-keyword-field-next.md) | Resolved | Current Stage-0 and native `decl.parse_unit`/`decl.prove_unit` accept the field and projection under Profile 0.18. |
 | [CP-0014 bool payload regression](0014-bool-payload-regression.md) | Resolved upstream and natively covered | Current Stage-0 accepts the bool-payload fixture; native parse/proof/verified-SSA cover finite matches and enum construction (10 verified functions, 10 corruption rejections). Backend lowering remains open. |
@@ -38,8 +38,9 @@ and current native syntax results are in
 | [CP-0018 verified native-SSA arithmetic](0018-verified-native-ssa-arithmetic.md) | Open | Main's proof-bound C11 adapter (`mncs.native-scalar-ssa/1`) admits only Constant/Call; no integer arithmetic. Backend ownership. Blocks migration off the unattested structural projection. |
 | [CP-0019 host-intrinsic callee model](0019-host-intrinsic-callee-model.md) | Resolved in compiler through verified SSA (current profile) | Five operations prove (kinds 53–67) and lower to verified kind-9 SSA with canonical identities; both pulling real sources reach verified SSA unmodified. Backend lowering, old-profile gating, and deferred view behaviors remain open; see the finding. |
 | [CP-0020 heterogeneous match env order](0020-heterogeneous-match-env-order.md) | Resolved in compiler | Match lowering reversed block-parameter environments, misaligning arm-to-join edges for mixed-type envs. Fixed at the shared prepare step; scalar/finite/projection sections cover it. |
-| [CP-0021 declaration logical-source fuel](0021-declaration-logical-source-fuel.md) | Open | `decl`/`flow`/`ssa`/`project` consume single bounded views; modules past 1,024 bytes are unrepresentable as their input (matrix span [1024,1025]). Needs pages-outer fuel refactor; no language change. Compiler architecture. |
-| [CP-0022 native lexical `not` kind](0022-native-lexical-not-kind.md) | Open | Native scanner has no `not` kind (bare `!` stays `(7, MNL002)` by version-neutral design; oracle emits `not`). Token-stream differentials compare modulo the classified pair. Needs an owning vocabulary decision. |
+| [CP-0021 declaration logical-source fuel](0021-declaration-logical-source-fuel.md) | Resolved in compiler | `decl`/`flow`/`ssa`/`project` consume logical pages with global positions (flat pages + descriptors + cover check in `project`). Full ABCD + 1,362 s closure green; `test_decl.py` digest byte-identical. Remaining ceilings: 1024-byte span-compare fail-closed, M=1024 page arrays. |
+| [CP-0022 native lexical `not` kind](0022-native-lexical-not-kind.md) | Decided: version-neutral contract kept | Bare `!` stays kind 7 + MNL002 with the `decl` 0.13-gated reinterpretation (no `not` kind). Parse/proof conformance proven via CP-0015; differentials keep comparing modulo the classified pair. |
+| [CP-0023 backend value-arena ceiling](0023-backend-value-arena-ceiling.md) | Workload relieved; backend cap open | The 16 MiB per-request Cranelift arena (`NATIVE_ARENA_BYTES`) is unchanged, but no tier-D milestone exhausts it anymore (CP-0003 step reduction). Backend configurability/usage-query remains `mncs-language` ownership. |
 
 ## Operating sequence
 

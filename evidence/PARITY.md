@@ -105,19 +105,18 @@ reference during verifier debugging, not as the normal suite runner.
 | Bootstrap | Lock and marked .bootstrap tree match a3ac17df; reprovision plus release builds exit 0 | Establishes reproducible Stage-0 provisioning, not self-hosting |
 | Profile 0.18 frontend | 21 positive, negative, and old-profile cases; 83.255 s; all conformant | Covers `!`, negative integer atoms, repeat literals, `next`, and integer match; grammar remains bounded |
 | Frontend and segment | 7,893 frontend requests / 196 sources / 1,759 tokens in 31.106 s; 6,564 segment requests / 43 texts / 3,161 tokens in 15.625 s; two identical runs each | Retained Cranelift, one step per request; Unicode remains explicitly unsupported by the native frontend |
-| Declarations | 9 requests, repeated twice identically; one retained Cranelift session; 163.271 s | Structural parsing, first-error spans, and declaration verdicts for the recorded corpus |
-| Semantic proof | 131 cases plus eleven proof verdicts, repeated twice; 209.087 s | Tested proof diagnostics and typed facts, not full Rust body semantics |
-| Typed CFG | Four control-flow cases, 21 requests, repeated twice; 87.615 s | Branch/jump/return and reachability facts for the tested slice |
-| Project and value SSA | 42 requests; 1467.736 s local / 1439.956 s obligation; canonical imported call identity, verified merge values, the finite/enum slice, the scalar-match slice (6 verified functions, 6 switches, 4 corruption rejections), the projection slice (5 verified functions, 7 project instructions, 6 corruption rejections), and the compiler-operation slice (5 verified functions, 5 kind-9 instructions, 7 corruption rejections, kind-53/MNE257 twin); digest `2fb25256…` repeats byte-identically across the local and Environment-obligation runners | Bounded verified slice; nested matches in arm position and over-ceiling sources (CP-0001) remain out of scope; no native target code |
+| Declarations | 9 requests; digest `820ac042…` byte-identical across the pages-outer refactor; one retained Cranelift session; 255.126 s | Structural parsing, first-error spans, and declaration verdicts for the recorded corpus |
+| Semantic proof | 170 cases plus eleven proof verdicts, passed twice identically | Tested proof diagnostics and typed facts, not full Rust body semantics |
+| Typed CFG | Four control-flow cases, 21 requests, repeated twice; 139.35 s | Branch/jump/return and reachability facts for the tested slice |
+| Project and value SSA | 43 requests; 1362.503 s local; canonical imported call identity, verified merge values, the finite/enum slice, the scalar-match slice (6 verified functions, 6 switches, 4 corruption rejections), the projection slice (5 verified functions, 7 project instructions, 6 corruption rejections), the nested-match slice (6 functions, 4 finite + 7 scalar switches, 8 corruption rejections), and the compiler-operation slice (5 verified functions, 5 kind-9 instructions, 7 corruption rejections, kind-53/MNE257 twin); digest `2565a27a…` with deterministic repetitions | Bounded verified slice; nested matches verified except outer stack temps / payload bindings (fail closed); logical-page sources to 558,004 bytes reach feature-gap spans (CP-0015/CP-0002), not ceiling blocks; no native target code |
 | Stage-0 compile cost | Two identical linked artifact runs in 1.090 / 1.088 s | Four output artifacts per run, byte-identical; not native compiler cost or peak memory |
 | Pressure probes | Four expected rejections and one supported control; 0.0954 s | Locked Stage-0 reference outcomes only; not native compiler verification |
 | RAVEL plans | Nine native plans in 95.428 s total at the 2026-09-26 pin; all selected obligations current then | Historical at `843c5bc`; reuses identity-bound PASS records; direct-dependents plans do not execute tests |
 
 The retained Cranelift request step count is one per request, with one retained
-session per focused module group. This bounds repeated execution cost, but no
-like-for-like wall-time speedup was demonstrated. The project suite runs
-775.098 s at the current pin including the finite/enum and scalar-match SSA
-slices (its result digest repeats byte-identically across two runs). The
+session per focused module group. The full project closure runs 1,362.503 s
+at the current pin (43 requests, 23 native steps — request and step counts
+unchanged across the pages-outer refactor; prior pin 1,406.305 s). The
 2026-09-26 growth note (project
 suite 53.083 s to 125.137 s with identity/SSA work; RAVEL nine-root planning
 95.428 s, not faster than prior warm measurements) is preserved as historical.
@@ -162,7 +161,7 @@ profile controls: all 21 current-head cases conform to locked Stage-0 in
 `campaign-20260929-profile-surface-results.json`. CP-0010
 integer match dispatch and CP-0013 next-field behavior remain confirmed, and
 the bootstrap refresh issue is resolved.
-CP-0001's remaining per-source ceiling,
+CP-0001/CP-0021 pipeline scale (resolved: logical pages to 558,004 bytes),
 CP-0002 Unicode refusal, CP-0005's host test transport, CP-0006's current
 Stage-0 envelope behavior, and CP-0007's linked artifact cost were rechecked.
 Imported nominal ownership now reaches verified SSA; aggregate C11 lowering
@@ -179,12 +178,15 @@ tooling pressure.
 
 ## Narrowest next parity step
 
-`TProj` record projection and the compiler-operation proof model
-(CP-0019, now reaching verified SSA for both pulling real sources) are
-implemented and verified. The next parity steps follow real-family
-evidence: nested-match parsing (CP-0011 instance) and the per-source
-size ceiling (CP-0001).
-No value-SSA operation is named first-unsupported until a post-CP-0019
+`TProj` record projection, the compiler-operation proof model
+(CP-0019), nested-match parsing/lowering (CP-0011, modulo the outer
+stack-temp / payload-binding residual), and logical-page pipeline
+scale (CP-0001/CP-0021, to 558,004 bytes) are implemented and
+verified. The next parity steps follow real-family evidence: the
+CP-0015 grammar gaps that tier D now names with precise spans
+(generics `<` first-failures on every large milestone) and CP-0002
+non-ASCII admission.
+No value-SSA operation is named first-unsupported until a post-CP-0021
 probe establishes it. Backend/runtime lowering is still unverified for
 enum construction, finite switch, scalar switch, payload extraction,
 sequence repeat, projection, and compiler operations; main's proof-bound C11 adapter needs

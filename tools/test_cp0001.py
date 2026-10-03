@@ -127,11 +127,13 @@ def ref_line_col(data, offset):
 class Probe:
     def __init__(self, modules, execution_modules, seeds, with_project=False):
         env = dict(os.environ)
-        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+        reference_interpreter = env.get("MNCS_PROBE_BACKEND") == "reference_interpreter"
+        if reference_interpreter:
             env.pop("MNCS_PROBE_BACKEND", None)
         env["MNCS_PROBE_MODULES"] = modules
         env["MNCS_PROBE_EXECUTION_MODULES"] = execution_modules
-        env.setdefault("MNCS_PROBE_BACKEND", "cranelift")
+        if not reference_interpreter:
+            env.setdefault("MNCS_PROBE_BACKEND", "cranelift")
         env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
         self.proc = subprocess.Popen(
             [env.get("MNCS_PROBE_BIN",
@@ -262,7 +264,7 @@ def full_probe():
     # listing ssa.v1 here previously retained only 1 of 2 sessions.
     seeds = [
         {"module": "mncs.compiler.project.v1", "function": "compile_project",
-         "type_arguments": [nat_arg(3), nat_arg(1024)]},
+         "type_arguments": [nat_arg(1024), nat_arg(1024)]},
     ]
     return Probe("source,lexer,parser,segment,decl,flow,ssa,project",
                  "mncs.compiler.project.v1",
@@ -842,7 +844,14 @@ def discover_sources(root):
     return sorted(discovered, key=lambda item: item[0].encode())
 
 
-def project_request(identities, sources):
+def project_request(identities, sources, stride=1024):
+    # CP-0021: one flat page array plus per-module page descriptors.
+    flat = []
+    descriptors = []
+    for sid, _, text in sources:
+        chunks = chunk(text, stride)
+        descriptors.append((sid, len(flat), len(chunks), stride, len(text)))
+        flat.extend(chunks)
     project = {
         "record": {
             "type_identity": identities["ProjectSnapshot"]["identity"],
@@ -858,8 +867,12 @@ def project_request(identities, sources):
                         "name": "ProjectSource",
                         "fields": [
                             ["source_id", byte_sequence(sid.encode())],
-                            ["source_path", byte_sequence(sid.encode())]]}}
-                    for sid, _, _ in sources]}}],
+                            ["source_path", byte_sequence(sid.encode())],
+                            ["page_start", integer(start)],
+                            ["page_count", integer(count)],
+                            ["stride", integer(st)],
+                            ["total", integer(total)]]}}
+                    for sid, start, count, st, total in descriptors]}}],
             ],
         }
     }
@@ -867,11 +880,30 @@ def project_request(identities, sources):
         "schema_version": "0.1",
         "target": {"module": "mncs.compiler.project.v1",
                    "function": "compile_project"},
-        "arguments": [project, {"sequence": {"values": [
-            byte_sequence(text) for _, _, text in sources]}}],
-        "type_arguments": [nat_arg(3), nat_arg(1024)],
+        "arguments": [project, pages_value(flat)],
+        "type_arguments": [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
         "step_budget": 8_000_000,
     }
+
+
+def pipeline_run(probe, identities, sources, stride=1024):
+    """One native compile_project on the given sources; returns decoded
+    native, or None when the backend value arena is exhausted (CP-0023):
+    no verdict was reached, so callers must record unknown stages."""
+    request = project_request(identities, sources, stride=stride)
+    first = probe.send(request)
+    probe.count += 1
+    probe.steps.append(first.get("steps", 0))
+    probe.digest.update(json.dumps(
+        ["compile_project", stride, first["status"], first.get("returned"),
+         first.get("failure"), first.get("steps")], sort_keys=True).encode())
+    if first["status"] == "budget_exhausted":
+        return None
+    assert first["status"] == "returned", first
+    second = probe.send(request)
+    assert second["returned"] == first["returned"], \
+        "project output must be deterministic"
+    return decode(first["returned"][0])
 
 
 def project_stages(native):
@@ -914,12 +946,28 @@ def file_strides(total):
     return strides
 
 
+def classify_parse_pressure(data, span, is_ascii):
+    """CP-0021: attribute a native parse failure to a known feature gap."""
+    if not is_ascii:
+        return "CP-0002"
+    start = span[1] if isinstance(span, list) and len(span) > 1 else 0
+    if data[start:start + 1] == b"<":
+        # First generic-fn `<N: Nat>` (or similar) angle bracket: the
+        # native declaration parser has no generic-function production.
+        return "CP-0015"
+    return None
+
+
 def tier_d(probe, kinds_inv, stats):
     src = "mncs.compiler.source.v1"
     seg = "mncs.compiler.segment.v1"
     ker = "mncs.compiler.kernel.v1"
     workspace = ROOT.parent
     matrix = []
+    # One shared project probe for every milestone pipeline plus the
+    # anchors: elaboration/retention is paid once, not per milestone.
+    project_probe = None
+    project_identities = None
     for rel, label in MILESTONES:
         if SMOKE and label not in ("parser", "cli-outcome"):
             continue
@@ -1064,7 +1112,7 @@ def tier_d(probe, kinds_inv, stats):
             if elaborated is not None else None
         row["oracle_elaborate_diagnostics"] = elaborated[:5] \
             if elaborated is not None else None
-        if total <= 5 * 1024 and text is not None:
+        if total <= 8 * 1024 and text is not None:
             oracle = probe.send({"project_oracle": {"root": text,
                                                    "modules": {}}})
             row["oracle_project_valid"] = oracle["valid"]
@@ -1072,28 +1120,96 @@ def tier_d(probe, kinds_inv, stats):
             row["oracle_project_diagnostic_count"] = \
                 len(oracle["diagnostics"])
             row["oracle_has_ssa"] = oracle["ssa"] is not None
-        if not is_ascii:
-            row["first_failure"] = {"stage": "lex",
-                                    "span": [first_bad, first_bad + 1],
-                                    "scope": "CP-0002 non-ASCII admission"}
-            row["pressure"] = "CP-0002"
-            row["pressures"] = ["CP-0002"] + \
-                (["CP-0022"] if not_gaps else []) + ["CP-0021"]
-        elif not_gaps:
-            # First size-free gap: the deliberate version-neutral-scanner
-            # divergence on bare `!` (CP-0022). Every other span is exact.
-            row["first_failure"] = {"stage": "lex", "span": first_gap,
-                                    "scope": "CP-0022 not-pair"}
-            row["pressure"] = "CP-0022"
-            row["pressures"] = ["CP-0022", "CP-0021"]
+        # CP-0021: the real native pipeline runs on the milestone's
+        # logical source. Size is representable now, so any failure is a
+        # feature gap at a precise span, classified stage by stage.
+        if project_probe is None:
+            project_probe = full_probe()
+            stats["pipeline_execution"] = project_probe.send(
+                {"execution_status": True})
+            project_identities = {
+                record["name"]: record for record in project_probe.send(
+                    {"record_types": "mncs.compiler.project.v1"})}
+        native = pipeline_run(project_probe, project_identities,
+                              [(label, path, data)])
+        if native is None:
+            # CP-0023: the backend value arena (16 MiB per request)
+            # exhausted before any verdict. Lex/transport stages above
+            # stand; pipeline stages are unknown, not false.
+            row["stages"].update({"parse": None, "proof": None,
+                                  "cfg": None, "verified_ssa": None})
+            row["backend_arena_exhausted"] = True
+            row["first_failure"] = {"stage": "backend-arena", "span": None,
+                                    "scope": "cranelift JIT 16MiB value arena"}
+            row["pressure"] = "CP-0023"
+            row["pressures"] = ["CP-0023"] + \
+                (["CP-0022"] if not_gaps else [])
+            row["notes"].append("backend arena exhausted; no verdict")
+            row["ssa_modules"] = []
+            matrix.append(row)
+            continue
+        stages = project_stages(native)
+        row["stages"].update(stages)
+        row["native_valid"] = native["valid"]
+        row["native_value_ssa_valid"] = native["value_ssa_valid"]
+        row["native_module_count"] = native["module_count"]
+        if not stages["parse"]:
+            span = first_diag_span(native)
+            row["first_failure"] = {"stage": "parse", "span": span,
+                                    "scope": "native decl.parse_unit"}
+            row["pressure"] = classify_parse_pressure(data, span, is_ascii)
+            row["pressures"] = ([row["pressure"]] if row["pressure"] else []) \
+                + (["CP-0022"] if not_gaps else [])
+            if row["pressure"] is None:
+                row["notes"].append(
+                    f"unclassified native parse gap at span {span}")
+        elif not stages["proof"]:
+            span = first_diag_span(native)
+            row["first_failure"] = {"stage": "proof", "span": span,
+                                    "scope": "native decl.prove_unit"}
+            row["pressure"] = None
+            row["pressures"] = (["CP-0022"] if not_gaps else [])
+            row["notes"].append(f"native proof gap at span {span}")
+        elif not stages["cfg"]:
+            span = first_diag_span(native)
+            row["first_failure"] = {"stage": "cfg", "span": span,
+                                    "scope": "native flow.lower_unit"}
+            row["pressure"] = None
+            row["pressures"] = (["CP-0022"] if not_gaps else [])
+            row["notes"].append(f"native CFG gap at span {span}")
+        elif not stages["verified_ssa"]:
+            row["first_failure"] = {"stage": "verified_ssa", "span": None,
+                                    "scope": "native ssa.lower_value_ssa"}
+            row["pressure"] = None
+            row["pressures"] = (["CP-0022"] if not_gaps else [])
+            row["notes"].append("native value-SSA gap (see ssa_modules)")
+        elif not row["stages"]["lex"]:
+            if not is_ascii:
+                row["first_failure"] = {"stage": "lex",
+                                        "span": [first_bad, first_bad + 1],
+                                        "scope": "CP-0002 non-ASCII admission"}
+                row["pressure"] = "CP-0002"
+                row["pressures"] = ["CP-0002"] + \
+                    (["CP-0022"] if not_gaps else [])
+            else:
+                row["first_failure"] = {"stage": "lex", "span": first_gap,
+                                        "scope": "CP-0022 not-pair"}
+                row["pressure"] = "CP-0022"
+                row["pressures"] = ["CP-0022"]
         else:
-            # Declaration/proof/CFG/SSA consume single bounded views; a
-            # module past 1024 bytes is not representable there (CP-0021).
-            # The first byte past the ceiling is the precise failure span.
-            row["first_failure"] = {"stage": "parse", "span": [1024, 1025],
-                                    "scope": "native decl.parse_unit input"}
-            row["pressure"] = "CP-0021"
-            row["pressures"] = ["CP-0021"]
+            row["first_failure"] = None
+            row["pressure"] = None
+            row["pressures"] = []
+        row["ssa_modules"] = [
+            {"source_index": module.get("source_index"),
+             "valid": module.get("value_ssa", {}).get("valid"),
+             "verified": module.get("value_ssa", {}).get(
+                 "verified_function_count"),
+             "first_unsupported_kind": module.get("value_ssa", {}).get(
+                 "first_unsupported_kind"),
+             "first_unsupported_block": module.get("value_ssa", {}).get(
+                 "first_unsupported_block")}
+            for module in flist(native.get("modules", {"$v": 0}))]
         artifacts = [diag for diag in (elaborated or [])
                      if diag.get("code") == "MNE173" and
                      "unavailable to the resolver" in diag.get("message", "")]
@@ -1109,6 +1225,14 @@ def tier_d(probe, kinds_inv, stats):
                 f"diagnostics, so the oracle parses the file clean")
         matrix.append(row)
     stats["matrix"] = matrix
+    try:
+        pipeline_anchor(stats, project_probe, project_identities)
+    finally:
+        if project_probe is not None:
+            stats["pipeline_requests"] = project_probe.count
+            stats["pipeline_steps_total"] = sum(project_probe.steps)
+            stats["pipeline_digest"] = project_probe.digest.hexdigest()
+            project_probe.close()
 
 
 def join_trivia_prefixes(observed):
@@ -1140,71 +1264,73 @@ def join_trivia_prefixes(observed):
     return joined
 
 
-def pipeline_anchor(stats):
-    """Full native pipeline on a two-module project at the 1024-byte
-    ceiling: the <=1024 anchor row for the matrix. The same bytes lex
-    identically through the logical representation (tiers A/B), so the
-    pipeline input is representation-independent."""
+def pipeline_anchor(stats, probe=None, identities=None):
+    """Full native pipeline anchors: the two-module project at the
+    1024-byte ceiling (synthetic-1024) plus the same project with its
+    root trailing into a third page (synthetic-2049). Both must run the
+    whole native pipeline green with oracle agreement; the 2049 row
+    additionally proves stride-invariance of the full pipeline by
+    comparing stride-1024 and stride-256 runs byte for byte."""
     dependency = ("mncs 0.18; module demo.dep; "
                   "fn answer(value: u64) -> (r: u64) { return value; }")
-    root = ("mncs 0.18; module demo.root; use demo.dep as dep; "
-            "fn main() -> (r: u64) { return 1; }")
-    root = root + " " * (1024 - len(root.encode()))
-    assert len(dependency.encode()) <= 1024 and len(root.encode()) == 1024
-    row = {"path": "synthetic:demo.dep+demo.root (1024-byte ceiling)",
-           "label": "synthetic-1024", "revision": None, "tree_dirty": False,
-           "bytes": 1024, "representation": "single-view == logical/1-page",
-           "stages": {"transport": True, "lex": True, "parse": False,
-                      "proof": False, "cfg": False, "verified_ssa": False},
-           "first_failure": None, "pressure": None, "notes": []}
-    with tempfile.TemporaryDirectory(prefix="mncs-cp0001-") as directory:
-        project_root = Path(directory)
-        (project_root / "b-root.mncs").write_text(root)
-        (project_root / "a-dep.mncs").write_text(dependency)
-        discovered = discover_sources(project_root)
+    root_base = ("mncs 0.18; module demo.root; use demo.dep as dep; "
+                 "fn main() -> (r: u64) { return 1; }")
+    owned = probe is None
+    if owned:
         probe = full_probe()
-        try:
-            status = probe.send({"execution_status": True})
-            row["execution"] = status
-            identities = {record["name"]: record
-                          for record in
-                          probe.send({"record_types":
-                                      "mncs.compiler.project.v1"})}
-            request = project_request(identities, discovered)
-            first = probe.send(request)
-            assert first["status"] == "returned", first
-            probe.count += 1
-            probe.steps.append(first["steps"])
-            probe.digest.update(json.dumps(
-                ["compile_project", first["status"], first["returned"],
-                 first["failure"], first["steps"]], sort_keys=True).encode())
-            second = probe.send(request)
-            assert second["returned"] == first["returned"], \
-                "project output must be deterministic"
-            native = decode(first["returned"][0])
-            stages = project_stages(native)
-            row["stages"].update(stages)
-            row["native_valid"] = native["valid"]
-            row["native_diagnostics"] = native["diagnostics"]
-            if all(stages.values()):
-                row["pressure"] = None
-            else:
-                row["first_failure"] = {"stage": next(
-                    stage for stage in ("parse", "proof", "cfg")
-                    if not stages[stage]), "span": first_diag_span(native)}
-                row["pressure"] = "CP-0015"
-                row["notes"].append("native pipeline gap at <=1024")
-            oracle = probe.send({"project_oracle": {
-                "root": root, "modules": {"demo.dep": dependency}}})
-            row["oracle_project_valid"] = oracle["valid"]
-            row["oracle_project_diagnostics"] = oracle["diagnostics"]
-            row["oracle_has_ssa"] = oracle["ssa"] is not None
-            row["probe_requests"] = probe.count
-            row["probe_steps_max"] = max(probe.steps)
-            stats["pipeline_digest"] = probe.digest.hexdigest()
-        finally:
+        probe.send({"execution_status": True})
+        identities = {record["name"]: record for record in
+                      probe.send({"record_types":
+                                  "mncs.compiler.project.v1"})}
+    try:
+        for label, size, strides in (("synthetic-1024", 1024, (1024,)),
+                                     ("synthetic-2049", 2049, (1024, 256))):
+            root = root_base + " " * (size - len(root_base.encode()))
+            assert len(root.encode()) == size, (label, len(root.encode()))
+            row = {"path": f"synthetic:demo.dep+demo.root ({label})",
+                   "label": label, "revision": None, "tree_dirty": False,
+                   "bytes": size,
+                   "representation": "logical pages, all strides agree",
+                   "stages": {"transport": True, "lex": True, "parse": False,
+                              "proof": False, "cfg": False,
+                              "verified_ssa": False},
+                   "first_failure": None, "pressure": None, "notes": []}
+            with tempfile.TemporaryDirectory(
+                    prefix="mncs-cp0001-") as directory:
+                project_root = Path(directory)
+                (project_root / "b-root.mncs").write_text(root)
+                (project_root / "a-dep.mncs").write_text(dependency)
+                discovered = discover_sources(project_root)
+                natives = {}
+                for stride in strides:
+                    natives[stride] = pipeline_run(
+                        probe, identities, discovered, stride=stride)
+                if len(natives) > 1:
+                    first_native = next(iter(natives.values()))
+                    for stride, native in natives.items():
+                        assert native == first_native, \
+                            f"pipeline stride-invariance: {label} " \
+                            f"stride {stride}"
+                    row["stride_invariant"] = True
+                native = natives[strides[0]]
+                stages = project_stages(native)
+                row["stages"].update(stages)
+                row["native_valid"] = native["valid"]
+                row["native_diagnostics"] = native["diagnostics"]
+                assert native["valid"] is True, (label, native["diagnostics"])
+                assert all(stages.values()), (label, stages)
+                oracle = probe.send({"project_oracle": {
+                    "root": root, "modules": {"demo.dep": dependency}}})
+                row["oracle_project_valid"] = oracle["valid"]
+                row["oracle_project_diagnostics"] = oracle["diagnostics"]
+                row["oracle_has_ssa"] = oracle["ssa"] is not None
+                assert oracle["valid"] is True, (label, oracle["diagnostics"])
+                row["probe_requests"] = probe.count
+                row["probe_steps_max"] = max(probe.steps)
+            stats["matrix"].append(row)
+    finally:
+        if owned:
             probe.close()
-    stats["matrix"].append(row)
 
 
 def fresh_stats():
@@ -1235,7 +1361,6 @@ def run_suite():
             tier_c(probe, kinds_inv, stats)
         if "D" in TIERS:
             tier_d(probe, kinds_inv, stats)
-            pipeline_anchor(stats)
         stats["probe_requests"] = probe.count
         stats["probe_steps_total"] = sum(probe.steps)
         stats["probe_steps_max"] = max(probe.steps) if probe.steps else 0
@@ -1250,9 +1375,10 @@ def print_matrix(matrix):
           f"{'TlxPPCS':<18} first-failure")
     for row in matrix:
         stages = row["stages"]
-        bits = "".join("1" if stages[stage] else "0" for stage in
-                       ("transport", "lex", "parse", "proof", "cfg",
-                        "verified_ssa"))
+        bits = "".join("?" if stages[stage] is None else
+                          ("1" if stages[stage] else "0") for stage in
+                          ("transport", "lex", "parse", "proof", "cfg",
+                           "verified_ssa"))
         failure = row.get("first_failure") or {}
         print(f"{row['label']:<16} {row['bytes']:>7} "
               f"{str(row['representation'])[:24]:<24} {bits:<18} "

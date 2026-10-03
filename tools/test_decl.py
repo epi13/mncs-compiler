@@ -237,17 +237,37 @@ def nat_arg(value):
     return {'kind': 'nat', 'value': value}
 
 
+# CP-0021: declaration/proof entry points consume the logical paged source.
+# Unit suites transport each padded view as one canonical single-page
+# composition (stride 1024, total = view length).
+PAGE_BOUND = 1024
+STRIDE_BOUND = 1024
+
+
+def pages_value(chunks):
+    return {'sequence': {'values': [blob(chunk) for chunk in chunks]}}
+
+
+def logical_args(data, stride=STRIDE_BOUND):
+    total = len(data)
+    assert total <= STRIDE_BOUND
+    pages = [data] if total else []
+    return [pages_value(pages), integer(stride), integer(total)]
+
+
 class Probe:
     def __init__(self):
         env = dict(os.environ)
-        if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
+        reference_interpreter = env.get("MNCS_PROBE_BACKEND") == "reference_interpreter"
+        if reference_interpreter:
             env.pop("MNCS_PROBE_BACKEND", None)
         env['MNCS_PROBE_MODULES'] = 'source,lexer,parser,segment,decl'
         env['MNCS_PROBE_EXECUTION_MODULES'] = 'mncs.compiler.decl.v1'
-        env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+        if not reference_interpreter:
+            env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
         env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
             {'module': 'mncs.compiler.decl.v1', 'function': function,
-             'type_arguments': [nat_arg(SOURCE_BOUND)]}
+             'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)]}
             for function in ['parse_unit', 'check_unit', 'prove_unit']
         ])
         self.proc = subprocess.Popen(
@@ -266,9 +286,8 @@ class Probe:
         return json.loads(line)
 
     def run(self, unit, function, args):
-        bound = len(args[0]['sequence']['values'])
         request = {'schema_version': '0.1', 'target': {'module': f'mncs.compiler.{unit}.v1', 'function': function},
-                   'arguments': args, 'type_arguments': [nat_arg(bound)], 'step_budget': 8000000}
+                   'arguments': args, 'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)], 'step_budget': 8000000}
         result = self.send(request)
         assert result['status'] == 'returned', (function, result)
         self.count += 1
@@ -282,7 +301,7 @@ class Probe:
 
 
 def check_unit_case(probe, text):
-    return probe.run('decl', 'check_unit', [blob(source_bytes(text))])
+    return probe.run('decl', 'check_unit', logical_args(source_bytes(text)))
 
 
 def suite():
@@ -295,7 +314,7 @@ def suite():
         for text in POS:
             data = source_bytes(text)
             source_text = data.decode()
-            got = probe.run('decl', 'parse_unit', [blob(data)])
+            got = probe.run('decl', 'parse_unit', logical_args(data))
             oracle = probe.send({'oracle': source_text})
             assert not oracle['diagnostics'], (text, oracle['diagnostics'])
             assert got['ok'], (text, got['err_start'], got['err_end'])
@@ -327,7 +346,7 @@ def suite():
         for text in NEG:
             data = source_bytes(text)
             source_text = data.decode()
-            got = probe.run('decl', 'parse_unit', [blob(data)])
+            got = probe.run('decl', 'parse_unit', logical_args(data))
             oracle = probe.send({'oracle': source_text})
             odiags = oracle['diagnostics'] or []
             assert odiags, text

@@ -235,11 +235,14 @@ When compiler implementation exposes a language limitation, first record the pre
 
 ## 16. First executable kernel boundary
 
-The initial implementation is deliberately narrower than the target architecture:
-exact ≤64-byte source values feed pure lexical and header requests. The
-declaration vertical widens this to chained four-segment ≤256-byte units
-feeding declaration parsing, symbol facts, resolve/span checks, and
-depth-verified stack-IR lowering. Spans preserve
+The initial implementation was deliberately narrower than the target
+architecture (historical: exact ≤64-byte source values feeding pure
+lexical/header requests, widening to chained four-segment ≤256-byte
+units). The current pipeline (CP-0001/CP-0021) consumes logical paged
+sources with global positions, proven to 558,004 bytes per module with
+precise feature-gap spans past parser coverage; see
+[evidence/cp0001-matrix.json](evidence/cp0001-matrix.json) and the
+[parity matrix](evidence/PARITY.md). Spans preserve
 source provenance; module spans are not normalized IDs, and results do not yet
 carry persisted fact keys. Identity/invalidation requirements from RFC 0002 remain
 the target contract, with cache materialization deferred until whole-source

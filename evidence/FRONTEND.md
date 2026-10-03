@@ -1,5 +1,12 @@
 # Bounded deterministic frontend slice
 
+> Status note (2026-10-03): the interface tables and byte caps below
+> describe the pre-CP-0001 exact-view spellings and are preserved as
+> history. The current pipeline consumes logical pages with global
+> positions (CP-0001/CP-0021, proven to 558,004 bytes); see
+> [`cp0001-matrix.json`](cp0001-matrix.json),
+> [`PARITY.md`](PARITY.md), and the pressure index for live status.
+
 This is compiler code in MNCS, compiled/elaborated and executed by
 pinned Rust Stage-0. It is **not self-hosting**, a standalone compiler executable,
 or evidence of native/backend parity. Rust remains the current compiler.

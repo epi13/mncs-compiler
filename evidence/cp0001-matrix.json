@@ -2,7 +2,7 @@
   {
     "path": "mncs-compiler/src/compiler/parser.mncs",
     "label": "parser",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
     "bytes": 5950,
     "representation": "logical pages stride varied (min 6, 1024)",
@@ -43,12 +43,13 @@
     "first_failure": {
       "stage": "parse",
       "span": [
-        1024,
-        1025
+        0,
+        626,
+        627
       ],
-      "scope": "native decl.parse_unit input"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0021",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
@@ -76,15 +77,46 @@
         "stage": "elaboration"
       }
     ],
+    "oracle_project_valid": false,
+    "oracle_project_diagnostics": [
+      {
+        "code": "MNE173",
+        "expected": [],
+        "found": null,
+        "message": "imported module 'mncs.compiler.lexer.v1' is unavailable to the resolver",
+        "severity": "error",
+        "span": {
+          "column": 5,
+          "end": 69,
+          "line": 3,
+          "start": 47
+        },
+        "stage": "elaboration"
+      }
+    ],
+    "oracle_project_diagnostic_count": 1,
+    "oracle_has_ssa": false,
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0021"
+      "CP-0015"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
     "path": "mncs-compiler/src/compiler/kernel.mncs",
     "label": "kernel",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
     "bytes": 6297,
     "representation": "logical pages stride varied (min 7, 1024)",
@@ -123,14 +155,15 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        1262,
-        1263
+        0,
+        391,
+        392
       ],
-      "scope": "CP-0022 not-pair"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0022",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
@@ -165,9 +198,40 @@
         "stage": "elaboration"
       }
     ],
+    "oracle_project_valid": false,
+    "oracle_project_diagnostics": [
+      {
+        "code": "MNE173",
+        "expected": [],
+        "found": null,
+        "message": "imported module 'mncs.compiler.parser.v1' is unavailable to the resolver",
+        "severity": "error",
+        "span": {
+          "column": 5,
+          "end": 70,
+          "line": 3,
+          "start": 47
+        },
+        "stage": "elaboration"
+      }
+    ],
+    "oracle_project_diagnostic_count": 1,
+    "oracle_has_ssa": false,
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0022",
-      "CP-0021"
+      "CP-0015",
+      "CP-0022"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
@@ -213,12 +277,13 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        35,
-        36
+        0,
+        0,
+        4364
       ],
-      "scope": "CP-0002 non-ASCII admission"
+      "scope": "native decl.parse_unit"
     },
     "pressure": "CP-0002",
     "notes": [
@@ -270,16 +335,27 @@
     ],
     "oracle_project_diagnostic_count": 1,
     "oracle_has_ssa": false,
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0002",
-      "CP-0021"
+      "CP-0002"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
     "path": "mncs-compiler/src/compiler/lexer.mncs",
     "label": "lexer",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
     "bytes": 39629,
     "representation": "logical pages stride varied (min 39, 1024)",
@@ -318,14 +394,15 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        14102,
-        14103
+        0,
+        686,
+        687
       ],
-      "scope": "CP-0022 not-pair"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0022",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
@@ -360,41 +437,53 @@
         "stage": "elaboration"
       }
     ],
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0022",
-      "CP-0021"
+      "CP-0015",
+      "CP-0022"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
     "path": "mncs-compiler/src/compiler/flow.mncs",
     "label": "flow",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
-    "bytes": 20980,
-    "representation": "logical pages stride varied (min 21, 1024)",
+    "bytes": 22998,
+    "representation": "logical pages stride varied (min 23, 1024)",
     "strides": {
-      "21": {
+      "23": {
         "pages": 1000,
         "transport": true,
-        "fingerprint": 3616058563306514518,
-        "tokens": 7957,
+        "fingerprint": 12833636192148382130,
+        "tokens": 9056,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "256": {
-        "pages": 82,
+        "pages": 90,
         "transport": true,
-        "fingerprint": 3616058563306514518,
-        "tokens": 7957,
+        "fingerprint": 12833636192148382130,
+        "tokens": 9056,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "1024": {
-        "pages": 21,
+        "pages": 23,
         "transport": true,
-        "fingerprint": 3616058563306514518,
-        "tokens": 7957,
+        "fingerprint": 12833636192148382130,
+        "tokens": 9056,
         "oracle_exact": null,
         "trivia_prefixes": 0
       }
@@ -408,19 +497,20 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        5504,
-        5505
+        0,
+        3021,
+        3022
       ],
-      "scope": "CP-0022 not-pair"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0022",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
-    "oracle_tokens": 7957,
-    "oracle_significant": 5254,
+    "oracle_tokens": 9056,
+    "oracle_significant": 5996,
     "oracle_max_significant": 29,
     "oracle_max_trivia": 76,
     "header_module": "mncs.compiler.flow.v1",
@@ -429,8 +519,8 @@
       "pressure": "CP-0022",
       "not_tokens": 4,
       "first_span": [
-        5504,
-        5505
+        5716,
+        5717
       ]
     },
     "oracle_elaborate_count": 1,
@@ -450,41 +540,53 @@
         "stage": "elaboration"
       }
     ],
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0022",
-      "CP-0021"
+      "CP-0015",
+      "CP-0022"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
     "path": "mncs-compiler/src/compiler/project.mncs",
     "label": "project",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
-    "bytes": 63283,
-    "representation": "logical pages stride varied (min 62, 1024)",
+    "bytes": 73919,
+    "representation": "logical pages stride varied (min 73, 1024)",
     "strides": {
-      "62": {
-        "pages": 1021,
+      "73": {
+        "pages": 1013,
         "transport": true,
-        "fingerprint": 14320668800080729551,
-        "tokens": 20743,
+        "fingerprint": 3840049075348868613,
+        "tokens": 23882,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "256": {
-        "pages": 248,
+        "pages": 289,
         "transport": true,
-        "fingerprint": 14320668800080729551,
-        "tokens": 20743,
+        "fingerprint": 3840049075348868613,
+        "tokens": 23882,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "1024": {
-        "pages": 62,
+        "pages": 73,
         "transport": true,
-        "fingerprint": 14320668800080729551,
-        "tokens": 20743,
+        "fingerprint": 3840049075348868613,
+        "tokens": 23882,
         "oracle_exact": null,
         "trivia_prefixes": 0
       }
@@ -498,29 +600,30 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        5115,
-        5116
+        0,
+        1259,
+        1260
       ],
-      "scope": "CP-0022 not-pair"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0022",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
-    "oracle_tokens": 20743,
-    "oracle_significant": 14021,
+    "oracle_tokens": 23882,
+    "oracle_significant": 16147,
     "oracle_max_significant": 34,
     "oracle_max_trivia": 76,
     "header_module": "mncs.compiler.project.v1",
     "lex_qualified_modulo_not": true,
     "lex_gap": {
       "pressure": "CP-0022",
-      "not_tokens": 28,
+      "not_tokens": 29,
       "first_span": [
-        5115,
-        5116
+        2843,
+        2844
       ]
     },
     "oracle_elaborate_count": 1,
@@ -540,41 +643,53 @@
         "stage": "elaboration"
       }
     ],
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0022",
-      "CP-0021"
+      "CP-0015",
+      "CP-0022"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
     "path": "mncs-compiler/src/compiler/ssa.mncs",
     "label": "ssa",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
-    "bytes": 199447,
-    "representation": "logical pages stride varied (min 195, 1024)",
+    "bytes": 217526,
+    "representation": "logical pages stride varied (min 213, 1024)",
     "strides": {
-      "195": {
-        "pages": 1023,
+      "213": {
+        "pages": 1022,
         "transport": true,
-        "fingerprint": 3551269468031395398,
-        "tokens": 70744,
+        "fingerprint": 10963093167960717027,
+        "tokens": 80348,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "256": {
-        "pages": 780,
+        "pages": 850,
         "transport": true,
-        "fingerprint": 3551269468031395398,
-        "tokens": 70744,
+        "fingerprint": 10963093167960717027,
+        "tokens": 80348,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "1024": {
-        "pages": 195,
+        "pages": 213,
         "transport": true,
-        "fingerprint": 3551269468031395398,
-        "tokens": 70744,
+        "fingerprint": 10963093167960717027,
+        "tokens": 80348,
         "oracle_exact": null,
         "trivia_prefixes": 0
       }
@@ -588,19 +703,20 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        12536,
-        12537
+        0,
+        10990,
+        10991
       ],
-      "scope": "CP-0022 not-pair"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0022",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
-    "oracle_tokens": 70744,
-    "oracle_significant": 47740,
+    "oracle_tokens": 80348,
+    "oracle_significant": 54215,
     "oracle_max_significant": 33,
     "oracle_max_trivia": 77,
     "header_module": "mncs.compiler.ssa.v1",
@@ -609,8 +725,8 @@
       "pressure": "CP-0022",
       "not_tokens": 109,
       "first_span": [
-        12536,
-        12537
+        12841,
+        12842
       ]
     },
     "oracle_elaborate_count": 1,
@@ -630,33 +746,45 @@
         "stage": "elaboration"
       }
     ],
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0022",
-      "CP-0021"
+      "CP-0015",
+      "CP-0022"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
     "path": "mncs-compiler/src/compiler/decl.mncs",
     "label": "decl",
-    "revision": "68358e6ae79742658717ee2ec0d5cdf927435c61",
+    "revision": "0e63ec14a07be663221ab229e563b82bf1d4e31b",
     "tree_dirty": true,
-    "bytes": 490607,
-    "representation": "logical pages stride varied (min 480, 1024)",
+    "bytes": 558004,
+    "representation": "logical pages stride varied (min 545, 1024)",
     "strides": {
-      "480": {
-        "pages": 1023,
+      "545": {
+        "pages": 1024,
         "transport": true,
-        "fingerprint": 15584692198277392348,
-        "tokens": 187305,
+        "fingerprint": 3449604736339677533,
+        "tokens": 220315,
         "oracle_exact": null,
         "trivia_prefixes": 0
       },
       "1024": {
-        "pages": 480,
+        "pages": 545,
         "transport": true,
-        "fingerprint": 15584692198277392348,
-        "tokens": 187305,
+        "fingerprint": 3449604736339677533,
+        "tokens": 220315,
         "oracle_exact": null,
         "trivia_prefixes": 0
       }
@@ -670,29 +798,30 @@
       "verified_ssa": false
     },
     "first_failure": {
-      "stage": "lex",
+      "stage": "parse",
       "span": [
-        21434,
-        21435
+        0,
+        8898,
+        8899
       ],
-      "scope": "CP-0022 not-pair"
+      "scope": "native decl.parse_unit"
     },
-    "pressure": "CP-0022",
+    "pressure": "CP-0015",
     "notes": [
       "1 MNE173 resolver artifact(s): single-file elaborate without sibling modules; no non-resolution diagnostics, so the oracle parses the file clean"
     ],
-    "oracle_tokens": 187305,
-    "oracle_significant": 123770,
+    "oracle_tokens": 220315,
+    "oracle_significant": 145928,
     "oracle_max_significant": 45,
     "oracle_max_trivia": 88,
     "header_module": "mncs.compiler.decl.v1",
     "lex_qualified_modulo_not": true,
     "lex_gap": {
       "pressure": "CP-0022",
-      "not_tokens": 267,
+      "not_tokens": 335,
       "first_span": [
-        21434,
-        21435
+        24055,
+        24056
       ]
     },
     "oracle_elaborate_count": 1,
@@ -712,19 +841,31 @@
         "stage": "elaboration"
       }
     ],
+    "native_valid": false,
+    "native_value_ssa_valid": false,
+    "native_module_count": 1,
     "pressures": [
-      "CP-0022",
-      "CP-0021"
+      "CP-0015",
+      "CP-0022"
+    ],
+    "ssa_modules": [
+      {
+        "source_index": 0,
+        "valid": false,
+        "verified": 0,
+        "first_unsupported_kind": 0,
+        "first_unsupported_block": 0
+      }
     ],
     "oracle_elaborate_artifacts": 1
   },
   {
-    "path": "synthetic:demo.dep+demo.root (1024-byte ceiling)",
+    "path": "synthetic:demo.dep+demo.root (synthetic-1024)",
     "label": "synthetic-1024",
     "revision": null,
     "tree_dirty": false,
     "bytes": 1024,
-    "representation": "single-view == logical/1-page",
+    "representation": "logical pages, all strides agree",
     "stages": {
       "transport": true,
       "lex": true,
@@ -736,11 +877,6 @@
     "first_failure": null,
     "pressure": null,
     "notes": [],
-    "execution": {
-      "backend": "cranelift",
-      "modules": 1,
-      "retained_sessions": 1
-    },
     "native_valid": true,
     "native_diagnostics": {
       "$v": 0,
@@ -749,7 +885,37 @@
     "oracle_project_valid": true,
     "oracle_project_diagnostics": [],
     "oracle_has_ssa": true,
-    "probe_requests": 1,
+    "probe_requests": 9,
+    "probe_steps_max": 1
+  },
+  {
+    "path": "synthetic:demo.dep+demo.root (synthetic-2049)",
+    "label": "synthetic-2049",
+    "revision": null,
+    "tree_dirty": false,
+    "bytes": 2049,
+    "representation": "logical pages, all strides agree",
+    "stages": {
+      "transport": true,
+      "lex": true,
+      "parse": true,
+      "proof": true,
+      "cfg": true,
+      "verified_ssa": true
+    },
+    "first_failure": null,
+    "pressure": null,
+    "notes": [],
+    "stride_invariant": true,
+    "native_valid": true,
+    "native_diagnostics": {
+      "$v": 0,
+      "$p": {}
+    },
+    "oracle_project_valid": true,
+    "oracle_project_diagnostics": [],
+    "oracle_has_ssa": true,
+    "probe_requests": 11,
     "probe_steps_max": 1
   }
 ]

@@ -1,6 +1,6 @@
 # CP-0001 — Whole compiler sources exceed bounded sequence capacity
 
-Status: partially resolved; native project inputs cross 256 bytes but remain capped at 1,024 bytes per source
+Status: resolved in mncs-compiler (representation + pipeline scale; revalidated by the committed suite)
 
 > Historical description and reproductions below preserve the original
 > finding. See the current reconciliation at the end of this file and the
@@ -176,7 +176,20 @@ asserted call returned normally and the run exited 0 — unattributed,
 pending a clean rerun.
 
 Reproduce: `python3 tools/test_cp0001.py` (tiers ABCD; `MNCS_CP0001_TIERS`
-selects; `MNCS_CP0001_SMOKE=1` for a fast cut). Existing suite
-revalidation (`test_segment.py` et al. over the additively extended
-modules) and a single full-ABCD evidence capture remain to be run — see
-the CP-0001 child report for the exact commands.
+selects; `MNCS_CP0001_SMOKE=1` for a fast cut).
+
+## Resolution (2026-10-03, performance campaign)
+
+CP-0021 landed: `decl`/`flow`/`ssa`/`project` consume logical pages
+with global positions (pages-outer fuel), so the pipeline scale the
+matrix left open is now proven. Full ABCD on the campaign tree
+(`9ff21e6f…9501e`, 137,299 requests, 944,444 tokens, 1,197 s): all 8
+real milestones transport as stride-variant logical pages; the 558,004-byte
+`decl.mncs` and 217,526-byte `ssa.mncs` reach precise feature-gap spans
+(CP-0015 `<`) instead of ceiling blocks; `synthetic-1024` and
+`synthetic-2049` run the whole native pipeline green with oracle
+agreement and stride invariance. The matrix records zero CP-0021 and
+zero backend-arena rows. Single-view spellings survive only as the
+canonical compositions in unit suites, not as pipeline inputs. The
+earlier unattributed session-thread panic did not reappear on the
+campaign's reruns.
