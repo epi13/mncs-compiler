@@ -157,7 +157,16 @@ fn main() {
         eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifacts:?}", backend_sessions.len());
     }
     for line in io::stdin().lock().lines() {
-        let input: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        // Local test transport over a pipe: requests carry whole native
+        // Functions (deeply nested wire values), so the untrusted-input
+        // recursion cap does not apply. Depth stays proportional to the
+        // bounded fixture sources on this loop; never expose it to a
+        // socket, and reach for serde_stacker before sending large
+        // real-module Functions through verify-style requests.
+        let line = line.unwrap();
+        let mut deserializer = serde_json::Deserializer::from_str(&line);
+        deserializer.disable_recursion_limit();
+        let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
         let output = if let Some(text) = input.get("oracle").and_then(Value::as_str) {
             serde_json::to_value(mncs_syntax::parse(&envelope(text.to_owned()))).unwrap()
         } else if input.get("execution_status").is_some() {

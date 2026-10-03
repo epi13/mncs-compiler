@@ -31,6 +31,46 @@ fn token_shape<N: Nat>(text: [byte; up_to N], cursor: u64, kind: u64, start: u64
     return known && diagnostic_ok && end > start;
 }
 
+// Logical-source kernel surface (CP-0001): header facts, single-token shape
+// checks, and host-driven coverage accumulation over global offsets. The
+// host supplies loop fuel only; every classification stays in MNCS.
+fn parse_header_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: parser.Header) {
+    return parser.header_global<P, N>(pages, stride, total);
+}
+
+// Global token shape: the same coverage/progress discipline as token_shape.
+// Diagnostic 6 (trivia prefix) is well-formed trivia; diagnostic 5
+// (overlong significant) is a well-formed error token like MNL002.
+fn token_shape_global(total: u64, cursor: u64, kind: u64, start: u64, end: u64, diagnostic: u64) -> (result: bool) {
+    if cursor > total { return false; }
+    if start != cursor || !source.span_valid_global(total, start, end) { return false; }
+    if kind == 0 { return start == total && end == start && diagnostic == 0; }
+    let known: bool = (kind >= 1 && kind <= 7) || (kind >= 10 && kind <= 39) || (kind >= 50 && kind <= 70) || (kind >= 80 && kind <= 96);
+    let diagnostic_ok: bool = (diagnostic == 0 && kind != 7) || (diagnostic == 1 && kind == 3) || ((diagnostic == 2 || diagnostic == 3) && kind == 7) || (diagnostic == 5 && kind == 7) || (diagnostic == 6 && kind >= 1 && kind <= 3);
+    return known && diagnostic_ok && end > start;
+}
+
+// One coverage step over a logical source: the host iterates this to the
+// end of the source. Trivia prefixes (6) accumulate as clean trivia; any
+// other diagnostic flips the evidence code to 1 exactly once.
+fn lex_step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, evidence: LexicalEvidence) -> (result: LexicalEvidence) {
+    if evidence.cursor == total || evidence.code == 2 { return evidence; }
+    let token: lexer.Token = lexer.next_token_global<P, N>(pages, stride, total, evidence.cursor);
+    if token_shape_global(total, evidence.cursor, token.kind, token.start, token.end, token.diagnostic) {
+        let error: bool = token.diagnostic != 0 && token.diagnostic != 6;
+        let first: bool = error && evidence.errors == 0;
+        return LexicalEvidence {
+            code: select(error, 1, evidence.code), cursor: token.end,
+            tokens: evidence.tokens + 1,
+            trivia: evidence.trivia + select(token.kind >= 1 && token.kind <= 3, 1, 0),
+            errors: evidence.errors + select(error, 1, 0),
+            first_start: select(first, token.start, evidence.first_start),
+            first_end: select(first, token.end, evidence.first_end)
+        };
+    }
+    return LexicalEvidence { ..evidence, code: 2, first_start: token.start, first_end: token.end };
+}
+
 // Whole bounded-source coverage evidence, independently useful before parsing.
 // code: 0 complete; 1 lexical errors; 2 structural verification failure;
 // 3 unsupported non-ASCII source. Counts include trivia; EOF is not counted.

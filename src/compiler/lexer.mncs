@@ -204,3 +204,272 @@ fn skip_trivia<N: Nat>(text: [byte; up_to N], token: Token) -> (result: Token) {
     if is_trivia(token) { return next_token<N>(text, token.end); }
     return token;
 }
+
+// Logical-source lexer (CP-0001): the same token rules over global offsets
+// into a validated page composition. Scans continue across page boundaries
+// transparently; spans are global and stride-stable. Diagnostics extend the
+// single-view vocabulary: 5 marks a significant token that outruns the
+// 8192-step per-call scan budget (word/number content past the budget is an
+// honest bounded-lexer refusal, never a silent split), and 6 marks a trivia
+// prefix whose remainder continues at its end (whitespace and comments may
+// span pages arbitrarily; the host continues scanning trivia past them).
+fn keyword_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: u64) {
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 109 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 115 { return 10; }
+    }
+    if end - start == 6 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 109 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 111 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 100 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 101 { return 11; }
+    }
+    if end - start == 2 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 102 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 110 { return 12; }
+    }
+    if end - start == 6 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 110 { return 13; }
+    }
+    if end - start == 3 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 116 { return 14; }
+    }
+    if end - start == 2 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 102 { return 15; }
+    }
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 101 { return 16; }
+    }
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 102 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 108 { return 17; }
+    }
+    if end - start == 8 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 113 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 115 { return 18; }
+    }
+    if end - start == 7 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 115 { return 19; }
+    }
+    if end - start == 7 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 109 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 115 { return 20; }
+    }
+    if end - start == 8 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 112 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 111 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 112 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 121 { return 21; }
+    }
+    if end - start == 9 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 118 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 8) == 116 { return 22; }
+    }
+    if end - start == 11 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 109 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 109 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 111 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 112 && source.byte_at_global<P, N>(pages, stride, total, start + 8) == 104 && source.byte_at_global<P, N>(pages, stride, total, start + 9) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 10) == 99 { return 23; }
+    }
+    if end - start == 6 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 102 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 102 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 116 { return 24; }
+    }
+    if end - start == 10 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 112 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 98 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 8) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 9) == 121 { return 25; }
+    }
+    if end - start == 13 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 104 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 111 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 122 && source.byte_at_global<P, N>(pages, stride, total, start + 8) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 9) == 100 && source.byte_at_global<P, N>(pages, stride, total, start + 10) == 95 && source.byte_at_global<P, N>(pages, stride, total, start + 11) == 98 && source.byte_at_global<P, N>(pages, stride, total, start + 12) == 121 { return 26; }
+    }
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 109 { return 27; }
+    }
+    if end - start == 3 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 101 { return 28; }
+    }
+    if end - start == 6 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 111 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 100 { return 29; }
+    }
+    if end - start == 5 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 109 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 104 { return 30; }
+    }
+    if end - start == 7 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 101 { return 31; }
+    }
+    if end - start == 5 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 112 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 95 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 111 { return 32; }
+    }
+    if end - start == 8 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 121 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 6) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 7) == 103 { return 33; }
+    }
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 110 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 120 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 116 { return 34; }
+    }
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 111 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 118 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 114 { return 35; }
+    }
+    if end - start == 2 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 115 { return 36; }
+    }
+    if end - start == 5 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 119 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 104 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 105 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 101 { return 37; }
+    }
+    if end - start == 4 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 116 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 114 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 117 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 101 { return 38; }
+    }
+    if end - start == 5 {
+        if source.byte_at_global<P, N>(pages, stride, total, start + 0) == 102 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 97 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 101 { return 39; }
+    }
+    return 4;
+}
+
+fn token_from_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, st: Scan, line: bool, block: bool, word: bool, ws: bool) -> (result: Token) {
+    let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword_global<P, N>(pages, stride, total, start, st.end), select(st.dotted, 6, 5)))));
+    return Token { kind: kind, start: start, end: st.end, diagnostic: select(block && st.depth > 0, 1, 0) };
+}
+
+fn scan_step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
+    if st.done || st.end >= total { return st; }
+    let a: u64 = source.byte_at_global<P, N>(pages, stride, total, st.end);
+    let b: u64 = source.byte_at_global<P, N>(pages, stride, total, st.end + 1);
+    if block {
+        if a == 47 && b == 42 { return Scan { ..st, end: st.end + 2, depth: st.depth + 1 }; }
+        if a == 42 && b == 47 { return Scan { ..st, end: st.end + 2, depth: st.depth - 1, done: st.depth == 1 }; }
+        return Scan { ..st, end: st.end + 1 };
+    }
+    // Preserve Stage-0's unusual continuation of dots after the first version dot.
+    let dot: bool = number && a == 46 && (st.dotted || digit(b));
+    let advance: bool = (line && a != 10) || (word && (letter(a) || digit(a))) || (number && (digit(a) || dot)) || (ws && space(a));
+    return Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: !advance };
+}
+
+fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
+    if start > total { return Token { kind: 0, start: total, end: total, diagnostic: 4 }; }
+    if start == total { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
+    let a: u64 = source.byte_at_global<P, N>(pages, stride, total, start);
+    let b: u64 = source.byte_at_global<P, N>(pages, stride, total, start + 1);
+    if a >= 128 { return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 }; }
+    let line: bool = a == 47 && b == 47;
+    let block: bool = a == 47 && b == 42;
+    let word: bool = letter(a);
+    let number: bool = digit(a);
+    let ws: bool = space(a);
+    if line || block || word || number || ws {
+        let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
+        iterate i up_to 1024 carrying s0: Scan = seed {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s0, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s0 = advanced;
+        }
+        iterate i up_to 1024 carrying s1: Scan = s0 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s1, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s1 = advanced;
+        }
+        iterate i up_to 1024 carrying s2: Scan = s1 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s2, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s2 = advanced;
+        }
+        iterate i up_to 1024 carrying s3: Scan = s2 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s3, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s3 = advanced;
+        }
+        iterate i up_to 1024 carrying s4: Scan = s3 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s4, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s4 = advanced;
+        }
+        iterate i up_to 1024 carrying s5: Scan = s4 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s5, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s5 = advanced;
+        }
+        iterate i up_to 1024 carrying s6: Scan = s5 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s6, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s6 = advanced;
+        }
+        iterate i up_to 1024 carrying s7: Scan = s6 {
+            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s7, line, block, word, number, ws);
+            if advanced.done || advanced.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            }
+            next s7 = advanced;
+        }
+        // The 8192-byte per-call scan budget is exhausted mid-token. Trivia
+        // continues at the prefix end (diagnostic 6); significant content is
+        // refused as overlong (diagnostic 5) rather than silently split.
+        if s7.done || s7.end >= total {
+            return token_from_scan_global<P, N>(pages, stride, total, start, s7, line, block, word, ws);
+        }
+        if ws || line || block {
+            return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: s7.end, diagnostic: 6 };
+        }
+        return Token { kind: 7, start: start, end: s7.end, diagnostic: 5 };
+    }
+    let kind: u64 = punctuation(a, b);
+    return Token { kind: kind, start: start, end: start + select(kind >= 80, 2, 1), diagnostic: select(kind == 7, 2, 0) };
+}
+
+// Significant-token request over global offsets; trivia prefixes (6) skip
+// exactly like clean trivia, while lexical failures never do.
+fn significant_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
+    let first: Token = next_token_global<P, N>(pages, stride, total, start);
+    if !(is_trivia_cont(first)) { return first; }
+    let second: Token = skip_trivia_global<P, N>(pages, stride, total, first);
+    if !(is_trivia_cont(second)) { return second; }
+    iterate i up_to 1024 carrying token: Token = second {
+        if !(is_trivia_cont(token)) { return token; }
+        next token = skip_trivia_global<P, N>(pages, stride, total, token);
+    }
+    iterate i up_to 1024 carrying token2: Token = token {
+        if !(is_trivia_cont(token2)) { return token2; }
+        next token2 = skip_trivia_global<P, N>(pages, stride, total, token2);
+    }
+    return token2;
+}
+fn is_trivia_cont(token: Token) -> (result: bool) {
+    return token.kind >= 1 && token.kind <= 3 && (token.diagnostic == 0 || token.diagnostic == 6);
+}
+fn skip_trivia_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, token: Token) -> (result: Token) {
+    if is_trivia_cont(token) { return next_token_global<P, N>(pages, stride, total, token.end); }
+    return token;
+}
+
+// Bounded batch traversal: up to 1024 tiling tokens from a global cursor.
+// The host pages this call to walk sources no single call may span; every
+// boundary and kind decision stays in MNCS. The batch stops at EOF, at an
+// invalid cursor, or at an overlong significant token (diagnostic 5); the
+// cursor always advances past the last returned token.
+enum TokenList { TNil, TCons { head: Token, tail: TokenList } }
+record BatchState { cursor: u64, tokens: TokenList, count: u64, done: bool, eof: bool }
+record BatchResult { tokens: TokenList, next: u64, eof: bool, count: u64 }
+fn lex_tokens_from<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: BatchResult) {
+    let seed: BatchState = BatchState { cursor: start, tokens: TokenList.TNil, count: 0, done: false, eof: false };
+    iterate i up_to 1024 carrying st: BatchState = seed {
+        next st = batch_step<P, N>(pages, stride, total, st);
+    }
+    return BatchResult { tokens: reverse_tokens(st.tokens), next: st.cursor, eof: st.eof, count: st.count };
+}
+fn batch_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BatchState) -> (result: BatchState) {
+    if st.done { return st; }
+    let token: Token = next_token_global<P, N>(pages, stride, total, st.cursor);
+    let tokens: TokenList = TokenList.TCons { head: token, tail: st.tokens };
+    let count: u64 = st.count + 1;
+    if token.kind == 0 { return BatchState { cursor: token.end, tokens: tokens, count: count, done: true, eof: token.diagnostic == 0 }; }
+    if token.diagnostic == 5 { return BatchState { cursor: token.end, tokens: tokens, count: count, done: true, eof: false }; }
+    return BatchState { cursor: token.end, tokens: tokens, count: count, done: false, eof: false };
+}
+record TokenReverse { rest: TokenList, acc: TokenList }
+fn reverse_tokens(tokens: TokenList) -> (result: TokenList) {
+    iterate i up_to 1024 carrying st: TokenReverse = TokenReverse { rest: tokens, acc: TokenList.TNil } {
+        next st = reverse_token_step(st);
+    }
+    return st.acc;
+}
+fn reverse_token_step(st: TokenReverse) -> (result: TokenReverse) {
+    return match st.rest {
+        TNil => st,
+        TCons { head: h, tail: t } => TokenReverse { rest: t, acc: TokenList.TCons { head: h, tail: st.acc } }
+    };
+}

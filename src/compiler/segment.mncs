@@ -26,3 +26,27 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: lexer.Token
 fn significant<N: Nat>(text: [byte; up_to N], start: u64) -> (result: lexer.Token) {
     return lexer.significant<N>(text, start);
 }
+
+// Logical-source cursor surface (CP-0001): the same stable surface over
+// global offsets into a validated page composition. Token rules stay in the
+// single lexer implementation; validation, identity, and rendering stay in
+// the source module and are called there directly.
+fn byte_at_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64) -> (result: u64) {
+    return source.byte_at_global<P, N>(pages, stride, total, offset);
+}
+
+fn span_valid_global(total: u64, start: u64, end: u64) -> (result: bool) {
+    return source.span_valid_global(total, start, end);
+}
+
+fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: lexer.Token) {
+    return lexer.next_token_global<P, N>(pages, stride, total, start);
+}
+
+fn significant_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: lexer.Token) {
+    return lexer.significant_global<P, N>(pages, stride, total, start);
+}
+
+fn lex_batch_from<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: lexer.BatchResult) {
+    return lexer.lex_tokens_from<P, N>(pages, stride, total, start);
+}

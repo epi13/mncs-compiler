@@ -177,3 +177,54 @@ the established style — the same treatment the expression, block, and
 proof machines already carry — not a recursion exemption. No new
 pressure identity: this is CP-0011's remaining parser instance with a
 real faithful reproducer.
+
+## Nested match resolution (2026-10-02)
+
+Closed as prescribed: match-arm values parse through one bounded
+explicit-state/frame driver (`scalar_match_value` →
+`parse_nest_expr_value` in `src/compiler/decl.mncs`). Arm-value
+expressions micro-step through `expr_step_base`, so match-free values
+parse bit-identically to before; a `match` in any operand position
+(arm head, binary operand, call argument, parenthesized) suspends the
+expression or arm scan onto the frame stack (`NSExpr`/`NSFinite`/
+`NSScalar`) and the nested match's arms parse in the same loop.
+No ad hoc recursion; fuel stays structural (three input passes plus
+slack; every step consumes a byte, shrinks a stack, or terminates).
+SSA lowering threads trailing arm operations through the nested join
+(`rest` through `nest_*_setup`/`nest_*_assemble` in
+`src/compiler/ssa.mncs`), so mid-sequence nested matches lower exactly
+like mid-sequence matches in function bodies.
+
+Verification: the semantic twin differential grows to 170 cases plus
+eleven proof verdicts, twice-identical — 39 focused nested cases
+(head/non-head positions, depth 5, mixed scalar/finite, payload
+bindings, heterogeneous result/env types, projection and compiler-op
+interaction, trailing commas, profile-0.10 finite, MNE-level
+malformed twins). The family reproducer
+(`mncs-language/examples/source/cre1-evidence-combine.mncs`) now
+proves clean natively, and its non-exhaustive twin still twins
+MNE140 at the same span. A nested-match verified-SSA slice
+(`demo.nested`: 6 functions, 4 finite + 7 scalar switches, 8
+corruption rejections) runs green in `tools/test_project.py`
+(`match-ssa` mode). Two lowering/verifier repairs were required
+before it executed: arm-join jumps read the join context from the
+block the arm actually finished in (`arm_jump_args`: prepared
+context is stale once a nested match moves lowering into its join),
+and switch source correspondence follows the leftmost atom
+(`leftmost_match_atom`: a match under a continuing operator
+re-parses as the enclosing expression, not the bare match).
+Pre-existing, unchanged, and out of scope: boolean matches,
+`!`/projection match subjects, scalar-match proof codes (MNE117 vs
+MNE140/MNE139), expected-type codes for `==`/`<<`/`/`/`%`
+(MNE117 vs MNE137), op-call as binary LHS — each twins identically
+at top level with and without nesting.
+
+Known residual SSA boundary (fails closed: the verifier rejects,
+nothing is trusted): a nested match inside an arm whose outer match
+carries stack temporaries (outer match mid-sequence), or inside a
+finite arm with payload bindings, still fails verification. The
+nested join does not yet thread outer stack slots or payload
+bindings through to the outer join; `arm_jump_args` keeps the
+prepared shape there exactly as before. No fixture or real-family
+source exercises this yet; file a follow-up with a reproducer when
+one does.

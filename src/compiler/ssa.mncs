@@ -102,9 +102,23 @@ record ValueListReverse { rest: ValueList, acc: ValueList }
 record ValueStackReverse { rest: ValueStack, acc: ValueStack }
 record IdListReverse { rest: IdList, acc: IdList }
 record PayloadLowerBuild { rest: decl.PayloadBindingList, fields: decl.BindList, env: Environment, subject: u64, variant_start: u64, variant_end: u64, nominal: decl.SemanticIdentity, match_start: u64, match_end: u64, instructions: InstructionList, values: ValueList, next_value: u64, next_instruction: u64, sequence: u64, block: u64, nominals: decl.NominalTypeIdentityList, ok: bool }
-record FiniteArmBuild { rest: decl.TypedFiniteMatchArmList, source: ExprBuild, cases: FiniteMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, nominal: decl.SemanticIdentity, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
+record FiniteArmBuild { rest: decl.TypedFiniteMatchArmList, source: ExprBuild, cases: FiniteMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, nominal: decl.SemanticIdentity, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, next_block: u64, ok: bool }
 record FiniteArmPrepared { arm: decl.TypedFiniteMatchArm, source: ExprBuild, arm_id: u64, arm_params: ValueList, arm_env: Environment, base_env: Environment, base_stack: ValueStack, subject: Value, nominal: decl.SemanticIdentity, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
-record ScalarArmBuild { rest: decl.TypedScalarMatchArmList, source: ExprBuild, cases: ScalarMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, default_target: u64, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, ok: bool }
+record ScalarArmBuild { rest: decl.TypedScalarMatchArmList, source: ExprBuild, cases: ScalarMatchCaseList, arm_blocks: SsaBlockList, arm_index: u64, arm_count: u64, join_id: u64, join_env: Environment, join_stack: ValueStack, join_params: ValueList, join_result: Value, source_arguments: IdList, default_target: u64, subject: Value, subject_ty: decl.SemType, result_ty: decl.SemType, match_start: u64, match_end: u64, next_value: u64, next_instruction: u64, next_block: u64, ok: bool }
+// Nested matches in arm position lower through an explicit suspension
+// stack (CP-0011): a match op suspends the current op sequence, lowers
+// the nested match's arms as further frames, and resumes with the nested
+// join as the current block. A match op may sit anywhere in the arm op
+// sequence (the parser accepts matches in any arm-value operand
+// position); trailing ops continue lowering in the nested join block
+// exactly like a mid-sequence match in a function body. Outer arm/join
+// IDs stay precomputed exactly as before, so numbering is unchanged
+// when no nesting occurs; nested blocks allocate above the outer join
+// through the bump pointer below.
+record NestFiniteFrame { match_ctx: FiniteArmBuild, arm: decl.TypedFiniteMatchArm, prepared_env: Environment, prepared_stack: ValueStack }
+record NestScalarFrame { match_ctx: ScalarArmBuild, arm: decl.TypedScalarMatchArm, prepared_env: Environment, prepared_stack: ValueStack }
+enum NestFrameList { NFNil, NFFinite { head: NestFiniteFrame, tail: NestFrameList }, NFScalar { head: NestScalarFrame, tail: NestFrameList } }
+record NestDriver { build: ExprBuild, frames: NestFrameList, done: bool }
 
 record ExprBuild {
     rest: decl.TOpList,
@@ -613,6 +627,21 @@ fn expression_stack_single(stack: ValueStack) -> (result: bool) {
 fn expression_value(stack: ValueStack) -> (result: Value) {
     return match stack { WNil => Value { id: 0, ty: decl.SemType.TPoison, owner_block: 0, kind: 0, index: 0 }, WCons { head: h, tail: t } => h };
 }
+fn expression_stack_tail(stack: ValueStack) -> (result: ValueStack) {
+    return match stack { WNil => ValueStack.WNil, WCons { head: h, tail: t } => t };
+}
+// Arm jumps carry the join's context from the block the arm actually
+// finished in. Straight-line arms finish in their entry block, where the
+// prepared context is available unchanged; an arm containing a nested
+// match finishes in that match's join, where only the join's rebound
+// context (current env plus the stack below the result) is available.
+// Anything else keeps the prepared shape and fails closed as before.
+fn arm_jump_args<N: Nat>(input: [byte; up_to N], moved: bool, current_ok: bool, current_env: Environment, current_stack: ValueStack, result_id: u64, prepared_env: Environment, prepared_stack: ValueStack) -> (result: IdList) {
+    if moved && current_ok {
+        return append_ids<N>(input, IdList.ICons { head: Id { value: result_id }, tail: IdList.INil }, match_context_ids<N>(input, current_env, expression_stack_tail(current_stack)));
+    }
+    return append_ids<N>(input, IdList.ICons { head: Id { value: result_id }, tail: IdList.INil }, match_context_ids<N>(input, prepared_env, prepared_stack));
+}
 
 fn lower_operation_step<N: Nat>(input: [byte; up_to N], st: ExprBuild) -> (result: ExprBuild) {
     return match st.rest {
@@ -654,14 +683,14 @@ fn lower_finite_match_subject<N: Nat>(input: [byte; up_to N], st: ExprBuild, res
     let join_values: ValueList = ValueList.VCons { head: join_result, tail: join_context.values };
     let source_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: subject.id }, tail: IdList.INil }, match_context_ids<N>(input, st.env, base_stack));
     let source: ExprBuild = ExprBuild { ..st, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block_id: st.next_block_id };
-    let initial: FiniteArmBuild = FiniteArmBuild { rest: arms, source: source, cases: FiniteMatchCaseList.MCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, nominal: nominal, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, ok: join_context.ok };
+    let initial: FiniteArmBuild = FiniteArmBuild { rest: arms, source: source, cases: FiniteMatchCaseList.MCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, nominal: nominal, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block: join_id + 1, ok: join_context.ok };
     iterate i over input carrying built: FiniteArmBuild = initial { next built = finite_arm_step<N>(input, built); }
     let ordered_cases: FiniteMatchCaseList = reverse_finite_match_cases<N>(input, built.cases);
     let source_term: Terminator = Terminator.FiniteSwitch { subject: subject.id, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, join_target: join_id, cases: ordered_cases };
     let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, instructions: reverse_instructions<N>(input, st.instructions), terminator: source_term, reachable: true, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
     let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: built.arm_blocks };
     let all_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_blocks, st.generated_blocks);
-    return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: join_id + 1, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 4)) };
+    return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: built.next_block, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 4)) };
 }
 fn finite_arm_step<N: Nat>(input: [byte; up_to N], st: FiniteArmBuild) -> (result: FiniteArmBuild) {
     return match st.rest {
@@ -684,16 +713,19 @@ fn lower_finite_arm<N: Nat>(input: [byte; up_to N], st: FiniteArmBuild, arm: dec
     let arm_params: ValueList = ValueList.VCons { head: subject_param, tail: prepared.parameters };
     let values_with_subject: ValueList = ValueList.VCons { head: subject_param, tail: prepared.values };
     let payloads: PayloadLowerBuild = lower_match_payloads<N>(input, arm.bindings, arm.payload_fields, prepared.env, subject_param.id, arm.variant_start, arm.variant_end, st.nominal, st.match_start, st.match_end, InstructionList.QNil, values_with_subject, prepared.next_value + 1, st.next_instruction, 0, arm_id, st.source.nominals, prepared.ok);
-    let arm_seed: ExprBuild = ExprBuild { rest: arm.ops, env: payloads.env, stack: ValueStack.WNil, instructions: payloads.instructions, values: payloads.values, next_value: payloads.next_value, next_instruction: payloads.next_instruction, sequence: payloads.sequence, block: arm_id, parameters: arm_params, generated_blocks: SsaBlockList.LNil, next_block_id: st.source.next_block_id, nominals: st.source.nominals, ok: payloads.ok, failure_op: 0 };
-    iterate i over input carrying lowered: ExprBuild = arm_seed { next lowered = lower_arm_operation_step<N>(input, lowered); }
+    let arm_seed: ExprBuild = ExprBuild { rest: arm.ops, env: payloads.env, stack: ValueStack.WNil, instructions: payloads.instructions, values: payloads.values, next_value: payloads.next_value, next_instruction: payloads.next_instruction, sequence: payloads.sequence, block: arm_id, parameters: arm_params, generated_blocks: SsaBlockList.LNil, next_block_id: st.next_block, nominals: st.source.nominals, ok: payloads.ok, failure_op: 0 };
+    let lowered: ExprBuild = lower_nested_arm_ops<N>(input, arm_seed);
     let result: Value = expression_value(lowered.stack);
     let result_ok: bool = expression_stack_single(lowered.stack) && decl.sem_eq<N>(input, result.ty, st.result_ty);
-    let jump_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: result.id }, tail: IdList.INil }, match_context_ids<N>(input, prepared.env, prepared.stack));
+    let jump_args: IdList = arm_jump_args<N>(input, lowered.block != arm_id, prepared.ok && lowered.ok && result_ok, lowered.env, lowered.stack, result.id, prepared.env, prepared.stack);
     let arm_term: Terminator = Terminator.Jump { target: st.join_id, arguments: jump_args };
-    let arm_block: SsaBlock = SsaBlock { id: arm_id, parameters: arm_params, instructions: reverse_instructions<N>(input, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: lowered.ok && result_ok && prepared.ok, lowering_failure_kind: select(lowered.ok && result_ok && prepared.ok, 0, 9) };
+    let arm_block: SsaBlock = SsaBlock { id: lowered.block, parameters: lowered.parameters, instructions: reverse_instructions<N>(input, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: lowered.ok && result_ok && prepared.ok, lowering_failure_kind: select(lowered.ok && result_ok && prepared.ok, 0, 9) };
     let edge_case: FiniteMatchCase = FiniteMatchCase { variant_start: arm.variant_start, variant_end: arm.variant_end, target: arm_id, arguments: st.source_arguments };
     let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
-    return FiniteArmBuild { rest: rest, source: source_next, cases: FiniteMatchCaseList.MCCons { head: edge_case, tail: st.cases }, arm_blocks: SsaBlockList.LCons { head: arm_block, tail: st.arm_blocks }, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, nominal: st.nominal, subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, ok: st.ok && prepared.ok && payloads.ok && lowered.ok && result_ok };
+    let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: lowered.generated_blocks };
+    let arm_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_arm, st.arm_blocks);
+    let bumped: u64 = select(lowered.next_block_id > st.next_block, lowered.next_block_id, st.next_block);
+    return FiniteArmBuild { rest: rest, source: source_next, cases: FiniteMatchCaseList.MCCons { head: edge_case, tail: st.cases }, arm_blocks: arm_blocks, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, nominal: st.nominal, subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, next_block: bumped, ok: st.ok && prepared.ok && payloads.ok && lowered.ok && result_ok };
 }
 fn lower_scalar_match<N: Nat>(input: [byte; up_to N], st: ExprBuild, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: ExprBuild) {
     return match st.stack {
@@ -712,14 +744,14 @@ fn lower_scalar_match_subject<N: Nat>(input: [byte; up_to N], st: ExprBuild, res
     let join_values: ValueList = ValueList.VCons { head: join_result, tail: join_context.values };
     let source_args: IdList = match_context_ids<N>(input, st.env, base_stack);
     let source: ExprBuild = ExprBuild { ..st, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block_id: st.next_block_id };
-    let initial: ScalarArmBuild = ScalarArmBuild { rest: arms, source: source, cases: ScalarMatchCaseList.SCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, default_target: 0, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, ok: join_context.ok };
+    let initial: ScalarArmBuild = ScalarArmBuild { rest: arms, source: source, cases: ScalarMatchCaseList.SCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, default_target: 0, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.next_instruction, next_block: join_id + 1, ok: join_context.ok };
     iterate i over input carrying built: ScalarArmBuild = initial { next built = scalar_arm_step<N>(input, built); }
     let ordered_cases: ScalarMatchCaseList = reverse_scalar_match_cases<N>(input, built.cases);
     let source_term: Terminator = Terminator.ScalarSwitch { subject: subject.id, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, default_target: built.default_target, join_target: join_id, cases: ordered_cases };
     let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, instructions: reverse_instructions<N>(input, st.instructions), terminator: source_term, reachable: true, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
     let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: built.arm_blocks };
     let all_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_blocks, st.generated_blocks);
-    return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: join_id + 1, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 2)) };
+    return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: built.next_block, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 2)) };
 }
 fn typed_scalar_match_arm_total<N: Nat>(input: [byte; up_to N], arms: decl.TypedScalarMatchArmList) -> (result: u64) {
     let count: decl.TypedScalarMatchCount = decl.typed_scalar_match_count<N>(input, arms);
@@ -742,23 +774,182 @@ fn reverse_scalar_match_cases_step(st: ScalarCaseReverse) -> (result: ScalarCase
 fn lower_scalar_arm<N: Nat>(input: [byte; up_to N], st: ScalarArmBuild, arm: decl.TypedScalarMatchArm, rest: decl.TypedScalarMatchArmList) -> (result: ScalarArmBuild) {
     let arm_id: u64 = st.source.next_block_id + st.arm_index;
     let prepared: MatchContextBuild = match_context_parameters<N>(input, st.source.env, st.source.stack, arm_id, st.next_value, st.source.values, st.source.nominals);
-    let arm_seed: ExprBuild = ExprBuild { rest: arm.ops, env: prepared.env, stack: ValueStack.WNil, instructions: InstructionList.QNil, values: prepared.values, next_value: prepared.next_value, next_instruction: st.next_instruction, sequence: 0, block: arm_id, parameters: prepared.parameters, generated_blocks: SsaBlockList.LNil, next_block_id: st.source.next_block_id, nominals: st.source.nominals, ok: prepared.ok, failure_op: 0 };
-    iterate i over input carrying lowered: ExprBuild = arm_seed { next lowered = lower_arm_operation_step<N>(input, lowered); }
+    let arm_seed: ExprBuild = ExprBuild { rest: arm.ops, env: prepared.env, stack: ValueStack.WNil, instructions: InstructionList.QNil, values: prepared.values, next_value: prepared.next_value, next_instruction: st.next_instruction, sequence: 0, block: arm_id, parameters: prepared.parameters, generated_blocks: SsaBlockList.LNil, next_block_id: st.next_block, nominals: st.source.nominals, ok: prepared.ok, failure_op: 0 };
+    let lowered: ExprBuild = lower_nested_arm_ops<N>(input, arm_seed);
     let result: Value = expression_value(lowered.stack);
     let result_ok: bool = expression_stack_single(lowered.stack) && decl.sem_eq<N>(input, result.ty, st.result_ty);
-    let jump_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: result.id }, tail: IdList.INil }, match_context_ids<N>(input, prepared.env, prepared.stack));
+    let jump_args: IdList = arm_jump_args<N>(input, lowered.block != arm_id, prepared.ok && lowered.ok && result_ok, lowered.env, lowered.stack, result.id, prepared.env, prepared.stack);
     let arm_term: Terminator = Terminator.Jump { target: st.join_id, arguments: jump_args };
-    let arm_block: SsaBlock = SsaBlock { id: arm_id, parameters: prepared.parameters, instructions: reverse_instructions<N>(input, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: lowered.ok && result_ok && prepared.ok, lowering_failure_kind: select(lowered.ok && result_ok && prepared.ok, 0, 9) };
+    let arm_block: SsaBlock = SsaBlock { id: lowered.block, parameters: lowered.parameters, instructions: reverse_instructions<N>(input, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: lowered.ok && result_ok && prepared.ok, lowering_failure_kind: select(lowered.ok && result_ok && prepared.ok, 0, 9) };
     let edge_case: ScalarMatchCase = ScalarMatchCase { is_default: arm.is_default, negative: arm.negative, value: arm.value, overflow: arm.overflow, pattern_start: arm.pattern_start, pattern_end: arm.pattern_end, target: arm_id, arguments: st.source_arguments };
     let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
-    return ScalarArmBuild { rest: rest, source: source_next, cases: ScalarMatchCaseList.SCCons { head: edge_case, tail: st.cases }, arm_blocks: SsaBlockList.LCons { head: arm_block, tail: st.arm_blocks }, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, default_target: select(arm.is_default, arm_id, st.default_target), subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, ok: st.ok && prepared.ok && lowered.ok && result_ok };
+    let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: lowered.generated_blocks };
+    let arm_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_arm, st.arm_blocks);
+    let bumped: u64 = select(lowered.next_block_id > st.next_block, lowered.next_block_id, st.next_block);
+    return ScalarArmBuild { rest: rest, source: source_next, cases: ScalarMatchCaseList.SCCons { head: edge_case, tail: st.cases }, arm_blocks: arm_blocks, arm_index: st.arm_index + 1, arm_count: st.arm_count, join_id: st.join_id, join_env: st.join_env, join_stack: st.join_stack, join_params: st.join_params, join_result: st.join_result, source_arguments: st.source_arguments, default_target: select(arm.is_default, arm_id, st.default_target), subject: st.subject, subject_ty: st.subject_ty, result_ty: st.result_ty, match_start: st.match_start, match_end: st.match_end, next_value: lowered.next_value, next_instruction: lowered.next_instruction, next_block: bumped, ok: st.ok && prepared.ok && lowered.ok && result_ok };
 }
-fn lower_arm_operation_step<N: Nat>(input: [byte; up_to N], st: ExprBuild) -> (result: ExprBuild) {
-    return match st.rest {
-        decl.TOpList.PNil => st,
-        decl.TOpList.PCons { head: operation, tail: rest } => lower_arm_operation<N>(input, st, operation, rest)
+fn lower_nested_arm_ops<N: Nat>(input: [byte; up_to N], seed: ExprBuild) -> (result: ExprBuild) {
+    let driver: NestDriver = NestDriver { build: seed, frames: NestFrameList.NFNil, done: false };
+    iterate i over input carrying d: NestDriver = driver { next d = nest_driver_step<N>(input, d); }
+    return nest_driver_result(d);
+}
+fn nest_driver_result(st: NestDriver) -> (result: ExprBuild) {
+    if st.done { return st.build; }
+    return ExprBuild { ..st.build, ok: false };
+}
+fn nest_driver_step<N: Nat>(input: [byte; up_to N], st: NestDriver) -> (result: NestDriver) {
+    if !(st.build.ok) || st.done { return st; }
+    return match st.build.rest {
+        decl.TOpList.PNil => nest_driver_pop<N>(input, st),
+        decl.TOpList.PCons { head: operation, tail: rest } => nest_driver_op<N>(input, st, operation, rest)
     };
 }
+fn nest_driver_op<N: Nat>(input: [byte; up_to N], st: NestDriver, operation: decl.TOp, rest: decl.TOpList) -> (result: NestDriver) {
+    return match operation {
+        TInt { value: v, ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TBool { value: v, ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TName { ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TNot { ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TRepeat { ty: ty, element: element, count: count, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => nest_scalar_setup<N>(input, st, rest, ty, subject_ty, arms, arm_count, default_count, s, e),
+        TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => nest_finite_setup<N>(input, st, rest, ty, subject_ty, arms, arm_count, s, e),
+        TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TBin { op: op, ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TCall { ty: ty, argc: argc, params: params, start: s, end: e, ns: ns, ne: ne, identity: identity, effects: effects, capabilities: capabilities } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TProj { ty: ty, fstart: fs, fend: fe, field_index: index, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false },
+        TOp { slot: slot, ty: ty, argc: argc, ns: ns, ne: ne, identity: identity, start: s, end: e } => NestDriver { build: lower_arm_operation<N>(input, st.build, operation, rest), frames: st.frames, done: false }
+    };
+}
+fn nest_driver_pop<N: Nat>(input: [byte; up_to N], st: NestDriver) -> (result: NestDriver) {
+    return match st.frames {
+        NFNil => NestDriver { ..st, done: true },
+        NFFinite { head: frame, tail: rest } => nest_finite_arm_done<N>(input, st, frame, rest),
+        NFScalar { head: frame, tail: rest } => nest_scalar_arm_done<N>(input, st, frame, rest)
+    };
+}
+fn nest_finite_setup<N: Nat>(input: [byte; up_to N], st: NestDriver, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64) -> (result: NestDriver) {
+    return match st.build.stack {
+        WNil => NestDriver { build: ExprBuild { ..st.build, ok: false, failure_op: select(st.build.failure_op > 0, st.build.failure_op, 4) }, frames: st.frames, done: false },
+        WCons { head: subject, tail: base_stack } => nest_finite_setup_subject<N>(input, st, rest, result_ty, subject_ty, arms, arm_count, start, end, subject, base_stack)
+    };
+}
+fn nest_finite_setup_subject<N: Nat>(input: [byte; up_to N], st: NestDriver, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64, subject: Value, base_stack: ValueStack) -> (result: NestDriver) {
+    let nominal: decl.SemanticIdentity = nominal_identity_for_type<N>(input, st.build.nominals, subject_ty);
+    let actual_count: u64 = decl.typed_finite_match_count<N>(input, arms);
+    let basic_ok: bool = nominal.valid && actual_count == arm_count && arm_count > 0 && decl.sem_eq<N>(input, subject.ty, subject_ty) && supported_value_type<N>(input, result_ty, st.build.nominals);
+    if !(basic_ok) { return NestDriver { build: ExprBuild { ..st.build, ok: false, failure_op: select(st.build.failure_op > 0, st.build.failure_op, 4) }, frames: st.frames, done: false }; }
+    let join_id: u64 = st.build.next_block_id + arm_count;
+    let join_context: MatchContextBuild = match_context_parameters<N>(input, st.build.env, base_stack, join_id, st.build.next_value, st.build.values, st.build.nominals);
+    let join_result: Value = Value { id: join_context.next_value, ty: result_ty, owner_block: join_id, kind: 1, index: join_context.parameter_index };
+    let join_params: ValueList = ValueList.VCons { head: join_result, tail: join_context.parameters };
+    let join_values: ValueList = ValueList.VCons { head: join_result, tail: join_context.values };
+    let source_args: IdList = append_ids<N>(input, IdList.ICons { head: Id { value: subject.id }, tail: IdList.INil }, match_context_ids<N>(input, st.build.env, base_stack));
+    let source: ExprBuild = ExprBuild { ..st.build, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.build.next_instruction, next_block_id: st.build.next_block_id };
+    let ctx: FiniteArmBuild = FiniteArmBuild { rest: arms, source: source, cases: FiniteMatchCaseList.MCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, nominal: nominal, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.build.next_instruction, next_block: join_id + 1, ok: join_context.ok };
+    return match arms {
+        decl.TypedFiniteMatchArmList.TFNil => NestDriver { build: ExprBuild { ..st.build, ok: false, failure_op: select(st.build.failure_op > 0, st.build.failure_op, 4) }, frames: st.frames, done: false },
+        decl.TypedFiniteMatchArmList.TFCons { head: arm, tail: rest_arms } => nest_finite_arm_start<N>(input, st, ctx, arm, rest_arms)
+    };
+}
+fn nest_finite_arm_start<N: Nat>(input: [byte; up_to N], st: NestDriver, ctx: FiniteArmBuild, arm: decl.TypedFiniteMatchArm, rest_arms: decl.TypedFiniteMatchArmList) -> (result: NestDriver) {
+    let entry_id: u64 = ctx.source.next_block_id + ctx.arm_index;
+    let prepared: MatchContextBuild = match_context_parameters<N>(input, ctx.source.env, ctx.source.stack, entry_id, ctx.next_value, ctx.source.values, ctx.source.nominals);
+    let subject_param: Value = Value { id: prepared.next_value, ty: ctx.subject_ty, owner_block: entry_id, kind: 1, index: prepared.parameter_index };
+    let arm_params: ValueList = ValueList.VCons { head: subject_param, tail: prepared.parameters };
+    let values_with_subject: ValueList = ValueList.VCons { head: subject_param, tail: prepared.values };
+    let payloads: PayloadLowerBuild = lower_match_payloads<N>(input, arm.bindings, arm.payload_fields, prepared.env, subject_param.id, arm.variant_start, arm.variant_end, ctx.nominal, ctx.match_start, ctx.match_end, InstructionList.QNil, values_with_subject, prepared.next_value + 1, ctx.next_instruction, 0, entry_id, ctx.source.nominals, prepared.ok);
+    let seed: ExprBuild = ExprBuild { rest: arm.ops, env: payloads.env, stack: ValueStack.WNil, instructions: payloads.instructions, values: payloads.values, next_value: payloads.next_value, next_instruction: payloads.next_instruction, sequence: payloads.sequence, block: entry_id, parameters: arm_params, generated_blocks: SsaBlockList.LNil, next_block_id: ctx.next_block, nominals: ctx.source.nominals, ok: payloads.ok, failure_op: 0 };
+    let frame: NestFiniteFrame = NestFiniteFrame { match_ctx: FiniteArmBuild { ..ctx, rest: rest_arms }, arm: arm, prepared_env: prepared.env, prepared_stack: prepared.stack };
+    return NestDriver { build: seed, frames: NestFrameList.NFFinite { head: frame, tail: st.frames }, done: false };
+}
+fn nest_finite_arm_done<N: Nat>(input: [byte; up_to N], st: NestDriver, frame: NestFiniteFrame, rest_frames: NestFrameList) -> (result: NestDriver) {
+    let build: ExprBuild = st.build;
+    let entry_id: u64 = frame.match_ctx.source.next_block_id + frame.match_ctx.arm_index;
+    let result: Value = expression_value(build.stack);
+    let result_ok: bool = expression_stack_single(build.stack) && decl.sem_eq<N>(input, result.ty, frame.match_ctx.result_ty);
+    let jump_args: IdList = arm_jump_args<N>(input, build.block != entry_id, build.ok && result_ok, build.env, build.stack, result.id, frame.prepared_env, frame.prepared_stack);
+    let arm_term: Terminator = Terminator.Jump { target: frame.match_ctx.join_id, arguments: jump_args };
+    let arm_block: SsaBlock = SsaBlock { id: build.block, parameters: build.parameters, instructions: reverse_instructions<N>(input, build.instructions), terminator: arm_term, reachable: true, lowering_ok: build.ok && result_ok, lowering_failure_kind: select(build.ok && result_ok, 0, 9) };
+    let edge_case: FiniteMatchCase = FiniteMatchCase { variant_start: frame.arm.variant_start, variant_end: frame.arm.variant_end, target: entry_id, arguments: frame.match_ctx.source_arguments };
+    let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: build.generated_blocks };
+    let arm_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_arm, frame.match_ctx.arm_blocks);
+    let source_next: ExprBuild = ExprBuild { ..frame.match_ctx.source, values: build.values, next_value: build.next_value, next_instruction: build.next_instruction };
+    let bumped: u64 = select(build.next_block_id > frame.match_ctx.next_block, build.next_block_id, frame.match_ctx.next_block);
+    let ctx: FiniteArmBuild = FiniteArmBuild { ..frame.match_ctx, source: source_next, cases: FiniteMatchCaseList.MCCons { head: edge_case, tail: frame.match_ctx.cases }, arm_blocks: arm_blocks, arm_index: frame.match_ctx.arm_index + 1, next_value: build.next_value, next_instruction: build.next_instruction, next_block: bumped, ok: frame.match_ctx.ok && build.ok && result_ok };
+    return match frame.match_ctx.rest {
+        decl.TypedFiniteMatchArmList.TFNil => nest_finite_assemble<N>(input, build, ctx, rest_frames),
+        decl.TypedFiniteMatchArmList.TFCons { head: next_arm, tail: rest_arms } => nest_finite_arm_start<N>(input, NestDriver { build: build, frames: rest_frames, done: false }, FiniteArmBuild { ..ctx, rest: rest_arms }, next_arm, rest_arms)
+    };
+}
+fn nest_finite_assemble<N: Nat>(input: [byte; up_to N], build: ExprBuild, ctx: FiniteArmBuild, rest_frames: NestFrameList) -> (result: NestDriver) {
+    let ordered_cases: FiniteMatchCaseList = reverse_finite_match_cases<N>(input, ctx.cases);
+    let source_term: Terminator = Terminator.FiniteSwitch { subject: ctx.subject.id, subject_ty: ctx.subject_ty, nominal_identity: ctx.nominal, result_type: ctx.result_ty, source_start: ctx.match_start, source_end: ctx.match_end, arm_count: ctx.arm_count, join_target: ctx.join_id, cases: ordered_cases };
+    let source_block: SsaBlock = SsaBlock { id: ctx.source.block, parameters: ctx.source.parameters, instructions: reverse_instructions<N>(input, ctx.source.instructions), terminator: source_term, reachable: true, lowering_ok: ctx.source.ok && ctx.ok, lowering_failure_kind: select(ctx.source.ok && ctx.ok, 0, 9) };
+    let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: ctx.arm_blocks };
+    let all_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_blocks, ctx.source.generated_blocks);
+    let cont: ExprBuild = ExprBuild { rest: ctx.source.rest, env: ctx.join_env, stack: ValueStack.WCons { head: ctx.join_result, tail: ctx.join_stack }, instructions: InstructionList.QNil, values: ctx.source.values, next_value: ctx.next_value, next_instruction: ctx.next_instruction, sequence: 0, block: ctx.join_id, parameters: ctx.join_params, generated_blocks: all_blocks, next_block_id: ctx.next_block, nominals: ctx.source.nominals, ok: ctx.source.ok && ctx.ok, failure_op: select(ctx.source.failure_op > 0, ctx.source.failure_op, select(ctx.ok, 0, 4)) };
+    return NestDriver { build: cont, frames: rest_frames, done: false };
+}
+fn nest_scalar_setup<N: Nat>(input: [byte; up_to N], st: NestDriver, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64) -> (result: NestDriver) {
+    return match st.build.stack {
+        WNil => NestDriver { build: ExprBuild { ..st.build, ok: false, failure_op: select(st.build.failure_op > 0, st.build.failure_op, 2) }, frames: st.frames, done: false },
+        WCons { head: subject, tail: base_stack } => nest_scalar_setup_subject<N>(input, st, rest, result_ty, subject_ty, arms, arm_count, default_count, start, end, subject, base_stack)
+    };
+}
+fn nest_scalar_setup_subject<N: Nat>(input: [byte; up_to N], st: NestDriver, rest: decl.TOpList, result_ty: decl.SemType, subject_ty: decl.SemType, arms: decl.TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64, subject: Value, base_stack: ValueStack) -> (result: NestDriver) {
+    let actual_count: u64 = typed_scalar_match_arm_total<N>(input, arms);
+    let basic_ok: bool = decl.is_int_ty(subject_ty) && actual_count == arm_count && arm_count > 0 && default_count == 1 && decl.sem_eq<N>(input, subject.ty, subject_ty) && supported_value_type<N>(input, result_ty, st.build.nominals);
+    if !(basic_ok) { return NestDriver { build: ExprBuild { ..st.build, ok: false, failure_op: select(st.build.failure_op > 0, st.build.failure_op, 2) }, frames: st.frames, done: false }; }
+    let join_id: u64 = st.build.next_block_id + arm_count;
+    let join_context: MatchContextBuild = match_context_parameters<N>(input, st.build.env, base_stack, join_id, st.build.next_value, st.build.values, st.build.nominals);
+    let join_result: Value = Value { id: join_context.next_value, ty: result_ty, owner_block: join_id, kind: 1, index: join_context.parameter_index };
+    let join_params: ValueList = ValueList.VCons { head: join_result, tail: join_context.parameters };
+    let join_values: ValueList = ValueList.VCons { head: join_result, tail: join_context.values };
+    let source_args: IdList = match_context_ids<N>(input, st.build.env, base_stack);
+    let source: ExprBuild = ExprBuild { ..st.build, rest: rest, stack: base_stack, values: join_values, next_value: join_context.next_value + 1, next_instruction: st.build.next_instruction, next_block_id: st.build.next_block_id };
+    let ctx: ScalarArmBuild = ScalarArmBuild { rest: arms, source: source, cases: ScalarMatchCaseList.SCNil, arm_blocks: SsaBlockList.LNil, arm_index: 0, arm_count: arm_count, join_id: join_id, join_env: join_context.env, join_stack: join_context.stack, join_params: join_params, join_result: join_result, source_arguments: source_args, default_target: 0, subject: subject, subject_ty: subject_ty, result_ty: result_ty, match_start: start, match_end: end, next_value: join_context.next_value + 1, next_instruction: st.build.next_instruction, next_block: join_id + 1, ok: join_context.ok };
+    return match arms {
+        decl.TypedScalarMatchArmList.TSNil => NestDriver { build: ExprBuild { ..st.build, ok: false, failure_op: select(st.build.failure_op > 0, st.build.failure_op, 2) }, frames: st.frames, done: false },
+        decl.TypedScalarMatchArmList.TSCons { head: arm, tail: rest_arms } => nest_scalar_arm_start<N>(input, st, ctx, arm, rest_arms)
+    };
+}
+fn nest_scalar_arm_start<N: Nat>(input: [byte; up_to N], st: NestDriver, ctx: ScalarArmBuild, arm: decl.TypedScalarMatchArm, rest_arms: decl.TypedScalarMatchArmList) -> (result: NestDriver) {
+    let entry_id: u64 = ctx.source.next_block_id + ctx.arm_index;
+    let prepared: MatchContextBuild = match_context_parameters<N>(input, ctx.source.env, ctx.source.stack, entry_id, ctx.next_value, ctx.source.values, ctx.source.nominals);
+    let seed: ExprBuild = ExprBuild { rest: arm.ops, env: prepared.env, stack: ValueStack.WNil, instructions: InstructionList.QNil, values: prepared.values, next_value: prepared.next_value, next_instruction: ctx.next_instruction, sequence: 0, block: entry_id, parameters: prepared.parameters, generated_blocks: SsaBlockList.LNil, next_block_id: ctx.next_block, nominals: ctx.source.nominals, ok: prepared.ok, failure_op: 0 };
+    let frame: NestScalarFrame = NestScalarFrame { match_ctx: ScalarArmBuild { ..ctx, rest: rest_arms }, arm: arm, prepared_env: prepared.env, prepared_stack: prepared.stack };
+    return NestDriver { build: seed, frames: NestFrameList.NFScalar { head: frame, tail: st.frames }, done: false };
+}
+fn nest_scalar_arm_done<N: Nat>(input: [byte; up_to N], st: NestDriver, frame: NestScalarFrame, rest_frames: NestFrameList) -> (result: NestDriver) {
+    let build: ExprBuild = st.build;
+    let entry_id: u64 = frame.match_ctx.source.next_block_id + frame.match_ctx.arm_index;
+    let result: Value = expression_value(build.stack);
+    let result_ok: bool = expression_stack_single(build.stack) && decl.sem_eq<N>(input, result.ty, frame.match_ctx.result_ty);
+    let jump_args: IdList = arm_jump_args<N>(input, build.block != entry_id, build.ok && result_ok, build.env, build.stack, result.id, frame.prepared_env, frame.prepared_stack);
+    let arm_term: Terminator = Terminator.Jump { target: frame.match_ctx.join_id, arguments: jump_args };
+    let arm_block: SsaBlock = SsaBlock { id: build.block, parameters: build.parameters, instructions: reverse_instructions<N>(input, build.instructions), terminator: arm_term, reachable: true, lowering_ok: build.ok && result_ok, lowering_failure_kind: select(build.ok && result_ok, 0, 9) };
+    let edge_case: ScalarMatchCase = ScalarMatchCase { is_default: frame.arm.is_default, negative: frame.arm.negative, value: frame.arm.value, overflow: frame.arm.overflow, pattern_start: frame.arm.pattern_start, pattern_end: frame.arm.pattern_end, target: entry_id, arguments: frame.match_ctx.source_arguments };
+    let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: build.generated_blocks };
+    let arm_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_arm, frame.match_ctx.arm_blocks);
+    let source_next: ExprBuild = ExprBuild { ..frame.match_ctx.source, values: build.values, next_value: build.next_value, next_instruction: build.next_instruction };
+    let bumped: u64 = select(build.next_block_id > frame.match_ctx.next_block, build.next_block_id, frame.match_ctx.next_block);
+    let ctx: ScalarArmBuild = ScalarArmBuild { ..frame.match_ctx, source: source_next, cases: ScalarMatchCaseList.SCCons { head: edge_case, tail: frame.match_ctx.cases }, arm_blocks: arm_blocks, arm_index: frame.match_ctx.arm_index + 1, default_target: select(frame.arm.is_default, entry_id, frame.match_ctx.default_target), next_value: build.next_value, next_instruction: build.next_instruction, next_block: bumped, ok: frame.match_ctx.ok && build.ok && result_ok };
+    return match frame.match_ctx.rest {
+        decl.TypedScalarMatchArmList.TSNil => nest_scalar_assemble<N>(input, build, ctx, rest_frames),
+        decl.TypedScalarMatchArmList.TSCons { head: next_arm, tail: rest_arms } => nest_scalar_arm_start<N>(input, NestDriver { build: build, frames: rest_frames, done: false }, ScalarArmBuild { ..ctx, rest: rest_arms }, next_arm, rest_arms)
+    };
+}
+fn nest_scalar_assemble<N: Nat>(input: [byte; up_to N], build: ExprBuild, ctx: ScalarArmBuild, rest_frames: NestFrameList) -> (result: NestDriver) {
+    let ordered_cases: ScalarMatchCaseList = reverse_scalar_match_cases<N>(input, ctx.cases);
+    let source_term: Terminator = Terminator.ScalarSwitch { subject: ctx.subject.id, subject_ty: ctx.subject_ty, result_type: ctx.result_ty, source_start: ctx.match_start, source_end: ctx.match_end, arm_count: ctx.arm_count, default_target: ctx.default_target, join_target: ctx.join_id, cases: ordered_cases };
+    let source_block: SsaBlock = SsaBlock { id: ctx.source.block, parameters: ctx.source.parameters, instructions: reverse_instructions<N>(input, ctx.source.instructions), terminator: source_term, reachable: true, lowering_ok: ctx.source.ok && ctx.ok, lowering_failure_kind: select(ctx.source.ok && ctx.ok, 0, 9) };
+    let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: ctx.arm_blocks };
+    let all_blocks: SsaBlockList = prepend_generated_blocks<N>(input, fresh_blocks, ctx.source.generated_blocks);
+    let cont: ExprBuild = ExprBuild { rest: ctx.source.rest, env: ctx.join_env, stack: ValueStack.WCons { head: ctx.join_result, tail: ctx.join_stack }, instructions: InstructionList.QNil, values: ctx.source.values, next_value: ctx.next_value, next_instruction: ctx.next_instruction, sequence: 0, block: ctx.join_id, parameters: ctx.join_params, generated_blocks: all_blocks, next_block_id: ctx.next_block, nominals: ctx.source.nominals, ok: ctx.source.ok && ctx.ok, failure_op: select(ctx.source.failure_op > 0, ctx.source.failure_op, select(ctx.ok, 0, 2)) };
+    return NestDriver { build: cont, frames: rest_frames, done: false };
+}
+// Straight-line arm operations. Match ops divert to the nested driver
+// before reaching here; the failing arms below stay as a closed backstop.
 fn lower_arm_operation<N: Nat>(input: [byte; up_to N], st: ExprBuild, operation: decl.TOp, rest: decl.TOpList) -> (result: ExprBuild) {
     return match operation {
         TInt { value: value, ty: ty, start: start, end: end } => emit_constant(st, rest, 0, value, false, ty, start, end),
@@ -1619,6 +1810,24 @@ fn match_arm_jumps_to_join<N: Nat>(input: [byte; up_to N], function: Function, b
     return match block.terminator {
         Jump { target: target, arguments: args } => target == join && verify_edge<N>(input, function, block.id, target, args, instruction_count<N>(input, block.instructions)) && first_argument_has_type<N>(input, function.values, args, result_ty),
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => false,
+        FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result, source_start: start, source_end: end, arm_count: count, join_target: target, cases: cases } => nested_join_jumps_to_join<N>(input, function, target, join, result_ty),
+        ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: target, cases: cases } => nested_join_jumps_to_join<N>(input, function, target, join, result_ty),
+        Return { value: value } => false,
+        Fail => false
+    };
+}
+// A case target may end in a nested switch only when the nested join
+// jumps directly to this join with a correctly typed result edge. The
+// nested switch's own cases are verified independently when its block is
+// visited, so one hop per level composes to arbitrary depth; longer
+// join chains fail closed (the lowering always emits the one-hop,
+// match-last shape).
+fn nested_join_jumps_to_join<N: Nat>(input: [byte; up_to N], function: Function, inner: u64, join: u64, result_ty: decl.SemType) -> (result: bool) {
+    let found: BlockLookup = find_block<N>(input, function.blocks, inner);
+    if !(found.found) { return false; }
+    return match found.block.terminator {
+        Jump { target: target, arguments: args } => target == join && verify_edge<N>(input, function, inner, join, args, instruction_count<N>(input, found.block.instructions)) && first_argument_has_type<N>(input, function.values, args, result_ty),
+        Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => false,
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result, source_start: start, source_end: end, arm_count: count, join_target: target, cases: cases } => false,
         ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: target, cases: cases } => false,
         Return { value: value } => false,
@@ -1713,10 +1922,36 @@ fn scalar_match_duplicate_one<N: Nat>(input: [byte; up_to N], st: DuplicateScala
     let clash: bool = case.target == st.target || (!(st.is_default) && !(case.is_default) && payload == st.payload);
     return DuplicateScalarCaseScan { rest: rest, payload: st.payload, is_default: st.is_default, target: st.target, found: clash };
 }
+// A match nested under a continuing operator (binary operand,
+// projection base) re-parses from its start as the enclosing
+// expression rather than the bare match. Correspondence still holds
+// through the left spine: Binary/Project continuations keep the match
+// as the leftmost atom with identical spans and arms.
+fn leftmost_match_step(node: decl.Expr) -> (result: decl.Expr) {
+    return match node {
+        Name { start: s, end: e } => node,
+        Integer { start: s, end: e, value: value, overflow: overflow } => node,
+        Boolean { start: s, end: e, value: value } => node,
+        UnaryNot { value: v, start: s, end: e } => node,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => node,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => node,
+        Binary { op: op, left: left, right: right, start: s, end: e } => left,
+        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => node,
+        Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: p } => base,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => node,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => node,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: args, start: s, end: e } => node
+    };
+}
+fn leftmost_match_atom<N: Nat>(input: [byte; up_to N], node: decl.Expr) -> (result: decl.Expr) {
+    iterate i over input carrying current: decl.Expr = node { next current = leftmost_match_step(current); }
+    return current;
+}
 fn scalar_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, cases: ScalarMatchCaseList, count: u64) -> (result: bool) {
     let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
-    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
-    return match parsed.node {
+    if !(parsed.ok) || parsed.start != start { return false; }
+    let atom: decl.Expr = leftmost_match_atom<N>(input, parsed.node);
+    return match atom {
         ScalarMatch { subject: subject, arms: arms, start: source_start, end: source_end } => source_start == start && source_end == end && scalar_match_source_arm_pairs<N>(input, arms, cases, count),
         Name { start: s, end: e } => false,
         Integer { start: s, end: e, value: value, overflow: overflow } => false,
@@ -1751,8 +1986,9 @@ fn scalar_match_source_pair_case(st: SourceScalarCasePair, arm: decl.ScalarMatch
 }
 fn finite_match_source_cases_valid<N: Nat>(input: [byte; up_to N], start: u64, end: u64, cases: FiniteMatchCaseList, count: u64) -> (result: bool) {
     let parsed: decl.ExprParse = decl.parse_expr<N>(input, start, true);
-    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
-    return match parsed.node {
+    if !(parsed.ok) || parsed.start != start { return false; }
+    let atom: decl.Expr = leftmost_match_atom<N>(input, parsed.node);
+    return match atom {
         FiniteMatch { subject: subject, arms: arms, start: source_start, end: source_end } => source_start == start && source_end == end && finite_match_source_arm_pairs<N>(input, arms, cases, count),
         Name { start: s, end: e } => false,
         Integer { start: s, end: e, value: value, overflow: overflow } => false,

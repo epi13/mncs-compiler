@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 11,
+  "revision": 12,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -247,20 +247,13 @@
     },
     {
       "identity": "mncs-compiler.project-source-differential",
-      "title": "Project modules, canonical imports, and typed value SSA are checked against Stage-0",
+      "title": "Project module/import/member resolution closure (focused mode)",
       "guarantee_domain": "semantic",
       "evidence_role": "differential_oracle",
       "lifecycle": "permanent",
       "scope": "repository_canonical",
       "subjects": [
-        "mncs:0.2:function:mncs.compiler.project.v1::compile_project",
-        "mncs:0.2:function:mncs.compiler.flow.v1::lower_proven_unit",
-        "mncs:0.2:function:mncs.compiler.decl.v1::prove_parsed_unit",
-        "mncs:0.2:function:mncs.compiler.decl.v1::collect_call_sites",
-        "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit",
-        "mncs:0.2:function:mncs.compiler.source.v1::byte_at",
-        "mncs:0.2:function:mncs.compiler.parser.v1::header",
-        "mncs:0.2:function:mncs.compiler.segment.v1::significant"
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project"
       ],
       "invalidation_dependencies": [
         "src/compiler/source.mncs",
@@ -272,15 +265,178 @@
         "src/compiler/ssa.mncs",
         "src/compiler/project.mncs",
         "tools/test_project.py",
-        "tools/stage0-probe/src/main.rs"
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
       ],
       "executor": {
         "provider": "mncs-compiler",
         "kind": "external_integration",
-        "entrypoint": "python3 tools/test_project.py",
+        "entrypoint": "python3 tools/test_project.py resolution",
         "argv": [
           "python3",
-          "tools/test_project.py"
+          "tools/test_project.py",
+          "resolution"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.value-ssa-differential",
+      "title": "Merge/join, enum, scalar, projection, and nested-match value SSA (focused mode)",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::lower_value_ssa",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::verify_function"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/project.mncs",
+        "tools/test_project.py",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_project.py match-ssa",
+        "argv": [
+          "python3",
+          "tools/test_project.py",
+          "match-ssa"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1500
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.project-imported-identity-differential",
+      "title": "Imported callable identity and argument proof (focused mode)",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/project.mncs",
+        "tools/test_project.py",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_project.py imported-identity",
+        "argv": [
+          "python3",
+          "tools/test_project.py",
+          "imported-identity"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.project-operations-differential",
+      "title": "Compiler-operation call SSA slots and proofs (focused mode)",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::lower_value_ssa",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::verify_function"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/project.mncs",
+        "tools/test_project.py",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_project.py operations",
+        "argv": [
+          "python3",
+          "tools/test_project.py",
+          "operations"
         ],
         "working_directory": ".",
         "timeout_seconds": 900
@@ -302,15 +458,14 @@
       }
     },
     {
-      "identity": "mncs-compiler.value-ssa-differential",
-      "title": "Bounded value SSA and imported callable identity match Stage-0 body/SSA facts",
+      "identity": "mncs-compiler.project-full-closure",
+      "title": "Canonical project differential full closure (release/campaign)",
       "guarantee_domain": "semantic",
       "evidence_role": "differential_oracle",
       "lifecycle": "permanent",
       "scope": "repository_canonical",
       "subjects": [
         "mncs:0.2:function:mncs.compiler.project.v1::compile_project",
-        "mncs:0.2:function:mncs.compiler.flow.v1::lower_proven_unit",
         "mncs:0.2:function:mncs.compiler.ssa.v1::lower_value_ssa",
         "mncs:0.2:function:mncs.compiler.ssa.v1::verify_function"
       ],
@@ -324,7 +479,9 @@
         "src/compiler/ssa.mncs",
         "src/compiler/project.mncs",
         "tools/test_project.py",
-        "tools/stage0-probe/src/main.rs"
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
       ],
       "executor": {
         "provider": "mncs-compiler",
@@ -335,7 +492,67 @@
           "tools/test_project.py"
         ],
         "working_directory": ".",
-        "timeout_seconds": 900
+        "timeout_seconds": 2100
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.logical-source-differential",
+      "title": "Logical multi-page source, cross-boundary lexing, and self-host distance (CP-0001 tiers)",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.source.v1::validate_pages",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::lex_tokens_from",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header_global",
+        "mncs:0.2:function:mncs.compiler.kernel.v1::parse_header_global",
+        "mncs:0.2:function:mncs.compiler.kernel.v1::token_shape_global",
+        "mncs:0.2:function:mncs.compiler.kernel.v1::lex_step_global",
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/project.mncs",
+        "tools/test_cp0001.py",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_cp0001.py",
+        "argv": [
+          "python3",
+          "tools/test_cp0001.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800
       },
       "evidence_identity": {
         "subject_fields": [

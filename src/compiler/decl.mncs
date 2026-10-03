@@ -317,16 +317,11 @@ fn parse_expr<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) ->
     }
     return finish_expr<N>(input, fin);
 }
-// Match arm values use the same expression machine but disable nested match
-// dispatch, keeping the parser call graph acyclic while accepting binary,
-// projection, and direct-call arm results.
-fn parse_expr_base<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
-    let seed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true, profile_013: profile_013, allow_construct: true };
-    iterate i over input carrying d: ExprState = seed { next d = expr_step_base<N>(input, d); }
-    iterate i over input carrying h: ExprState = d { next h = expr_step_base<N>(input, h); }
-    iterate i up_to 32 carrying fin: ExprState = h { next fin = expr_step_base<N>(input, fin); }
-    return finish_expr<N>(input, fin);
-}
+// Match arm values run the same expression machine via the explicit
+// nested-match driver below (scalar_match_value): a `match` in any
+// operand position suspends onto the driver frame stack instead of
+// recursing through prefix_match, keeping the parser call graph acyclic
+// while accepting matches nested to arbitrary depth below arm values.
 // If conditions and match subjects sit directly before a statement-level or
 // match-body `{`, so a top-level `{` after a projection there closes the
 // expression instead of starting enum construction. Nested (parenthesized or
@@ -593,7 +588,162 @@ fn scalar_match_underscore<N: Nat>(input: [byte; up_to N], start: u64, end: u64)
     return end == start + 1 && segment.byte_at<N>(input, start) == 95;
 }
 fn scalar_match_value<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
-    return parse_expr_base<N>(input, cursor, profile_013);
+    return parse_nest_expr_value<N>(input, cursor, profile_013);
+}
+// Nested matches in arm position (CP-0011): a match arm result may itself
+// be a match, to arbitrary depth, in any scalar/finite combination, in any
+// operand position (arm head, binary operand, call argument, parenthesized).
+// The call graph stays acyclic: instead of recursive expression dispatch,
+// one driver loop micro-steps arm-value expressions and arm scans alike.
+// A nested `match` suspends the current expression or arm scan onto an
+// explicit frame stack; closing the nested match resumes the parent with
+// the nested node as the operand or arm value. Match entry mirrors
+// prefix_match exactly (subject, `{`, first-arm kind selection, same
+// error spans); expression micro-steps are expr_step_base exactly, so a
+// match-free arm value parses identically to the former direct call.
+// Fuel: every step consumes an input byte, shrinks the operator or frame
+// stack, or terminates the top (match/arm entry always consumes the head
+// it suspends on), so three input passes plus slack always suffice.
+record FiniteNestParent { scan: FiniteMatchScan, subject: Expr, match_start: u64, variant_start: u64, variant_end: u64, has_payload: bool, bindings: PayloadBindingList, pattern_start: u64, pattern_end: u64 }
+record ScalarNestParent { scan: MatchScan, subject: Expr, match_start: u64, is_default: bool, negative: bool, value: u64, overflow: bool, pattern_start: u64, pattern_end: u64 }
+record NestExprParent { est: ExprState }
+enum MatchNestStack { NSNil, NSFinite { head: FiniteNestParent, tail: MatchNestStack }, NSScalar { head: ScalarNestParent, tail: MatchNestStack }, NSExpr { head: NestExprParent, tail: MatchNestStack } }
+enum MatchNestTop { FiniteTop { scan: FiniteMatchScan, subject: Expr, match_start: u64 }, ScalarTop { scan: MatchScan, subject: Expr, match_start: u64 }, ExprTop { est: ExprState } }
+record MatchNestParse { top: MatchNestTop, stack: MatchNestStack, ok: bool, done: bool, err_start: u64, err_end: u64, node: Expr, node_ok: bool, cursor: u64 }
+record MatchOpen { ok: bool, err_start: u64, err_end: u64, subject: Expr, open_end: u64, is_finite: bool }
+fn match_open_nested<N: Nat>(input: [byte; up_to N], match_token: lexer.Token, profile_013: bool) -> (result: MatchOpen) {
+    let subject: ExprParse = parse_expr_base_noconstruct<N>(input, match_token.end, profile_013);
+    if !(subject.ok) { return MatchOpen { ok: false, err_start: subject.err_start, err_end: subject.err_end, subject: Expr.Name { start: 0, end: 0 }, open_end: match_token.end, is_finite: false }; }
+    let open: lexer.Token = segment.significant<N>(input, subject.cursor);
+    if open.diagnostic != 0 || open.kind != 67 { return MatchOpen { ok: false, err_start: open.start, err_end: open.end, subject: subject.node, open_end: subject.cursor, is_finite: false }; }
+    let first: lexer.Token = segment.significant<N>(input, open.end);
+    if first.diagnostic != 0 { return MatchOpen { ok: false, err_start: first.start, err_end: first.end, subject: subject.node, open_end: open.end, is_finite: false }; }
+    if finite_pattern_start<N>(input, first) { return MatchOpen { ok: true, err_start: 0, err_end: 0, subject: subject.node, open_end: open.end, is_finite: true }; }
+    if !(profile_013) { return MatchOpen { ok: false, err_start: first.start, err_end: first.end, subject: subject.node, open_end: open.end, is_finite: false }; }
+    return MatchOpen { ok: true, err_start: 0, err_end: 0, subject: subject.node, open_end: open.end, is_finite: false };
+}
+fn nest_expr_seed(cursor: u64, profile_013: bool) -> (result: ExprState) {
+    return ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true, profile_013: profile_013, allow_construct: true };
+}
+fn parse_nest_expr_value<N: Nat>(input: [byte; up_to N], cursor: u64, profile_013: bool) -> (result: ExprParse) {
+    let seed: MatchNestParse = MatchNestParse { top: MatchNestTop.ExprTop { est: nest_expr_seed(cursor, profile_013) }, stack: MatchNestStack.NSNil, ok: true, done: false, err_start: 0, err_end: 0, node: Expr.Name { start: cursor, end: cursor }, node_ok: false, cursor: cursor };
+    iterate i over input carrying a: MatchNestParse = seed {
+        next a = match_nest_step<N>(input, a);
+    }
+    iterate i over input carrying b: MatchNestParse = a {
+        next b = match_nest_step<N>(input, b);
+    }
+    iterate i over input carrying c: MatchNestParse = b {
+        next c = match_nest_step<N>(input, c);
+    }
+    iterate i up_to 32 carrying d: MatchNestParse = c {
+        next d = match_nest_step<N>(input, d);
+    }
+    let bad: Expr = Expr.Name { start: d.cursor, end: d.cursor };
+    if !(d.ok) { return ExprParse { cursor: d.cursor, ok: false, err_start: d.err_start, err_end: d.err_end, node: bad, start: d.cursor, end: d.cursor }; }
+    if !(d.done) || !(d.node_ok) { return ExprParse { cursor: d.cursor, ok: false, err_start: d.cursor, err_end: d.cursor, node: bad, start: d.cursor, end: d.cursor }; }
+    return ExprParse { cursor: d.cursor, ok: true, err_start: 0, err_end: 0, node: d.node, start: expr_start(d.node), end: expr_end(d.node) };
+}
+fn match_nest_step<N: Nat>(input: [byte; up_to N], st: MatchNestParse) -> (result: MatchNestParse) {
+    if !(st.ok) || st.done { return st; }
+    return match st.top {
+        FiniteTop { scan: scan, subject: subject, match_start: ms } => finite_nest_step<N>(input, st, scan, subject, ms),
+        ScalarTop { scan: scan, subject: subject, match_start: ms } => scalar_nest_step<N>(input, st, scan, subject, ms),
+        ExprTop { est: est } => expr_nest_step<N>(input, st, est)
+    };
+}
+fn expr_nest_step<N: Nat>(input: [byte; up_to N], st: MatchNestParse, est: ExprState) -> (result: MatchNestParse) {
+    if !(est.ok) || est.done { return expr_nest_done<N>(input, st, est); }
+    let tok: lexer.Token = segment.significant<N>(input, est.cursor);
+    if est.expect_operand && tok.diagnostic == 0 && tok.kind == 30 { return expr_nest_push_match<N>(input, st, est, tok); }
+    let advanced: ExprState = expr_step_base<N>(input, est);
+    return MatchNestParse { ..st, top: MatchNestTop.ExprTop { est: advanced }, cursor: advanced.cursor };
+}
+fn expr_nest_done<N: Nat>(input: [byte; up_to N], st: MatchNestParse, est: ExprState) -> (result: MatchNestParse) {
+    let finished: ExprParse = finish_expr<N>(input, est);
+    if !(finished.ok) { return MatchNestParse { ..st, ok: false, err_start: finished.err_start, err_end: finished.err_end }; }
+    return match st.stack {
+        NSNil => MatchNestParse { ..st, done: true, node: finished.node, node_ok: true, cursor: finished.cursor },
+        NSFinite { head: parent, tail: rest } => finite_nest_pop_parent<N>(input, st, parent, rest, finished.node, finished.cursor),
+        NSScalar { head: parent, tail: rest } => scalar_nest_pop_parent<N>(input, st, parent, rest, finished.node, finished.cursor),
+        NSExpr { head: frame, tail: rest } => MatchNestParse { ..st, ok: false, err_start: finished.cursor, err_end: finished.cursor }
+    };
+}
+fn expr_nest_push_match<N: Nat>(input: [byte; up_to N], st: MatchNestParse, est: ExprState, match_token: lexer.Token) -> (result: MatchNestParse) {
+    let open: MatchOpen = match_open_nested<N>(input, match_token, est.profile_013);
+    if !(open.ok) { return MatchNestParse { ..st, ok: false, err_start: open.err_start, err_end: open.err_end }; }
+    let stack: MatchNestStack = MatchNestStack.NSExpr { head: NestExprParent { est: est }, tail: st.stack };
+    if open.is_finite {
+        let nested: FiniteMatchScan = FiniteMatchScan { ok: true, done: false, err_start: 0, err_end: 0, cursor: open.open_end, start: match_token.start, end: open.open_end, profile_013: est.profile_013, arms: FiniteMatchArmList.ANil };
+        return MatchNestParse { top: MatchNestTop.FiniteTop { scan: nested, subject: open.subject, match_start: match_token.start }, stack: stack, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: open.open_end };
+    }
+    let nested: MatchScan = MatchScan { ok: true, done: false, err_start: 0, err_end: 0, cursor: open.open_end, start: match_token.start, end: open.open_end, profile_013: est.profile_013, arms: ScalarMatchArmList.MNil };
+    return MatchNestParse { top: MatchNestTop.ScalarTop { scan: nested, subject: open.subject, match_start: match_token.start }, stack: stack, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: open.open_end };
+}
+fn expr_nest_resume<N: Nat>(input: [byte; up_to N], st: MatchNestParse, frame: NestExprParent, rest: MatchNestStack, node: Expr, cursor: u64) -> (result: MatchNestParse) {
+    let est: ExprState = frame.est;
+    let resumed: ExprState = ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ECons { head: node, tail: est.operands }, operators: est.operators, depth: est.depth, done: false, expect_operand: false, profile_013: est.profile_013, allow_construct: est.allow_construct };
+    return MatchNestParse { top: MatchNestTop.ExprTop { est: resumed }, stack: rest, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: cursor };
+}
+fn finite_nest_step<N: Nat>(input: [byte; up_to N], st: MatchNestParse, scan: FiniteMatchScan, subject: Expr, match_start: u64) -> (result: MatchNestParse) {
+    if !(scan.ok) { return MatchNestParse { ..st, ok: false, err_start: scan.err_start, err_end: scan.err_end }; }
+    let pattern_token: lexer.Token = segment.significant<N>(input, scan.cursor);
+    if pattern_token.diagnostic != 0 { return MatchNestParse { ..st, ok: false, err_start: pattern_token.start, err_end: pattern_token.end }; }
+    if pattern_token.kind == 68 { return finite_nest_close<N>(input, st, scan, subject, match_start, pattern_token); }
+    let pattern: FiniteMatchPattern = finite_match_pattern<N>(input, pattern_token);
+    if !(pattern.ok) { return MatchNestParse { ..st, ok: false, err_start: pattern.start, err_end: pattern.end }; }
+    let arrow: lexer.Token = segment.significant<N>(input, pattern.cursor);
+    if arrow.diagnostic != 0 || arrow.kind != 81 { return MatchNestParse { ..st, ok: false, err_start: arrow.start, err_end: arrow.end }; }
+    let parent: FiniteNestParent = FiniteNestParent { scan: scan, subject: subject, match_start: match_start, variant_start: pattern.variant_start, variant_end: pattern.variant_end, has_payload: pattern.has_payload, bindings: pattern.bindings, pattern_start: pattern.start, pattern_end: pattern.end };
+    let stack: MatchNestStack = MatchNestStack.NSFinite { head: parent, tail: st.stack };
+    return MatchNestParse { top: MatchNestTop.ExprTop { est: nest_expr_seed(arrow.end, scan.profile_013) }, stack: stack, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: arrow.end };
+}
+fn finite_nest_close<N: Nat>(input: [byte; up_to N], st: MatchNestParse, scan: FiniteMatchScan, subject: Expr, match_start: u64, close: lexer.Token) -> (result: MatchNestParse) {
+    let arms: FiniteMatchArmList = reverse_finite_match_arms<N>(input, scan.arms);
+    let node: Expr = Expr.FiniteMatch { subject: subject, arms: arms, start: match_start, end: match_close_end<N>(input, close.end) };
+    return match_nest_pop<N>(input, st, node, close.end);
+}
+fn match_nest_pop<N: Nat>(input: [byte; up_to N], st: MatchNestParse, node: Expr, cursor: u64) -> (result: MatchNestParse) {
+    return match st.stack {
+        NSNil => MatchNestParse { ..st, done: true, node: node, node_ok: true, cursor: cursor },
+        NSFinite { head: parent, tail: rest } => finite_nest_pop_parent<N>(input, st, parent, rest, node, cursor),
+        NSScalar { head: parent, tail: rest } => scalar_nest_pop_parent<N>(input, st, parent, rest, node, cursor),
+        NSExpr { head: frame, tail: rest } => expr_nest_resume<N>(input, st, frame, rest, node, cursor)
+    };
+}
+fn finite_nest_pop_parent<N: Nat>(input: [byte; up_to N], st: MatchNestParse, parent: FiniteNestParent, rest: MatchNestStack, node: Expr, cursor: u64) -> (result: MatchNestParse) {
+    let delimiter: lexer.Token = segment.significant<N>(input, cursor);
+    if delimiter.diagnostic != 0 || (delimiter.kind != 64 && delimiter.kind != 68) { return MatchNestParse { ..st, ok: false, err_start: delimiter.start, err_end: delimiter.end }; }
+    let arm: FiniteMatchArm = FiniteMatchArm { variant_start: parent.variant_start, variant_end: parent.variant_end, has_payload: parent.has_payload, bindings: parent.bindings, pattern_start: parent.pattern_start, pattern_end: parent.pattern_end, result: node };
+    let next_cursor: u64 = select(delimiter.kind == 64, delimiter.end, cursor);
+    let scan: FiniteMatchScan = FiniteMatchScan { ..parent.scan, cursor: next_cursor, end: delimiter.start, arms: FiniteMatchArmList.ACons { head: arm, tail: parent.scan.arms } };
+    return MatchNestParse { top: MatchNestTop.FiniteTop { scan: scan, subject: parent.subject, match_start: parent.match_start }, stack: rest, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: next_cursor };
+}
+fn scalar_nest_step<N: Nat>(input: [byte; up_to N], st: MatchNestParse, scan: MatchScan, subject: Expr, match_start: u64) -> (result: MatchNestParse) {
+    if !(scan.ok) { return MatchNestParse { ..st, ok: false, err_start: scan.err_start, err_end: scan.err_end }; }
+    let pattern_token: lexer.Token = segment.significant<N>(input, scan.cursor);
+    if pattern_token.diagnostic != 0 { return MatchNestParse { ..st, ok: false, err_start: pattern_token.start, err_end: pattern_token.end }; }
+    if pattern_token.kind == 68 { return scalar_nest_close<N>(input, st, scan, subject, match_start, pattern_token); }
+    let pattern: MatchPattern = scalar_match_pattern<N>(input, pattern_token);
+    if !(pattern.ok) { return MatchNestParse { ..st, ok: false, err_start: pattern.start, err_end: pattern.end }; }
+    let arrow: lexer.Token = segment.significant<N>(input, pattern.cursor);
+    if arrow.diagnostic != 0 || arrow.kind != 81 { return MatchNestParse { ..st, ok: false, err_start: arrow.start, err_end: arrow.end }; }
+    let parent: ScalarNestParent = ScalarNestParent { scan: scan, subject: subject, match_start: match_start, is_default: pattern.is_default, negative: pattern.negative, value: pattern.value, overflow: pattern.overflow, pattern_start: pattern.start, pattern_end: pattern.end };
+    let stack: MatchNestStack = MatchNestStack.NSScalar { head: parent, tail: st.stack };
+    return MatchNestParse { top: MatchNestTop.ExprTop { est: nest_expr_seed(arrow.end, scan.profile_013) }, stack: stack, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: arrow.end };
+}
+fn scalar_nest_close<N: Nat>(input: [byte; up_to N], st: MatchNestParse, scan: MatchScan, subject: Expr, match_start: u64, close: lexer.Token) -> (result: MatchNestParse) {
+    let arms: ScalarMatchArmList = reverse_scalar_match_arms<N>(input, scan.arms);
+    let node: Expr = Expr.ScalarMatch { subject: subject, arms: arms, start: match_start, end: match_close_end<N>(input, close.end) };
+    return match_nest_pop<N>(input, st, node, close.end);
+}
+fn scalar_nest_pop_parent<N: Nat>(input: [byte; up_to N], st: MatchNestParse, parent: ScalarNestParent, rest: MatchNestStack, node: Expr, cursor: u64) -> (result: MatchNestParse) {
+    let delimiter: lexer.Token = segment.significant<N>(input, cursor);
+    if delimiter.diagnostic != 0 || (delimiter.kind != 64 && delimiter.kind != 68) { return MatchNestParse { ..st, ok: false, err_start: delimiter.start, err_end: delimiter.end }; }
+    let arm: ScalarMatchArm = ScalarMatchArm { is_default: parent.is_default, negative: parent.negative, value: parent.value, overflow: parent.overflow, pattern_start: parent.pattern_start, pattern_end: parent.pattern_end, result: node };
+    let next_cursor: u64 = select(delimiter.kind == 64, delimiter.end, cursor);
+    let scan: MatchScan = MatchScan { ..parent.scan, cursor: next_cursor, end: delimiter.start, arms: ScalarMatchArmList.MCons { head: arm, tail: parent.scan.arms } };
+    return MatchNestParse { top: MatchNestTop.ScalarTop { scan: scan, subject: parent.subject, match_start: parent.match_start }, stack: rest, ok: true, done: false, err_start: 0, err_end: 0, node: st.node, node_ok: false, cursor: next_cursor };
 }
 fn scalar_match_arms_empty(list: ScalarMatchArmList) -> (result: bool) {
     return match list { MNil => true, MCons { head: head, tail: tail } => false };
