@@ -235,8 +235,12 @@ def run_native_backend_vertical() -> dict:
                     operands = id_list(instruction["inputs"])
                     if len(operands) != 2 or type_name(instruction["ty"]) != "u64":
                         raise ValueError("native C11 addition requires two u64 operands and a u64 result")
+                    # Opcode 50 is MNCS `+`, whose language intent is Checked
+                    # (Stage-0 frontend maps plain Add to Checked; only the
+                    # explicit Wrap/Sat operator tokens select total intents).
+                    # The verified adapter keeps the exact overflow guard.
                     instructions.append({
-                        "kind": "integer", "operator": "add",
+                        "kind": "integer", "operator": "add", "intent": "checked",
                         "dest": {"id": str(instruction["result"]), "ty": type_name(instruction["ty"])},
                         "lhs": operands[0], "rhs": operands[1],
                     })
@@ -324,8 +328,15 @@ def run_native_backend_vertical() -> dict:
         assert identity_text(root_ssa["first_call_identity"]) == dep_fn["identity"]
         assert identity_text(owner_function["identity"]) == dep_fn["identity"]
 
+        # Proof-bound admission (CP-0018): both summaries carry native
+        # verifier PASS facts (asserted in normalized_function), bound here
+        # to the exact compiler sources and pinned Stage-0 revision.
         normalized = {
-            "schema_version": "mncs.native-scalar-ssa-structural/1",
+            "schema_version": "mncs.native-scalar-ssa/1",
+            "verification_status": "pass",
+            "verifier": "mncs.compiler.ssa.verify",
+            "compiler_source_sha256": compiler_digest,
+            "stage0_revision": lock["revision"],
             "functions": [normalized_function(root_ssa), normalized_function(owner_ssa)],
         }
         with tempfile.TemporaryDirectory(prefix="mncs-native-c11-") as output_dir:
@@ -336,7 +347,7 @@ def run_native_backend_vertical() -> dict:
             executable_path = output_root / "run"
             input_path.write_text(json.dumps(normalized))
             lowered = subprocess.run(
-                [str(cli_binary), "emit-native-ssa-c11-structural", str(input_path)],
+                [str(cli_binary), "emit-native-ssa-c11", str(input_path)],
                 capture_output=True, text=True, timeout=30,
             )
             if lowered.returncode != 0:
@@ -424,7 +435,7 @@ int main(void) {{
         return {
             "schema_version": 1,
             "status": "verified",
-            "scope": "test-verified imported two-module SSA was projected into explicitly unattested structural C11 input; emitted execution matched the pinned Stage-0 oracle",
+            "scope": "test-verified imported two-module SSA was projected into proof-bound native-scalar C11 input (verifier PASS + compiler/stage0 provenance); emitted execution matched the pinned Stage-0 oracle",
             "native_root_identity": identity_text(root_function["identity"]),
             "native_imported_callable_identity": identity_text(root_ssa["first_call_identity"]),
             "native_root_blocks": root_ssa["block_count"],

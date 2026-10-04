@@ -2,7 +2,7 @@
 
 ID: CP-0018
 
-Status: open
+Status: resolved (2026-10-04)
 
 Category: backend
 
@@ -116,3 +116,39 @@ arithmetic removed.
 - Narrower than, and prerequisite to, aggregate/nominal C11 lowering
   for enum construction, payload extraction, sequence repetition, and
   finite/scalar switch terminators.
+
+## Resolution (2026-10-04)
+
+- Language scope (`mncs-language`, branch
+  `spark/self-consumption-20261004`): `NativeSsaScalarInstruction`
+  gains `Integer { dest, operator, intent, lhs, rhs }` in
+  `crates/mncs-codegen/src/c11/native_ssa.rs`. Operator set and
+  widening refusal mirror `scalar.rs` exactly; dest/operands must be
+  `u64`; the no-overflow promise is explicitly withheld per op (audit
+  decisions roll up to function and module records). `Constant.value`
+  changes `i128` → `u64`: the CLI JSON layer cannot deserialize
+  `i128`, so the verified path never admitted any constant-bearing
+  module through `mncs emit-native-ssa-c11` until this fix.
+- Adapter tests: 4/4 pass, including an execution differential
+  (checked add traps `UINT64_MAX + 1` with status 1 while wrapping
+  mul of `(2^63 + 2) * 2^63` yields 0 with status 0) and three
+  envelope refusals (unknown operator, widening intent, non-u64
+  dest). Full `mncs-codegen` suite: 68/68. No new clippy warnings.
+- Compiler scope (`mncs-compiler`, same branch):
+  `tools/test_imported_nominal_ssa.py` projects native opcode 50
+  (`+`, language intent Checked per Stage-0 frontend mapping) with
+  `"intent": "checked"` into schema `mncs.native-scalar-ssa/1`
+  (`verification_status: pass`, verifier
+  `mncs.compiler.ssa.verify`, compiler/stage0 provenance) and lowers
+  via `emit-native-ssa-c11`.
+- Consumer proof:
+  `evidence/campaign-20261004-native-backend-vertical.json`
+  (`status: verified`, `observable_behavior_equal: true`; full dump
+  `sha256:8710c147…`, 17,589 bytes in session artifacts). Backend
+  fixture at stride 256 (stride 64 cannot page the 137-byte root
+  into the 2-page `build_modules` bound): all five native stages
+  retained, emitted C carries the exact `mncs_wide` checked guard,
+  executions `[0,38],[0,82]` match the pinned Stage-0 oracle.
+- Residual boundary: aggregate/nominal representation, switch
+  terminators, and sequence operations remain outside the verified
+  envelope, as originally scoped.

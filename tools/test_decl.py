@@ -77,6 +77,7 @@ def norm_expr(e, src: bytes):
                 (p['start'], p['end']))
     if v == 7:
         return ('call', src[p['name_start']:p['name_end']].decode(),
+                [src[t['start']:t['end']].decode() for t in flist(p['targs'], 1)],
                 [norm_expr(a, src) for a in flist(p['args'], 1)],
                 (p['start'], p['end']))
     if v == 8:
@@ -108,7 +109,7 @@ def canon_proj(e):
     if isinstance(e, tuple) and e and e[0] == 'bin':
         return ('bin', e[1], canon_proj(e[2]), canon_proj(e[3]), e[4])
     if isinstance(e, tuple) and e and e[0] == 'call':
-        return ('call', e[1], [canon_proj(a) for a in e[2]], e[3])
+        return ('call', e[1], e[2], [canon_proj(a) for a in e[3]], e[4])
     if isinstance(e, list):
         return [canon_proj(x) for x in e]
     if isinstance(e, tuple) and e and e[0] == 'let':
@@ -149,7 +150,9 @@ def onorm_expr(e):
         return ('bin', b['op'], onorm_expr(b['left']), onorm_expr(b['right']),
                 (b['span']['start'], b['span']['end']))
     if tag == 'Call':
-        return ('call', b['function']['text'], [onorm_expr(a) for a in b['arguments']],
+        return ('call', b['function']['text'],
+                [a['text']['text'] for a in b.get('generic_args', [])],
+                [onorm_expr(a) for a in b['arguments']],
                 (b['span']['start'], b['span']['end']))
     if tag == 'FieldProject':
         f = b['field']
@@ -208,12 +211,27 @@ POS = [
     'mncs 0.10; module t; fn f(a: u64, b: u64) -> (result: u64) { return a + b; }',
     'mncs 0.10; module t; use a.b as c; record R { x: u64 } fn f(v: R) -> (r: u64) { return v.x; }',
     'mncs 0.10; module t; fn f(a: u64) -> (r: u64) { if a == 1 { return 1; } else { return 2; } return 0; }',
+    # Generic-aware declaration surface: params, bounds, type-argument
+    # calls, nested sequences, `<` disambiguation, and backtracking.
+    'mncs 0.18; module t; fn f<N: Nat>(x: u64) -> (r: u64) { return x; }',
+    'mncs 0.18; module t; fn h<F: Type -> Type, T>(v: u64) -> (r: u64) { return v; }',
+    'mncs 0.18; module t; use a.b as c; fn f<N: Nat>(x: u64) -> (r: u64) { return c.g<N>(x); }',
+    'mncs 0.18; module t; fn g<N: Nat>(x: u64) -> (r: u64) { return x; } fn f(x: u64) -> (r: u64) { return g<4>(x); }',
+    'mncs 0.18; module t; fn f<N: Nat>(p: [[byte; up_to N]; up_to 4]) -> (r: u64) { return 0; }',
+    'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: bool) { return a < b; }',
+    'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: bool) { return a<1+2>(b); }',
 ]
 
 NEG = [
     'mncs 0.10; module t;',
     'mncs 0.10; module t; record R {}',
     'mncs 0.10; module t; fn f() -> (r: u64) { return 1 + ; }',
+    # Generic first-error spans: duplicate params (MNP186), constraint
+    # validation (MNP187), and the Profile 0.10 gate (MNP184/MNP189).
+    'mncs 0.18; module t; fn f<T, T>(x: u64) -> (r: u64) { return x; }',
+    'mncs 0.18; module t; fn f<N: Foo>(x: u64) -> (r: u64) { return x; }',
+    'mncs 0.09; module t; fn f<T>(x: u64) -> (r: u64) { return x; }',
+    'mncs 0.09; module t; use a.b as c; fn f(x: u64) -> (r: u64) { return c.g<N>(x); }',
 ]
 
 # check_unit verdicts: (source, expected stage). Stages: 1 duplicate symbol,
@@ -222,7 +240,15 @@ CHECKS = [
     ('mncs 0.10; module t; fn f(a: u64) -> (r: u64) { return a + 1; }', 4),
     ('mncs 0.10; module t; fn f() -> (r: u64) { return 0; } fn f() -> (r: u64) { return 1; }', 1),
     ('mncs 0.10; module t; fn f() -> (r: u64) { return g(1); }', 2),
+    # Generic signatures verify; alias-qualified calls stay stage 2 in
+    # single-unit scope (imports resolve at the project layer).
+    ('mncs 0.18; module t; fn f<N: Nat>(x: u64) -> (r: u64) { return x; }', 4),
+    ('mncs 0.18; module t; use a.b as c; fn f(x: u64) -> (r: u64) { return c.g(x); }', 2),
 ]
+
+# Self-ingestion: real compiler modules the native parser must consume
+# whole, with oracle agreement on declaration facts.
+SELF_INGEST = ['src/compiler/segment.mncs']
 
 SOURCE_BOUND = max(len(text.encode()) for text in POS + NEG + [item[0] for item in CHECKS])
 
@@ -285,9 +311,9 @@ class Probe:
         assert line, f'probe terminated: {self.proc.poll()}'
         return json.loads(line)
 
-    def run(self, unit, function, args):
+    def run(self, unit, function, args, step_budget=8000000):
         request = {'schema_version': '0.1', 'target': {'module': f'mncs.compiler.{unit}.v1', 'function': function},
-                   'arguments': args, 'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)], 'step_budget': 8000000}
+                   'arguments': args, 'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)], 'step_budget': step_budget}
         result = self.send(request)
         assert result['status'] == 'returned', (function, result)
         self.count += 1
@@ -302,6 +328,23 @@ class Probe:
 
 def check_unit_case(probe, text):
     return probe.run('decl', 'check_unit', logical_args(source_bytes(text)))
+
+
+def self_ingest_case(probe, relpath):
+    data = (ROOT / relpath).read_bytes()
+    pages = [data[i:i + STRIDE_BOUND] for i in range(0, len(data), STRIDE_BOUND)]
+    args = [pages_value(pages), integer(STRIDE_BOUND), integer(len(data))]
+    got = probe.run('decl', 'parse_unit', args)
+    assert got['ok'], (relpath, got['err_start'], got['err_end'])
+    oracle = probe.send({'oracle': data.decode()})
+    assert not oracle['diagnostics'], (relpath, oracle['diagnostics'])
+    want = [(f['name']['text'], [g['name']['text'] for g in f.get('generic_params', [])])
+            for f in oracle['ast']['functions']]
+    have = [(data[s['name_start']:s['name_end']].decode(),
+             [data[p['name_start']:p['name_end']].decode() for p in flist(s['generics'], 1)])
+            for s in (h['sig'] for h in flist(got['fns'], 1))]
+    assert want == have, (relpath, have, want)
+    return {'module': relpath, 'bytes': len(data), 'functions': len(want)}
 
 
 def suite():
@@ -334,6 +377,12 @@ def suite():
             for wf, hf in zip(a['functions'], flist(got['fns'], 1)):
                 s = hf['sig']
                 assert src[s['name_start']:s['name_end']].decode() == wf['name']['text'], text
+                want_gen = [(g['name']['text'], g['constraint']['text'] if g.get('constraint') else None)
+                            for g in wf.get('generic_params', [])]
+                have_gen = [(src[p['name_start']:p['name_end']].decode(),
+                             src[p['bound_start']:p['bound_end']].decode() if p['has_bound'] else None)
+                            for p in flist(s['generics'], 1)]
+                assert want_gen == have_gen, (text, have_gen, want_gen)
                 assert ([norm_field(f, src) for f in flist(s['params'], 1)] ==
                         [(p['name']['text'], p['value_type']['text']) for p in wf['inputs']]), text
                 assert ([norm_field(f, src) for f in flist(s['results'], 1)] ==
@@ -360,7 +409,9 @@ def suite():
                 assert got['ok'] and got['ir_ok'] and got['fn_count'] >= 1 and got['expr_count'] >= 1, (text, got)
             else:
                 assert not got['ok'], (text, got)
+        ingested = [self_ingest_case(probe, path) for path in SELF_INGEST]
         return {'requests': probe.count, 'pos': len(POS), 'neg': len(NEG), 'checks': len(CHECKS),
+                'self_ingest': ingested,
                 'result_sha256': probe.digest.hexdigest(),
                 'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
                 'execution_mode': 'retained_cranelift' if execution_status['retained_sessions'] else 'reference_interpreter',
