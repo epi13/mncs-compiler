@@ -15,11 +15,52 @@ in MNCS on the pinned Rust Stage-0 reference interpreter unless noted.
 This is **not self-hosting** and not backend parity; Rust remains the
 current compiler.
 
-## Current pin status (2026-09-25)
+## Current pin status (2026-10-04)
+
+The declaration differential passes twice at Stage-0 pin
+`a3ac17df69e68f6373cbff336db0a572667d73da` with the generic-aware
+declaration surface: generic parameter lists (bounded, unconstrained,
+arrow), type-argument calls (direct and alias-qualified), two-level
+sequence types, `<` disambiguation with Stage-0 backtracking, and
+Profile 0.10 gating. The corpus covers 10 positive parses (structural +
+generic-fact agreement), 7 negatives with first-error-span agreement
+(MNP184/186/187/189 among them), 5 check verdicts (generic stage 4,
+alias-qualified stage 2), and the first self-ingestion case:
+`src/compiler/segment.mncs` (2,430 bytes, 11 functions) parses natively
+whole with oracle agreement on declaration facts. Reports:
+[`campaign-20261004-generics-decl-results.json`](campaign-20261004-generics-decl-results.json)
+(retained Cranelift twin, 23 requests) and the reference-interpreter
+twin (13,889,717 steps, 4,978,825-step maximum, 1,915.338 seconds).
+The promoted [`decl-results.json`](decl-results.json) is the
+reference-interpreter report.
+
+Proof carries the generic facts downstream (`prove_unit`): application
+counts fail exactly (MNE220/221/222), per-argument kinds fail exactly
+(MNE222/232/224, MNE105 pairs), higher-kinded bounds fail at the
+definition (MNE229), and validated applications retain one UNKNOWN
+obligation (kind 71: substitution unmodeled). The semantic suite covers
+17 generic proof cases (187 total); see [`SEM.md`](SEM.md).
+
+Known boundaries: nested type arguments read as comparisons on both
+sides (shared backtracking); `(f)<N>(x)` commits natively where
+Stage-0 reads a comparison (documented, no real source does this);
+sequence nesting past two levels and vec/mask type arguments stay
+deferred with explicit spans. Next self-ingestion frontier: record
+literals (`parser.mncs`), `iterate` (`kernel.mncs`), index/cast
+(`source.mncs`).
+
+Capacity note: this growth (+6.3% `decl` session image) escalates the
+documented JIT finalize pressure to single sessions — see
+[`../pressure/0024-single-session-jit-finalize-overflow.md`](../pressure/0024-single-session-jit-finalize-overflow.md).
+The project session no longer retains on Cranelift; `decl`/`flow`/`ssa`
+sessions still do (flow is marginal — one finalize failure in two runs
+at this size).
+
+## Earlier pin status (2026-09-25)
 
 The declaration differential passed twice with the compiler modules declaring
 Profile 0.18 and Stage-0 pinned to `709ba00810099e6965bb47dec14ed19e9e1ae6f8`.
-The promoted report [`decl-results.json`](decl-results.json) covers 3 positive
+The promoted report covered 3 positive
 parses, 3 negative parses with first-error spans, and 3 symbol/resolve/stack-IR
 verdicts. It records 7,188,374 Stage-0 steps, a 2,358,379-step maximum, and
 900.429 seconds for two identical runs. The former CP-0014 bool-payload issue

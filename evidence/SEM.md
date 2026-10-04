@@ -65,7 +65,7 @@ Adversarial constructors (`sabotage_depth`, `sabotage_call_arity`,
 verifiers; `sound_sample` must pass. Construction and verdict both execute
 in MNCS through the probe; no host-constructed values cross the boundary.
 
-## Oracle-pinned semantics (all verified against current Stage-0, 103 cases)
+## Oracle-pinned semantics (all verified against current Stage-0, 187 cases)
 
 - Elaboration order is [all signature type resolutions] then [per function:
   remaining signature obligations, body]. Deduced from duplicated
@@ -88,16 +88,24 @@ in MNCS through the probe; no host-constructed values cross the boundary.
 
 ## Differential results vs current Stage-0 oracle
 
-- Twin differential (`tools/test_sem.py`, two identical runs): 103
-  semantic cases plus 7 intrinsic-proof verdicts (the two new verdicts
-  reject sabotaged finite-match and enum-construction arity), 110
-  requests per run, 0 mismatches. Retained-cranelift execution recorded
-  110 steps total, max 1 per request (8,000,000 budget). The identical
-  result digest is
-  `55e50f0d7e2e16edfdc3d726dd384bbb77d3b0a2494054cc88d627de03d02be9`;
-  elapsed time was 161.128 seconds over both runs. Stage-0 revision:
+- Twin differential (`tools/test_sem.py`, two identical runs): 187
+  semantic cases plus 11 proof verdicts, 198 requests, 0 mismatches.
+  Retained-cranelift execution recorded 198 steps total, max 1 per
+  request (8,000,000 budget). The identical result digest is
+  `4f9ba6019c03bb891108329ca2eebdb38f94efc5587ed2df1f2b71ad25e3e2d4`;
+  elapsed time was 297.57 seconds over both runs. Stage-0 revision:
   `a3ac17df69e68f6373cbff336db0a572667d73da`, source Profile 0.18.
-  Promoted report: [`sem-results.json`](sem-results.json).
+  Promoted report: [`sem-results.json`](sem-results.json) (campaign copy:
+  [`campaign-20261004-generics-sem-results.json`](campaign-20261004-generics-sem-results.json)).
+- Seventeen generic-application cases pin the downstream proof facts:
+  validated applications retain UNKNOWN kind 71 (substitution
+  unmodeled); missing/extra/misplaced arguments fail exactly
+  (MNE220/221/222 at the callee span); per-argument kinds fail exactly
+  (MNE222 at the argument span, MNE105+MNE222 pairs for integer
+  literals in type position, MNE232 for Nat-valued names as types,
+  MNE224 for unbound names in Nat position, MNE105 for unbound names
+  in type position); higher-kinded bounds fail at the definition
+  (MNE229 over the parameter span).
 - Every case compares FAIL obligations against the oracle `elaborate`
   MNE diagnostics in order with exact spans, plus the proof `ok` verdict
   and function count. UNKNOWN obligations for overflow (13) and division by
@@ -111,11 +119,13 @@ in MNCS through the probe; no host-constructed values cross the boundary.
 - The superseded profile-0.10 result is preserved as
   [`sem-results-pre-campaign.json`](sem-results-pre-campaign.json); it is not
   current-pin parity evidence.
-- Oracle-pinned semantics (all verified against Stage-0, 103 cases):
+- Oracle-pinned semantics (all verified against Stage-0, 187 cases):
   the case list in `tools/test_sem.py` `CASES` is the corpus. Finite-match
   subject-shape rows pin the oracle split: `bool` subjects draw per-arm
   MNE138 plus MNE140 at the match span, while `u64`/`byte`/sequence/record
-  subjects draw a single MNE136 at the subject span.
+  subjects draw a single MNE136 at the subject span. Generic-application
+  rows pin MNE220/221/222/224/229/232 against the new kind 68-70/72-74
+  obligations plus UNKNOWN kind 71.
 
 ## Scope limits and next target
 

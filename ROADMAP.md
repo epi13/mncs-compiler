@@ -31,7 +31,7 @@ Priorities:
 - structured diagnostics/evidence,
 - differential fixtures against the Rust compiler.
 
-## Current evidence-backed campaign state (2026-10-03)
+## Current evidence-backed campaign state (2026-10-04)
 
 The lock pins Rust Stage-0 revision
 `a3ac17df69e68f6373cbff336db0a572667d73da` at source Profile 0.18. All
@@ -40,24 +40,49 @@ machine-readable [ledger](evidence/parity-ledger.json) are current at this
 pin; the dated sections below are preserved as historical evidence with
 their original pins and measurements.
 
+- Self-consumption begins: the native declaration surface parses generic
+  parameter lists, type-argument calls, and two-level sequence types
+  with Stage-0 agreement, carries the facts through check spans and
+  proof obligations (new kinds 68-74, UNKNOWN 71), and ingests the
+  first real compiler module whole (`src/compiler/segment.mncs`,
+  2,430 bytes, 11 functions). Next frontier: record literals
+  (`parser.mncs`), `iterate` (`kernel.mncs`), index/cast
+  (`source.mncs`). See `evidence/DECL.md`, `evidence/SEM.md`, and the
+  `campaign-20261004-generics-*` reports.
+- Capacity pressure escalates with this growth (+6.3% `decl` session
+  image): the whole-compiler project session no longer survives
+  Cranelift JIT finalization (single-session NegOverflow, CP-0024),
+  and the `flow` session is marginal. Project-mode suites cannot run
+  on Cranelift until the backend image/layout pressure is resolved;
+  the reference interpreter exhausts step budgets on project modes.
+  Downstream fixtures carry no generics, so proven pipeline behavior
+  on them is unchanged; only session retention regressed.
 - Verified value SSA covers finite enum matches, enum construction,
   scalar matches, record projection, nested matches (CP-0011, modulo
   the outer stack-temp / payload-binding residual), and compiler
   operations (CP-0019), with Stage-0 oracle agreement throughout.
-  Full project closure: 43 requests in 1,362.503 s. See
-  `evidence/campaign-20261003-project-results.json`.
+  Full project closure: 43 requests in 1,362.503 s at the prior
+  commit. See `evidence/campaign-20261003-project-results.json`.
 - The native pipeline consumes logical paged sources past the old
   1,024-byte views (CP-0001/CP-0021): tier D proves stride-variant
   transport to 558,004 bytes with precise feature-gap spans, and the
   `synthetic-2049` anchor runs the whole pipeline green. See
   `evidence/cp0001-matrix.json` (10 rows, zero ceiling rows).
-- Backend/runtime lowering is still unverified for enum construction,
-  finite switch, scalar switch, payload extraction, sequence repeat,
-  projection, and compiler operations (CP-0018). Native executable
-  output remains a narrow test-only structural scalar C11 slice;
-  replacing that projection with backend admission tied to compiler
-  proof/provenance is open work. Do not infer broad backend parity
-  from the small scalar executable.
+- Proof-bound backend admission lands for scalar integer arithmetic
+  (CP-0018 resolved): the verified native-SSA C11 adapter admits
+  `Integer` with operator/intent validation mirrored from the scalar
+  backend, explicit withheld no-overflow promises, and a `u64`
+  constant wire type (the old `i128` was undeserializable through the
+  CLI). The two-module canary migrates off the unattested structural
+  projection onto `mncs.native-scalar-ssa/1` with verifier PASS plus
+  compiler/stage0 provenance; emitted execution matches the pinned
+  Stage-0 oracle. See
+  `evidence/campaign-20261004-native-backend-vertical.json` and
+  `pressure/0018-verified-native-ssa-arithmetic.md`. Backend/runtime
+  lowering is still unverified for enum construction, finite switch,
+  scalar switch, payload extraction, sequence repeat, projection, and
+  compiler operations; do not infer broad backend parity from the
+  small scalar executable.
 - The 21-case Profile 0.18 surface, pressure reproductions,
   imported-nominal SSA, family slices, and CP-0001 ABCD evidence are
   re-recorded at this pin in

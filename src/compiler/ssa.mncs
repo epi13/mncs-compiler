@@ -407,7 +407,7 @@ fn enum_construct_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: ns, end: ne } => false,
         ScalarMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
         Binary { op: op, left: left, right: right, start: ns, end: ne } => false,
-        Call { name_start: ns, name_end: ne, args: args, start: es, end: ee } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: es, end: ee } => false,
         Project { base: base, field_start: fs, field_end: fe, start: es, end: ee, path: path } => enum_construct_project_source<P, N>(pages, stride, total, ty, variant_start, variant_end, params, start, end, base, fs, fe, path),
         FiniteMatch { subject: subject, arms: arms, start: ns, end: ne } => false,
         OpCall { slot: slot, name_start: ons, name_end: one, args: a, start: s, end: e } => false
@@ -423,7 +423,7 @@ fn enum_construct_project_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
-        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
@@ -1440,7 +1440,7 @@ fn repeat_source_count_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
         UnaryNot { value: value, start: not_start, end: not_end } => false,
         ScalarMatch { subject: subject, arms: arms, start: match_start, end: match_end } => false,
         Binary { op: op, left: left, right: right, start: binary_start, end: binary_end } => false,
-        Call { name_start: name_start, name_end: name_end, args: args, start: call_start, end: call_end } => false,
+        Call { name_start: name_start, name_end: name_end, args: args, targs: tg, start: call_start, end: call_end } => false,
         Project { base: base, field_start: field_start, field_end: field_end, start: project_start, end: project_end, path: path } => false,
         FiniteMatch { subject: subject, arms: arms, start: match_start, end: match_end } => false,
         EnumConstruct { type_start: type_start, type_end: type_end, variant_start: variant_start, variant_end: variant_end, fields: fields, start: construct_start, end: construct_end } => false,
@@ -1497,7 +1497,7 @@ fn project_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
-        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: os, name_end: oe, args: a, start: s2, end: e2 } => false
     };
@@ -1560,7 +1560,7 @@ fn payload_extract_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
-        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
@@ -1686,7 +1686,7 @@ fn op_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
-        Call { name_start: cns, name_end: cne, args: a, start: s, end: e } => false,
+        Call { name_start: cns, name_end: cne, args: a, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false
@@ -1940,7 +1940,7 @@ fn leftmost_match_step(node: decl.Expr) -> (result: decl.Expr) {
         Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => node,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => node,
         Binary { op: op, left: left, right: right, start: s, end: e } => left,
-        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => node,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => node,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: p } => base,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => node,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => node,
@@ -1964,7 +1964,7 @@ fn scalar_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_t
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
-        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
@@ -2001,7 +2001,7 @@ fn finite_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_t
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
-        Call { name_start: ns, name_end: ne, args: args, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
