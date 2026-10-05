@@ -83,18 +83,18 @@ def nat_arg(value):
 
 
 def vm_run(artifact_path, function, args, type_args):
-    tmp = Path(tempfile.mkdtemp(prefix="mncs-vm-emit-"))
-    args_path = tmp / "args.json"
-    targs_path = tmp / "targs.json"
-    args_path.write_text(json.dumps(args))
-    targs_path.write_text(json.dumps(type_args))
-    completed = subprocess.run(
-        [str(VM_BIN), "run", "--artifact", str(artifact_path),
-         "--callable", f"{MODULE}::{function}",
-         "--args", str(args_path), "--type-args", str(targs_path)],
-        capture_output=True, text=True)
-    return completed
-
+    with tempfile.TemporaryDirectory(prefix="mncs-vm-emit-") as directory:
+        tmp = Path(directory)
+        args_path = tmp / "args.json"
+        targs_path = tmp / "targs.json"
+        args_path.write_text(json.dumps(args))
+        targs_path.write_text(json.dumps(type_args))
+        completed = subprocess.run(
+            [str(VM_BIN), "run", "--artifact", str(artifact_path),
+             "--callable", f"{MODULE}::{function}",
+             "--args", str(args_path), "--type-args", str(targs_path)],
+            capture_output=True, text=True)
+        return completed
 
 def main():
     ensure_probe()
@@ -141,42 +141,43 @@ def main():
         assert hashlib.sha256(cli_bytes).digest() == hashlib.sha256(first_bytes).digest(), \
             "one-shot CLI must match protocol bytes"
 
-        tmp = Path(tempfile.mkdtemp(prefix="mncs-vm-emit-"))
-        artifact_path = tmp / "direct.json"
-        artifact_path.write_bytes(json.dumps(artifact).encode())
+        with tempfile.TemporaryDirectory(prefix="mncs-vm-emit-") as directory:
+            tmp = Path(directory)
+            artifact_path = tmp / "direct.json"
+            artifact_path.write_bytes(json.dumps(artifact).encode())
 
-        args = [byte_seq(b"ABCDEFGH"), u64_arg(0)]
-        # Pinned oracle over the same compilation.
-        oracle = probe.send({
-            "schema_version": "0.1",
-            "target": {"module": MODULE, "function": "byte_at"},
-            "arguments": args,
-            "type_arguments": [nat_arg(8)],
-            "step_budget": 50000,
-        })
-        assert oracle["status"] == "returned", oracle
-        # Canonical VM over frozen direct bytes.
-        completed = vm_run(artifact_path, "byte_at", args, [nat_arg(8)])
-        assert completed.returncode == 0, completed.stderr
-        document = json.loads(completed.stdout)
-        assert document["outcome"] == {"kind": "completed"}, document["outcome"]
-        record = document["record"]
-        assert record["callable_name"].startswith(f"{MODULE}::byte_at<"), record["callable_name"]
-        vm_values = [
-            {"integer": {"value": v["Integer"]["value"],
-                         "type": {"bits": v["Integer"]["bits"], "signed": v["Integer"]["signed"]}}}
-            for v in record["returned"]
-        ]
-        assert vm_values == oracle["returned"], (vm_values, oracle["returned"])
-        assert vm_values == [u64_arg(65)], "concrete expectation"
-        # Fail-closed over the same frozen bytes: uncompiled N=7 is
-        # a structured invalid_request outcome, not a crash.
-        bad = vm_run(artifact_path, "byte_at",
-                     [byte_seq(b"ABCDEFG"), u64_arg(0)], [nat_arg(7)])
-        assert bad.returncode == 0, bad.stderr
-        refusal = json.loads(bad.stdout)["outcome"]
-        assert refusal["kind"] == "invalid_request", refusal
-        assert "no compiled specialization" in refusal["reason"], refusal
+            args = [byte_seq(b"ABCDEFGH"), u64_arg(0)]
+            # Pinned oracle over the same compilation.
+            oracle = probe.send({
+                "schema_version": "0.1",
+                "target": {"module": MODULE, "function": "byte_at"},
+                "arguments": args,
+                "type_arguments": [nat_arg(8)],
+                "step_budget": 50000,
+            })
+            assert oracle["status"] == "returned", oracle
+            # Canonical VM over frozen direct bytes.
+            completed = vm_run(artifact_path, "byte_at", args, [nat_arg(8)])
+            assert completed.returncode == 0, completed.stderr
+            document = json.loads(completed.stdout)
+            assert document["outcome"] == {"kind": "completed"}, document["outcome"]
+            record = document["record"]
+            assert record["callable_name"].startswith(f"{MODULE}::byte_at<"), record["callable_name"]
+            vm_values = [
+                {"integer": {"value": v["Integer"]["value"],
+                             "type": {"bits": v["Integer"]["bits"], "signed": v["Integer"]["signed"]}}}
+                for v in record["returned"]
+            ]
+            assert vm_values == oracle["returned"], (vm_values, oracle["returned"])
+            assert vm_values == [u64_arg(65)], "concrete expectation"
+            # Fail-closed over the same frozen bytes: uncompiled N=7 is
+            # a structured invalid_request outcome, not a crash.
+            bad = vm_run(artifact_path, "byte_at",
+                         [byte_seq(b"ABCDEFG"), u64_arg(0)], [nat_arg(7)])
+            assert bad.returncode == 0, bad.stderr
+            refusal = json.loads(bad.stdout)["outcome"]
+            assert refusal["kind"] == "invalid_request", refusal
+            assert "no compiled specialization" in refusal["reason"], refusal
     finally:
         probe.close()
     print("vm_emit: direct emission differential passed "

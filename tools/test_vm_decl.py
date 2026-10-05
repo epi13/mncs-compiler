@@ -49,16 +49,6 @@ OUT.mkdir(exist_ok=True)
 MODULE = 'mncs.compiler.decl.v1'
 FUNCTIONS = ['parse_unit', 'check_unit']
 TYPE_ARGS = [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)]
-STEP_BUDGET = 8000000
-# VM batch envelope mirrors the suite's step budget; other dimensions
-# match the mncs-vm CLI defaults.
-ENVELOPE = {'limits': [
-    {'dimension': 'steps', 'limit': STEP_BUDGET},
-    {'dimension': 'call_depth', 'limit': 1024},
-    {'dimension': 'memory_cells', 'limit': 10000000},
-    {'dimension': 'effects', 'limit': 1024},
-    {'dimension': 'iterations', 'limit': 1000000},
-]}
 
 
 def stage0_revision():
@@ -103,7 +93,7 @@ def gen_cases(probe, smoke):
 
     def case(kind, function, args, **extra):
         item = {'id': f"{len(cases)}:{kind}:{function}", 'kind': kind,
-                'function': function, 'args': args, 'type_args': TYPE_ARGS}
+                'function': function, 'args': args, 'type_args': TYPE_ARGS, 'step_budget': test_decl.EXECUTION_STEP_BUDGET}
         item.update(extra)
         cases.append(item)
 
@@ -161,7 +151,7 @@ def execute_reference(probe, cases):
             'target': {'module': MODULE, 'function': case_item['function']},
             'arguments': case_item['args'],
             'type_arguments': case_item['type_args'],
-            'step_budget': 8000000,
+            'step_budget': case_item['step_budget'],
         }
         result = probe.send(request)
         assert result['status'] == 'returned', (case_item['id'], result)
@@ -201,91 +191,92 @@ def main():
     artifact = emitted['artifact']
     assert artifact['schema_version'] == 'mncs.vm.artifact/1'
     assert 'program' not in artifact
-    tmp = Path(tempfile.mkdtemp(prefix='mncs-vm-decl-'))
-    artifact_path = tmp / 'decl.json'
-    artifact_bytes = json.dumps(artifact).encode()
-    artifact_path.write_bytes(artifact_bytes)
+    with tempfile.TemporaryDirectory(prefix='mncs-vm-decl-') as directory:
+        tmp = Path(directory)
+        artifact_path = tmp / 'decl.json'
+        artifact_bytes = json.dumps(artifact).encode()
+        artifact_path.write_bytes(artifact_bytes)
 
-    t_ref = time.monotonic()
-    ref_raw_digest, ref_steps, ref_wire = execute_reference(ref, cases)
-    phase_wall['reference_execution'] = round(time.monotonic() - t_ref, 3)
-    ref_stderr = ref.close()
-    ref_cache = [line for line in ref_stderr.splitlines() if 'mncs-stage0-probe' in line]
+        t_ref = time.monotonic()
+        ref_raw_digest, ref_steps, ref_wire = execute_reference(ref, cases)
+        phase_wall['reference_execution'] = round(time.monotonic() - t_ref, 3)
+        ref_stderr = ref.close()
+        ref_cache = [line for line in ref_stderr.splitlines() if 'mncs-stage0-probe' in line]
 
-    document, batch_wall, batch_peak_kb, calls_bytes, results_bytes = run_batch(
-        artifact_path, cases, tmp, module=MODULE, envelope=ENVELOPE)
-    process_count += 1
-    phase_wall['vm_batch'] = round(batch_wall, 3)
-    assert document['artifact_id'] == artifact['artifact_id']
-    vm_wire = []
-    for case_item, result in zip(cases, document['results']):
-        assert result['id'] == case_item['id']
-        assert result['outcome'] == {'kind': 'completed'}, (case_item['id'], result['outcome'])
-        wire = [vm_to_wire(v) for v in result['record']['returned']]
-        check_case(case_item, wire)
-        vm_wire.append(wire)
+        document, batch_wall, batch_peak_kb, calls_bytes, results_bytes = run_batch(
+            artifact_path, cases, tmp, module=MODULE)
+        process_count += 1
+        phase_wall['vm_batch'] = round(batch_wall, 3)
+        assert document['artifact_id'] == artifact['artifact_id']
+        vm_wire = []
+        for case_item, result in zip(cases, document['results']):
+            assert result['id'] == case_item['id']
+            assert result['outcome'] == {'kind': 'completed'}, (case_item['id'], result['outcome'])
+            wire = [vm_to_wire(v) for v in result['record']['returned']]
+            check_case(case_item, wire)
+            vm_wire.append(wire)
 
-    policy_backend = backend_policy.resolve('decl', {})
-    third = Probe(backend=policy_backend, cache_dir=cache_dir)
-    process_count += 1
-    t_third = time.monotonic()
-    third_ok, third_wire, third_note, third_steps = True, [], '', []
-    try:
-        for case_item in cases:
-            request = {
-                'schema_version': '0.1',
-                'target': {'module': MODULE, 'function': case_item['function']},
-                'arguments': case_item['args'],
-                'type_arguments': case_item['type_args'],
-                'step_budget': 8000000,
-            }
-            result = third.send(request)
-            assert result['status'] == 'returned', (case_item['id'], result['status'])
-            third_steps.append(result['steps'])
-            check_case(case_item, result['returned'])
-            third_wire.append(result['returned'])
-    except Exception as error:
-        third_ok, third_note = False, f'{type(error).__name__}: {error}'[:300]
-    phase_wall[f'{policy_backend}_execution'] = round(time.monotonic() - t_third, 3)
-    third_stderr = third.close()
-    third_cache = [line for line in third_stderr.splitlines() if 'mncs-stage0-probe' in line]
+        policy_backend = backend_policy.resolve('decl', {})
+        third = Probe(backend=policy_backend, cache_dir=cache_dir)
+        process_count += 1
+        t_third = time.monotonic()
+        third_ok, third_wire, third_note, third_steps = True, [], '', []
+        try:
+            for case_item in cases:
+                request = {
+                    'schema_version': '0.1',
+                    'target': {'module': MODULE, 'function': case_item['function']},
+                    'arguments': case_item['args'],
+                    'type_arguments': case_item['type_args'],
+                    'step_budget': case_item['step_budget'],
+                }
+                result = third.send(request)
+                assert result['status'] == 'returned', (case_item['id'], result['status'])
+                third_steps.append(result['steps'])
+                check_case(case_item, result['returned'])
+                third_wire.append(result['returned'])
+        except Exception as error:
+            third_ok, third_note = False, f'{type(error).__name__}: {error}'[:300]
+        phase_wall[f'{policy_backend}_execution'] = round(time.monotonic() - t_third, 3)
+        third_stderr = third.close()
+        third_cache = [line for line in third_stderr.splitlines() if 'mncs-stage0-probe' in line]
 
-    digests = {'reference': semantic_digest(cases, ref_wire),
-               'vm': semantic_digest(cases, vm_wire)}
-    assert digests['vm'] == digests['reference'], digests
-    if third_ok:
-        digests[policy_backend] = semantic_digest(cases, third_wire)
-        assert digests[policy_backend] == digests['reference'], digests
+        digests = {'reference': semantic_digest(cases, ref_wire),
+                   'vm': semantic_digest(cases, vm_wire)}
+        assert digests['vm'] == digests['reference'], digests
+        if third_ok:
+            digests[policy_backend] = semantic_digest(cases, third_wire)
+            assert digests[policy_backend] == digests['reference'], digests
 
-    children_peak_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-    report = {
-        'schema_version': 1,
-        'stage0_revision': stage0_revision(),
-        'suite': 'decl',
-        'smoke': smoke,
-        'cases': len(cases),
-        'artifact_id': artifact['artifact_id'],
-        'artifact_bytes': len(artifact_bytes),
-        'batch_calls_bytes': calls_bytes,
-        'batch_results_bytes': results_bytes,
-        'batch_peak_rss_kb': batch_peak_kb,
-        'children_peak_rss_kb': children_peak_kb,
-        'process_count': process_count,
-        'vm_summary': document['summary'],
-        'reference_steps_total': sum(ref_steps),
-        'reference_steps_max': max(ref_steps),
-        'third_steps_total': sum(third_steps) if third_steps else 0,
-        'semantic_digests': digests,
-        'reference_raw_digest': ref_raw_digest,
-        'third_backend': {'name': policy_backend, 'worked': third_ok, 'note': third_note},
-        'reference_probe': ref_cache,
-        'third_probe': third_cache,
-        'phase_wall_seconds': phase_wall,
-        'elapsed_seconds': round(time.monotonic() - t0, 3),
-        'scope': 'decl.parse_unit/check_unit via direct mncs.vm.artifact/1 + canonical VM batch vs reference + policy backend',
-    }
-    (OUT / 'vm-decl-results.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps(report, indent=2))
+        children_peak_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        report = {
+            'schema_version': 1,
+            'stage0_revision': stage0_revision(),
+            'suite': 'decl',
+            'smoke': smoke,
+            'cases': len(cases),
+            'artifact_id': artifact['artifact_id'],
+            'artifact_bytes': len(artifact_bytes),
+            'batch_calls_bytes': calls_bytes,
+            'batch_results_bytes': results_bytes,
+            'batch_peak_rss_kb': batch_peak_kb,
+            'children_peak_rss_kb': children_peak_kb,
+            'process_count': process_count,
+            'vm_summary': document['summary'],
+            'reference_steps_total': sum(ref_steps),
+            'reference_steps_max': max(ref_steps),
+            'third_steps_total': sum(third_steps) if third_steps else 0,
+            'semantic_digests': digests,
+            'reference_raw_digest': ref_raw_digest,
+            'third_backend': {'name': policy_backend, 'worked': third_ok, 'note': third_note},
+            'reference_probe': ref_cache,
+            'third_probe': third_cache,
+            'phase_wall_seconds': phase_wall,
+            'elapsed_seconds': round(time.monotonic() - t0, 3),
+            'scope': 'decl.parse_unit/check_unit via direct mncs.vm.artifact/1 + canonical VM batch vs reference + policy backend',
+        }
+        (OUT / 'vm-decl-results.json').write_text(json.dumps(report, indent=2) + '\n')
+        print(json.dumps(report, indent=2))
 
 
 if __name__ == '__main__':

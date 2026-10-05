@@ -122,7 +122,7 @@ def gen_cases(probe, texts, smoke):
     def case(function, args, expected):
         cases.append({'id': f"{len(cases)}:{function}", 'function': function,
                       'args': args, 'type_args': [nat_arg(SOURCE_BOUND)],
-                      'expected': expected})
+                      'expected': expected, 'step_budget': test_segment.EXECUTION_STEP_BUDGET})
 
     for original in texts:
         data = original + b' ' * (SOURCE_BOUND - len(original))
@@ -197,7 +197,7 @@ def execute_reference(probe, cases):
             'target': {'module': MODULE, 'function': case_item['function']},
             'arguments': case_item['args'],
             'type_arguments': case_item['type_args'],
-            'step_budget': 8000000,
+            'step_budget': case_item['step_budget'],
         }
         result = probe.send(request)
         assert result['status'] == 'returned', (case_item['id'], result)
@@ -219,8 +219,10 @@ def semantic_digest(cases, wire_results):
 
 
 def run_batch(artifact_path, cases, tmp, module=MODULE, envelope=None):
-    calls = [{'id': c['id'], 'callable': f"{module}::{c['function']}",
-              'args': c['args'], 'type_args': c['type_args']} for c in cases]
+    calls = [{'id': c['id'], 'request': {
+        'schema_version': '0.1', 'target': {'module': module, 'function': c['function']},
+        'arguments': c['args'], 'type_arguments': c['type_args'],
+        'step_budget': c['step_budget']}} for c in cases]
     calls_path = tmp / 'calls.json'
     out_path = tmp / 'results.json'
     calls_path.write_text(json.dumps(calls))
@@ -268,94 +270,95 @@ def main():
     artifact = emitted['artifact']
     assert artifact['schema_version'] == 'mncs.vm.artifact/1'
     assert 'program' not in artifact
-    tmp = Path(tempfile.mkdtemp(prefix='mncs-vm-segment-'))
-    artifact_path = tmp / 'segment.json'
-    artifact_bytes = json.dumps(artifact).encode()
-    artifact_path.write_bytes(artifact_bytes)
+    with tempfile.TemporaryDirectory(prefix='mncs-vm-segment-') as directory:
+        tmp = Path(directory)
+        artifact_path = tmp / 'segment.json'
+        artifact_bytes = json.dumps(artifact).encode()
+        artifact_path.write_bytes(artifact_bytes)
 
-    t_ref = time.monotonic()
-    ref_raw_digest, ref_steps, ref_wire = execute_reference(ref, cases)
-    phase_wall['reference_execution'] = round(time.monotonic() - t_ref, 3)
-    ref_stderr = ref.close()
-    ref_cache = [line for line in ref_stderr.splitlines() if 'mncs-stage0-probe' in line]
+        t_ref = time.monotonic()
+        ref_raw_digest, ref_steps, ref_wire = execute_reference(ref, cases)
+        phase_wall['reference_execution'] = round(time.monotonic() - t_ref, 3)
+        ref_stderr = ref.close()
+        ref_cache = [line for line in ref_stderr.splitlines() if 'mncs-stage0-probe' in line]
 
-    document, batch_wall, batch_peak_kb, calls_bytes, results_bytes = run_batch(
-        artifact_path, cases, tmp)
-    process_count += 1
-    phase_wall['vm_batch'] = round(batch_wall, 3)
-    assert document['artifact_id'] == artifact['artifact_id']
-    vm_wire = []
-    for case_item, result in zip(cases, document['results']):
-        assert result['id'] == case_item['id']
-        assert result['outcome'] == {'kind': 'completed'}, (case_item['id'], result['outcome'])
-        wire = [vm_to_wire(v) for v in result['record']['returned']]
-        check_expected(case_item, wire)
-        vm_wire.append(wire)
+        document, batch_wall, batch_peak_kb, calls_bytes, results_bytes = run_batch(
+            artifact_path, cases, tmp)
+        process_count += 1
+        phase_wall['vm_batch'] = round(batch_wall, 3)
+        assert document['artifact_id'] == artifact['artifact_id']
+        vm_wire = []
+        for case_item, result in zip(cases, document['results']):
+            assert result['id'] == case_item['id']
+            assert result['outcome'] == {'kind': 'completed'}, (case_item['id'], result['outcome'])
+            wire = [vm_to_wire(v) for v in result['record']['returned']]
+            check_expected(case_item, wire)
+            vm_wire.append(wire)
 
-    cranelift_backend = backend_policy.resolve('segment', {})
-    assert cranelift_backend == 'cranelift'
-    cran = Probe(backend=cranelift_backend, cache_dir=cache_dir)
-    process_count += 1
-    t_cran = time.monotonic()
-    cran_ok, cran_wire, cran_note, cran_steps = True, [], '', []
-    try:
-        for case_item in cases:
-            request = {
-                'schema_version': '0.1',
-                'target': {'module': MODULE, 'function': case_item['function']},
-                'arguments': case_item['args'],
-                'type_arguments': case_item['type_args'],
-                'step_budget': 8000000,
-            }
-            result = cran.send(request)
-            assert result['status'] == 'returned', (case_item['id'], result['status'])
-            cran_steps.append(result['steps'])
-            check_expected(case_item, result['returned'])
-            cran_wire.append(result['returned'])
-    except Exception as error:
-        cran_ok, cran_note = False, f'{type(error).__name__}: {error}'[:300]
-    phase_wall['cranelift_execution'] = round(time.monotonic() - t_cran, 3)
-    cran_stderr = cran.close()
-    cran_cache = [line for line in cran_stderr.splitlines() if 'mncs-stage0-probe' in line]
+        cranelift_backend = backend_policy.resolve('segment', {})
+        assert cranelift_backend == 'cranelift'
+        cran = Probe(backend=cranelift_backend, cache_dir=cache_dir)
+        process_count += 1
+        t_cran = time.monotonic()
+        cran_ok, cran_wire, cran_note, cran_steps = True, [], '', []
+        try:
+            for case_item in cases:
+                request = {
+                    'schema_version': '0.1',
+                    'target': {'module': MODULE, 'function': case_item['function']},
+                    'arguments': case_item['args'],
+                    'type_arguments': case_item['type_args'],
+                    'step_budget': case_item['step_budget'],
+                }
+                result = cran.send(request)
+                assert result['status'] == 'returned', (case_item['id'], result['status'])
+                cran_steps.append(result['steps'])
+                check_expected(case_item, result['returned'])
+                cran_wire.append(result['returned'])
+        except Exception as error:
+            cran_ok, cran_note = False, f'{type(error).__name__}: {error}'[:300]
+        phase_wall['cranelift_execution'] = round(time.monotonic() - t_cran, 3)
+        cran_stderr = cran.close()
+        cran_cache = [line for line in cran_stderr.splitlines() if 'mncs-stage0-probe' in line]
 
-    digests = {'reference': semantic_digest(cases, ref_wire),
-               'vm': semantic_digest(cases, vm_wire)}
-    assert digests['vm'] == digests['reference'], digests
-    if cran_ok:
-        digests['cranelift'] = semantic_digest(cases, cran_wire)
-        assert digests['cranelift'] == digests['reference'], digests
+        digests = {'reference': semantic_digest(cases, ref_wire),
+                   'vm': semantic_digest(cases, vm_wire)}
+        assert digests['vm'] == digests['reference'], digests
+        if cran_ok:
+            digests['cranelift'] = semantic_digest(cases, cran_wire)
+            assert digests['cranelift'] == digests['reference'], digests
 
-    children_peak_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
-    report = {
-        'schema_version': 1,
-        'stage0_revision': stage0_revision(),
-        'suite': 'segment',
-        'smoke': smoke,
-        'texts': len(texts) + (1 if smoke else len(test_segment.NONASCII)),
-        'cases': len(cases),
-        'tokens_compared': n_tokens,
-        'artifact_id': artifact['artifact_id'],
-        'artifact_bytes': len(artifact_bytes),
-        'batch_calls_bytes': calls_bytes,
-        'batch_results_bytes': results_bytes,
-        'batch_peak_rss_kb': batch_peak_kb,
-        'children_peak_rss_kb': children_peak_kb,
-        'process_count': process_count,
-        'vm_summary': document['summary'],
-        'reference_steps_total': sum(ref_steps),
-        'reference_steps_max': max(ref_steps),
-        'cranelift_steps_total': sum(cran_steps) if cran_steps else 0,
-        'semantic_digests': digests,
-        'reference_raw_digest': ref_raw_digest,
-        'cranelift': {'worked': cran_ok, 'note': cran_note},
-        'reference_probe': ref_cache,
-        'cranelift_probe': cran_cache,
-        'phase_wall_seconds': phase_wall,
-        'elapsed_seconds': round(time.monotonic() - t0, 3),
-        'scope': 'segment/lexer helpers via direct mncs.vm.artifact/1 + canonical VM batch vs reference + Cranelift',
-    }
-    (OUT / 'vm-segment-results.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(json.dumps(report, indent=2))
+        children_peak_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
+        report = {
+            'schema_version': 1,
+            'stage0_revision': stage0_revision(),
+            'suite': 'segment',
+            'smoke': smoke,
+            'texts': len(texts) + (1 if smoke else len(test_segment.NONASCII)),
+            'cases': len(cases),
+            'tokens_compared': n_tokens,
+            'artifact_id': artifact['artifact_id'],
+            'artifact_bytes': len(artifact_bytes),
+            'batch_calls_bytes': calls_bytes,
+            'batch_results_bytes': results_bytes,
+            'batch_peak_rss_kb': batch_peak_kb,
+            'children_peak_rss_kb': children_peak_kb,
+            'process_count': process_count,
+            'vm_summary': document['summary'],
+            'reference_steps_total': sum(ref_steps),
+            'reference_steps_max': max(ref_steps),
+            'cranelift_steps_total': sum(cran_steps) if cran_steps else 0,
+            'semantic_digests': digests,
+            'reference_raw_digest': ref_raw_digest,
+            'cranelift': {'worked': cran_ok, 'note': cran_note},
+            'reference_probe': ref_cache,
+            'cranelift_probe': cran_cache,
+            'phase_wall_seconds': phase_wall,
+            'elapsed_seconds': round(time.monotonic() - t0, 3),
+            'scope': 'segment/lexer helpers via direct mncs.vm.artifact/1 + canonical VM batch vs reference + Cranelift',
+        }
+        (OUT / 'vm-segment-results.json').write_text(json.dumps(report, indent=2) + '\n')
+        print(json.dumps(report, indent=2))
 
 
 if __name__ == '__main__':
