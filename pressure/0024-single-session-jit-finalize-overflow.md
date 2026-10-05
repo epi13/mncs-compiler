@@ -163,3 +163,19 @@ backend
   colocation, cranelift dep upgrade, reachable-only pruning) lives
   in `mncs-language` main and cannot reach the execution pin
   without a repin. Not attempted in this campaign; tracked here.
+
+## 2026-10-05 VM-architecture campaign findings (still open)
+
+- `flow.v1` retention is layout-marginal, not deterministically
+  failed: two cold `execution_status` probes (fresh cache dirs,
+  `lower_unit` `(1024, 1024)` seed, `ready_s` 170/168) both
+  retained 1/1 this run, vs 0/2 on 2026-10-04. Margin remains
+  ~zero; any growth re-trips it.
+- `decl.v1` still retains reliably (multiple 1/1, including the
+  three-executor VM proof runs). Project session not re-run: the
+  deterministic single-session panic stands unaddressed and nothing
+  in this campaign touches JIT layout inputs.
+- Cranelift native coverage is preserved and explicit: `decl` and
+  `segment` VM drivers execute the policy backend (Cranelift) as
+  the third executor with digest agreement; no suite was silently
+  routed away from native.
