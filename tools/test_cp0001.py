@@ -1350,7 +1350,7 @@ def run_suite():
     probe = lex_probe()
     try:
         status = probe.send({"execution_status": True})
-        if os.environ.get("MNCS_PROBE_BACKEND", "cranelift") == "cranelift":
+        if backend_policy.resolve("cp0001") == "cranelift":
             assert status["retained_sessions"] == 3, status
         stats["execution_status"] = status
         kinds = json.loads(Path("src/compiler/token-kinds.json").read_text())
