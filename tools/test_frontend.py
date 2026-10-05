@@ -2,6 +2,7 @@
 """Temporary test transport; lexical/parser decisions execute in MNCS or Stage-0.
 No source implementation, tokenization, parsing, or production hashing lives here.
 """
+import backend_policy
 import hashlib
 import json
 import os
@@ -66,7 +67,7 @@ class Probe:
             f'mncs.compiler.{unit}.v1' for unit in ['source', 'lexer', 'kernel']
         )
         if not reference_interpreter:
-            env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+            env.setdefault('MNCS_PROBE_BACKEND', backend_policy.resolve('frontend'))
         env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
             {'module': f'mncs.compiler.{unit}.v1', 'function': function,
              'type_arguments': [nat_arg(bound)]}
@@ -78,6 +79,7 @@ class Probe:
                 else [SOURCE_BOUND]
             )
         ])
+        env.setdefault('MNCS_PROBE_CACHE_DIR', str(ROOT / '.build' / 'probe-cache'))
         self.proc = subprocess.Popen(
             [env.get('MNCS_PROBE_BIN', str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, env=env
@@ -101,7 +103,8 @@ class Probe:
         assert result['status'] == status, (request, result)
         self.count += 1
         self.steps.append(result['steps'])
-        normalized = [request, result['status'], result['returned'], result['failure'], result['steps']]
+        # Semantic-only digest: steps are backend-coupled cost telemetry.
+        normalized = [request, result['status'], result['returned'], result['failure']]
         self.digest.update(json.dumps(normalized, sort_keys=True).encode())
         if status == 'returned':
             return decode(result['returned'][0])
@@ -224,7 +227,7 @@ def suite():
         return {'requests': probe.count, 'lexical_sources': len(samples), 'tokens_compared': tokens,
                 'header_cases': len(fixtures['headers']), 'result_sha256': probe.digest.hexdigest(),
                 'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
-                'execution_mode': 'retained_cranelift' if execution_status['retained_sessions'] else 'reference_interpreter',
+                'execution_mode': ('retained_' + (execution_status['backend'] or 'unknown')) if execution_status['retained_sessions'] else 'reference_interpreter',
                 'retained_execution_sessions': execution_status['retained_sessions']}
     finally:
         probe.close()

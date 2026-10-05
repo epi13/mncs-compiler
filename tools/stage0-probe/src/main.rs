@@ -22,6 +22,7 @@ fn envelope(text: String) -> SourceEnvelope {
     SourceEnvelope::inline(SourceArtifactKind::Program, "probe", text)
 }
 fn main() {
+    let t_start = std::time::Instant::now();
     // `MNCS_PROBE_MODULES` optionally narrows the elaborated module set
     // (comma-separated leaf names). By default it loads the shared frontend
     // and declaration core; focused suites load only their affected closure.
@@ -70,13 +71,128 @@ fn main() {
             .0
             .insert(format!("mncs.compiler.{file}.v1"), envelope(text));
     }
+    let backend_name = std::env::var("MNCS_PROBE_BACKEND").ok();
+    // Content-addressed readiness cache: frontend Programs and backend
+    // artifacts keyed by every input that determines them (backend,
+    // module closure bytes, seed request, module selection). A hit
+    // skips elaboration and lowering entirely; invalidation is exact
+    // because the key is the content. Unset MNCS_PROBE_CACHE_DIR
+    // disables the cache (historical behavior).
+    let cache_dir = std::env::var("MNCS_PROBE_CACHE_DIR")
+        .ok()
+        .filter(|dir| !dir.is_empty());
+    let seeds_raw = std::env::var("MNCS_PROBE_GENERIC_SEEDS").unwrap_or_default();
+    let mut cache_hits = 0u32;
+    let mut cache_misses = 0u32;
+    let cache_key = |module: &str| -> String {
+        let mut input = String::from("probe-cache-v1\n");
+        input.push_str(backend_name.as_deref().unwrap_or("none"));
+        input.push('\n');
+        input.push_str(module);
+        input.push('\n');
+        let mut names: Vec<_> = sources.0.keys().collect();
+        names.sort();
+        for name in names {
+            input.push_str(name);
+            input.push('\n');
+        }
+        // Source bytes: re-read the loaded leaves (kilobytes; the
+        // envelopes already hold them but do not lend the text back).
+        for file in [
+            "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "ssa", "project",
+        ] {
+            let name = format!("mncs.compiler.{file}.v1");
+            if sources.0.contains_key(&name) {
+                let text =
+                    std::fs::read_to_string(format!("src/compiler/{file}.mncs")).unwrap();
+                input.push_str(&text);
+                input.push('\n');
+            }
+        }
+        input.push_str(&seeds_raw);
+        mncs_model::sha256_hex(input.as_bytes())
+    };
+    // Entries are gzip-compressed JSON (`{program, artifact|null}`) via
+    // the system gzip: payloads shrink ~25x (hundreds of MB to tens)
+    // with no new dependencies. Any compression failure degrades to a
+    // miss, never an error.
+    let cache_load = |key: &str| -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+        let dir = cache_dir.as_ref()?;
+        let output = std::process::Command::new("gzip")
+            .args(["-dc", &format!("{dir}/{key}.json.gz")])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let entry: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+        let program =
+            serde_json::from_value::<mncs_model::Program>(entry.get("program")?.clone()).ok()?;
+        if backend_name.is_none() {
+            return Some((program, None));
+        }
+        let artifact = serde_json::from_value::<mncs_model::BackendArtifact>(
+            entry.get("artifact")?.clone(),
+        )
+        .ok()?;
+        if !artifact.identity_is_valid() {
+            return None;
+        }
+        Some((program, Some(artifact)))
+    };
+    let cache_store = |key: &str, program: &mncs_model::Program, artifact: Option<&mncs_model::BackendArtifact>| {
+        let Some(dir) = cache_dir.as_ref() else {
+            return;
+        };
+        if std::fs::create_dir_all(dir).is_err() {
+            return;
+        }
+        let entry = serde_json::json!({"program": program, "artifact": artifact});
+        let entry_bytes = serde_json::to_vec(&entry).expect("entry serializes");
+        // Compress via a temp file, not a stdin pipe: entries are hundreds
+        // of MB, and piping both stdin and stdout through 64KB kernel
+        // buffers deadlocks once both fill with no drainer.
+        let raw_tmp = format!("{dir}/{key}.json.tmp");
+        if std::fs::write(&raw_tmp, &entry_bytes).is_err() {
+            return;
+        }
+        let output = std::process::Command::new("gzip")
+            .args(["-n", "-c", &raw_tmp])
+            .output();
+        let _ = std::fs::remove_file(&raw_tmp);
+        let Ok(output) = output else {
+            return;
+        };
+        if !output.status.success() {
+            return;
+        }
+        let tmp = format!("{dir}/{key}.json.gz.tmp");
+        if std::fs::write(&tmp, &output.stdout).is_ok() {
+            let _ = std::fs::rename(&tmp, format!("{dir}/{key}.json.gz"));
+        }
+    };
     let mut programs = BTreeMap::new();
+    let mut cached_artifacts: BTreeMap<String, mncs_model::BackendArtifact> = BTreeMap::new();
     for (name, source) in &sources.0 {
         if execution_modules
             .as_ref()
             .is_some_and(|modules| !modules.iter().any(|module| module == name))
         {
             continue;
+        }
+        if cache_dir.is_some() {
+            let key = cache_key(name);
+            if let Some((program, artifact)) = cache_load(&key) {
+                if backend_name.is_none() || artifact.is_some() {
+                    cache_hits += 1;
+                    if let Some(artifact) = artifact {
+                        cached_artifacts.insert(name.clone(), artifact);
+                    }
+                    programs.insert(name.clone(), program);
+                    continue;
+                }
+            }
+            cache_misses += 1;
         }
         let module_seeds: Vec<_> = generic_seeds
             .iter()
@@ -89,7 +205,11 @@ fn main() {
             &module_seeds,
         );
         assert!(result.is_valid(), "{name}: {:?}", result.diagnostics);
-        programs.insert(name.clone(), result.program.unwrap());
+        let program = result.program.unwrap();
+        if backend_name.is_none() {
+            cache_store(&cache_key(name), &program, None);
+        }
+        programs.insert(name.clone(), program);
     }
     let sessions: BTreeMap<_, _> = programs
         .iter()
@@ -99,7 +219,6 @@ fn main() {
     // once, retain its backend session, then answer the same requests through
     // that executable artifact. The ordinary interpreter remains available
     // as the independent comparison path.
-    let backend_name = std::env::var("MNCS_PROBE_BACKEND").ok();
     let backend_artifacts: BTreeMap<_, _> = backend_name
         .as_deref()
         .map(|backend| {
@@ -107,6 +226,9 @@ fn main() {
             programs
                 .iter()
                 .map(|(name, program)| {
+                    if let Some(artifact) = cached_artifacts.get(name) {
+                        return (name.clone(), artifact.clone());
+                    }
                     let emit = [
                         ArtifactRepresentation::Semantic,
                         ArtifactRepresentation::Hir,
@@ -126,6 +248,7 @@ fn main() {
                         .as_ref()
                         .unwrap_or_else(|| panic!("{backend} emitted no artifact for {name}: {result:?}"))
                         .clone();
+                    cache_store(&cache_key(name), program, Some(&artifact));
                     (name.clone(), artifact)
                 })
                 .collect()
@@ -154,7 +277,9 @@ fn main() {
                 )
             })
             .collect::<Vec<_>>();
-        eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifacts:?}", backend_sessions.len());
+        eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifacts:?} cache_hits={cache_hits} cache_misses={cache_misses} ready_s={:.1}", backend_sessions.len(), t_start.elapsed().as_secs_f64());
+    } else if cache_dir.is_some() {
+        eprintln!("mncs-stage0-probe backend=none modules={} cache_hits={cache_hits} cache_misses={cache_misses}", programs.len());
     }
     for line in io::stdin().lock().lines() {
         // Local test transport over a pipe: requests carry whole native

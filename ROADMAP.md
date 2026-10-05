@@ -40,6 +40,21 @@ machine-readable [ledger](evidence/parity-ledger.json) are current at this
 pin; the dated sections below are preserved as historical evidence with
 their original pins and measurements.
 
+- Backend choice is now intentional, and development got cheaper (see
+  `evidence/BACKEND-NEUTRALITY-AUDIT.md`). Readiness (~93% of suite
+  wall) is served by a content-addressed probe cache (149 s → 23 s
+  per spawn; `test_decl` 5:01 → 0:52; repeats add bytes, not
+  minutes). Backend defaults resolve through `tools/backend_policy.py`
+  with explicit per-suite rationale: flow runs research-bytecode by
+  default (Cranelift retention is broken there), decl/sem/project
+  stay native as canaries or for execution cost, explicit
+  `MNCS_PROBE_BACKEND` always wins. Evidence labels are truthful
+  (`execution_mode` names the real backend) and digests semantic-only
+  (identical `bbf91e03…` on Cranelift and bytecode). Real compiler
+  source executes through canonical `mncs-vm` against the oracle.
+  CP-0024 stays open and honest (flow joined project in scope);
+  CP-0025 records the WASM execution overflow.
+
 - Self-consumption begins: the native declaration surface parses generic
   parameter lists, type-argument calls, and two-level sequence types
   with Stage-0 agreement, carries the facts through check spans and

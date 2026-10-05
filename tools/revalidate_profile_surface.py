@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compare Profile 0.18 syntax admission in native decl parsing vs Stage-0."""
+import backend_policy
 import hashlib
 import json
 import os
@@ -90,12 +91,13 @@ class Probe:
         environment["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl"
         environment["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.decl.v1"
         if not reference_interpreter:
-            environment.setdefault("MNCS_PROBE_BACKEND", "cranelift")
+            environment.setdefault("MNCS_PROBE_BACKEND", backend_policy.resolve("profile-surface"))
         environment["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([{
             "module": "mncs.compiler.decl.v1",
             "function": function,
             "type_arguments": [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
         } for function in ("parse_unit", "prove_unit")])
+        environment.setdefault('MNCS_PROBE_CACHE_DIR', str(ROOT / '.build' / 'probe-cache'))
         self.process = subprocess.Popen(
             [environment.get("MNCS_PROBE_BIN", str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
             cwd=ROOT,

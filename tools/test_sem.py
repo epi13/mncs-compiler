@@ -7,6 +7,7 @@ Stage-0 oracle diagnostics (code, span) in order. UNKNOWN obligations
 (overflow, div-zero, contracts) must never surface as oracle diagnostics.
 Also checks sabotage/soundness verdicts and run-to-run determinism.
 """
+import backend_policy
 import hashlib
 import json
 import os
@@ -672,7 +673,7 @@ class Probe:
         env['MNCS_PROBE_MODULES'] = 'source,lexer,parser,segment,decl'
         env['MNCS_PROBE_EXECUTION_MODULES'] = 'mncs.compiler.decl.v1'
         if not reference_interpreter:
-            env.setdefault('MNCS_PROBE_BACKEND', 'cranelift')
+            env.setdefault('MNCS_PROBE_BACKEND', backend_policy.resolve('sem'))
         env['MNCS_PROBE_GENERIC_SEEDS'] = json.dumps([
             {'module': 'mncs.compiler.decl.v1', 'function': function,
              'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)]}
@@ -683,6 +684,7 @@ class Probe:
                              'sabotage_op_arity', 'sabotage_op_source',
                              'sound_sample']
         ])
+        env.setdefault('MNCS_PROBE_CACHE_DIR', str(ROOT / '.build' / 'probe-cache'))
         self.proc = subprocess.Popen(
             [env.get('MNCS_PROBE_BIN', str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=env
@@ -705,7 +707,9 @@ class Probe:
         assert result['status'] == 'returned', (function, result)
         self.count += 1
         self.steps.append(result['steps'])
-        self.digest.update(json.dumps([request, result['returned'], result['steps']], sort_keys=True).encode())
+        # Semantic-only digest: steps are backend-coupled cost telemetry,
+        # recorded separately as execution_steps_total/max.
+        self.digest.update(json.dumps([request, result['returned']], sort_keys=True).encode())
         return decode(result['returned'][0])
 
     def close(self):
@@ -761,7 +765,7 @@ def suite():
         return {'requests': probe.count, 'cases': len(CASES),
                 'result_sha256': probe.digest.hexdigest(),
                 'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
-                'execution_mode': 'retained_cranelift' if execution_status['retained_sessions'] else 'reference_interpreter',
+                'execution_mode': ('retained_' + (execution_status['backend'] or 'unknown')) if execution_status['retained_sessions'] else 'reference_interpreter',
                 'retained_execution_sessions': execution_status['retained_sessions'],
                 'details': details}
     finally:

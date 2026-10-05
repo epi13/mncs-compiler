@@ -130,3 +130,36 @@ backend
 - `mncs-language` issue/PR:
 - Resolution revision:
 - Follow-up evidence in this repository:
+
+## 2026-10-04 backend campaign findings (still open)
+
+- Scope widened: the `flow.v1` session now fails retention 2/2 with
+  the identical contained `mncs-cranelift-session` worker panic
+  (`compiled_blob.rs:56` NegOverflow); previously marginal 1/2.
+  `decl`/`ssa` still retain. Growth keeps pushing sessions over.
+- Mechanism, fully characterized: JIT finalize panics on the
+  dedicated worker thread inside `prepare_stateful_session`
+  (`JitSession::new` → `finalize_definitions`). The panic is
+  contained — the probe survives and reports `retained_sessions:
+  0` — but every one-shot execution attempt re-enters JIT finalize
+  on the serving thread (`execute_backend` → `jit_scalar` →
+  `JitSession::new`) and panics again. Retention failure is
+  therefore total execution failure on Cranelift for affected
+  modules, not a graceful fallback.
+- Peak RSS does not discriminate: decl 3.2 GB retains, flow 3.1 GB
+  panics. The discriminator is JIT image layout (PC-relative
+  relocation distances), not process size.
+- Mitigation (this campaign): B-class suites migrate to the
+  research-bytecode retained backend (flow passes there 2:50 /
+  2.5 GB; decl passes 4:56 / 2.4 GB with identical semantic
+  results). This keeps verification green but does not fix the
+  defect and is not claimed as a fix.
+- The project suite cannot follow: interpreted step budgets
+  (pin-maximum 8M) exhaust on `compile_project`, while native
+  reports 1 step/request. Project execution needs a retained
+  native session that currently cannot finalize — the defect
+  remains load-bearing.
+- A real fix (PIC-capable JIT memory management, blob layout
+  colocation, cranelift dep upgrade, reachable-only pruning) lives
+  in `mncs-language` main and cannot reach the execution pin
+  without a repin. Not attempted in this campaign; tracked here.
