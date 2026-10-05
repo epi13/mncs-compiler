@@ -77,6 +77,38 @@
       "kind": "compiler-artifact-provider",
       "stability": "experimental",
       "version": "1"
+    },
+    {
+      "artifact_contract": {
+        "receipt_schema": "mncs.compiler-producer-build/1",
+        "stage0_pin": "mncs-language.lock.json"
+      },
+      "contract": "compiler-build",
+      "effects": [
+        "write"
+      ],
+      "fingerprint_sources": [
+        "tools/bootstrap.sh",
+        "tools/stage0-probe/",
+        "tools/vm-artifact-codec/",
+        "tools/vm_emit.rs",
+        "mncs-language.lock.json"
+      ],
+      "invocation": {
+        "fixed_argv": [
+          "build"
+        ],
+        "kind": "python",
+        "path": "tools/vm_provider.py",
+        "toolchain": {
+          "path": ".bootstrap/target/release/mncs-compiler-stage0-probe",
+          "repository": "mncs-compiler"
+        },
+        "toolchain_env": "MNCS_COMPILER_PROBE"
+      },
+      "kind": "build-provider",
+      "stability": "experimental",
+      "version": "1"
     }
   ],
   "dependencies": [
@@ -97,6 +129,6 @@
   "purpose": "Experimental MNCS compiler implementation, written in mncs-language to pressure-test the language and move compiler semantics into MNCS while Rust remains the Stage-0/bootstrap/reference implementation.",
   "repository": "mncs-compiler",
   "schema_version": "mncs.project-view/1",
-  "source_identity": "sha256:c6fd0050ecce58b7cc965889ec32f18ba968f83c55e5d7951662689dff7b96c4",
+  "source_identity": "sha256:5795b69dc735e842de5654729820630e67a26210b8ab90bf5f31f01db69400ba",
   "structure": {}
 }

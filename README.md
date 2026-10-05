@@ -12,6 +12,7 @@ tools/bootstrap.sh
 Declared capabilities (declarations do not establish execution health):
 
 - `canonical-vm-artifact/1` — compiler-artifact-provider (experimental)
+- `compiler-build/1` — build-provider (experimental)
 - `compiler-next-generation/1` — compiler-research-surface (experimental)
 - `compiler-producer/1` — compiler-artifact-provider (experimental)
 
