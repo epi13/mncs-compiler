@@ -11,6 +11,7 @@ closure. Verification obligations bind one mode each. The `route`
 meta-mode selects affected modes from the obligation inventory and runs
 them on one resident probe; an empty selection runs nothing.
 """
+import backend_policy
 import contextlib
 import hashlib
 import copy
@@ -28,7 +29,7 @@ BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".boo
 os.chdir(ROOT)
 os.environ.setdefault("MNCS_PROBE_MODULES", "source,lexer,parser,segment,decl,flow,ssa,project")
 os.environ.setdefault("MNCS_PROBE_EXECUTION_MODULES", "mncs.compiler.project.v1,mncs.compiler.ssa.v1")
-os.environ.setdefault("MNCS_PROBE_BACKEND", "cranelift")
+os.environ.setdefault("MNCS_PROBE_BACKEND", backend_policy.resolve("project"))
 os.environ.setdefault("MNCS_PROBE_GENERIC_SEEDS", json.dumps([
     {"module": "mncs.compiler.project.v1", "function": "compile_project",
      "type_arguments": [
@@ -136,6 +137,7 @@ class Probe:
         base = os.environ.copy()
         if base.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
             base.pop("MNCS_PROBE_BACKEND", None)
+        base.setdefault("MNCS_PROBE_CACHE_DIR", str(ROOT / ".build" / "probe-cache"))
         configured = [part.strip() for part in
                       base.get("MNCS_PROBE_EXECUTION_MODULES", "").split(",")
                       if part.strip()]
@@ -197,11 +199,23 @@ class Probe:
                                      for status in statuses.values()),
         }
 
+    @staticmethod
+    def _digest_payload(result):
+        # Semantic-only digest: execution responses digest returned values;
+        # status responses digest topology counts; oracle responses are
+        # backend-independent and digest whole.
+        if "returned" in result:
+            return result["returned"]
+        if "retained_sessions" in result:
+            return {"modules": result.get("modules"),
+                    "retained_sessions": result["retained_sessions"]}
+        return result
+
     def send(self, request):
         if isinstance(request, dict) and "execution_status" in request:
             result = self._status()
             self.last_response = result
-            self.digest.update(json.dumps([request, result], sort_keys=True).encode())
+            self.digest.update(json.dumps([request, self._digest_payload(result)], sort_keys=True).encode())
             self.requests += 1
             return result
         proc = self._route(request)
@@ -211,7 +225,7 @@ class Probe:
         assert line, f"Stage-0 probe terminated: {proc.poll()}"
         result = json.loads(line)
         self.last_response = result
-        self.digest.update(json.dumps([request, result], sort_keys=True).encode())
+        self.digest.update(json.dumps([request, self._digest_payload(result)], sort_keys=True).encode())
         self.requests += 1
         return result
 
@@ -596,7 +610,7 @@ def _mode_common(run):
         "result_sha256": run.probe.digest.hexdigest(),
         "native_execution_steps_total": sum(run.probe.steps),
         "native_execution_steps_max": max(run.probe.steps),
-        "execution_mode": "retained_cranelift" if run.execution_status["retained_sessions"] else "reference_interpreter",
+        "execution_mode": ("retained_" + (run.execution_status["backend"] or "unknown")) if run.execution_status["retained_sessions"] else "reference_interpreter",
         "requested_execution_backend": os.environ.get("MNCS_PROBE_BACKEND"),
         "retained_execution_sessions": run.execution_status["retained_sessions"],
     }
@@ -2098,7 +2112,7 @@ def run_route(changed_paths, select_all=False):
     with _FixtureRun() as run:
         report["shared_probe"] = {
             "entry_digest": run.probe.digest.copy().hexdigest(),
-            "execution_mode": "retained_cranelift" if run.execution_status["retained_sessions"] else "reference_interpreter",
+            "execution_mode": ("retained_" + (run.execution_status["backend"] or "unknown")) if run.execution_status["retained_sessions"] else "reference_interpreter",
             "requested_execution_backend": os.environ.get("MNCS_PROBE_BACKEND"),
             "retained_execution_sessions": run.execution_status["retained_sessions"],
         }

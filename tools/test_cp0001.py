@@ -23,6 +23,7 @@ Evidence: evidence/cp0001-results.json (compact) and
 evidence/cp0001-matrix.json (executable matrix input). No full token traces
 are retained; digests plus the deterministic suite reproduce them.
 """
+import backend_policy
 import hashlib
 import json
 import os
@@ -133,8 +134,9 @@ class Probe:
         env["MNCS_PROBE_MODULES"] = modules
         env["MNCS_PROBE_EXECUTION_MODULES"] = execution_modules
         if not reference_interpreter:
-            env.setdefault("MNCS_PROBE_BACKEND", "cranelift")
+            env.setdefault("MNCS_PROBE_BACKEND", backend_policy.resolve("cp0001"))
         env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
+        env.setdefault('MNCS_PROBE_CACHE_DIR', str(ROOT / '.build' / 'probe-cache'))
         self.proc = subprocess.Popen(
             [env.get("MNCS_PROBE_BIN",
                      str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],

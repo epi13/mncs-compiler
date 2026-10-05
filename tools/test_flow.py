@@ -4,6 +4,7 @@
 The native flow module consumes the existing declaration tree and proof.
 Python only moves request values and compares emitted facts with the oracle.
 """
+import backend_policy
 import hashlib
 import json
 import os
@@ -19,7 +20,7 @@ OUT.mkdir(exist_ok=True)
 
 os.environ["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow"
 os.environ["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.flow.v1"
-os.environ.setdefault("MNCS_PROBE_BACKEND", "cranelift")
+os.environ.setdefault("MNCS_PROBE_BACKEND", backend_policy.resolve("flow"))
 
 
 def blob(data):
@@ -87,6 +88,7 @@ class Probe:
             }
             for length in lengths
         ])
+        env.setdefault('MNCS_PROBE_CACHE_DIR', str(ROOT / '.build' / 'probe-cache'))
         self.proc = subprocess.Popen(
             [os.environ.get("MNCS_PROBE_BIN", str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
             stdin=subprocess.PIPE,
@@ -104,7 +106,17 @@ class Probe:
         line = self.proc.stdout.readline()
         assert line, f"Stage-0 probe terminated: {self.proc.poll()}"
         result = json.loads(line)
-        self.digest.update(json.dumps([request, result], sort_keys=True).encode())
+        # Semantic-only digest: execution responses digest returned values;
+        # status responses digest topology counts; oracle responses are
+        # backend-independent and digest whole. Backend names, artifact
+        # identities, and step counts are recorded separately.
+        if 'returned' in result:
+            payload = result['returned']
+        elif 'retained_sessions' in result:
+            payload = {'modules': result.get('modules'), 'retained_sessions': result['retained_sessions']}
+        else:
+            payload = result
+        self.digest.update(json.dumps([request, payload], sort_keys=True).encode())
         self.requests += 1
         return result
 
@@ -274,7 +286,7 @@ def suite():
             "result_sha256": probe.digest.hexdigest(),
             "execution_steps_total": sum(probe.steps),
             "execution_steps_max": max(probe.steps),
-            "execution_mode": "retained_cranelift" if execution_status["retained_sessions"] else "reference_interpreter",
+            "execution_mode": ("retained_" + (execution_status["backend"] or "unknown")) if execution_status["retained_sessions"] else "reference_interpreter",
             "retained_execution_sessions": execution_status["retained_sessions"],
             "cases": results,
         }
