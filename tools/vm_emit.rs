@@ -7,8 +7,7 @@
 //! serialization, no migration adapter on the proof path.
 //!
 //! The emitter runs on compiler internals (it is compiler-side), but
-//! its OUTPUT is the frozen contract only: selected SSA lifted
-//! verbatim, identity-bound callables, compiler-determined generic
+//! its OUTPUT is the frozen contract only: selected SSA encoded losslessly, identity-bound callables, compiler-determined generic
 //! entrypoints, declared capabilities, and provenance refs. The VM
 //! admits the bytes without knowing compiler internals.
 //!
@@ -94,7 +93,9 @@ struct GenericEntrypoint {
 enum CodeSection {
     MncsSelectedSsa {
         ssa_schema: String,
-        module: SsaModule,
+        // The shared codec freezes this once before sealing. VM decoding
+        // expands it into its typed SSA module without a JSON tree copy.
+        module: serde_json::Value,
     },
 }
 
@@ -179,18 +180,21 @@ fn stage0_provenance_refs() -> Vec<String> {
 /// every row below mirrors the migration adapter's translation so
 /// direct and migrated artifacts agree on content while only the
 /// direct bytes are free of compiler internals.
-pub fn emit_vm_artifact(compiler: &ReferenceCompiler, program: &Program) -> serde_json::Value {
+pub fn emit_vm_artifact(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+) -> Result<serde_json::Value, String> {
     let emit: BTreeSet<ArtifactRepresentation> =
         [ArtifactRepresentation::Ssa].into_iter().collect();
     let request = compiler.request_for_program(program, emit, None);
-    let result = compiler.compile(request, program);
+    let mut result = compiler.compile(request, program);
     if result.status == CompilationStatus::Failed {
-        panic!(
+        return Err(format!(
             "direct vm emission failed for {}: {:?}",
             program.module, result.diagnostics
-        );
+        ));
     }
-    let ssa = result.emissions.ssa.clone().expect("ssa emission present");
+    let ssa = result.emissions.ssa.take().expect("ssa emission present");
     assert!(
         ssa.identity_is_valid(),
         "selected ssa identity is valid for {}",
@@ -296,7 +300,7 @@ pub fn emit_vm_artifact(compiler: &ReferenceCompiler, program: &Program) -> serd
         generic_entrypoints,
         code: CodeSection::MncsSelectedSsa {
             ssa_schema: ssa.schema_version.clone(),
-            module: ssa,
+            module: mncs_vm_artifact_codec::freeze(&ssa).expect("selected SSA freezes"),
         },
         requirements: ArtifactRequirements {
             capabilities,
@@ -310,7 +314,7 @@ pub fn emit_vm_artifact(compiler: &ReferenceCompiler, program: &Program) -> serd
     let mut sealed = artifact;
     let canonical = serde_json::to_vec(&sealed).expect("artifact serializes");
     sealed.artifact_id = artifact_id_of(&canonical);
-    serde_json::to_value(&sealed).expect("sealed artifact serializes")
+    Ok(serde_json::to_value(&sealed).expect("sealed artifact serializes"))
 }
 
 /// Bind one module-qualified function to its SSA instance. Panics

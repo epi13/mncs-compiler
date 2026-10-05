@@ -45,6 +45,9 @@ def decode(value):
     return next(iter(value.values()))['value']
 
 
+EXECUTION_STEP_BUDGET = 8_000_000
+
+
 class Probe:
     def __init__(self):
         env = dict(os.environ)
@@ -82,7 +85,7 @@ class Probe:
             'target': {'module': 'mncs.compiler.segment.v1', 'function': function},
             'arguments': args,
             'type_arguments': [nat_arg(SOURCE_BOUND)],
-            'step_budget': 8000000,
+            'step_budget': EXECUTION_STEP_BUDGET,
         }
         result = self.send(request)
         assert result['status'] == 'returned', (function, result)

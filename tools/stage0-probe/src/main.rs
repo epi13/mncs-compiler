@@ -17,6 +17,7 @@ use std::{
     io::{self, BufRead},
 };
 
+#[path = "../../vm_emit.rs"]
 mod vm_emit;
 
 struct Sources(BTreeMap<String, SourceEnvelope>);
@@ -520,7 +521,7 @@ fn main() {
             .get(&module)
             .unwrap_or_else(|| panic!("--emit-vm-artifact for unknown module {module}"));
         let compiler = ReferenceCompiler::default();
-        let artifact = vm_emit::emit_vm_artifact(&compiler, program);
+        let artifact = vm_emit::emit_vm_artifact(&compiler, program).expect("direct VM emission");
         println!("{}", json!({"module": module, "artifact": artifact}));
         return;
     }
@@ -641,7 +642,8 @@ fn main() {
                 .get(module)
                 .unwrap_or_else(|| panic!("emit_vm_artifact for unknown module {module}"));
             let compiler = ReferenceCompiler::default();
-            let artifact = vm_emit::emit_vm_artifact(&compiler, program);
+            let artifact =
+                vm_emit::emit_vm_artifact(&compiler, program).expect("direct VM emission");
             json!({"module": module, "artifact": artifact})
         } else if let Some(text) = input.get("elaborate").and_then(Value::as_str) {
             let result = ReferenceCompiler::default()

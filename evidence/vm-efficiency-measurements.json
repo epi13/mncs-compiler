@@ -1,0 +1,470 @@
+{
+  "session": "ses_b3e2482c01aec62b",
+  "branch": "cleanup/vm-efficiency-20261005",
+  "baseline_heads": {
+    "mncs-compiler": "03e0caa6538680262fd59212dff58978b6741371",
+    "mncs-vm": "a3ab04ccc0969a8bf6a2977a735c6a043f1a6ae3"
+  },
+  "stage0_pin": "a3ac17df69e68f6373cbff336db0a572667d73da",
+  "suites": {
+    "segment": {
+      "accounting": {
+        "before": {
+          "disk_bytes": 8239851,
+          "compact_bytes": 8239851,
+          "suite_json_bytes": 8509421,
+          "artifact_sections_bytes": {
+            "artifact_id": 73,
+            "assumptions": 2,
+            "callables": 4587,
+            "code": 8228971,
+            "exports": 1153,
+            "generic_entrypoints": 1154,
+            "requirements": 59,
+            "schema_version": 20,
+            "source": 1285,
+            "unsupported": 2402
+          },
+          "artifact_field_names_and_punctuation_bytes": 145,
+          "expanded_ssa_sections_bytes": {
+            "binding_table": 2607831,
+            "functions": 2402234,
+            "generic_specializations": 4752,
+            "hir_fingerprint": 66,
+            "identity": 86,
+            "obligations": 1111406,
+            "record_types": 2567,
+            "schema_version": 5,
+            "semantic_identity": 43,
+            "trace": 657605,
+            "transformations": 1442137
+          },
+          "functions": 28,
+          "blocks": 406,
+          "instructions": 1597,
+          "ssa_string_occurrences_including_keys": 215886,
+          "ssa_unique_strings_including_keys": 17221,
+          "ssa_repeated_string_bytes": 5673221,
+          "contains_program_or_session": false
+        },
+        "after": {
+          "disk_bytes": 4039143,
+          "compact_bytes": 4039143,
+          "suite_json_bytes": 4363080,
+          "artifact_sections_bytes": {
+            "artifact_id": 73,
+            "assumptions": 2,
+            "callables": 4587,
+            "code": 4028263,
+            "exports": 1153,
+            "generic_entrypoints": 1154,
+            "requirements": 59,
+            "schema_version": 20,
+            "source": 1285,
+            "unsupported": 2402
+          },
+          "artifact_field_names_and_punctuation_bytes": 145,
+          "expanded_ssa_sections_bytes": {
+            "binding_table": 2607831,
+            "functions": 2402234,
+            "generic_specializations": 4752,
+            "hir_fingerprint": 66,
+            "identity": 86,
+            "obligations": 1111406,
+            "record_types": 2567,
+            "schema_version": 5,
+            "semantic_identity": 43,
+            "trace": 657605,
+            "transformations": 1442137
+          },
+          "functions": 28,
+          "blocks": 406,
+          "instructions": 1597,
+          "ssa_string_occurrences_including_keys": 215886,
+          "ssa_unique_strings_including_keys": 17221,
+          "ssa_repeated_string_bytes": 5673221,
+          "contains_program_or_session": false,
+          "shared_node_payload_bytes": {
+            "S": 2173467,
+            "O": 1553042,
+            "A": 193326,
+            "I": 62293,
+            "N": 3,
+            "B": 11
+          },
+          "shared_nodes": 46045
+        },
+        "all_ssa_facts_preserved": true,
+        "outer_contract_facts_preserved": true,
+        "compact_bytes_saved": 4200708
+      },
+      "before_instrumented": {
+        "phases": [
+          {
+            "allocated_bytes": 8240525,
+            "allocations": 6,
+            "phase": "read",
+            "seconds": 0.003100524
+          },
+          {
+            "allocated_bytes": 15311262,
+            "allocations": 90399,
+            "phase": "decode",
+            "seconds": 0.113747464
+          },
+          {
+            "allocated_bytes": 26153746,
+            "allocations": 88133,
+            "phase": "admit",
+            "seconds": 0.638391442
+          },
+          {
+            "allocated_bytes": 796,
+            "allocations": 7,
+            "phase": "session",
+            "seconds": 1.773e-06
+          },
+          {
+            "allocated_bytes": 2277354940,
+            "allocations": 14222378,
+            "phase": "execute-0",
+            "seconds": 7.504109717
+          },
+          {
+            "allocated_bytes": 2277354940,
+            "allocations": 14222378,
+            "phase": "execute-1",
+            "seconds": 6.828107135
+          }
+        ],
+        "peak_rss_kb": 170120,
+        "return_digests": [
+          "6e79736ff818b0eb26e96163b6d3bf3c3007c327dc2c30f238f6740fa4b30b49",
+          "6e79736ff818b0eb26e96163b6d3bf3c3007c327dc2c30f238f6740fa4b30b49"
+        ]
+      },
+      "after_instrumented": {
+        "phases": [
+          {
+            "allocated_bytes": 4039817,
+            "allocations": 6,
+            "phase": "read",
+            "seconds": 0.001671711
+          },
+          {
+            "allocated_bytes": 19580309,
+            "allocations": 169897,
+            "phase": "decode",
+            "seconds": 0.147946091
+          },
+          {
+            "allocated_bytes": 29717656,
+            "allocations": 321660,
+            "phase": "admit",
+            "seconds": 0.521596939
+          },
+          {
+            "allocated_bytes": 796,
+            "allocations": 7,
+            "phase": "session",
+            "seconds": 2.278e-06
+          },
+          {
+            "allocated_bytes": 1749253205,
+            "allocations": 9807223,
+            "phase": "execute-0",
+            "seconds": 5.6960180860000005
+          },
+          {
+            "allocated_bytes": 1749253205,
+            "allocations": 9807223,
+            "phase": "execute-1",
+            "seconds": 5.704947194
+          }
+        ],
+        "peak_rss_kb": 171320,
+        "return_digests": [
+          "6e79736ff818b0eb26e96163b6d3bf3c3007c327dc2c30f238f6740fa4b30b49",
+          "6e79736ff818b0eb26e96163b6d3bf3c3007c327dc2c30f238f6740fa4b30b49"
+        ]
+      },
+      "before_batch": [
+        {
+          "wall_seconds": 10.99,
+          "peak_rss_kb": 420088
+        }
+      ],
+      "after_batch": [
+        {
+          "wall_seconds": 9.24,
+          "peak_rss_kb": 415284
+        }
+      ],
+      "identical_metering_and_returns_before_after": true,
+      "vm_summary": {
+        "call_depth_max": 6,
+        "calls": 6564,
+        "effects_total": 0,
+        "memory_cells_max": 1270,
+        "outcomes": {
+          "completed": 6564
+        },
+        "steps_max": 35033,
+        "steps_total": 3818937
+      },
+      "emission_wall_seconds": {
+        "before": [
+          2.170888174994616,
+          2.1614361770043615
+        ],
+        "after": [
+          2.1904125880100764,
+          2.187606551000499
+        ]
+      },
+      "after_batch_before_owned_buffer_release": [
+        {
+          "wall_seconds": 9.29,
+          "peak_rss_kb": 417356
+        }
+      ],
+      "owned_loader_metering_and_returns_unchanged": true
+    },
+    "decl": {
+      "accounting": {
+        "before": {
+          "disk_bytes": 97865397,
+          "compact_bytes": 97865397,
+          "suite_json_bytes": 100695968,
+          "artifact_sections_bytes": {
+            "artifact_id": 73,
+            "assumptions": 2,
+            "callables": 84294,
+            "code": 97705436,
+            "exports": 26969,
+            "generic_entrypoints": 499,
+            "requirements": 59,
+            "schema_version": 20,
+            "source": 1285,
+            "unsupported": 46615
+          },
+          "artifact_field_names_and_punctuation_bytes": 145,
+          "expanded_ssa_sections_bytes": {
+            "binding_table": 47518681,
+            "functions": 24505432,
+            "generic_specializations": 99574,
+            "hir_fingerprint": 66,
+            "identity": 86,
+            "obligations": 6293953,
+            "record_types": 122213,
+            "schema_version": 5,
+            "semantic_identity": 40,
+            "trace": 6389964,
+            "transformations": 12775183
+          },
+          "functions": 502,
+          "blocks": 5328,
+          "instructions": 14251,
+          "ssa_string_occurrences_including_keys": 2334253,
+          "ssa_unique_strings_including_keys": 175789,
+          "ssa_repeated_string_bytes": 68003934,
+          "contains_program_or_session": false
+        },
+        "after": {
+          "disk_bytes": 47239943,
+          "compact_bytes": 47239943,
+          "suite_json_bytes": 50715964,
+          "artifact_sections_bytes": {
+            "artifact_id": 73,
+            "assumptions": 2,
+            "callables": 84294,
+            "code": 47079982,
+            "exports": 26969,
+            "generic_entrypoints": 499,
+            "requirements": 59,
+            "schema_version": 20,
+            "source": 1285,
+            "unsupported": 46615
+          },
+          "artifact_field_names_and_punctuation_bytes": 145,
+          "expanded_ssa_sections_bytes": {
+            "binding_table": 47518681,
+            "functions": 24505432,
+            "generic_specializations": 99574,
+            "hir_fingerprint": 66,
+            "identity": 86,
+            "obligations": 6293953,
+            "record_types": 122213,
+            "schema_version": 5,
+            "semantic_identity": 40,
+            "trace": 6389964,
+            "transformations": 12775183
+          },
+          "functions": 502,
+          "blocks": 5328,
+          "instructions": 14251,
+          "ssa_string_occurrences_including_keys": 2334253,
+          "ssa_unique_strings_including_keys": 175789,
+          "ssa_repeated_string_bytes": 68003934,
+          "contains_program_or_session": false,
+          "shared_node_payload_bytes": {
+            "S": 25668341,
+            "O": 17730610,
+            "A": 2086407,
+            "I": 1092207,
+            "N": 3,
+            "B": 21
+          },
+          "shared_nodes": 502316
+        },
+        "all_ssa_facts_preserved": true,
+        "outer_contract_facts_preserved": true,
+        "compact_bytes_saved": 50625454
+      },
+      "before_instrumented": {
+        "phases": [
+          {
+            "allocated_bytes": 97866071,
+            "allocations": 6,
+            "phase": "read",
+            "seconds": 0.036216828
+          },
+          {
+            "allocated_bytes": 172302488,
+            "allocations": 1015269,
+            "phase": "decode",
+            "seconds": 1.273981011
+          },
+          {
+            "allocated_bytes": 378979972,
+            "allocations": 995745,
+            "phase": "admit",
+            "seconds": 7.415966382
+          },
+          {
+            "allocated_bytes": 796,
+            "allocations": 7,
+            "phase": "session",
+            "seconds": 2.659e-06
+          },
+          {
+            "allocated_bytes": 7512159291,
+            "allocations": 48798114,
+            "phase": "execute-0",
+            "seconds": 25.894557101
+          },
+          {
+            "allocated_bytes": 7512159291,
+            "allocations": 48798114,
+            "phase": "execute-1",
+            "seconds": 26.432164259
+          }
+        ],
+        "peak_rss_kb": 367848,
+        "return_digests": [
+          "9266abed0ecb48cfc8730213ab73d348faebf7728d36f6b9b99f55a66092cd3a",
+          "9266abed0ecb48cfc8730213ab73d348faebf7728d36f6b9b99f55a66092cd3a"
+        ]
+      },
+      "after_instrumented": {
+        "phases": [
+          {
+            "allocated_bytes": 47240617,
+            "allocations": 6,
+            "phase": "read",
+            "seconds": 0.017759258
+          },
+          {
+            "allocated_bytes": 232985679,
+            "allocations": 1846499,
+            "phase": "decode",
+            "seconds": 1.5924879760000001
+          },
+          {
+            "allocated_bytes": 384895720,
+            "allocations": 3466671,
+            "phase": "admit",
+            "seconds": 6.013384438
+          },
+          {
+            "allocated_bytes": 796,
+            "allocations": 7,
+            "phase": "session",
+            "seconds": 3.162e-06
+          },
+          {
+            "allocated_bytes": 7080051431,
+            "allocations": 43648384,
+            "phase": "execute-0",
+            "seconds": 28.350866297
+          },
+          {
+            "allocated_bytes": 7080051431,
+            "allocations": 43648384,
+            "phase": "execute-1",
+            "seconds": 28.745126629
+          }
+        ],
+        "peak_rss_kb": 274408,
+        "return_digests": [
+          "9266abed0ecb48cfc8730213ab73d348faebf7728d36f6b9b99f55a66092cd3a",
+          "9266abed0ecb48cfc8730213ab73d348faebf7728d36f6b9b99f55a66092cd3a"
+        ]
+      },
+      "before_batch": [
+        {
+          "wall_seconds": 34.94,
+          "peak_rss_kb": 471748
+        },
+        {
+          "wall_seconds": 36.94,
+          "peak_rss_kb": 471504
+        }
+      ],
+      "after_batch": [
+        {
+          "wall_seconds": 34.29,
+          "peak_rss_kb": 282052
+        },
+        {
+          "wall_seconds": 34.26,
+          "peak_rss_kb": 282084
+        }
+      ],
+      "identical_metering_and_returns_before_after": true,
+      "vm_summary": {
+        "call_depth_max": 21,
+        "calls": 23,
+        "effects_total": 0,
+        "memory_cells_max": 28871,
+        "outcomes": {
+          "completed": 23
+        },
+        "steps_max": 6428040,
+        "steps_total": 17919512
+      },
+      "emission_wall_seconds": {
+        "before": [
+          35.03563744899293,
+          35.904791755005135
+        ],
+        "after": [
+          37.333108160994016,
+          37.74354180099908
+        ]
+      },
+      "after_batch_before_owned_buffer_release": [
+        {
+          "wall_seconds": 33.32,
+          "peak_rss_kb": 328184
+        },
+        {
+          "wall_seconds": 33.14,
+          "peak_rss_kb": 328300
+        }
+      ],
+      "owned_loader_metering_and_returns_unchanged": true
+    }
+  },
+  "measurement_scope": "debug VM build; allocator counts include reallocations, cumulative requested bytes are allocation churn, not live memory. Phase runner discards results; CLI retains results. Wall times are observations, not statistically isolated CPU benchmarks."
+}

@@ -282,6 +282,9 @@ def logical_args(data, stride=STRIDE_BOUND):
     return [pages_value(pages), integer(stride), integer(total)]
 
 
+EXECUTION_STEP_BUDGET = 8_000_000
+
+
 class Probe:
     def __init__(self):
         env = dict(os.environ)
@@ -313,7 +316,7 @@ class Probe:
         assert line, f'probe terminated: {self.proc.poll()}'
         return json.loads(line)
 
-    def run(self, unit, function, args, step_budget=8000000):
+    def run(self, unit, function, args, step_budget=EXECUTION_STEP_BUDGET):
         request = {'schema_version': '0.1', 'target': {'module': f'mncs.compiler.{unit}.v1', 'function': function},
                    'arguments': args, 'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)], 'step_budget': step_budget}
         result = self.send(request)
