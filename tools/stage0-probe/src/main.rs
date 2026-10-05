@@ -19,6 +19,7 @@ use std::{
 
 #[path = "../../vm_emit.rs"]
 mod vm_emit;
+mod provider;
 
 struct Sources(BTreeMap<String, SourceEnvelope>);
 impl ModuleResolver for Sources {
@@ -259,6 +260,17 @@ fn short_hash(value: &str) -> &str {
     &value[..value.len().min(12)]
 }
 fn main() {
+    if std::env::args().any(|arg| arg == "--producer-info") {
+        println!("{}", provider::producer());
+        return;
+    }
+    if let Some(path) = std::env::args().find_map(|arg| arg.strip_prefix("--provider-request=").map(str::to_owned)) {
+        match provider::run(&path) {
+            Ok(value) => println!("{}", value),
+            Err(error) => { eprintln!("compiler provider: {error}"); std::process::exit(2); }
+        }
+        return;
+    }
     let t_start = std::time::Instant::now();
     // `MNCS_PROBE_MODULES` optionally narrows the elaborated module set
     // (comma-separated leaf names). By default it loads the shared frontend

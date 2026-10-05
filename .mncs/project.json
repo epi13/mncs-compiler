@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 9,
+  "revision": 10,
   "manifest_location": "in-repository",
   "authority": {
     "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
@@ -22,6 +22,74 @@
           "src/compiler/",
           "README.md"
         ]
+      },
+      {
+        "contract": "canonical-vm-artifact",
+        "version": "1",
+        "kind": "compiler-artifact-provider",
+        "stability": "experimental",
+        "effects": [
+          "verify"
+        ],
+        "artifact_contract": {
+          "artifact_schema": "mncs.vm.artifact/1",
+          "ssa_schema": "0.5",
+          "vm_contract": "mncs.vm/0.1",
+          "producer_kind": "stage0-bootstrap-direct-emitter",
+          "source_map_schema": "mncs.execution-source-map/1",
+          "request_schema": "mncs.compiler-vm-request/1"
+        },
+        "fingerprint_sources": [
+          "tools/vm_provider.py",
+          "tools/stage0-probe/",
+          "tools/vm_emit.rs"
+        ],
+        "invocation": {
+          "kind": "python",
+          "path": "tools/vm_provider.py",
+          "fixed_argv": [
+            "emit"
+          ],
+          "toolchain": {
+            "repository": "mncs-compiler",
+            "path": ".bootstrap/target/release/mncs-compiler-stage0-probe"
+          },
+          "toolchain_env": "MNCS_COMPILER_PROBE"
+        }
+      },
+      {
+        "contract": "compiler-producer",
+        "version": "1",
+        "kind": "compiler-artifact-provider",
+        "stability": "experimental",
+        "effects": [
+          "read"
+        ],
+        "artifact_contract": {
+          "artifact_schema": "mncs.vm.artifact/1",
+          "ssa_schema": "0.5",
+          "vm_contract": "mncs.vm/0.1",
+          "producer_kind": "stage0-bootstrap-direct-emitter",
+          "source_map_schema": "mncs.execution-source-map/1",
+          "request_schema": "mncs.compiler-vm-request/1"
+        },
+        "fingerprint_sources": [
+          "tools/vm_provider.py",
+          "tools/stage0-probe/",
+          "tools/vm_emit.rs"
+        ],
+        "invocation": {
+          "kind": "python",
+          "path": "tools/vm_provider.py",
+          "fixed_argv": [
+            "inspect"
+          ],
+          "toolchain": {
+            "repository": "mncs-compiler",
+            "path": ".bootstrap/target/release/mncs-compiler-stage0-probe"
+          },
+          "toolchain_env": "MNCS_COMPILER_PROBE"
+        }
       }
     ],
     "consumes": [

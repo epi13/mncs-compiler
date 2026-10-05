@@ -77,6 +77,8 @@ struct CallableEntry {
     function: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     semantic: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    test_binding: Option<mncs_model::BackendCallableBinding>,
 }
 
 #[derive(serde::Serialize)]
@@ -184,6 +186,23 @@ pub fn emit_vm_artifact(
     compiler: &ReferenceCompiler,
     program: &Program,
 ) -> Result<serde_json::Value, String> {
+    emit_vm_artifact_with_producer(compiler, program, None)
+}
+
+pub fn emit_vm_artifact_with_producer(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    producer: Option<&str>,
+) -> Result<serde_json::Value, String> {
+    emit_vm_artifact_with_source_map(compiler, program, producer, None).map(|pair| pair.0)
+}
+
+pub fn emit_vm_artifact_with_source_map(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    producer: Option<&str>,
+    mut source_map: Option<mncs_compiler::ExecutionSourceMap>,
+) -> Result<(serde_json::Value, Option<mncs_compiler::ExecutionSourceMap>), String> {
     let emit: BTreeSet<ArtifactRepresentation> =
         [ArtifactRepresentation::Ssa].into_iter().collect();
     let request = compiler.request_for_program(program, emit, None);
@@ -222,11 +241,17 @@ pub fn emit_vm_artifact(
     // only the module-qualified pair routes precisely. This is
     // stricter than the migration adapter's bare-name uniqueness
     // rule, which refuses such programs outright.
+    let test_bindings: BTreeMap<_, _> = mncs_codegen::language_owned_callable_bindings(program)
+        .into_iter().filter(|row| row.test_case_identity.is_some())
+        .map(|row| ((row.module.clone(), row.function.clone()), row)).collect();
     let mut callables: Vec<CallableEntry> = Vec::with_capacity(program.functions.len());
     for function in &program.functions {
         let namespace = function.identity_namespace(&program.module);
         match resolve_callable(&ssa, namespace, &function.name) {
-            Some(entry) => callables.push(entry),
+            Some(mut entry) => {
+                entry.test_binding = test_bindings.get(&(namespace.to_owned(), function.name.clone())).cloned();
+                callables.push(entry);
+            },
             None => unsupported.push(format!(
                 "export {namespace}::{}: no ssa instance",
                 function.name
@@ -280,8 +305,36 @@ pub fn emit_vm_artifact(
     capabilities.sort();
     capabilities.dedup();
 
+    // Runtime events name selected SSA operations. Preserve the original
+    // semantic rows and add exact compiler-owned SSA -> source correspondences.
+    // Imported/generic operations without a root-source correspondence stay absent.
+    if let Some(map) = &mut source_map {
+        let original: BTreeMap<_, _> = map.operations.iter().map(|row| (row.identity.clone(), row.clone())).collect();
+        let functions: BTreeSet<_> = map.functions.iter().map(|row| row.identity.clone()).collect();
+        for function in &ssa.functions {
+            if !functions.contains(&function.semantic_identity) { continue; }
+            for block in &function.blocks {
+                map.blocks.push(mncs_compiler::ExecutionSourceBlock {
+                    identity:block.identity.clone(), function_identity:function.semantic_identity.clone(), source_span:None,
+                });
+                for instruction in &block.instructions {
+                    let Some(origin) = instruction.semantic_identity.as_ref().and_then(|id| original.get(id)) else { continue; };
+                    map.operations.push(mncs_compiler::ExecutionSourceOperation {
+                        identity:instruction.identity.clone(), function_identity:function.semantic_identity.clone(),
+                        block_identity:block.identity.clone(), source_span:origin.source_span, synthetic:origin.synthetic,
+                        correspondence:format!("selected-ssa-from:{}", origin.identity.0),
+                    });
+                }
+            }
+        }
+        map.identity = format!("mncs:compiler:execution-source-map:{}", map.fingerprint());
+        assert!(map.identity_is_valid());
+    }
+
     let mut lowering_refs = vec![result.identity.0.clone(), selected.identity.0.clone()];
     lowering_refs.extend(stage0_provenance_refs());
+    if let Some(identity) = producer { lowering_refs.push(format!("compiler-producer:{identity}")); }
+    if let Some(map) = &source_map { lowering_refs.push(format!("source-map:{}", map.identity)); }
 
     let artifact = VmArtifact {
         schema_version: VM_ARTIFACT_SCHEMA_VERSION.to_owned(),
@@ -314,7 +367,7 @@ pub fn emit_vm_artifact(
     let mut sealed = artifact;
     let canonical = serde_json::to_vec(&sealed).expect("artifact serializes");
     sealed.artifact_id = artifact_id_of(&canonical);
-    Ok(serde_json::to_value(&sealed).expect("sealed artifact serializes"))
+    Ok((serde_json::to_value(&sealed).expect("sealed artifact serializes"), source_map))
 }
 
 /// Bind one module-qualified function to its SSA instance. Panics
@@ -336,6 +389,7 @@ fn resolve_callable(ssa: &SsaModule, namespace: &str, name: &str) -> Option<Call
             name: name.to_owned(),
             function: candidates.pop().unwrap_or_default(),
             semantic: None,
+            test_binding: None,
         }),
         0 => None,
         _ => panic!("callable {namespace}::{name} is ambiguous across ssa functions"),
