@@ -17,6 +17,8 @@ use std::{
     io::{self, BufRead},
 };
 
+mod vm_emit;
+
 struct Sources(BTreeMap<String, SourceEnvelope>);
 impl ModuleResolver for Sources {
     fn resolve(&self, name: &str) -> Option<SourceEnvelope> {
@@ -181,9 +183,7 @@ fn hash_tree(root: &std::path::Path) -> String {
                     Err(_) => return false,
                 },
                 _ => match std::fs::read_link(&path) {
-                    Ok(target) => {
-                        files.push((rel, target.to_string_lossy().as_bytes().to_vec()))
-                    }
+                    Ok(target) => files.push((rel, target.to_string_lossy().as_bytes().to_vec())),
                     Err(_) => return false,
                 },
             }
@@ -236,8 +236,7 @@ fn parse_cache_entry(
     backend_name: Option<&str>,
 ) -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
     let entry: serde_json::Value = serde_json::from_slice(raw).ok()?;
-    let stored: ToolchainIdentity =
-        serde_json::from_value(entry.get("identity")?.clone()).ok()?;
+    let stored: ToolchainIdentity = serde_json::from_value(entry.get("identity")?.clone()).ok()?;
     if &stored != expected {
         return None;
     }
@@ -246,10 +245,9 @@ fn parse_cache_entry(
     if backend_name.is_none() {
         return Some((program, None));
     }
-    let artifact = serde_json::from_value::<mncs_model::BackendArtifact>(
-        entry.get("artifact")?.clone(),
-    )
-    .ok()?;
+    let artifact =
+        serde_json::from_value::<mncs_model::BackendArtifact>(entry.get("artifact")?.clone())
+            .ok()?;
     if !artifact.identity_is_valid() {
         return None;
     }
@@ -274,12 +272,14 @@ fn main() {
     });
     // Keep the resolver closure loaded, but elaborate only the Program a
     // focused execution suite actually calls.
-    let execution_modules: Option<Vec<String>> = std::env::var("MNCS_PROBE_EXECUTION_MODULES").ok().map(|raw| {
-        raw.split(',')
-            .map(|part| part.trim().to_owned())
-            .filter(|part| !part.is_empty())
-            .collect()
-    });
+    let execution_modules: Option<Vec<String>> = std::env::var("MNCS_PROBE_EXECUTION_MODULES")
+        .ok()
+        .map(|raw| {
+            raw.split(',')
+                .map(|part| part.trim().to_owned())
+                .filter(|part| !part.is_empty())
+                .collect()
+        });
     let generic_seeds: Vec<HostGenericSeedRequest> = std::env::var("MNCS_PROBE_GENERIC_SEEDS")
         .ok()
         .map(|raw| serde_json::from_str(&raw).expect("valid MNCS_PROBE_GENERIC_SEEDS JSON"))
@@ -289,9 +289,11 @@ fn main() {
     // This loader extension and the SSA oracle below stay only until the
     // canonical compiler test runner can make the same native-vs-Rust check
     // without this adapter; then both paths can be retired.
-    let include_flow = wanted
-        .as_ref()
-        .is_some_and(|names| names.iter().any(|name| matches!(name.as_str(), "flow" | "ssa" | "project")));
+    let include_flow = wanted.as_ref().is_some_and(|names| {
+        names
+            .iter()
+            .any(|name| matches!(name.as_str(), "flow" | "ssa" | "project"))
+    });
     let mut sources = Sources(BTreeMap::new());
     for file in [
         "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "ssa", "project",
@@ -339,8 +341,7 @@ fn main() {
     .filter_map(|file| {
         let name = format!("mncs.compiler.{file}.v1");
         sources.0.contains_key(&name).then(|| {
-            let text =
-                std::fs::read_to_string(format!("src/compiler/{file}.mncs")).unwrap();
+            let text = std::fs::read_to_string(format!("src/compiler/{file}.mncs")).unwrap();
             (name, text)
         })
     })
@@ -362,26 +363,30 @@ fn main() {
     // payloads shrink ~25x (hundreds of MB to tens) with no new
     // dependencies. Any compression failure degrades to a miss, never
     // an error.
-    let cache_load = |key: &str| -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
-        let dir = cache_dir.as_ref()?;
-        let toolchain = toolchain.as_ref()?;
-        let output = std::process::Command::new("gzip")
-            .args(["-dc", &format!("{dir}/{key}.json.gz")])
-            .output()
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        parse_cache_entry(&output.stdout, toolchain, backend_name.as_deref())
-    };
-    let cache_store = |key: &str, program: &mncs_model::Program, artifact: Option<&mncs_model::BackendArtifact>| {
+    let cache_load =
+        |key: &str| -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+            let dir = cache_dir.as_ref()?;
+            let toolchain = toolchain.as_ref()?;
+            let output = std::process::Command::new("gzip")
+                .args(["-dc", &format!("{dir}/{key}.json.gz")])
+                .output()
+                .ok()?;
+            if !output.status.success() {
+                return None;
+            }
+            parse_cache_entry(&output.stdout, toolchain, backend_name.as_deref())
+        };
+    let cache_store = |key: &str,
+                       program: &mncs_model::Program,
+                       artifact: Option<&mncs_model::BackendArtifact>| {
         let (Some(dir), Some(toolchain)) = (cache_dir.as_ref(), toolchain.as_ref()) else {
             return;
         };
         if std::fs::create_dir_all(dir).is_err() {
             return;
         }
-        let entry = serde_json::json!({"identity": toolchain, "program": program, "artifact": artifact});
+        let entry =
+            serde_json::json!({"identity": toolchain, "program": program, "artifact": artifact});
         let entry_bytes = serde_json::to_vec(&entry).expect("entry serializes");
         // Compress via a temp file, not a stdin pipe: entries are hundreds
         // of MB, and piping both stdin and stdout through 64KB kernel
@@ -480,7 +485,9 @@ fn main() {
                         .emissions
                         .backend
                         .as_ref()
-                        .unwrap_or_else(|| panic!("{backend} emitted no artifact for {name}: {result:?}"))
+                        .unwrap_or_else(|| {
+                            panic!("{backend} emitted no artifact for {name}: {result:?}")
+                        })
                         .clone();
                     if cache_dir.is_some() {
                         cache_store(&cache_key(name), program, Some(&artifact));
@@ -508,7 +515,10 @@ fn main() {
         )
     });
     if let Some(backend) = backend_name.as_deref() {
-        let reused = backend_sessions.values().filter(|session| session.reused()).count();
+        let reused = backend_sessions
+            .values()
+            .filter(|session| session.reused())
+            .count();
         let artifacts = backend_artifacts
             .iter()
             .map(|(name, artifact)| {
@@ -550,12 +560,18 @@ fn main() {
             let root = request["root"].as_str().expect("project root source");
             let mut imported = BTreeMap::new();
             for (module, text) in request["modules"].as_object().expect("project modules") {
-                imported.insert(module.clone(), envelope(text.as_str().expect("module source").to_owned()));
+                imported.insert(
+                    module.clone(),
+                    envelope(text.as_str().expect("module source").to_owned()),
+                );
             }
             let resolver = Sources(imported);
             let result = ReferenceCompiler::default()
                 .front_end_with_resolver(envelope(root.to_owned()), &resolver);
-            let ssa = result.program.as_ref().and_then(|program| program.lower_to_ssa().ok());
+            let ssa = result
+                .program
+                .as_ref()
+                .and_then(|program| program.lower_to_ssa().ok());
             let executions = request
                 .get("calls")
                 .and_then(Value::as_array)
@@ -571,22 +587,24 @@ fn main() {
                     }
                 })
                 .collect::<Vec<_>>();
-            let program = result.program.as_ref().map(|program| json!({
-                "module": program.module,
-                "dependencies": program.dependencies,
-                "functions": program.functions.iter().map(|function| json!({
-                    "name": function.name,
-                    "home_module": function.home_module,
-                    "identity": mncs_model::function_id(
-                        function.identity_namespace(&program.module),
-                        &function.name,
-                    ),
-                    "inputs": function.inputs,
-                    "outputs": function.outputs,
-                })).collect::<Vec<_>>(),
-                "record_types": program.record_types,
-                "finite_types": program.finite_types,
-            }));
+            let program = result.program.as_ref().map(|program| {
+                json!({
+                    "module": program.module,
+                    "dependencies": program.dependencies,
+                    "functions": program.functions.iter().map(|function| json!({
+                        "name": function.name,
+                        "home_module": function.home_module,
+                        "identity": mncs_model::function_id(
+                            function.identity_namespace(&program.module),
+                            &function.name,
+                        ),
+                        "inputs": function.inputs,
+                        "outputs": function.outputs,
+                    })).collect::<Vec<_>>(),
+                    "record_types": program.record_types,
+                    "finite_types": program.finite_types,
+                })
+            });
             json!({
                 "valid": result.is_valid(),
                 "diagnostics": result.diagnostics,
@@ -595,6 +613,19 @@ fn main() {
                 "ssa": ssa,
                 "executions": executions,
             })
+        } else if let Some(request) = input.get("emit_vm_artifact") {
+            // Direct canonical emission: one sealed mncs.vm.artifact/1
+            // for an elaborated module, no research payload involved.
+            let module = request
+                .get("module")
+                .and_then(Value::as_str)
+                .expect("emit_vm_artifact module");
+            let program = programs
+                .get(module)
+                .unwrap_or_else(|| panic!("emit_vm_artifact for unknown module {module}"));
+            let compiler = ReferenceCompiler::default();
+            let artifact = vm_emit::emit_vm_artifact(&compiler, program);
+            json!({"module": module, "artifact": artifact})
         } else if let Some(text) = input.get("elaborate").and_then(Value::as_str) {
             let result = ReferenceCompiler::default()
                 .front_end_with_resolver(envelope(text.to_owned()), &NullResolver);
@@ -627,9 +658,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mncs_model::{
-        BackendArtifact, BackendIdentity, CompilerArtifactRef, TransformationStatus,
-    };
+    use mncs_model::{BackendArtifact, BackendIdentity, CompilerArtifactRef, TransformationStatus};
 
     /// Hand-built identity with real in-memory driver parts and fixed
     /// file/toolchain parts, so each mutation test changes exactly one
@@ -664,7 +693,11 @@ mod tests {
         let text = "mncs 0.10;\nmodule probe.tiny;\nrecord Token { kind: u64, start: u64, end: u64 }\nfn first(tokens: [Token; 2]) -> (result: Token) { return tokens[0]; }\n";
         let result = ReferenceCompiler::default()
             .front_end_with_resolver(envelope(text.to_owned()), &NullResolver);
-        assert!(result.is_valid(), "tiny program valid: {:?}", result.diagnostics);
+        assert!(
+            result.is_valid(),
+            "tiny program valid: {:?}",
+            result.diagnostics
+        );
         result.program.unwrap()
     }
 
@@ -672,12 +705,7 @@ mod tests {
         BackendArtifact::new(
             BackendIdentity::new("test-backend", "0.1"),
             CompilerArtifactRef::new(ArtifactRepresentation::Semantic, "test-schema", "test-fp"),
-            TargetContractRef::new(
-                "test-target",
-                BTreeMap::new(),
-                Vec::new(),
-                Vec::new(),
-            ),
+            TargetContractRef::new("test-target", BTreeMap::new(), Vec::new(), Vec::new()),
             "test-format",
             b"bytes",
             vec!["f".to_owned()],
@@ -705,7 +733,10 @@ mod tests {
     fn source_change_misses() {
         let toolchain = test_toolchain(Some("cranelift"));
         let before = test_closure();
-        let after = vec![("mncs.compiler.decl.v1".to_owned(), "decl-bytes-changed".to_owned())];
+        let after = vec![(
+            "mncs.compiler.decl.v1".to_owned(),
+            "decl-bytes-changed".to_owned(),
+        )];
         assert_ne!(
             cache_key_hex(&toolchain, "mncs.compiler.decl.v1", &before, "seeds"),
             cache_key_hex(&toolchain, "mncs.compiler.decl.v1", &after, "seeds"),
@@ -803,9 +834,7 @@ mod tests {
             "artifact": tampered,
         }))
         .unwrap();
-        assert!(
-            parse_cache_entry(&bad_artifact, &backended, Some("cranelift")).is_none()
-        );
+        assert!(parse_cache_entry(&bad_artifact, &backended, Some("cranelift")).is_none());
         // Matching identity but an unparseable artifact.
         let unparseable = serde_json::to_vec(&serde_json::json!({
             "identity": backended,
@@ -813,9 +842,7 @@ mod tests {
             "artifact": {"broken": true},
         }))
         .unwrap();
-        assert!(
-            parse_cache_entry(&unparseable, &backended, Some("cranelift")).is_none()
-        );
+        assert!(parse_cache_entry(&unparseable, &backended, Some("cranelift")).is_none());
     }
 
     #[test]
@@ -840,18 +867,14 @@ mod tests {
             "artifact": artifact,
         }))
         .unwrap();
-        assert!(
-            parse_cache_entry(&entry, &backended, Some("cranelift"))
-                .is_some_and(|(_, artifact)| artifact.is_some())
-        );
+        assert!(parse_cache_entry(&entry, &backended, Some("cranelift"))
+            .is_some_and(|(_, artifact)| artifact.is_some()));
     }
 
     #[test]
     fn gather_reads_pins_and_tree() {
-        let root = std::env::temp_dir().join(format!(
-            "probe-cache-test-{}-gather",
-            std::process::id()
-        ));
+        let root =
+            std::env::temp_dir().join(format!("probe-cache-test-{}-gather", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);
         let bootstrap = root.join("bootstrap");
         std::fs::create_dir_all(bootstrap.join("crates")).unwrap();
@@ -870,8 +893,7 @@ mod tests {
             vec![7u8; 1024],
         )
         .unwrap();
-        let first =
-            gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
+        let first = gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
         assert_eq!(first.lock_revision, "rev-1");
         assert_eq!(first.lock_source_profile, "0.18");
         assert_eq!(first.provisioned_revision, "rev-1");
@@ -882,20 +904,15 @@ mod tests {
             vec![8u8; 2048],
         )
         .unwrap();
-        let second =
-            gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
+        let second = gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
         assert_eq!(first.bootstrap_tree_sha256, second.bootstrap_tree_sha256);
         // A source change does.
         std::fs::write(bootstrap.join("crates").join("a.rs"), "fn a() { 1 }").unwrap();
-        let third =
-            gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
+        let third = gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
         assert_ne!(first.bootstrap_tree_sha256, third.bootstrap_tree_sha256);
         // Missing files degrade to explicit unknowns, never a panic.
-        let missing = gather_toolchain_identity(
-            None,
-            &root.join("no-lock.json"),
-            &root.join("no-bootstrap"),
-        );
+        let missing =
+            gather_toolchain_identity(None, &root.join("no-lock.json"), &root.join("no-bootstrap"));
         assert_eq!(missing.lock_revision, UNKNOWN_IDENTITY_PART);
         assert_eq!(missing.provisioned_revision, UNKNOWN_IDENTITY_PART);
         assert_eq!(missing.bootstrap_tree_sha256, UNKNOWN_IDENTITY_PART);
