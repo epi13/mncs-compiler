@@ -57,6 +57,14 @@ def test_defaults_matches_suites():
     }
 
 
+def test_vm_drivers_exist():
+    root = Path(__file__).resolve().parents[1]
+    for name, entry in backend_policy.SUITES.items():
+        driver = entry.get("vm_driver")
+        if driver is not None:
+            assert (root / driver).exists(), f"{name}: {driver} missing"
+
+
 if __name__ == "__main__":
     test_explicit_override_wins()
     test_classified_suites_resolve_table_backend()
@@ -64,4 +72,5 @@ if __name__ == "__main__":
     test_unknown_suite_error_is_lookup_error()
     test_classification_is_abcd()
     test_defaults_matches_suites()
-    print("backend_policy: 6 checks passed")
+    test_vm_drivers_exist()
+    print("backend_policy: 7 checks passed")

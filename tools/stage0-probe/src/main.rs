@@ -507,6 +507,23 @@ fn main() {
             )
         })
         .collect();
+    // One-shot public emission (P-VM-COMPILER-003 substance for the
+    // direct path): same module/seed/cache environment as the
+    // transport, but prints one sealed artifact and exits so
+    // out-of-process runtimes, stores, and evidence pipelines can
+    // consume frozen bytes without linking the compiler or speaking
+    // the JSONL protocol.
+    if let Some(module) =
+        std::env::args().find_map(|arg| arg.strip_prefix("--emit-vm-artifact=").map(str::to_owned))
+    {
+        let program = programs
+            .get(&module)
+            .unwrap_or_else(|| panic!("--emit-vm-artifact for unknown module {module}"));
+        let compiler = ReferenceCompiler::default();
+        let artifact = vm_emit::emit_vm_artifact(&compiler, program);
+        println!("{}", json!({"module": module, "artifact": artifact}));
+        return;
+    }
     let stage0 = toolchain.as_ref().map(|identity| {
         format!(
             "{}/{}",

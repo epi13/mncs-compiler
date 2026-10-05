@@ -125,6 +125,21 @@ def main():
         second_bytes = json.dumps(second["artifact"], sort_keys=True).encode()
         assert hashlib.sha256(first_bytes).digest() == hashlib.sha256(second_bytes).digest(), \
             "emission must be deterministic"
+        # One-shot CLI emits the same bytes as the protocol: byte
+        # stability across transports (P-VM-COMPILER-003).
+        env = dict(os.environ)
+        env.pop("MNCS_PROBE_BACKEND", None)
+        env["MNCS_PROBE_MODULES"] = "source"
+        env["MNCS_PROBE_EXECUTION_MODULES"] = MODULE
+        env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(SEEDS)
+        one_shot = subprocess.run(
+            [str(PROBE), f"--emit-vm-artifact={MODULE}"],
+            capture_output=True, text=True, env=env, cwd=ROOT)
+        assert one_shot.returncode == 0, one_shot.stderr[-1000:]
+        cli_artifact = json.loads(one_shot.stdout)["artifact"]
+        cli_bytes = json.dumps(cli_artifact, sort_keys=True).encode()
+        assert hashlib.sha256(cli_bytes).digest() == hashlib.sha256(first_bytes).digest(), \
+            "one-shot CLI must match protocol bytes"
 
         tmp = Path(tempfile.mkdtemp(prefix="mncs-vm-emit-"))
         artifact_path = tmp / "direct.json"

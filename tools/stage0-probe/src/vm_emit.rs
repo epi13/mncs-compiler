@@ -204,18 +204,29 @@ pub fn emit_vm_artifact(compiler: &ReferenceCompiler, program: &Program) -> serd
         .clone();
 
     // Exports mirror the research adapter exactly: every program
-    // function name in order.
+    // function name in order (informational; may repeat across linked
+    // modules).
     let exports: Vec<String> = program
         .functions
         .iter()
         .map(|function| function.name.clone())
         .collect();
     let mut unsupported: Vec<String> = Vec::new();
-    let mut callables: Vec<CallableEntry> = Vec::with_capacity(exports.len());
-    for name in &exports {
-        match resolve_export(program, &ssa, name) {
+    // Callables resolve per (namespace, name) function, not per bare
+    // name: linked programs routinely define one helper name in
+    // several modules (segment's `next_token` wraps lexer's), and
+    // only the module-qualified pair routes precisely. This is
+    // stricter than the migration adapter's bare-name uniqueness
+    // rule, which refuses such programs outright.
+    let mut callables: Vec<CallableEntry> = Vec::with_capacity(program.functions.len());
+    for function in &program.functions {
+        let namespace = function.identity_namespace(&program.module);
+        match resolve_callable(&ssa, namespace, &function.name) {
             Some(entry) => callables.push(entry),
-            None => unsupported.push(format!("export {name}: no ssa instance")),
+            None => unsupported.push(format!(
+                "export {namespace}::{}: no ssa instance",
+                function.name
+            )),
         }
     }
 
@@ -302,42 +313,28 @@ pub fn emit_vm_artifact(compiler: &ReferenceCompiler, program: &Program) -> serd
     serde_json::to_value(&sealed).expect("sealed artifact serializes")
 }
 
-/// Mirror of the migration adapter's export routing, over the typed
-/// program instead of payload JSON. Panics on ambiguity (test
-/// transport is loud); names without an SSA instance resolve to
-/// `None` for explicit recording.
-fn resolve_export(program: &Program, ssa: &SsaModule, name: &str) -> Option<CallableEntry> {
-    let mut namespaces: Vec<&str> = Vec::new();
-    for function in &program.functions {
-        if function.name != name {
-            continue;
-        }
-        let namespace = function.identity_namespace(&program.module);
-        if !namespaces.contains(&namespace) {
-            namespaces.push(namespace);
-        }
-    }
+/// Bind one module-qualified function to its SSA instance. Panics
+/// when one qualified pair names several SSA functions (test
+/// transport is loud); pairs without an SSA instance (generics
+/// without a compiled instance here) resolve to `None` for explicit
+/// recording.
+fn resolve_callable(ssa: &SsaModule, namespace: &str, name: &str) -> Option<CallableEntry> {
+    let id = mncs_model::function_id(namespace, name);
     let mut candidates = Vec::new();
-    for namespace in &namespaces {
-        let id = mncs_model::function_id(namespace, name);
-        for function in &ssa.functions {
-            if function.semantic_identity == id {
-                candidates.push(((*namespace).to_owned(), function.identity.0.clone()));
-            }
+    for function in &ssa.functions {
+        if function.semantic_identity == id {
+            candidates.push(function.identity.0.clone());
         }
     }
     match candidates.len() {
-        1 => {
-            let (namespace, function) = candidates.pop().unwrap_or_default();
-            Some(CallableEntry {
-                module: namespace,
-                name: name.to_owned(),
-                function,
-                semantic: None,
-            })
-        }
+        1 => Some(CallableEntry {
+            module: namespace.to_owned(),
+            name: name.to_owned(),
+            function: candidates.pop().unwrap_or_default(),
+            semantic: None,
+        }),
         0 => None,
-        _ => panic!("export {name} is ambiguous across functions"),
+        _ => panic!("callable {namespace}::{name} is ambiguous across ssa functions"),
     }
 }
 

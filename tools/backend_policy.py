@@ -70,11 +70,15 @@ SUITES = {
         "backend": "cranelift",
         "reason": "executor-backed; stays native until the VM route covers the workload",
     },
-    # B-class: executes segment helpers through the probe.
+    # B-class: executes segment helpers through the probe. Also
+    # covered on the canonical VM via tools/test_vm_segment.py
+    # (direct bytes + batch); the Cranelift row stays as the native
+    # anchor.
     "segment": {
         "class": "B",
         "backend": "cranelift",
-        "reason": "executor-backed; stays native until the VM route covers the workload",
+        "reason": "executor-backed; native anchor, with VM coverage via test_vm_segment.py",
+        "vm_driver": "tools/test_vm_segment.py",
     },
     # B-class: lexer differential; the Cranelift retained-session
     # assertions are a native canary.
