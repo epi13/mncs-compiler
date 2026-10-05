@@ -335,13 +335,64 @@ def check_unit_case(probe, text):
     return probe.run('decl', 'check_unit', logical_args(source_bytes(text)))
 
 
-def self_ingest_case(probe, relpath):
-    data = (ROOT / relpath).read_bytes()
-    pages = [data[i:i + STRIDE_BOUND] for i in range(0, len(data), STRIDE_BOUND)]
-    args = [pages_value(pages), integer(STRIDE_BOUND), integer(len(data))]
-    got = probe.run('decl', 'parse_unit', args)
+def check_pos_parse(got, oracle, data, text):
+    """POS structural assertions shared by the live suite and VM drivers."""
+    assert not oracle['diagnostics'], (text, oracle['diagnostics'])
+    assert got['ok'], (text, got['err_start'], got['err_end'])
+    a = oracle['ast']
+    src = data
+    want_uses = [(u['module']['text'], u['alias']['text'] if u.get('alias') else None) for u in a['uses']]
+    have_uses = [(src[u['module_start']:u['module_end']].decode(),
+                  src[u['alias_start']:u['alias_end']].decode() if u['has_alias'] else None)
+                 for u in flist(got['uses'], 1)]
+    assert want_uses == have_uses, (text, have_uses, want_uses)
+    want_recs = [(r['name']['text'], [(f['name']['text'], f['value_type']['text']) for f in r['fields']])
+                 for r in a['record_types']]
+    have_recs = [(src[r['name_start']:r['name_end']].decode(),
+                  [norm_field(f, src) for f in flist(r['fields'], 1)]) for r in flist(got['records'], 1)]
+    assert want_recs == have_recs, (text, have_recs, want_recs)
+    assert len(a['functions']) == len(flist(got['fns'], 1)), text
+    for wf, hf in zip(a['functions'], flist(got['fns'], 1)):
+        s = hf['sig']
+        assert src[s['name_start']:s['name_end']].decode() == wf['name']['text'], text
+        want_gen = [(g['name']['text'], g['constraint']['text'] if g.get('constraint') else None)
+                    for g in wf.get('generic_params', [])]
+        have_gen = [(src[p['name_start']:p['name_end']].decode(),
+                     src[p['bound_start']:p['bound_end']].decode() if p['has_bound'] else None)
+                    for p in flist(s['generics'], 1)]
+        assert want_gen == have_gen, (text, have_gen, want_gen)
+        assert ([norm_field(f, src) for f in flist(s['params'], 1)] ==
+                [(p['name']['text'], p['value_type']['text']) for p in wf['inputs']]), text
+        assert ([norm_field(f, src) for f in flist(s['results'], 1)] ==
+                [(p['name']['text'], p['value_type']['text']) for p in wf['outputs']]), text
+        wstmts = canon_proj([onorm_stmt(x) for x in wf['body']['statements']] +
+                            [('ret', onorm_expr(wf['body']['returned_value']))])
+        hstmts = canon_proj([norm_stmt(x, src) for x in flist(hf['body']['body'], 1)] +
+                            [('ret', norm_expr(hf['body']['ret'], src))])
+        assert [deep(x) for x in wstmts] == [deep(x) for x in hstmts], (text, hstmts, wstmts)
+
+
+def check_neg_parse(got, oracle, text):
+    """NEG first-error-span assertions shared by the live suite and VM drivers."""
+    odiags = oracle['diagnostics'] or []
+    assert odiags, text
+    assert not got['ok'], text
+    ospan = (odiags[0]['span']['start'], odiags[0]['span']['end'])
+    assert (got['err_start'], got['err_end']) == ospan, (text, got, ospan)
+
+
+def check_check_unit(got, text, stage):
+    """check_unit verdict assertions shared by the live suite and VM drivers."""
+    assert got['stage'] == stage, (text, got)
+    if stage == 4:
+        assert got['ok'] and got['ir_ok'] and got['fn_count'] >= 1 and got['expr_count'] >= 1, (text, got)
+    else:
+        assert not got['ok'], (text, got)
+
+
+def check_self_ingest(got, oracle, data, relpath):
+    """Self-ingestion oracle-agreement assertions shared with VM drivers."""
     assert got['ok'], (relpath, got['err_start'], got['err_end'])
-    oracle = probe.send({'oracle': data.decode()})
     assert not oracle['diagnostics'], (relpath, oracle['diagnostics'])
     want = [(f['name']['text'], [g['name']['text'] for g in f.get('generic_params', [])])
             for f in oracle['ast']['functions']]
@@ -350,6 +401,15 @@ def self_ingest_case(probe, relpath):
             for s in (h['sig'] for h in flist(got['fns'], 1))]
     assert want == have, (relpath, have, want)
     return {'module': relpath, 'bytes': len(data), 'functions': len(want)}
+
+
+def self_ingest_case(probe, relpath):
+    data = (ROOT / relpath).read_bytes()
+    pages = [data[i:i + STRIDE_BOUND] for i in range(0, len(data), STRIDE_BOUND)]
+    args = [pages_value(pages), integer(STRIDE_BOUND), integer(len(data))]
+    got = probe.run('decl', 'parse_unit', args)
+    oracle = probe.send({'oracle': data.decode()})
+    return check_self_ingest(got, oracle, data, relpath)
 
 
 def suite():
@@ -364,56 +424,16 @@ def suite():
             source_text = data.decode()
             got = probe.run('decl', 'parse_unit', logical_args(data))
             oracle = probe.send({'oracle': source_text})
-            assert not oracle['diagnostics'], (text, oracle['diagnostics'])
-            assert got['ok'], (text, got['err_start'], got['err_end'])
-            a = oracle['ast']
-            src = data
-            want_uses = [(u['module']['text'], u['alias']['text'] if u.get('alias') else None) for u in a['uses']]
-            have_uses = [(src[u['module_start']:u['module_end']].decode(),
-                          src[u['alias_start']:u['alias_end']].decode() if u['has_alias'] else None)
-                         for u in flist(got['uses'], 1)]
-            assert want_uses == have_uses, (text, have_uses, want_uses)
-            want_recs = [(r['name']['text'], [(f['name']['text'], f['value_type']['text']) for f in r['fields']])
-                         for r in a['record_types']]
-            have_recs = [(src[r['name_start']:r['name_end']].decode(),
-                          [norm_field(f, src) for f in flist(r['fields'], 1)]) for r in flist(got['records'], 1)]
-            assert want_recs == have_recs, (text, have_recs, want_recs)
-            assert len(a['functions']) == len(flist(got['fns'], 1)), text
-            for wf, hf in zip(a['functions'], flist(got['fns'], 1)):
-                s = hf['sig']
-                assert src[s['name_start']:s['name_end']].decode() == wf['name']['text'], text
-                want_gen = [(g['name']['text'], g['constraint']['text'] if g.get('constraint') else None)
-                            for g in wf.get('generic_params', [])]
-                have_gen = [(src[p['name_start']:p['name_end']].decode(),
-                             src[p['bound_start']:p['bound_end']].decode() if p['has_bound'] else None)
-                            for p in flist(s['generics'], 1)]
-                assert want_gen == have_gen, (text, have_gen, want_gen)
-                assert ([norm_field(f, src) for f in flist(s['params'], 1)] ==
-                        [(p['name']['text'], p['value_type']['text']) for p in wf['inputs']]), text
-                assert ([norm_field(f, src) for f in flist(s['results'], 1)] ==
-                        [(p['name']['text'], p['value_type']['text']) for p in wf['outputs']]), text
-                wstmts = canon_proj([onorm_stmt(x) for x in wf['body']['statements']] +
-                                    [('ret', onorm_expr(wf['body']['returned_value']))])
-                hstmts = canon_proj([norm_stmt(x, src) for x in flist(hf['body']['body'], 1)] +
-                                    [('ret', norm_expr(hf['body']['ret'], src))])
-                assert [deep(x) for x in wstmts] == [deep(x) for x in hstmts], (text, hstmts, wstmts)
+            check_pos_parse(got, oracle, data, text)
         for text in NEG:
             data = source_bytes(text)
             source_text = data.decode()
             got = probe.run('decl', 'parse_unit', logical_args(data))
             oracle = probe.send({'oracle': source_text})
-            odiags = oracle['diagnostics'] or []
-            assert odiags, text
-            assert not got['ok'], text
-            ospan = (odiags[0]['span']['start'], odiags[0]['span']['end'])
-            assert (got['err_start'], got['err_end']) == ospan, (text, got, ospan)
+            check_neg_parse(got, oracle, text)
         for text, stage in CHECKS:
             got = check_unit_case(probe, text)
-            assert got['stage'] == stage, (text, got)
-            if stage == 4:
-                assert got['ok'] and got['ir_ok'] and got['fn_count'] >= 1 and got['expr_count'] >= 1, (text, got)
-            else:
-                assert not got['ok'], (text, got)
+            check_check_unit(got, text, stage)
         ingested = [self_ingest_case(probe, path) for path in SELF_INGEST]
         return {'requests': probe.count, 'pos': len(POS), 'neg': len(NEG), 'checks': len(CHECKS),
                 'self_ingest': ingested,

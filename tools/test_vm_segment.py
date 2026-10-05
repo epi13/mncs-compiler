@@ -100,6 +100,10 @@ def vm_to_wire(value):
         return {'sequence': {'values': [vm_to_wire(v) for v in value['Sequence']['elements']]}}
     if 'Record' in value:
         return {'record': {'fields': [[k, vm_to_wire(v)] for k, v in value['Record']['fields']]}}
+    if 'Finite' in value:
+        node = value['Finite']
+        return {'finite': {'discriminant': node['discriminant'],
+                           'payload': [[k, vm_to_wire(v)] for k, v in node['payload']]}}
     raise AssertionError(f'unexpected VM value {value}')
 
 
@@ -214,19 +218,22 @@ def semantic_digest(cases, wire_results):
     return digest.hexdigest()
 
 
-def run_batch(artifact_path, cases, tmp):
-    calls = [{'id': c['id'], 'callable': f"{MODULE}::{c['function']}",
+def run_batch(artifact_path, cases, tmp, module=MODULE, envelope=None):
+    calls = [{'id': c['id'], 'callable': f"{module}::{c['function']}",
               'args': c['args'], 'type_args': c['type_args']} for c in cases]
     calls_path = tmp / 'calls.json'
     out_path = tmp / 'results.json'
     calls_path.write_text(json.dumps(calls))
     test_vm_emit.ensure_vm()
+    command = ['/usr/bin/time', '-v', str(test_vm_emit.VM_BIN), 'batch',
+               '--artifact', str(artifact_path), '--calls', str(calls_path),
+               '--output', str(out_path)]
+    if envelope is not None:
+        envelope_path = tmp / 'envelope.json'
+        envelope_path.write_text(json.dumps(envelope))
+        command += ['--envelope', str(envelope_path)]
     started = time.monotonic()
-    completed = subprocess.run(
-        ['/usr/bin/time', '-v', str(test_vm_emit.VM_BIN), 'batch',
-         '--artifact', str(artifact_path), '--calls', str(calls_path),
-         '--output', str(out_path)],
-        capture_output=True, text=True)
+    completed = subprocess.run(command, capture_output=True, text=True)
     wall = time.monotonic() - started
     assert completed.returncode == 0, completed.stderr[-2000:]
     peak_kb = None
