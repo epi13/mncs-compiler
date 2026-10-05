@@ -11,7 +11,9 @@ tools/bootstrap.sh
 
 Declared capabilities (declarations do not establish execution health):
 
+- `canonical-vm-artifact/1` — compiler-artifact-provider (experimental)
 - `compiler-next-generation/1` — compiler-research-surface (experimental)
+- `compiler-producer/1` — compiler-artifact-provider (experimental)
 
 Semantic sources and ownership: `.mncs/projections.json`.
 <!-- MNCS:generated:end -->

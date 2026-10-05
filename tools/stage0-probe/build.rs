@@ -7,6 +7,23 @@ use std::{
 fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
+fn resolve_executable(configured: &str) -> PathBuf {
+    let path = PathBuf::from(configured);
+    if path.components().count() > 1 || path.is_absolute() {
+        return path.canonicalize().expect("canonical build tool path");
+    }
+    std::env::split_paths(&std::env::var_os("PATH").expect("build PATH"))
+        .map(|directory| directory.join(&path))
+        .find_map(|candidate| candidate.canonicalize().ok())
+        .expect("resolve build tool through PATH")
+}
+fn executable_identity(name: &str) -> serde_json::Value {
+    let configured = std::env::var(name).expect("selected build tool path");
+    let path = resolve_executable(&configured);
+    println!("cargo:rerun-if-env-changed={name}");
+    println!("cargo:rerun-if-changed={}", path.display());
+    serde_json::json!({"configured_path":configured,"resolved_path":path.display().to_string(),"sha256":hash(&std::fs::read(path).expect("read build tool"))})
+}
 fn collect(root: &Path, path: &Path, rows: &mut BTreeMap<String, String>) {
     if path.is_dir() {
         if matches!(
@@ -95,15 +112,59 @@ fn main() {
         .ok()
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned());
+    let dirty_status = std::process::Command::new("git")
+        .args([
+            "-C",
+            root.to_str().unwrap(),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ])
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| {
+            String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let changed: std::collections::BTreeSet<String> = dirty_status
+        .iter()
+        .filter_map(|line| {
+            (line.len() >= 4).then(|| {
+                line[3..]
+                    .rsplit(" -> ")
+                    .next()
+                    .unwrap_or(&line[3..])
+                    .to_owned()
+            })
+        })
+        .collect();
+    let dirty_inputs: BTreeMap<String, String> = inputs
+        .iter()
+        .filter(|(path, _)| changed.contains(*path))
+        .map(|(path, identity)| (path.clone(), identity.clone()))
+        .collect();
     let stage0_revision = std::fs::read_to_string(root.join(".bootstrap/revision"))
         .unwrap()
         .trim()
         .to_owned();
-    let compiler = std::process::Command::new(std::env::var("RUSTC").unwrap())
+    let rustc_identity = executable_identity("RUSTC");
+    let cargo_identity = executable_identity("CARGO");
+    let compiler = std::process::Command::new(rustc_identity["configured_path"].as_str().unwrap())
         .arg("-vV")
         .output()
         .unwrap();
-    let receipt = serde_json::json!({"schema_version":"mncs.compiler-producer-build/1", "repository":"mncs-compiler", "producer_kind":"stage0-bootstrap-direct-emitter", "source_revision":revision, "source_inputs":inputs, "stage0_revision":stage0_revision, "rustc":String::from_utf8_lossy(&compiler.stdout).trim(), "build_configuration":{"profile":std::env::var("PROFILE").ok(),"target":std::env::var("TARGET").ok(),"opt_level":std::env::var("OPT_LEVEL").ok(),"rustflags":std::env::var("RUSTFLAGS").ok()}, "assurance":"local build observation; not independent attestation"});
+    let cargo_version =
+        std::process::Command::new(cargo_identity["configured_path"].as_str().unwrap())
+            .arg("--version")
+            .output()
+            .ok()
+            .map(|value| String::from_utf8_lossy(&value.stdout).trim().to_owned());
+    let receipt = serde_json::json!({"schema_version":"mncs.compiler-producer-build/1", "repository":"mncs-compiler", "producer_kind":"stage0-bootstrap-direct-emitter", "source_revision":revision, "dirty_content_identity":hash(&serde_json::to_vec(&dirty_inputs).unwrap()), "dirty_input_count":dirty_inputs.len(), "source_inputs":inputs, "stage0_revision":stage0_revision, "rustc":String::from_utf8_lossy(&compiler.stdout).trim(), "build_configuration":{"profile":std::env::var("PROFILE").ok(),"target":std::env::var("TARGET").ok(),"opt_level":std::env::var("OPT_LEVEL").ok(),"rustflags":std::env::var("RUSTFLAGS").ok(),"cargo_version":cargo_version,"toolchain_executables":{"cargo":cargo_identity,"rustc":rustc_identity}}, "assurance":"local build observation; not independent attestation"});
     let bytes = serde_json::to_vec(&receipt).unwrap();
     let value =
         serde_json::json!({"identity":format!("sha256:{}", hash(&bytes)), "receipt":receipt});

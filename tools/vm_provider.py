@@ -9,6 +9,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -31,6 +32,28 @@ def file_digest(path):
         for block in iter(lambda: stream.read(1024 * 1024), b''):
             h.update(block)
     return h.hexdigest()
+
+
+def toolchain_mismatches(configuration):
+    tools = configuration.get('toolchain_executables') if isinstance(configuration, dict) else None
+    if not isinstance(tools, dict) or set(tools) != {'cargo', 'rustc'}:
+        return ['toolchain-executable-identities']
+    mismatches = []
+    for name, identity in tools.items():
+        try:
+            if not isinstance(identity, dict):
+                raise ValueError('invalid tool identity')
+            configured_path = identity['configured_path']
+            configured = Path(configured_path)
+            if not configured.is_absolute() and configured.parent == Path('.'):
+                configured = Path(shutil.which(configured_path) or configured_path)
+            configured = configured.resolve(strict=True)
+            resolved = Path(identity['resolved_path']).resolve(strict=True)
+            if configured != resolved or file_digest(resolved) != identity['sha256']:
+                mismatches.append('build-tool:' + name)
+        except (OSError, KeyError, TypeError, ValueError):
+            mismatches.append('build-tool:' + name)
+    return mismatches
 
 
 class ProviderError(RuntimeError):
@@ -68,6 +91,18 @@ class CompilerProvider:
         if producer['identity'] != 'sha256:' + digest(receipt):
             raise ProviderError('producer build receipt identity mismatch')
         mismatches = []
+        mismatches.extend(toolchain_mismatches(receipt.get('build_configuration')))
+        try:
+            revision = subprocess.run(['git', '-C', str(self.checkout), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=5, check=True).stdout.strip()
+            status = subprocess.run(['git', '-C', str(self.checkout), 'status', '--porcelain=v1', '--untracked-files=all'], capture_output=True, text=True, timeout=10, check=True).stdout.splitlines()
+            changed = {line[3:].rsplit(' -> ', 1)[-1] for line in status if len(line) >= 4}
+            dirty_inputs = {name: identity for name, identity in receipt['source_inputs'].items() if name in changed}
+            if revision != receipt.get('source_revision'):
+                mismatches.append('source-revision')
+            if digest(dirty_inputs) != receipt.get('dirty_content_identity') or len(dirty_inputs) != receipt.get('dirty_input_count'):
+                mismatches.append('dirty-checkout-identity')
+        except (OSError, subprocess.SubprocessError):
+            mismatches.append('checkout-state-unavailable')
         for name, expected in receipt['source_inputs'].items():
             path = (self.checkout / name).resolve()
             if not path.is_relative_to(self.checkout) or not path.is_file() or file_digest(path) != expected:
@@ -79,6 +114,7 @@ class CompilerProvider:
                 'checkout': str(self.checkout), 'executable': str(self.executable),
                 'executable_sha256': file_digest(self.executable), 'producer': producer,
                 'build_origin': 'input-mismatch' if mismatches else 'locally-observed-compiled-inputs',
+                'build_origin_mismatches': mismatches,
                 'mismatches': mismatches, 'artifact_schema': 'mncs.vm.artifact/1', 'ssa_schema': '0.5',
                 'vm_contract': 'mncs.vm/0.1', 'source_map_schema': 'mncs.execution-source-map/1',
                 'reference_role': 'pinned Stage-0 bootstrap; no self-hosting claim'}
@@ -206,17 +242,53 @@ class CompilerProvider:
             return {**product, 'cache_reused': False, 'cache': str(cache), 'product': str(product_path)}
 
 
+def build_selected_producer(*, checkout: Path, executable: Path, cargo: str = 'cargo'):
+    """Rebuild the pinned direct-emitter probe from its selected Stage-0 tree."""
+    checkout = Path(checkout).resolve()
+    expected = (checkout / '.bootstrap/target/release/mncs-compiler-stage0-probe').resolve()
+    if Path(executable).resolve() != expected:
+        raise ProviderError('provider build is bound to the selected Stage-0 probe path')
+    pin = json.loads((checkout / 'mncs-language.lock.json').read_text())['revision']
+    staged = checkout / '.bootstrap'
+    if (not (staged / 'Cargo.toml').is_file()
+            or (staged / 'revision').read_text().strip() != pin):
+        raise ProviderError('selected Stage-0 source tree is absent or does not match the compiler pin')
+    result = subprocess.run(
+        ['bash', str(checkout / 'tools/bootstrap.sh')], cwd=checkout,
+        capture_output=True, text=True, timeout=1800, check=False,
+        env={**os.environ, 'CARGO': cargo, 'GIT_OPTIONAL_LOCKS': '0'},
+    )
+    if result.returncode:
+        raise ProviderError('selected compiler producer build failed: ' + result.stderr[-3000:])
+    provider = CompilerProvider(checkout, executable=expected)
+    inspection = provider.inspect()
+    if inspection.get('state') != 'ready':
+        raise ProviderError('rebuilt compiler producer does not match its recorded source inputs')
+    return {'schema_version': 'mncs.compiler-build-operation/1',
+            'status': 'built-and-verified-locally', 'executable': str(expected),
+            'producer_identity': inspection['producer']['identity'],
+            'executable_sha256': inspection['executable_sha256'],
+            'source_revision': inspection['producer']['receipt'].get('source_revision'),
+            'stage0_revision': inspection['producer']['receipt'].get('stage0_revision'),
+            'build_command': ['bash', 'tools/bootstrap.sh'],
+            'build_stderr_tail': result.stderr[-1000:]}
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=['inspect', 'emit'])
+    parser.add_argument('operation', choices=['inspect', 'emit', 'build'])
     parser.add_argument('--request')
     parser.add_argument('--cache')
     parser.add_argument('--executable', default=os.environ.get('MNCS_COMPILER_PROBE'))
+    parser.add_argument('--cargo', default=os.environ.get('CARGO', 'cargo'))
     args = parser.parse_args(argv)
     provider = CompilerProvider(ROOT, executable=Path(args.executable) if args.executable else None)
     try:
         if args.operation == 'inspect':
             value = provider.inspect()
+        elif args.operation == 'build':
+            value = build_selected_producer(checkout=ROOT, executable=provider.executable,
+                                            cargo=args.cargo)
         else:
             if not args.request or not args.cache:
                 parser.error('emit requires --request and --cache')

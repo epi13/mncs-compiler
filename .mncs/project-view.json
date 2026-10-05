@@ -9,6 +9,74 @@
       "kind": "compiler-research-surface",
       "stability": "experimental",
       "version": "1"
+    },
+    {
+      "artifact_contract": {
+        "artifact_schema": "mncs.vm.artifact/1",
+        "producer_kind": "stage0-bootstrap-direct-emitter",
+        "request_schema": "mncs.compiler-vm-request/1",
+        "source_map_schema": "mncs.execution-source-map/1",
+        "ssa_schema": "0.5",
+        "vm_contract": "mncs.vm/0.1"
+      },
+      "contract": "canonical-vm-artifact",
+      "effects": [
+        "verify"
+      ],
+      "fingerprint_sources": [
+        "tools/vm_provider.py",
+        "tools/stage0-probe/",
+        "tools/vm_emit.rs"
+      ],
+      "invocation": {
+        "fixed_argv": [
+          "emit"
+        ],
+        "kind": "python",
+        "path": "tools/vm_provider.py",
+        "toolchain": {
+          "path": ".bootstrap/target/release/mncs-compiler-stage0-probe",
+          "repository": "mncs-compiler"
+        },
+        "toolchain_env": "MNCS_COMPILER_PROBE"
+      },
+      "kind": "compiler-artifact-provider",
+      "stability": "experimental",
+      "version": "1"
+    },
+    {
+      "artifact_contract": {
+        "artifact_schema": "mncs.vm.artifact/1",
+        "producer_kind": "stage0-bootstrap-direct-emitter",
+        "request_schema": "mncs.compiler-vm-request/1",
+        "source_map_schema": "mncs.execution-source-map/1",
+        "ssa_schema": "0.5",
+        "vm_contract": "mncs.vm/0.1"
+      },
+      "contract": "compiler-producer",
+      "effects": [
+        "read"
+      ],
+      "fingerprint_sources": [
+        "tools/vm_provider.py",
+        "tools/stage0-probe/",
+        "tools/vm_emit.rs"
+      ],
+      "invocation": {
+        "fixed_argv": [
+          "inspect"
+        ],
+        "kind": "python",
+        "path": "tools/vm_provider.py",
+        "toolchain": {
+          "path": ".bootstrap/target/release/mncs-compiler-stage0-probe",
+          "repository": "mncs-compiler"
+        },
+        "toolchain_env": "MNCS_COMPILER_PROBE"
+      },
+      "kind": "compiler-artifact-provider",
+      "stability": "experimental",
+      "version": "1"
     }
   ],
   "dependencies": [
@@ -29,6 +97,6 @@
   "purpose": "Experimental MNCS compiler implementation, written in mncs-language to pressure-test the language and move compiler semantics into MNCS while Rust remains the Stage-0/bootstrap/reference implementation.",
   "repository": "mncs-compiler",
   "schema_version": "mncs.project-view/1",
-  "source_identity": "sha256:e84d8458588284e6fa85fd3d7414c825a724f983957b17607a8b05ea6035361f",
+  "source_identity": "sha256:c6fd0050ecce58b7cc965889ec32f18ba968f83c55e5d7951662689dff7b96c4",
   "structure": {}
 }

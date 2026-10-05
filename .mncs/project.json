@@ -90,6 +90,38 @@
           },
           "toolchain_env": "MNCS_COMPILER_PROBE"
         }
+      },
+      {
+        "contract": "compiler-build",
+        "version": "1",
+        "kind": "build-provider",
+        "stability": "experimental",
+        "effects": [
+          "write"
+        ],
+        "artifact_contract": {
+          "receipt_schema": "mncs.compiler-producer-build/1",
+          "stage0_pin": "mncs-language.lock.json"
+        },
+        "fingerprint_sources": [
+          "tools/bootstrap.sh",
+          "tools/stage0-probe/",
+          "tools/vm-artifact-codec/",
+          "tools/vm_emit.rs",
+          "mncs-language.lock.json"
+        ],
+        "invocation": {
+          "kind": "python",
+          "path": "tools/vm_provider.py",
+          "fixed_argv": [
+            "build"
+          ],
+          "toolchain": {
+            "repository": "mncs-compiler",
+            "path": ".bootstrap/target/release/mncs-compiler-stage0-probe"
+          },
+          "toolchain_env": "MNCS_COMPILER_PROBE"
+        }
       }
     ],
     "consumes": [
