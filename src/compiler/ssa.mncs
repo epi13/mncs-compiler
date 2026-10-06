@@ -400,6 +400,8 @@ fn enum_construct_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
     return match parsed.node {
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: es, end: ee } => enum_construct_source_parts<P, N>(pages, stride, total, ty, variant_start, variant_end, params, start, end, ts, te, vs, ve, fields),
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: es, end: ee } => false,
         Name { start: ns, end: ne } => false,
         Integer { start: ns, end: ne, value: value, overflow: overflow } => false,
@@ -428,6 +430,8 @@ fn enum_construct_project_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
@@ -1446,6 +1450,8 @@ fn repeat_source_count_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
         Project { base: base, field_start: field_start, field_end: field_end, start: project_start, end: project_end, path: path } => false,
         FiniteMatch { subject: subject, arms: arms, start: match_start, end: match_end } => false,
         EnumConstruct { type_start: type_start, type_end: type_end, variant_start: variant_start, variant_end: variant_end, fields: fields, start: construct_start, end: construct_end } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: type_start, type_end: type_end, base: b, has_base: hb, fields: fields, start: construct_start, end: construct_end } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
@@ -1502,6 +1508,8 @@ fn project_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
         Binary { op: op, left: left, right: right, start: s, end: e } => false,
         Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: os, name_end: oe, args: a, start: s2, end: e2 } => false
     };
@@ -1567,6 +1575,8 @@ fn payload_extract_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
         Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
@@ -1695,6 +1705,8 @@ fn op_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false
     };
 }
@@ -1950,6 +1962,8 @@ fn leftmost_match_step(node: decl.Expr) -> (result: decl.Expr) {
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: p } => base,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => node,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => node,
+        Index { base: ib, index: ii, start: is, end: ie } => node,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => node,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => node,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: args, start: s, end: e } => node
     };
@@ -1974,6 +1988,8 @@ fn scalar_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_t
         Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };
@@ -2012,6 +2028,8 @@ fn finite_match_source_cases_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_t
         Call { name_start: ns, name_end: ne, args: args, targs: tg, start: s, end: e } => false,
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: ib, index: ii, start: is, end: ie } => false,
+        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => false,
         RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false,
         OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => false
     };

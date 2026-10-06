@@ -3,6 +3,14 @@
 
 Run after cleanup validation:
 python3 tools/test_vm_stage1_frontier.py .build/vm-efficiency/decl-after.json
+
+The remaining real-module frontiers (lexer.mncs, flow.mncs, ssa.mncs) all
+fail thousands of bytes deep, past what the 8M step-counted executors can
+reach, so the witness pins the minimal qualified-match-pattern case inline.
+It reproduces flow.mncs:173 (`decl.FnList.DNil`) and ssa.mncs:268
+(`SsaBlockList.LNil`): native parse fails at the pattern dot on every
+executor while the oracle accepts. When qualified patterns land, update
+this stress witness deliberately.
 """
 import hashlib
 import json
@@ -17,14 +25,15 @@ from test_vm_segment import run_batch, vm_to_wire
 
 def main():
     artifact = Path(sys.argv[1]).resolve()
-    path = Path('src/compiler/source.mncs')
-    data = path.read_bytes()
+    text = ('mncs 0.18; module t; enum F { No, Yes } '
+            'fn f(s: u64) -> (r: u64) { return match s { F.No => 1, _ => 0 }; }')
+    data = text.encode()
     pages = [data[i:i + decl.STRIDE_BOUND] for i in range(0, len(data), decl.STRIDE_BOUND)]
     args = [decl.pages_value(pages), decl.integer(decl.STRIDE_BOUND), decl.integer(len(data))]
     request = {'schema_version': '0.1', 'target': {'module': decl.MODULE, 'function': 'parse_unit'},
                'arguments': args, 'type_arguments': decl.TYPE_ARGS,
                'step_budget': decl.test_decl.EXECUTION_STEP_BUDGET}
-    case = {'id': 'stage1:source', 'function': 'parse_unit', 'args': args,
+    case = {'id': 'stage1:qualified-pattern', 'function': 'parse_unit', 'args': args,
             'type_args': decl.TYPE_ARGS, 'step_budget': request['step_budget']}
     values, times, steps = {}, {}, {}
     for backend in ['reference_interpreter', 'cranelift']:
@@ -51,7 +60,7 @@ def main():
     assert not got['ok'], 'frontier moved; update this stress witness deliberately'
     start, end = got['err_start'], got['err_end']
     report = {
-        'stage0_revision': decl.stage0_revision(), 'source': str(path), 'source_bytes': len(data),
+        'stage0_revision': decl.stage0_revision(), 'source': 'inline:qualified-match-pattern', 'source_bytes': len(data),
         'source_sha256': hashlib.sha256(data).hexdigest(), 'request_step_budget': request['step_budget'],
         'vm_outcome': result['outcome'], 'vm_peak_rss_kb': rss, 'steps': steps,
         'wall_seconds': times, 'frontier': {'start': start, 'end': end,
@@ -60,7 +69,7 @@ def main():
         'semantic_digests': {k: hashlib.sha256(json.dumps(v, sort_keys=True).encode()).hexdigest()
                              for k, v in values.items()},
         'new_vm_envelope_blocker': False,
-        'scope': 'real source.mncs self-ingestion: matching structured Stage-1 source frontier; no feature implementation',
+        'scope': 'qualified match patterns: matching structured Stage-1 frontier; no feature implementation',
     }
     Path('.build/vm-efficiency/stage1-frontier.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))

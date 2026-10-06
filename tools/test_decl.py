@@ -71,14 +71,34 @@ def norm_expr(e, src: bytes):
         return ('int', p['value'], (p['start'], p['end']))
     if v == 2:
         return ('bool', p['value'])
+    if v == 3:
+        return ('not', norm_expr(p['value'], src), (p['start'], p['end']))
+    if v == 4:
+        return ('rep', norm_expr(p['value'], src),
+                src[p['count_start']:p['count_end']].decode(),
+                (p['start'], p['end']))
+    if v == 10:
+        return ('enum', src[p['type_start']:p['type_end']].decode(),
+                src[p['variant_start']:p['variant_end']].decode(),
+                [(src[f['field_start']:f['field_end']].decode(), norm_expr(f['value'], src))
+                 for f in flist(p['fields'], 1)],
+                (p['start'], p['end']))
     # Keep these discriminants aligned with decl.Expr after the Profile 0.18
     # UnaryNot, Repeat, and ScalarMatch variants were added ahead of Binary.
-    # RecordConstruct is appended last (12) so existing discriminants hold.
+    # RecordConstruct (12), Index (13), and Cast (14) are appended last so
+    # existing discriminants hold.
     if v == 12:
         return ('rec', src[p['type_start']:p['type_end']].decode(),
                 norm_expr(p['base'], src) if p['has_base'] else None,
                 [(src[f['field_start']:f['field_end']].decode(), norm_expr(f['value'], src))
                  for f in flist(p['fields'], 1)],
+                (p['start'], p['end']))
+    if v == 13:
+        return ('idx', norm_expr(p['base'], src), norm_expr(p['index'], src),
+                (p['start'], p['end']))
+    if v == 14:
+        return ('cast', norm_expr(p['value'], src),
+                src[p['type_start']:p['type_end']].decode(),
                 (p['start'], p['end']))
     if v == 6:
         return ('bin', OPNAME[p['op']], norm_expr(p['left'], src), norm_expr(p['right'], src),
@@ -121,6 +141,17 @@ def canon_proj(e):
     if isinstance(e, tuple) and e and e[0] == 'rec':
         return ('rec', e[1], canon_proj(e[2]),
                 [(f, canon_proj(v)) for f, v in e[3]], e[4])
+    if isinstance(e, tuple) and e and e[0] == 'not':
+        return ('not', canon_proj(e[1]), e[2])
+    if isinstance(e, tuple) and e and e[0] == 'enum':
+        return ('enum', e[1], e[2],
+                [(f, canon_proj(v)) for f, v in e[3]], e[4])
+    if isinstance(e, tuple) and e and e[0] == 'rep':
+        return ('rep', canon_proj(e[1]), e[2], e[3])
+    if isinstance(e, tuple) and e and e[0] == 'idx':
+        return ('idx', canon_proj(e[1]), canon_proj(e[2]), e[3])
+    if isinstance(e, tuple) and e and e[0] == 'cast':
+        return ('cast', canon_proj(e[1]), e[2], e[3])
     if isinstance(e, list):
         return [canon_proj(x) for x in e]
     if isinstance(e, tuple) and e and e[0] == 'let':
@@ -185,6 +216,10 @@ def onorm_expr(e):
                 (b['span']['start'], b['span']['end']))
     if tag == 'FiniteVariant':
         t, v = b['type_name'], b['variant']
+        if b.get('fields'):
+            return ('enum', t['text'], v['text'],
+                    [(f[0]['text'], onorm_expr(f[1])) for f in b['fields']],
+                    (b['span']['start'], b['span']['end']))
         return ('path', t['text'], (t['span']['start'], t['span']['end']),
                 [(v['text'], (v['span']['start'], v['span']['end']))],
                 (b['span']['start'], b['span']['end']))
@@ -197,6 +232,18 @@ def onorm_expr(e):
         return ('rec', b['type_name']['text'],
                 onorm_expr(b['base']) if b.get('base') else None,
                 [(f[0]['text'], onorm_expr(f[1])) for f in b['fields']],
+                (b['span']['start'], b['span']['end']))
+    if tag == 'Not':
+        return ('not', onorm_expr(b['value']),
+                (b['span']['start'], b['span']['end']))
+    if tag == 'SequenceRepeat':
+        return ('rep', onorm_expr(b['element']), b['count']['text'],
+                (b['span']['start'], b['span']['end']))
+    if tag == 'Index':
+        return ('idx', onorm_expr(b['base']), onorm_expr(b['index']),
+                (b['span']['start'], b['span']['end']))
+    if tag == 'Cast':
+        return ('cast', onorm_expr(b['value']), b['target_type']['text'],
                 (b['span']['start'], b['span']['end']))
     return ('OTHER', tag)
 
@@ -229,15 +276,17 @@ def strip_spans(e):
     if isinstance(e, tuple) and e and e[0] == 'rec':
         return ('rec', e[1], strip_spans(e[2]),
                 [(f, strip_spans(v)) for f, v in e[3]])
-    if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int'):
+    if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int', 'idx', 'cast', 'rep', 'not'):
         return (e[0],) + tuple(strip_spans(x) for x in e[1:-1])
+    if isinstance(e, tuple) and e and e[0] == 'enum':
+        return ('enum', e[1], e[2], [(f, strip_spans(v)) for f, v in e[3]])
     if isinstance(e, list):
         return [strip_spans(x) for x in e]
     return e
 
 
 def deep(e):
-    if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int', 'rec'):
+    if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int', 'rec', 'idx', 'cast', 'rep', 'not', 'enum'):
         return strip_spans(e)
     if isinstance(e, tuple) and e and e[0] == 'let':
         return ('let', e[1], e[2], deep(e[3]))
@@ -285,6 +334,30 @@ POS = [
     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } iterate j up_to 2 carrying t: u64 = s { next t = t; } return t; }',
     'mncs 0.18; module t; fn f(a: u64) -> (r: u64) { if a == 1 { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } return s; } return 0; }',
     'mncs 0.18; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { iterate i up_to 4 carrying s: R = v { next s = s; } return s.x; }',
+    # Sequence index and `as` casts over open postfix chains, including
+    # chained index, cast/b operator association, and group-cast reentry.
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i]; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i] as u64; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x as u64; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return g(x)[i]; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64, j: u64) -> (r: u64) { return x[i][j]; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i].y; }',
+    'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: u64) { return a + b as u64; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: bool) { return x[i] as u64 < 128; }',
+    'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: u64) { return (a + b) as u64; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return (x as u64) as u64; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f(v: R, i: u64) -> (r: u64) { return v.x[i]; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f(x: u64) -> (r: u64) { return x as R; }',
+    'mncs 0.10; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i]; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return [x; 2][i]; }',
+    'mncs 0.18; module t; use a.b as c; fn f(x: u64) -> (r: u64) { return c.g(x) as u64; }',
+    # Operators inside construct field values reduce before the closing
+    # brace on both sides.
+    'mncs 0.18; module t; record R { x: u64 } fn f(s: u64) -> (r: u64) { return R { x: s + 1 }; }',
+    'mncs 0.18; module t; record R { x: u64, y: u64 } fn f(s: u64, t: u64) -> (r: u64) { return R { x: s, y: t + 1 }; }',
+    'mncs 0.18; module t; record R { x: bool } fn f(b: bool) -> (r: bool) { return R { x: !b }; }',
+    'mncs 0.18; module t; enum F { V { x: u64 } } fn f(a: u64, b: u64) -> (r: u64) { return F.V { x: a + b }; }',
+    'mncs 0.18; module t; enum F { No, Yes } fn f() -> (r: u64) { return F.No; }',
 ]
 
 NEG = [
@@ -323,6 +396,22 @@ NEG = [
     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s } return s; }',
     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; return s; } return s; }',
     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i over carrying s: u64 = 0 { next s = s; } return s; }',
+    # Index/cast first-error spans: empty/unclosed/multi indexes, missing
+    # cast targets, and the chain-closing rules (no index over groups or
+    # casts, no chained casts) fail at the delimiter on both sides.
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x[]; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i, i]; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x as; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x as 5; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return (x)[i]; }',
+    'mncs 0.18; module t; fn f(a: u64, b: u64, i: u64) -> (r: u64) { return (a + b)[i]; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x as u64 as u64; }',
+    'mncs 0.18; module t; fn f(x: u64, i: u64, j: u64) -> (r: u64) { return x as u64[i]; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return as u64; }',
+    # Truncated operators inside construct fields fail at the delimiter.
+    'mncs 0.18; module t; record R { x: u64 } fn f(a: u64) -> (r: u64) { return R { x: a + }; }',
+    'mncs 0.18; module t; record R { x: u64, y: u64 } fn f(a: u64, b: u64) -> (r: u64) { return R { x: a + , y: b }; }',
 ]
 
 # check_unit verdicts: (source, expected stage). Stages: 1 duplicate symbol,
@@ -338,11 +427,15 @@ CHECKS = [
     # Iterate bodies resolve and lower structurally at check_unit; loop
     # checking itself stays an explicit prove_unit failure (kind-2 obl).
     ('mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } return s; }', 4),
+    # Index and cast resolve and lower structurally at check_unit; their
+    # checking stays an explicit prove_unit failure like records/loops.
+    ('mncs 0.18; module t; fn f(x: u64, i: u64) -> (r: u64) { return x[i]; }', 4),
+    ('mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x as u64; }', 4),
 ]
 
 # Self-ingestion: real compiler modules the native parser must consume
 # whole, with oracle agreement on declaration facts.
-SELF_INGEST = ['src/compiler/segment.mncs', 'src/compiler/parser.mncs']
+SELF_INGEST = ['src/compiler/segment.mncs', 'src/compiler/parser.mncs', 'src/compiler/source.mncs']
 
 SOURCE_BOUND = max(len(text.encode()) for text in POS + NEG + [item[0] for item in CHECKS])
 
