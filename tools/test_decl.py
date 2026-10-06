@@ -73,6 +73,13 @@ def norm_expr(e, src: bytes):
         return ('bool', p['value'])
     # Keep these discriminants aligned with decl.Expr after the Profile 0.18
     # UnaryNot, Repeat, and ScalarMatch variants were added ahead of Binary.
+    # RecordConstruct is appended last (12) so existing discriminants hold.
+    if v == 12:
+        return ('rec', src[p['type_start']:p['type_end']].decode(),
+                norm_expr(p['base'], src) if p['has_base'] else None,
+                [(src[f['field_start']:f['field_end']].decode(), norm_expr(f['value'], src))
+                 for f in flist(p['fields'], 1)],
+                (p['start'], p['end']))
     if v == 6:
         return ('bin', OPNAME[p['op']], norm_expr(p['left'], src), norm_expr(p['right'], src),
                 (p['start'], p['end']))
@@ -111,6 +118,9 @@ def canon_proj(e):
         return ('bin', e[1], canon_proj(e[2]), canon_proj(e[3]), e[4])
     if isinstance(e, tuple) and e and e[0] == 'call':
         return ('call', e[1], e[2], [canon_proj(a) for a in e[3]], e[4])
+    if isinstance(e, tuple) and e and e[0] == 'rec':
+        return ('rec', e[1], canon_proj(e[2]),
+                [(f, canon_proj(v)) for f, v in e[3]], e[4])
     if isinstance(e, list):
         return [canon_proj(x) for x in e]
     if isinstance(e, tuple) and e and e[0] == 'let':
@@ -119,6 +129,10 @@ def canon_proj(e):
         return ('if', canon_proj(e[1]), [canon_proj(x) for x in e[2]], [canon_proj(x) for x in e[3]])
     if isinstance(e, tuple) and e and e[0] == 'ret':
         return ('ret', canon_proj(e[1]))
+    if isinstance(e, tuple) and e and e[0] == 'iter':
+        return ('iter', e[1], canon_proj(e[2]), e[3], e[4], e[5],
+                canon_proj(e[6]), [canon_proj(x) for x in e[7]], e[8],
+                canon_proj(e[9]))
     return e
 
 
@@ -135,6 +149,16 @@ def norm_stmt(s, src: bytes):
         return ('fail', src[p['mode_start']:p['mode_end']].decode())
     if v == 3:
         return ('ret', norm_expr(p['value'], src))
+    if v == 4:
+        return ('iter', src[p['name_start']:p['name_end']].decode(),
+                norm_expr(p['over_source'], src) if p['has_over_source'] else None,
+                src[p['bound_start']:p['bound_end']].decode(),
+                src[p['state_start']:p['state_end']].decode(),
+                src[p['type_start']:p['type_end']].decode(),
+                norm_expr(p['initial'], src),
+                [norm_stmt(x, src) for x in flist(p['body'], 1)],
+                src[p['next_start']:p['next_end']].decode(),
+                norm_expr(p['next_value'], src))
     raise AssertionError(v)
 
 
@@ -169,6 +193,11 @@ def onorm_expr(e):
         return ('path', segs[0]['text'], (segs[0]['span']['start'], segs[0]['span']['end']),
                 [(s['text'], (s['span']['start'], s['span']['end'])) for s in segs[1:]],
                 (b['span']['start'], b['span']['end']))
+    if tag == 'RecordLiteral':
+        return ('rec', b['type_name']['text'],
+                onorm_expr(b['base']) if b.get('base') else None,
+                [(f[0]['text'], onorm_expr(f[1])) for f in b['fields']],
+                (b['span']['start'], b['span']['end']))
     return ('OTHER', tag)
 
 
@@ -185,10 +214,21 @@ def onorm_stmt(s):
         return ('fail', b['mode']['text'])
     if tag == 'Return':
         return ('ret', onorm_expr(b['value']))
+    if tag == 'BoundedIteration':
+        return ('iter', b['name']['text'],
+                onorm_expr(b['over_source']) if b.get('over_source') else None,
+                b['bound']['text'],
+                b['state']['text'], b['state_type']['text'],
+                onorm_expr(b['initial']),
+                [onorm_stmt(x) for x in b['body']],
+                b['next_state']['text'], onorm_expr(b['next_value']))
     return ('OTHER', tag)
 
 
 def strip_spans(e):
+    if isinstance(e, tuple) and e and e[0] == 'rec':
+        return ('rec', e[1], strip_spans(e[2]),
+                [(f, strip_spans(v)) for f, v in e[3]])
     if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int'):
         return (e[0],) + tuple(strip_spans(x) for x in e[1:-1])
     if isinstance(e, list):
@@ -197,7 +237,7 @@ def strip_spans(e):
 
 
 def deep(e):
-    if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int'):
+    if isinstance(e, tuple) and e and e[0] in ('bin', 'call', 'proj', 'pathproj', 'int', 'rec'):
         return strip_spans(e)
     if isinstance(e, tuple) and e and e[0] == 'let':
         return ('let', e[1], e[2], deep(e[3]))
@@ -205,6 +245,9 @@ def deep(e):
         return ('if', deep(e[1]), [deep(x) for x in e[2]], [deep(x) for x in e[3]])
     if isinstance(e, tuple) and e and e[0] == 'ret':
         return ('ret', deep(e[1]))
+    if isinstance(e, tuple) and e and e[0] == 'iter':
+        return ('iter', e[1], deep(e[2]), e[3], e[4], e[5], deep(e[6]),
+                [deep(x) for x in e[7]], e[8], deep(e[9]))
     return e
 
 
@@ -221,6 +264,27 @@ POS = [
     'mncs 0.18; module t; fn f<N: Nat>(p: [[byte; up_to N]; up_to 4]) -> (r: u64) { return 0; }',
     'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: bool) { return a < b; }',
     'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: bool) { return a<1+2>(b); }',
+    # Record construction literals and `..base` updates, including trailing
+    # commas, projections over literals, and nested literal values.
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R { x: 1 }; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64, y: u64 } fn f() -> (r: u64) { let v: R = R { x: 1, y: 2 }; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64, y: u64 } fn f(v: R) -> (r: u64) { let w: R = R { ..v, x: 2 }; return w.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { let w: R = R { ..v }; return w.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R { x: 1, }; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { return R { ..v, x: v.x }; }',
+    'mncs 0.18; module t; record S { y: u64 } record R { x: u64 } fn f(s: S) -> (r: u64) { let v: R = R { x: s.y }; return v.x; }',
+    # Bounded iteration: `up_to` and `over` headers, body statements,
+    # nesting, sequencing after `if`, and record carried state.
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } return s; }',
+    'mncs 0.18; module t; fn f(xs: u64) -> (r: u64) { iterate i over xs carrying s: u64 = 0 { next s = s; } return s; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { iterate i over g(x) carrying s: u64 = x { let y: u64 = i; next s = y; } return s; }',
+    'mncs 0.18; module t; fn f(a: u64) -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { if a == 1 { return 1; } else { return 2; } next s = s; } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { iterate j up_to 2 carrying t: u64 = s { next t = t; } next s = t; } return s; }',
+    'mncs 0.18; module t; fn f(a: u64) -> (r: u64) { if a == 1 { return 1; } iterate i up_to 4 carrying s: u64 = 0 { next s = s; } return s; }',
+    'mncs 0.18; module t; fn f(a: u64) -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { if a == 1 { return 1; } next s = s; } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } iterate j up_to 2 carrying t: u64 = s { next t = t; } return t; }',
+    'mncs 0.18; module t; fn f(a: u64) -> (r: u64) { if a == 1 { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } return s; } return 0; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { iterate i up_to 4 carrying s: R = v { next s = s; } return s.x; }',
 ]
 
 NEG = [
@@ -233,6 +297,32 @@ NEG = [
     'mncs 0.18; module t; fn f<N: Foo>(x: u64) -> (r: u64) { return x; }',
     'mncs 0.09; module t; fn f<T>(x: u64) -> (r: u64) { return x; }',
     'mncs 0.09; module t; use a.b as c; fn f(x: u64) -> (r: u64) { return c.g<N>(x); }',
+    # Record-literal first-error spans: missing value/name/base land where
+    # Stage-0 reports them; a late `..` and a non-literal brace fail at the
+    # brace or dots on both sides.
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R { x: }; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R { x }; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R { .. }; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { let w: R = R { x: 1, ..v }; return w.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R {}; return v.x; }',
+    'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: u64) { let v: R = R { 1: 2 }; return v.x; }',
+    # Stage-0 ends a record literal before any `.`, so a projection directly
+    # off a literal fails at the dot on both sides.
+    'mncs 0.18; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { return R { ..v, x: v.x }.x; }',
+    'mncs 0.18; module t; record S { y: u64 } record R { x: u64 } fn f() -> (r: u64) { let v: R = R { x: S { y: 1 }.y }; return v.x; }',
+    # Iterate first-error spans: a body must end with `next`; a `next`
+    # outside a body fails at the keyword; header truncations fail at the
+    # offending token on both sides.
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { next s = s; return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { if s == 1 { next s = s; } } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 { next s = s; } return s; }',
+    'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { iterate i up_to x carrying s: u64 = 0 { next s = s; } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate up_to 4 carrying s: u64 = 0 { next s = s; } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = ; } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; return s; } return s; }',
+    'mncs 0.18; module t; fn f() -> (r: u64) { iterate i over carrying s: u64 = 0 { next s = s; } return s; }',
 ]
 
 # check_unit verdicts: (source, expected stage). Stages: 1 duplicate symbol,
@@ -245,11 +335,14 @@ CHECKS = [
     # single-unit scope (imports resolve at the project layer).
     ('mncs 0.18; module t; fn f<N: Nat>(x: u64) -> (r: u64) { return x; }', 4),
     ('mncs 0.18; module t; use a.b as c; fn f(x: u64) -> (r: u64) { return c.g(x); }', 2),
+    # Iterate bodies resolve and lower structurally at check_unit; loop
+    # checking itself stays an explicit prove_unit failure (kind-2 obl).
+    ('mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } return s; }', 4),
 ]
 
 # Self-ingestion: real compiler modules the native parser must consume
 # whole, with oracle agreement on declaration facts.
-SELF_INGEST = ['src/compiler/segment.mncs']
+SELF_INGEST = ['src/compiler/segment.mncs', 'src/compiler/parser.mncs']
 
 SOURCE_BOUND = max(len(text.encode()) for text in POS + NEG + [item[0] for item in CHECKS])
 

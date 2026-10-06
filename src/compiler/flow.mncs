@@ -30,7 +30,7 @@ record Block {
 enum BlockList { BNil, BCons { head: Block, tail: BlockList } }
 record BlockRev { rest: BlockList, acc: BlockList }
 
-record Frame {
+record FlowFrame {
     next: decl.StmtList,
     else_body: decl.StmtList,
     else_id: u64,
@@ -39,7 +39,7 @@ record Frame {
     parent_live: bool,
     then_falls: bool
 }
-enum Frames { FNil, FCons { head: Frame, tail: Frames } }
+enum FlowFrames { FNil, FCons { head: FlowFrame, tail: FlowFrames } }
 
 record Diagnostic { code: u64, start: u64, end: u64 }
 enum DiagnosticList { DNil, DCons { head: Diagnostic, tail: DiagnosticList } }
@@ -48,7 +48,7 @@ record DiagRev { rest: DiagnosticList, acc: DiagnosticList }
 record Build {
     rest: decl.StmtList,
     typed_rest: decl.TopsList,
-    frames: Frames,
+    frames: FlowFrames,
     current: Block,
     blocks: BlockList,
     diagnostics: DiagnosticList,
@@ -176,7 +176,7 @@ fn lower_fn_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
 }
 fn lower_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (result: FnWalk) {
     let initial: Build = Build {
-        rest: h.body.body, typed_rest: st.typed_rest, frames: Frames.FNil,
+        rest: h.body.body, typed_rest: st.typed_rest, frames: FlowFrames.FNil,
         current: empty_block(0, true, false), blocks: BlockList.BNil,
         diagnostics: DiagnosticList.DNil, next_id: 1, done: false, ok: h.ok,
         fn_start: h.fn_start, fn_end: h.fn_end,
@@ -216,8 +216,8 @@ fn step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u
 }
 fn step_empty<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build) -> (result: Build) {
     return match st.frames {
-        Frames.FNil => finish_tail<P, N>(pages, stride, total, st),
-        Frames.FCons { head: f, tail: t } => unwind<P, N>(pages, stride, total, st, f, t)
+        FlowFrames.FNil => finish_tail<P, N>(pages, stride, total, st),
+        FlowFrames.FCons { head: f, tail: t } => unwind<P, N>(pages, stride, total, st, f, t)
     };
 }
 fn step_stmt<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, h: decl.Stmt, t: decl.StmtList) -> (result: Build) {
@@ -226,8 +226,14 @@ fn step_stmt<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tot
         decl.Stmt.Let { name_start: a, name_end: b, type_start: c, type_end: d, type_kind: k, value: v, start: s, end: e } => add_let<P, N>(pages, stride, total, st, t, v, a, b),
         decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch<P, N>(pages, stride, total, st, t, c, tb, eb),
         decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail<P, N>(pages, stride, total, st, t, s, e),
-        decl.Stmt.Return { value: v, start: s, end: e } => add_return<P, N>(pages, stride, total, st, t, v, s, e)
+        decl.Stmt.Return { value: v, start: s, end: e } => add_return<P, N>(pages, stride, total, st, t, v, s, e),
+        decl.Stmt.Iterate { name_start: ns, name_end: ne, over_source: o, has_over_source: ho, bound_start: bs, bound_end: be, state_start: ss, state_end: se, type_start: ts, type_end: te, type_kind: tk, initial: init, body: b, next_start: xs, next_end: xe, next_value: nv, start: s, end: e } => add_iterate<P, N>(pages, stride, total, st, t)
     };
+}
+// Loop control-flow (back-edge construction over the carried state) is
+// unmodeled: fail the build here rather than emitting a wrong graph.
+fn add_iterate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList) -> (result: Build) {
+    return Build { ..st, done: true, ok: false };
 }
 fn add_let<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, value: decl.Expr, name_start: u64, name_end: u64) -> (result: Build) {
     let attached: Build = attach_expression<P, N>(pages, stride, total, st, value, 1, name_start, name_end);
@@ -244,10 +250,10 @@ fn add_branch<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         term_start: decl.expr_start(cond), term_end: decl.expr_end(cond),
         succ0: yes, succ1: no, succ_count: 2
     };
-    let frame: Frame = Frame { next: t, else_body: else_b, else_id: no, join_id: join, phase: 0, parent_live: attached.current.reachable, then_falls: false };
+    let frame: FlowFrame = FlowFrame { next: t, else_body: else_b, else_id: no, join_id: join, phase: 0, parent_live: attached.current.reachable, then_falls: false };
     return Build {
         ..attached, rest: then_b,
-        frames: Frames.FCons { head: frame, tail: st.frames },
+        frames: FlowFrames.FCons { head: frame, tail: st.frames },
         current: empty_block(yes, attached.current.reachable, false),
         blocks: BlockList.BCons { head: branch, tail: st.blocks },
         next_id: attached.next_id + 3
@@ -264,21 +270,21 @@ fn add_fail<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tota
     return Build { ..st, rest: t, current: b, blocks: BlockList.BCons { head: b, tail: st.blocks } };
 }
 
-fn unwind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
     if f.phase == 0 { return unwind_then<P, N>(pages, stride, total, st, f, tail); }
     return unwind_else<P, N>(pages, stride, total, st, f, tail);
 }
-fn unwind_then<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind_then<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
     let first: Build = close_to_join<P, N>(pages, stride, total, st, f.join_id);
-    let changed: Frame = Frame { ..f, phase: 1, then_falls: falls };
+    let changed: FlowFrame = FlowFrame { ..f, phase: 1, then_falls: falls };
     return Build {
         ..first, rest: f.else_body,
-        frames: Frames.FCons { head: changed, tail: tail },
+        frames: FlowFrames.FCons { head: changed, tail: tail },
         current: empty_block(f.else_id, f.parent_live, false)
     };
 }
-fn unwind_else<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: Frame, tail: Frames) -> (result: Build) {
+fn unwind_else<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
     let second: Build = close_to_join<P, N>(pages, stride, total, st, f.join_id);
     let join_live: bool = f.then_falls || falls;

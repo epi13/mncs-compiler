@@ -17,14 +17,14 @@ from test_vm_segment import run_batch, vm_to_wire
 
 def main():
     artifact = Path(sys.argv[1]).resolve()
-    path = Path('src/compiler/parser.mncs')
+    path = Path('src/compiler/source.mncs')
     data = path.read_bytes()
     pages = [data[i:i + decl.STRIDE_BOUND] for i in range(0, len(data), decl.STRIDE_BOUND)]
     args = [decl.pages_value(pages), decl.integer(decl.STRIDE_BOUND), decl.integer(len(data))]
     request = {'schema_version': '0.1', 'target': {'module': decl.MODULE, 'function': 'parse_unit'},
                'arguments': args, 'type_arguments': decl.TYPE_ARGS,
                'step_budget': decl.test_decl.EXECUTION_STEP_BUDGET}
-    case = {'id': 'stage1:parser', 'function': 'parse_unit', 'args': args,
+    case = {'id': 'stage1:source', 'function': 'parse_unit', 'args': args,
             'type_args': decl.TYPE_ARGS, 'step_budget': request['step_budget']}
     values, times, steps = {}, {}, {}
     for backend in ['reference_interpreter', 'cranelift']:
@@ -60,7 +60,7 @@ def main():
         'semantic_digests': {k: hashlib.sha256(json.dumps(v, sort_keys=True).encode()).hexdigest()
                              for k, v in values.items()},
         'new_vm_envelope_blocker': False,
-        'scope': 'real parser.mncs self-ingestion: matching structured Stage-1 parser frontier; no feature implementation',
+        'scope': 'real source.mncs self-ingestion: matching structured Stage-1 source frontier; no feature implementation',
     }
     Path('.build/vm-efficiency/stage1-frontier.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))

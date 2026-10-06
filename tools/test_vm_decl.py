@@ -49,6 +49,13 @@ OUT.mkdir(exist_ok=True)
 MODULE = 'mncs.compiler.decl.v1'
 FUNCTIONS = ['parse_unit', 'check_unit']
 TYPE_ARGS = [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)]
+# Step-counted executors (reference interpreter, canonical VM batch) share
+# the probe schema ceiling of 8M steps/request. Measured reference cost is
+# ~2050 steps/byte (segment.mncs: 2430 bytes -> 4,979,291 steps), so inputs
+# above this limit run on the native policy backend only, still checked
+# per-case against the Stage-0 oracle, while the joint semantic digests
+# cover exactly the cases every executor ran.
+INTERPRETER_BYTE_LIMIT = 3000
 
 
 def stage0_revision():
@@ -104,15 +111,15 @@ def gen_cases(probe, smoke):
         data = source_bytes(text)
         oracle = probe.send({'oracle': data.decode()})
         case('pos', 'parse_unit', logical_args(data),
-             text=text, data=data, oracle=oracle)
+             text=text, data=data, oracle=oracle, input_bytes=len(data))
     for text in neg:
         data = source_bytes(text)
         oracle = probe.send({'oracle': data.decode()})
         case('neg', 'parse_unit', logical_args(data),
-             text=text, oracle=oracle)
+             text=text, oracle=oracle, input_bytes=len(data))
     for text, stage in checks:
         case('check', 'check_unit', logical_args(source_bytes(text)),
-             text=text, stage=stage)
+             text=text, stage=stage, input_bytes=len(source_bytes(text)))
     if not smoke:
         for relpath in test_decl.SELF_INGEST:
             data = (ROOT / relpath).read_bytes()
@@ -120,7 +127,7 @@ def gen_cases(probe, smoke):
             args = [pages_value(pages), integer(STRIDE_BOUND), integer(len(data))]
             oracle = probe.send({'oracle': data.decode()})
             case('ingest', 'parse_unit', args,
-                 relpath=relpath, data=data, oracle=oracle)
+                 relpath=relpath, data=data, oracle=oracle, input_bytes=len(data))
     return cases
 
 
@@ -197,19 +204,23 @@ def main():
         artifact_bytes = json.dumps(artifact).encode()
         artifact_path.write_bytes(artifact_bytes)
 
+        joint = [c for c in cases if c['input_bytes'] <= INTERPRETER_BYTE_LIMIT]
+        native_only = [c['id'] for c in cases if c['input_bytes'] > INTERPRETER_BYTE_LIMIT]
+        assert joint, 'partition left no jointly-runnable case'
+
         t_ref = time.monotonic()
-        ref_raw_digest, ref_steps, ref_wire = execute_reference(ref, cases)
+        ref_raw_digest, ref_steps, ref_wire = execute_reference(ref, joint)
         phase_wall['reference_execution'] = round(time.monotonic() - t_ref, 3)
         ref_stderr = ref.close()
         ref_cache = [line for line in ref_stderr.splitlines() if 'mncs-stage0-probe' in line]
 
         document, batch_wall, batch_peak_kb, calls_bytes, results_bytes = run_batch(
-            artifact_path, cases, tmp, module=MODULE)
+            artifact_path, joint, tmp, module=MODULE)
         process_count += 1
         phase_wall['vm_batch'] = round(batch_wall, 3)
         assert document['artifact_id'] == artifact['artifact_id']
         vm_wire = []
-        for case_item, result in zip(cases, document['results']):
+        for case_item, result in zip(joint, document['results']):
             assert result['id'] == case_item['id']
             assert result['outcome'] == {'kind': 'completed'}, (case_item['id'], result['outcome'])
             wire = [vm_to_wire(v) for v in result['record']['returned']]
@@ -234,18 +245,19 @@ def main():
                 assert result['status'] == 'returned', (case_item['id'], result['status'])
                 third_steps.append(result['steps'])
                 check_case(case_item, result['returned'])
-                third_wire.append(result['returned'])
+                if case_item['input_bytes'] <= INTERPRETER_BYTE_LIMIT:
+                    third_wire.append(result['returned'])
         except Exception as error:
             third_ok, third_note = False, f'{type(error).__name__}: {error}'[:300]
         phase_wall[f'{policy_backend}_execution'] = round(time.monotonic() - t_third, 3)
         third_stderr = third.close()
         third_cache = [line for line in third_stderr.splitlines() if 'mncs-stage0-probe' in line]
 
-        digests = {'reference': semantic_digest(cases, ref_wire),
-                   'vm': semantic_digest(cases, vm_wire)}
+        digests = {'reference': semantic_digest(joint, ref_wire),
+                   'vm': semantic_digest(joint, vm_wire)}
         assert digests['vm'] == digests['reference'], digests
         if third_ok:
-            digests[policy_backend] = semantic_digest(cases, third_wire)
+            digests[policy_backend] = semantic_digest(joint, third_wire)
             assert digests[policy_backend] == digests['reference'], digests
 
         children_peak_kb = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
@@ -255,6 +267,9 @@ def main():
             'suite': 'decl',
             'smoke': smoke,
             'cases': len(cases),
+            'joint_cases': len(joint),
+            'native_only_cases': native_only,
+            'interpreter_byte_limit': INTERPRETER_BYTE_LIMIT,
             'artifact_id': artifact['artifact_id'],
             'artifact_bytes': len(artifact_bytes),
             'batch_calls_bytes': calls_bytes,
