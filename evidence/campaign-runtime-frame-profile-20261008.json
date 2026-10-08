@@ -1109,13 +1109,68 @@
   ],
   "recorded_at": "2026-10-08T21:50:45.177557+00:00",
   "schema_version": "mncs.compiler.campaign-evidence/1",
+  "self_consumption_attempts": [
+    {
+      "backend": "reference_interpreter",
+      "cgroup_observation": {
+        "absolute_oom_kill_count_at_sample": 4,
+        "cpu_max": "max 100000",
+        "memory_current_bytes_at_sample_scope": 16403472384,
+        "memory_max": "max",
+        "nr_throttled_at_sample": 0,
+        "oom_kill_delta": "UNKNOWN; no before snapshot",
+        "throttled_usec_at_sample": 0
+      },
+      "child": {
+        "cpu_percent": 99.0,
+        "file_descriptors": 3,
+        "max_rss_kib": 1560720,
+        "pid": 2924026,
+        "proc_io": {
+          "cancelled_write_bytes": 96096256,
+          "rchar_bytes": 146223783,
+          "read_bytes": 0,
+          "wchar_bytes": 102624636,
+          "write_bytes": 99463168
+        },
+        "rss_kib": 1311240,
+        "threads": 1
+      },
+      "child_observation_at_seconds": 152,
+      "classification": "TIMEOUT",
+      "compiler_request_result": "UNKNOWN; no response line before timeout",
+      "configured_step_budget": 8000000,
+      "execution_status_request_received": true,
+      "module": "decl",
+      "operation": "mncs.compiler.decl.v1::parse_unit",
+      "outer_timeout_seconds": 180,
+      "reported_executor_steps": "UNKNOWN",
+      "requested_stage": [
+        "parse",
+        "function_signature_names_and_generics"
+      ],
+      "source_bytes": 820881,
+      "source_path": "src/compiler/decl.mncs",
+      "source_sha256": "f2dd1f842e8747c408f9918d7611afeba0b45c2ae15f1467acb13b72fee9691f",
+      "stage0_oracle": "not run because native parse response did not return",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "termination": {
+        "probe_child_cleanup": "child no longer present after timeout; Probe.close assertion followed the interrupted transport",
+        "semantic_verdict": "UNKNOWN",
+        "wrapper_exit_code": 124,
+        "wrapper_signal": "SIGINT at 180 seconds"
+      }
+    }
+  ],
   "unknowns": [
     "parser/checker/proof/CFG/SSA subphase labels are UNKNOWN in these bounded project executions",
     "per-function CPU time is UNKNOWN; opt-in profiles report wall time, calls, and executor steps",
     "hardware instruction count is UNKNOWN in this execution namespace",
     "baseline proc I/O was unavailable and remains UNKNOWN; measured zero values are retained only when proc reported them",
-    "historical Cranelift exit -9 is not sufficient evidence to attribute OOM or semantic rejection"
+    "historical Cranelift exit -9 is not sufficient evidence to attribute OOM or semantic rejection",
+    "Current decl whole-module parse/signature attempt did not return within 180 seconds; its 8M executor step usage is UNKNOWN, and this is not a semantic rejection."
   ],
+  "updated_at": "2026-10-08T22:04:31.126257+00:00",
   "verification": {
     "differentials": [
       {
@@ -1148,7 +1203,7 @@
       }
     ],
     "git_diff_check": "passed",
-    "not_run": "full project regression and whole-module proof/SSA revalidation for changed compiler sources",
+    "not_run": "Full project regression and proof/CFG/verified-SSA revalidation for changed compiler sources. A bounded decl parse/signature attempt was made and timed out with UNKNOWN result.",
     "python_py_compile": {
       "files": [
         "tools/measure_compiler_probe.py",
