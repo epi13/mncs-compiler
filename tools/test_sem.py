@@ -34,8 +34,14 @@ KIND_TO_MNE = {
     62: 'MNE292', 63: 'MNE293', 64: 'MNE294', 65: 'MNE295', 66: 'MNE296',
     67: 'MNE297',
     68: 'MNE220', 69: 'MNE221', 70: 'MNE222', 72: 'MNE232', 73: 'MNE229', 74: 'MNE224',
+    75: 'MNE176', 76: 'MNE186', 77: 'MNE192', 78: 'MNE189',
+    80: 'MNE196', 81: 'MNE195',
+    82: 'MNE144', 83: 'MNE143', 84: 'MNE146', 85: 'MNE147', 86: 'MNE148',
+    87: 'MNE142', 88: 'MNE180', 89: 'MNE182', 90: 'MNE193', 91: 'MNE194',
+    92: 'MNE154', 93: 'MNE155', 94: 'MNE156', 95: 'MNE157', 96: 'MNE158',
+    97: 'MNE159', 98: 'MNE160', 99: 'MNE187', 100: 'MNE188',
 }
-UNKNOWN_KINDS = {13, 14, 16, 71}
+UNKNOWN_KINDS = {13, 14, 16, 79}
 
 
 def source_bytes(text):
@@ -84,6 +90,171 @@ CASES = [
      set()),
     ('clean-record-proj',
      'mncs 0.10; module t; record R { x: u64 } fn f(v: R) -> (r: u64) { return v.x; }',
+     set()),
+    ('record-literal-clean',
+     'mncs 0.18; module t; record R { x: u64, y: bool } fn f() -> (r: R) { return R { x: 1, y: true }; }',
+     set()),
+    ('record-literal-unknown-type',
+     'mncs 0.18; module t; fn f() -> (r: u64) { return Nope { x: 1 }; }',
+     set()),
+    ('record-literal-expected-type',
+     'mncs 0.18; module t; record A { x: u64 } record B { x: u64 } fn f() -> (r: A) { return B { x: 1 }; }',
+     set()),
+    ('record-literal-unknown-field',
+     'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: R) { return R { y: 1 }; }',
+     set()),
+    ('record-literal-duplicate-field',
+     'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: R) { return R { x: 1, x: 2 }; }',
+     set()),
+    ('record-literal-field-type',
+     'mncs 0.18; module t; record R { x: u64 } fn f() -> (r: R) { return R { x: true }; }',
+     set()),
+    ('record-literal-nested-value',
+     'mncs 0.18; module t; record Inner { x: u64 } record Outer { inner: Inner } fn f() -> (r: Outer) { return Outer { inner: Inner { x: 1 } }; }',
+     set()),
+    ('nested-sequence-argument',
+     'mncs 0.18; module t; fn id(pages: [[byte; up_to 8]; up_to 4]) -> (r: u64) { return 0; } fn f(pages: [[byte; up_to 8]; up_to 4]) -> (r: u64) { return id(pages); }',
+     set()),
+    ('nested-sequence-element-mismatch',
+     'mncs 0.18; module t; fn id(pages: [[byte; up_to 8]; up_to 4]) -> (r: u64) { return 0; } fn f(pages: [[u64; up_to 8]; up_to 4]) -> (r: u64) { return id(pages); }',
+     set()),
+    ('sequence-length-up-to',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 64]) -> (r: u64) { return s.len; }',
+     set()),
+    ('sequence-length-exact',
+     'mncs 0.18; module t; fn f(s: [u64; 8]) -> (r: u64) { return s.len; }',
+     set()),
+    ('sequence-length-wrong-field',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 64]) -> (r: u64) { return s.count; }',
+     set()),
+    ('sequence-length-required-type',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 64]) -> (r: bool) { return s.len; }',
+     set()),
+    ('sequence-index-dynamic',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 8], i: u64) -> (r: byte) { return s[i]; }',
+     {79}),
+    ('generic-up-to-index-cast',
+     'mncs 0.18; module t; fn f<N: Nat>(s: [byte; up_to N], i: u64) -> (r: u64) { return s[i] as u64; }',
+     {79}),
+    ('generic-view-traversal-index-cast',
+     'mncs 0.18; module t; fn f<N: Nat>(s: [byte; up_to N]) -> (r: bool) { iterate i over s carrying valid: bool = true { next valid = valid && s[i] as u64 < 128; } return valid; }',
+     {79}),
+    ('generic-view-loop-call',
+     'mncs 0.18; module t; fn step(state: u64, value: byte) -> (r: u64) { return state + value as u64; } fn f<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], index: u64, initial: u64) -> (r: u64) { let page: [byte; up_to N] = pages[index]; iterate i over page carrying acc: u64 = initial { next acc = step(acc, page[i]); } return acc; }',
+     {79}),
+    ('call-argument-order-mixed-types',
+     'mncs 0.18; module t; fn step(state: u64, value: byte) -> (r: u64) { return state + value as u64; } fn f(state: u64, value: byte) -> (r: u64) { return step(state, value); }',
+     set()),
+    ('generic-call-argument-order-mixed-types',
+     'mncs 0.18; module t; fn step<N: Nat>(state: u64, value: byte) -> (r: u64) { return state + value as u64; } fn f(state: u64, value: byte) -> (r: u64) { return step<4>(state, value); }',
+     set()),
+    ('bounded-iteration-index-and-carry',
+     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { let x: u64 = i; next s = x; } return s; }',
+     set()),
+    ('nested-bounded-iteration',
+     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { iterate j up_to 2 carrying t: u64 = s { next t = t; } next s = t; } return s; }',
+     set()),
+    ('bounded-iteration-over-scalar',
+     'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { iterate i over x carrying s: u64 = 0 { next s = s; } return s; }',
+     set()),
+    ('bounded-iteration-bad-initial-state',
+     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: bool = 1 { next s = true; } return s; }',
+     set()),
+    ('bounded-iteration-bad-next-name',
+     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next x = s; } return s; }',
+     set()),
+    ('bounded-iteration-bad-next-type',
+     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = true; } return s; }',
+     set()),
+    ('bounded-iteration-zero-bound',
+     'mncs 0.18; module t; fn f() -> (r: u64) { iterate i up_to 0 carrying s: u64 = 0 { next s = s; } return s; }',
+     set()),
+    ('profile-010-counted-index-unbound',
+     'mncs 0.10; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { let x: u64 = i; next s = s; } return s; }',
+     set()),
+    ('profile-010-nested-iteration-forbidden',
+     'mncs 0.10; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { iterate j up_to 2 carrying t: u64 = s { next t = t; } next s = t; } return s; }',
+     set()),
+    ('profile-010-iteration-identity-not-reusable',
+     'mncs 0.10; module t; fn f() -> (r: u64) { iterate i up_to 4 carrying s: u64 = 0 { next s = s; } iterate i up_to 2 carrying t: u64 = s { next t = t; } return t; }',
+     set()),
+    ('profile-012-u64-sequence-traversal',
+     'mncs 0.12; module t; fn f(s: [u64; up_to 2]) -> (r: u64) { iterate i over s carrying a: u64 = 0 { next a = i; } return a; }',
+     set()),
+    ('sequence-index-in-bounds',
+     'mncs 0.18; module t; fn f(s: [byte; 8]) -> (r: byte) { return s[7]; }',
+     set()),
+    ('sequence-index-out-of-bounds',
+     'mncs 0.18; module t; fn f(s: [byte; 8]) -> (r: byte) { return s[8]; }',
+     set()),
+    ('sequence-index-wrong-base',
+     'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return x[0]; }',
+     set()),
+    ('sequence-index-wrong-index-type',
+     'mncs 0.18; module t; fn f(s: [byte; 8]) -> (r: byte) { return s[true]; }',
+     set()),
+    ('sequence-slice-view-return',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 8], start: u64) -> (r: [byte; up_to 8]) { return s[start..s.len]; }',
+     {79}),
+    ('sequence-slice-view-iterate',
+     'mncs 0.18; module t; fn f(s: [byte; up_to 8], start: u64) -> (r: u64) { iterate i over s[start..s.len] carrying n: u64 = 0 { next n = n + s[i] as u64; } return n; }',
+     {79}),
+    ('sequence-slice-wrong-base',
+     'mncs 0.18; module t; fn f(x: u64) -> (r: [byte; up_to 8]) { return x[0..1]; }',
+     set()),
+    ('sequence-slice-wrong-start-type',
+     'mncs 0.18; module t; fn f(s: [byte; 8], start: bool) -> (r: [byte; up_to 8]) { return s[start..1]; }',
+     set()),
+    ('sequence-slice-wrong-result-type',
+     'mncs 0.18; module t; fn f(s: [byte; 8]) -> (r: u64) { return s[0..1]; }',
+     set()),
+    ('record-update-overrides-field',
+     'mncs 0.18; module t; record Scan { end: u64, depth: u64 } fn f(st: Scan) -> (r: Scan) { return Scan { ..st, end: st.end + 2 }; }',
+     set()),
+    ('record-update-inherits-all-fields',
+     'mncs 0.18; module t; record Scan { end: u64, depth: u64 } fn f(st: Scan) -> (r: Scan) { return Scan { ..st }; }',
+     set()),
+    ('record-update-wrong-base-type',
+     'mncs 0.18; module t; record Scan { end: u64, depth: u64 } fn f(x: u64) -> (r: Scan) { return Scan { ..x, end: 2 }; }',
+     set()),
+    ('record-literal-missing-field-without-base',
+     'mncs 0.18; module t; record Scan { end: u64, depth: u64 } fn f() -> (r: Scan) { return Scan { end: 2 }; }',
+     set()),
+    ('record-update-wrong-override-type',
+     'mncs 0.18; module t; record Scan { end: u64, depth: u64 } fn f(st: Scan) -> (r: Scan) { return Scan { ..st, end: true }; }',
+     set()),
+    ('cast-byte-to-u64',
+     'mncs 0.18; module t; fn f(x: byte) -> (r: u64) { return x as u64; }',
+     set()),
+    ('cast-bool-to-u64',
+     'mncs 0.18; module t; fn f(x: bool) -> (r: u64) { return x as u64; }',
+     set()),
+    ('cast-invalid-source',
+     'mncs 0.18; module t; fn f(x: [byte; 8]) -> (r: u64) { return x as u64; }',
+     set()),
+    ('cast-invalid-target',
+     'mncs 0.18; module t; fn f(x: u64) -> (r: bool) { return x as bool; }',
+     set()),
+    ('select-clean',
+     'mncs 0.18; module t; fn f(c: bool, a: u64, b: u64) -> (r: u64) { return select(c, a, b); }',
+     set()),
+    ('select-literal-candidates-expected',
+     'mncs 0.18; module t; fn f(c: bool) -> (r: u64) { return select(c, 2, 1); }',
+     set()),
+    ('select-literal-candidates-inferred',
+     'mncs 0.18; module t; fn f(c: bool) -> (r: u64) { return select(c, 2, 1) as u64; }',
+     set()),
+    ('select-literal-candidates-byte',
+     'mncs 0.18; module t; fn f(c: bool) -> (r: byte) { return select(c, 2, 1); }',
+     set()),
+    ('select-wrong-condition',
+     'mncs 0.18; module t; fn f(c: u64, a: u64, b: u64) -> (r: u64) { return select(c, a, b); }',
+     set()),
+    ('select-wrong-candidates',
+     'mncs 0.18; module t; fn f(c: bool, a: u64, b: bool) -> (r: u64) { return select(c, a, b); }',
+     set()),
+    ('select-old-profile',
+     'mncs 0.7; module t; fn f(c: bool, a: u64, b: u64) -> (r: u64) { return select(c, a, b); }',
      set()),
     ('clean-let-bool-shift',
      'mncs 0.10; module t; fn f(a: u64) -> (r: u64) { let b: bool = a == 1; let c: u64 = a << 2; return c; }',
@@ -219,6 +390,21 @@ CASES = [
      set()),
     ('finite-match-018',
      'mncs 0.18; module t; enum Flag { Yes { set: bool }, No } fn f(x: Flag) -> (r: bool) { return match x { Yes { set: s } => s, No => false }; }',
+     set()),
+    ('finite-qualified-nested',
+     'mncs 0.18; module t; enum Flag { Yes, No } fn f(x: Flag, y: Flag) -> (r: bool) { return match x { Flag.Yes => match y { Flag.Yes => true, Flag.No => false }, Flag.No => false }; }',
+     set()),
+    ('finite-next-payload-binding',
+     'mncs 0.18; module t; enum Flag { Item { next: bool }, No } fn f(x: Flag) -> (r: bool) { return match x { Flag.Item { next: n } => n, Flag.No => false }; }',
+     set()),
+    ('finite-qualified-correct',
+     'mncs 0.18; module t; enum Flag { Yes, No } fn f(x: Flag) -> (r: bool) { return match x { Flag.Yes => true, Flag.No => false }; }',
+     set()),
+    ('finite-qualified-payload-ignore',
+     'mncs 0.18; module t; enum Flag { Yes { set: bool }, No } fn f(x: Flag) -> (r: bool) { return match x { Flag.Yes { .. } => true, Flag.No => false }; }',
+     set()),
+    ('finite-qualified-underscore-variant',
+     'mncs 0.18; module t; enum Flag { _, No } fn f(x: Flag) -> (r: bool) { return match x { Flag._ => true, Flag.No => false }; }',
      set()),
     ('finite-construct-clean',
      'mncs 0.10; module t; enum Flag { Yes { set: bool }, No } fn f(s: bool) -> (r: Flag) { return Flag.Yes { set: s }; }',
@@ -369,6 +555,9 @@ CASES = [
      set()),
     ('finite-unknown-variant',
      'mncs 0.10; module t; enum Flag { Yes { set: bool }, No } fn f(x: Flag) -> (r: bool) { return match x { Maybe => true, No => false, Yes { set: s } => s }; }',
+     set()),
+    ('finite-qualified-wrong-type',
+     'mncs 0.18; module t; enum Flag { Yes, No } enum Other { Yes, No } fn f(x: Flag) -> (r: bool) { return match x { Other.Yes => true, Other.No => false }; }',
      set()),
     ('finite-default-arm',
      'mncs 0.10; module t; enum Flag { Yes { set: bool }, No } fn f(x: Flag) -> (r: bool) { return match x { Yes { set: s } => s, _ => false }; }',
@@ -577,17 +766,29 @@ CASES = [
     ('op-shadow-intrinsic',
      'mncs 0.18; module t; fn fs_entry_kind_at(x: u64) -> (r: u64) { return x; } fn g() -> (r: u64) { return fs_entry_kind_at(1); }',
      set()),
-    # Generic application: substitution stays UNKNOWN (71); counts, kinds,
-    # inference, and higher-kinded bounds fail exactly (MNE220-224/229/232).
+    # Explicit generic arguments specialize callee signature types, including
+    # Type parameters, concrete Nat bounds, and forwarded symbolic Nat bounds.
     ('generic-apply-clean',
      'mncs 0.18; module t; fn g<N: Nat>(x: u64) -> (r: u64) { return x; } fn f(x: u64) -> (r: u64) { return g<4>(x); }',
-     {71}),
+     set()),
     ('generic-apply-named',
      'mncs 0.18; module t; fn g<N: Nat>(x: u64) -> (r: u64) { return x; } fn f<M: Nat>(x: u64) -> (r: u64) { return g<M>(x); }',
-     {71}),
+     set()),
     ('generic-apply-nominal-type',
      'mncs 0.18; module t; record R { x: u64 } fn g<T: Type>(x: u64) -> (r: u64) { return x; } fn f(x: u64) -> (r: u64) { return g<R>(x); }',
-     {71}),
+     set()),
+    ('generic-type-substitution',
+     'mncs 0.18; module t; fn id<T: Type>(x: T) -> (r: T) { return x; } fn f(x: u64) -> (r: u64) { return id<u64>(x); }',
+     set()),
+    ('generic-nat-view-substitution',
+     'mncs 0.18; module t; fn view<N: Nat>(x: [byte; up_to N]) -> (r: u64) { return x.len; } fn f(x: [byte; 4]) -> (r: u64) { return view<4>(x); }',
+     set()),
+    ('generic-nat-view-forwarding',
+     'mncs 0.18; module t; fn inner<N: Nat>(x: [byte; up_to N]) -> (r: u64) { return x.len; } fn outer<M: Nat>(x: [byte; up_to M]) -> (r: u64) { return inner<M>(x); }',
+     set()),
+    ('generic-nat-view-substitution-too-small',
+     'mncs 0.18; module t; fn view<N: Nat>(x: [byte; up_to N]) -> (r: u64) { return x.len; } fn f(x: [byte; 4]) -> (r: u64) { return view<3>(x); }',
+     set()),
     ('generic-missing',
      'mncs 0.18; module t; fn g<N: Nat>(x: u64) -> (r: u64) { return x; } fn f(x: u64) -> (r: u64) { return g(x); }',
      set()),
@@ -721,6 +922,82 @@ def prove_case(probe, text):
     return probe.run('decl', 'prove_unit', logical_args(source_bytes(text)))
 
 
+def paged_nested_match_case(probe):
+    """Keep absolute decimal spans correct after a logical source page."""
+    text = (
+        'mncs 0.18; module t; '
+        'fn f(a: u64, b: u64) -> (r: u64) { return '
+        'match a { 45 => match b { 62 => 80, _ => 51 }, '
+        '61 => match b { 62 => 81, _ => 60 }, _ => 7 }; }'
+    )
+    anchor = text.index('match a {')
+    text = text[:anchor] + (' ' * (STRIDE_BOUND - anchor)) + text[anchor:]
+    raw = text.encode()
+    assert raw.index(b'match a {') == STRIDE_BOUND
+    chunks = [raw[i:i + STRIDE_BOUND] for i in range(0, len(raw), STRIDE_BOUND)]
+    assert len(chunks) == 2
+
+    oracle = probe.send({'oracle': text})
+    reference_diags = [(d['code'], d['span']['start'], d['span']['end'])
+                       for d in probe.send({'elaborate': text})
+                       if d['code'].startswith('MNE')]
+    request = {
+        'schema_version': '0.1',
+        'target': {'module': 'mncs.compiler.decl.v1', 'function': 'prove_unit'},
+        'arguments': [pages_value(chunks), integer(STRIDE_BOUND), integer(len(raw))],
+        'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
+        'step_budget': 8000000,
+    }
+    response = probe.send(request)
+    assert response['status'] == 'returned', response
+    got = decode(response['returned'][0])
+    obls = flist(got['obls'], 1)
+    native_diags = [(KIND_TO_MNE[o['kind']], o['start'], o['end'])
+                    for o in obls if o['status'] == 1]
+    assert native_diags == reference_diags == [], (native_diags, reference_diags)
+    assert got['ok'] and got['fn_count'] == len(oracle['ast']['functions']) == 1, got
+
+    native_fn = flist(got['unit']['fns'], 1)[0]
+    native_expr = native_fn['body']['ret']
+
+    def native_match_facts(expr):
+        assert expr['$v'] == 5, expr
+        facts = []
+        for arm in flist(expr['$p']['arms'], 1):
+            nested = native_match_facts(arm['result']) if arm['result']['$v'] == 5 else None
+            facts.append((arm['is_default'], arm['value'], nested))
+        return facts
+
+    def stage0_match_facts(match):
+        facts = []
+        for arm in match['arms']:
+            pattern = arm.get('pattern')
+            if pattern is None:
+                is_default, value = True, 0
+            else:
+                scalar = pattern['scalar']
+                token = scalar['text']['text']
+                value = int(token)
+                if scalar.get('negative', False):
+                    value = -value
+                is_default = False
+            nested_expr = arm['value'].get('Match')
+            nested = stage0_match_facts(nested_expr) if nested_expr is not None else None
+            facts.append((is_default, value, nested))
+        return facts
+
+    stage0_expr = oracle['ast']['functions'][0]['body']['returned_value']['Match']
+    native_facts = native_match_facts(native_expr)
+    reference_facts = stage0_match_facts(stage0_expr)
+    assert native_facts == reference_facts, (native_facts, reference_facts)
+    probe.count += 1
+    probe.steps.append(response['steps'])
+    probe.digest.update(json.dumps([request, response['returned']], sort_keys=True).encode())
+    return {'case': 'paged-nested-scalar-match', 'fails': 0, 'fn_count': 1,
+            'page_count': len(chunks), 'match_start': STRIDE_BOUND,
+            'stage0_fact_match': True}
+
+
 def suite():
     probe = Probe()
     details = []
@@ -749,6 +1026,37 @@ def suite():
             assert got['fn_count'] == expect_n, (name, got)
             details.append({'case': name, 'fails': len(fails), 'unknowns': sorted(unknowns),
                             'fn_count': got['fn_count']})
+        details.append(paged_nested_match_case(probe))
+        # Keep one real compiler module in the deepest proven semantic cell.
+        # Its native proof can carry conservative arithmetic/runtime-bound
+        # UNKNOWNs; Stage-0 must still accept the same complete source.
+        source_module = (ROOT / 'src/compiler/source.mncs').read_bytes()
+        source_text = source_module.decode()
+        source_oracle = probe.send({'elaborate': source_text})
+        source_diagnostics = [(d['code'], d['span']['start'], d['span']['end'])
+                              for d in source_oracle if d.get('code', '').startswith('MNE')]
+        stride = 1024
+        chunks = [source_module[i:i + stride] for i in range(0, len(source_module), stride)]
+        source_request = {'schema_version': '0.1',
+                          'target': {'module': 'mncs.compiler.decl.v1', 'function': 'prove_unit'},
+                          'arguments': [pages_value(chunks), integer(stride), integer(len(source_module))],
+                          'type_arguments': [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
+                          'step_budget': 8000000}
+        source_raw = probe.send(source_request)
+        assert source_raw['status'] == 'returned', source_raw
+        source_got = decode(source_raw['returned'][0])
+        source_obls = flist(source_got['obls'], 1)
+        source_fails = [(KIND_TO_MNE[o['kind']], o['start'], o['end'])
+                        for o in source_obls if o['status'] == 1]
+        source_unknowns = sorted({o['kind'] for o in source_obls if o['status'] == 2})
+        assert source_fails == source_diagnostics == [], (source_fails, source_diagnostics)
+        assert source_got['ok'] and source_got['fn_count'] == 20, source_got
+        assert set(source_unknowns) <= UNKNOWN_KINDS, source_unknowns
+        probe.count += 1
+        probe.steps.append(source_raw['steps'])
+        probe.digest.update(json.dumps([source_request, source_raw['returned']], sort_keys=True).encode())
+        details.append({'case': 'self-ingest-source-proof', 'source_sha256': hashlib.sha256(source_module).hexdigest(),
+                        'fails': 0, 'unknowns': source_unknowns, 'fn_count': source_got['fn_count']})
         # Intrinsic-proof adversarial verdicts: all sabotage rejected, sound sample passes.
         args = logical_args(source_bytes(b'mncs 0.10; module t;'))
         assert probe.run('decl', 'sabotage_depth', args[:4]) is False
@@ -762,7 +1070,7 @@ def suite():
         assert probe.run('decl', 'sabotage_op_arity', args) is False
         assert probe.run('decl', 'sabotage_op_source', args) is False
         assert probe.run('decl', 'sound_sample', args) is True
-        return {'requests': probe.count, 'cases': len(CASES),
+        return {'requests': probe.count, 'cases': len(CASES) + 1,
                 'result_sha256': probe.digest.hexdigest(),
                 'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
                 'execution_mode': ('retained_' + (execution_status['backend'] or 'unknown')) if execution_status['retained_sessions'] else 'reference_interpreter',
@@ -784,4 +1092,4 @@ if __name__ == '__main__':
               'scope': 'decl.prove_unit FAIL-obligation differential vs Stage-0 diagnostics; UNKNOWN obligations never surface; sabotage/soundness verdicts'}
     Path('.build').mkdir(exist_ok=True)
     Path('.build/sem-results.json').write_text(json.dumps(report, indent=2) + '\n')
-    print(f"{len(CASES)} semantic cases + 11 proof verdicts passed twice identically.")
+    print(f"{len(CASES) + 1} semantic cases + source-module proof + 11 proof verdicts passed twice identically.")

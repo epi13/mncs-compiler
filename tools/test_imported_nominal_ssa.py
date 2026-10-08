@@ -23,6 +23,10 @@ elif FIXTURE_KIND == "finite":
     NOMINAL_TYPES = "mncs 0.18;module b;enum E{A}fn f(x:E)->(r:E){return x;}"
     NOMINAL_ROOT = "mncs 0.18;module a;use b;fn g(x:b.E)->(r:b.E){return b.f(x);}"
     ROOT_FUNCTION_COUNT = 1
+elif FIXTURE_KIND == "finite-pattern":
+    NOMINAL_TYPES = "mncs 0.18;module b;enum E{A,B}fn f(x:E)->(r:E){return x;}"
+    NOMINAL_ROOT = "mncs 0.18;module a;use b;fn g(x:b.E)->(r:b.E){return b.f(match x { b.E.A => b.E.A, b.E.B => b.E.B });}"
+    ROOT_FUNCTION_COUNT = 1
 elif FIXTURE_KIND == "nested":
     NOMINAL_TYPES = "mncs 0.18;module b;record I{v:u64}record O{i:I}fn f(x:O)->(r:O){return x;}"
     NOMINAL_ROOT = "mncs 0.18;module a;use b;fn g(x:b.O)->(r:b.O){return b.f(x);}"
@@ -957,7 +961,7 @@ def run() -> dict:
                     **exported_facts(state),
                     "coverage": [
                         "declaring-module ownership for every imported nominal identity in the owner module",
-                        "imported finite identity" if FIXTURE_KIND == "finite" else ("nested imported nominal field identity" if FIXTURE_KIND == "nested" else ("imported record identity" if FIXTURE_KIND != "effects" else "imported effect and capability identities retained on the verified call instruction")),
+                        "imported finite identity with qualified match patterns" if FIXTURE_KIND == "finite-pattern" else ("imported finite identity" if FIXTURE_KIND == "finite" else ("nested imported nominal field identity" if FIXTURE_KIND == "nested" else ("imported record identity" if FIXTURE_KIND != "effects" else "imported effect and capability identities retained on the verified call instruction"))),
                         "resolved imported callable identity",
                         "parsed and resolved facts consumed from the saved project artifact",
                         "proof, CFG, and value SSA consume imported nominal facts without reparsing or re-resolving the project",

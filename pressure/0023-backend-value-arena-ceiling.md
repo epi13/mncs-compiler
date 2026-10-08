@@ -1,7 +1,99 @@
 # CP-0023 — native backend per-request value-arena ceiling
 
-Status: workload relieved in mncs-compiler (acceptance met on all milestones); backend cap unchanged, configurability still open (`mncs-language`).
+Status: open; the full project boundary remains unresolved. The recorded `source.mncs` + `lexer.mncs` workload exhausted the bounded 128 MiB Cranelift arena at the 2026-10-06 pin. Current `decl.mncs` parse/signature ingestion passes, while the latest real `flow.mncs` project target ended before a compiler result. Backend ownership remains `mncs-language`.
 Found: 2026-10-03, perf campaign (CP-0021 follow-up). Stage-0 `a3ac17df`, profile `0.18`.
+
+## Initial compiler re-probe at 64 MiB (2026-10-06)
+
+The historical workload relief below still stands for its recorded compiler
+tree. Compiler growth reopened this backend pressure: with Stage-0
+`a12ce8e55287ce74a7ff51fee30ab8dcd58e88cc`, the Cranelift `decl.parse_unit`
+request for `src/compiler/decl.mncs` (693,292 bytes) returns
+`budget_exhausted` before producing a parser verdict:
+
+```text
+MNCS_RSRC_EXHAUSTED cranelift JIT canonical arena exhausted: requested 72 byte(s), 67108864 of 67108864 byte(s) used; bounded loops over large aggregate values allocate one fresh cell per functional update
+```
+
+The independent Stage-0 oracle accepts this source with no diagnostics, and
+the focused sequence-literal POS/NEG differential passes. The observed
+failure is at the Cranelift canonical-value arena boundary, not a grammar
+diagnostic or an MNCS semantic rejection. This is the original 64 MiB failure;
+the later 128 MiB result below supersedes its `decl.mncs` ingestion status.
+
+## Current compiler progression (2026-10-06)
+
+The independently reproduced `carry_huge` loop crossed the old cap. Language
+commit `f1a96a0` (included in pushed `mncs-language` main `3e874f642b30`) raises
+the explicitly bounded per-request Cranelift arena from 64 MiB to 128 MiB.
+The `pressure_loop_region` integration tests pass on reclamation, C11, LLVM,
+and Cranelift: `carry_huge` returns 1024 on Cranelift/reclamation backends and
+C11/LLVM report structured exhaustion at their unchanged 16 MiB limits.
+The advertised-cap unit test passes at 134,217,728 bytes.
+
+With that selected Stage-0 revision, Cranelift parses the 679,907-byte current
+`src/compiler/decl.mncs` whole module and agrees with Stage-0 on all 1,002
+function names and generic parameter names. It is now in the maintained
+self-ingestion corpus at parse/signature depth; check, proof, flow, SSA, and VM
+remain unproven. This resolves the current compiler workload, not the general
+arena pressure: larger per-request values can still exhaust the bounded
+128 MiB arena, so CP-0023 remains open.
+
+## Reopened by compiler project ingestion (2026-10-06)
+
+The real `src/compiler/lexer.mncs` module imports
+`mncs.compiler.source.v1`. The isolated `flow.lower_unit` adapter therefore
+reports Stage-0 MNE173 at the import; the Stage-0 project oracle is the
+authoritative route for this workload. With `source.mncs` and `lexer.mncs`
+submitted together, the Stage-0 project oracle accepts the project, resolves
+one import, links 42 functions, and emits reference SSA for 15 functions.
+
+The selected native Cranelift project route uses two retained sessions
+(`project` and `ssa`) but its `mncs.compiler.project.v1::compile_project`
+request fails before execution (`steps=0`) at the fixed arena cap:
+
+```text
+MNCS_RSRC_EXHAUSTED cranelift JIT canonical arena exhausted: requested 24 byte(s), 134217728 of 134217728 byte(s) used; bounded loops over large aggregate values allocate one fresh cell per functional update
+```
+
+This is a backend arena failure, not a project diagnostic, import failure, or
+step-budget exhaustion. CP-0023 is load-bearing again for the compiler's
+project-level self-consumption path and is being addressed at the Language
+backend owner. The exact sources and selected Stage-0 revision are recorded
+in the Environment session artifact; the two-module project result is in the
+ignored `.build/project-source-lexer-reprobe-20261006.json` campaign report.
+
+## Current compiler probe (2026-10-08, Stage-0 `1513bdf`)
+
+The current `tools/test_decl.py` run passes twin-identically on one retained
+Cranelift session (153 requests: 76 POS, 58 NEG, 9 checker cases). Its
+self-ingestion corpus parses all nine current compiler modules and matches
+Stage-0 function names and generic parameter names. In particular,
+`src/compiler/decl.mncs` now parses at 820,430 bytes with 1,200 functions.
+This closes the old `decl.mncs` parser admission failure at this pin; it does
+not close the general arena pressure or prove whole-project compilation.
+
+The focused imported-enum project witness also admits the project and SSA
+sessions at M=896 and verifies two valid constructors in SSA while matching
+six negative diagnostics to Stage-0. It is a small source fixture, not the
+whole compiler project.
+
+The current real `flow.mncs` closure is 894 pages at stride 1024. The
+independent Stage-0 project oracle accepts it with 1,324 linked functions and
+376 SSA functions. Native Cranelift attempts at M=1024 and M=896 ended when
+the probe child exited `-9` before returning a compiler result. A reference
+interpreter attempt ran without output for about 900 seconds before it was
+stopped; a research-bytecode flow-target admission attempt was stopped after
+120 seconds without a result. These observations do not establish that the
+128 MiB arena caused the child termination, and they do not establish a
+compiler rejection. The latest compact matrix and exact probe summaries are
+in `evidence/SELF-HOST-MATRIX.json` and
+`evidence/campaign-20261008-imported-enum-constructor-frontier.json`.
+
+Current next frontier: obtain a complete native compiler result for the real
+flow closure through a target/input route that returns within a trustworthy
+execution envelope. CP-0023 remains open because the earlier exact arena
+failure and the current whole-project gap are unresolved.
 
 ## Symptom
 
@@ -67,11 +159,11 @@ waste — not input bytes — dominates the arena.
 
 ## Backend half (`mncs-language`)
 
-- The 16 MiB per-request cap binds before any MNCS semantic bound on
-  real compiler modules. Options owned by the backend: raise or
-  configure `NATIVE_ARENA_BYTES`, denser cell allocation, cell reuse
-  for identical no-op updates, or an arena-usage query so drivers can
-  split work before exhaustion.
+- The original 16 MiB shared cap and subsequent 64 MiB Cranelift cap are
+  historical. Cranelift now advertises an explicit 128 MiB per-request
+  bound; denser cell allocation, cell reuse for identical no-op updates,
+  reachable-only codegen, and arena-usage queries remain possible later
+  remedies if compiler growth makes the new bound load-bearing.
 - Reference/interpreter equivalence is unaffected (step budgets, not
   arenas); any relief must keep deterministic failure (`budget_exhausted`
   with attributed bytes, never silent truncation).
@@ -101,9 +193,7 @@ verification-suite memory by letting sections share probes.
   full ABCD matrix records zero `backend_arena_exhausted` rows; ssa
   (217,526 B) and decl (558,004 B) reach CP-0015 parse spans.
   No fuel bound was shrunk: supported inputs did not narrow.
-- The backend ceiling itself (16 MiB, `NATIVE_ARENA_BYTES`) is
-  unchanged and still unconfigurable: larger or denser inputs past
-  today's milestones can still exhaust it, and drivers still cannot
-  query usage to split work. That hardening remains open backend
-  ownership (`mncs-language`), now decoupled from any failing
-  compiler milestone.
+- The original 16 MiB native cap and 2026-10-03 milestone verdict are
+  historical. Cranelift's bounded 128 MiB per-request arena admits the
+  current whole `decl.mncs` parse, verified against the selected Stage-0
+  oracle. CP-0023 remains open because the backend still has a fixed ceiling.

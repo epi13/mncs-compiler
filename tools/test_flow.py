@@ -75,7 +75,7 @@ def flist(value, cons=1):
 
 class Probe:
     def __init__(self):
-        source_bound = max(len(source.encode()) for _, source, _, _ in CASES)
+        source_bound = max(len(source.encode()) for _, source, _, _, _ in CASES)
         lengths = [source_bound]
         env = os.environ.copy()
         if env.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
@@ -145,24 +145,49 @@ CASES = [
         "mncs 0.18; module pressure.flow; fn f(x: bool) -> (r: u64) { let y: u64 = 1; if x { return y; } return 2; }",
         0,
         (1, 2),
+        0,
     ),
     (
         "multiple_functions",
         "mncs 0.18; module pressure.flow; fn f(x: bool) -> (r: u64) { if x { return 1; } return 2; } fn g() -> (r: bool) { return true; }",
         0,
         (1, 3),
+        0,
     ),
     (
         "unreachable_join",
         "mncs 0.18; module pressure.flow; fn f(x: bool) -> (r: u64) { if x { return 1; } else { return 2; } return 3; }",
         1,
         None,
+        0,
     ),
     (
         "nested_unreachable_joins",
         "mncs 0.18; module pressure.flow; fn f(x: bool, y: bool) -> (r: u64) { if x { if y { return 1; } else { return 2; } } else { return 3; } return 4; }",
         2,
         None,
+        0,
+    ),
+    (
+        "bounded_iteration_counted",
+        "mncs 0.18; module pressure.flow; fn f() -> (r: u64) { iterate i up_to 4 carrying state: u64 = 0 { next state = state + 1; } return state; }",
+        0,
+        None,
+        1,
+    ),
+    (
+        "bounded_iteration_sequence",
+        "mncs 0.18; module pressure.flow; fn f(source: [byte; up_to 8]) -> (r: u64) { iterate i over source carrying total: u64 = 0 { let item: u64 = source[i] as u64; next total = item; } return total; }",
+        0,
+        None,
+        1,
+    ),
+    (
+        "nested_bounded_iteration",
+        "mncs 0.18; module pressure.flow; fn f() -> (r: u64) { iterate i up_to 4 carrying outer: u64 = 0 { iterate j up_to 2 carrying inner: u64 = outer { next inner = inner; } next outer = inner; } return outer; }",
+        0,
+        None,
+        2,
     ),
 ]
 
@@ -199,7 +224,7 @@ def graph_shape(flow):
                 ops = flist(expression["ops"])
                 assert expression["op_count"] == len(ops) and ops, expression
                 assert expression["start"] <= expression["end"]
-                assert expression["role"] in (1, 2, 3)
+                assert expression["role"] in (1, 2, 3, 4, 5, 6)
                 assigned_ops.append(expression["ops"])
                 for op in ops:
                     assert expression["start"] <= op["$p"]["start"] <= op["$p"]["end"] <= expression["end"], (expression, op)
@@ -208,10 +233,20 @@ def graph_shape(flow):
             if block["kind"] == 1:
                 assert block["succ_count"] == 2
                 assert block["succ0"] in known and block["succ1"] in known
-                assert expressions and expressions[-1]["role"] == 2
-                assert (expressions[-1]["start"], expressions[-1]["end"]) == (block["term_start"], block["term_end"])
+                if block["is_iteration_header"]:
+                    assert expressions == []
+                    assert (block["iteration_start"], block["iteration_end"]) == (block["term_start"], block["term_end"])
+                else:
+                    assert expressions and expressions[-1]["role"] == 2
+                    assert (expressions[-1]["start"], expressions[-1]["end"]) == (block["term_start"], block["term_end"])
             elif block["kind"] == 2:
                 assert block["succ_count"] == 1 and block["succ0"] in known
+                if block["is_iteration_backedge"]:
+                    assert block["succ0"] == block["iteration_header_id"]
+                    assert (block["iteration_start"], block["iteration_end"]) in {
+                        (header["iteration_start"], header["iteration_end"])
+                        for header in blocks if header["is_iteration_header"] and header["id"] == block["iteration_header_id"]
+                    }
             else:
                 assert block["kind"] in (3, 4) and block["succ_count"] == 0
                 if block["kind"] == 3:
@@ -227,6 +262,8 @@ def graph_shape(flow):
         "returns": sum(block["kind"] == 3 for block in all_blocks),
         "typed_expressions": sum(len(flist(block["expressions"])) for block in all_blocks),
         "typed_operations": sum(block["instructions"] for block in all_blocks),
+        "iteration_headers": sum(block["is_iteration_header"] for block in all_blocks),
+        "iteration_backedges": sum(block["is_iteration_backedge"] for block in all_blocks),
     }
 
 
@@ -237,12 +274,12 @@ def suite():
         execution_status = probe.send({"execution_status": True})
         if execution_status.get("backend") == "cranelift":
             assert execution_status["retained_sessions"] == 1, execution_status
-        source_bound = max(len(source.encode()) for _, source, _, _ in CASES)
+        source_bound = max(len(source.encode()) for _, source, _, _, _ in CASES)
         cases = [
-            (name, source.ljust(source_bound), expected_mnb_count, expected_shape)
-            for name, source, expected_mnb_count, expected_shape in CASES
+            (name, source.ljust(source_bound), expected_mnb_count, expected_shape, expected_iterations)
+            for name, source, expected_mnb_count, expected_shape, expected_iterations in CASES
         ]
-        for name, source, expected_mnb_count, expected_shape in cases:
+        for name, source, expected_mnb_count, expected_shape, expected_iterations in cases:
             native1 = probe.run(source)
             native2 = probe.run(source)
             assert native1 == native2, name
@@ -272,12 +309,29 @@ def suite():
                 assert (shape["branches"], shape["returns"]) == (
                     ref_shape["branches"], ref_shape["returns"]
                 ), (name, shape, ref_shape)
+            stage0_iterations = []
+            if expected_iterations:
+                ssa1 = probe.send({"ssa": source})
+                ssa2 = probe.send({"ssa": source})
+                assert ssa1 == ssa2, name
+                assert ssa1.get("ssa") is not None, (name, ssa1)
+                stage0_iterations = [
+                    loop for function in ssa1["ssa"]["functions"]
+                    for loop in function.get("bounded_iterations", [])
+                ]
+                assert len(stage0_iterations) == expected_iterations, (name, stage0_iterations)
+                assert shape["iteration_headers"] == expected_iterations, (name, shape)
+                assert shape["iteration_backedges"] == expected_iterations, (name, shape)
             results.append(
                 {
                     "case": name,
                     "diagnostics": got,
                     "native_graph": shape,
                     "stage0_ssa_shape": expected_shape,
+                    "stage0_bounded_iterations": [
+                        {"bound": loop.get("bound"), "domain": loop.get("domain"), "has_header": bool(loop.get("header")), "has_backedge": bool(loop.get("backedge"))}
+                        for loop in stage0_iterations
+                    ],
                     "deterministic_repetitions": 2,
                 }
             )

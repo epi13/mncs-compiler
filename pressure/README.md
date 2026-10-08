@@ -6,7 +6,7 @@ backend, tooling, and language separately, then reproduce it at the authority
 that owns the behavior. Preserve each original reproducer and history; use the
 current reconciliation below for live status.
 
-Current locked Stage-0 CLI/bootstrap reference: `a3ac17df69e68f6373cbff336db0a572667d73da`,
+Current locked Stage-0 CLI/bootstrap reference: `1513bdf62bbcf4d366238dba1d8f2396b2e94128`,
 profile 0.18. Earlier pins named below (`4f9e122`, `b0f3e64`, `709ba008`,
 `843c5bc`) are preserved as historical evidence with their original
 measurements. Current pressure probes are in
@@ -14,7 +14,7 @@ measurements. Current pressure probes are in
 and current native syntax results are in
 [`../evidence/campaign-20261003-profile-surface-results.json`](../evidence/campaign-20261003-profile-surface-results.json).
 
-## Current reconciliation (2026-10-03)
+## Current reconciliation (2026-10-08)
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
@@ -35,12 +35,12 @@ and current native syntax results are in
 | [CP-0015 version-aware frontend](0015-version-aware-frontend.md) | Resolved for tested forms | All 21 Profile 0.18 differential cases conform: native parsing and proof accept `!`, negative atoms, repeat literals, `next`, and integer `match` with matching Stage-0 diagnostics. Broader grammar remains bounded. |
 | [CP-0016 linked record call validation](0016-linked-record-call-validation.md) | Resolved upstream | The exact compiler-origin call now returns after a generic language runtime fix for nested nominal payload validation. |
 | [CP-0017 poisoned-result semantic recovery](0017-semantic-poison-recovery.md) | Resolved in compiler; full semantic twin passes | Both operand orders and the 131-case semantic suite plus eleven proof verdicts match current Rust diagnostics, including ordered codes/spans, with identical repeated native results on the retained backend. |
-| [CP-0018 verified native-SSA arithmetic](0018-verified-native-ssa-arithmetic.md) | Open | Main's proof-bound C11 adapter (`mncs.native-scalar-ssa/1`) admits only Constant/Call; no integer arithmetic. Backend ownership. Blocks migration off the unattested structural projection. |
+| [CP-0018 verified native-SSA arithmetic](0018-verified-native-ssa-arithmetic.md) | Resolved upstream (2026-10-04, `mncs-language` `890c78d`) | Verified native-SSA integer arithmetic landed; this compiler ledger's former Open summary was stale. Residual native-SSA aggregate, switch, and sequence envelopes remain separate. |
 | [CP-0019 host-intrinsic callee model](0019-host-intrinsic-callee-model.md) | Resolved in compiler through verified SSA (current profile) | Five operations prove (kinds 53–67) and lower to verified kind-9 SSA with canonical identities; both pulling real sources reach verified SSA unmodified. Backend lowering, old-profile gating, and deferred view behaviors remain open; see the finding. |
 | [CP-0020 heterogeneous match env order](0020-heterogeneous-match-env-order.md) | Resolved in compiler | Match lowering reversed block-parameter environments, misaligning arm-to-join edges for mixed-type envs. Fixed at the shared prepare step; scalar/finite/projection sections cover it. |
 | [CP-0021 declaration logical-source fuel](0021-declaration-logical-source-fuel.md) | Resolved in compiler | `decl`/`flow`/`ssa`/`project` consume logical pages with global positions (flat pages + descriptors + cover check in `project`). Full ABCD + 1,362 s closure green; `test_decl.py` digest byte-identical. Remaining ceilings: 1024-byte span-compare fail-closed, M=1024 page arrays. |
 | [CP-0022 native lexical `not` kind](0022-native-lexical-not-kind.md) | Decided: version-neutral contract kept | Bare `!` stays kind 7 + MNL002 with the `decl` 0.13-gated reinterpretation (no `not` kind). Parse/proof conformance proven via CP-0015; differentials keep comparing modulo the classified pair. |
-| [CP-0023 backend value-arena ceiling](0023-backend-value-arena-ceiling.md) | Workload relieved; backend cap open | The 16 MiB per-request Cranelift arena (`NATIVE_ARENA_BYTES`) is unchanged, but no tier-D milestone exhausts it anymore (CP-0003 step reduction). Backend configurability/usage-query remains `mncs-language` ownership. |
+| [CP-0023 backend value-arena ceiling](0023-backend-value-arena-ceiling.md) | Open; full project boundary unresolved | Current `decl.mncs` whole-source parse/signature ingestion passes at the 1513bdf pin, while the earlier `source.mncs` + `lexer.mncs` project request exhausted the 128 MiB arena at the recorded 3e874f pin. The current real `flow.mncs` project target ended before a compiler result, so it neither confirms nor clears the arena pressure; owner remains `mncs-language`. |
 
 ## Operating sequence
 

@@ -55,15 +55,35 @@ their original pins and measurements.
   CP-0024 stays open and honest (flow joined project in scope);
   CP-0025 records the WASM execution overflow.
 
-- Self-consumption begins: the native declaration surface parses generic
-  parameter lists, type-argument calls, and two-level sequence types
-  with Stage-0 agreement, carries the facts through check spans and
-  proof obligations (new kinds 68-74, UNKNOWN 71), and ingests the
-  first real compiler module whole (`src/compiler/segment.mncs`,
-  2,430 bytes, 11 functions). Next frontier: record literals
-  (`parser.mncs`), `iterate` (`kernel.mncs`), index/cast
-  (`source.mncs`). See `evidence/DECL.md`, `evidence/SEM.md`, and the
-  `campaign-20261004-generics-*` reports.
+- Self-consumption has moved through qualified finite-match patterns,
+  nested scalar-match composition, and the real source module's verifier.
+  Native parsing now ingests nine compiler modules whole, including `decl`,
+  `flow`, `lexer`, `ssa`, `kernel`, and `project`; `tools/test_decl.py` is
+  twin-identical at 153 requests (76 POS, 58 NEG, 9 checks). Qualified pattern
+  qualifiers remain through checking and proof. `source.mncs` is accepted by
+  Stage-0, has a valid proof and CFG (20 functions, 119 blocks), and verifies
+  all 20 functions in native Cranelift SSA (693 values, 198 instructions).
+  The full module is native-only because the canonical VM reaches its 8M-step
+  ceiling. The nested `lexer.punctuation` witness agrees across Stage-0
+  reference, canonical VM, and Cranelift on all 192 input pairs.
+
+  The imported enum-constructor fixture now reaches checker/proof, valid flow,
+  and verified SSA for two functions; six invalid constructors match Stage-0
+  diagnostic spans. The focused `tools/test_flow.py` differential also passes
+  seven CFG/reachability/iteration cases on research-bytecode (39 requests,
+  two identical native repetitions). These focused results do not prove the
+  corresponding whole compiler modules beyond parse/signature depth.
+
+  The current real `flow.mncs` closure is 894 pages at stride 1024. Its
+  independent Stage-0 project oracle accepts 1,324 linked functions and emits
+  reference SSA for 376. Native Cranelift requests at M=1024 and M=896 ended
+  with child exit `-9` before a compiler response; the research-bytecode
+  admission attempt also produced no result within 120 seconds. This is an
+  unresolved execution boundary, not a native compiler rejection. A prior
+  source+lexer project probe at Stage-0 `3e874f642b30` exhausted the 128 MiB
+  Cranelift value arena (CP-0023); that arena cause has not been established
+  for the current flow attempts. Stage-1 is not yet proven. The compact
+  machine-readable self-host matrix is `evidence/SELF-HOST-MATRIX.json`.
 - Capacity pressure escalates with this growth (+6.3% `decl` session
   image): the whole-compiler project session no longer survives
   Cranelift JIT finalization (single-session NegOverflow, CP-0024),

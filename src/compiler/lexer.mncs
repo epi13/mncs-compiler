@@ -12,6 +12,15 @@ fn digit(c: u64) -> (result: bool) { return c >= 48 && c <= 57; }
 fn letter(c: u64) -> (result: bool) {
     return (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95;
 }
+// Source text reaches the reference parser as UTF-8. A rejected non-ASCII
+// scalar therefore occupies its full encoded width in the shared byte-span
+// vocabulary, even though the MNCS token grammar is ASCII-only.
+fn utf8_width(lead: u64) -> (result: u64) {
+    if lead >= 194 && lead <= 223 { return 2; }
+    if lead >= 224 && lead <= 239 { return 3; }
+    if lead >= 240 && lead <= 244 { return 4; }
+    return 1;
+}
 fn space(c: u64) -> (result: bool) {
     return c == 32 || (c >= 9 && c <= 13);
 }
@@ -147,7 +156,11 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     if start == text.len { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
     let a: u64 = source.byte_at<N>(text, start);
     let b: u64 = source.byte_at<N>(text, start + 1);
-    if a >= 128 { return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 }; }
+    if a >= 128 {
+        let width: u64 = utf8_width(a);
+        let remaining: u64 = text.len - start;
+        return Token { kind: 7, start: start, end: start + select(width <= remaining, width, remaining), diagnostic: 3 };
+    }
     let line: bool = a == 47 && b == 47;
     let block: bool = a == 47 && b == 42;
     let word: bool = letter(a);
@@ -332,7 +345,11 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     if start == total { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
     let a: u64 = source.byte_at_global<P, N>(pages, stride, total, start);
     let b: u64 = source.byte_at_global<P, N>(pages, stride, total, start + 1);
-    if a >= 128 { return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 }; }
+    if a >= 128 {
+        let width: u64 = utf8_width(a);
+        let remaining: u64 = total - start;
+        return Token { kind: 7, start: start, end: start + select(width <= remaining, width, remaining), diagnostic: 3 };
+    }
     let line: bool = a == 47 && b == 47;
     let block: bool = a == 47 && b == 42;
     let word: bool = letter(a);

@@ -1,0 +1,274 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-frontier-evidence",
+  "observed_at": "2026-10-08T14:42:50.809580+00:00",
+  "compiler_head": "44fe937dca0cecaf5cc562a4b3e18127e6399d1c",
+  "compiler_branch": "campaign/qualified-finite-patterns-20261006",
+  "stage0_revision": "1513bdf62bbcf4d366238dba1d8f2396b2e94128",
+  "candidate_source_sha256": {
+    "decl": "f7c9578dd7cff890e6b0f68cf9f6d4afdf43ffd5277deb4e7309e9b19dcd5aa3",
+    "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+    "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+    "lexer": "97f695f6d949a4e5071a6da6c866bcee999346ebab25f87814c1c8eb1efbb2f3",
+    "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+    "project": "defae4253e1528d7b0d3faad6f955df166db809eef40233693d04735e19e8a00",
+    "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+    "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+    "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+  },
+  "probes": [
+    {
+      "kind": "imported-enum-constructor-focused-differential",
+      "status": "passed",
+      "input": {
+        "dependency_module": "demo.dep",
+        "root_module": "demo.root",
+        "page_capacity": 896,
+        "page_width": 1024
+      },
+      "stage0_revision": "1513bdf62bbcf4d366238dba1d8f2396b2e94128",
+      "backend": "cranelift",
+      "cache_hits": 2,
+      "cache_misses": 0,
+      "admission_seconds": 86.0,
+      "valid_constructors": 2,
+      "verified_ssa_functions": 2,
+      "negative_cases": 6,
+      "negative_diagnostic_spans_matching_stage0": 6,
+      "requests": 16,
+      "result_sha256": "6ee20d6fa08be6481e19810446882fa97b98f534de6a14698315d33c5ad1569d",
+      "evidence_scope": "small imported-enum fixture; not a whole compiler-module proof"
+    },
+    {
+      "kind": "real-flow-module-pipeline-frontier",
+      "status": "inconclusive-execution-envelope",
+      "target_module": "src/compiler/flow.mncs",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "stage0_revision": "1513bdf62bbcf4d366238dba1d8f2396b2e94128",
+      "input_page_width": 1024,
+      "input_page_count": 894,
+      "native_cranelift_attempts": [
+        {
+          "page_capacity": 1024,
+          "admission_seconds": 598.4,
+          "child_exit_code": -9,
+          "result": "probe terminated before compiler result"
+        },
+        {
+          "page_capacity": 896,
+          "admission_seconds": 600.3,
+          "child_exit_code": -9,
+          "result": "probe terminated before compiler result"
+        }
+      ],
+      "independent_stage0_project_oracle": {
+        "valid": true,
+        "diagnostic_count": 0,
+        "linked_function_count": 1324,
+        "ssa_function_count": 376
+      },
+      "reference_interpreter_attempt": {
+        "status": "stopped-without-result",
+        "elapsed_seconds_approx": 900,
+        "exit_code": 130,
+        "reason": "no output during bounded observation"
+      },
+      "research_bytecode_attempt": {
+        "status": "stopped-before-admission-result",
+        "elapsed_seconds": 120,
+        "exit_code": 130,
+        "reason": "no output during bounded observation"
+      },
+      "classification": "Stage-0 accepts the real closure; native compiler result is unknown. The probe terminations do not establish a source rejection or a system-wide OOM cause."
+    },
+    {
+      "kind": "reduced-project-capacity-admission-attempt",
+      "status": "stopped-before-result",
+      "page_capacity": 2,
+      "page_width": 256,
+      "backend": "cranelift",
+      "elapsed_seconds_approx": 150,
+      "exit_code": 130,
+      "reason": "uncached admission emitted no result; not semantic evidence"
+    },
+    {
+      "kind": "current-source-whole-module-parse-and-signature-ingestion",
+      "status": "passed",
+      "stage0_revision": "1513bdf62bbcf4d366238dba1d8f2396b2e94128",
+      "backend": "retained_cranelift",
+      "retained_execution_sessions": 1,
+      "pos": 76,
+      "neg": 58,
+      "checker_cases": 9,
+      "requests": 153,
+      "identical_runs": 2,
+      "elapsed_seconds": 1273.752,
+      "result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
+      "declaration_capacity_frontier": {
+        "module": "inline:1025-top-level-declarations",
+        "bytes": 47169,
+        "functions": 1122,
+        "declarations": 1123,
+        "records": 1
+      },
+      "self_ingested_modules": [
+        {
+          "module": "src/compiler/segment.mncs",
+          "source_bytes": 2430,
+          "functions": 11,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+        },
+        {
+          "module": "src/compiler/parser.mncs",
+          "source_bytes": 5950,
+          "functions": 6,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc"
+        },
+        {
+          "module": "src/compiler/source.mncs",
+          "source_bytes": 8456,
+          "functions": 20,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89"
+        },
+        {
+          "module": "src/compiler/decl.mncs",
+          "source_bytes": 820430,
+          "functions": 1200,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "f7c9578dd7cff890e6b0f68cf9f6d4afdf43ffd5277deb4e7309e9b19dcd5aa3"
+        },
+        {
+          "module": "src/compiler/flow.mncs",
+          "source_bytes": 33922,
+          "functions": 65,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        },
+        {
+          "module": "src/compiler/lexer.mncs",
+          "source_bytes": 40330,
+          "functions": 22,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "97f695f6d949a4e5071a6da6c866bcee999346ebab25f87814c1c8eb1efbb2f3"
+        },
+        {
+          "module": "src/compiler/ssa.mncs",
+          "source_bytes": 305014,
+          "functions": 377,
+          "page_bound": 314,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+        },
+        {
+          "module": "src/compiler/kernel.mncs",
+          "source_bytes": 6297,
+          "functions": 8,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6"
+        },
+        {
+          "module": "src/compiler/project.mncs",
+          "source_bytes": 109992,
+          "functions": 152,
+          "page_bound": 1024,
+          "stages": {
+            "parse": "proven",
+            "function_signature_names_and_generics": "proven"
+          },
+          "source_sha256": "defae4253e1528d7b0d3faad6f955df166db809eef40233693d04735e19e8a00"
+        }
+      ],
+      "scope": "Each current compiler source was targeted independently for native parsing and function-signature/generic facts. Checker/proof/flow/SSA are not implied for those whole modules."
+    },
+    {
+      "kind": "flow-cfg-differential",
+      "status": "passed",
+      "stage0_revision": "1513bdf62bbcf4d366238dba1d8f2396b2e94128",
+      "backend": "retained_research-bytecode",
+      "retained_execution_sessions": 1,
+      "cases": 7,
+      "requests": 39,
+      "identical_native_repetitions": 2,
+      "elapsed_seconds": 278.694,
+      "execution_steps_total": 25902964,
+      "execution_steps_max": 2471859,
+      "result_sha256": "2fd5a4a55d6302b0f023aadb59a34cbcc91841f541803173ecc9410047dc2764",
+      "covered_cases": [
+        "fallthrough_join",
+        "multiple_functions",
+        "unreachable_join",
+        "nested_unreachable_joins",
+        "bounded_iteration_counted",
+        "bounded_iteration_sequence",
+        "nested_bounded_iteration"
+      ],
+      "scope": "Focused typed-operation CFG, reachability, bounded-iteration, diagnostic, and Stage-0 SSA-shape comparisons; this is not whole-flow.mncs proof."
+    },
+    {
+      "kind": "aggregate-record-flow-ssa-cross-executor-attempt",
+      "status": "stopped-without-result",
+      "harness": "tools/test_ssa_record_flow.py",
+      "requested_backends": [
+        "cranelift",
+        "canonical-vm"
+      ],
+      "elapsed_seconds_approx": 720,
+      "termination": "manually interrupted after no stdout or stage result",
+      "semantic_verdict": "none",
+      "resource_observation_scope": "Environment resources reported system memory availability between 22.4 and 26.6 GB during the attempt; caller-ancestry RSS does not map the probe child"
+    }
+  ],
+  "module_matrix": "SELF-HOST-MATRIX.json",
+  "current_source_sha256": {
+    "decl": "f7c9578dd7cff890e6b0f68cf9f6d4afdf43ffd5277deb4e7309e9b19dcd5aa3",
+    "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+    "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+    "lexer": "97f695f6d949a4e5071a6da6c866bcee999346ebab25f87814c1c8eb1efbb2f3",
+    "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+    "project": "defae4253e1528d7b0d3faad6f955df166db809eef40233693d04735e19e8a00",
+    "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+    "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+    "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+  }
+}

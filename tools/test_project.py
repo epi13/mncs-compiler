@@ -4,8 +4,8 @@
 Python only builds typed request values and compares compiler outputs. The
 project/module/import interpretation remains in MNCS or the Rust oracle.
 
-Focused modes (`resolution`, `imported-identity`, `match-ssa`,
-`operations`) run natural-granularity subsets with their own probe and
+Focused modes (`resolution`, `imported-identity`, `imported-sequence`,
+`match-ssa`, `operations`) run natural-granularity subsets with their own probe and
 scratch snapshot; the default with no mode runs the full canonical
 closure. Verification obligations bind one mode each. The `route`
 meta-mode selects affected modes from the obligation inventory and runs
@@ -117,20 +117,12 @@ def _filtered_seeds(raw, module):
 class Probe:
     """Transport pair: one retained JIT session per execution module.
 
-    The cranelift backend cannot retain the project+ssa session pair in
-    one probe process on the current tree: the second session worker
-    panics in ``finalize_definitions`` (cranelift-jit ``NegOverflow``)
-    and ``retained_sessions`` drops to 1 while elaboration and every
-    emitted artifact stay valid. Either module alone retains fine, so
-    this probe spawns one single-module process per execution module
-    and routes ``ssa.v1``-targeted requests to the ssa process; every
-    other request (project targets, oracles, record types, status)
-    goes to the project process. Responses, digests, and step counts
-    aggregate exactly as before; a routing break fails loudly because
-    each process only elaborates its own module. Revert to one process
-    when backend pressure prs_4606a5e9b5d87684 (mncs-language:
-    dual-session JIT finalize NegOverflow) is fixed and dual retention
-    holds.
+    CP-0024 previously required splitting project and SSA into separate
+    processes because Cranelift JIT finalization overflowed on far
+    relocations. The default now keeps both sessions together so this
+    workload continues to guard the repaired backend. Set
+    MNCS_PROBE_SPLIT_EXECUTION_SESSIONS=1 only to compare the isolated
+    retention behavior with historical evidence.
     """
 
     def __init__(self):
@@ -141,7 +133,12 @@ class Probe:
         configured = [part.strip() for part in
                       base.get("MNCS_PROBE_EXECUTION_MODULES", "").split(",")
                       if part.strip()]
-        self._split = PROJECT_MODULE in configured and SSA_MODULE in configured
+        self._split = (
+            os.environ.get("MNCS_PROBE_SPLIT_EXECUTION_SESSIONS", "0") == "1"
+            and PROJECT_MODULE in configured
+            and SSA_MODULE in configured
+        )
+        self._execution_modules = configured
         if self._split:
             project_env = dict(base)
             project_env["MNCS_PROBE_EXECUTION_MODULES"] = PROJECT_MODULE
@@ -590,7 +587,11 @@ class _FixtureRun:
         self.execution_status = self.probe.send({"execution_status": True})
         if os.environ.get("MNCS_PROBE_BACKEND") == "cranelift":
             assert self.execution_status["backend"] == "cranelift", self.execution_status
-            assert self.execution_status["retained_sessions"] == 2, self.execution_status
+            expected_sessions = (
+                len(self.probe._procs) if self.probe._split
+                else len(self.probe._execution_modules)
+            )
+            assert self.execution_status["retained_sessions"] == expected_sessions, self.execution_status
         self.identities = identity_map(self.probe)
         return self
 
@@ -1277,7 +1278,133 @@ def _sec_nominal(probe, identities, project_root):
         ],
         "coverage_gap": False,
     }
-    return {"imported_record_finite_and_nested_nominal_types": nominal_type_case}
+
+    generic_view_case = _sec_generic_sequence(probe, identities, project_root)
+    return {
+        "imported_record_finite_and_nested_nominal_types": nominal_type_case,
+        "imported_generic_sequence_signature": generic_view_case,
+    }
+
+
+def _sec_generic_sequence(probe, identities, project_root):
+    """Imported `up_to N` signatures preserve their symbolic view bound."""
+    view_dependency = (
+        "mncs 0.18; module demo.bytes; "
+        "fn byte_at<N: Nat>(source: [byte; up_to N], offset: u64) -> (result: u64) { "
+        "if offset < source.len { return source[offset] as u64; } return 256; }"
+    )
+    view_caller = (
+        "mncs 0.18; module demo.view_user; use demo.bytes as bytes; "
+        "fn get<N: Nat>(source: [byte; up_to N], offset: u64) -> (result: u64) { "
+        "return bytes.byte_at<N>(source, offset); }"
+    )
+    for path in project_root.glob("*.mncs"):
+        path.unlink()
+    (project_root / "a-view-dep.mncs").write_text(view_dependency)
+    (project_root / "b-view-root.mncs").write_text(view_caller)
+    view_native = probe.native(request_value(identities, discover_sources(project_root)))
+    view_modules = flist(view_native["modules"])
+    view_root = next(module for module in view_modules if module["source_index"] == 1)
+    view_oracle = probe.send({"project_oracle": {
+        "root": view_caller,
+        "modules": {"demo.bytes": view_dependency},
+    }})
+    assert view_oracle["valid"] is True, view_oracle["diagnostics"]
+    assert view_native["valid"] is True, view_native["diagnostics"]
+    assert view_native["value_ssa_valid"] is True, view_native
+    assert view_root["flow"]["proof"]["ok"] is True, view_root["flow"]["proof"]
+    assert view_root["value_ssa"]["valid"] is True, view_root["value_ssa"]
+    assert len(view_oracle["program"]["functions"]) == 2
+
+    # Match the real lexer -> source.byte_at_global call shape: the imported
+    # function transports two independent Nat bounds through a nested page
+    # sequence.  Keep the body small so a failure identifies signature
+    # transport rather than indexing or lexer behavior.
+    two_bound_dependency = (
+        "mncs 0.18; module demo.source; "
+        "fn byte_at_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], "
+        "stride: u64, total: u64, offset: u64) -> (result: u64) { return offset; }"
+    )
+    two_bound_caller = (
+        "mncs 0.18; module demo.lexer; use demo.source as source; "
+        "fn keyword_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], "
+        "stride: u64, total: u64, offset: u64) -> (result: u64) { "
+        "return source.byte_at_global<P, N>(pages, stride, total, offset); }"
+    )
+    for path in project_root.glob("*.mncs"):
+        path.unlink()
+    (project_root / "a-two-bound-dep.mncs").write_text(two_bound_dependency)
+    (project_root / "b-two-bound-root.mncs").write_text(two_bound_caller)
+    two_bound_native = probe.native(
+        request_value(identities, discover_sources(project_root)))
+    two_bound_modules = flist(two_bound_native["modules"])
+    two_bound_root = next(
+        module for module in two_bound_modules if module["source_index"] == 1)
+    two_bound_oracle = probe.send({"project_oracle": {
+        "root": two_bound_caller,
+        "modules": {"demo.source": two_bound_dependency},
+    }})
+    assert two_bound_oracle["valid"] is True, two_bound_oracle["diagnostics"]
+    assert two_bound_native["valid"] is True, two_bound_native["diagnostics"]
+    assert two_bound_native["value_ssa_valid"] is True, two_bound_native
+    assert two_bound_root["flow"]["proof"]["ok"] is True, two_bound_root["flow"]["proof"]
+    assert two_bound_root["value_ssa"]["valid"] is True, two_bound_root["value_ssa"]
+
+    mismatched_view_caller = (
+        "mncs 0.18; module demo.view_user; use demo.bytes as bytes; "
+        "fn bad<N: Nat>(offset: u64) -> (result: u64) { "
+        "return bytes.byte_at<N>(offset, offset); }"
+    )
+    for path in project_root.glob("*.mncs"):
+        path.unlink()
+    (project_root / "a-view-dep.mncs").write_text(view_dependency)
+    (project_root / "b-view-root.mncs").write_text(mismatched_view_caller)
+    mismatch_native = probe.native(request_value(identities, discover_sources(project_root)))
+    mismatch_modules = flist(mismatch_native["modules"])
+    mismatch_root = next(module for module in mismatch_modules if module["source_index"] == 1)
+    mismatch_obligations = flist(mismatch_root["flow"]["proof"]["obls"])
+    mismatch_obligation = next(item for item in mismatch_obligations if item["kind"] == 26)
+    mismatch_oracle = probe.send({"project_oracle": {
+        "root": mismatched_view_caller,
+        "modules": {"demo.bytes": view_dependency},
+    }})
+    mismatch_start = mismatched_view_caller.index("offset, offset")
+    mismatch_span = [mismatch_start, mismatch_start + len("offset")]
+    mismatch_diags = flist(mismatch_native["diagnostics"])
+    proof_failed = next(item for item in mismatch_diags if item["$v"] == 5)
+    stage0_mismatch = next(item for item in mismatch_oracle["diagnostics"] if item["code"] == "MNE133")
+    assert mismatch_native["valid"] is False, mismatch_native
+    assert mismatch_oracle["valid"] is False, mismatch_oracle
+    assert [mismatch_obligation["start"], mismatch_obligation["end"]] == mismatch_span
+    assert [proof_failed["$p"]["start"], proof_failed["$p"]["end"]] == mismatch_span
+    assert [stage0_mismatch["span"]["start"], stage0_mismatch["span"]["end"]] == mismatch_span
+    return {
+        "positive": {
+            "native_valid": view_native["valid"],
+            "native_value_ssa_valid": view_native["value_ssa_valid"],
+            "native_root_proof_ok": view_root["flow"]["proof"]["ok"],
+            "stage0_valid": view_oracle["valid"],
+            "stage0_linked_functions": len(view_oracle["program"]["functions"]),
+        },
+        "negative": {
+            "native_valid": mismatch_native["valid"],
+            "native_obligation_kind": mismatch_obligation["kind"],
+            "native_span": mismatch_span,
+            "stage0_valid": mismatch_oracle["valid"],
+            "stage0_diagnostic": stage0_mismatch["code"],
+            "stage0_span": [stage0_mismatch["span"]["start"], stage0_mismatch["span"]["end"]],
+            "matching": True,
+        },
+        "two_bound_nested_sequence": {
+            "native_valid": two_bound_native["valid"],
+            "native_root_proof_ok": two_bound_root["flow"]["proof"]["ok"],
+            "native_value_ssa_valid": two_bound_native["value_ssa_valid"],
+            "stage0_valid": two_bound_oracle["valid"],
+            "stage0_linked_functions": len(two_bound_oracle["program"]["functions"]),
+        },
+        "covered": "imported generic up_to view bound and two-bound nested page signature transport through call specialization",
+    }
+
 # Enum values retain their canonical nominal and variant identity
 # in value SSA. Keep construction and finite-match cases in small
 # project requests: the selected native runtime has a bounded
@@ -1982,6 +2109,17 @@ def run_imported_identity(_run=None):
         }
 
 
+def run_imported_sequence(_run=None):
+    """Focused imported generic-sequence proof and Stage-0 differential."""
+    with _maybe_run(_run) as run:
+        sequence_case = _sec_generic_sequence(
+            run.probe, run.identities, run.project_root)
+        return {
+            **_mode_common(run),
+            "imported_generic_sequence_signature": sequence_case,
+        }
+
+
 def run_match_ssa(_run=None):
     """Match/aggregate value-SSA closure: merge, enum, scalar, projection, nested."""
     with _maybe_run(_run) as run:
@@ -2191,6 +2329,7 @@ def run():
                 "missing_imported_member": missing_member["missing_imported_member"],
                 "parse_failure_explains_itself": parse_failure["parse_failure_explains_itself"],
                 "imported_record_finite_and_nested_nominal_types": nominal["imported_record_finite_and_nested_nominal_types"],
+                "imported_generic_sequence_signature": nominal["imported_generic_sequence_signature"],
             },
             "enum_construction_value_ssa": enum["enum_construction_value_ssa"],
             "scalar_match_value_ssa": scalar["scalar_match_value_ssa"],
@@ -2204,6 +2343,7 @@ def run():
 MODES = {
     "resolution": (run_resolution, "ordered snapshots, module/import/member resolution, edge cases"),
     "imported-identity": (run_imported_identity, "imported callable identity, argument proof, nominal types"),
+    "imported-sequence": (run_imported_sequence, "generic imported sequence signature transport and proof"),
     "match-ssa": (run_match_ssa, "merge/join, enum, scalar-match, projection, nested-match SSA"),
     "operations": (run_operations, "compiler-operation call SSA: slots, proofs, kind-9 verification"),
 }
@@ -2250,9 +2390,9 @@ if __name__ == "__main__":
         "stage0_reference_mode": os.environ.get("MNCS_PROBE_REFERENCE_MODE", "locked"),
         "source_profile": "0.18",
         "elapsed_seconds": round(time.monotonic() - started, 3),
-        "scope": "ordered current-profile project snapshot, native module/import/member resolution, canonical callable identity, scalar imported-signature proof, and verified value SSA; a multi-module imported call crosses a control-flow merge and is compared with locked Rust Stage-0 body/SSA facts",
+        "scope": "ordered current-profile project snapshot, native module/import/member resolution, canonical callable identity, scalar and generic-sequence imported-signature proof, and verified value SSA; a multi-module imported call crosses a control-flow merge and is compared with locked Rust Stage-0 body/SSA facts",
         "imported_signature_scope": {
-            "supported": "scalar, effect-free imported callable signatures with argument/result proof and compiler-emitted canonical Stage-0 callable identity; nominal imported type ownership and nested nominal resolution reach verified SSA per campaign-20261001-imported-nominal-ssa.json",
+            "supported": "scalar and generic-sequence effect-free imported callable signatures with argument/result proof and compiler-emitted canonical Stage-0 callable identity; nominal imported type ownership and nested nominal resolution reach verified SSA per campaign-20261001-imported-nominal-ssa.json",
             "remaining": ["imported effect/capability identity and coverage"],
         },
         "project_fingerprint": {

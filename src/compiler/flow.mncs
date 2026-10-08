@@ -10,10 +10,15 @@ use mncs.compiler.decl.v1 as decl;
 
 // kind: 0 open builder, 1 branch, 2 jump, 3 return, 4 fail. `instructions`
 // counts retained typed-stack operations in `expressions`.
-// role: 1 let-value, 2 branch condition, 3 returned value.
+// role: 1 let-value, 2 branch condition, 3 returned value, 4 iterate source,
+// 5 iterate initial state, 6 iterate next state.
 record TypedExpr { role: u64, start: u64, end: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, op_count: u64 }
 enum TypedExprList { ENil, ECons { head: TypedExpr, tail: TypedExprList } }
 record TypedExprRev { rest: TypedExprList, acc: TypedExprList }
+// Loop facts retained for the value-SSA consumer. `mode` is 1 for a counted
+// loop and 2 for sequence iteration; `role` identifies the preheader, header,
+// body, backedge, or exhausted join (1 through 5).
+record LoopMeta { mode: u64, role: u64, index_start: u64, index_end: u64, statement_start: u64, statement_end: u64, state_start: u64, state_end: u64, source_start: u64, source_end: u64, bound_start: u64, bound_end: u64, bound: u64, exit_id: u64 }
 record Block {
     id: u64,
     kind: u64,
@@ -25,19 +30,33 @@ record Block {
     instructions: u64,
     expressions: TypedExprList,
     reachable: bool,
-    is_join: bool
+    is_join: bool,
+    is_iteration_header: bool,
+    is_iteration_backedge: bool,
+    iteration_header_id: u64,
+    iteration_start: u64,
+    iteration_end: u64,
+    iteration: LoopMeta
 }
 enum BlockList { BNil, BCons { head: Block, tail: BlockList } }
 record BlockRev { rest: BlockList, acc: BlockList }
 
 record FlowFrame {
+    kind: u64,
     next: decl.StmtList,
     else_body: decl.StmtList,
     else_id: u64,
     join_id: u64,
     phase: u64,
     parent_live: bool,
-    then_falls: bool
+    then_falls: bool,
+    iteration_start: u64,
+    iteration_end: u64,
+    iteration_state_start: u64,
+    iteration_state_end: u64,
+    iteration_next_start: u64,
+    iteration_next_end: u64,
+    iteration: LoopMeta
 }
 enum FlowFrames { FNil, FCons { head: FlowFrame, tail: FlowFrames } }
 
@@ -62,7 +81,9 @@ record Build {
     has_tail: bool
 }
 
-record TargetCheck { rest: BlockList, limit: u64, ok: bool }
+record TargetCheck { rest: BlockList, all: BlockList, limit: u64, ok: bool }
+record LoopLinkScan { rest: BlockList, all: BlockList, ok: bool }
+record LoopHeaderScan { rest: BlockList, wanted: u64, start: u64, end: u64, found: bool }
 record BlockCount { rest: BlockList, count: u64 }
 record DiagCount { rest: DiagnosticList, count: u64 }
 record FunctionFlow {
@@ -124,8 +145,16 @@ fn empty_block(id: u64, live: bool, join: bool) -> (result: Block) {
         id: id, kind: 0, term_start: 0, term_end: 0,
         succ0: 0, succ1: 0, succ_count: 0, instructions: 0,
         expressions: TypedExprList.ENil,
-        reachable: live, is_join: join
+        reachable: live, is_join: join,
+        is_iteration_header: false, is_iteration_backedge: false,
+        iteration_header_id: 0, iteration_start: 0, iteration_end: 0,
+        iteration: empty_loop_meta()
     };
+}
+fn empty_loop_meta() -> (result: LoopMeta) { return LoopMeta { mode: 0, role: 0, index_start: 0, index_end: 0, statement_start: 0, statement_end: 0, state_start: 0, state_end: 0, source_start: 0, source_end: 0, bound_start: 0, bound_end: 0, bound: 0, exit_id: 0 }; }
+fn make_loop_meta<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, index_start: u64, index_end: u64, has_source: bool, over_source: decl.Expr, bound_start: u64, bound_end: u64, state_start: u64, state_end: u64, start: u64, end: u64, exit_id: u64) -> (result: LoopMeta) {
+    let value: decl.IntVal = decl.int_value<P, N>(pages, stride, total, bound_start, bound_end);
+    return LoopMeta { mode: select(has_source, 2, 1), role: 0, index_start: index_start, index_end: index_end, statement_start: start, statement_end: end, state_start: state_start, state_end: state_end, source_start: select(has_source, decl.expr_start(over_source), 0), source_end: select(has_source, decl.expr_end(over_source), 0), bound_start: bound_start, bound_end: bound_end, bound: value.value, exit_id: exit_id };
 }
 
 fn lower_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: LoweredUnit) {
@@ -227,13 +256,56 @@ fn step_stmt<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tot
         decl.Stmt.If { cond: c, then_b: tb, else_b: eb, start: s, end: e } => add_branch<P, N>(pages, stride, total, st, t, c, tb, eb),
         decl.Stmt.Fail { mode_start: a, mode_end: b, start: s, end: e } => add_fail<P, N>(pages, stride, total, st, t, s, e),
         decl.Stmt.Return { value: v, start: s, end: e } => add_return<P, N>(pages, stride, total, st, t, v, s, e),
-        decl.Stmt.Iterate { name_start: ns, name_end: ne, over_source: o, has_over_source: ho, bound_start: bs, bound_end: be, state_start: ss, state_end: se, type_start: ts, type_end: te, type_kind: tk, initial: init, body: b, next_start: xs, next_end: xe, next_value: nv, start: s, end: e } => add_iterate<P, N>(pages, stride, total, st, t)
+        decl.Stmt.Iterate { name_start: ns, name_end: ne, over_source: o, has_over_source: ho, bound_start: bs, bound_end: be, state_start: ss, state_end: se, type_start: ts, type_end: te, type_kind: tk, initial: init, body: b, next_start: xs, next_end: xe, next_value: nv, start: s, end: e } => add_iterate<P, N>(pages, stride, total, st, t, ns, ne, o, ho, bs, be, ss, se, init, b, nv, s, e)
     };
 }
-// Loop control-flow (back-edge construction over the carried state) is
-// unmodeled: fail the build here rather than emitting a wrong graph.
-fn add_iterate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList) -> (result: Build) {
-    return Build { ..st, done: true, ok: false };
+// Bounded iteration becomes a verified CFG cycle: a preheader jump, an
+// iteration header with body/exhausted successors, a body entry, and an
+// exhausted join. The carried-value semantics remain attached as typed
+// expression roles; SSA admission handles that representation separately.
+fn add_iterate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, index_start: u64, index_end: u64, over_source: decl.Expr, has_over_source: bool, bound_start: u64, bound_end: u64, state_start: u64, state_end: u64, initial: decl.Expr, body: decl.StmtList, next_value: decl.Expr, start: u64, end: u64) -> (result: Build) {
+    let source: Build = attach_iterate_source<P, N>(pages, stride, total, st, over_source, has_over_source, start, end);
+    let attached: Build = attach_expression<P, N>(pages, stride, total, source, initial, 5, state_start, state_end);
+    let header_id: u64 = attached.next_id;
+    let body_id: u64 = header_id + 1;
+    let exit_id: u64 = header_id + 2;
+    let meta: LoopMeta = make_loop_meta<P, N>(pages, stride, total, index_start, index_end, has_over_source, over_source, bound_start, bound_end, state_start, state_end, start, end, exit_id);
+    let preheader: Build = close_to_loop_preheader<P, N>(pages, stride, total, attached, header_id, start, end, LoopMeta { ..meta, role: 1 });
+    let header: Block = Block {
+        ..preheader.current,
+        id: header_id, kind: 1, term_start: start, term_end: end,
+        succ0: body_id, succ1: exit_id, succ_count: 2,
+        instructions: 0, expressions: TypedExprList.ENil,
+        reachable: preheader.current.reachable, is_join: false,
+        is_iteration_header: true, is_iteration_backedge: false,
+        iteration_header_id: header_id, iteration_start: start, iteration_end: end,
+        iteration: LoopMeta { ..meta, role: 2 }
+    };
+    let frame: FlowFrame = FlowFrame {
+        kind: 1, next: t, else_body: decl.StmtList.SNil,
+        else_id: header_id, join_id: exit_id, phase: 0,
+        parent_live: preheader.current.reachable, then_falls: false,
+        iteration_start: start, iteration_end: end,
+        iteration_state_start: state_start, iteration_state_end: state_end,
+        iteration_next_start: decl.expr_start(next_value), iteration_next_end: decl.expr_end(next_value),
+        iteration: meta
+    };
+    return Build {
+        ..preheader, rest: body,
+        frames: FlowFrames.FCons { head: frame, tail: st.frames },
+        current: Block { ..empty_block(body_id, preheader.current.reachable, false), iteration: LoopMeta { ..meta, role: 3 } },
+        blocks: BlockList.BCons { head: header, tail: preheader.blocks },
+        next_id: exit_id + 1, done: false
+    };
+}
+fn attach_iterate_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, over_source: decl.Expr, has_over_source: bool, start: u64, end: u64) -> (result: Build) {
+    if has_over_source { return attach_expression<P, N>(pages, stride, total, st, over_source, 4, start, end); }
+    return st;
+}
+fn close_to_loop_preheader<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, header_id: u64, start: u64, end: u64, meta: LoopMeta) -> (result: Build) {
+    let source_order: TypedExprList = reverse_typed_expressions<P, N>(pages, stride, total, st.current.expressions);
+    let block: Block = Block { ..st.current, kind: 2, expressions: source_order, term_start: start, term_end: end, succ0: header_id, succ_count: 1, iteration: meta };
+    return Build { ..st, current: block, blocks: BlockList.BCons { head: block, tail: st.blocks } };
 }
 fn add_let<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, t: decl.StmtList, value: decl.Expr, name_start: u64, name_end: u64) -> (result: Build) {
     let attached: Build = attach_expression<P, N>(pages, stride, total, st, value, 1, name_start, name_end);
@@ -250,7 +322,7 @@ fn add_branch<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         term_start: decl.expr_start(cond), term_end: decl.expr_end(cond),
         succ0: yes, succ1: no, succ_count: 2
     };
-    let frame: FlowFrame = FlowFrame { next: t, else_body: else_b, else_id: no, join_id: join, phase: 0, parent_live: attached.current.reachable, then_falls: false };
+    let frame: FlowFrame = FlowFrame { kind: 0, next: t, else_body: else_b, else_id: no, join_id: join, phase: 0, parent_live: attached.current.reachable, then_falls: false, iteration_start: 0, iteration_end: 0, iteration_state_start: 0, iteration_state_end: 0, iteration_next_start: 0, iteration_next_end: 0, iteration: empty_loop_meta() };
     return Build {
         ..attached, rest: then_b,
         frames: FlowFrames.FCons { head: frame, tail: st.frames },
@@ -271,8 +343,29 @@ fn add_fail<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tota
 }
 
 fn unwind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
+    if f.kind == 1 { return unwind_iterate<P, N>(pages, stride, total, st, f, tail); }
     if f.phase == 0 { return unwind_then<P, N>(pages, stride, total, st, f, tail); }
     return unwind_else<P, N>(pages, stride, total, st, f, tail);
+}
+fn unwind_iterate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
+    if st.current.kind != 0 { return finish_iterate(st, f, tail); }
+    let with_next: Build = attach_expression_at<P, N>(pages, stride, total, st, f.iteration_next_start, f.iteration_next_end, 6, f.iteration_state_start, f.iteration_state_end);
+    let backedge: Build = close_to_loop_backedge<P, N>(pages, stride, total, with_next, f.else_id, f.iteration_start, f.iteration_end, LoopMeta { ..f.iteration, role: 4 });
+    return finish_iterate(backedge, f, tail);
+}
+fn finish_iterate(st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
+    return Build { ..st, rest: f.next, frames: tail, current: Block { ..empty_block(f.join_id, f.parent_live, true), iteration: LoopMeta { ..f.iteration, role: 5 } }, done: false };
+}
+fn close_to_loop_backedge<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, header_id: u64, start: u64, end: u64, meta: LoopMeta) -> (result: Build) {
+    let source_order: TypedExprList = reverse_typed_expressions<P, N>(pages, stride, total, st.current.expressions);
+    let block: Block = Block {
+        ..st.current, kind: 2, expressions: source_order,
+        term_start: start, term_end: end, succ0: header_id, succ_count: 1,
+        is_iteration_backedge: true, iteration_header_id: header_id,
+        iteration_start: start, iteration_end: end,
+        iteration: meta
+    };
+    return Build { ..st, current: block, blocks: BlockList.BCons { head: block, tail: st.blocks } };
 }
 fn unwind_then<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
     let falls: bool = st.current.kind == 0 && st.current.reachable;
@@ -314,15 +407,18 @@ fn finish_tail<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     return Build { ..attached, current: b, blocks: BlockList.BCons { head: b, tail: attached.blocks }, done: true };
 }
 fn attach_expression<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64) -> (result: Build) {
+    return attach_expression_at<P, N>(pages, stride, total, st, decl.expr_start(expression), decl.expr_end(expression), role, binding_start, binding_end);
+}
+fn attach_expression_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, start: u64, end: u64, role: u64, binding_start: u64, binding_end: u64) -> (result: Build) {
     return match st.typed_rest {
         decl.TopsList.TLNil => Build { ..st, done: true, ok: false },
-        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<P, N>(pages, stride, total, st, expression, role, binding_start, binding_end, ops, rest)
+        decl.TopsList.TLCons { head: ops, tail: rest } => attach_typed_ops<P, N>(pages, stride, total, st, start, end, role, binding_start, binding_end, ops, rest)
     };
 }
-fn attach_typed_ops<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, expression: decl.Expr, role: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
+fn attach_typed_ops<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, start: u64, end: u64, role: u64, binding_start: u64, binding_end: u64, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
     let n: u64 = decl.count_tops<P, N>(pages, stride, total, ops);
     if n == 0 { return Build { ..st, done: true, ok: false }; }
-    let typed: TypedExpr = TypedExpr { role: role, start: decl.expr_start(expression), end: decl.expr_end(expression), binding_start: binding_start, binding_end: binding_end, ops: ops, op_count: n };
+    let typed: TypedExpr = TypedExpr { role: role, start: start, end: end, binding_start: binding_start, binding_end: binding_end, ops: ops, op_count: n };
     let exprs: TypedExprList = TypedExprList.ECons { head: typed, tail: st.current.expressions };
     let current: Block = Block { ..st.current, instructions: st.current.instructions + n, expressions: exprs };
     return Build { ..st, typed_rest: rest, current: current };
@@ -369,8 +465,8 @@ fn block_count_step(st: BlockCount) -> (result: BlockCount) {
     };
 }
 fn verify_targets<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList, limit: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying d: TargetCheck = TargetCheck { rest: blocks, limit: limit, ok: true } { next d = target_step(d); }
-    return d.ok && block_list_empty(d.rest);
+    iterate i up_to 1024 carrying d: TargetCheck = TargetCheck { rest: blocks, all: blocks, limit: limit, ok: true } { next d = target_step(d); }
+    return d.ok && block_list_empty(d.rest) && iteration_links_valid<P, N>(pages, stride, total, blocks);
 }
 fn block_list_empty(list: BlockList) -> (result: bool) {
     return match list { BNil => true, BCons { head: h, tail: t } => false };
@@ -383,10 +479,37 @@ fn target_step(st: TargetCheck) -> (result: TargetCheck) {
     };
 }
 fn target_check_block(st: TargetCheck, h: Block, t: BlockList) -> (result: TargetCheck) {
-    if h.kind == 1 { return TargetCheck { ..st, rest: t, ok: h.succ_count == 2 && h.succ0 < st.limit && h.succ1 < st.limit }; }
-    if h.kind == 2 { return TargetCheck { ..st, rest: t, ok: h.succ_count == 1 && h.succ0 < st.limit }; }
+    if h.kind == 1 { return TargetCheck { ..st, rest: t, ok: h.succ_count == 2 && h.succ0 < st.limit && h.succ1 < st.limit && (!h.is_iteration_header || (h.iteration_start == h.term_start && h.iteration_end == h.term_end && h.iteration_end > h.iteration_start)) }; }
+    if h.kind == 2 { return TargetCheck { ..st, rest: t, ok: h.succ_count == 1 && h.succ0 < st.limit && (!h.is_iteration_backedge || (h.succ0 == h.iteration_header_id && h.iteration_end > h.iteration_start)) }; }
     if h.kind == 3 || h.kind == 4 { return TargetCheck { ..st, rest: t, ok: h.succ_count == 0 }; }
     return TargetCheck { ..st, rest: t, ok: false };
+}
+fn iteration_links_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList) -> (result: bool) {
+    iterate i up_to 1024 carrying st: LoopLinkScan = LoopLinkScan { rest: blocks, all: blocks, ok: true } { next st = iteration_link_step<P, N>(pages, stride, total, st); }
+    return st.ok && block_list_empty(st.rest);
+}
+fn iteration_link_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LoopLinkScan) -> (result: LoopLinkScan) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        BNil => st,
+        BCons { head: block, tail: rest } => iteration_link_check<P, N>(pages, stride, total, st, block, rest)
+    };
+}
+fn iteration_link_check<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LoopLinkScan, block: Block, rest: BlockList) -> (result: LoopLinkScan) {
+    if !(block.is_iteration_backedge) { return LoopLinkScan { ..st, rest: rest }; }
+    let header: bool = loop_header_exists<P, N>(pages, stride, total, st.all, block.iteration_header_id, block.iteration_start, block.iteration_end);
+    return LoopLinkScan { ..st, rest: rest, ok: block.succ0 == block.iteration_header_id && header };
+}
+fn loop_header_exists<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: BlockList, wanted: u64, start: u64, end: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying st: LoopHeaderScan = LoopHeaderScan { rest: blocks, wanted: wanted, start: start, end: end, found: false } { next st = loop_header_scan_step(st); }
+    return st.found;
+}
+fn loop_header_scan_step(st: LoopHeaderScan) -> (result: LoopHeaderScan) {
+    if st.found { return st; }
+    return match st.rest {
+        BNil => st,
+        BCons { head: block, tail: rest } => LoopHeaderScan { ..st, rest: rest, found: block.id == st.wanted && block.is_iteration_header && block.iteration_start == st.start && block.iteration_end == st.end }
+    };
 }
 
 fn diagnostic_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: DiagnosticList) -> (result: u64) {
