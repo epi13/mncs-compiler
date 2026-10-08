@@ -57,6 +57,14 @@ def integer(n):
     return {"integer": {"type": {"bits": 64, "signed": False}, "value": n}}
 
 
+def utf8_scalar_end(data, start):
+    try:
+        scalar = data[start:].decode("utf-8")[0]
+    except (UnicodeDecodeError, IndexError):
+        return min(start + 1, len(data))
+    return min(start + len(scalar.encode("utf-8")), len(data))
+
+
 def boolean(v):
     return {"boolean": {"value": bool(v)}}
 
@@ -555,8 +563,9 @@ def tier_a(probe, kinds_inv, stats):
         token = probe.run_global("mncs.compiler.segment.v1",
                                  "next_token_global", pages, 7, total,
                                  (integer(first_bad),))
+        expected_end = utf8_scalar_end(data, first_bad)
         assert (token["kind"], token["start"], token["end"],
-                token["diagnostic"]) == (7, first_bad, first_bad + 1, 3)
+                token["diagnostic"]) == (7, first_bad, expected_end, 3)
         header = probe.run_global("mncs.compiler.kernel.v1",
                                   "parse_header_global", pages, 7, total)
         assert header["code"] == 8 and header["end"] == total, header

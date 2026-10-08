@@ -2572,6 +2572,9 @@ record IntAcc { value: u64, overflow: bool }
 fn int_value<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: IntVal) {
     iterate i up_to 1024 carrying d: IntAcc = IntAcc { value: 0, overflow: false } {
         let pos: u64 = start + i;
+        // Positions outside the exact token are identity steps in int_step;
+        // keep the 1024-byte bound but stop once the token span is exhausted.
+        if pos < start || pos >= end { return IntVal { value: d.value, overflow: d.overflow }; }
         next d = int_step(start, end, d, pos, source.byte_at_global<P, N>(pages, stride, total, pos) as u64);
     }
     return IntVal { value: d.value, overflow: d.overflow };
@@ -2593,6 +2596,9 @@ fn header<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total:
     // may contain UTF-8. Let the lexer validate actual tokens instead of
     // rejecting the whole module because a comment contains a non-ASCII byte.
     iterate i up_to 1024 carrying d: parser.Header = seed {
+        // header_step is an identity transition after an error or the
+        // completed state, so skip only those terminal no-op iterations.
+        if d.code != 0 || d.state == 8 { return d; }
         next d = header_step<P, N>(pages, stride, total, d);
     }
     return header_finish<P, N>(pages, stride, total, d);

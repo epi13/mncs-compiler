@@ -39,6 +39,14 @@ def blob(data):
     return {'sequence': {'values': [{'byte': {'value': n}} for n in raw]}}
 
 
+def utf8_scalar_end(data, start):
+    try:
+        scalar = data[start:].decode('utf-8')[0]
+    except (UnicodeDecodeError, IndexError):
+        return min(start + 1, len(data))
+    return min(start + len(scalar.encode('utf-8')), len(data))
+
+
 def decode(value):
     if 'record' in value:
         return {k: decode(v) for k, v in value['record']['fields']}
@@ -206,7 +214,8 @@ def suite(smoke=False):
             assert probe.run('ascii', [blob(data)]) is False
             first_bad = next(index for index, byte in enumerate(data) if byte >= 128)
             token = probe.run('next_token', [blob(data), integer(first_bad)])
-            assert token == {'kind': 7, 'start': first_bad, 'end': first_bad + 1, 'diagnostic': 3}
+            expected_end = utf8_scalar_end(data, first_bad)
+            assert token == {'kind': 7, 'start': first_bad, 'end': expected_end, 'diagnostic': 3}
             assert probe.run('span_valid', [blob(data), integer(0), integer(len(data))]) is True
             n_texts += 1
         return {

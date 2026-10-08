@@ -216,6 +216,16 @@ def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
 def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, object]:
     rows = list(records.values())
     probe_rows = [row for row in rows if "mncs-compiler-stage0-probe" in str(row.get("cmdline", ""))]
+    io_rows = [row.get("last_io") for row in probe_rows]
+    io_fields = {"rchar": "probe_io_rchar_bytes", "read_bytes": "probe_io_read_bytes"}
+    io_summary = {
+        output: (
+            sum(int(values[key]) for values in io_rows if isinstance(values, dict) and key in values)
+            if io_rows and all(isinstance(values, dict) and key in values for values in io_rows)
+            else "UNKNOWN"
+        )
+        for key, output in io_fields.items()
+    }
     return {
         "processes": sorted(rows, key=lambda row: int(row["pid"])),
         "probe_child_count_observed": len(probe_rows),
@@ -225,8 +235,7 @@ def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, 
         "probe_last_cpu_seconds": sum(float(row["last_cpu_seconds"]) for row in probe_rows),
         "probe_last_cpu_user_seconds": sum(float(row["last_cpu_user_seconds"]) for row in probe_rows),
         "probe_last_cpu_system_seconds": sum(float(row["last_cpu_system_seconds"]) for row in probe_rows),
-        "probe_io_rchar_bytes": sum(int(row.get("last_io", {}).get("rchar", 0)) for row in probe_rows),
-        "probe_io_read_bytes": sum(int(row.get("last_io", {}).get("read_bytes", 0)) for row in probe_rows),
+        **io_summary,
     }
 
 
@@ -297,6 +306,64 @@ def _operation_outcome(report: dict[str, object] | None) -> str:
     return "UNKNOWN_NO_RETURNED_PROJECT_RESULT"
 
 
+def _body_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
+    prefix = "mncs-body-runtime-profile "
+    profiles = []
+    errors = []
+    for line_number, line in enumerate(stderr.splitlines(), start=1):
+        if not line.startswith(prefix):
+            continue
+        try:
+            value = json.loads(line[len(prefix):])
+        except json.JSONDecodeError as error:
+            errors.append(f"line {line_number}: {error}")
+            continue
+        if not isinstance(value, dict):
+            errors.append(f"line {line_number}: profile value is not an object")
+            continue
+        profiles.append(value)
+    return profiles, errors
+
+
+def _body_profile_summaries(
+    profiles: list[dict[str, object]],
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    modules: dict[str, dict[str, int]] = {}
+    functions = []
+    for profile in profiles:
+        rows = profile.get("functions")
+        if not isinstance(rows, dict):
+            continue
+        for identity, raw in rows.items():
+            if not isinstance(identity, str) or not isinstance(raw, dict):
+                continue
+            module_prefix = "mncs:0.2:function:"
+            module_part = identity.split("::", 1)[0]
+            module = (
+                module_part[len(module_prefix):]
+                if module_part.startswith(module_prefix)
+                else "UNKNOWN"
+            )
+            fields = {
+                name: int(raw.get(name, 0))
+                for name in ("calls", "steps", "inclusive_ns", "exclusive_ns")
+            }
+            aggregate = modules.setdefault(
+                module,
+                {name: 0 for name in fields},
+            )
+            for name, value in fields.items():
+                aggregate[name] += value
+            functions.append({"identity": identity, **fields})
+    module_rows = [
+        {"module": module, **values}
+        for module, values in modules.items()
+    ]
+    module_rows.sort(key=lambda row: (-row["exclusive_ns"], row["module"]))
+    functions.sort(key=lambda row: (-row["exclusive_ns"], row["identity"]))
+    return module_rows, functions[:25]
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     label = args.label or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -313,6 +380,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     env["MNCS_PROBE_TRACE_PATH"] = str(trace_path)
     env["MNCS_PROBE_ARTIFACT_LABEL"] = f"{label}-{selection}"
     env["MNCS_TIMINGS"] = "1"
+    if args.runtime_profile:
+        env["MNCS_RUNTIME_PROFILE"] = "1"
     command = [sys.executable, str(ROOT / "tools" / "probe_compiler_module_frontier.py"), "--modules", *args.modules]
     if args.target_last:
         command.append("--target-last")
@@ -328,6 +397,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "type_arguments": [{"kind": "nat", "value": 1024}, {"kind": "nat", "value": 1024}],
         }])
         env["MNCS_PROBE_CACHE_DIR"] = str(ROOT / ".build" / "probe-cache")
+    if args.step_budget is not None:
+        command.extend(["--step-budget", str(args.step_budget)])
 
     before_host = _host_mem_available()
     started = time.monotonic()
@@ -406,9 +477,12 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             r"mncs-timing stage=([^\s]+) elapsed_ms=(\d+)", stderr
         )
     ]
+    runtime_profiles, runtime_profile_parse_errors = _body_runtime_profiles(stderr)
+    runtime_profile_modules, runtime_profile_hot_functions = _body_profile_summaries(runtime_profiles)
     cgroup_after = _cgroup_snapshot(cgroup_dir)
     phase_unknown = [
-        "parser/checker/proof/CFG/SSA subphase wall and CPU time within compile_project are UNKNOWN; the current MNCS entry performs them in one call",
+        "compiler semantic phase labels for parser/checker/proof/CFG/SSA remain UNKNOWN; opt-in function profiles report runtime work without asserting those phase boundaries",
+        "per-function CPU time remains UNKNOWN; the runtime profile reports wall time, call count, and executor steps",
         "hardware instruction count is UNKNOWN; no permitted counter is exposed by this execution environment",
         "an exit signal alone does not identify OOM; cgroup deltas and process termination evidence are reported separately",
     ]
@@ -424,6 +498,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "target_last": args.target_last,
         "oracle_only": args.oracle_only,
         "signature_cache_fixture": args.signature_cache_fixture,
+        "step_budget": args.step_budget if args.step_budget is not None else 8_000_000,
+        "runtime_profile_enabled": bool(env.get("MNCS_RUNTIME_PROFILE")),
         "timeout_seconds": args.timeout_seconds,
         "classification": classification,
         "semantic_result": _semantic_result(probe_report),
@@ -440,6 +516,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "phase_events": len(phase_events),
         "phase_rows": phases,
         "compiler_timing_events": compiler_timing_events,
+        "body_runtime_profiles": runtime_profiles,
+        "body_runtime_profile_module_totals": runtime_profile_modules,
+        "body_runtime_profile_hot_functions": runtime_profile_hot_functions,
+        "runtime_profile_parse_errors": runtime_profile_parse_errors,
         "probe_report": probe_report,
         "stderr_tail": stderr[-12000:],
         "phase_unknown": phase_unknown,
@@ -455,10 +535,14 @@ def main() -> int:
     parser.add_argument("--target-last", action="store_true")
     parser.add_argument("--oracle-only", action="store_true", help="run and measure only the Stage-0 project oracle")
     parser.add_argument("--signature-cache-fixture", action="store_true", help="run a reduced two-call imported-signature cache differential through the reference interpreter")
+    parser.add_argument("--step-budget", type=int, help="use a smaller execution step budget for a bounded prefix (maximum 8,000,000)")
+    parser.add_argument("--runtime-profile", action="store_true", help="enable opt-in function-level body executor profiling")
     parser.add_argument("--timeout-seconds", type=float, default=120.0)
     parser.add_argument("--sample-seconds", type=float, default=0.5)
     parser.add_argument("--label")
     args = parser.parse_args()
+    if args.step_budget is not None and not 1 <= args.step_budget <= 8_000_000:
+        parser.error("--step-budget must be between 1 and 8,000,000")
     print(json.dumps(run(args), indent=2))
     return 0
 

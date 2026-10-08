@@ -17,6 +17,7 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src" / "compiler"
+DEFAULT_STEP_BUDGET = 8_000_000
 
 
 def _source_module_name(source, module):
@@ -141,7 +142,7 @@ def run_stage0_oracle_only(module_names):
         probe.close()
 
 
-def run_imported_signature_cache_fixture():
+def run_imported_signature_cache_fixture(step_budget=DEFAULT_STEP_BUDGET):
     _seed_target_specialization(target_only=True)
     probe = project.Probe()
     provider = (
@@ -162,6 +163,7 @@ def run_imported_signature_cache_fixture():
         execution = probe.send({"execution_status": True})
         identities = project.identity_map(probe)
         request = project.request_value(identities, sources)
+        request["step_budget"] = step_budget
         request["target"] = {"module": project.PROJECT_MODULE, "function": "compile_project_target"}
         request["arguments"].append(project.integer(1))
         response = probe.send(request)
@@ -187,6 +189,8 @@ def run_imported_signature_cache_fixture():
             ).stdout.strip(),
             "stage0_revision": json.loads((ROOT / "mncs-language.lock.json").read_text())["revision"],
             "fixture_scope": "two imported calls to one immutable provider table in one target-module lowering",
+            "step_budget": step_budget,
+            "bounded_prefix": step_budget < DEFAULT_STEP_BUDGET,
             "fixture_source_sha256": hashlib.sha256(b"a-provider.mncs\0" + hashlib.sha256(provider.encode()).digest() + b"b-root.mncs\0" + hashlib.sha256(root.encode()).digest()).hexdigest(),
             "execution_backend": execution["backend"],
             "retained_sessions": execution["retained_sessions"],
@@ -201,10 +205,12 @@ def run_imported_signature_cache_fixture():
             "requests": probe.requests,
             "result_sha256": probe.digest.hexdigest(),
         }
-        assert report["native_request_status"] == "returned", report
-        assert report["native_project_valid"] is True and report["native_project_ssa_valid"] is True, report
-        assert report["native_root_proof_ok"] is True and report["native_root_ssa_valid"] is True, report
-        assert report["native_root_ssa_call_count"] == 2, report
+        if report["native_request_status"] == "returned":
+            assert report["native_project_valid"] is True and report["native_project_ssa_valid"] is True, report
+            assert report["native_root_proof_ok"] is True and report["native_root_ssa_valid"] is True, report
+            assert report["native_root_ssa_call_count"] == 2, report
+        elif not report["bounded_prefix"]:
+            raise AssertionError(f"complete imported-signature fixture did not return: {report}")
         assert report["stage0_oracle"]["valid"] is True, report
         return report
     finally:
@@ -246,7 +252,7 @@ def _seed_target_specialization(*, target_only=False):
     os.environ["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
 
 
-def run(module_names=None, target_last=False):
+def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
     if target_last:
         _seed_target_specialization(target_only=True)
     lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
@@ -260,6 +266,7 @@ def run(module_names=None, target_last=False):
         identities = project.identity_map(probe)
         sources = _load_sources(module_names)
         request = project.request_value(identities, sources)
+        request["step_budget"] = step_budget
         target_stem = None
         target_source_index = None
         if target_last:
@@ -326,6 +333,7 @@ def run(module_names=None, target_last=False):
             "selected_modules": module_names or "all",
             "lowering_scope": "target-module" if target_last else "all-modules",
             "target_source_index": target_source_index,
+            "step_budget": step_budget,
             "compiler_source_count": len(sources),
             "input_total_page_count_at_stride_1024": page_count,
             "input_page_bound": 1024,
@@ -377,6 +385,18 @@ if __name__ == "__main__":
     target_last = "--target-last" in args
     oracle_only = "--oracle-only" in args
     signature_cache_fixture = "--signature-cache-fixture" in args
+    step_budget = DEFAULT_STEP_BUDGET
+    if "--step-budget" in args:
+        position = args.index("--step-budget")
+        if position + 1 >= len(args):
+            raise SystemExit("--step-budget requires an integer")
+        try:
+            step_budget = int(args[position + 1])
+        except ValueError as error:
+            raise SystemExit("--step-budget requires an integer") from error
+        del args[position:position + 2]
+        if not 1 <= step_budget <= DEFAULT_STEP_BUDGET:
+            raise SystemExit(f"--step-budget must be between 1 and {DEFAULT_STEP_BUDGET}")
     args = [arg for arg in args if arg != "--target-last"]
     args = [arg for arg in args if arg != "--oracle-only"]
     args = [arg for arg in args if arg != "--signature-cache-fixture"]
@@ -385,9 +405,9 @@ if __name__ == "__main__":
             raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--oracle-only] [--signature-cache-fixture]")
         names = args[1:]
     if signature_cache_fixture:
-        report = run_imported_signature_cache_fixture()
+        report = run_imported_signature_cache_fixture(step_budget)
     elif oracle_only:
         report = run_stage0_oracle_only(names)
     else:
-        report = run(names, target_last=target_last)
+        report = run(names, target_last=target_last, step_budget=step_budget)
     print(json.dumps(report, indent=2))
