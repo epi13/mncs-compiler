@@ -828,9 +828,19 @@ fn order_diagnostics<M: Nat>(sources: [ProjectSource; up_to M], ordered: bool, c
 // Build an imported signature environment from already parsed module facts.
 // Transport preserves sequence bounds and parameter order while nominal
 // ownership is resolved by identity instead of matching type spelling.
-record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList }
-record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList }
-record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, current: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList }
+// Provider signatures and nominal ownership are immutable within one
+// project invocation. The cache is deliberately local to imported_signatures:
+// source_index is unique in that invocation, and no fact survives a new
+// source snapshot or compiler request.
+record ProviderSignatureFacts { source_index: u64, signatures: decl.SigTab, nominals: decl.NominalTypeIdentityList }
+enum ProviderSignatureFactsList { PSNil, PSCons { head: ProviderSignatureFacts, tail: ProviderSignatureFactsList } }
+record ProviderSignatureLookupWalk { rest: ProviderSignatureFactsList, target_index: u64, found: bool, signatures: decl.SigTab, nominals: decl.NominalTypeIdentityList }
+record ProviderSignatureLookup { found: bool, signatures: decl.SigTab, nominals: decl.NominalTypeIdentityList }
+record TargetSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureFactsList }
+record UseSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureFactsList }
+record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList }
+record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList }
+record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, current: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList }
 record ExportSigWalk { rest: decl.FnList, caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab }
 
 fn imported_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
@@ -838,7 +848,7 @@ fn imported_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_
     let input_stride: u64 = module_stride(sources, current.source_index);
     let input_total: u64 = module_total(sources, current.source_index);
     let calls: decl.CallSiteList = decl.collect_call_sites<1024, N>(input_pages, input_stride, input_total, current.unit.fns);
-    let initial: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules };
+    let initial: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules, provider_facts: ProviderSignatureFactsList.PSNil };
     iterate chunk up_to 64 carrying st: CallSigWalk = initial {
         if decl.call_site_list_empty(st.rest) { return st.acc; }
         next st = imported_signature_chunk<M, N>(sources, flat_pages, current, all, st);
@@ -860,14 +870,14 @@ fn imported_signature_for_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
 }
 fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, call: decl.CallSite, rest: decl.CallSiteList, st: CallSigWalk) -> (result: CallSigWalk) {
     let uses: decl.UseList = current.unit.uses;
-    let found: decl.SigTab = signatures_from_uses<M, N>(sources, flat_pages, all, current, uses, call, st.acc, st.nominals, st.modules);
-    return CallSigWalk { rest: rest, acc: found, nominals: st.nominals, modules: st.modules };
+    let found: UseSignatureResult = signatures_from_uses<M, N>(sources, flat_pages, all, current, uses, call, st.acc, st.nominals, st.modules, st.provider_facts);
+    return CallSigWalk { rest: rest, acc: found.acc, nominals: st.nominals, modules: st.modules, provider_facts: found.provider_facts };
 }
-fn signatures_from_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
-    iterate i up_to 1024 carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc, nominals: nominals, modules: nominal_modules } {
+fn signatures_from_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList, provider_facts: ProviderSignatureFactsList) -> (result: UseSignatureResult) {
+    iterate i up_to 1024 carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc, nominals: nominals, modules: nominal_modules, provider_facts: provider_facts } {
         next st = signatures_from_use<M, N>(sources, flat_pages, all, current, st);
     }
-    return st.acc;
+    return UseSignatureResult { acc: st.acc, provider_facts: st.provider_facts };
 }
 fn signatures_from_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: UseSigWalk) -> (result: UseSigWalk) {
     return match st.rest {
@@ -879,8 +889,8 @@ fn signatures_from_one_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], f
     if !(call_has_import_prefix<M, N>(sources, flat_pages, current.source_index, st.call, usage)) { return UseSigWalk { ..st, rest: rest }; }
     let target: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, current, usage);
     if !(target.found) { return UseSigWalk { ..st, rest: rest }; }
-    let sigs: decl.SigTab = signatures_from_target<M, N>(sources, flat_pages, all, st.modules, current, target.index, usage, st.call, st.acc, st.nominals);
-    return UseSigWalk { rest: rest, call: st.call, acc: sigs, nominals: st.nominals, modules: st.modules };
+    let sigs: TargetSignatureResult = signatures_from_target<M, N>(sources, flat_pages, all, st.modules, current, target.index, usage, st.call, st.acc, st.nominals, st.provider_facts);
+    return UseSigWalk { rest: rest, call: st.call, acc: sigs.acc, nominals: st.nominals, modules: st.modules, provider_facts: sigs.provider_facts };
 }
 fn call_has_import_prefix<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, call: decl.CallSite, usage: decl.UseDecl) -> (result: bool) {
     let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, index);
@@ -894,11 +904,11 @@ fn call_has_import_prefix<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], fl
     if !(decl.spans_equal<1024, N>(pages, stride, total, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
     return source.byte_at_global<1024, N>(pages, stride, total, call.start + prefix_len) == 46;
 }
-fn signatures_from_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, target_index: u64, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList) -> (result: decl.SigTab) {
-    iterate i over sources carrying st: TargetSigWalk = TargetSigWalk { rest: all, modules: nominal_modules, target_index: target_index, current: current, usage: usage, call: call, acc: acc, caller_nominals: caller_nominals } {
+fn signatures_from_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, target_index: u64, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList) -> (result: TargetSignatureResult) {
+    iterate i over sources carrying st: TargetSigWalk = TargetSigWalk { rest: all, modules: nominal_modules, target_index: target_index, current: current, usage: usage, call: call, acc: acc, caller_nominals: caller_nominals, provider_facts: provider_facts } {
         next st = signatures_from_target_step<M, N>(sources, flat_pages, st);
     }
-    return st.acc;
+    return TargetSignatureResult { acc: st.acc, provider_facts: st.provider_facts };
 }
 fn signatures_from_target_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk) -> (result: TargetSigWalk) {
     return match st.rest {
@@ -908,6 +918,8 @@ fn signatures_from_target_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
 }
 fn build_signatures_from_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetSigWalk) {
     if target.source_index != st.target_index { return TargetSigWalk { ..st, rest: rest }; }
+    let cached: ProviderSignatureLookup = provider_signature_lookup(st.provider_facts, target.source_index);
+    if cached.found { return signatures_from_cached_provider<M, N>(sources, flat_pages, st, target, cached); }
     let t_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
     let t_stride: u64 = module_stride(sources, target.source_index);
     let t_total: u64 = module_total(sources, target.source_index);
@@ -916,7 +928,34 @@ fn build_signatures_from_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_t
     let sigs: decl.SigTabRep = decl.collect_sigtab<1024, N>(t_pages, t_stride, t_total, target.unit.fns, target.unit.records, target.unit.enums, target_nominals);
     let owned_sigs: decl.SigTab = decl.bind_local_callable_identities<1024, N>(t_pages, t_stride, t_total, target.unit.header, sigs.tab);
     let exported: decl.SigTab = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, owned_sigs, st.acc, st.caller_nominals, target_nominals);
+    let facts: ProviderSignatureFacts = ProviderSignatureFacts { source_index: target.source_index, signatures: owned_sigs, nominals: target_nominals };
+    let cached_facts: ProviderSignatureFactsList = ProviderSignatureFactsList.PSCons { head: facts, tail: st.provider_facts };
+    return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported, provider_facts: cached_facts };
+}
+fn signatures_from_cached_provider<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, cached: ProviderSignatureLookup) -> (result: TargetSigWalk) {
+    let exported: decl.SigTab = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, cached.signatures, st.acc, st.caller_nominals, cached.nominals);
     return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported };
+}
+fn provider_signature_lookup(facts: ProviderSignatureFactsList, target_index: u64) -> (result: ProviderSignatureLookup) {
+    let initial: ProviderSignatureLookupWalk = ProviderSignatureLookupWalk { rest: facts, target_index: target_index, found: false, signatures: decl.SigTab.HNil, nominals: decl.NominalTypeIdentityList.NINil };
+    iterate i up_to 64 carrying st: ProviderSignatureLookupWalk = initial {
+        if st.found || provider_signature_facts_empty(st.rest) { return ProviderSignatureLookup { found: st.found, signatures: st.signatures, nominals: st.nominals }; }
+        next st = provider_signature_lookup_step(st);
+    }
+    return ProviderSignatureLookup { found: st.found, signatures: st.signatures, nominals: st.nominals };
+}
+fn provider_signature_facts_empty(facts: ProviderSignatureFactsList) -> (result: bool) {
+    return match facts { PSNil => true, PSCons { head: item, tail: rest } => false };
+}
+fn provider_signature_lookup_step(st: ProviderSignatureLookupWalk) -> (result: ProviderSignatureLookupWalk) {
+    return match st.rest {
+        PSNil => st,
+        PSCons { head: item, tail: rest } => provider_signature_lookup_item(st, item, rest)
+    };
+}
+fn provider_signature_lookup_item(st: ProviderSignatureLookupWalk, item: ProviderSignatureFacts, rest: ProviderSignatureFactsList) -> (result: ProviderSignatureLookupWalk) {
+    if item.source_index == st.target_index { return ProviderSignatureLookupWalk { rest: rest, target_index: st.target_index, found: true, signatures: item.signatures, nominals: item.nominals }; }
+    return ProviderSignatureLookupWalk { ..st, rest: rest };
 }
 fn signatures_from_exports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: decl.SigTab) {
     // A project import can name any declaration in a source-sized module.

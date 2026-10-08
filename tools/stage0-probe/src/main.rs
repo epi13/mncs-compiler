@@ -14,12 +14,77 @@ use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
-    io::{self, BufRead},
+    fs::{File, OpenOptions},
+    io::{self, BufRead, BufWriter, Write},
+    sync::{Mutex, OnceLock},
+    time::Instant,
 };
 
 #[path = "../../vm_emit.rs"]
 mod vm_emit;
 mod provider;
+
+static TELEMETRY_ORIGIN: OnceLock<Instant> = OnceLock::new();
+static TELEMETRY_WRITER: OnceLock<Option<Mutex<BufWriter<File>>>> = OnceLock::new();
+
+fn telemetry_enabled() -> bool {
+    matches!(
+        std::env::var("MNCS_PROBE_TELEMETRY").as_deref(),
+        Ok("1" | "true")
+    )
+}
+
+fn trace_event(mut event: Value) {
+    if !telemetry_enabled() {
+        return;
+    }
+    let origin = TELEMETRY_ORIGIN.get_or_init(Instant::now);
+    let Some(fields) = event.as_object_mut() else {
+        return;
+    };
+    fields.insert("pid".to_owned(), json!(std::process::id()));
+    fields.insert(
+        "process_elapsed_ms".to_owned(),
+        json!(origin.elapsed().as_secs_f64() * 1000.0),
+    );
+    let Ok(line) = serde_json::to_vec(&event) else {
+        return;
+    };
+    let trace_path = std::env::var_os("MNCS_PROBE_TRACE_PATH");
+    if let Some(path) = trace_path {
+        let writer = TELEMETRY_WRITER.get_or_init(|| {
+            OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(path)
+                .ok()
+                .map(|file| Mutex::new(BufWriter::new(file)))
+        });
+        if let Some(writer) = writer {
+            if let Ok(mut writer) = writer.lock() {
+                let _ = writer.write_all(&line);
+                let _ = writer.write_all(b"\n");
+                let _ = writer.flush();
+                return;
+            }
+        }
+    }
+    eprintln!("{}", String::from_utf8_lossy(&line));
+}
+
+fn trace_phase(phase: &str, started: Instant, details: Value) {
+    if !telemetry_enabled() {
+        return;
+    }
+    let mut fields = details.as_object().cloned().unwrap_or_default();
+    fields.insert("event".to_owned(), json!("phase"));
+    fields.insert("phase".to_owned(), json!(phase));
+    fields.insert(
+        "duration_ms".to_owned(),
+        json!(started.elapsed().as_secs_f64() * 1000.0),
+    );
+    trace_event(Value::Object(fields));
+}
 
 struct Sources(BTreeMap<String, SourceEnvelope>);
 impl ModuleResolver for Sources {
@@ -272,6 +337,11 @@ fn main() {
         return;
     }
     let t_start = std::time::Instant::now();
+    trace_event(json!({
+        "event": "probe_start",
+        "backend": std::env::var("MNCS_PROBE_BACKEND").ok(),
+        "pid": std::process::id()
+    }));
     // `MNCS_PROBE_MODULES` optionally narrows the elaborated module set
     // (comma-separated leaf names). By default it loads the shared frontend
     // and declaration core; focused suites load only their affected closure.
@@ -307,7 +377,9 @@ fn main() {
             .iter()
             .any(|name| matches!(name.as_str(), "flow" | "ssa" | "project"))
     });
+    let source_resolution_started = Instant::now();
     let mut sources = Sources(BTreeMap::new());
+    let mut loaded_source_bytes = 0usize;
     for file in [
         "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "ssa", "project",
     ] {
@@ -320,10 +392,16 @@ fn main() {
             }
         }
         let text = std::fs::read_to_string(format!("src/compiler/{file}.mncs")).unwrap();
+        loaded_source_bytes += text.len();
         sources
             .0
             .insert(format!("mncs.compiler.{file}.v1"), envelope(text));
     }
+    trace_phase(
+        "source_resolution",
+        source_resolution_started,
+        json!({"module_count": sources.0.len(), "source_bytes": loaded_source_bytes}),
+    );
     let backend_name = std::env::var("MNCS_PROBE_BACKEND").ok();
     // Content-addressed readiness cache: frontend Programs and backend
     // artifacts keyed by every input that determines them (toolchain
@@ -339,14 +417,27 @@ fn main() {
     // Gathered once: Stage-0 pin/provision/tree reads plus one rustc
     // version probe. Skipped entirely when the cache is disabled.
     let toolchain = cache_dir.as_ref().map(|_| {
-        gather_toolchain_identity(
+        let started = Instant::now();
+        let identity = gather_toolchain_identity(
             backend_name.as_deref(),
             std::path::Path::new("mncs-language.lock.json"),
             std::path::Path::new(".bootstrap"),
-        )
+        );
+        trace_phase(
+            "toolchain_identity",
+            started,
+            json!({
+                "backend": backend_name,
+                "stage0_revision": identity.provisioned_revision,
+                "lock_revision": identity.lock_revision,
+                "cache_enabled": true
+            }),
+        );
+        identity
     });
     // Loaded closure as (name, bytes) pairs, read once (the envelopes
     // already hold the leaves but do not lend the text back).
+    let closure_started = Instant::now();
     let closure: Vec<(String, String)> = [
         "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "ssa", "project",
     ]
@@ -359,6 +450,14 @@ fn main() {
         })
     })
     .collect();
+    trace_phase(
+        "dependency_closure_resolution",
+        closure_started,
+        json!({
+            "module_count": closure.len(),
+            "source_bytes": closure.iter().map(|(_, source)| source.len()).sum::<usize>()
+        }),
+    );
     let mut cache_hits = 0u32;
     let mut cache_misses = 0u32;
     let cache_key = |module: &str| -> String {
@@ -400,7 +499,13 @@ fn main() {
         }
         let entry =
             serde_json::json!({"identity": toolchain, "program": program, "artifact": artifact});
+        let encode_started = Instant::now();
         let entry_bytes = serde_json::to_vec(&entry).expect("entry serializes");
+        trace_phase(
+            "artifact_cache_encode",
+            encode_started,
+            json!({"cache_key": key, "uncompressed_bytes": entry_bytes.len()}),
+        );
         // Compress via a temp file, not a stdin pipe: entries are hundreds
         // of MB, and piping both stdin and stdout through 64KB kernel
         // buffers deadlocks once both fill with no drainer.
@@ -408,20 +513,44 @@ fn main() {
         if std::fs::write(&raw_tmp, &entry_bytes).is_err() {
             return;
         }
+        let gzip_started = Instant::now();
         let output = std::process::Command::new("gzip")
             .args(["-n", "-c", &raw_tmp])
             .output();
         let _ = std::fs::remove_file(&raw_tmp);
         let Ok(output) = output else {
+            trace_phase(
+                "artifact_cache_gzip_write",
+                gzip_started,
+                json!({"cache_key": key, "success": false}),
+            );
             return;
         };
         if !output.status.success() {
+            trace_phase(
+                "artifact_cache_gzip_write",
+                gzip_started,
+                json!({
+                    "cache_key": key,
+                    "success": false,
+                    "exit_code": output.status.code()
+                }),
+            );
             return;
         }
         let tmp = format!("{dir}/{key}.json.gz.tmp");
-        if std::fs::write(&tmp, &output.stdout).is_ok() {
-            let _ = std::fs::rename(&tmp, format!("{dir}/{key}.json.gz"));
-        }
+        let stored = std::fs::write(&tmp, &output.stdout).is_ok()
+            && std::fs::rename(&tmp, format!("{dir}/{key}.json.gz")).is_ok();
+        trace_phase(
+            "artifact_cache_gzip_write",
+            gzip_started,
+            json!({
+                "cache_key": key,
+                "success": stored,
+                "uncompressed_bytes": entry_bytes.len(),
+                "compressed_bytes": output.stdout.len()
+            }),
+        );
     };
     let mut programs = BTreeMap::new();
     let mut cached_artifacts: BTreeMap<String, mncs_model::BackendArtifact> = BTreeMap::new();
@@ -434,7 +563,23 @@ fn main() {
         }
         if cache_dir.is_some() {
             let key = cache_key(name);
-            if let Some((program, artifact)) = cache_load(&key) {
+            let cache_started = Instant::now();
+            let cached = cache_load(&key);
+            let cache_decoded = cached.is_some();
+            let cache_usable = cached
+                .as_ref()
+                .is_some_and(|(_, artifact)| backend_name.is_none() || artifact.is_some());
+            trace_phase(
+                "artifact_cache_read_decode",
+                cache_started,
+                json!({
+                    "module": name,
+                    "cache_key": key,
+                    "decoded": cache_decoded,
+                    "usable": cache_usable
+                }),
+            );
+            if let Some((program, artifact)) = cached {
                 if backend_name.is_none() || artifact.is_some() {
                     cache_hits += 1;
                     if let Some(artifact) = artifact {
@@ -451,12 +596,34 @@ fn main() {
             .filter(|seed| seed.module == *name)
             .cloned()
             .collect();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "stage0_frontend_elaboration_specialization",
+            "module": name,
+            "specialization_seeds": module_seeds.iter().map(|seed| {
+                json!({"function": seed.function, "type_arguments": seed.type_arguments})
+            }).collect::<Vec<_>>()
+        }));
+        let frontend_started = Instant::now();
         let result = ReferenceCompiler::default().front_end_with_resolver_and_seeds(
             source.clone(),
             &sources,
             &module_seeds,
         );
-        assert!(result.is_valid(), "{name}: {:?}", result.diagnostics);
+        let frontend_valid = result.is_valid();
+        trace_phase(
+            "stage0_frontend_elaboration_specialization",
+            frontend_started,
+            json!({
+                "module": name,
+                "specialization_seed_count": module_seeds.len(),
+                "valid": frontend_valid,
+                "module_resolution_count": result.module_resolutions.len(),
+                "program_function_count": result.program.as_ref().map(|program| program.functions.len()),
+                "diagnostic_count": result.diagnostics.len()
+            }),
+        );
+        assert!(frontend_valid, "{name}: {:?}", result.diagnostics);
         let program = result.program.unwrap();
         if backend_name.is_none() && cache_dir.is_some() {
             cache_store(&cache_key(name), &program, None);
@@ -479,6 +646,12 @@ fn main() {
                 .iter()
                 .map(|(name, program)| {
                     if let Some(artifact) = cached_artifacts.get(name) {
+                        trace_event(json!({
+                            "event": "artifact_reuse",
+                            "phase": "backend_compile",
+                            "module": name,
+                            "source": "content_addressed_cache"
+                        }));
                         return (name.clone(), artifact.clone());
                     }
                     let emit = [
@@ -490,9 +663,16 @@ fn main() {
                     ]
                     .into_iter()
                     .collect();
+                    let request_started = Instant::now();
                     let request = compiler
                         .request_for_program_with_backend(program, emit, backend)
                         .unwrap_or_else(|error| panic!("{backend} request for {name}: {error:?}"));
+                    trace_phase(
+                        "backend_request_construction",
+                        request_started,
+                        json!({"module": name, "backend": backend}),
+                    );
+                    let compile_started = Instant::now();
                     let result = compiler.compile(request, program);
                     let artifact = result
                         .emissions
@@ -502,6 +682,18 @@ fn main() {
                             panic!("{backend} emitted no artifact for {name}: {result:?}")
                         })
                         .clone();
+                    let payload_bytes = artifact.bytes_hex.len() / 2;
+                    trace_phase(
+                        "backend_compilation",
+                        compile_started,
+                        json!({
+                            "module": name,
+                            "backend": backend,
+                            "artifact_kind": artifact.artifact_kind,
+                            "artifact_payload_bytes": payload_bytes,
+                            "identity_valid": artifact.identity_is_valid()
+                        }),
+                    );
                     if cache_dir.is_some() {
                         cache_store(&cache_key(name), program, Some(&artifact));
                     }
@@ -510,16 +702,35 @@ fn main() {
                 .collect()
         })
         .unwrap_or_default();
+    let session_admission_started = Instant::now();
     let backend_sessions: BTreeMap<_, _> = backend_artifacts
         .iter()
         .map(|(name, artifact)| {
-            (
-                name.clone(),
-                OwnedExecutionSession::new(artifact.clone())
-                    .unwrap_or_else(|error| panic!("backend session for {name}: {error}")),
-            )
+            let started = Instant::now();
+            let session = OwnedExecutionSession::new(artifact.clone())
+                .unwrap_or_else(|error| panic!("backend session for {name}: {error}"));
+            trace_phase(
+                "retained_session_admission",
+                started,
+                json!({
+                    "module": name,
+                    "backend": artifact.backend.name,
+                    "artifact_kind": artifact.artifact_kind,
+                    "artifact_payload_bytes": artifact.bytes_hex.len() / 2,
+                    "admitted": true
+                }),
+            );
+            (name.clone(), session)
         })
         .collect();
+    trace_phase(
+        "retained_session_admission_total",
+        session_admission_started,
+        json!({
+            "session_count": backend_sessions.len(),
+            "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count()
+        }),
+    );
     // One-shot public emission (P-VM-COMPILER-003 substance for the
     // direct path): same module/seed/cache environment as the
     // transport, but prints one sealed artifact and exits so
@@ -572,9 +783,47 @@ fn main() {
         // socket, and reach for serde_stacker before sending large
         // real-module Functions through verify-style requests.
         let line = line.unwrap();
+        let parse_started = Instant::now();
         let mut deserializer = serde_json::Deserializer::from_str(&line);
         deserializer.disable_recursion_limit();
         let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
+        let request_kind = if input.get("execution_status").is_some() {
+            "execution_status"
+        } else if input.get("record_types").is_some() {
+            "record_types"
+        } else if input.get("project_oracle").is_some() {
+            "project_oracle"
+        } else if input.get("emit_vm_artifact").is_some() {
+            "emit_vm_artifact"
+        } else if input.get("elaborate").is_some() {
+            "elaborate"
+        } else if input.get("ssa").is_some() {
+            "ssa_oracle"
+        } else {
+            "mncs_function_execution"
+        };
+        let request_module = input
+            .get("target")
+            .and_then(|target| target.get("module"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let request_function = input
+            .get("target")
+            .and_then(|target| target.get("function"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        let request_step_budget = input.get("step_budget").and_then(Value::as_u64);
+        trace_phase(
+            "request_json_decode",
+            parse_started,
+            json!({
+                "request_kind": request_kind,
+                "request_bytes": line.len(),
+                "target_module": request_module,
+                "target_function": request_function
+            }),
+        );
+        let dispatch_started = Instant::now();
         let output = if let Some(text) = input.get("oracle").and_then(Value::as_str) {
             serde_json::to_value(mncs_syntax::parse(&envelope(text.to_owned()))).unwrap()
         } else if input.get("execution_status").is_some() {
@@ -682,7 +931,49 @@ fn main() {
                 json!(session.execute(&request))
             }
         };
-        println!("{}", output);
+        trace_phase(
+            "request_execution",
+            dispatch_started,
+            json!({
+                "request_kind": request_kind,
+                "target_module": request_module,
+                "target_function": request_function,
+                "step_budget": request_step_budget,
+                "reported_steps": output.get("steps"),
+                "reported_steps_semantics": match backend_name.as_deref() {
+                    Some("research-bytecode") => "research-bytecode execution budget units",
+                    Some("canonical-vm") => "canonical VM reported steps",
+                    Some("cranelift") => "not an instruction-count metric",
+                    _ => "executor-specific; UNKNOWN",
+                },
+                "reported_status": output.get("status"),
+                "reported_valid": output.get("valid")
+            }),
+        );
+        if telemetry_enabled() {
+            trace_event(json!({
+                "event": "process_cost_report",
+                "report": mncs_model::cost_report()
+            }));
+        }
+        let encode_started = Instant::now();
+        let output_line = serde_json::to_string(&output).unwrap();
+        trace_phase(
+            "response_json_encode",
+            encode_started,
+            json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
+        );
+        let write_started = Instant::now();
+        let stdout = io::stdout();
+        let mut stdout = stdout.lock();
+        writeln!(stdout, "{output_line}").unwrap();
+        stdout.flush().unwrap();
+        drop(stdout);
+        trace_phase(
+            "response_write",
+            write_started,
+            json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
+        );
     }
 }
 
