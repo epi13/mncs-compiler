@@ -83,11 +83,13 @@ independent Stage-0 project oracle accepts it with 1,324 linked functions and
 376 SSA functions. Native Cranelift attempts at M=1024 and M=896 ended when
 the probe child exited `-9` before returning a compiler result. A reference
 interpreter attempt ran without output for about 900 seconds before it was
-stopped; a research-bytecode flow-target admission attempt was stopped after
-120 seconds without a result. These observations do not establish that the
-128 MiB arena caused the child termination, and they do not establish a
-compiler rejection. The latest compact matrix and exact probe summaries are
-in `evidence/SELF-HOST-MATRIX.json` and
+stopped. A later research-bytecode run admitted both project and SSA sessions
+in 568.9 seconds, then produced no response from the 894-page target in a
+ten-minute execution window at the standard 8M step budget before it was
+stopped. These observations do not establish that the 128 MiB arena caused
+the Cranelift child termination, and they do not establish a compiler
+rejection. The latest compact matrix and exact probe summaries are in
+`evidence/SELF-HOST-MATRIX.json` and
 `evidence/campaign-20261008-imported-enum-constructor-frontier.json`.
 
 Current next frontier: obtain a complete native compiler result for the real

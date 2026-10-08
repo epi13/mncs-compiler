@@ -78,8 +78,10 @@ their original pins and measurements.
   independent Stage-0 project oracle accepts 1,324 linked functions and emits
   reference SSA for 376. Native Cranelift requests at M=1024 and M=896 ended
   with child exit `-9` before a compiler response; the research-bytecode
-  admission attempt also produced no result within 120 seconds. This is an
-  unresolved execution boundary, not a native compiler rejection. A prior
+  route later admitted both project and SSA sessions in 569 seconds, then
+  produced no response for the real target during a ten-minute run at the
+  standard 8M step budget before it was stopped. This is an unresolved
+  execution boundary, not a native compiler rejection. A prior
   source+lexer project probe at Stage-0 `3e874f642b30` exhausted the 128 MiB
   Cranelift value arena (CP-0023); that arena cause has not been established
   for the current flow attempts. Stage-1 is not yet proven. The compact
