@@ -20,9 +20,9 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod provider;
 #[path = "../../vm_emit.rs"]
 mod vm_emit;
-mod provider;
 
 static TELEMETRY_ORIGIN: OnceLock<Instant> = OnceLock::new();
 static TELEMETRY_WRITER: OnceLock<Option<Mutex<BufWriter<File>>>> = OnceLock::new();
@@ -313,6 +313,40 @@ fn cache_key_hex(
     mncs_model::sha256_hex(input.as_bytes())
 }
 
+/// Frontend Programs are independent of backend selection. Keep their cache
+/// identity separate from the backend artifact key so a backend change can
+/// reuse the exact elaborated Program without reusing an incompatible
+/// executable artifact.
+fn frontend_toolchain_identity(toolchain: &ToolchainIdentity) -> ToolchainIdentity {
+    let mut identity = toolchain.clone();
+    identity.backend_name = None;
+    identity.backend_configuration = None;
+    identity.target = None;
+    identity
+}
+
+fn module_seeds_for(module: &str, seeds: &[HostGenericSeedRequest]) -> Vec<HostGenericSeedRequest> {
+    seeds
+        .iter()
+        .filter(|seed| seed.module == module)
+        .cloned()
+        .collect()
+}
+
+fn frontend_cache_key_hex(
+    toolchain: &ToolchainIdentity,
+    module: &str,
+    closure: &[(String, String)],
+    module_seeds: &[HostGenericSeedRequest],
+) -> String {
+    let frontend_identity = frontend_toolchain_identity(toolchain);
+    let seed_identity = serde_json::to_string(module_seeds)
+        .expect("module-specific specialization seeds serialize");
+    let content_key = cache_key_hex(&frontend_identity, module, closure, &seed_identity);
+    let domain = format!("probe-frontend-program-v1\n{content_key}");
+    mncs_model::sha256_hex(domain.as_bytes())
+}
+
 /// Parse one decompressed cache entry. Every failure mode is a safe
 /// miss (`None`): corrupt bytes, missing identity or program, a stored
 /// toolchain identity that differs from the current one, or an artifact
@@ -363,10 +397,15 @@ fn main() {
         println!("{}", provider::producer());
         return;
     }
-    if let Some(path) = std::env::args().find_map(|arg| arg.strip_prefix("--provider-request=").map(str::to_owned)) {
+    if let Some(path) =
+        std::env::args().find_map(|arg| arg.strip_prefix("--provider-request=").map(str::to_owned))
+    {
         match provider::run(&path) {
             Ok(value) => println!("{}", value),
-            Err(error) => { eprintln!("compiler provider: {error}"); std::process::exit(2); }
+            Err(error) => {
+                eprintln!("compiler provider: {error}");
+                std::process::exit(2);
+            }
         }
         return;
     }
@@ -437,13 +476,12 @@ fn main() {
         json!({"module_count": sources.0.len(), "source_bytes": loaded_source_bytes}),
     );
     let backend_name = std::env::var("MNCS_PROBE_BACKEND").ok();
-    // Content-addressed readiness cache: frontend Programs and backend
-    // artifacts keyed by every input that determines them (toolchain
-    // identity, backend configuration/target, module closure bytes,
-    // seed request, module selection). A hit skips elaboration and
-    // lowering entirely; invalidation is exact because the key is the
-    // content. Unset MNCS_PROBE_CACHE_DIR disables the cache
-    // (historical behavior).
+    // Content-addressed readiness cache: backend artifacts retain their
+    // existing backend-specific key, while frontend Programs also have a
+    // backend-independent key over the Stage-0/compiler identity, resolver
+    // source closure, module, and that module's specialization seeds. A
+    // Program hit skips elaboration; it never admits an artifact from a
+    // different backend. Unset MNCS_PROBE_CACHE_DIR disables the cache.
     let cache_dir = std::env::var("MNCS_PROBE_CACHE_DIR")
         .ok()
         .filter(|dir| !dir.is_empty());
@@ -469,6 +507,7 @@ fn main() {
         );
         identity
     });
+    let frontend_identity = toolchain.as_ref().map(frontend_toolchain_identity);
     // Loaded closure as (name, bytes) pairs, read once (the envelopes
     // already hold the leaves but do not lend the text back).
     let closure_started = Instant::now();
@@ -494,6 +533,8 @@ fn main() {
     );
     let mut cache_hits = 0u32;
     let mut cache_misses = 0u32;
+    let mut backend_artifact_cache_hits = 0u32;
+    let mut frontend_program_cache_hits = 0u32;
     let cache_key = |module: &str| -> String {
         cache_key_hex(
             toolchain
@@ -504,51 +545,71 @@ fn main() {
             &seeds_raw,
         )
     };
+    let frontend_cache_key = |module: &str, module_seeds: &[HostGenericSeedRequest]| -> String {
+        frontend_cache_key_hex(
+            frontend_identity
+                .as_ref()
+                .expect("frontend identity is gathered whenever the cache is enabled"),
+            module,
+            &closure,
+            module_seeds,
+        )
+    };
     // Entries are gzip-compressed JSON
     // (`{identity, program, artifact|null}`) via the system gzip:
     // payloads shrink ~25x (hundreds of MB to tens) with no new
     // dependencies. Any compression failure degrades to a miss, never
     // an error.
-    let cache_load =
-        |key: &str| -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
-            let dir = cache_dir.as_ref()?;
-            let toolchain = toolchain.as_ref()?;
-            let path = format!("{dir}/{key}.json.gz");
-            let started = Instant::now();
-            let mut gzip = std::process::Command::new("gzip")
-                .args(["-dc", &path])
-                .stdout(std::process::Stdio::piped())
-                .stderr(std::process::Stdio::null())
-                .spawn()
-                .ok()?;
-            let gzip_pid = gzip.id();
-            trace_event(json!({
-                "event": "phase_begin",
-                "phase": "artifact_cache_gzip_read",
+    let cache_load = |key: &str,
+                      suffix: &str,
+                      identity: &ToolchainIdentity,
+                      expected_backend: Option<&str>|
+     -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+        let dir = cache_dir.as_ref()?;
+        let path = format!("{dir}/{key}{suffix}");
+        let started = Instant::now();
+        let mut gzip = std::process::Command::new("gzip")
+            .args(["-dc", &path])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .ok()?;
+        let gzip_pid = gzip.id();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "artifact_cache_gzip_read",
+            "cache_key": key,
+            "cache_file_suffix": suffix,
+            "gzip_pid": gzip_pid
+        }));
+        let reader = gzip.stdout.take()?;
+        let reader = BufReader::with_capacity(1024 * 1024, reader);
+        let parsed = parse_cache_entry_reader(reader, identity, expected_backend);
+        let status = gzip.wait().ok()?;
+        trace_phase(
+            "artifact_cache_gzip_read",
+            started,
+            json!({
                 "cache_key": key,
-                "gzip_pid": gzip_pid
-            }));
-            let reader = gzip.stdout.take()?;
-            let reader = BufReader::with_capacity(1024 * 1024, reader);
-            let parsed = parse_cache_entry_reader(reader, toolchain, backend_name.as_deref());
-            let status = gzip.wait().ok()?;
-            trace_phase(
-                "artifact_cache_gzip_read",
-                started,
-                json!({
-                    "cache_key": key,
-                    "gzip_pid": gzip_pid,
-                    "exit_code": status.code(),
-                    "success": status.success(),
-                    "compressed_bytes": std::fs::metadata(path).map(|metadata| metadata.len()).ok()
-                }),
-            );
-            if status.success() { parsed } else { None }
-        };
+                "cache_file_suffix": suffix,
+                "gzip_pid": gzip_pid,
+                "exit_code": status.code(),
+                "success": status.success(),
+                "compressed_bytes": std::fs::metadata(path).map(|metadata| metadata.len()).ok()
+            }),
+        );
+        if status.success() {
+            parsed
+        } else {
+            None
+        }
+    };
     let cache_store = |key: &str,
+                       suffix: &str,
+                       identity: &ToolchainIdentity,
                        program: &mncs_model::Program,
                        artifact: Option<&mncs_model::BackendArtifact>| {
-        let (Some(dir), Some(toolchain)) = (cache_dir.as_ref(), toolchain.as_ref()) else {
+        let Some(dir) = cache_dir.as_ref() else {
             return;
         };
         if std::fs::create_dir_all(dir).is_err() {
@@ -568,6 +629,7 @@ fn main() {
             "event": "phase_begin",
             "phase": "artifact_cache_encode",
             "cache_key": key,
+            "cache_file_suffix": suffix,
             "artifact_present": artifact.is_some()
         }));
         let encoded_bytes = (|| -> io::Result<u64> {
@@ -576,7 +638,7 @@ fn main() {
             serde_json::to_writer(
                 &mut writer,
                 &ProbeCacheEntry {
-                    identity: toolchain,
+                    identity,
                     program,
                     artifact,
                 },
@@ -679,7 +741,7 @@ fn main() {
             }
         };
         let stored = compressed_bytes.is_some()
-            && std::fs::rename(&compressed_tmp, format!("{dir}/{key}.json.gz")).is_ok();
+            && std::fs::rename(&compressed_tmp, format!("{dir}/{key}{suffix}")).is_ok();
         if !stored {
             let _ = std::fs::remove_file(&compressed_tmp);
         }
@@ -688,6 +750,7 @@ fn main() {
             gzip_started,
             json!({
                 "cache_key": key,
+                "cache_file_suffix": suffix,
                 "success": stored,
                 "gzip_pid": gzip_pid,
                 "exit_code": status.code(),
@@ -705,43 +768,111 @@ fn main() {
         {
             continue;
         }
+        let module_seeds = module_seeds_for(name, &generic_seeds);
         if cache_dir.is_some() {
             let key = cache_key(name);
-            let cache_started = Instant::now();
-            trace_event(json!({
-                "event": "phase_begin",
-                "phase": "artifact_cache_read_decode",
-                "module": name,
-                "cache_key": key
-            }));
-            let cached = cache_load(&key);
-            let cache_decoded = cached.is_some();
-            let cache_usable = cached.is_some();
-            trace_phase(
-                "artifact_cache_read_decode",
-                cache_started,
-                json!({
+            let identity = toolchain
+                .as_ref()
+                .expect("toolchain identity is gathered whenever the cache is enabled");
+
+            // Preserve the existing backend-specific cache key so prior
+            // artifacts remain reusable without weakening their identity.
+            if backend_name.is_some() {
+                let cache_started = Instant::now();
+                trace_event(json!({
+                    "event": "phase_begin",
+                    "phase": "artifact_cache_read_decode",
                     "module": name,
                     "cache_key": key,
-                    "decoded": cache_decoded,
-                    "usable": cache_usable
+                    "cache_file_suffix": ".json.gz"
+                }));
+                let cached = cache_load(&key, ".json.gz", identity, backend_name.as_deref());
+                trace_phase(
+                    "artifact_cache_read_decode",
+                    cache_started,
+                    json!({
+                        "module": name,
+                        "cache_key": key,
+                        "decoded": cached.is_some(),
+                        "usable": cached.is_some()
+                    }),
+                );
+                if let Some((program, artifact)) = cached {
+                    cache_hits += 1;
+                    backend_artifact_cache_hits += u32::from(artifact.is_some());
+                    let frontend_key = frontend_cache_key(name, &module_seeds);
+                    let frontend_path = format!(
+                        "{}/{frontend_key}.program.json.gz",
+                        cache_dir.as_ref().unwrap()
+                    );
+                    if !std::path::Path::new(&frontend_path).is_file() {
+                        cache_store(
+                            &frontend_key,
+                            ".program.json.gz",
+                            frontend_identity.as_ref().unwrap(),
+                            &program,
+                            None,
+                        );
+                    }
+                    if let Some(artifact) = artifact {
+                        cached_artifacts.insert(name.clone(), artifact);
+                    }
+                    programs.insert(name.clone(), program);
+                    continue;
+                }
+            }
+
+            // A frontend Program depends on the Stage-0/compiler identity,
+            // resolver source closure, this module, and only this module's
+            // specialization seeds. Backend configuration affects the
+            // executable artifact but cannot affect frontend elaboration.
+            let frontend_key = frontend_cache_key(name, &module_seeds);
+            let frontend_identity = frontend_identity.as_ref().unwrap();
+            let frontend_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "frontend_program_cache_read_decode",
+                "module": name,
+                "cache_key": frontend_key,
+                "cache_file_suffix": ".program.json.gz"
+            }));
+            let mut cached_program =
+                cache_load(&frontend_key, ".program.json.gz", frontend_identity, None);
+            // Read old no-backend Program entries once as a migration path;
+            // successful reads are written under the backend-independent key.
+            if cached_program.is_none() {
+                let legacy_key = cache_key_hex(frontend_identity, name, &closure, &seeds_raw);
+                cached_program = cache_load(&legacy_key, ".json.gz", frontend_identity, None);
+                if cached_program.is_some() {
+                    if let Some((program, _)) = cached_program.as_ref() {
+                        cache_store(
+                            &frontend_key,
+                            ".program.json.gz",
+                            frontend_identity,
+                            program,
+                            None,
+                        );
+                    }
+                }
+            }
+            trace_phase(
+                "frontend_program_cache_read_decode",
+                frontend_started,
+                json!({
+                    "module": name,
+                    "cache_key": frontend_key,
+                    "decoded": cached_program.is_some(),
+                    "usable": cached_program.is_some()
                 }),
             );
-            if let Some((program, artifact)) = cached {
+            if let Some((program, _)) = cached_program {
                 cache_hits += 1;
-                if let Some(artifact) = artifact {
-                    cached_artifacts.insert(name.clone(), artifact);
-                }
+                frontend_program_cache_hits += 1;
                 programs.insert(name.clone(), program);
                 continue;
             }
             cache_misses += 1;
         }
-        let module_seeds: Vec<_> = generic_seeds
-            .iter()
-            .filter(|seed| seed.module == *name)
-            .cloned()
-            .collect();
         trace_event(json!({
             "event": "phase_begin",
             "phase": "stage0_frontend_elaboration_specialization",
@@ -772,10 +903,17 @@ fn main() {
         assert!(frontend_valid, "{name}: {:?}", result.diagnostics);
         let program = result.program.unwrap();
         if cache_dir.is_some() {
-            // Preserve the expensive frontend result before backend compile.
-            // If backend work is interrupted, the next run can reuse this
-            // exact Program and retry only backend compilation.
-            cache_store(&cache_key(name), &program, None);
+            // Preserve the frontend result before backend compilation under
+            // a backend-independent identity. An interrupted backend compile
+            // or a later backend selection can reuse this exact Program.
+            let frontend_key = frontend_cache_key(name, &module_seeds);
+            cache_store(
+                &frontend_key,
+                ".program.json.gz",
+                frontend_identity.as_ref().unwrap(),
+                &program,
+                None,
+            );
         }
         programs.insert(name.clone(), program);
     }
@@ -844,7 +982,13 @@ fn main() {
                         }),
                     );
                     if cache_dir.is_some() {
-                        cache_store(&cache_key(name), program, Some(&artifact));
+                        cache_store(
+                            &cache_key(name),
+                            ".json.gz",
+                            toolchain.as_ref().unwrap(),
+                            program,
+                            Some(&artifact),
+                        );
                     }
                     (name.clone(), artifact)
                 })
@@ -930,9 +1074,9 @@ fn main() {
             .values()
             .filter(|session| session.reused())
             .count();
-        eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifact_summaries:?} cache_hits={cache_hits} cache_misses={cache_misses} stage0={} ready_s={:.1}", backend_sessions.len(), stage0.as_deref().unwrap_or("cache=off"), t_start.elapsed().as_secs_f64());
+        eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifact_summaries:?} cache_hits={cache_hits} backend_artifact_cache_hits={backend_artifact_cache_hits} frontend_program_cache_hits={frontend_program_cache_hits} cache_misses={cache_misses} stage0={} ready_s={:.1}", backend_sessions.len(), stage0.as_deref().unwrap_or("cache=off"), t_start.elapsed().as_secs_f64());
     } else if cache_dir.is_some() {
-        eprintln!("mncs-stage0-probe backend=none modules={} cache_hits={cache_hits} cache_misses={cache_misses} stage0={}", programs.len(), stage0.as_deref().unwrap_or("cache=off"));
+        eprintln!("mncs-stage0-probe backend=none modules={} cache_hits={cache_hits} frontend_program_cache_hits={frontend_program_cache_hits} cache_misses={cache_misses} stage0={}", programs.len(), stage0.as_deref().unwrap_or("cache=off"));
     }
     let release_programs_after_identities = backend_name.is_some()
         && std::env::var("MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES").as_deref() == Ok("1");
@@ -1319,7 +1463,10 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mncs_model::{BackendArtifact, BackendIdentity, CompilerArtifactRef, TransformationStatus};
+    use mncs_model::{
+        BackendArtifact, BackendIdentity, CompilerArtifactRef, ExecutionTypeArgument,
+        TransformationStatus,
+    };
 
     /// Hand-built identity with real in-memory driver parts and fixed
     /// file/toolchain parts, so each mutation test changes exactly one
@@ -1348,6 +1495,14 @@ mod tests {
 
     fn test_closure() -> Vec<(String, String)> {
         vec![("mncs.compiler.decl.v1".to_owned(), "decl-bytes".to_owned())]
+    }
+
+    fn test_seed(module: &str, function: &str, value: u32) -> HostGenericSeedRequest {
+        HostGenericSeedRequest::from_request(
+            module,
+            function,
+            &[ExecutionTypeArgument::Nat { value }],
+        )
     }
 
     fn tiny_program() -> mncs_model::Program {
@@ -1412,6 +1567,83 @@ mod tests {
             cache_key_hex(&toolchain, "mncs.compiler.decl.v1", &closure, "seeds-a"),
             cache_key_hex(&toolchain, "mncs.compiler.decl.v1", &closure, "seeds-b"),
         );
+    }
+
+    #[test]
+    fn frontend_cache_is_backend_independent_and_module_seed_scoped() {
+        let cranelift = test_toolchain(Some("cranelift"));
+        let research = test_toolchain(Some("research-bytecode"));
+        let closure = test_closure();
+        let module_seed = test_seed("mncs.compiler.project.v1", "compile_project_target", 1024);
+        let unrelated_seed = test_seed("mncs.compiler.lexer.v1", "lex", 64);
+        let changed_module_seed =
+            test_seed("mncs.compiler.project.v1", "compile_project_target", 512);
+        let only_module = module_seeds_for("mncs.compiler.project.v1", &[module_seed.clone()]);
+        let with_unrelated = module_seeds_for(
+            "mncs.compiler.project.v1",
+            &[module_seed.clone(), unrelated_seed],
+        );
+        let changed = module_seeds_for("mncs.compiler.project.v1", &[changed_module_seed]);
+
+        assert_eq!(only_module, with_unrelated);
+        assert_ne!(only_module, changed);
+        assert_ne!(
+            cache_key_hex(
+                &cranelift,
+                "mncs.compiler.project.v1",
+                &closure,
+                "same-seeds"
+            ),
+            cache_key_hex(
+                &research,
+                "mncs.compiler.project.v1",
+                &closure,
+                "same-seeds"
+            ),
+            "backend artifact identities must remain distinct",
+        );
+        assert_eq!(
+            frontend_cache_key_hex(
+                &cranelift,
+                "mncs.compiler.project.v1",
+                &closure,
+                &only_module,
+            ),
+            frontend_cache_key_hex(
+                &research,
+                "mncs.compiler.project.v1",
+                &closure,
+                &with_unrelated,
+            ),
+            "backend and unrelated module seeds must not invalidate a frontend Program",
+        );
+        assert_ne!(
+            frontend_cache_key_hex(
+                &cranelift,
+                "mncs.compiler.project.v1",
+                &closure,
+                &only_module,
+            ),
+            frontend_cache_key_hex(&cranelift, "mncs.compiler.project.v1", &closure, &changed,),
+            "the target module's own specialization must invalidate its Program",
+        );
+    }
+
+    #[test]
+    fn frontend_program_entry_loads_under_each_backend_identity() {
+        let cranelift = frontend_toolchain_identity(&test_toolchain(Some("cranelift")));
+        let research = frontend_toolchain_identity(&test_toolchain(Some("research-bytecode")));
+        let program = tiny_program();
+        let entry = serde_json::to_vec(&serde_json::json!({
+            "identity": cranelift,
+            "program": program,
+            "artifact": serde_json::Value::Null,
+        }))
+        .unwrap();
+        let (loaded, artifact) =
+            parse_cache_entry(&entry, &research, None).expect("backend-independent Program hit");
+        assert!(artifact.is_none());
+        assert_eq!(loaded.module, program.module);
     }
 
     #[test]

@@ -1,0 +1,181 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.frontend-cache-execution-evidence",
+  "observed_at": "2026-10-09T09:26:03Z",
+  "change": {
+    "path": "tools/stage0-probe/src/main.rs",
+    "source_sha256": "0b4efefd86e1f164ffc7298ff6d56c35abb7e183cc85bfefb93dd178bbb56a03",
+    "compiler_main_base": "a39a70e35fc934d6410057fcd53843ae38d3e723",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "behavior": "Cache elaborated frontend Programs by Stage-0/compiler identity, full loaded source closure, module identity, and that module's specialization seeds. Backend identity is excluded from the Program key. Backend executable artifacts retain their previous backend-specific identity and key.",
+    "safety_properties": [
+      "A Program cache hit cannot supply an executable artifact.",
+      "Changing backend configuration invalidates backend artifacts but preserves a matching frontend Program.",
+      "Changing a module's own specialization seed invalidates its Program; unrelated module seeds do not.",
+      "The legacy no-backend cache entry is accepted only under its exact prior identity and is migrated to the new frontend key."
+    ],
+    "frontend_cache_key": "1f82864ce390c73d35fb261cb15031a630baddd8926355249f356cbc89aa2791",
+    "backend_artifact_cache_key": "152e0584e07104f94a68e98581bbc61d31b8fc9db5640694d82643e939f5f292",
+    "tests": {
+      "command": "cargo test --release --manifest-path tools/stage0-probe/Cargo.toml",
+      "passed": 10,
+      "failed": 0,
+      "coverage": [
+        "backend-independent frontend identity",
+        "module-scoped specialization seeds and invalidation",
+        "backend-specific artifact identities",
+        "cross-backend frontend cache entry parsing"
+      ]
+    }
+  },
+  "workload": {
+    "modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "module_count": 8,
+    "source_bytes": 1335704,
+    "target": "mncs.compiler.project.v1::compile_project_target",
+    "generic_seed": "compile_project_target<1024,1024>",
+    "flow_input_pages_at_width_1024": 891,
+    "program_functions_after_elaboration": 3120,
+    "semantic_scope": "Frontend preparation only for the cold/warm comparison. No target execution, native backend artifact, or canonical VM conformance is implied by those runs."
+  },
+  "frontend_preparation_comparison": {
+    "cold": {
+      "program_cache": "miss",
+      "stage0_frontend_phase_seconds": 150.450,
+      "whole_process_wall_seconds": 151.88,
+      "whole_process_cpu_seconds": 151.09,
+      "max_rss_kib": 2127552,
+      "encoded_program_bytes": 150546578,
+      "compressed_program_bytes": 5274409
+    },
+    "warm": {
+      "program_cache": "hit",
+      "program_cache_read_decode_seconds": 0.568,
+      "whole_process_wall_seconds": 0.77,
+      "whole_process_cpu_seconds": 0.85,
+      "max_rss_kib": 310080
+    },
+    "reduction_percent": {
+      "wall": 99.493,
+      "cpu": 99.437,
+      "max_rss": 85.426
+    },
+    "result": "Stage-0 frontend elaboration accepted with zero diagnostics in the cold run; the warm run reused the same content-addressed Program. Both requests stopped after execution_status inspection."
+  },
+  "cross_backend_smoke_integration": {
+    "module": "source",
+    "program_functions": 20,
+    "cold_frontend_miss_and_elaboration_ms": 75.569,
+    "research_bytecode_run": {
+      "frontend_program_cache": "hit",
+      "backend_compilation_ms": 201.155,
+      "artifact_payload_bytes": 969774,
+      "retained_session_admission_ms": 32.742,
+      "whole_process_wall_seconds": 0.40,
+      "whole_process_cpu_seconds": 0.39,
+      "max_rss_kib": 52976,
+      "request": "execution_status"
+    },
+    "research_bytecode_repeat": {
+      "backend_artifact_cache": "hit",
+      "backend_compilation": "skipped",
+      "whole_process_wall_seconds": 0.20,
+      "max_rss_kib": 53172,
+      "request": "execution_status"
+    },
+    "result": "Frontend Program reuse crossed backend selection while backend artifacts remained independently keyed. The target function was not executed."
+  },
+  "bounded_flow_target_attempt": {
+    "backend": "research-bytecode",
+    "requested_step_budget": 1000000,
+    "measurement_runner_status": "TIMEOUT",
+    "operation_outcome": "UNKNOWN_NO_COMPILER_RESULT",
+    "semantic_result": "UNKNOWN_NO_COMPILER_RESULT",
+    "target_request_started": true,
+    "target_request_completed": false,
+    "reported_steps": null,
+    "reported_steps_semantics": "UNKNOWN; no compiler response was returned",
+    "frontend_program_cache_read_decode_seconds": 0.570,
+    "backend_compilation_seconds": 175.564,
+    "backend_artifact_payload_bytes": 399790958,
+    "backend_artifact_cache_uncompressed_bytes": 976218533,
+    "backend_artifact_cache_compressed_bytes": 42147545,
+    "backend_artifact_cache_write_seconds": 10.118,
+    "retained_session_admission_seconds": 16.545,
+    "admission_result": "SUCCESS; admission does not establish execution success",
+    "execution_child": {
+      "executable": "mncs-compiler-stage0-probe",
+      "observed_alive_after_runner_timeout": true,
+      "cancellation_signal_after_runner_exit": "SIGTERM",
+      "max_sampled_rss_kib": 5111156,
+      "last_sampled_rss_kib": 3468620,
+      "last_cpu_seconds": 257.56,
+      "last_cpu_user_seconds": 252.17,
+      "last_cpu_system_seconds": 5.39,
+      "max_file_descriptors": 5,
+      "io_read_chars_bytes": 1179343031,
+      "io_read_bytes": 0,
+      "cancellation_disposition": "Specific probe child was still alive after the outer runner timed out and was terminated with SIGTERM. No target response or semantic verdict was produced."
+    },
+    "cgroup_observation": {
+      "memory_max": "max",
+      "memory_event_delta": {
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "oom_kill": 0
+      },
+      "cpu_usage_delta_seconds": 283.564,
+      "cpu_usage_attribution": "Cgroup scope may include sibling processes; child CPU above is sampled by PID.",
+      "memory_pressure_full_delta_usec": 414771,
+      "termination_interpretation": "No cgroup OOM or memory-limit event was observed for this run. The runner timeout and later child SIGTERM do not establish a semantic rejection or OOM cause."
+    }
+  },
+  "unknowns": [
+    "The target's semantic result and execution-step count are unknown.",
+    "Parser/checker/proof/CFG/SSA per-phase execution cost is not separated by the available runtime instrumentation.",
+    "Hardware instruction count and per-function CPU time are unavailable.",
+    "The observed cgroup aggregates the execution scope and is not child-specific."
+  ],
+  "trace_artifacts": [
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/flow-project-frontend-cache-preparation-20261009.jsonl",
+      "sha256": "1773e2bd792069056ee8ff915217af49ccba870f315fc5c8c53a566b0f55878a",
+      "retention": "local ignored build artifact"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/flow-project-frontend-cache-warm-20261009.jsonl",
+      "sha256": "ada943ba1c2a594abfec4aa3a24cdc896083aa96e0c269238ac28578b26cb604",
+      "retention": "local ignored build artifact"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-cache-target-1m-rb-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "950dba17f1a712b2cfe71237b6ea530f8afaa6561f03b90b2625f80b580bf94e",
+      "retention": "local ignored build artifact"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-target-1m-rb-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791537530103695519.jsonl",
+      "sha256": "e88d3021470f623fde46fd8e9e29108f38128c9647612e619aa89164a852b7f7",
+      "retention": "local ignored build artifact"
+    }
+  ],
+  "compiler_succession": {
+    "matrix_path": "evidence/SELF-HOST-MATRIX.json",
+    "matrix_observed_at": "2026-10-08T15:06:29.523545+00:00",
+    "matrix_updated_by_this_change": false,
+    "module_stage_state": "Unchanged: segment, parser, source, lexer, and kernel have native parse/check/proof/CFG/verified-SSA evidence; decl, flow, ssa, and project have whole-module parse/signature evidence only.",
+    "executable_artifact": "not proven",
+    "stage_1": "not proven",
+    "stage_2": "not proven"
+  }
+}
