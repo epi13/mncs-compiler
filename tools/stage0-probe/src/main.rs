@@ -196,6 +196,30 @@ struct ProbeCacheBackendEntry {
     artifact: Option<mncs_model::BackendArtifact>,
 }
 
+/// An artifact whose immutable identity was checked at the cache or compiler
+/// emission boundary. Keeping that fact with the value lets this probe reuse
+/// the language-owned admitted-session API without hashing the full payload
+/// again for diagnostic summaries or retained-session construction.
+struct VerifiedBackendArtifact(mncs_model::BackendArtifact);
+
+impl VerifiedBackendArtifact {
+    fn verify(artifact: mncs_model::BackendArtifact) -> Result<Self, mncs_model::BackendArtifact> {
+        if artifact.identity_is_valid() {
+            Ok(Self(artifact))
+        } else {
+            Err(artifact)
+        }
+    }
+
+    fn artifact(&self) -> &mncs_model::BackendArtifact {
+        &self.0
+    }
+
+    fn into_artifact(self) -> mncs_model::BackendArtifact {
+        self.0
+    }
+}
+
 fn gather_toolchain_identity(
     backend_name: Option<&str>,
     lock_path: &std::path::Path,
@@ -396,7 +420,7 @@ fn parse_cache_entry(
     raw: &[u8],
     expected: &ToolchainIdentity,
     backend_name: Option<&str>,
-) -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+) -> Option<(mncs_model::Program, Option<VerifiedBackendArtifact>)> {
     parse_cache_entry_reader(raw, expected, backend_name)
 }
 
@@ -404,7 +428,7 @@ fn parse_cache_entry_reader<R: Read>(
     reader: R,
     expected: &ToolchainIdentity,
     backend_name: Option<&str>,
-) -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+) -> Option<(mncs_model::Program, Option<VerifiedBackendArtifact>)> {
     if backend_name.is_none() {
         let entry: ProbeCacheProgramEntry = serde_json::from_reader(reader).ok()?;
         if &entry.identity != expected {
@@ -423,9 +447,7 @@ fn parse_cache_entry_reader<R: Read>(
         // an executable session.
         return Some((entry.program, None));
     };
-    if !artifact.identity_is_valid() {
-        return None;
-    }
+    let artifact = VerifiedBackendArtifact::verify(artifact).ok()?;
     Some((entry.program, Some(artifact)))
 }
 
@@ -604,7 +626,7 @@ fn main() {
                       suffix: &str,
                       identity: &ToolchainIdentity,
                       expected_backend: Option<&str>|
-     -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+     -> Option<(mncs_model::Program, Option<VerifiedBackendArtifact>)> {
         let dir = cache_dir.as_ref()?;
         let path = format!("{dir}/{key}{suffix}");
         let started = Instant::now();
@@ -833,7 +855,7 @@ fn main() {
         );
     };
     let mut programs = BTreeMap::new();
-    let mut cached_artifacts: BTreeMap<String, mncs_model::BackendArtifact> = BTreeMap::new();
+    let mut cached_artifacts: BTreeMap<String, VerifiedBackendArtifact> = BTreeMap::new();
     for (name, source) in &sources.0 {
         if execution_modules
             .as_ref()
@@ -1035,24 +1057,28 @@ fn main() {
                     // needed below; release the rest before cache encoding.
                     drop(result);
                     let payload_bytes = artifact.bytes_hex.len() / 2;
+                    let artifact = VerifiedBackendArtifact::verify(artifact);
                     trace_phase(
                         "backend_compilation",
                         compile_started,
                         json!({
                             "module": name,
                             "backend": backend,
-                            "artifact_kind": artifact.artifact_kind,
+                            "artifact_kind": artifact.as_ref().map(|artifact| artifact.artifact().artifact_kind.as_str()),
                             "artifact_payload_bytes": payload_bytes,
-                            "identity_valid": artifact.identity_is_valid()
+                            "identity_valid": artifact.is_ok()
                         }),
                     );
+                    let artifact = artifact.unwrap_or_else(|_| {
+                        panic!("{backend} emitted an artifact with an invalid identity for {name}")
+                    });
                     if cache_dir.is_some() {
                         cache_store(
                             &cache_key(name),
                             ".json.gz",
                             toolchain.as_ref().unwrap(),
                             program,
-                            Some(&artifact),
+                            Some(artifact.artifact()),
                         );
                     }
                     (name.clone(), artifact)
@@ -1065,9 +1091,11 @@ fn main() {
         .map(|(name, artifact)| {
             (
                 name.clone(),
-                artifact.backend.name.clone(),
-                artifact.artifact_kind.clone(),
-                artifact.identity_is_valid(),
+                artifact.artifact().backend.name.clone(),
+                artifact.artifact().artifact_kind.clone(),
+                // The collection contains only artifacts that passed the
+                // cache-ingress or compiler-emission verification above.
+                true,
             )
         })
         .collect::<Vec<_>>();
@@ -1075,6 +1103,7 @@ fn main() {
     let backend_sessions: BTreeMap<_, _> = backend_artifacts
         .into_iter()
         .map(|(name, artifact)| {
+            let artifact = artifact.into_artifact();
             let backend = artifact.backend.name.clone();
             let artifact_kind = artifact.artifact_kind.clone();
             let artifact_payload_bytes = artifact.bytes_hex.len() / 2;
@@ -1086,7 +1115,7 @@ fn main() {
                 "artifact_payload_bytes": artifact_payload_bytes
             }));
             let started = Instant::now();
-            let session = OwnedExecutionSession::new(artifact)
+            let session = OwnedExecutionSession::new_admitted(artifact)
                 .unwrap_or_else(|error| panic!("backend session for {name}: {error}"));
             trace_phase(
                 "retained_session_admission",
