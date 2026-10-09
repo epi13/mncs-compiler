@@ -66,7 +66,8 @@ fn validate_pages<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     if pages.len != page_count_for(stride, total) { return 5; }
     if pages.len == 0 { return 0; }
     iterate i over pages carrying code: u64 = 0 {
-        next code = validate_page_step<P, N>(pages, stride, i, code);
+        let page: [byte; up_to N] = pages[i];
+        next code = validate_page_step<N>(page, stride, i, pages.len, code);
     }
     if code != 0 { return code; }
     let last: u64 = pages.len - 1;
@@ -75,11 +76,10 @@ fn validate_pages<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     if terminal.len != total - last * stride { return 6; }
     return 0;
 }
-fn validate_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, index: u64, code: u64) -> (result: u64) {
+fn validate_page_step<N: Nat>(page: [byte; up_to N], stride: u64, index: u64, page_count: u64, code: u64) -> (result: u64) {
     if code != 0 { return code; }
-    let page: [byte; up_to N] = pages[index];
     if page.len > stride { return 3; }
-    if index + 1 < pages.len && page.len != stride { return 4; }
+    if index + 1 < page_count && page.len != stride { return 4; }
     return 0;
 }
 

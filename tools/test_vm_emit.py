@@ -26,8 +26,13 @@ VM_BIN = Path(os.environ.get("MNCS_VM_BIN", VM_REPO / "target" / "debug" / "mncs
 os.chdir(ROOT)
 
 MODULE = "mncs.compiler.source.v1"
-SEEDS = [{"module": MODULE, "function": "byte_at",
-          "type_arguments": [{"kind": "nat", "value": 8}]}]
+SEEDS = [
+    {"module": MODULE, "function": "byte_at",
+     "type_arguments": [{"kind": "nat", "value": 8}]},
+    {"module": MODULE, "function": "validate_pages",
+     "type_arguments": [{"kind": "nat", "value": 1024},
+                        {"kind": "nat", "value": 1024}]},
+]
 
 
 def ensure_probe():
@@ -74,6 +79,10 @@ def byte_seq(data: bytes):
     return {"sequence": {"values": [{"byte": {"value": b}} for b in data]}}
 
 
+def page_table(pages):
+    return {"sequence": {"values": [byte_seq(page) for page in pages]}}
+
+
 def u64_arg(value):
     return {"integer": {"value": value, "type": {"bits": 64, "signed": False}}}
 
@@ -115,6 +124,10 @@ def main():
                 if r["generic_function"] == "byte_at"]
         assert len(rows) == 1 and rows[0]["args_spellings"] == ["8"], rows
         assert rows[0]["canonical_args"], "specialization identity bound"
+        validate_rows = [r for r in artifact.get("generic_entrypoints", [])
+                         if r["generic_function"] == "validate_pages"]
+        assert len(validate_rows) == 1 and \
+            validate_rows[0]["args_spellings"] == ["1024", "1024"], validate_rows
         assert artifact["source"]["backend_name"] == "mncs-vm-direct"
         refs = artifact["source"]["lowering_refs"]
         assert any(r.startswith("stage0-lock:") for r in refs), refs
@@ -178,10 +191,49 @@ def main():
             refusal = json.loads(bad.stdout)["outcome"]
             assert refusal["kind"] == "invalid_request", refusal
             assert "no compiled specialization" in refusal["reason"], refusal
+
+            # Keep the page-composition validator's full result code surface
+            # on the same frozen canonical VM artifact. Stage-0 supplies the
+            # independent expected value; both valid and malformed layouts
+            # must complete through the VM.
+            page_cases = [
+                ("valid-empty", [], 16, 0, 0),
+                ("stride-zero", [], 0, 0, 1),
+                ("stride-over-limit", [], 1025, 0, 2),
+                ("page-count-mismatch", [b"x"], 1, 2, 5),
+                ("page-over-stride", [b"xx", b"x"], 1, 2, 3),
+                ("nonterminal-short", [b"", b"x"], 1, 2, 4),
+                ("terminal-short", [b"xx", b"x"], 2, 4, 6),
+                ("canonical-split", [b"xx", b"xx", b"x"], 2, 5, 0),
+                ("large-page-count", [b"x"] * 802, 1, 802, 0),
+            ]
+            page_type_args = [nat_arg(1024), nat_arg(1024)]
+            for name, pages, stride, total, expected in page_cases:
+                args = [page_table(pages), u64_arg(stride), u64_arg(total)]
+                oracle = probe.send({
+                    "schema_version": "0.1",
+                    "target": {"module": MODULE, "function": "validate_pages"},
+                    "arguments": args,
+                    "type_arguments": page_type_args,
+                    "step_budget": 100000,
+                })
+                assert oracle["status"] == "returned", (name, oracle)
+                assert oracle["returned"] == [u64_arg(expected)], (name, oracle)
+                completed = vm_run(artifact_path, "validate_pages", args,
+                                   page_type_args)
+                assert completed.returncode == 0, (name, completed.stderr)
+                document = json.loads(completed.stdout)
+                assert document["outcome"] == {"kind": "completed"}, \
+                    (name, document["outcome"])
+                vm_values = [u64_arg(value["Integer"]["value"])
+                             for value in document["record"]["returned"]]
+                assert vm_values == oracle["returned"], (name, vm_values,
+                                                         oracle["returned"])
     finally:
         probe.close()
     print("vm_emit: direct emission differential passed "
-          "(byte_at<8>=65 agrees across direct-VM, pinned oracle, concrete)")
+          "(byte_at<8> and validate_pages<1024,1024> agree across "
+          "direct-VM and pinned oracle)")
 
 
 if __name__ == "__main__":
