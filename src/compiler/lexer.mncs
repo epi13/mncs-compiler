@@ -352,8 +352,15 @@ fn keyword_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
 }
 
 fn token_from_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, st: Scan, line: bool, block: bool, word: bool, ws: bool) -> (result: Token) {
-    let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword_global<P, N>(pages, stride, total, start, st.end), select(st.dotted, 6, 5)))));
-    return Token { kind: kind, start: start, end: st.end, diagnostic: select(block && st.depth > 0, 1, 0) };
+    let diagnostic: u64 = select(block && st.depth > 0, 1, 0);
+    if ws { return Token { kind: 1, start: start, end: st.end, diagnostic: diagnostic }; }
+    if line { return Token { kind: 2, start: start, end: st.end, diagnostic: diagnostic }; }
+    if block { return Token { kind: 3, start: start, end: st.end, diagnostic: diagnostic }; }
+    if word {
+        let kind: u64 = keyword_global<P, N>(pages, stride, total, start, st.end);
+        return Token { kind: kind, start: start, end: st.end, diagnostic: diagnostic };
+    }
+    return Token { kind: select(st.dotted, 6, 5), start: start, end: st.end, diagnostic: diagnostic };
 }
 
 fn scan_step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
