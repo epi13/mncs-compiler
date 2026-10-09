@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-09T22:53:11Z",
+    "updated_at": "2026-10-09T23:05:31Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -1872,7 +1872,82 @@
       "evidence_artifact_sha256": "e16545a96740330b278732653fb96aee5bebb17299fd7e0924570bd1598f5d7d",
       "implementation_commit": "14ad9e535ee8974012cb75892ce78bbac4f7dd8f",
       "delivery_role": "Exact tested source identity and bounded execution measurements; does not alter module-stage rows or establish Stage-1/Stage-2."
+    },
+    "lexer_byte_pair_window_experiment_campaign_20261009": {
+      "observed_at": "2026-10-09T23:05:08Z",
+      "entry_delivered_main_revision": "c756a15247b1eb184c7685b558f61973f376c144",
+      "candidate_base_revision": "c756a15247b1eb184c7685b558f61973f376c144",
+      "tested_candidate_git_head": "c756a15247b1eb184c7685b558f61973f376c144",
+      "tested_candidate_branch": "campaign/lexer-head-byte-pair-window-20261009",
+      "tested_candidate_working_tree_dirty": true,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "tested_candidate_source_identity": {
+        "kind": "sha256 over sorted module basename including .mncs, NUL, and raw per-file SHA-256 digest",
+        "sha256": "c91d5c83173652c5141d8039a4e78a6c0238b7786074b599c6ad37a093de8e80",
+        "module_source_sha256": {
+          "source": "5072a965e64664c8bfe26563763301fc8216f72392837cf958fb9472bd47f0ae",
+          "lexer": "ff6b8c038d65eecc6b3528b81392ee0e3b7e2673eb2b02e0ec863e0ca8729af0",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        }
+      },
+      "matched_baseline_source_identity": {
+        "kind": "sha256 over sorted module basename including .mncs, NUL, and raw per-file SHA-256 digest",
+        "sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+        "module_source_sha256": {
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+          "lexer": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+        }
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "diagnostics": 0,
+        "candidate_source_pages": 897,
+        "linked_functions": 1332,
+        "ssa_functions": 380
+      },
+      "target_operation": "mncs.compiler.project.v1::compile_project_target",
+      "target_backend": "reference_interpreter",
+      "target_step_budget": 50000,
+      "target_execution_classification": "RESOURCE_EXHAUSTED; no returned project result; semantic result UNKNOWN",
+      "matched_run_means": {
+        "wall_seconds": {
+          "baseline": 23.782,
+          "candidate": 24.033,
+          "change_percent": 1.06
+        },
+        "child_cpu_seconds": {
+          "baseline": 21.46,
+          "candidate": 21.665,
+          "change_percent": 0.96
+        },
+        "child_peak_rss_kib": {
+          "baseline": 1751028,
+          "candidate": 1753234,
+          "change_kib": 2206
+        },
+        "fd_max": {
+          "baseline": 5,
+          "candidate": 5
+        }
+      },
+      "cp0001_smoke": {
+        "tokens_compared": 1283,
+        "candidate_wall_change_percent": -1.17,
+        "candidate_steps_change_percent": -3.7
+      },
+      "decision": "REJECTED; small-fixture gain did not transfer to real-flow execution efficiency; candidate code restored",
+      "evidence_artifact": "evidence/campaign-20261009-lexer-byte-pair-window-experiment.json",
+      "evidence_artifact_sha256": "f6eab53f4c96b278183d66ca4383ad628f341ea02b3c6eaf676024cb9bb3e949",
+      "implementation_commit": null,
+      "delivery_role": "Negative optimization evidence only; no compiler source changes delivered and no module-stage row changed."
     }
   },
-  "evidence_updated_at": "2026-10-09T22:53:11Z"
+  "evidence_updated_at": "2026-10-09T23:05:31Z"
 }

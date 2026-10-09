@@ -1,0 +1,478 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-measured-optimization-experiment",
+  "observed_at": "2026-10-09T23:05:08Z",
+  "decision": "REJECTED_NO_REAL_FLOW_EXECUTION_EFFICIENCY_GAIN",
+  "implementation": {
+    "candidate_base_git_revision": "c756a15247b1eb184c7685b558f61973f376c144",
+    "tested_candidate_git_head": "c756a15247b1eb184c7685b558f61973f376c144",
+    "tested_candidate_branch": "campaign/lexer-head-byte-pair-window-20261009",
+    "working_tree_was_dirty_when_profiled": true,
+    "files": [
+      "src/compiler/source.mncs",
+      "src/compiler/lexer.mncs"
+    ],
+    "description": "Added ByteWindow2 and byte_window2_global, used only for next_token_global initial a/b classification, to avoid loading b2/b3 when only two bytes were needed.",
+    "disposition": "Experimental source changes were restored after matched real-flow measurements showed no wall-time or child-CPU improvement. No implementation commit was delivered."
+  },
+  "identities": {
+    "campaign_entry_delivered_main_revision": "c756a15247b1eb184c7685b558f61973f376c144",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "source_identity_kind": "sha256 over sorted module basename including .mncs, NUL, and raw per-file SHA-256 digest",
+    "matched_baseline_source_identity": {
+      "sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+      "module_source_sha256": {
+        "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+      }
+    },
+    "tested_candidate_source_identity": {
+      "sha256": "c91d5c83173652c5141d8039a4e78a6c0238b7786074b599c6ad37a093de8e80",
+      "module_source_sha256": {
+        "source": "5072a965e64664c8bfe26563763301fc8216f72392837cf958fb9472bd47f0ae",
+        "lexer": "ff6b8c038d65eecc6b3528b81392ee0e3b7e2673eb2b02e0ec863e0ca8729af0",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      }
+    },
+    "identity_role_note": "Git head is the experimental base. The measured source bundle c91d5c... identifies the dirty candidate bytes; the code was restored and is not delivered."
+  },
+  "stage0_oracle": {
+    "baseline": {
+      "report": {
+        "path": ".worktrees/lexer-head-byte-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-next-window-candidate-stage0-oracle-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "f5d46b7e548571d064670c058689552c65bdec0b0486d1efcfc0bc1a3c21c28b"
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "source_identity_sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+      "source_pages": 896,
+      "stage0_result": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1330,
+        "ssa_functions": 379
+      },
+      "result_sha256": "c0f3cf90a5ae3f7ea80d544d584c724eca9b24ff3357f7535cd7050cf9e876a4",
+      "wall_seconds": 112.649,
+      "operation_outcome": "STAGE0_ORACLE_COMPLETED"
+    },
+    "candidate": {
+      "report": {
+        "path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-stage0-oracle-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "96ac8f14a037fb436aea1e923e65798bdc23ae91f3c5654059f9b225446347e0"
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "source_identity_sha256": "c91d5c83173652c5141d8039a4e78a6c0238b7786074b599c6ad37a093de8e80",
+      "source_pages": 897,
+      "stage0_result": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1332,
+        "ssa_functions": 380
+      },
+      "result_sha256": "546a95a53c0a69214bc214dce114742bc921e4d5e80a1e0f505c318cb81eacea",
+      "wall_seconds": 114.653,
+      "operation_outcome": "STAGE0_ORACLE_COMPLETED"
+    },
+    "interpretation": "Both exact compiler source bundles passed the independent Stage-0 project oracle with zero diagnostics. Baseline was 896 pages / 1,330 linked / 379 SSA; candidate was 897 pages / 1,332 linked / 380 SSA because the source implementation added two compiler functions. This validates oracle acceptance, not native project execution."
+  },
+  "measurement_contract": {
+    "backend_requested": "reference_interpreter",
+    "target_operation": "mncs.compiler.project.v1::compile_project_target for flow source index",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_step_budget": 50000,
+    "timeout_seconds": 120,
+    "sampled_child_rss_cap_mib": 3000,
+    "target_runs_per_identity": 2,
+    "stage0_oracle_skipped_during_target_runs": true,
+    "target_classification": "RESOURCE_EXHAUSTED at explicit 50,000-step budget in all four valid comparison runs",
+    "target_semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "rss_cap_triggered": false,
+    "cgroup_oom_kill_delta": 0,
+    "resource_observation": "CPU/RSS/FD/I/O and cgroup delta are from the actual mncs-compiler-stage0-probe child PID; cgroup memory total may include sibling processes."
+  },
+  "target_runs": {
+    "baseline": [
+      {
+        "measurement_report": {
+          "path": ".worktrees/lexer-head-byte-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-next-window-candidate-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "5756bc3a9e42737214167272340dc818aafa2f6097d9fa263918318ce4d9e520"
+        },
+        "phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-next-window-candidate-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "d399c8420d904aa9e18144f4ce516e36eec0009eae0569eff5869e273ec862ed"
+        },
+        "pipeline_report": {
+          "path": ".worktrees/lexer-head-byte-window-20261009/.build/campaign-artifacts/compiler-facts/campaign-flow-next-window-candidate-50k-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+          "sha256": "1ad94ee4cccff622e5ee62c1a9782cc763ae440cd40d2d77e198d4f4bc459315",
+          "result_sha256": "4fa5d53030603f59936816d10d8534efd8ad243341895482c16deb0b9ad4b4c1"
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "runner_status": "SUCCESS",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 24.032,
+        "target_steps": 50000,
+        "target_request_status": "budget_exhausted",
+        "actual_child": {
+          "executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+          "pid": 24,
+          "start_time_ticks": 51061662,
+          "cpu_seconds": 21.55,
+          "max_rss_kib": 1751268,
+          "max_fd_count": 5,
+          "last_io": {
+            "rchar": 179649134,
+            "wchar": 151280314,
+            "syscr": 4938,
+            "syscw": 6015,
+            "read_bytes": 0,
+            "write_bytes": 20480,
+            "cancelled_write_bytes": 0
+          }
+        },
+        "cgroup_memory_event_delta": {
+          "oom_group_kill": 0,
+          "high": 0,
+          "oom_kill": 0,
+          "max": 0,
+          "sock_throttled": 0,
+          "low": 0,
+          "oom": 0
+        },
+        "resource_cap_triggered": false,
+        "source_pages": 896
+      },
+      {
+        "measurement_report": {
+          "path": ".worktrees/lexer-head-byte-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-next-window-candidate-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "a6b341d98ac2256a1859d2611d8bc5b6f83cb3a931d0950c50fc03d7079c6536"
+        },
+        "phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-next-window-candidate-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "a7247c94ab2b9c7a057599a6a4b668585c6475d15634d75fb8e1a59fa8772a70"
+        },
+        "pipeline_report": {
+          "path": ".worktrees/lexer-head-byte-window-20261009/.build/campaign-artifacts/compiler-facts/campaign-flow-next-window-candidate-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+          "sha256": "a083ac40fc01b9ffde0eab3dba237117d90f219b0a0165ce248ad4264167ce7a",
+          "result_sha256": "4fa5d53030603f59936816d10d8534efd8ad243341895482c16deb0b9ad4b4c1"
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "runner_status": "SUCCESS",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 23.532,
+        "target_steps": 50000,
+        "target_request_status": "budget_exhausted",
+        "actual_child": {
+          "executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+          "pid": 24,
+          "start_time_ticks": 51065512,
+          "cpu_seconds": 21.369999999999997,
+          "max_rss_kib": 1750788,
+          "max_fd_count": 5,
+          "last_io": {
+            "rchar": 179649183,
+            "wchar": 151280277,
+            "syscr": 4939,
+            "syscw": 6015,
+            "read_bytes": 0,
+            "write_bytes": 20480,
+            "cancelled_write_bytes": 0
+          }
+        },
+        "cgroup_memory_event_delta": {
+          "oom_kill": 0,
+          "max": 0,
+          "oom": 0,
+          "low": 0,
+          "sock_throttled": 0,
+          "oom_group_kill": 0,
+          "high": 0
+        },
+        "resource_cap_triggered": false,
+        "source_pages": 896
+      }
+    ],
+    "candidate": [
+      {
+        "measurement_report": {
+          "path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-candidate-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "d92c0d5e5eddb754ce28d68d0d15598aa4d88a361231858a29361001f48028f6"
+        },
+        "phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-candidate-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "15b8675f1e349b0752f218d701a70014de78af01430009f8ef886b4424cd3e97"
+        },
+        "pipeline_report": {
+          "path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/campaign-artifacts/compiler-facts/campaign-flow-byte-pair-candidate-50k-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+          "sha256": "ecc6c96b1dc5fa7c0010ab5fab3caf2e1665fa78a11e07d07a2b56868a22469e",
+          "result_sha256": "ae3839ae553b85d00b4c6ec84108f1abc5aea504b286cf75c8b859480b76ec8f"
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "runner_status": "SUCCESS",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 24.034,
+        "target_steps": 50000,
+        "target_request_status": "budget_exhausted",
+        "actual_child": {
+          "executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+          "pid": 25,
+          "start_time_ticks": 51160800,
+          "cpu_seconds": 21.71,
+          "max_rss_kib": 1753348,
+          "max_fd_count": 5,
+          "last_io": {}
+        },
+        "cgroup_memory_event_delta": {
+          "sock_throttled": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "oom": 0,
+          "low": 0,
+          "max": 0,
+          "high": 0
+        },
+        "resource_cap_triggered": false,
+        "source_pages": 897
+      },
+      {
+        "measurement_report": {
+          "path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-candidate-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "0722436396f51a0aa2aca75b7c6cfa2ee51368e13a8fce49194ba53397aaaea9"
+        },
+        "phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-candidate-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "0e031b1c423a190f9dd36723af17ce87b124e1db74e2f561b85cf54a2cf7f366"
+        },
+        "pipeline_report": {
+          "path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/campaign-artifacts/compiler-facts/campaign-flow-byte-pair-candidate-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+          "sha256": "7ab6b85fd1069a9f9dcfbdfcdbe87e59ad768efb24300167fbd0f1c2f55425d4",
+          "result_sha256": "ae3839ae553b85d00b4c6ec84108f1abc5aea504b286cf75c8b859480b76ec8f"
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "runner_status": "SUCCESS",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 24.032,
+        "target_steps": 50000,
+        "target_request_status": "budget_exhausted",
+        "actual_child": {
+          "executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+          "pid": 25,
+          "start_time_ticks": 51163406,
+          "cpu_seconds": 21.62,
+          "max_rss_kib": 1753120,
+          "max_fd_count": 5,
+          "last_io": {
+            "rchar": 179778170,
+            "wchar": 151377796,
+            "syscr": 4943,
+            "syscw": 6054,
+            "read_bytes": 0,
+            "write_bytes": 20480,
+            "cancelled_write_bytes": 0
+          }
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "max": 0,
+          "low": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "resource_cap_triggered": false,
+        "source_pages": 897
+      }
+    ]
+  },
+  "performance_summary": {
+    "mean_wall_seconds": {
+      "baseline": 23.782,
+      "candidate": 24.033,
+      "change_percent": 1.06
+    },
+    "mean_child_cpu_seconds": {
+      "baseline": 21.46,
+      "candidate": 21.665,
+      "change_percent": 0.96
+    },
+    "mean_child_peak_rss_kib": {
+      "baseline": 1751028,
+      "candidate": 1753234,
+      "change_kib": 2206
+    },
+    "max_child_fd_count": {
+      "baseline": 5,
+      "candidate": 5
+    },
+    "mean_profile_seconds": {
+      "lexer.next_token_global": {
+        "baseline": 8.156,
+        "candidate": 8.328
+      },
+      "source.byte_at_global": {
+        "baseline": 1.389,
+        "candidate": 1.409
+      },
+      "source.byte_window4_global": {
+        "baseline": 2.014,
+        "candidate": 0.995
+      },
+      "source.byte_window2_global": {
+        "baseline": null,
+        "candidate": 1.053
+      },
+      "combined_byte_access_windows": {
+        "baseline": 3.403,
+        "candidate": 3.458
+      },
+      "lexer_module": {
+        "baseline": 28.284,
+        "candidate": 28.966
+      },
+      "source_module": {
+        "baseline": 5.35,
+        "candidate": 5.407
+      }
+    },
+    "bounded_progress": {
+      "baseline_next_token_global_calls": 70,
+      "candidate_next_token_global_calls": 72,
+      "baseline_steps_by_module": {
+        "mncs.compiler.lexer.v1": 15802,
+        "mncs.compiler.source.v1": 31201,
+        "mncs.compiler.decl.v1": 1676,
+        "mncs.compiler.segment.v1": 85,
+        "mncs.compiler.project.v1": 1236
+      },
+      "candidate_steps_by_module": {
+        "mncs.compiler.lexer.v1": 16144,
+        "mncs.compiler.source.v1": 30834,
+        "mncs.compiler.decl.v1": 1699,
+        "mncs.compiler.segment.v1": 87,
+        "mncs.compiler.project.v1": 1236
+      },
+      "note": "Candidate passed two more next_token_global calls at the same 50,000-step cutoff, but returned no project result; semantic progress is not declared equivalent."
+    }
+  },
+  "cp0001_smoke": {
+    "scope": "Tier A/B smoke, Stage-0 differential, 1,283 tokens",
+    "baseline": {
+      "report_path": ".worktrees/lexer-head-byte-window-20261009/.build/cp0001-results.json",
+      "report_sha256": "717dfd18fec5c2e808800af044a5546fd75b35ae3b5872ee6977436d762c9629",
+      "elapsed_seconds": 36.12,
+      "probe_steps_total": 2187937,
+      "probe_steps_max": 74828,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "result_sha256": "ba37ef54d74aedcba3eccb3d0c86f02311d56772be9289309db9c09489bebb57"
+    },
+    "candidate": {
+      "report_path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/cp0001-results.json",
+      "report_sha256": "85a2341b1ad3f727669406ce73503f60c8800b59311c409339519133a3524c2d",
+      "elapsed_seconds": 35.699,
+      "probe_steps_total": 2106985,
+      "probe_steps_max": 69322,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "result_sha256": "75c0cc3c282af236a64ca0892664fd0eec244fc502691687991efa444569dc6a"
+    },
+    "wall_change_percent": -1.17,
+    "steps_change_percent": -3.7,
+    "interpretation": "Both compared the same token count and 18 Tier A / 26 Tier B cases. The pair candidate improved this small fixture against the four-byte-window baseline, but the real-flow execution cost increased."
+  },
+  "frontend_cache_preparation": {
+    "measurement_report": {
+      "path": ".worktrees/lexer-head-byte-pair-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-candidate-prep-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "8095f73a564c60a62e59fbeaa0b90851ba8a2e724411e3123142d11474e1b0fa"
+    },
+    "classification": "SUCCESS",
+    "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+    "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+    "wall_seconds": 152.201,
+    "child_cpu_seconds": 150.53,
+    "child_peak_rss_kib": 2133988,
+    "max_fd_count": 5,
+    "rss_cap_triggered": false,
+    "cgroup_memory_event_delta": {
+      "sock_throttled": 0,
+      "low": 0,
+      "oom_group_kill": 0,
+      "max": 0,
+      "oom": 0,
+      "high": 0,
+      "oom_kill": 0
+    },
+    "meaning": "ADMISSION_ONLY_SUCCESS; frontend Program cache prepared, target execution not run."
+  },
+  "measurement_harness_timeout": {
+    "measurement_report": {
+      "path": ".worktrees/lexer-head-byte-window-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-byte-pair-window4-baseline-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "a66ea95c88d3560f0f36f14d9de688e3c48c5da9f09a494bd77c5c5a1179e997"
+    },
+    "classification": "TIMEOUT",
+    "runner_status": "TIMEOUT",
+    "operation_outcome": "INTERRUPTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "runner_wall_seconds": 120.322,
+    "target_request_status": "budget_exhausted",
+    "stage0_oracle": {
+      "status": "UNKNOWN",
+      "reason": "probe child exited without response (-2)"
+    },
+    "actual_child_cpu_seconds": 118.14,
+    "actual_child_peak_rss_kib": 1751320,
+    "resource_stop_cause": "measurement_timeout",
+    "cgroup_memory_event_delta": {
+      "oom_group_kill": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "low": 0,
+      "max": 0,
+      "high": 0,
+      "sock_throttled": 0
+    },
+    "interpretation": "The target itself returned budget_exhausted at 50,000 steps. This duplicate baseline run did not set MNCS_PROBE_SKIP_STAGE0_ORACLE=1; the subsequent Stage-0 oracle request exceeded the 120-second runner envelope and was interrupted. It is classified TIMEOUT/INTERRUPTED with semantic UNKNOWN and is excluded from the matched target performance summary."
+  },
+  "artifact_scope": {
+    "probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c",
+    "large_generated_reports_retained_locally_under_worktrees": true,
+    "large_reports_committed": false
+  },
+  "claims": {
+    "whole_flow_native_result": false,
+    "whole_module_check_proof_cfg_verified_ssa": false,
+    "stage1_executable": false,
+    "stage2_succession": false,
+    "result": "A smaller initial byte window improves the smoke fixture but shows no measured real-flow wall/CPU efficiency gain; candidate code rejected and restored."
+  }
+}
