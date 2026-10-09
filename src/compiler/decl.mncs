@@ -5228,7 +5228,7 @@ fn callable_identity_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
 fn callable_identity_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemanticIdentityBuild, start: u64, end: u64) -> (result: SemanticIdentityBuild) {
     if end < start || end > total { return SemanticIdentityBuild { ..st, valid: false }; }
     iterate i up_to 1024 carrying d: SemanticIdentityBuild = st {
-        next d = callable_identity_span_step<P, N>(pages, stride, total, d, i, start, end);
+        next d = callable_identity_span_step<P, N>(pages, stride, total, d, start + i, start, end);
     }
     return d;
 }

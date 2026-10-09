@@ -1,0 +1,608 @@
+{
+  "artifacts": {
+    "baseline_repeated64_warm": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-scan-baseline-cranelift-repeated64-identityfixed-final-20261009.json",
+      "file_sha256": "a2bf3d591d4a241b84708c73978553ebcbda72d38ae3c24c51c44a2bb5b52568",
+      "status": "SUCCESS",
+      "compiler_source_identity_sha256": "0aa7b7d6985b4d171ea175f0d339d4322ae0146aad79c46ed15fbadf09911cd5"
+    },
+    "baseline_unique64_warm": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-scan-baseline-cranelift-unique64-identityfixed-final-20261009.json",
+      "file_sha256": "4e5763265af270a3499c5ec96f034877fda699f4e14d16fe89985360fc9fc756",
+      "status": "SUCCESS",
+      "compiler_source_identity_sha256": "0aa7b7d6985b4d171ea175f0d339d4322ae0146aad79c46ed15fbadf09911cd5"
+    },
+    "candidate_repeated64_warm": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-repeated64-warm-unredirected-20261009.json",
+      "file_sha256": "80a1eac032cf8d7cb5345a4de119beee0bdb9ea2d193261e15feaa1214d2e968",
+      "status": "SUCCESS",
+      "compiler_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396"
+    },
+    "candidate_unique64_warm": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-unique64-20261009.json",
+      "file_sha256": "296676fa4a086856e11dcc3a5a2a93a9cb3da4691e5d10ba72ceea672bba0df0",
+      "status": "SUCCESS",
+      "compiler_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396"
+    },
+    "candidate_unique65_cache_reset": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-unique65-20261009.json",
+      "file_sha256": "662a642b29c71052ff0c1961717ac4865f2d47241a8266ff795f2d0d6ec94fae",
+      "status": "SUCCESS",
+      "compiler_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+      "note": "65 distinct imported members exercise the bounded cache reset at count 64."
+    },
+    "candidate_repeated64_cold_build": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-repeated64-20261009.json",
+      "file_sha256": "ad10e612a521ccc460588858400a00cf6e6840f4305f65fd0ec802cc0f9c179c",
+      "status": "SUCCESS",
+      "compiler_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+      "note": "Cold compilation/admission report; HWM includes backend compilation and is excluded from warm baseline comparison."
+    },
+    "candidate_warm_phase_trace": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-repeated64-warm.trace.jsonl",
+      "file_sha256": "e57726d19f9188d59670c0ba2f69d6a1bfa316c09c66edb84f3c073d07b0c474"
+    },
+    "candidate_warm_phase_stderr": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-repeated64-warm.stderr.log",
+      "file_sha256": "ab3a54ed7166a4a3a4cb62ed3318d91b0be65592fabc73d4b4193730b78f9f52"
+    },
+    "focused_target_module_suite_before_count_update": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-target-module-candidate-final-20261009.json",
+      "file_sha256": "070d75fc73025923de5aba0d8045d3a5dca7d9bffdfd68ff1f0096fab71f8b10",
+      "status": "passed",
+      "result_sha256": "90908bc292dfbb828943b6b5c1fe280e2d414c62b233c459414aeb0834f9e470",
+      "compiler_source_identity_sha256": "aca3b50582a9abe699cf92eb3b5b9460e09d4dd807506e4aee00363fa72be6f3",
+      "note": "Passed against the exact-member/provider cache before the O(1) counted-cache storage update; see the current 65-call native reset-boundary probe."
+    },
+    "real_flow_native_attempt": {
+      "file_sha256": "5e4129a04c7139c2fff59ff6d260d7c225f7d8e877e390689f792106a7b626ac",
+      "path": ".build/campaign-artifacts/compiler-facts/flow-target-candidate-identity-cache-capped-20261009.json",
+      "result_sha256": "b1066781d21ec93327538e6ce30ef215777ac091adc5d9c3bb9d16db36284f65",
+      "status": null
+    },
+    "real_flow_pipeline_report": {
+      "file_sha256": "5e4129a04c7139c2fff59ff6d260d7c225f7d8e877e390689f792106a7b626ac",
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-20261009-import-signature-cache-flow-capped-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+      "result_sha256": "b1066781d21ec93327538e6ce30ef215777ac091adc5d9c3bb9d16db36284f65",
+      "status": null
+    },
+    "real_flow_stderr": {
+      "file_sha256": "54b9d6f116f96a532ae01fc2c7ee0075248875b8a98da2f57ecc6c7dc33784b5",
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-20261009-import-signature-cache-flow-capped-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791521326432211633.log",
+      "result_sha256": null,
+      "status": null
+    },
+    "real_flow_trace": {
+      "file_sha256": "1b56cb6f0539f9004294d729c305c60e6593ba01ba05d843662f2ac36f1c42ba",
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-20261009-import-signature-cache-flow-capped-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791521326432211633.jsonl",
+      "result_sha256": null,
+      "status": null
+    },
+    "stage0_flow_oracle": {
+      "file_sha256": "6baa1e760e0755e64b2a34c346f1404e499f960f34f73ca94485ec7cdc7dc1dd",
+      "path": ".build/campaign-artifacts/compiler-facts/flow-target-stage0-oracle-current-20261009.json",
+      "result_sha256": "5fb7a1caedbd08d073c16bd6a5cf9ca1a1f87a2e0b3ed0b6ddf4afc620cf1c79",
+      "status": null
+    },
+    "stage0_flow_oracle_telemetry": {
+      "file_sha256": "5c526cec74a5dde6478d7788e0d356f7154abffc8508af2b40a1b1670f8d2b7b",
+      "path": ".build/campaign-artifacts/compiler-facts/flow-target-stage0-oracle-current-telemetry-20261009.jsonl",
+      "result_sha256": null,
+      "status": null
+    },
+    "current_source_provider_scope_and_1025_boundary": {
+      "path": ".build/campaign-artifacts/compiler-facts/import-signature-cache-scope-boundary-current-20261009.json",
+      "file_sha256": "b41f1bcfb536090dea0058427bf82b351df819544e1c87df94bdbff9e41f28cb",
+      "result_sha256": "8c8663b45e3aa0c4f62494efdd753103bb4078ec46417aa9c3d4b79f8d67942b",
+      "compiler_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+      "status": "SUCCESS"
+    }
+  },
+  "benchmark_contract": {
+    "target": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "backend": "cranelift",
+    "cache_state_for_comparison": "warm content-addressed compiler artifact and retained-session admission; baseline and final candidate use same canonical bootstrap/toolchain and cache root",
+    "provider_function_counts": [
+      129,
+      513,
+      1025
+    ],
+    "calls_per_fixture": 64,
+    "cache_reset_boundary_calls": 65,
+    "requested_step_budget": 8000000,
+    "cranelift_reported_step_value": 1,
+    "cranelift_step_value_semantics": "request marker only; Cranelift does not report MNCS VM instruction count",
+    "request_timeout_seconds": 480,
+    "rlimit_as_bytes": 8589934592,
+    "resource_sampling": true,
+    "identity_parity_required": true,
+    "patterns": [
+      "repeated-one-name",
+      "unique",
+      "65-unique-cache-reset"
+    ],
+    "baseline_source_identity_sha256": "0aa7b7d6985b4d171ea175f0d339d4322ae0146aad79c46ed15fbadf09911cd5",
+    "candidate_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396"
+  },
+  "change": {
+    "decl_callable_identity_span": "pass source offset start+i to callable_identity_span_step so names beyond byte offset 1023 retain their canonical identity",
+    "project_import_resolution": "resolve imported members from the provider SigTab already built during checking instead of scanning FnDecl and then searching SigTab; carry the canonical candidate identity directly",
+    "resolved_import_cache": "invocation-local, exact member bytes plus provider source index; cached signature spans are rewritten to each call site; retain at most 64 facts and reset the bounded epoch when full",
+    "cache_insertion_cost": "O(1) for insertion while count is below 64; no trim/reverse scans on common misses; at the capacity boundary replace the list with the newest fact",
+    "correctness_scope": "cache lifetime is one compile invocation and one source snapshot; eviction can cause recomputation but cannot change lookup or diagnostics"
+  },
+  "claims": {
+    "executable_artifact_created": false,
+    "stage1_proven": false,
+    "stage2_proven": false,
+    "verified_ssa_is_not_executable_or_canonical_vm_conformance": true
+  },
+  "focused_verification": {
+    "python_compile": "passed for tools/probe_import_signature_lookup.py and tools/test_project_target_module.py",
+    "git_diff_check": "passed after counted cache update",
+    "native_repeated64": "SUCCESS for providers 129/513/1025; Stage-0 valid, identities match, proof and verified SSA each cover 64 functions",
+    "native_unique64": "SUCCESS for providers 129/513/1025; Stage-0 valid, identities match, proof and verified SSA each cover 64 functions",
+    "native_unique65_cache_reset": "SUCCESS for providers 129/513/1025; exercised count-64 reset, Stage-0 valid, identities match, proof and verified SSA each cover 65 functions",
+    "target_module_diagnostic_and_nominal_suite": {
+      "status": "passed",
+      "source_identity_sha256": "aca3b50582a9abe699cf92eb3b5b9460e09d4dd807506e4aee00363fa72be6f3",
+      "result_sha256": "90908bc292dfbb828943b6b5c1fe280e2d414c62b233c459414aeb0834f9e470",
+      "timing_relative_to_current_candidate": "passed before the counted-cache storage update; current 65-call native probe covers the changed capacity-boundary branch",
+      "late_export_declaration_count": 1025,
+      "missing_late_export_rejected_by_both": true,
+      "same_name_two_provider_identity_scoping": true,
+      "imported_enum_payload_native_verified_ssa": true,
+      "wrong_qualifier_diagnostic_span_matches_stage0": true
+    },
+    "whole_module_stage_change": "none; these targeted compile requests do not upgrade decl or project whole-module proof/CFG/SSA evidence",
+    "current_source_provider_scope_and_1025_boundary": {
+      "status": "SUCCESS",
+      "source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+      "probe_digest_sha256": "8c8663b45e3aa0c4f62494efdd753103bb4078ec46417aa9c3d4b79f8d67942b",
+      "same_name_two_provider_cache_scope": {
+        "native_project_valid": true,
+        "native_ssa_valid": true,
+        "stage0_valid": true,
+        "same_member_name_provider_count": 2,
+        "native_import_call_count": 4,
+        "distinct_provider_callable_identity_count": 2,
+        "all_native_identities_match_stage0": true
+      },
+      "late_export_1025th_declaration": {
+        "native_valid": true,
+        "native_verified_ssa": true,
+        "stage0_valid": true,
+        "call_identity_matches_stage0": true
+      },
+      "missing_export_1025th_declaration": {
+        "native_rejected": true,
+        "stage0_rejected": true,
+        "native_diagnostic_start": 87,
+        "expected_start": 87,
+        "diagnostic_span_matches_call_site": true
+      }
+    }
+  },
+  "kind": "mncs.compiler.import-signature-cache-campaign-evidence",
+  "next_frontier": "Profile current real-flow target memory beyond the resolved import scan: exact target still returned RESOURCE_EXHAUSTED under the explicit 8 GiB address-space limit; cgroup counters did not identify a new OOM. Continue from project aggregate/page reconstruction and retained artifact working set, preserving the Stage-0 oracle and exact current failure classification.",
+  "observed_at": "2026-10-09T06:06:05.897003+00:00",
+  "real_flow_frontier": {
+    "attribution": "resource exhaustion was observed under the explicit address-space envelope; cgroup counters show no new OOM event. Exact allocator cause beyond the observed 32KiB allocation failure remains UNKNOWN.",
+    "backend_admitted": "cranelift",
+    "campaign_elapsed_ns_before_close": 119731633942,
+    "cgroup_observation": {
+      "memory_max_after": "max",
+      "memory_max_before": "max",
+      "oom_after": "0",
+      "oom_before": "0",
+      "oom_kill_after": "4",
+      "oom_kill_before": "4",
+      "scope": "host caller cgroup, not child-specific"
+    },
+    "child_observation": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "cpu_time_delta_ns": 44570000000,
+      "fd_high_water": 4,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 4096,
+      "pid": 3634742,
+      "return_code": -6,
+      "rlimits": {
+        "Max address space": "8589934592 8589934592 bytes",
+        "Max cpu time": "unlimited unlimited seconds",
+        "Max open files": "524288 524288 files",
+        "Max resident set": "unlimited unlimited bytes"
+      },
+      "rss_high_water_bytes": 8427470848,
+      "sample_count": 142,
+      "signal": "SIGABRT",
+      "start_ticks": 44596851,
+      "thread_high_water": 2
+    },
+    "execution_steps_reported": 0,
+    "input_page_bound": 1024,
+    "input_page_width": 1024,
+    "input_pages": 890,
+    "input_source_bundle_sha256": "c4fccde6e45fcca97eed7c28aae23de9861e2602c970db01d5c40fc83b5bd6e6",
+    "native_diagnostics": [],
+    "native_transport_outcome": "RESOURCE_EXHAUSTED",
+    "phase_timings_ns": {
+      "native_request_construction": 670899706,
+      "native_request_transport_and_execution": 70970300606,
+      "record_type_identity_admission": 7005935,
+      "result_serialization": 1253096,
+      "retained_session_admission": 48074424890,
+      "source_resolution_and_dependency_selection": 931314
+    },
+    "selected_input_modules": [
+      "decl",
+      "flow",
+      "lexer",
+      "parser",
+      "segment",
+      "source"
+    ],
+    "semantic_result": "UNKNOWN; native_project_valid and native_project_ssa_valid were not produced",
+    "stage0_admission_compiler_modules": "source,lexer,parser,segment,decl,flow,ssa,project",
+    "stage0_oracle": {
+      "compiler_source_bundle_sha256": "c4fccde6e45fcca97eed7c28aae23de9861e2602c970db01d5c40fc83b5bd6e6",
+      "diagnostics": [],
+      "linked_functions": 1324,
+      "pages": 890,
+      "result_sha256": "5fb7a1caedbd08d073c16bd6a5cf9ca1a1f87a2e0b3ed0b6ddf4afc620cf1c79",
+      "ssa_functions": 376,
+      "status": "valid",
+      "valid": true
+    },
+    "stderr_allocator_message": "memory allocation of 32768 bytes failed",
+    "target_module": "flow"
+  },
+  "results": {
+    "status": "SUCCESS",
+    "warm_request_comparison": {
+      "repeated_one_name": [
+        {
+          "provider_function_count": 129,
+          "qualified_call_count": 64,
+          "baseline": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.190282282,
+            "child_cpu_time_delta_ns": 970000000,
+            "child_rss_high_water_bytes": 3270995968,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "candidate": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.099000402,
+            "child_cpu_time_delta_ns": 880000000,
+            "child_rss_high_water_bytes": 3283963904,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "wall_reduction_percent": 7.67,
+          "cpu_reduction_percent": 9.28
+        },
+        {
+          "provider_function_count": 513,
+          "qualified_call_count": 64,
+          "baseline": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.953363742,
+            "child_cpu_time_delta_ns": 1710000000,
+            "child_rss_high_water_bytes": 3270995968,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "candidate": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.823428789,
+            "child_cpu_time_delta_ns": 1560000000,
+            "child_rss_high_water_bytes": 3283963904,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "wall_reduction_percent": 6.65,
+          "cpu_reduction_percent": 8.77
+        },
+        {
+          "provider_function_count": 1025,
+          "qualified_call_count": 64,
+          "baseline": {
+            "status": "SUCCESS",
+            "wall_seconds": 2.968177457,
+            "child_cpu_time_delta_ns": 2710000000,
+            "child_rss_high_water_bytes": 3270995968,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "candidate": {
+            "status": "SUCCESS",
+            "wall_seconds": 2.81790139,
+            "child_cpu_time_delta_ns": 2550000000,
+            "child_rss_high_water_bytes": 3283963904,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "wall_reduction_percent": 5.06,
+          "cpu_reduction_percent": 5.9
+        }
+      ],
+      "unique_names": [
+        {
+          "provider_function_count": 129,
+          "qualified_call_count": 64,
+          "baseline": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.772458425,
+            "child_cpu_time_delta_ns": 1540000000,
+            "child_rss_high_water_bytes": 3270893568,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "candidate": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.277640678,
+            "child_cpu_time_delta_ns": 1050000000,
+            "child_rss_high_water_bytes": 3283963904,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "wall_reduction_percent": 27.92,
+          "cpu_reduction_percent": 31.82
+        },
+        {
+          "provider_function_count": 513,
+          "qualified_call_count": 64,
+          "baseline": {
+            "status": "SUCCESS",
+            "wall_seconds": 4.194867928,
+            "child_cpu_time_delta_ns": 3950000000,
+            "child_rss_high_water_bytes": 3270893568,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "candidate": {
+            "status": "SUCCESS",
+            "wall_seconds": 1.986734428,
+            "child_cpu_time_delta_ns": 1750000000,
+            "child_rss_high_water_bytes": 3283963904,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "wall_reduction_percent": 52.64,
+          "cpu_reduction_percent": 55.7
+        },
+        {
+          "provider_function_count": 1025,
+          "qualified_call_count": 64,
+          "baseline": {
+            "status": "SUCCESS",
+            "wall_seconds": 7.492176731,
+            "child_cpu_time_delta_ns": 7200000000,
+            "child_rss_high_water_bytes": 3270893568,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "candidate": {
+            "status": "SUCCESS",
+            "wall_seconds": 3.01364352,
+            "child_cpu_time_delta_ns": 2720000000,
+            "child_rss_high_water_bytes": 3283963904,
+            "fd_high_water": 3,
+            "native_proof_function_count": 64,
+            "native_ssa_verified_function_count": 64,
+            "stage0_valid": true,
+            "identity_parity": true
+          },
+          "wall_reduction_percent": 59.78,
+          "cpu_reduction_percent": 62.22
+        }
+      ]
+    },
+    "interpretation": {
+      "unique_names": "Wall time fell 27.9%, 52.6%, and 59.8% as provider size grew from 129 to 513 to 1025 functions; child CPU time fell 31.8%, 55.7%, and 62.2%.",
+      "repeated_one_name": "With the current unredirected warm run, wall time fell 5.1% to 7.7% and child CPU fell 5.9% to 9.3% across the 129/513/1025-function providers.",
+      "rss": "Warm child RSS high-water was 3,283,963,904 bytes for candidate and about 3,271,000,000 bytes for baseline (about +0.4%); fd high-water was 3 for both.",
+      "step_count": "Reported Cranelift value 1 is a request marker and is not interpreted as VM instructions."
+    },
+    "cache_reset_boundary": {
+      "report": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-unique65-20261009.json",
+      "status": "SUCCESS",
+      "call_count": 65,
+      "pattern": "unique",
+      "provider_function_counts": [
+        129,
+        513,
+        1025
+      ],
+      "stage0_valid_all_rows": true,
+      "identity_parity_all_rows": true,
+      "native_proof_function_counts": [
+        65,
+        65,
+        65
+      ],
+      "native_verified_ssa_function_counts": [
+        65,
+        65,
+        65
+      ]
+    },
+    "cold_build": {
+      "status": "SUCCESS",
+      "child_pid": 3745610,
+      "session_ready_seconds": 434.001,
+      "stage0_specialization_seconds": 160.034,
+      "stage0_program_function_count": 3110,
+      "stage0_diagnostic_count": 0,
+      "stage0_artifact_uncompressed_bytes": 150211820,
+      "stage0_artifact_compressed_bytes": 5270053,
+      "backend_compilation_seconds": 218.736,
+      "backend_artifact_identity_valid": true,
+      "backend_payload_bytes": 404096909,
+      "backend_artifact_uncompressed_bytes": 986806131,
+      "backend_artifact_compressed_bytes": 42769439,
+      "backend_artifact_gzip_seconds": 11.07,
+      "retained_session_admission_seconds": 32.414,
+      "child_rss_high_water_bytes_including_cold_build": 5586178048,
+      "fd_high_water": 3,
+      "whole_cold_build_cpu_time": "UNKNOWN; the harness retained per-request child CPU deltas, not an attributable compile-phase CPU total"
+    },
+    "warm_admission": {
+      "artifact_decode_seconds": 10.373,
+      "retained_session_admission_seconds": 30.398,
+      "backend_payload_bytes": 404096909,
+      "trace": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-repeated64-warm.trace.jsonl",
+      "stderr": ".build/campaign-artifacts/compiler-facts/import-signature-cache-count-repeated64-warm.stderr.log"
+    },
+    "resource_observation": {
+      "current_rlimit_as_bytes": 8589934592,
+      "current_cgroup_memory_max": "max",
+      "cgroup_attribution": "caller cgroup scope, not child-specific",
+      "cgroup_oom_before_after": [
+        0,
+        0
+      ],
+      "cgroup_oom_kill_before_after": [
+        4,
+        4
+      ],
+      "candidate_warm_child_rss_high_water_bytes": 3283963904,
+      "candidate_warm_fd_high_water": 3,
+      "sampler": "low-rate /proc child observations and cgroup/pressure snapshots; UNKNOWN retained for unavailable fields"
+    },
+    "supplementary_current_source_cold_build": {
+      "source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+      "backend": "cranelift",
+      "specialization_seed_count": 1,
+      "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "probe_runtime_banner_revision": "UNKNOWN (observed banner was unknown/b05dfa2b9154)",
+      "child_pid": 3786051,
+      "session_ready_seconds": 395.945,
+      "stage0_specialization_seconds": 151.619,
+      "stage0_program_function_count": 3110,
+      "stage0_diagnostic_count": 0,
+      "backend_compilation_seconds": 192.7,
+      "backend_identity_valid": true,
+      "backend_payload_bytes": 404096909,
+      "backend_artifact_uncompressed_bytes": 986805984,
+      "backend_artifact_compressed_bytes": 42769317,
+      "backend_artifact_gzip_seconds": 10.358,
+      "retained_session_admission_seconds": 30.286,
+      "observation_note": "Phase events came from the actual stage0-probe child. This run selected a different artifact cache key due to the explicit canonical probe path; its runtime revision stamp remains UNKNOWN and is not used to establish Stage-0 or VM conformance."
+    }
+  },
+  "schema_version": 1,
+  "scope": {
+    "backend": "cranelift",
+    "baseline": {
+      "git_head": "581c8154008b56b968a67e85882a6d5eab0a18b3",
+      "project_importer": "linear FnDecl scan plus provider SigTab scan; no resolved-import fact cache",
+      "selected_module_source_identity_sha256": "0aa7b7d6985b4d171ea175f0d339d4322ae0146aad79c46ed15fbadf09911cd5",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow",
+        "ssa",
+        "project"
+      ],
+      "worktree": "temporary detached baseline with callable_identity_span offset correction only"
+    },
+    "candidate_base_git_head": "581c8154008b56b968a67e85882a6d5eab0a18b3",
+    "candidate_branch": "campaign/import-signature-scan-20261009",
+    "candidate_module_source_sha256": {
+      "decl": "ae93a228da29488da02332d94d5cfac5a0d55d4619d565cc9860d290de1e86ca",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+      "lexer": "b68edd4e2dcbf69ea47ed4d0a4cbe11cb7a2053a6ed2770526b8468ab2a55550",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "project": "de0f3f1adf2afa350360e8e1e94486d41b416aac8f37a77875cb4163c1b4b3b3",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+      "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+    },
+    "candidate_selected_module_source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+    "candidate_selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "tested_candidate_worktree_dirty": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "implementation": "native MNCS imported signature lookup, invocation-local provider/name cache, constant-work cache insertion below the 64-fact bound, and source-offset-correct callable identities",
+    "superseded_candidate_measurement": {
+      "selected_module_source_identity_sha256": "40541146f2ef0f9e083db9c0aa936e08a454def2cbd3697a191b2d40719c1a4a",
+      "status": "excluded-from-final-comparison",
+      "reason": "Earlier candidate used an incorrect cache key and its timings are not evidence for the final implementation."
+    }
+  },
+  "tested_candidate_identity": {
+    "git_head_at_test_time": "581c8154008b56b968a67e85882a6d5eab0a18b3",
+    "branch": "campaign/import-signature-scan-20261009",
+    "worktree_dirty_at_test_time": true,
+    "source_identity_kind": "sha256 of ordered selected compiler module ids and source bytes",
+    "source_identity_sha256": "3b39b57a6bd6d85beed15e914e9574709761780b3a2e35e21c2b7ced09dbc396",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "module_source_sha256": {
+      "decl": "ae93a228da29488da02332d94d5cfac5a0d55d4619d565cc9860d290de1e86ca",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+      "lexer": "b68edd4e2dcbf69ea47ed4d0a4cbe11cb7a2053a6ed2770526b8468ab2a55550",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "project": "de0f3f1adf2afa350360e8e1e94486d41b416aac8f37a77875cb4163c1b4b3b3",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+      "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+    },
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e"
+  }
+}
