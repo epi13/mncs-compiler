@@ -892,24 +892,35 @@ fn match_open_nested<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 fn nest_expr_seed(cursor: u64, profile_013: bool) -> (result: ExprState) {
     return ExprState { ok: true, err_start: 0, err_end: 0, cursor: cursor, operands: ExprList.ENil, operators: OpList.ONil, depth: 0, done: false, expect_operand: true, profile_013: profile_013, allow_construct: true, allow_index: true, allow_cast: true };
 }
+fn finish_nest_expr(state: MatchNestParse) -> (result: ExprParse) {
+    let bad: Expr = Expr.Name { start: state.cursor, end: state.cursor };
+    if !(state.ok) { return ExprParse { cursor: state.cursor, ok: false, err_start: state.err_start, err_end: state.err_end, node: bad, start: state.cursor, end: state.cursor }; }
+    if !(state.done) || !(state.node_ok) { return ExprParse { cursor: state.cursor, ok: false, err_start: state.cursor, err_end: state.cursor, node: bad, start: state.cursor, end: state.cursor }; }
+    return ExprParse { cursor: state.cursor, ok: true, err_start: 0, err_end: 0, node: state.node, start: expr_start(state.node), end: expr_end(state.node) };
+}
 fn parse_nest_expr_value<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, profile_013: bool) -> (result: ExprParse) {
     let seed: MatchNestParse = MatchNestParse { top: MatchNestTop.ExprTop { est: nest_expr_seed(cursor, profile_013) }, stack: MatchNestStack.NSNil, ok: true, done: false, err_start: 0, err_end: 0, node: Expr.Name { start: cursor, end: cursor }, node_ok: false, cursor: cursor };
-    iterate i up_to 1024 carrying a: MatchNestParse = seed {
+    // Keep the 3104-step parser ceiling, but stop charging for unused capacity once parsing finishes.
+    iterate i up_to 64 carrying a: MatchNestParse = seed {
         next a = match_nest_step<P, N>(pages, stride, total, a);
     }
-    iterate i up_to 1024 carrying b: MatchNestParse = a {
+    if !(a.ok) || a.done { return finish_nest_expr(a); }
+    iterate i up_to 960 carrying b: MatchNestParse = a {
         next b = match_nest_step<P, N>(pages, stride, total, b);
     }
+    if !(b.ok) || b.done { return finish_nest_expr(b); }
     iterate i up_to 1024 carrying c: MatchNestParse = b {
         next c = match_nest_step<P, N>(pages, stride, total, c);
     }
-    iterate i up_to 32 carrying d: MatchNestParse = c {
+    if !(c.ok) || c.done { return finish_nest_expr(c); }
+    iterate j up_to 1024 carrying d: MatchNestParse = c {
         next d = match_nest_step<P, N>(pages, stride, total, d);
     }
-    let bad: Expr = Expr.Name { start: d.cursor, end: d.cursor };
-    if !(d.ok) { return ExprParse { cursor: d.cursor, ok: false, err_start: d.err_start, err_end: d.err_end, node: bad, start: d.cursor, end: d.cursor }; }
-    if !(d.done) || !(d.node_ok) { return ExprParse { cursor: d.cursor, ok: false, err_start: d.cursor, err_end: d.cursor, node: bad, start: d.cursor, end: d.cursor }; }
-    return ExprParse { cursor: d.cursor, ok: true, err_start: 0, err_end: 0, node: d.node, start: expr_start(d.node), end: expr_end(d.node) };
+    if !(d.ok) || d.done { return finish_nest_expr(d); }
+    iterate k up_to 32 carrying fin: MatchNestParse = d {
+        next fin = match_nest_step<P, N>(pages, stride, total, fin);
+    }
+    return finish_nest_expr(fin);
 }
 fn match_nest_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: MatchNestParse) -> (result: MatchNestParse) {
     if !(st.ok) || st.done { return st; }
