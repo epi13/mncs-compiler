@@ -1,0 +1,149 @@
+{
+  "schema_version": "mncs.compiler.performance-evidence/1",
+  "recorded_at": "2026-10-09T02:56:05.073585+00:00",
+  "title": "Global lexer keyword byte reuse",
+  "identity": {
+    "compiler_base_revision": "ca9516f32e57cbf1f226460fe8013a3471cebd11",
+    "tested_branch": "campaign/lexer-keyword-dispatch-20261009",
+    "baseline_lexer_source_sha256": "30eed817c039544f1a4aa022a0dd2cb57f4f6b751b155c53c725d9116b884e58",
+    "tested_lexer_source_sha256": "b68edd4e2dcbf69ea47ed4d0a4cbe11cb7a2053a6ed2770526b8468ab2a55550",
+    "other_selected_module_source_sha256": {
+      "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89"
+    },
+    "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "probe_runtime_stage0_identity": "UNKNOWN",
+    "tested_compiler_source_bundle_bytes": {
+      "baseline": 48486,
+      "candidate": 45081
+    }
+  },
+  "workload": {
+    "operation": "mncs.compiler.lexer.v1::lex_tokens_from<64,1024>",
+    "requested_backend": "reference_interpreter",
+    "reported_backend": null,
+    "step_counter_scope": "reference-interpreter-specific; compare only between these matching runs",
+    "input_source": "src/compiler/flow.mncs",
+    "input_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+    "input_bytes": 33922,
+    "stride": 1024,
+    "execution_step_budget": 4000000,
+    "returned_prefix_token_count": 1024,
+    "next_global_offset": 4060,
+    "whole_stage0_token_count": 12861,
+    "batch_eof": false,
+    "prefix_sha256": "4e0f57bfb16915afce4a4ad97368a233e65ca7eed71b4a61d770fe939f05abe9",
+    "stage0_prefix_parity": true
+  },
+  "warm_measurement": {
+    "baseline": {
+      "status": "returned",
+      "steps": 678820,
+      "wall_seconds": 24.680625252,
+      "cpu_seconds": 24.54,
+      "rss_high_water_bytes": 75280384,
+      "fd_high_water": 4,
+      "threads_high_water": 1,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 4096,
+      "probe_cache_key": "197f2144ffc997cf4cf5f7883991c008d6a1b5b29cc977eaf2479feacd3d34ce",
+      "trace": ".build/campaign-artifacts/compiler-facts/global-lexer-flow-baseline-repeat-20261009.jsonl",
+      "trace_sha256": "fa38f96b91eb0cae87925b39cb109b96edd1ca0d3c6f810536b98243f18de648"
+    },
+    "candidate": {
+      "status": "returned",
+      "steps": 580156,
+      "wall_seconds": 22.237895432,
+      "cpu_seconds": 22.04,
+      "rss_high_water_bytes": 72019968,
+      "fd_high_water": 4,
+      "threads_high_water": 1,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 4096,
+      "probe_cache_key": "fd1320d2a6d93c2716507565e3a82a9090e7713a3a9cc83126c49a14ffc03145",
+      "trace": ".build/campaign-artifacts/compiler-facts/global-lexer-flow-full-candidate-repeat-20261009.jsonl",
+      "trace_sha256": "93aba88e997c3094b45f0529b9fff091e7a8d707ba9cf2e90524f2fd91df3255"
+    },
+    "change": {
+      "step_reduction_fraction": 0.14534633628944343,
+      "wall_reduction_fraction": 0.09897357927761789,
+      "cpu_reduction_fraction": 0.10187449062754686,
+      "rss_high_water_reduction_fraction": 0.04331029979868328
+    }
+  },
+  "additional_candidate_replay": {
+    "status": "returned",
+    "steps": 580156,
+    "wall_seconds": 24.075595783,
+    "cpu_seconds": 23.9,
+    "rss_high_water_bytes": 71757824,
+    "trace": ".build/campaign-artifacts/compiler-facts/global-lexer-flow-full-candidate-final-20261009.jsonl",
+    "trace_sha256": "db761ab674cb2be1bb9550d287d0fe030771dd4f39a458d95f21db6f18a3f4ac",
+    "host_pressure_before": {
+      "cpu_avg10": "1.66",
+      "io_avg10": "1.84"
+    },
+    "interpretation": "Step count stayed deterministic; wall and CPU time were higher while host CPU and I/O pressure was visible."
+  },
+  "keyword_boundary_differential": {
+    "test": "tools/test_global_keyword_dispatch.py",
+    "status": "passed",
+    "stage0_oracle": "mncs-language locked Stage-0 lexical oracle",
+    "keywords": 30,
+    "near_misses": 60,
+    "keyword_starts_forced_to_page_boundary": 30,
+    "fixture_bytes": 31188,
+    "native_tokens": 180,
+    "stage0_tokens": 180,
+    "native_matches_stage0": true,
+    "eof_and_global_spans_match": true,
+    "execution_steps": 2269198
+  },
+  "artifact_and_source_size": {
+    "cache_entries": {
+      "197f2144ffc997cf4cf5f7883991c008d6a1b5b29cc977eaf2479feacd3d34ce": {
+        "compressed_bytes": 154556,
+        "encoded_program_bytes": 4302007,
+        "cache_file_sha256": "25f0a86a32ab9dceeb739e81affac81fcce9508ba5385c9d847cd62224efaace"
+      },
+      "fd1320d2a6d93c2716507565e3a82a9090e7713a3a9cc83126c49a14ffc03145": {
+        "compressed_bytes": 144336,
+        "encoded_program_bytes": 3962096,
+        "cache_file_sha256": "688dc84d2eab8b22b8300680439f101a296174d5b341eb2bcab5551c3b23fbee"
+      }
+    },
+    "raw_program_size_reduction_fraction": 0.07901219128653207,
+    "compressed_cache_size_reduction_fraction": 0.06612489971272549,
+    "candidate_warm_sampler": {
+      "samples": 49,
+      "overhead_ns": 13183310,
+      "overhead_fraction_of_request_wall": 0.0005475798031676897,
+      "measurement_trace": ".build/campaign-artifacts/compiler-facts/global-lexer-flow-full-candidate-final-20261009.jsonl"
+    }
+  },
+  "resource_context": {
+    "cgroup_attribution": "shared user scope; not child-specific",
+    "memory_limit": "unlimited",
+    "cpu_limit": "unlimited",
+    "process_cpu_address_space_and_rss_limits": "unlimited",
+    "max_open_files": 524288,
+    "child_fds": 4,
+    "child_threads": 1,
+    "cgroup_memory_event_delta": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "sock_throttled": 0
+    },
+    "cgroup_cpu_throttle_delta_usec": 0,
+    "cumulative_oom_kill_counter_before_and_after": 4,
+    "cumulative_oom_kill_counter_attribution": "UNKNOWN; unchanged during the measured request"
+  },
+  "scope_and_unknowns": [
+    "This measures the global lexer prefix only; it is not a whole flow.mncs project parse, proof, CFG, SSA, or executable result.",
+    "The full real-flow compiler phase boundaries and Stage-1 executable frontier remain UNKNOWN.",
+    "Warm measurements are compared with both program artifacts already admitted from cache; the candidate first cache-miss run had an unmatched 92.8 MB process high-water and is excluded from the warm RSS comparison."
+  ]
+}
