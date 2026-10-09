@@ -86,15 +86,15 @@ record ProjectNominalIdentityWalk { rest: decl.NominalTypeIdentityList, acc: dec
 record ProjectNominalModuleWalk { rest: NominalModuleList, acc: decl.NominalTypeIdentityList, count: u64 }
 record ProjectNominalContains { rest: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity, found: bool }
 record ProjectRecordWalk { rest: ModuleList, nominal_modules: NominalModuleList, markers: decl.NominalTypeIdentityList, acc: decl.ImportedRecordList }
-record ProjectRecordDeclWalk { rest: decl.RecordList, source_index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedRecordList }
-record ProjectRecordFieldWalk { rest: decl.FieldList, source_index: u64, index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedRecordFieldList, ok: bool }
+record ProjectRecordDeclWalk { rest: decl.RecordList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedRecordList }
+record ProjectRecordFieldWalk { rest: decl.FieldList, index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedRecordFieldList, ok: bool }
 record ProjectRecordFields { fields: decl.ImportedRecordFieldList, ok: bool }
 record ProjectRecordFieldReverse { rest: decl.ImportedRecordFieldList, acc: decl.ImportedRecordFieldList }
 record ProjectEnumWalk { rest: ModuleList, nominal_modules: NominalModuleList, markers: decl.NominalTypeIdentityList, acc: decl.ImportedEnumList }
-record ProjectEnumDeclWalk { rest: decl.EnumList, source_index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedEnumList }
-record ProjectEnumVariantWalk { rest: decl.VariantList, source_index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedEnumVariantList, ok: bool }
+record ProjectEnumDeclWalk { rest: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedEnumList }
+record ProjectEnumVariantWalk { rest: decl.VariantList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedEnumVariantList, ok: bool }
 record ProjectEnumVariantBuild { variants: decl.ImportedEnumVariantList, ok: bool }
-record ProjectEnumFieldWalk { rest: decl.FieldList, source_index: u64, index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedEnumFieldList, ok: bool }
+record ProjectEnumFieldWalk { rest: decl.FieldList, index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedEnumFieldList, ok: bool }
 record ProjectEnumFields { fields: decl.ImportedEnumFieldList, ok: bool }
 record ProjectEnumFieldReverse { rest: decl.ImportedEnumFieldList, acc: decl.ImportedEnumFieldList }
 record ProjectEnumVariantReverse { rest: decl.ImportedEnumVariantList, acc: decl.ImportedEnumVariantList }
@@ -1120,6 +1120,57 @@ fn transport_type<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages
         TPoison => TypeTransport { ty: decl.SemType.TPoison, ok: false }
     };
 }
+// Schema fields are resolved and transported within their declaring module.
+// Reuse that module's page slice instead of rebuilding it for each nominal
+// field through the general cross-module transport path.
+fn transport_type_in_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: decl.SemType, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    return match ty {
+        TBool => TypeTransport { ty: ty, ok: true },
+        TByte => TypeTransport { ty: ty, ok: true },
+        TInt { width: width, signed: signed } => TypeTransport { ty: ty, ok: true },
+        TNamed { start: start, end: end } => transport_nominal_type_in_module<P, N>(pages, stride, total, start, end, target_nominals, caller_nominals),
+        TSeq => TypeTransport { ty: ty, ok: true },
+        TSeqExact { element: element, length: length, length_valid: valid } => transport_sequence_type_in_module<P, N>(pages, stride, total, element, length, valid, target_nominals, caller_nominals),
+        TPoison => TypeTransport { ty: decl.SemType.TPoison, ok: false }
+    };
+}
+fn transport_sequence_type_in_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, element: decl.SemType, length: u64, length_valid: bool, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    let transported: TypeTransport = transport_sequence_element_in_module<P, N>(pages, stride, total, element, target_nominals, caller_nominals);
+    if !(transported.ok) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
+    return TypeTransport { ty: decl.SemType.TSeqExact { element: transported.ty, length: length, length_valid: length_valid }, ok: true };
+}
+fn transport_sequence_element_in_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, element: decl.SemType, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    return match element {
+        TBool => TypeTransport { ty: element, ok: true },
+        TByte => TypeTransport { ty: element, ok: true },
+        TInt { width: width, signed: signed } => TypeTransport { ty: element, ok: true },
+        TNamed { start: start, end: end } => transport_nominal_type_in_module<P, N>(pages, stride, total, start, end, target_nominals, caller_nominals),
+        TSeq => TypeTransport { ty: element, ok: true },
+        TSeqExact { element: nested, length: count, length_valid: valid } => transport_nested_sequence_element_in_module<P, N>(pages, stride, total, nested, count, valid, target_nominals, caller_nominals),
+        TPoison => TypeTransport { ty: decl.SemType.TPoison, ok: false }
+    };
+}
+fn transport_nested_sequence_element_in_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, element: decl.SemType, length: u64, length_valid: bool, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    let transported: TypeTransport = match element {
+        TBool => TypeTransport { ty: element, ok: true },
+        TByte => TypeTransport { ty: element, ok: true },
+        TInt { width: width, signed: signed } => TypeTransport { ty: element, ok: true },
+        TNamed { start: start, end: end } => transport_nominal_type_in_module<P, N>(pages, stride, total, start, end, target_nominals, caller_nominals),
+        TSeq => TypeTransport { ty: decl.SemType.TPoison, ok: false },
+        TSeqExact { element: nested, length: count, length_valid: valid } => TypeTransport { ty: decl.SemType.TPoison, ok: false },
+        TPoison => TypeTransport { ty: decl.SemType.TPoison, ok: false }
+    };
+    if !(transported.ok) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
+    return TypeTransport { ty: decl.SemType.TSeqExact { element: transported.ty, length: length, length_valid: length_valid }, ok: true };
+}
+fn transport_nominal_type_in_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
+    let imported: decl.NominalLookup = decl.nominal_identity_at<P, N>(pages, stride, total, target_nominals, start, end);
+    let target: decl.NominalLookup = select_nominal_lookup(imported.found, imported, decl.nominal_identity_by_name<P, N>(pages, stride, total, target_nominals, start, end));
+    if !(target.found) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
+    let caller: decl.NominalRefLookup = decl.nominal_reference_by_identity<P, N>(pages, stride, total, caller_nominals, target.identity);
+    if !(caller.found) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
+    return TypeTransport { ty: decl.SemType.TNamed { start: caller.start, end: caller.end }, ok: true };
+}
 fn transport_sequence_type<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, target_index: u64, element: decl.SemType, length: u64, length_valid: bool, target_nominals: decl.NominalTypeIdentityList, caller_nominals: decl.NominalTypeIdentityList) -> (result: TypeTransport) {
     let transported: TypeTransport = transport_sequence_element<M, N>(sources, flat_pages, caller_index, target_index, element, target_nominals, caller_nominals);
     if !(transported.ok) { return TypeTransport { ty: decl.SemType.TPoison, ok: false }; }
@@ -1252,53 +1303,47 @@ fn project_record_module_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64]
     let input_total: u64 = module_total(sources, parsed.source_index);
     let facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.nominal_modules, parsed.source_index);
     let target_nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, st.markers, facts.facts.resolved);
-    let schemas: decl.ImportedRecordList = project_record_decls<M, N>(sources, flat_pages, parsed.source_index, parsed.unit.records, parsed.unit.records, parsed.unit.enums, st.markers, target_nominals, st.acc);
+    let schemas: decl.ImportedRecordList = project_record_decls<N>(input_pages, input_stride, input_total, parsed.unit.records, parsed.unit.records, parsed.unit.enums, st.markers, target_nominals, st.acc);
     return ProjectRecordWalk { rest: rest, nominal_modules: st.nominal_modules, markers: st.markers, acc: schemas };
 }
-fn project_record_decls<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, records: decl.RecordList, unit_records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.ImportedRecordList) -> (result: decl.ImportedRecordList) {
-    iterate i up_to 1024 carrying st: ProjectRecordDeclWalk = ProjectRecordDeclWalk { rest: records, source_index: source_index, markers: markers, target_nominals: target_nominals, records: unit_records, enums: enums, acc: acc } {
-        next st = project_record_decl_step<M, N>(sources, flat_pages, st);
+fn project_record_decls<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, records: decl.RecordList, unit_records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.ImportedRecordList) -> (result: decl.ImportedRecordList) {
+    iterate i up_to 1024 carrying st: ProjectRecordDeclWalk = ProjectRecordDeclWalk { rest: records, markers: markers, target_nominals: target_nominals, records: unit_records, enums: enums, acc: acc } {
+        next st = project_record_decl_step<N>(pages, stride, total, st);
     }
     return st.acc;
 }
-fn project_record_decl_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectRecordDeclWalk) -> (result: ProjectRecordDeclWalk) {
+fn project_record_decl_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectRecordDeclWalk) -> (result: ProjectRecordDeclWalk) {
     return match st.rest {
         decl.RecordList.RNil => st,
-        decl.RecordList.RCons { head: record_decl, tail: rest } => project_record_decl_cons<M, N>(sources, flat_pages, st, record_decl, rest)
+        decl.RecordList.RCons { head: record_decl, tail: rest } => project_record_decl_cons<N>(pages, stride, total, st, record_decl, rest)
     };
 }
-fn project_record_decl_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectRecordDeclWalk, record_decl: decl.RecordDecl, rest: decl.RecordList) -> (result: ProjectRecordDeclWalk) {
-    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.source_index);
-    let stride: u64 = module_stride(sources, st.source_index);
-    let total: u64 = module_total(sources, st.source_index);
+fn project_record_decl_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectRecordDeclWalk, record_decl: decl.RecordDecl, rest: decl.RecordList) -> (result: ProjectRecordDeclWalk) {
     let identity: decl.NominalLookup = decl.nominal_identity_by_name<1024, N>(pages, stride, total, st.target_nominals, record_decl.name_start, record_decl.name_end);
-    let built_fields: ProjectRecordFields = project_record_fields<M, N>(sources, flat_pages, st.source_index, record_decl.fields, st.records, st.enums, st.markers, st.target_nominals);
+    let built_fields: ProjectRecordFields = project_record_fields<N>(pages, stride, total, record_decl.fields, st.records, st.enums, st.markers, st.target_nominals);
     if !(identity.found) { return ProjectRecordDeclWalk { ..st, rest: rest }; }
     let schema: decl.ImportedRecordSchema = decl.ImportedRecordSchema { identity: identity.identity, fields: built_fields.fields };
-    return ProjectRecordDeclWalk { rest: rest, source_index: st.source_index, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedRecordList.IRCons { head: schema, tail: st.acc } };
+    return ProjectRecordDeclWalk { rest: rest, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedRecordList.IRCons { head: schema, tail: st.acc } };
 }
-fn project_record_fields<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectRecordFields) {
-    iterate i up_to 1024 carrying st: ProjectRecordFieldWalk = ProjectRecordFieldWalk { rest: fields, source_index: source_index, index: 0, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedRecordFieldList.IRFNil, ok: true } {
-        next st = project_record_field_step<M, N>(sources, flat_pages, st);
+fn project_record_fields<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectRecordFields) {
+    iterate i up_to 1024 carrying st: ProjectRecordFieldWalk = ProjectRecordFieldWalk { rest: fields, index: 0, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedRecordFieldList.IRFNil, ok: true } {
+        next st = project_record_field_step<N>(pages, stride, total, st);
     }
     let ordered: decl.ImportedRecordFieldList = reverse_project_record_fields(st.acc);
     return ProjectRecordFields { fields: ordered, ok: st.ok };
 }
-fn project_record_field_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectRecordFieldWalk) -> (result: ProjectRecordFieldWalk) {
+fn project_record_field_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectRecordFieldWalk) -> (result: ProjectRecordFieldWalk) {
     return match st.rest {
         decl.FieldList.FNil => st,
-        decl.FieldList.FCons { head: field, tail: rest } => project_record_field_cons<M, N>(sources, flat_pages, st, field, rest)
+        decl.FieldList.FCons { head: field, tail: rest } => project_record_field_cons<N>(pages, stride, total, st, field, rest)
     };
 }
-fn project_record_field_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectRecordFieldWalk, field: decl.Field, rest: decl.FieldList) -> (result: ProjectRecordFieldWalk) {
-    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.source_index);
-    let stride: u64 = module_stride(sources, st.source_index);
-    let total: u64 = module_total(sources, st.source_index);
+fn project_record_field_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectRecordFieldWalk, field: decl.Field, rest: decl.FieldList) -> (result: ProjectRecordFieldWalk) {
     let resolved: decl.TyRes = decl.resolve_type<1024, N>(pages, stride, total, field.type_kind, field.type_start, field.type_end, st.records, st.enums, st.target_nominals);
-    let transported: TypeTransport = transport_type<M, N>(sources, flat_pages, st.source_index, st.source_index, resolved.ty, st.target_nominals, st.markers);
+    let transported: TypeTransport = transport_type_in_module<1024, N>(pages, stride, total, resolved.ty, st.target_nominals, st.markers);
     let valid: bool = resolved.ok && transported.ok;
     let item: decl.ImportedRecordField = decl.ImportedRecordField { name: decl.signature_name_key<1024, N>(pages, stride, total, field.name_start, field.name_end), index: st.index, ty: transported.ty, type_valid: valid };
-    return ProjectRecordFieldWalk { rest: rest, source_index: st.source_index, index: st.index + 1, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedRecordFieldList.IRFCons { head: item, tail: st.acc }, ok: st.ok && valid };
+    return ProjectRecordFieldWalk { rest: rest, index: st.index + 1, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedRecordFieldList.IRFCons { head: item, tail: st.acc }, ok: st.ok && valid };
 }
 fn reverse_project_record_fields(fields: decl.ImportedRecordFieldList) -> (result: decl.ImportedRecordFieldList) {
     iterate i up_to 1024 carrying st: ProjectRecordFieldReverse = ProjectRecordFieldReverse { rest: fields, acc: decl.ImportedRecordFieldList.IRFNil } {
@@ -1329,68 +1374,59 @@ fn project_enum_module_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], 
     let total: u64 = module_total(sources, parsed.source_index);
     let facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.nominal_modules, parsed.source_index);
     let target_nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, stride, total, st.markers, facts.facts.resolved);
-    let schemas: decl.ImportedEnumList = project_enum_decls<M, N>(sources, flat_pages, parsed.source_index, parsed.unit.enums, parsed.unit.records, parsed.unit.enums, st.markers, target_nominals, st.acc);
+    let schemas: decl.ImportedEnumList = project_enum_decls<N>(pages, stride, total, parsed.unit.enums, parsed.unit.records, parsed.unit.enums, st.markers, target_nominals, st.acc);
     return ProjectEnumWalk { rest: rest, nominal_modules: st.nominal_modules, markers: st.markers, acc: schemas };
 }
-fn project_enum_decls<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, enums: decl.EnumList, records: decl.RecordList, unit_enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.ImportedEnumList) -> (result: decl.ImportedEnumList) {
-    iterate i up_to 1024 carrying st: ProjectEnumDeclWalk = ProjectEnumDeclWalk { rest: enums, source_index: source_index, markers: markers, target_nominals: target_nominals, records: records, enums: unit_enums, acc: acc } { next st = project_enum_decl_step<M, N>(sources, flat_pages, st); }
+fn project_enum_decls<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, enums: decl.EnumList, records: decl.RecordList, unit_enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.ImportedEnumList) -> (result: decl.ImportedEnumList) {
+    iterate i up_to 1024 carrying st: ProjectEnumDeclWalk = ProjectEnumDeclWalk { rest: enums, markers: markers, target_nominals: target_nominals, records: records, enums: unit_enums, acc: acc } { next st = project_enum_decl_step<N>(pages, stride, total, st); }
     return st.acc;
 }
-fn project_enum_decl_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectEnumDeclWalk) -> (result: ProjectEnumDeclWalk) {
+fn project_enum_decl_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumDeclWalk) -> (result: ProjectEnumDeclWalk) {
     return match st.rest {
         decl.EnumList.GNil => st,
-        decl.EnumList.GCons { head: enum_decl, tail: rest } => project_enum_decl_cons<M, N>(sources, flat_pages, st, enum_decl, rest)
+        decl.EnumList.GCons { head: enum_decl, tail: rest } => project_enum_decl_cons<N>(pages, stride, total, st, enum_decl, rest)
     };
 }
-fn project_enum_decl_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectEnumDeclWalk, enum_decl: decl.EnumDecl, rest: decl.EnumList) -> (result: ProjectEnumDeclWalk) {
-    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.source_index);
-    let stride: u64 = module_stride(sources, st.source_index);
-    let total: u64 = module_total(sources, st.source_index);
+fn project_enum_decl_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumDeclWalk, enum_decl: decl.EnumDecl, rest: decl.EnumList) -> (result: ProjectEnumDeclWalk) {
     let identity: decl.NominalLookup = decl.nominal_identity_by_name<1024, N>(pages, stride, total, st.target_nominals, enum_decl.name_start, enum_decl.name_end);
-    let built: ProjectEnumVariantBuild = project_enum_variants<M, N>(sources, flat_pages, st.source_index, enum_decl.variants, st.records, st.enums, st.markers, st.target_nominals);
+    let built: ProjectEnumVariantBuild = project_enum_variants<N>(pages, stride, total, enum_decl.variants, st.records, st.enums, st.markers, st.target_nominals);
     if !(identity.found) { return ProjectEnumDeclWalk { ..st, rest: rest }; }
     let schema: decl.ImportedEnumSchema = decl.ImportedEnumSchema { identity: identity.identity, variants: built.variants };
-    return ProjectEnumDeclWalk { rest: rest, source_index: st.source_index, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumList.IECons { head: schema, tail: st.acc } };
+    return ProjectEnumDeclWalk { rest: rest, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumList.IECons { head: schema, tail: st.acc } };
 }
-fn project_enum_variants<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, variants: decl.VariantList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectEnumVariantBuild) {
-    let seed: ProjectEnumVariantWalk = ProjectEnumVariantWalk { rest: variants, source_index: source_index, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedEnumVariantList.IEVNil, ok: true };
-    iterate i up_to 1024 carrying st: ProjectEnumVariantWalk = seed { next st = project_enum_variant_step<M, N>(sources, flat_pages, st); }
+fn project_enum_variants<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, variants: decl.VariantList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectEnumVariantBuild) {
+    let seed: ProjectEnumVariantWalk = ProjectEnumVariantWalk { rest: variants, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedEnumVariantList.IEVNil, ok: true };
+    iterate i up_to 1024 carrying st: ProjectEnumVariantWalk = seed { next st = project_enum_variant_step<N>(pages, stride, total, st); }
     return ProjectEnumVariantBuild { variants: reverse_project_enum_variants(st.acc), ok: st.ok };
 }
-fn project_enum_variant_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectEnumVariantWalk) -> (result: ProjectEnumVariantWalk) {
+fn project_enum_variant_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumVariantWalk) -> (result: ProjectEnumVariantWalk) {
     return match st.rest {
         decl.VariantList.VNil => st,
-        decl.VariantList.VCons { head: variant, tail: rest } => project_enum_variant_cons<M, N>(sources, flat_pages, st, variant, rest)
+        decl.VariantList.VCons { head: variant, tail: rest } => project_enum_variant_cons<N>(pages, stride, total, st, variant, rest)
     };
 }
-fn project_enum_variant_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectEnumVariantWalk, variant: decl.Variant, rest: decl.VariantList) -> (result: ProjectEnumVariantWalk) {
-    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.source_index);
-    let stride: u64 = module_stride(sources, st.source_index);
-    let total: u64 = module_total(sources, st.source_index);
-    let built: ProjectEnumFields = project_enum_fields<M, N>(sources, flat_pages, st.source_index, variant.fields, st.records, st.enums, st.markers, st.target_nominals);
+fn project_enum_variant_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumVariantWalk, variant: decl.Variant, rest: decl.VariantList) -> (result: ProjectEnumVariantWalk) {
+    let built: ProjectEnumFields = project_enum_fields<N>(pages, stride, total, variant.fields, st.records, st.enums, st.markers, st.target_nominals);
     let item: decl.ImportedEnumVariant = decl.ImportedEnumVariant { name: decl.signature_name_key<1024, N>(pages, stride, total, variant.name_start, variant.name_end), fields: built.fields };
-    return ProjectEnumVariantWalk { rest: rest, source_index: st.source_index, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumVariantList.IEVCons { head: item, tail: st.acc }, ok: st.ok && built.ok };
+    return ProjectEnumVariantWalk { rest: rest, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumVariantList.IEVCons { head: item, tail: st.acc }, ok: st.ok && built.ok };
 }
-fn project_enum_fields<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectEnumFields) {
-    let seed: ProjectEnumFieldWalk = ProjectEnumFieldWalk { rest: fields, source_index: source_index, index: 0, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedEnumFieldList.IEFNil, ok: true };
-    iterate i up_to 1024 carrying st: ProjectEnumFieldWalk = seed { next st = project_enum_field_step<M, N>(sources, flat_pages, st); }
+fn project_enum_fields<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectEnumFields) {
+    let seed: ProjectEnumFieldWalk = ProjectEnumFieldWalk { rest: fields, index: 0, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedEnumFieldList.IEFNil, ok: true };
+    iterate i up_to 1024 carrying st: ProjectEnumFieldWalk = seed { next st = project_enum_field_step<N>(pages, stride, total, st); }
     return ProjectEnumFields { fields: reverse_project_enum_fields(st.acc), ok: st.ok };
 }
-fn project_enum_field_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectEnumFieldWalk) -> (result: ProjectEnumFieldWalk) {
+fn project_enum_field_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumFieldWalk) -> (result: ProjectEnumFieldWalk) {
     return match st.rest {
         decl.FieldList.FNil => st,
-        decl.FieldList.FCons { head: field, tail: rest } => project_enum_field_cons<M, N>(sources, flat_pages, st, field, rest)
+        decl.FieldList.FCons { head: field, tail: rest } => project_enum_field_cons<N>(pages, stride, total, st, field, rest)
     };
 }
-fn project_enum_field_cons<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectEnumFieldWalk, field: decl.Field, rest: decl.FieldList) -> (result: ProjectEnumFieldWalk) {
-    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, st.source_index);
-    let stride: u64 = module_stride(sources, st.source_index);
-    let total: u64 = module_total(sources, st.source_index);
+fn project_enum_field_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumFieldWalk, field: decl.Field, rest: decl.FieldList) -> (result: ProjectEnumFieldWalk) {
     let resolved: decl.TyRes = decl.resolve_type<1024, N>(pages, stride, total, field.type_kind, field.type_start, field.type_end, st.records, st.enums, st.target_nominals);
-    let transported: TypeTransport = transport_type<M, N>(sources, flat_pages, st.source_index, st.source_index, resolved.ty, st.target_nominals, st.markers);
+    let transported: TypeTransport = transport_type_in_module<1024, N>(pages, stride, total, resolved.ty, st.target_nominals, st.markers);
     let valid: bool = resolved.ok && transported.ok;
     let item: decl.ImportedEnumField = decl.ImportedEnumField { name: decl.signature_name_key<1024, N>(pages, stride, total, field.name_start, field.name_end), index: st.index, ty: transported.ty, type_valid: valid };
-    return ProjectEnumFieldWalk { rest: rest, source_index: st.source_index, index: st.index + 1, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumFieldList.IEFCons { head: item, tail: st.acc }, ok: st.ok && valid };
+    return ProjectEnumFieldWalk { rest: rest, index: st.index + 1, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumFieldList.IEFCons { head: item, tail: st.acc }, ok: st.ok && valid };
 }
 fn reverse_project_enum_fields(fields: decl.ImportedEnumFieldList) -> (result: decl.ImportedEnumFieldList) {
     iterate i up_to 1024 carrying st: ProjectEnumFieldReverse = ProjectEnumFieldReverse { rest: fields, acc: decl.ImportedEnumFieldList.IEFNil } { next st = reverse_project_enum_field_step(st); }

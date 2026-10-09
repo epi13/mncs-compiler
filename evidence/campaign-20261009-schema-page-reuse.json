@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.schema-page-reuse-campaign-evidence/1",
+  "observed_at": "2026-10-09T07:32:28.810626Z",
+  "identity_ledger": {
+    "delivery_base_revision": "45f84477a2f455cedae645045882f7e5c23bbe9a",
+    "tested_candidate_revision": "45f84477a2f455cedae645045882f7e5c23bbe9a plus candidate working-tree source",
+    "candidate_project_source_sha256": "939e7803121d691cac02b0aab84ffeaeb006e2a5730915033ee8e00612c6d7d9",
+    "baseline_project_source_sha256": "de0f3f1adf2afa350360e8e1e94486d41b416aac8f37a77875cb4163c1b4b3b3",
+    "candidate_loaded_compiler_closure_identity": "0d99d177e977b4122d0683a65ff0013df73685001b70539e738832984523e530",
+    "baseline_loaded_compiler_closure_identity": "79fd17f1939e5261efe7972c29f6be6f8f86cae783028d6ff544c90d0069b9a5",
+    "focused_request_source_identity": "9d9449250680eb14684c64e9a8ca778c4671813414392e58ed01809889b87408",
+    "one_level_sequence_source_identity": "dd4cd880380d93f512d03eca11a581266cb618f0b13fe8d5dd38509bb5f4c68f",
+    "nested_sequence_source_identity": "7dec106c50e612dad7b59f965778bf47b8816dcf6e44d32ecb0bc54272cfb169",
+    "real_flow_target_source_identity": "c4fccde6e45fcca97eed7c28aae23de9861e2602c970db01d5c40fc83b5bd6e6",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "backend_requested": "cranelift",
+    "backend_admitted_for_candidate_requests": "cranelift"
+  },
+  "implementation": {
+    "owner": "src/compiler/project.mncs",
+    "change": "Build each imported record or enum module page slice once and pass it through declaration, field, variant, and same-module type transport walks.",
+    "semantic_scope": "Existing type transport rules retained, including exact sequence lengths, the supported single nested sequence layer, poison propagation, and diagnostic spans.",
+    "probe": "tools/probe_project_schema_page_reuse.py",
+    "probe_scope": "Bounded imported enum and record consumers over the real compiler source context; Stage-0 independently checks each synthetic provider/consumer case."
+  },
+  "matched_cases": {
+    "plain_enum_and_record_controls": {
+      "input_pages": 858,
+      "request_bytes": 19739614,
+      "result": "Both revisions produced valid native proofs and verified SSA; Stage-0 accepted both. Target summaries match exactly.",
+      "baseline": {
+        "native_request_wall_ns": 8556417056,
+        "child_cpu_delta_ns": 8530000000,
+        "peak_rss_bytes": 4916748288,
+        "kernel_rss_high_water_bytes": 4916748288,
+        "peak_fds": 4,
+        "peak_threads": 2
+      },
+      "candidate": {
+        "native_request_wall_ns": 8525452979,
+        "child_cpu_delta_ns": 8510000000,
+        "peak_rss_bytes": 4831084544,
+        "kernel_rss_high_water_bytes": 4922851328,
+        "peak_fds": 4,
+        "peak_threads": 2
+      },
+      "interpretation": "0.36% lower wall time and 0.23% lower CPU are within run noise; candidate kernel RSS high-water was about 6.1 MB higher. No performance gain is established.",
+      "negative_record_field": {
+        "baseline_native_valid": false,
+        "candidate_native_valid": false,
+        "baseline_stage0_valid": false,
+        "candidate_stage0_valid": false,
+        "diagnostic": "MNE162",
+        "native_and_stage0_span": [127, 133]
+      }
+    },
+    "one_level_imported_record_sequence": {
+      "input_pages": 858,
+      "input_source_identity": "dd4cd880380d93f512d03eca11a581266cb618f0b13fe8d5dd38509bb5f4c68f",
+      "request_bytes": 19738038,
+      "baseline": {
+        "native_valid": true,
+        "verified_ssa": true,
+        "stage0_valid": true,
+        "native_request_wall_ns": 8591884215,
+        "child_cpu_delta_ns": 8560000000,
+        "kernel_rss_high_water_bytes": 4910301184,
+        "peak_fds": 4,
+        "peak_threads": 2
+      },
+      "candidate": {
+        "native_valid": true,
+        "verified_ssa": true,
+        "stage0_valid": true,
+        "native_request_wall_ns": 8571103822,
+        "child_cpu_delta_ns": 8540000000,
+        "kernel_rss_high_water_bytes": 4916432896,
+        "peak_fds": 4,
+        "peak_threads": 2
+      },
+      "interpretation": "Semantic result parity holds. Timing difference is not material and candidate RSS high-water was about 6.1 MB higher."
+    },
+    "nested_imported_sequence_gap": {
+      "input_pages": 858,
+      "input_source_identity": "7dec106c50e612dad7b59f965778bf47b8816dcf6e44d32ecb0bc54272cfb169",
+      "baseline_native_valid": false,
+      "candidate_native_valid": false,
+      "baseline_stage0_valid": true,
+      "candidate_stage0_valid": true,
+      "native_proof_error_span": [114, 133],
+      "classification": "Pre-existing native proof gap; not a language rejection and not introduced by this change."
+    },
+    "multi_function_record_resource_control": {
+      "request_bytes": 19742424,
+      "input_source_identity": "UNKNOWN: the captured pre-change probe output omitted it on terminal process failure",
+      "address_space_limit_bytes": 8589934592,
+      "baseline": {
+        "status": "RESOURCE_EXHAUSTED",
+        "child_cpu_delta_ns": 13770000000,
+        "kernel_rss_high_water_bytes": 8445763584,
+        "peak_fds": 4,
+        "peak_threads": 2,
+        "allocator_stderr": "memory allocation of 632 bytes failed"
+      },
+      "candidate": {
+        "status": "RESOURCE_EXHAUSTED",
+        "child_cpu_delta_ns": 14050000000,
+        "kernel_rss_high_water_bytes": 8447057920,
+        "peak_fds": 4,
+        "peak_threads": 2,
+        "allocator_stderr": "memory allocation of 5 bytes failed"
+      },
+      "cgroup_oom_kill_counter": "4 before and after both requests; the cgroup memory limit was unlimited. This does not establish a cgroup OOM kill."
+    }
+  },
+  "flow_target_pressure": {
+    "scope": "Target-last request for the current source, lexer, parser, segment, decl, and flow compiler modules.",
+    "measured_input_pages": 890,
+    "previous_matrix_scope_note": "The retained matrix's 894-page flow-closure observation is a distinct historical evidence scope and remains unchanged.",
+    "page_width": 1024,
+    "step_budget": 8000000,
+    "request_bytes": 20495231,
+    "candidate": {
+      "native_transport_status": "RESOURCE_EXHAUSTED",
+      "native_result_status": "UNKNOWN: no compiler response",
+      "stage0_oracle_status": "UNKNOWN: request did not produce a result",
+      "request_wait_wall_ns": 79091288673,
+      "phase_transport_and_execution_wall_ns": 79510855901,
+      "child_cpu_delta_ns": 46460000000,
+      "child_peak_rss_bytes": 8427511808,
+      "child_peak_fds": 4,
+      "child_peak_threads": 2,
+      "request_encode_ns": 404635218,
+      "request_write_ns": 13290196,
+      "resource_sample_count": 159,
+      "resource_sampling_overhead_ns": 52030438,
+      "address_space_limit_bytes": 8589934592,
+      "compiler_program_source_bytes": 1335346,
+      "cgroup_memory_limit": "max",
+      "cgroup_oom_kill_counter": "4 before and after",
+      "allocator_stderr": "memory allocation of 76 bytes failed",
+      "child_exit_status": -6,
+      "final_process_observation": "UNKNOWN: /proc read returned PermissionError after the request ended; the probe close path separately observed child exit status -6.",
+      "admission_cache": "one artifact-cache hit and zero misses; retained-session admission took 47.966 seconds."
+    },
+    "untouched_main_baseline": {
+      "status": "TIMEOUT",
+      "timeout_stage": "retained_session_admission; the target request did not run",
+      "admission_wall_ns": 120116285801,
+      "child_cpu_delta_ns": 119380000000,
+      "child_peak_rss_bytes": 1709899776,
+      "peak_fds": 5,
+      "peak_threads": 1,
+      "address_space_limit_bytes": 8589934592,
+      "compiler_program_source_bytes": 1332412,
+      "stage0_parse_elapsed_ms": 1206,
+      "stage0_elaboration_elapsed_ms": 107232,
+      "cgroup_oom_kill_counter": "4 before and after",
+      "stage0_oracle_status": "UNKNOWN: the target request did not run"
+    },
+    "comparability": "The baseline cold artifact cache timed out during admission; the candidate had a warm artifact-cache hit and reached MNCS execution. These are different cache states and cannot establish an end-to-end speedup or a baseline/candidate semantic difference.",
+    "candidate_program_source_growth_bytes": 2934,
+    "classification_limit": "The child exited -6 after allocator failure under the explicitly imposed 8 GiB RLIMIT_AS. The observed cgroup had no memory.max limit and no OOM-kill counter increment. The final child proc sample remains UNKNOWN; do not classify this as a cgroup OOM or semantic rejection."
+  },
+  "succession": {
+    "new_module_stage_proof": false,
+    "stage1_executable_proven": false,
+    "stage2_succession_proven": false,
+    "matrix_updated": false,
+    "matrix_identity_note": "The matrix's compiler_head and branch fields remain historical. This record distinguishes tested baseline, candidate source identity, and eventual delivered revision without rewriting those facts."
+  },
+  "raw_local_observations": [
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+      "sha256": "6d8a452f9fac2eff78994b80228cc8ff597932f86afa8aaf4016f112d4980306"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791530807345533382.jsonl",
+      "sha256": "6e7626c94489e1e327fe54865d6bb0fce9a522262fe44541f46ce16210d84083"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-baseline-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+      "sha256": "f853a307e970c790e34e1990577a38235a7a5d3de92736a6a8c3026b916b2c3d"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-baseline-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791531028692694678.jsonl",
+      "sha256": "af9fae7ccb70982654616167601450f0399fe5ecf87523670cefaa1a3a956a23"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-baseline-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791531028692694678.log",
+      "sha256": "579176795703b394113ac4a14888ec6ed093fb41eb4e1e54eda70b24ca46d793"
+    }
+  ]
+}
