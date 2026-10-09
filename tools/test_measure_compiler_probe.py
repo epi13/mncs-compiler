@@ -81,6 +81,21 @@ def test_nested_probe_timing_lines_are_available():
     assert lines == ["mncs-timing stage=ssa elapsed_ms=17"]
 
 
+def test_explicit_stage0_oracle_skip_is_forwarded_and_recordable():
+    env = {}
+    assert measurement._configure_stage0_oracle_skip(env, requested=True) is True
+    assert env["MNCS_PROBE_SKIP_STAGE0_ORACLE"] == "1"
+
+    inherited = {"MNCS_PROBE_SKIP_STAGE0_ORACLE": "1"}
+    assert measurement._configure_stage0_oracle_skip(inherited, requested=False) is True
+
+    oracle_required = {"MNCS_PROBE_SKIP_STAGE0_ORACLE": "1"}
+    assert measurement._configure_stage0_oracle_skip(
+        oracle_required, requested=False, oracle_required=True
+    ) is False
+    assert "MNCS_PROBE_SKIP_STAGE0_ORACLE" not in oracle_required
+
+
 def test_ssa_and_artifact_profile_events_are_structured():
     runtime = {
         "status": "BudgetExhausted",
@@ -467,6 +482,7 @@ if __name__ == "__main__":
     tests = [
         test_body_profiles_are_read_from_nested_probe_stderr,
         test_nested_probe_timing_lines_are_available,
+        test_explicit_stage0_oracle_skip_is_forwarded_and_recordable,
         test_ssa_and_artifact_profile_events_are_structured,
         test_inner_timeout_is_not_runner_success,
         test_outer_runner_statuses_are_preserved,
