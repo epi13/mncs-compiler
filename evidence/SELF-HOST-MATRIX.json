@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-09T18:08:03Z",
+    "updated_at": "2026-10-09T19:27:20Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -1257,7 +1257,55 @@
       "scope": "Matched warm target-flow execution and one cold diagnostic. Artifact identity passes reduced from three to one; compiler semantic result remains UNKNOWN at the unchanged 8M-step cap. No compiler module stage or Stage-1/2 claim is changed.",
       "delivered_implementation_commit": "a09768b",
       "delivered_at": "2026-10-09T18:08:03Z"
+    },
+    "lexer_window_campaign_20261009": {
+      "candidate_base_revision": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+      "tested_candidate_branch": "campaign/lexer-batched-window-20261009",
+      "tested_candidate_git_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+      "tested_candidate_worktree_dirty": true,
+      "tested_compiler_source_identity": {
+        "kind": "SHA-256 of exact source-file ids and bytes in order",
+        "selected_modules": [
+          "source",
+          "lexer"
+        ],
+        "module_source_sha256": {
+          "lexer": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+          "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+        },
+        "sha256": "b09dd11dd4d47a4cfec7fc544aea974bb68a3a484e75e76d7c9d3c075920345a"
+      },
+      "implementation_commit": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+      "delivered_implementation_commit": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+      "entry_delivered_main_revision": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+      "delivered_main_revision": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+      "delivery_role": "Batched global lexer scans with a four-byte paged-source window; exact lexical differential and operation cost evidence only. Does not establish whole-module proofs, executable artifacts, Stage-1, or Stage-2.",
+      "evidence_artifact": "evidence/campaign-20261009-lexer-window.json",
+      "evidence_file_sha256": "14a54d736645c8423c5f6238d95e20580ed2a8ded2b9ad3a3cf399866fd571e5",
+      "observed_at": "2026-10-09T19:27:20Z",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "matched_baseline_identity": {
+        "git_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+        "source_content_sha256": {
+          "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+          "lexer": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c"
+        },
+        "input_sha256": "be861084ce3b64fbcca5f8c8d83164c77b1e8df21944adefa431ad20261f0e26",
+        "probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c"
+      },
+      "primary_result": {
+        "status": "SUCCESS",
+        "operation": "mncs.compiler.lexer.v1::lex_tokens_from",
+        "semantic_result": "exact Stage-0 token/span/EOF parity",
+        "reported_steps_baseline": 2263618,
+        "reported_steps_candidate": 1945790,
+        "child_cpu_baseline_ns": 43460000000,
+        "child_cpu_candidate_ns": 31060000000,
+        "peak_rss_baseline_bytes": 92999680,
+        "peak_rss_candidate_bytes": 68366336,
+        "flow_integration_status": "INTERRUPTED_NO_SEMANTIC_RESULT"
+      }
     }
   },
-  "evidence_updated_at": "2026-10-09T18:08:03Z"
+  "evidence_updated_at": "2026-10-09T19:27:20Z"
 }

@@ -1,0 +1,271 @@
+{
+  "bounded_flow_integration_attempt": {
+    "child_pid": 4134305,
+    "classification_note": "No semantic rejection or OOM conclusion is supported.",
+    "execution_status": "INTERRUPTED",
+    "fixture": "fallthrough_join (first case in tools/test_flow.py)",
+    "last_observed_cpu_percent": 99.2,
+    "last_observed_elapsed_seconds": 119,
+    "last_observed_rss_kib": 1207440,
+    "returned_steps": null,
+    "semantic_result": "UNKNOWN",
+    "step_budget": 8000000,
+    "target": "mncs.compiler.flow.v1::lower_unit",
+    "termination_signal": "SIGTERM sent by campaign to enforce a finite budget after no result"
+  },
+  "campaign": "MNCS compiler execution efficiency, 2026-10-09",
+  "compiler_succession": {
+    "changed_source_modules": [
+      "source",
+      "lexer"
+    ],
+    "current_source_full_module_proof": "UNKNOWN_NOT_REESTABLISHED_FOR_THE_NEW_SOURCE_HASHES; earlier proof identities are preserved as historical evidence.",
+    "executable_artifact": "not proven",
+    "matrix": "evidence/SELF-HOST-MATRIX.json",
+    "new_stage_claim": "none",
+    "prior_full_parse_check_proof_cfg_verified_ssa_modules": [
+      "segment",
+      "parser",
+      "source",
+      "lexer",
+      "kernel"
+    ],
+    "prior_whole_module_parse_and_signature_only_modules": [
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "stage1": "not proven",
+    "stage2": "not proven"
+  },
+  "environment_observation": {
+    "authority_evaluation": {
+      "merge_mncs_compiler": "allow by live repository claim",
+      "publish_mncs_compiler": "allow by live repository claim",
+      "write_mncs_compiler": "allow by live repository claim"
+    },
+    "compiler_claim_id": "clm_5871ad9917e5210d",
+    "compiler_selection_drift": {
+      "observed_main_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+      "selected_head": "4d957194d967952fd26411807f3862fa1cacb83c"
+    },
+    "doctor_reason": "selected producer unavailable or stale: source-revision",
+    "doctor_repository_dry_run": "refused with remediation-adoption-required because the compiler main checkout is dirty and no adopted-work record exists; the three protected untracked compiler evidence files were preserved.",
+    "forge": "unavailable because resident Language Service input is unavailable",
+    "language_service": "stale-toolchain; selected binding differs from measured toolchain; resident workspace is owned by another session",
+    "live_health_observed_at_utc": "2026-10-09T19:22:05Z",
+    "readiness": "BLOCKED",
+    "session_id": "ses_d2537acde8b8a875",
+    "store_persistence": "store"
+  },
+  "implementation_scope": {
+    "change": "Add a bounded four-byte logical-source window with page-edge fallback; process up to two scanner transitions per MNCS call while keeping four 1024-call passes and the prior 8192-transition cap.",
+    "files": [
+      "src/compiler/source.mncs",
+      "src/compiler/lexer.mncs"
+    ],
+    "no_language_or_backend_semantics_change": true,
+    "operation": "mncs.compiler.lexer.v1::lex_tokens_from",
+    "owner": "mncs-compiler"
+  },
+  "matched_benchmark": {
+    "baseline": {
+      "compiler_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+      "hot_functions": {
+        "byte_at_global": {
+          "calls": 32071,
+          "exclusive_ns": 16686558053,
+          "inclusive_ns": 16686558053,
+          "steps": 673491
+        },
+        "scan_step_global": {
+          "calls": 31187,
+          "exclusive_ns": 20048299559,
+          "inclusive_ns": 37474803865,
+          "steps": 810862
+        }
+      },
+      "measured": {
+        "cpu_ns": 43460000000,
+        "fd_count": 4,
+        "rss_bytes": 92999680,
+        "steps": 2263618,
+        "wall_ns": 43663129066
+      },
+      "runtime_profile_elapsed_ns": 43395794987,
+      "source_content_sha256": {
+        "lexer": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c",
+        "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89"
+      }
+    },
+    "candidate": {
+      "child_identity": {
+        "pid": 4133890,
+        "start_ticks": 49806932
+      },
+      "committed_source_snapshot": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+      "compiler_commit": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+      "execution_git_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+      "execution_worktree_dirty": true,
+      "hot_functions": {
+        "byte_window4_global": {
+          "calls": 15654,
+          "exclusive_ns": 11318343470,
+          "inclusive_ns": 11507674082,
+          "steps": 766738
+        },
+        "scan_chunk_global": {
+          "calls": 15654,
+          "exclusive_ns": 13002673962,
+          "inclusive_ns": 25749301720,
+          "steps": 593633
+        }
+      },
+      "measured": {
+        "cpu_ns": 31060000000,
+        "fd_count": 4,
+        "rss_bytes": 68366336,
+        "steps": 1945790,
+        "wall_ns": 31170633058
+      },
+      "runtime_profile_elapsed_ns": 30877675481,
+      "runtime_profile_program_fingerprint": "b59c790e1fe9dceb614897d3fb644e0ca696abfa83c20e69b2ebd1437fb32837",
+      "source_content_sha256": {
+        "lexer": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+        "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+      }
+    },
+    "case": "existing 31,188-byte page-crossing keyword and near-miss corpus",
+    "execution_mode": "MNCS reference-interpreter path; reported backend is null. This is an executed result with steps, not admission-only and not canonical VM evidence.",
+    "generic_specialization": {
+      "function": "lex_tokens_from",
+      "module": "mncs.compiler.lexer.v1",
+      "type_arguments": [
+        {
+          "kind": "nat",
+          "value": 64
+        },
+        {
+          "kind": "nat",
+          "value": 1024
+        }
+      ]
+    },
+    "input_sha256": "be861084ce3b64fbcca5f8c8d83164c77b1e8df21944adefa431ad20261f0e26",
+    "keywords": 30,
+    "near_misses": 60,
+    "page_boundary_starts": 30,
+    "page_width": 1024,
+    "relative_change_percent_candidate_vs_baseline": {
+      "cpu_ns": -28.53,
+      "fd_count": 0.0,
+      "rss_bytes": -26.49,
+      "steps": -14.04,
+      "wall_ns": -28.61
+    },
+    "resource_units": {
+      "cpu": "child process CPU seconds sampled from /proc",
+      "fd_count": "peak child FD count",
+      "rss": "child process peak RSS bytes",
+      "steps": "executor-reported MNCS steps",
+      "wall": "seconds for target request"
+    },
+    "result": "SUCCESS",
+    "scope_notes": [
+      "Same probe binary, source input bytes, generic arguments, page width, execution mode and step budget.",
+      "Process metrics are correlated to the actual probe PID and start-tick identity.",
+      "The recorded session cgroup is not child-specific and was not used to infer OOM or child memory limits."
+    ],
+    "semantic_parity": {
+      "kinds_spans_diagnostics_and_eof_match": true,
+      "native_token_count": 180,
+      "stage0_token_count": 180
+    },
+    "step_budget": 4000000
+  },
+  "matrix_identity_handling": {
+    "delivered_implementation_commit": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+    "delivered_main_code_revision": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+    "historical_field_role_is_preserved": true,
+    "historical_top_level_compiler_head": "44fe937dca0cecaf5cc562a4b3e18127e6399d1c",
+    "matrix_ledger_entry": "identity_ledger.lexer_window_campaign_20261009",
+    "tested_candidate_base_git_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+    "tested_candidate_worktree_dirty": true,
+    "tested_source_content_identity": {
+      "lexer": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+      "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+    }
+  },
+  "page_edge_mode_differential": {
+    "backend": null,
+    "boundary_cases": [
+      "word at offset 1023",
+      "number at offset 2046",
+      "block opener at offset 3071 with nesting",
+      "block closer at offset 4095",
+      "line comment at offset 5118 with newline after page edge"
+    ],
+    "eof_and_global_spans_match": true,
+    "native_matches_stage0": true,
+    "native_steps": 340128,
+    "page_size": 1024,
+    "source_bytes": 5250,
+    "source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+    "stage0_token_count": 11,
+    "status": "passed",
+    "tested_candidate_git_head": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+    "token_count": 11
+  },
+  "recorded_at_utc": "2026-10-09T19:27:20Z",
+  "repository": {
+    "benchmark_worktree_dirty_at_execution": true,
+    "committed_source_snapshot": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+    "delivered_main_revision": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+    "delivery_role": "The implementation commit is the tested source snapshot; matrix historical identities remain unchanged.",
+    "delivery_status": "Implementation commit b2d6698 is present on main by fast-forward; this evidence record and its matrix ledger entry are delivered together.",
+    "entry_delivered_main_revision": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+    "implementation_commit": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4",
+    "name": "mncs-compiler",
+    "source_content_sha256": {
+      "lexer": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+      "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+    },
+    "test_source_sha256": {
+      "tools/test_global_scan_modes.py": "6bbe6f1a0c35065c0c0bc69dbffd30ce3fc34db41ecb4da14ec4647af5c2b76d"
+    },
+    "tested_candidate_base_head": "b188398f74398de9a8d6a8ba37b32c525bf637b8",
+    "tested_candidate_branch": "campaign/lexer-batched-window-20261009"
+  },
+  "schema": "mncs.compiler.lexer-window-campaign-evidence/1",
+  "stage0": {
+    "canonical_vm_execution": "not exercised",
+    "lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "oracle": "Stage-0 lexical facts from the same probe process",
+    "probe_backend_override": "reference_interpreter",
+    "probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c",
+    "reported_backend": null
+  },
+  "verification": [
+    {
+      "result": "180 token kinds, diagnostics, spans and EOF match Stage-0 on the matched benchmark.",
+      "status": "SUCCESS",
+      "test": "tools/test_global_keyword_dispatch.py"
+    },
+    {
+      "result": "11 tokens match Stage-0 across word, number, nested block comment, block delimiter and line comment page edges.",
+      "status": "SUCCESS",
+      "test": "tools/test_global_scan_modes.py",
+      "tested_candidate_git_head": "b2d6698c488a57c1ad2e9b4caabf2540bb698cf4"
+    },
+    {
+      "status": "SUCCESS",
+      "test": "git diff --check"
+    },
+    {
+      "result": "No response after 119 seconds; see bounded_flow_integration_attempt.",
+      "status": "INTERRUPTED",
+      "test": "tools/test_flow.py"
+    }
+  ]
+}
