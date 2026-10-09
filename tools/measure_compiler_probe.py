@@ -256,15 +256,37 @@ def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
 def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, object]:
     rows = list(records.values())
     probe_rows = [row for row in rows if "mncs-compiler-stage0-probe" in str(row.get("cmdline", ""))]
-    io_rows = [row.get("last_io") for row in probe_rows]
-    io_fields = {"rchar": "probe_io_rchar_bytes", "read_bytes": "probe_io_read_bytes"}
+
+    def last_io_value(row: dict[str, object], field: str) -> int | None:
+        latest = row.get("last_io")
+        if isinstance(latest, dict) and field in latest:
+            return int(latest[field])
+        samples = row.get("resource_samples")
+        if isinstance(samples, list):
+            for sample in reversed(samples):
+                if not isinstance(sample, dict):
+                    continue
+                io_values = sample.get("io")
+                if isinstance(io_values, dict) and field in io_values:
+                    return int(io_values[field])
+        return None
+
+    io_fields = {
+        "rchar": "probe_io_rchar_bytes",
+        "wchar": "probe_io_wchar_bytes",
+        "read_bytes": "probe_io_read_bytes",
+        "write_bytes": "probe_io_write_bytes",
+        "cancelled_write_bytes": "probe_io_cancelled_write_bytes",
+    }
+
+    def summarize_io_field(field: str) -> int | str:
+        values = [last_io_value(row, field) for row in probe_rows]
+        if not probe_rows or any(value is None for value in values):
+            return "UNKNOWN"
+        return sum(int(value) for value in values if value is not None)
+
     io_summary = {
-        output: (
-            sum(int(values[key]) for values in io_rows if isinstance(values, dict) and key in values)
-            if io_rows and all(isinstance(values, dict) and key in values for values in io_rows)
-            else "UNKNOWN"
-        )
-        for key, output in io_fields.items()
+        output: summarize_io_field(key) for key, output in io_fields.items()
     }
     probe_samples = [
         {
@@ -479,6 +501,8 @@ def _semantic_result(report: dict[str, object] | None) -> str:
         return "UNKNOWN_NO_COMPILER_RESULT"
     if report.get("kind") == "compiler-program-cache-preparation":
         return "NOT_RUN_CACHE_PREPARATION"
+    if report.get("kind") == "compiler-backend-admission-only":
+        return "NOT_RUN_BACKEND_ADMISSION_ONLY"
     if report.get("kind") == "stage0-project-oracle-frontier":
         return "UNKNOWN_NO_NATIVE_COMPILER_RESULT"
     status = report.get("native_request_status")
@@ -522,6 +546,28 @@ def _operation_outcome(report: dict[str, object] | None) -> str:
             if cache_written or cache_reused:
                 return "ADMISSION_ONLY_SUCCESS"
         return "UNKNOWN_CACHE_PREPARATION"
+    if report.get("kind") == "compiler-backend-admission-only":
+        trace = report.get("probe_internal_trace")
+        events = trace.get("events") if isinstance(trace, dict) else None
+        if isinstance(events, list):
+            backend_admitted = any(
+                isinstance(event, dict)
+                and event.get("event") == "phase"
+                and event.get("phase") == "retained_session_admission"
+                and event.get("admitted") is True
+                for event in events
+            )
+            artifact_cached = any(
+                isinstance(event, dict)
+                and event.get("event") == "phase"
+                and event.get("phase") == "artifact_cache_gzip_write"
+                and event.get("cache_file_suffix") == ".json.gz"
+                and event.get("success") is True
+                for event in events
+            )
+            if backend_admitted and artifact_cached:
+                return "ADMISSION_ONLY_SUCCESS"
+        return "UNKNOWN_BACKEND_ADMISSION"
     if report.get("kind") == "stage0-project-oracle-frontier":
         oracle = report.get("stage0_oracle")
         if isinstance(oracle, dict) and oracle.get("status") in {"valid", "invalid"}:
@@ -613,8 +659,16 @@ def _body_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[s
     return _prefixed_json_profiles(stderr, "mncs-body-runtime-profile ")
 
 
+def _body_runtime_progress_events(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
+    return _prefixed_json_profiles(stderr, "mncs-body-runtime-progress ")
+
+
 def _ssa_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
     return _prefixed_json_profiles(stderr, "mncs-runtime-profile ")
+
+
+def _ssa_runtime_progress_events(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
+    return _prefixed_json_profiles(stderr, "mncs-ssa-runtime-progress ")
 
 
 def _named_profile_phases(stderr: str, prefix: str) -> list[dict[str, object]]:
@@ -692,6 +746,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         command.append("--target-last")
     if args.prepare_program_cache_only:
         command.append("--prepare-program-cache-only")
+    if args.admission_only:
+        command.append("--admission-only")
     if args.oracle_only:
         command.append("--oracle-only")
     if args.signature_cache_fixture:
@@ -771,6 +827,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     execution_mode = (
         "frontend_cache_preparation" if args.prepare_program_cache_only
+        else "backend_admission_only" if args.admission_only
         else "reference_interpreter" if args.signature_cache_fixture
         else args.backend
     )
@@ -790,7 +847,19 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         )
     ]
     runtime_profiles, runtime_profile_parse_errors = _body_runtime_profiles(profile_stderr)
+    runtime_progress_events, runtime_progress_parse_errors = (
+        _body_runtime_progress_events(profile_stderr)
+    )
+    runtime_profile_parse_errors.extend(
+        f"mncs-body-runtime-progress {error}" for error in runtime_progress_parse_errors
+    )
     ssa_runtime_profiles, ssa_profile_parse_errors = _ssa_runtime_profiles(profile_stderr)
+    ssa_progress_events, ssa_progress_parse_errors = _ssa_runtime_progress_events(
+        profile_stderr
+    )
+    runtime_profile_parse_errors.extend(
+        f"mncs-ssa-runtime-progress {error}" for error in ssa_progress_parse_errors
+    )
     runtime_profile_parse_errors.extend(
         f"mncs-runtime-profile {error}" for error in ssa_profile_parse_errors
     )
@@ -820,6 +889,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "probe_process_backend": probe_start.get("backend"),
         "modules": args.modules,
         "target_last": args.target_last,
+        "admission_only": args.admission_only,
         "oracle_only": args.oracle_only,
         "signature_cache_fixture": args.signature_cache_fixture,
         "step_budget": args.step_budget if args.step_budget is not None else 8_000_000,
@@ -872,9 +942,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         },
         "compiler_timing_events": compiler_timing_events,
         "body_runtime_profiles": runtime_profiles,
+        "body_runtime_progress_events": runtime_progress_events,
         "body_runtime_profile_module_totals": runtime_profile_modules,
         "body_runtime_profile_hot_functions": runtime_profile_hot_functions,
         "ssa_runtime_profiles": ssa_runtime_profiles,
+        "ssa_runtime_progress_events": ssa_progress_events,
         "ssa_profile_phase_events": ssa_profile_phase_events,
         "artifact_profile_phase_events": artifact_profile_phase_events,
         "runtime_profile_parse_errors": runtime_profile_parse_errors,
@@ -891,6 +963,10 @@ def main() -> int:
     parser.add_argument("--backend", choices=["research-bytecode", "cranelift", "canonical-vm", "reference_interpreter"], default="research-bytecode")
     parser.add_argument("--modules", nargs="+", default=["source", "lexer", "parser", "segment", "decl", "flow"])
     parser.add_argument("--target-last", action="store_true")
+    parser.add_argument(
+        "--admission-only", action="store_true",
+        help="compile and admit the selected backend session, then skip target execution",
+    )
     parser.add_argument("--oracle-only", action="store_true", help="run and measure only the Stage-0 project oracle")
     parser.add_argument("--signature-cache-fixture", action="store_true", help="run a reduced two-call imported-signature cache differential through the reference interpreter")
     parser.add_argument("--prepare-program-cache-only", action="store_true", help="elaborate and persist the backend-independent Program cache without admitting a backend or executing the compiler target; requires --backend reference_interpreter")
@@ -912,6 +988,12 @@ def main() -> int:
         parser.error("--prepare-program-cache-only requires --backend reference_interpreter")
     if args.prepare_program_cache_only and args.signature_cache_fixture:
         parser.error("--prepare-program-cache-only cannot be combined with --signature-cache-fixture")
+    if args.admission_only and not args.target_last:
+        parser.error("--admission-only requires --target-last")
+    if args.admission_only and (
+        args.prepare_program_cache_only or args.oracle_only or args.signature_cache_fixture
+    ):
+        parser.error("--admission-only cannot be combined with cache preparation, oracle-only, or signature-cache fixture modes")
     print(json.dumps(run(args), indent=2))
     return 0
 

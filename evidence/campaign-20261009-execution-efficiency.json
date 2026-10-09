@@ -1,0 +1,146 @@
+{
+  "schema_version": "mncs.compiler.execution-efficiency/1",
+  "observed_at": "2026-10-09T17:32:41Z",
+  "scope": {
+    "campaign_entry_main_revision": "6d73c7a383193974618fabcbe3baa9cf3fc2ec60",
+    "delivery_branch": "campaign/streaming-probe-cache-20261009",
+    "tested_probe_git_head": "76ccb18af4e1da9a849f421960ecb9634ca2409d",
+    "tested_probe_worktree": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009",
+    "tested_compiler_source_identity": {
+      "kind": "probe-reported SHA-256 of ordered selected compiler module ids and source bytes",
+      "sha256": "eb24218ed9aae5a43c0e2bf5d664c1c07d316efcc1fc2373ebd91f3216c3af85",
+      "selected_modules": ["source", "lexer", "parser", "segment", "decl", "flow"],
+      "module_source_sha256": {
+        "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+        "lexer": "40ca998e7b4ae0b5d274b833a1adc9034c011c797fe035494a3bd608c3f686d8",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "fd066efabad38d73d2f6c5f8f96988d95ac34aa65087dbfaa797afee705aed33",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "candidate_probe_binary_sha256": "06e7e89a79f7014de69f6b157b651d407c70231258ff367fe6dcd0d3ee685251",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-500c5220d15488044e69396e42a6b58466580f44e4d00d083c4d066746c43820"
+    },
+    "input": {
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "target_module": "flow",
+      "probe_report_page_count_at_stride_1024": 893,
+      "historical_matrix_page_count_at_width_1024": 894,
+      "page_count_note": "These are separately observed counts; the historical matrix value was preserved. The probe used six selected modules and recorded 893 pages."
+    }
+  },
+  "probe_cache_streaming": {
+    "scope": "V15 backend admission-only; target execution and Stage-0 oracle were not run.",
+    "unbuffered_stream_report": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-v15-streamed-cache-write-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "5d4be99cb2987b5c529047297be7a485060ed6f419a15334e2f7a2c798f39286",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "wall_seconds": 143.151,
+      "child_cpu_seconds": 132.86,
+      "child_peak_rss_kib": 2435624,
+      "child_max_fds": 5,
+      "cache_writer_phase_seconds": 18.502593365,
+      "serialized_bytes": 976665464,
+      "compressed_artifact_bytes": 42171298
+    },
+    "buffered_stream_report": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-v15-streamed-cache-buffered-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "a913310d6e6fcee8d75a6193178bf4970717b7d00baa758a87c1a782f2e3888b",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "wall_seconds": 136.126,
+      "child_cpu_seconds": 125.43,
+      "child_peak_rss_kib": 2435752,
+      "child_max_fds": 5,
+      "cache_writer_phase_seconds": 10.335278868,
+      "serialized_bytes": 976665464,
+      "compressed_artifact_bytes": 42171298,
+      "child_write_bytes": 42315776,
+      "child_cancelled_write_bytes": 0
+    },
+    "interpretation": "A 64 KiB buffered writer preserved the compressed artifact identity and reduced the measured cache-write phase from 18.50 s to 10.34 s (44.1%) in matched admission-only runs. The buffered run wrote 42,315,776 bytes with no cancelled writes. This proves backend admission and cache publication only; it is not compiler semantic evidence."
+  },
+  "real_flow_target": {
+    "baseline": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-inline-lexer-language-reuse-on-default-8m-profile-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "249d21a1888cb8e20240d26d766f67035388b12d8db21091b7a39deeb436bf99",
+      "operation_classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 37.603,
+      "child_cpu_seconds": 35.56,
+      "child_peak_rss_kib": 3130932,
+      "child_max_fds": 5,
+      "cgroup_oom_kill_delta": 0,
+      "step_budget": 8000000,
+      "steps": 8000000,
+      "frames": 329600,
+      "instructions": 5782159,
+      "ssa_profile_seconds": 6.778766856,
+      "frame_setup_seconds": 4.526885719,
+      "input_arguments": 1532559,
+      "reused_validated_arguments": 997396,
+      "input_validation_seconds": 4.212456586,
+      "result_sha256": "6bf903e12e2255093d3c7039e642bc6c1e448f9d6a28d1942f3798ae8f787e6a"
+    },
+    "candidate_cold_admission_and_target": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-typed-output-provenance-default-8m-profile-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "f30e2706b0a324406fc188ff9589543ef97e91efa0280aa16f5e05b176ac5dae",
+      "operation_classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 284.765,
+      "child_cpu_seconds": 271.29,
+      "child_peak_rss_kib": 3098164,
+      "child_max_fds": 5,
+      "cgroup_oom_kill_delta": 0,
+      "step_budget": 8000000,
+      "steps": 8000000,
+      "frames": 329600,
+      "instructions": 5782159,
+      "ssa_profile_seconds": 2.432025714,
+      "frame_setup_seconds": 0.250989205,
+      "input_arguments": 1532559,
+      "reused_validated_arguments": 1532556,
+      "input_validation_seconds": 0.004291446,
+      "result_sha256": "6bf903e12e2255093d3c7039e642bc6c1e448f9d6a28d1942f3798ae8f787e6a",
+      "comparability_note": "Cold source elaboration, backend compilation, cache encoding and retained-session admission were measured. This run overlapped the Store scrub and is not used as a matched wall-time comparison."
+    },
+    "candidate_warm_cache_recheck": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-typed-output-provenance-default-8m-cache-hit-recheck-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "4c8d14804c49b96d66df073e074bcc4d62de79597d3c92110e5618c3f506a714",
+      "operation_classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 33.342,
+      "child_cpu_seconds": 31.16,
+      "child_peak_rss_kib": 3130788,
+      "child_max_fds": 5,
+      "cgroup_oom_kill_delta": 0,
+      "step_budget": 8000000,
+      "steps": 8000000,
+      "frames": 329600,
+      "instructions": 5782159,
+      "ssa_profile_seconds": 2.388825660,
+      "frame_setup_seconds": 0.246249817,
+      "input_arguments": 1532559,
+      "reused_validated_arguments": 1532556,
+      "input_validation_seconds": 0.004148956,
+      "result_sha256": "6bf903e12e2255093d3c7039e642bc6c1e448f9d6a28d1942f3798ae8f787e6a"
+    },
+    "comparison": {
+      "matched_warm_runner_wall_seconds_baseline_to_candidate": [37.603, 33.342],
+      "matched_child_cpu_seconds_baseline_to_candidate": [35.56, 31.16],
+      "ssa_profile_time_reduction_percent": 64.76,
+      "frame_setup_time_reduction_percent": 94.56,
+      "input_validation_time_reduction_percent": 99.90,
+      "semantic_status_and_result_hash_unchanged": true,
+      "limitation": "The unchanged 8,000,000-step budget is exhausted. The identical report hash is an incomplete execution report digest, not a successful compiler output. Stage-0 oracle and native flow module parse/check/proof/CFG/SSA result were not established by this probe."
+    }
+  },
+  "remaining_profile_frontier": {
+    "last_progress_function_at_step_cap": "mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+    "next_action": "Profile semantic work within this function and the remaining CP-0011 recursion pressure; do not raise the 8M budget without measured need."
+  },
+  "delivery": {
+    "implementation_commit": null,
+    "delivery_role": "The tested candidate source digest and probe Git head are independent of the delivered compiler main revision.",
+    "protected_untracked_evidence_preserved": true
+  }
+}

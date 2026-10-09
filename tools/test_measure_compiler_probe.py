@@ -52,6 +52,29 @@ def test_body_profiles_are_read_from_nested_probe_stderr():
     assert hot_functions[0]["identity"].endswith("source.v1::validate_page_step")
 
 
+def test_body_runtime_progress_events_are_read_from_nested_probe_stderr():
+    event = {
+        "schema_version": "mncs.language.body-runtime-progress/1",
+        "step_scope": "current_function_frame",
+        "function_identity": "mncs:0.2:function:mncs.compiler.project.v1::compile_project_target",
+        "frame_steps": 250_000,
+        "step_budget": 8_000_000,
+        "elapsed_ns": 12_345_000_000,
+    }
+    report = {
+        "probe_stderr": {
+            "tail": ["mncs-body-runtime-progress " + json.dumps(event)],
+        },
+    }
+    stderr = "\n".join(measurement._nested_probe_stderr_lines(report, "tail"))
+    events, errors = measurement._body_runtime_progress_events(stderr)
+
+    assert not errors
+    assert len(events) == 1
+    assert events[0]["step_scope"] == "current_function_frame"
+    assert events[0]["frame_steps"] == 250_000
+
+
 def test_nested_probe_timing_lines_are_available():
     report = {"probe_stderr": {"mncs_timings": ["mncs-timing stage=ssa elapsed_ms=17"]}}
     lines = measurement._nested_probe_stderr_lines(report, "mncs_timings")
@@ -94,6 +117,33 @@ def test_ssa_and_artifact_profile_events_are_structured():
             "scope": "mncs-artifact-profile",
         },
     ]
+
+
+def test_ssa_runtime_progress_events_preserve_request_scope_and_location():
+    event = {
+        "schema_version": "mncs.language.ssa-runtime-progress/1",
+        "step_scope": "top_level_request",
+        "steps": 250_000,
+        "step_budget": 8_000_000,
+        "module": "mncs.compiler.project.v1",
+        "function": "compile_project_target",
+        "function_identity": "mncs:0.2:function:mncs.compiler.project.v1::compile_project_target",
+        "block_identity": "mncs:0.2:block:compile_project_target::entry",
+        "call_depth": 0,
+    }
+    report = {
+        "probe_stderr": {
+            "tail": ["mncs-ssa-runtime-progress " + json.dumps(event)],
+        },
+    }
+    stderr = "\n".join(measurement._nested_probe_stderr_lines(report, "tail"))
+    events, errors = measurement._ssa_runtime_progress_events(stderr)
+
+    assert not errors
+    assert len(events) == 1
+    assert events[0]["step_scope"] == "top_level_request"
+    assert events[0]["steps"] == 250_000
+    assert events[0]["function"] == "compile_project_target"
 
 
 def test_inner_timeout_is_not_runner_success():
@@ -174,6 +224,79 @@ def test_probe_child_samples_keep_process_elapsed_resource_series(monkeypatch):
         "io": {"rchar": 8192, "read_bytes": 0, "write_bytes": 16},
     }]
     assert "CLOCK_MONOTONIC" in summary["probe_sample_clock"]
+
+
+def test_probe_io_summary_keeps_read_and_write_bytes_separate():
+    records = {
+        100: {
+            "pid": 100,
+            "cmdline": "python3 measure_compiler_probe.py",
+            "last_io": {"rchar": 900, "wchar": 800, "read_bytes": 700, "write_bytes": 600},
+        },
+        101: {
+            "pid": 101,
+            "cmdline": "/tmp/mncs-compiler-stage0-probe",
+            "start_time_ticks": 1234,
+            "last_cpu_seconds": 3.0,
+            "last_cpu_user_seconds": 2.8,
+            "last_cpu_system_seconds": 0.2,
+            "last_io": {
+                "rchar": 11,
+                "wchar": 17,
+                "read_bytes": 3,
+                "write_bytes": 5,
+                "cancelled_write_bytes": 2,
+            },
+            "resource_samples": [],
+            "max_rss_kib": 100,
+            "max_hwm_kib": 110,
+            "max_fd_count": 4,
+        },
+    }
+
+    summary = measurement._probe_resource_summary(records)
+
+    assert summary["probe_io_rchar_bytes"] == 11
+    assert summary["probe_io_wchar_bytes"] == 17
+    assert summary["probe_io_read_bytes"] == 3
+    assert summary["probe_io_write_bytes"] == 5
+    assert summary["probe_io_cancelled_write_bytes"] == 2
+
+
+def test_probe_io_summary_uses_last_valid_sample_after_process_exit():
+    values = {
+        "rchar": 11,
+        "wchar": 17,
+        "read_bytes": 3,
+        "write_bytes": 5,
+        "cancelled_write_bytes": 2,
+    }
+    records = {
+        101: {
+            "pid": 101,
+            "start_time_ticks": 1234,
+            "cmdline": "/tmp/mncs-compiler-stage0-probe",
+            "last_io": {},
+            "max_rss_kib": 100,
+            "max_hwm_kib": 110,
+            "max_fd_count": 4,
+            "last_cpu_seconds": 1.0,
+            "last_cpu_user_seconds": 0.9,
+            "last_cpu_system_seconds": 0.1,
+            "resource_samples": [
+                {"elapsed_ms": 10, "io": values},
+                {"elapsed_ms": 11},
+            ],
+        },
+    }
+
+    summary = measurement._probe_resource_summary(records)
+
+    assert summary["probe_io_rchar_bytes"] == 11
+    assert summary["probe_io_wchar_bytes"] == 17
+    assert summary["probe_io_read_bytes"] == 3
+    assert summary["probe_io_write_bytes"] == 5
+    assert summary["probe_io_cancelled_write_bytes"] == 2
 
 
 def test_only_revalidated_isolated_probe_group_is_signaled(monkeypatch):
@@ -294,6 +417,38 @@ def test_program_cache_preparation_is_admission_only_and_not_semantic_evidence()
 
     unknown = {"kind": "compiler-program-cache-preparation", "probe_internal_trace": {"events": []}}
     assert measurement._operation_outcome(unknown) == "UNKNOWN_CACHE_PREPARATION"
+
+
+def test_backend_admission_only_requires_cache_publication_and_retained_admission():
+    report = {
+        "kind": "compiler-backend-admission-only",
+        "native_request_status": "not_run",
+        "probe_internal_trace": {
+            "events": [
+                {
+                    "event": "phase",
+                    "phase": "artifact_cache_gzip_write",
+                    "cache_file_suffix": ".json.gz",
+                    "success": True,
+                },
+                {
+                    "event": "phase",
+                    "phase": "retained_session_admission",
+                    "admitted": True,
+                },
+            ],
+        },
+    }
+
+    assert measurement._operation_outcome(report) == "ADMISSION_ONLY_SUCCESS"
+    assert measurement._operation_classification(report, "SUCCESS") == "SUCCESS"
+    assert measurement._semantic_result(report) == "NOT_RUN_BACKEND_ADMISSION_ONLY"
+
+    incomplete = {
+        **report,
+        "probe_internal_trace": {"events": report["probe_internal_trace"]["events"][:1]},
+    }
+    assert measurement._operation_outcome(incomplete) == "UNKNOWN_BACKEND_ADMISSION"
 
 
 if __name__ == "__main__":

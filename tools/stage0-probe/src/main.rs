@@ -27,6 +27,36 @@ mod vm_emit;
 static TELEMETRY_ORIGIN: OnceLock<Instant> = OnceLock::new();
 static TELEMETRY_WRITER: OnceLock<Option<Mutex<BufWriter<File>>>> = OnceLock::new();
 
+struct CountingWriter<W> {
+    inner: W,
+    bytes_written: u64,
+}
+
+impl<W> CountingWriter<W> {
+    fn new(inner: W) -> Self {
+        Self {
+            inner,
+            bytes_written: 0,
+        }
+    }
+
+    fn bytes_written(&self) -> u64 {
+        self.bytes_written
+    }
+}
+
+impl<W: Write> Write for CountingWriter<W> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        let written = self.inner.write(bytes)?;
+        self.bytes_written = self.bytes_written.saturating_add(written as u64);
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
 fn telemetry_enabled() -> bool {
     matches!(
         std::env::var("MNCS_PROBE_TELEMETRY").as_deref(),
@@ -633,54 +663,25 @@ fn main() {
                 .unwrap_or_default()
                 .as_nanos()
         );
-        let raw_tmp = format!("{dir}/{key}.{unique_suffix}.json.tmp");
+        let compressed_tmp = format!("{dir}/{key}.{unique_suffix}.json.gz.tmp");
         let encode_started = Instant::now();
         trace_event(json!({
             "event": "phase_begin",
             "phase": "artifact_cache_encode",
             "cache_key": key,
             "cache_file_suffix": suffix,
-            "artifact_present": artifact.is_some()
+            "artifact_present": artifact.is_some(),
+            "encoding": "streamed_to_gzip"
         }));
-        let encoded_bytes = (|| -> io::Result<u64> {
-            let file = File::create(&raw_tmp)?;
-            let mut writer = BufWriter::new(file);
-            serde_json::to_writer(
-                &mut writer,
-                &ProbeCacheEntry {
-                    identity,
-                    program,
-                    artifact,
-                },
-            )
-            .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
-            writer.flush()?;
-            drop(writer);
-            Ok(std::fs::metadata(&raw_tmp)?.len())
-        })();
-        let encoded_bytes = match encoded_bytes {
-            Ok(bytes) => bytes,
+        let gzip_started = Instant::now();
+        let compressed_file = match File::create(&compressed_tmp) {
+            Ok(file) => file,
             Err(error) => {
-                let _ = std::fs::remove_file(&raw_tmp);
                 trace_phase(
                     "artifact_cache_encode",
                     encode_started,
                     json!({"cache_key": key, "success": false, "error": error.to_string()}),
                 );
-                return;
-            }
-        };
-        trace_phase(
-            "artifact_cache_encode",
-            encode_started,
-            json!({"cache_key": key, "uncompressed_bytes": encoded_bytes}),
-        );
-        let compressed_tmp = format!("{dir}/{key}.{unique_suffix}.json.gz.tmp");
-        let gzip_started = Instant::now();
-        let compressed_file = match File::create(&compressed_tmp) {
-            Ok(file) => file,
-            Err(error) => {
-                let _ = std::fs::remove_file(&raw_tmp);
                 trace_phase(
                     "artifact_cache_gzip_write",
                     gzip_started,
@@ -690,15 +691,20 @@ fn main() {
             }
         };
         let mut gzip = match std::process::Command::new("gzip")
-            .args(["-n", "-c", &raw_tmp])
+            .args(["-n", "-c"])
+            .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::from(compressed_file))
             .stderr(std::process::Stdio::null())
             .spawn()
         {
             Ok(child) => child,
             Err(error) => {
-                let _ = std::fs::remove_file(&raw_tmp);
                 let _ = std::fs::remove_file(&compressed_tmp);
+                trace_phase(
+                    "artifact_cache_encode",
+                    encode_started,
+                    json!({"cache_key": key, "success": false, "error": error.to_string()}),
+                );
                 trace_phase(
                     "artifact_cache_gzip_write",
                     gzip_started,
@@ -714,11 +720,66 @@ fn main() {
             "cache_key": key,
             "gzip_pid": gzip_pid
         }));
+
+        let Some(gzip_stdin) = gzip.stdin.take() else {
+            let _ = gzip.kill();
+            let _ = gzip.wait();
+            let _ = std::fs::remove_file(&compressed_tmp);
+            trace_phase(
+                "artifact_cache_encode",
+                encode_started,
+                json!({"cache_key": key, "success": false, "error": "gzip stdin was unavailable"}),
+            );
+            trace_phase(
+                "artifact_cache_gzip_write",
+                gzip_started,
+                json!({"cache_key": key, "success": false, "gzip_pid": gzip_pid}),
+            );
+            return;
+        };
+        let buffered_gzip_stdin = BufWriter::with_capacity(64 * 1024, gzip_stdin);
+        let mut writer = CountingWriter::new(buffered_gzip_stdin);
+        let encode_result = serde_json::to_writer(
+            &mut writer,
+            &ProbeCacheEntry {
+                identity,
+                program,
+                artifact,
+            },
+        )
+        .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
+        .and_then(|()| writer.flush());
+        let encoded_bytes = writer.bytes_written();
+        drop(writer);
+        trace_phase(
+            "artifact_cache_encode",
+            encode_started,
+            json!({
+                "cache_key": key,
+                "success": encode_result.is_ok(),
+                "encoding": "streamed_to_gzip",
+                "uncompressed_bytes": encoded_bytes,
+                "error": encode_result.as_ref().err().map(ToString::to_string)
+            }),
+        );
         let status = gzip.wait();
-        let _ = std::fs::remove_file(&raw_tmp);
         let compressed_bytes = std::fs::metadata(&compressed_tmp)
             .map(|metadata| metadata.len())
             .ok();
+        if encode_result.is_err() {
+            let _ = std::fs::remove_file(&compressed_tmp);
+            trace_phase(
+                "artifact_cache_gzip_write",
+                gzip_started,
+                json!({
+                    "cache_key": key,
+                    "success": false,
+                    "gzip_pid": gzip_pid,
+                    "encoding_error": encode_result.err().map(|error| error.to_string())
+                }),
+            );
+            return;
+        }
         let status = match status {
             Ok(status) if status.success() => status,
             Ok(status) => {
@@ -765,7 +826,9 @@ fn main() {
                 "gzip_pid": gzip_pid,
                 "exit_code": status.code(),
                 "uncompressed_bytes": encoded_bytes,
-                "compressed_bytes": compressed_bytes
+                "compressed_bytes": compressed_bytes,
+                "encoding": "streamed_to_gzip",
+                "overlaps_encode": true
             }),
         );
     };
@@ -1469,6 +1532,19 @@ mod tests {
         BackendArtifact, BackendIdentity, CompilerArtifactRef, ExecutionTypeArgument,
         TransformationStatus,
     };
+
+    #[test]
+    fn counting_writer_counts_streamed_serialized_bytes() {
+        let value = json!({"function": "compile_project_target", "pages": 894});
+        let expected = serde_json::to_vec(&value).unwrap();
+        let buffered = BufWriter::with_capacity(64 * 1024, Vec::new());
+        let mut writer = CountingWriter::new(buffered);
+        serde_json::to_writer(&mut writer, &value).unwrap();
+        writer.flush().unwrap();
+
+        assert_eq!(writer.bytes_written(), expected.len() as u64);
+        assert_eq!(writer.inner.into_inner().unwrap(), expected);
+    }
 
     #[test]
     fn backend_probe_retains_only_the_consumed_artifact_emission() {

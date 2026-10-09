@@ -258,6 +258,7 @@ def run(
     target_last=False,
     step_budget=DEFAULT_STEP_BUDGET,
     prepare_program_cache_only=False,
+    admission_only=False,
 ):
     campaign_started = time.monotonic_ns()
     phase_timings_ns = {}
@@ -359,8 +360,13 @@ def run(
                 transport_failure = {"stage": "record_type_identity_admission", **error.observation}
             phase_timings_ns["record_type_identity_admission"] = time.monotonic_ns() - phase_started
 
+        if transport_failure is None and admission_only:
+            # Exercise backend construction, cache publication, retained-session
+            # admission, and record identities without entering target execution.
+            response = {"status": "not_run", "reason": "backend_admission_only"}
+
         request = None
-        if transport_failure is None and not prepare_program_cache_only:
+        if transport_failure is None and not prepare_program_cache_only and not admission_only:
             phase_started = time.monotonic_ns()
             request = project.request_value(identities, sources)
             request["step_budget"] = step_budget
@@ -388,7 +394,7 @@ def run(
         elif response.get("steps") is not None:
             probe.steps.append(response["steps"])
 
-        if (transport_failure is None and not prepare_program_cache_only
+        if (transport_failure is None and not prepare_program_cache_only and not admission_only
                 and module_names and not skip_stage0_oracle and response.get("status") in
                 {"returned", "budget_exhausted", "step_limit_exceeded"}):
             phase_started = time.monotonic_ns()
@@ -422,6 +428,11 @@ def run(
                 "status": "not-run",
                 "reason": "program-cache preparation mode does not execute the compiler target or Stage-0 oracle",
             }
+        elif admission_only:
+            stage0_oracle = {
+                "status": "not-run",
+                "reason": "backend admission mode does not execute the compiler target or Stage-0 oracle",
+            }
         elif transport_failure is None and module_names and skip_stage0_oracle:
             stage0_oracle = {
                 "status": "not-run",
@@ -438,6 +449,8 @@ def run(
             "kind": (
                 "compiler-program-cache-preparation"
                 if prepare_program_cache_only
+                else "compiler-backend-admission-only"
+                if admission_only
                 else "compiler-module-pipeline-frontier"
             ),
             "observed_at": datetime.now(timezone.utc).isoformat(),
@@ -466,8 +479,10 @@ def run(
                 os.environ.get("MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES") == "1"
             ),
             "program_cache_preparation_only": prepare_program_cache_only,
+            "backend_admission_only": admission_only,
             "target_execution_started": (
-                not prepare_program_cache_only and response.get("status") != "not_run"
+                not prepare_program_cache_only and not admission_only
+                and response.get("status") != "not_run"
             ),
             "target_input_modules": [Path(source_id).stem for source_id, _, _ in sources],
             "stage0_admission_source_modules": os.environ.get("MNCS_PROBE_MODULES"),
@@ -479,7 +494,7 @@ def run(
             "native_transport_outcome": (
                 transport_failure.get("status")
                 if transport_failure
-                else "NOT_RUN" if prepare_program_cache_only
+                else "NOT_RUN" if prepare_program_cache_only or admission_only
                 else "RESPONSE_RECEIVED"
             ),
             "transport_failure": transport_failure,
@@ -582,6 +597,7 @@ if __name__ == "__main__":
     oracle_only = "--oracle-only" in args
     signature_cache_fixture = "--signature-cache-fixture" in args
     prepare_program_cache_only = "--prepare-program-cache-only" in args
+    admission_only = "--admission-only" in args
     step_budget = DEFAULT_STEP_BUDGET
     if "--step-budget" in args:
         position = args.index("--step-budget")
@@ -598,10 +614,15 @@ if __name__ == "__main__":
     args = [arg for arg in args if arg != "--oracle-only"]
     args = [arg for arg in args if arg != "--signature-cache-fixture"]
     args = [arg for arg in args if arg != "--prepare-program-cache-only"]
+    args = [arg for arg in args if arg != "--admission-only"]
     if args:
         if args[0] != "--modules" or len(args) < 2:
-            raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--oracle-only] [--signature-cache-fixture] [--prepare-program-cache-only]")
+            raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--oracle-only] [--signature-cache-fixture] [--prepare-program-cache-only] [--admission-only]")
         names = args[1:]
+    if admission_only and not target_last:
+        raise SystemExit("--admission-only requires --target-last")
+    if admission_only and (prepare_program_cache_only or oracle_only or signature_cache_fixture):
+        raise SystemExit("--admission-only cannot be combined with cache preparation, oracle-only, or signature-cache fixture modes")
     if signature_cache_fixture:
         report = run_imported_signature_cache_fixture(step_budget)
     elif oracle_only:
@@ -614,5 +635,6 @@ if __name__ == "__main__":
             target_last=target_last,
             step_budget=step_budget,
             prepare_program_cache_only=prepare_program_cache_only,
+            admission_only=admission_only,
         )
     print(json.dumps(report, indent=2))
