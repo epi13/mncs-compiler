@@ -4,6 +4,7 @@
 import json
 import signal
 import sys
+import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -132,6 +133,49 @@ def test_probe_child_rss_cap_is_scoped_and_classified_as_resource_exhausted():
     assert measurement._operation_classification(None, runner) == "RESOURCE_EXHAUSTED"
 
 
+def test_probe_child_samples_keep_process_elapsed_resource_series(monkeypatch):
+    sample = {
+        "pid": 101,
+        "parent_pid": 100,
+        "process_group_id": 101,
+        "session_id": 101,
+        "start_time_ticks": 1200,
+        "executable_path": "/tmp/mncs-compiler-stage0-probe",
+        "comm": "mncs-compiler-stage0-probe",
+        "cmdline": "/tmp/mncs-compiler-stage0-probe",
+        "rss_kib": 4096,
+        "hwm_kib": 4352,
+        "swap_kib": 0,
+        "fd_count": 5,
+        "cpu_seconds": 0.31,
+        "cpu_user_seconds": 0.29,
+        "cpu_system_seconds": 0.02,
+        "io": {"rchar": 8192, "read_bytes": 0, "write_bytes": 16},
+    }
+    monkeypatch.setattr(measurement, "_proc_snapshot", lambda pid: sample)
+    monkeypatch.setattr(measurement.time, "monotonic", lambda: 12.5)
+    monkeypatch.setattr(measurement, "TICKS_PER_SECOND", 100)
+    records = {}
+
+    measurement._record_sample(records, 101)
+    summary = measurement._probe_resource_summary(records)
+
+    assert summary["probe_samples"] == [{
+        "pid": 101,
+        "start_time_ticks": 1200,
+        "elapsed_ms": 500.0,
+        "rss_kib": 4096,
+        "hwm_kib": 4352,
+        "swap_kib": 0,
+        "fd_count": 5,
+        "cpu_seconds": 0.31,
+        "cpu_user_seconds": 0.29,
+        "cpu_system_seconds": 0.02,
+        "io": {"rchar": 8192, "read_bytes": 0, "write_bytes": 16},
+    }]
+    assert "CLOCK_MONOTONIC" in summary["probe_sample_clock"]
+
+
 def test_only_revalidated_isolated_probe_group_is_signaled(monkeypatch):
     records = {
         101: {
@@ -253,6 +297,18 @@ def test_program_cache_preparation_is_admission_only_and_not_semantic_evidence()
 
 
 if __name__ == "__main__":
+    class _ManualMonkeyPatch:
+        def __init__(self):
+            self._changes = []
+
+        def setattr(self, target, name, value):
+            self._changes.append((target, name, getattr(target, name)))
+            setattr(target, name, value)
+
+        def undo(self):
+            for target, name, original in reversed(self._changes):
+                setattr(target, name, original)
+
     tests = [
         test_body_profiles_are_read_from_nested_probe_stderr,
         test_nested_probe_timing_lines_are_available,
@@ -260,13 +316,32 @@ if __name__ == "__main__":
         test_inner_timeout_is_not_runner_success,
         test_outer_runner_statuses_are_preserved,
         test_probe_child_rss_cap_is_scoped_and_classified_as_resource_exhausted,
+        test_probe_child_samples_keep_process_elapsed_resource_series,
         test_only_revalidated_isolated_probe_group_is_signaled,
         test_phase_trace_keeps_valid_partial_events_and_hashes_raw_bytes,
         test_budget_and_protocol_failures_are_distinct,
         test_child_interruption_and_unknown_remain_distinct,
         test_execution_success_is_separate_from_semantic_rejection,
+        test_program_cache_preparation_is_admission_only_and_not_semantic_evidence,
         test_stage0_oracle_completion_is_not_native_compiler_evidence,
     ]
     for test in tests:
-        test()
+        patch = _ManualMonkeyPatch()
+        temporary_directories = []
+        arguments = {}
+        try:
+            for name in test.__code__.co_varnames[:test.__code__.co_argcount]:
+                if name == "monkeypatch":
+                    arguments[name] = patch
+                elif name == "tmp_path":
+                    temporary = tempfile.TemporaryDirectory()
+                    temporary_directories.append(temporary)
+                    arguments[name] = Path(temporary.name)
+                else:
+                    raise TypeError(f"unsupported test fixture: {name}")
+            test(**arguments)
+        finally:
+            patch.undo()
+            for temporary in temporary_directories:
+                temporary.cleanup()
     print(f"measure_compiler_probe: {len(tests)} checks passed")

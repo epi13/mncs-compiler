@@ -72,6 +72,35 @@ steps remain UNKNOWN. The cgroup memory maximum was unlimited and event deltas,
 including `oom` and `oom_kill`, were zero. This is not evidence of a kernel OOM
 or a semantic rejection.
 
+## Phase-correlated RSS repeat
+
+The matched V2 request was repeated with probe measurement schema 3, which
+retains the actual compiler child’s RSS, HWM, CPU, FD, and I/O samples beside
+its phase trace. The 377 samples span 94.5 seconds at 250 ms intervals. The
+nearest sample to each mapped compiler event was within 123 ms.
+
+| Host Stage-0 milestone | Probe elapsed | Sampled child RSS |
+| --- | ---: | ---: |
+| `backend_compilation` begins | 2.271 s | 1,323,596 KiB |
+| `compiler-hir` timing event | about 65.270 s | 1,627,860 KiB |
+| `compiler-ssa` timing event | about 77.495 s | 2,049,960 KiB |
+| 2,560 MiB runner stop | 94.512 s | 2,630,320 KiB |
+
+The child used 94.0 CPU seconds, peaked at five FDs, and performed no
+kernel-accounted storage reads. From the sample nearest the host
+`compiler-ssa` event to the RSS stop, sampled RSS rose by 580,360 KiB
+(566.8 MiB). This localizes additional growth to the remainder of the
+`research-bytecode` backend-compilation/admission path, but it does not name an
+allocator or data structure. It is not a Cranelift observation. The request
+again stopped at retained-session admission without a compiler result; cgroup
+OOM and `oom_kill` event deltas remained zero.
+
+A separate run that paired the V2 binary with a different worktree’s pristine
+identity metadata missed the candidate cache and re-elaborated the frontend.
+It is excluded from matched comparisons. The exact matched trace, the new
+collector source hash, and raw measurement hashes are retained in
+[`campaign-20261009-flow-phase-resource-samples.json`](../evidence/campaign-20261009-flow-phase-resource-samples.json).
+
 ## Earlier bounded observation
 
 The earlier 1,600 MiB paired emission experiment remains recorded in

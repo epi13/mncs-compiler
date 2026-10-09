@@ -2,8 +2,9 @@
 """Measure the real stage0-probe child while running a bounded frontier case.
 
 The runner records phase timings in the probe process. This wrapper samples
-the process tree rooted at that runner, including the actual Rust probe child,
-so caller RSS is not mistaken for compiler execution RSS.
+the process tree rooted at that runner, including time-series resources for the
+actual Rust probe child, so caller RSS is not mistaken for compiler execution
+RSS and phase events can be correlated with child memory growth.
 """
 
 from __future__ import annotations
@@ -233,6 +234,23 @@ def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
     current["last_hwm_kib"] = sample["hwm_kib"]
     current["last_swap_kib"] = sample["swap_kib"]
     current["last_fd_count"] = sample["fd_count"]
+    if "mncs-compiler-stage0-probe" in str(current.get("cmdline", "")):
+        start_ticks = int(sample["start_time_ticks"])
+        elapsed_ms = max(
+            0.0,
+            (time.monotonic() - start_ticks / TICKS_PER_SECOND) * 1000.0,
+        )
+        current.setdefault("resource_samples", []).append({
+            "elapsed_ms": round(elapsed_ms, 3),
+            "rss_kib": sample["rss_kib"],
+            "hwm_kib": sample["hwm_kib"],
+            "swap_kib": sample["swap_kib"],
+            "fd_count": sample["fd_count"],
+            "cpu_seconds": sample["cpu_seconds"],
+            "cpu_user_seconds": sample["cpu_user_seconds"],
+            "cpu_system_seconds": sample["cpu_system_seconds"],
+            "io": dict(sample["io"]),
+        })
 
 
 def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, object]:
@@ -248,8 +266,21 @@ def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, 
         )
         for key, output in io_fields.items()
     }
+    probe_samples = [
+        {
+            "pid": row["pid"],
+            "start_time_ticks": row["start_time_ticks"],
+            **sample,
+        }
+        for row in probe_rows
+        for sample in row.get("resource_samples", [])
+        if isinstance(sample, dict)
+    ]
+    probe_samples.sort(key=lambda sample: (int(sample["start_time_ticks"]), float(sample["elapsed_ms"])))
     return {
         "processes": sorted(rows, key=lambda row: int(row["pid"])),
+        "probe_sample_clock": "elapsed_ms is CLOCK_MONOTONIC minus /proc stat start ticks; phase traces use process elapsed from Rust Instant and align within kernel tick resolution plus the configured sampling interval",
+        "probe_samples": probe_samples,
         "probe_child_count_observed": len(probe_rows),
         "probe_max_sampled_rss_kib": max((int(row["max_rss_kib"]) for row in probe_rows), default=None),
         "probe_max_observed_hwm_kib": max((int(row["max_hwm_kib"]) for row in probe_rows), default=None),
@@ -776,10 +807,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "SSA validation/fingerprint profile phases describe backend preparation, not the MNCS compiler's semantic parser/checker/proof/CFG/SSA work",
         "per-function CPU time remains UNKNOWN; the runtime profile reports wall time, call count, and executor steps",
         "hardware instruction count is UNKNOWN; no permitted counter is exposed by this execution environment",
+        "resource samples align with phase events at kernel tick resolution plus the configured sampling interval; sub-sample peaks remain UNKNOWN",
         "an exit signal alone does not identify OOM; cgroup deltas and process termination evidence are reported separately",
     ]
     result = {
-        "schema": "mncs-compiler.probe-resource-measurement/2",
+        "schema": "mncs-compiler.probe-resource-measurement/3",
         "label": label,
         "command": command,
         "backend_cli_argument": args.backend,

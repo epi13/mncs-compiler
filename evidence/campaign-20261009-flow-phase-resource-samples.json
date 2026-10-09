@@ -1,0 +1,128 @@
+{
+  "schema": "mncs.compiler.flow-phase-resource-samples/1",
+  "observed_at": "2026-10-09",
+  "tooling": {
+    "compiler_main_at_tool_change_base": "2e08320fae3c1ee1916b5c7154484906bb23b70d",
+    "measurement_schema": "mncs-compiler.probe-resource-measurement/3",
+    "measurement_tool_sha256": "0f000a047cd01aca657ca30d5859d5dd42f7edcba330a080b0b792267c014ade",
+    "focused_contract_checks": "python3 tools/test_measure_compiler_probe.py: 14 passed; pytest: 14 passed",
+    "sampling_interval_seconds": 0.25,
+    "sampled_process": "actual mncs-compiler-stage0-probe child, keyed by PID and /proc start ticks",
+    "clock_alignment": "CLOCK_MONOTONIC minus /proc stat start ticks; phase trace uses process elapsed from Rust Instant; nearest samples are within 123 ms of the mapped compiler events"
+  },
+  "identities": {
+    "compiler_input_head": "76ccb18af4e1da9a849f421960ecb9634ca2409d",
+    "compiler_input_source_sha256": "7a89b18b4bd00e871faa92ddf7923cd8e8b40a9999c8057c33a5a654efd505d6",
+    "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-357a31413527121f5ca6846bc02e204d0fd566b1a4f735e94ca6a9d6a7e59a72",
+    "stage0_probe_binary_sha256": "4e56013a021135c5934a91196c60c8e4f481dd53e96c52c047685d12921b28b3",
+    "frontend_program_cache_key": "7a782a74d6d40e68eb92e012dae3649acce564060ca3a79e4170fc359a916eb0"
+  },
+  "workload": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "input_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "input_pages_at_width_1024": 892,
+    "backend_requested": "research-bytecode",
+    "step_budget": 8000000,
+    "timeout_seconds": 600,
+    "rss_stop_mib": 2560
+  },
+  "result": {
+    "classification": "RESOURCE_EXHAUSTED",
+    "operation_outcome": "INTERRUPTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "wall_seconds_to_runner_completion": 94.676,
+    "rss_stop_triggered_at_seconds": 94.512,
+    "child_cpu_seconds_at_stop": 94.0,
+    "child_cpu_user_seconds": 92.96,
+    "child_cpu_system_seconds": 1.04,
+    "child_peak_rss_kib": 2630320,
+    "child_max_fds": 5,
+    "child_io_rchar_bytes": 182680804,
+    "child_io_read_bytes": 0,
+    "frontend_cache_compressed_bytes": 5276831,
+    "resource_sample_count": 377,
+    "cgroup_memory_max": "max",
+    "cgroup_memory_event_delta": {
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "high": 0,
+      "low": 0,
+      "max": 0,
+      "sock_throttled": 0,
+      "oom": 0
+    },
+    "oom_attribution": "NOT_ESTABLISHED; cgroup oom and oom_kill event deltas are zero",
+    "retained_session_admission": "INTERRUPTED",
+    "target_vm_steps": "UNKNOWN_NOT_ADMITTED"
+  },
+  "phase_correlated_rss_samples": [
+    {
+      "milestone": "backend_compilation_begin",
+      "phase_event_process_elapsed_ms": 2270.988,
+      "sample_process_elapsed_ms": 2216.779,
+      "sample_delta_ms": -54.209,
+      "rss_kib": 1323596,
+      "cpu_seconds": 2.19,
+      "fd_count": 4
+    },
+    {
+      "milestone": "host_compiler_hir_timing",
+      "compiler_elapsed_ms": 62999,
+      "estimated_process_elapsed_ms": 65269.971,
+      "sample_process_elapsed_ms": 65392.594,
+      "sample_delta_ms": 122.623,
+      "rss_kib": 1627860,
+      "cpu_seconds": 65.01,
+      "fd_count": 4
+    },
+    {
+      "milestone": "host_compiler_ssa_timing",
+      "compiler_elapsed_ms": 75224,
+      "estimated_process_elapsed_ms": 77494.971,
+      "sample_process_elapsed_ms": 77424.518,
+      "sample_delta_ms": -70.453,
+      "rss_kib": 2049960,
+      "cpu_seconds": 77.01,
+      "fd_count": 4
+    },
+    {
+      "milestone": "sampled_rss_stop",
+      "stop_elapsed_ms": 94512,
+      "sample_process_elapsed_ms": 94470.993,
+      "sample_delta_ms": -41.007,
+      "rss_kib": 2630320,
+      "cpu_seconds": 94.0,
+      "fd_count": 4
+    }
+  ],
+  "interpretation": {
+    "observed_change": "Nearest sample at the host compiler-SSA timing point was 2,049,960 KiB RSS; the sampled stop was 2,630,320 KiB, a rise of 580,360 KiB (566.8 MiB) in the remaining backend-compilation/admission interval.",
+    "scope": "These HIR/SSA phase events describe Stage-0 host preparation of the MNCS compiler Program. They do not prove acceptance, verified SSA, or execution of flow.mncs by the MNCS compiler.",
+    "attribution_limit": "The resource trace localizes when this process grew in the research-bytecode path. It does not name the allocator or identify a specific backend data structure. It is not a Cranelift measurement.",
+    "repeatability": "This matched V2 repeat loaded the same candidate-specific frontend cache and produced a comparable wall time, HIR/SSA timing, and RSS stop to the earlier V2 run. The separate cache-miss attempt is excluded from this comparison."
+  },
+  "raw_evidence": {
+    "measurement": {
+      "path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-phase-resource-samples-matched-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 658378,
+      "sha256": "93f7760e24a807fa954502e8e5f980215ae5bdd3854a4e1e087939af969894d5"
+    },
+    "phase_trace": {
+      "path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-phase-resource-samples-matched-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 3428,
+      "sha256": "8d8aebea9250f4282d72b7fe113a5978b302eaea99926213b68b704dfb55ebac"
+    },
+    "probe_stderr": {
+      "path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-phase-resource-samples-matched-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+      "bytes": 885,
+      "sha256": "c23ecf18de358df6ca4e647b363fd5fc0f58c39f1168e948f99f7cf9e019ca69"
+    }
+  }
+}
