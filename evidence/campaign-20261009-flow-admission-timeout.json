@@ -1,0 +1,210 @@
+{
+  "schema": "mncs.compiler.execution-admission-observation/1",
+  "observed_at": "2026-10-09T08:41:17.766659+00:00",
+  "kind": "flow-target-stage0-admission-timeout",
+  "identities": {
+    "compiler_tested_head": "97db51927d017123847735baf13409e94d27dc7f",
+    "compiler_selected_source_identity_sha256": "ab9c93a32a7dad14fe4a0cb32995043f6b9322bb1b2ce2589b2d8bcdb567eb18",
+    "compiler_source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "selected_module_sha256": {
+      "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+      "lexer": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "ae93a228da29488da02332d94d5cfac5a0d55d4619d565cc9860d290de1e86ca",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+    },
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_source_profile": "0.18",
+    "probe_executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "probe_executable_sha256": "5491d5fd02924420ad73785a85e38d742118320d81296b067b7a5320265454ab"
+  },
+  "work": {
+    "target_module": "flow",
+    "target_function": "mncs.compiler.project.v1::compile_project_target",
+    "project_input_pages_at_width_1024": 891,
+    "selected_project_input_source_count": 6,
+    "admission_frontend_source_count": 8,
+    "admission_frontend_source_bytes": 1335704,
+    "backend_requested": "research-bytecode",
+    "backend_admitted": null,
+    "retained_sessions": null,
+    "target_step_budget_requested": 1000000,
+    "target_execution_started": false,
+    "target_steps_returned": null,
+    "native_request_status": null
+  },
+  "outcome": {
+    "classification": "TIMEOUT",
+    "operation_outcome": "TIMEOUT",
+    "measurement_runner_status": "SUCCESS",
+    "operation_phase": "retained_session_admission",
+    "transport_status": "TIMEOUT",
+    "transport_reason": "request deadline expired",
+    "termination": "INTERRUPTED_BY_PROBE_TIMEOUT",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "interpretation": "Stage-0 frontend elaboration/specialization timed out during retained-session admission. The flow compiler function did not run; this is not a semantic rejection."
+  },
+  "phase_observations": {
+    "phase_events": [
+      {
+        "event": "phase",
+        "phase": "source_resolution",
+        "duration_ms": 6.475034,
+        "process_elapsed_ms": 6.560347999999999,
+        "module_count": 8,
+        "source_bytes": 1335704
+      },
+      {
+        "event": "phase",
+        "phase": "toolchain_identity",
+        "duration_ms": 119.10876400000001,
+        "process_elapsed_ms": 125.68407400000001
+      },
+      {
+        "event": "phase",
+        "phase": "dependency_closure_resolution",
+        "duration_ms": 0.23139600000000002,
+        "process_elapsed_ms": 125.93196300000001,
+        "module_count": 8,
+        "source_bytes": 1335704
+      },
+      {
+        "event": "phase_begin",
+        "phase": "artifact_cache_read_decode",
+        "process_elapsed_ms": 130.87560100000002,
+        "module": "mncs.compiler.project.v1",
+        "cache_key": "152e0584e07104f94a68e98581bbc61d31b8fc9db5640694d82643e939f5f292"
+      },
+      {
+        "event": "phase",
+        "phase": "artifact_cache_read_decode",
+        "duration_ms": 0.575161,
+        "process_elapsed_ms": 131.448907,
+        "module": "mncs.compiler.project.v1",
+        "cache_key": "152e0584e07104f94a68e98581bbc61d31b8fc9db5640694d82643e939f5f292",
+        "decoded": false,
+        "usable": false
+      },
+      {
+        "event": "phase_begin",
+        "phase": "stage0_frontend_elaboration_specialization",
+        "process_elapsed_ms": 131.4602,
+        "module": "mncs.compiler.project.v1",
+        "specialization_seeds": [
+          {
+            "function": "compile_project_target",
+            "type_arguments": [
+              {
+                "kind": "nat",
+                "value": 1024
+              },
+              {
+                "kind": "nat",
+                "value": 1024
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "compiler_timing_events": [
+      "mncs-timing stage=parse elapsed_ms=1245"
+    ],
+    "timed_out_phase_elapsed_ns": 90033498491
+  },
+  "resources": {
+    "child": {
+      "pid": 3860081,
+      "start_ticks": 45982981,
+      "cpu_time_delta_ns": 89730000000,
+      "max_sampled_rss_bytes": 676036608,
+      "kernel_rss_high_water_bytes": 676036608,
+      "peak_fds": 5,
+      "peak_threads": 1,
+      "read_bytes_delta": 0,
+      "write_bytes_delta": 4096,
+      "samples": 182
+    },
+    "address_space_limit_bytes": 12884901888,
+    "cgroup": {
+      "path": "/sys/fs/cgroup/user.slice/user-1000.slice/user@1000.service/app.slice/app-org.kde.konsole-320048.scope/tab(320111).scope",
+      "scope_note": "kernel-reported cgroup may include sibling processes; current/peak and event deltas are cgroup-level, while per-process RSS/CPU/I/O below is sampled by PID",
+      "memory_max": "max\n",
+      "memory_events_before": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "4",
+        "oom_group_kill": "0",
+        "sock_throttled": "14"
+      },
+      "memory_events_after": {
+        "low": "0",
+        "high": "0",
+        "max": "0",
+        "oom": "0",
+        "oom_kill": "4",
+        "oom_group_kill": "0",
+        "sock_throttled": "14"
+      },
+      "memory_event_delta": {
+        "oom_kill": 0,
+        "sock_throttled": 0,
+        "max": 0,
+        "oom": 0,
+        "low": 0,
+        "oom_group_kill": 0,
+        "high": 0
+      },
+      "cpu_usage_delta_usec": 93259128,
+      "memory_pressure_total_usec_delta": {
+        "full": 6,
+        "some": 7
+      },
+      "attribution": "cgroup counters cover the containing interactive scope and are not child-specific"
+    },
+    "host_available_memory_bytes_before": 21169364992,
+    "host_available_memory_bytes_after": 20964409344
+  },
+  "cache_observation": {
+    "key": "152e0584e07104f94a68e98581bbc61d31b8fc9db5640694d82643e939f5f292",
+    "phase": "artifact_cache_read_decode",
+    "decoded": false,
+    "usable": false,
+    "gzip_exit_code": 1,
+    "compressed_payload_bytes": null,
+    "interpretation": "No usable cache payload was read for this exact compiler/Stage-0 identity; this observation does not diagnose cache corruption."
+  },
+  "classification_provenance": {
+    "raw_measurement_schema": "mncs-compiler.probe-resource-measurement/1",
+    "raw_measurement_runner_classification": "SUCCESS",
+    "raw_measurement_operation_outcome": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "reclassification_schema": "mncs-compiler.probe-resource-measurement/2",
+    "reclassification_tool_sha256": "9b750ee608fe023abeab169b6388fd011620a63f5f2436c74aa89eae9fe3bee1",
+    "rule": "Preserve runner completion as measurement_runner_status; derive operation classification from the child transport response and native request status."
+  },
+  "artifacts": {
+    "measurement": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-target-1m-rb-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "c070ff2e66ed1ea52a32f82b1cc750e02f158267003e26c333d2ab1e4ef4554d"
+    },
+    "pipeline_report": {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-target-1m-rb-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+      "sha256": "02622eb3028a703c87d2a1a0f73223a32bd49ae29f842b18fadf12f49fe0ae8a"
+    },
+    "phase_trace": {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-target-1m-rb-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791535187731461605.jsonl",
+      "sha256": "316775df3ccaf3fd6d282224e53af3a129f61ef8573378c4b268771c74cb0afc"
+    }
+  }
+}

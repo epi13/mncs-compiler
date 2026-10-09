@@ -295,15 +295,50 @@ def _operation_outcome(report: dict[str, object] | None) -> str:
     if report is None:
         return "UNKNOWN_NO_COMPILER_RESULT"
     if report.get("kind") == "stage0-project-oracle-frontier":
-        return "STAGE0_ORACLE_COMPLETED"
+        oracle = report.get("stage0_oracle")
+        if isinstance(oracle, dict) and oracle.get("status") in {"valid", "invalid"}:
+            return "STAGE0_ORACLE_COMPLETED"
+        return "UNKNOWN_STAGE0_ORACLE_RESULT"
+    transport_outcome = report.get("native_transport_outcome")
+    if transport_outcome in {"TIMEOUT", "INTERRUPTED", "RESOURCE_EXHAUSTED", "FAILURE", "UNKNOWN"}:
+        return str(transport_outcome)
+    transport_failure = report.get("transport_failure")
+    if isinstance(transport_failure, dict):
+        failure_status = transport_failure.get("status")
+        if failure_status in {"TIMEOUT", "INTERRUPTED", "RESOURCE_EXHAUSTED", "FAILURE", "UNKNOWN"}:
+            return str(failure_status)
     status = report.get("native_request_status")
     if status in {"budget_exhausted", "step_limit_exceeded"}:
-        return "RESOURCE_EXHAUSTED_STEP_BUDGET"
+        return "RESOURCE_EXHAUSTED"
     if status == "invalid_request":
         return "REJECTED_BEFORE_COMPILER_EXECUTION"
     if status == "returned":
         return "COMPLETED_WITH_RESULT"
     return "UNKNOWN_NO_RETURNED_PROJECT_RESULT"
+
+
+def _measurement_runner_status(*, timed_out: bool, returncode: int) -> str:
+    if timed_out:
+        return "TIMEOUT"
+    if returncode == 0:
+        return "SUCCESS"
+    if returncode < 0:
+        return "INTERRUPTED"
+    return "FAILURE"
+
+
+def _operation_classification(report: dict[str, object] | None, runner_status: str) -> str:
+    """Classify the compiler operation independently from its measurement runner."""
+    if runner_status != "SUCCESS":
+        return runner_status
+    outcome = _operation_outcome(report)
+    if outcome in {"TIMEOUT", "INTERRUPTED", "RESOURCE_EXHAUSTED", "FAILURE"}:
+        return outcome
+    if outcome in {"COMPLETED_WITH_RESULT", "STAGE0_ORACLE_COMPLETED"}:
+        return "SUCCESS"
+    if outcome == "REJECTED_BEFORE_COMPILER_EXECUTION":
+        return "FAILURE"
+    return "UNKNOWN"
 
 
 def _body_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
@@ -450,14 +485,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         probe_report = json.loads(stdout) if stdout.strip() else None
     except json.JSONDecodeError:
         probe_report = None
-    if timed_out:
-        classification = "TIMEOUT"
-    elif returncode == 0:
-        classification = "SUCCESS"
-    elif returncode < 0:
-        classification = f"INTERRUPTED_SIGNAL_{-returncode}_CAUSE_UNKNOWN"
-    else:
-        classification = "FAILURE"
+    runner_status = _measurement_runner_status(timed_out=timed_out, returncode=returncode)
+    classification = _operation_classification(probe_report, runner_status)
 
     try:
         phase_events = [json.loads(line) for line in trace_path.read_text().splitlines() if line.strip()]
@@ -487,7 +516,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "an exit signal alone does not identify OOM; cgroup deltas and process termination evidence are reported separately",
     ]
     result = {
-        "schema": "mncs-compiler.probe-resource-measurement/1",
+        "schema": "mncs-compiler.probe-resource-measurement/2",
         "label": label,
         "command": command,
         "backend_cli_argument": args.backend,
@@ -502,6 +531,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "runtime_profile_enabled": bool(env.get("MNCS_RUNTIME_PROFILE")),
         "timeout_seconds": args.timeout_seconds,
         "classification": classification,
+        "measurement_runner_status": runner_status,
         "semantic_result": _semantic_result(probe_report),
         "operation_outcome": _operation_outcome(probe_report),
         "returncode": returncode,
