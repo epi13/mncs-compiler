@@ -1,0 +1,297 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.flow-execution-profile-evidence",
+  "observed_at": "2026-10-09T09:59:09.830130Z",
+  "campaign_cache_evidence": "evidence/campaign-20261009-frontend-program-cache.json",
+  "compiler_identity": {
+    "delivered_main": "3707c08b0d7ad27cd17587344367491430e917be",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "source_content_sha256": "ab9c93a32a7dad14fe4a0cb32995043f6b9322bb1b2ce2589b2d8bcdb567eb18",
+    "source_identity_scope": "selected compiler module ids and bytes"
+  },
+  "target": {
+    "operation": "mncs.compiler.project.v1::compile_project_target",
+    "generic_arguments": [
+      1024,
+      1024
+    ],
+    "selected_input_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "stage0_admission_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "logical_input_pages_at_width_1024": 891,
+    "campaign_closure_source_bytes": 1335704
+  },
+  "full_request_attempt": {
+    "backend": "research-bytecode",
+    "step_budget": 1000000,
+    "request_timeout_seconds": 240,
+    "runner_classification": "SUCCESS",
+    "operation_classification": "TIMEOUT",
+    "operation_outcome": "TIMEOUT",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "native_request_status": null,
+    "reported_execution_steps": null,
+    "target_request_started": true,
+    "target_request_wait_seconds": 240.000537625,
+    "total_runner_wall_seconds": 276.852,
+    "returncode": 0,
+    "cache_and_admission_phases": {
+      "backend_artifact_cache": "HIT; backend compilation skipped",
+      "artifact_gzip_read_decode_seconds": 10.628315452,
+      "artifact_payload_bytes": 399790958,
+      "retained_session_admission_seconds": 16.94518168,
+      "request_json_decode_seconds": 0.256878374,
+      "request_json_bytes": 20503343
+    },
+    "execution_child": {
+      "pid": 3882683,
+      "cpu_seconds": 273.65,
+      "cpu_user_seconds": 271.61,
+      "cpu_system_seconds": 2.04,
+      "max_sampled_rss_kib": 3125484,
+      "max_file_descriptors": 5,
+      "logical_read_characters_bytes": 1065661517,
+      "kernel_read_bytes": 0,
+      "disposition": "No child remained after the measurement runner returned."
+    },
+    "resource_boundary": {
+      "address_space_limit_bytes": 8589934592,
+      "cgroup_memory_max": "max",
+      "cgroup_event_delta": {
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "cgroup_cpu_usage_delta_seconds": 285.751,
+      "cgroup_scope_includes_siblings": true,
+      "interpretation": "No cgroup OOM or memory-limit event was observed. The request timed out without returning a semantic result; this is not a compiler rejection."
+    },
+    "artifacts": [
+      {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-cache-target-1m-rb-20261009-fullrequest-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "5ec2444ec636313c08c5cdd6dc5afb40634d35af28f5b8e425d42d0ff900b777",
+        "bytes": 570737,
+        "retention": "local ignored build artifact"
+      },
+      {
+        "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-target-1m-rb-20261009-fullrequest-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+        "sha256": "201479895d43ea9e060fda490078e598752692f7047030e7c3785792c5d99648",
+        "bytes": 527914,
+        "retention": "local ignored build artifact"
+      },
+      {
+        "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-target-1m-rb-20261009-fullrequest-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791538913760100695.jsonl",
+        "sha256": "5146b94b8eef72d48b58d225824e271e19cde0e45de4802dc5b7ba6bc87ceb92",
+        "events": 33,
+        "retention": "local ignored build artifact"
+      }
+    ]
+  },
+  "bounded_prefix_profiles": {
+    "reference_interpreter": {
+      "step_budget": 50000,
+      "runner_wall_seconds": 39.552,
+      "request_execution_seconds": 37.902743873,
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "native_request_status": "budget_exhausted",
+      "reported_steps": 50000,
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "max_sampled_rss_kib": 1742032,
+      "child_cpu_seconds": 37.45,
+      "max_file_descriptors": 5,
+      "frontend_program_cache": "HIT",
+      "profile": {
+        "schema": "mncs.language.body-runtime-profile/1",
+        "steps": 50000,
+        "profiled_steps": 50000,
+        "step_count_matches_result": true,
+        "elapsed_seconds": 29.46783593,
+        "module_exclusive_seconds": {
+          "mncs.compiler.source.v1": 19.121204721,
+          "mncs.compiler.lexer.v1": 8.503526849,
+          "mncs.compiler.decl.v1": 0.82623697,
+          "mncs.compiler.segment.v1": 0.707400452,
+          "mncs.compiler.project.v1": 0.309457223
+        },
+        "hot_functions": [
+          {
+            "function": "source.validate_page_step",
+            "calls": 802,
+            "steps": 16040,
+            "exclusive_seconds": 11.863068098
+          },
+          {
+            "function": "source.byte_at_global",
+            "calls": 355,
+            "steps": 7436,
+            "exclusive_seconds": 5.255233479
+          },
+          {
+            "function": "lexer.scan_step_global",
+            "calls": 123,
+            "steps": 3254,
+            "exclusive_seconds": 2.858625694
+          },
+          {
+            "function": "lexer.next_token_global",
+            "calls": 68,
+            "steps": 4642,
+            "exclusive_seconds": 2.454264695
+          },
+          {
+            "function": "source.validate_pages",
+            "calls": 1,
+            "steps": 6460,
+            "exclusive_seconds": 2.002824798
+          }
+        ]
+      },
+      "artifacts": [
+        {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-cache-target-50k-profile-reference-capture-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "9c48297047ea4b8866052c33abcf66182b9b37c8964038f479079cb1f19e0cc3",
+          "bytes": 122744,
+          "retention": "local ignored build artifact"
+        },
+        {
+          "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-target-50k-profile-reference-capture-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791539598219713689.jsonl",
+          "sha256": "85ce4cabd9b6b216c14ef9648ae5829ddbdd77c78765cf9d9ed8302e404caa7e",
+          "events": 36,
+          "retention": "local ignored build artifact"
+        }
+      ]
+    },
+    "research_bytecode": {
+      "step_budget": 50000,
+      "runner_wall_seconds": 61.579,
+      "retained_admission_seconds": 35.17372701,
+      "request_execution_seconds": 24.946658856,
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "native_request_status": "budget_exhausted",
+      "reported_steps": 50000,
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "max_sampled_rss_kib": 3125492,
+      "child_cpu_seconds": 59.21,
+      "max_file_descriptors": 5,
+      "ssa_runtime_profile": {
+        "status": "BudgetExhausted",
+        "steps": 50000,
+        "total_seconds": 23.555263831,
+        "execution_frames": 2190,
+        "nested_calls": 2189,
+        "instructions": 35215,
+        "frame_setup_seconds_aggregated_across_frames": 18.758869069,
+        "nested_call_setup_seconds": 0.003639099,
+        "target_resolution_seconds": 0.002142951,
+        "sequence_copy_count": 0
+      },
+      "ssa_preparation_phases_seconds": {
+        "program_validation": 0.557900656,
+        "module_validation": 2.568837825,
+        "program_fingerprint": 1.56846625,
+        "module_fingerprint": 1.077393036,
+        "prepared_indexes": 0.045742112
+      },
+      "artifact_identity_phases_seconds_by_occurrence": [
+        {
+          "structural_identity": 0.040203035,
+          "bytes_digest": 3.966985853,
+          "content_identity": 3.666872417
+        },
+        {
+          "structural_identity": 0.040234131,
+          "bytes_digest": 3.97781315,
+          "content_identity": 3.671867471
+        },
+        {
+          "structural_identity": 0.040741511,
+          "bytes_digest": 3.983084777,
+          "content_identity": 3.663479832
+        }
+      ],
+      "bounded_step_unit_note": "The reference-interpreter and research-bytecode step counters are backend-specific budget units; equal numeric budgets do not establish equal work.",
+      "artifacts": [
+        {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-cache-target-50k-profile-rb-capture-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "008439fca721541c8bb9a17175f86e35d6967df08da233e959ca76cc43bfc909",
+          "bytes": 113290,
+          "retention": "local ignored build artifact"
+        },
+        {
+          "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-target-50k-profile-rb-capture-20261009-source-lexer-parser-segment-decl-flow-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791539889033385478.jsonl",
+          "sha256": "4a610724a09c7952dd086821202c42cd70c28f3dab7b8d64871d4da233299a99",
+          "events": 39,
+          "retention": "local ignored build artifact"
+        }
+      ]
+    }
+  },
+  "bottleneck_assessment": {
+    "measured": [
+      "The full target used 240 seconds of its request timeout after a cache-backed artifact was admitted; the request returned no result.",
+      "The bounded reference-interpreter profile attributes 19.12 exclusive seconds of its 29.47-second 50k prefix to source routines and 8.50 seconds to lexer routines.",
+      "The research SSA profile reports 18.76 aggregate seconds in per-frame setup across 2,190 frames, with 2,189 nested calls.",
+      "Three artifact identity event groups each recompute byte digest and content identity over the admitted artifact during the measured retained-session path."
+    ],
+    "inspection_inference": "SSA input initialization recursively calls value_matches_type for nested sequence arguments. The hot source.validate_page_step function receives the full pages sequence on each of 802 calls, so repeated deep sequence validation is a plausible major contributor to frame setup. The profile does not directly split frame setup into argument validation and slot allocation; instrument or differentially measure that split before claiming its exact share.",
+    "next_owner_frontier": "mncs-language SSA execution: isolate nested aggregate ABI validation cost and repeated immutable artifact identity work, then make one bounded backend-owned optimization with exact diagnostics and differential parity."
+  },
+  "measurement_tooling": {
+    "changed_files": [
+      "tools/measure_compiler_probe.py",
+      "tools/test_measure_compiler_probe.py"
+    ],
+    "behavior": "Read function and SSA runtime profiles plus SSA/artifact phase events from the child stderr captured in probe_report, in addition to the runner stderr.",
+    "verification": {
+      "command": "python3 tools/test_measure_compiler_probe.py",
+      "passed": 9,
+      "failed": 0,
+      "end_to_end_reference_profile_records": 1,
+      "end_to_end_research_ssa_profiles": 1,
+      "end_to_end_artifact_profile_events": 9
+    }
+  },
+  "compiler_succession": {
+    "matrix_path": "evidence/SELF-HOST-MATRIX.json",
+    "matrix_updated": false,
+    "complete_parse_check_proof_cfg_verified_ssa": [
+      "segment",
+      "parser",
+      "source",
+      "lexer",
+      "kernel"
+    ],
+    "parse_and_signature_only": [
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "executable_artifact": "not proven",
+    "stage_1": "not proven",
+    "stage_2": "not proven"
+  },
+  "unknowns": [
+    "The 1M-step request's semantic result and execution-step count are unknown because the 240-second request timeout produced no compiler response.",
+    "The 50k profiles are incomplete prefixes; they do not establish parser/checker/proof/CFG/SSA completion or semantic acceptance.",
+    "Hardware instruction count and per-function CPU time are not available.",
+    "Cgroup resource counters cover the process scope and may include sibling processes; process CPU/RSS/FD values are sampled from the correlated child."
+  ]
+}

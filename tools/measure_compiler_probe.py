@@ -341,8 +341,25 @@ def _operation_classification(report: dict[str, object] | None, runner_status: s
     return "UNKNOWN"
 
 
-def _body_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
-    prefix = "mncs-body-runtime-profile "
+def _nested_probe_stderr_lines(
+    report: dict[str, object] | None,
+    field: str,
+) -> list[str]:
+    if not isinstance(report, dict):
+        return []
+    probe_stderr = report.get("probe_stderr")
+    if not isinstance(probe_stderr, dict):
+        return []
+    values = probe_stderr.get(field)
+    if not isinstance(values, list):
+        return []
+    return [value for value in values if isinstance(value, str)]
+
+
+def _prefixed_json_profiles(
+    stderr: str,
+    prefix: str,
+) -> tuple[list[dict[str, object]], list[str]]:
     profiles = []
     errors = []
     for line_number, line in enumerate(stderr.splitlines(), start=1):
@@ -358,6 +375,25 @@ def _body_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[s
             continue
         profiles.append(value)
     return profiles, errors
+
+
+def _body_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
+    return _prefixed_json_profiles(stderr, "mncs-body-runtime-profile ")
+
+
+def _ssa_runtime_profiles(stderr: str) -> tuple[list[dict[str, object]], list[str]]:
+    return _prefixed_json_profiles(stderr, "mncs-runtime-profile ")
+
+
+def _named_profile_phases(stderr: str, prefix: str) -> list[dict[str, object]]:
+    pattern = re.compile(
+        re.escape(prefix) + r" phase=([^\s]+) elapsed_ns=(\d+)"
+    )
+    return [
+        {"phase": match.group(1), "elapsed_ns": int(match.group(2)), "scope": prefix.strip()}
+        for line in stderr.splitlines()
+        if (match := pattern.search(line)) is not None
+    ]
 
 
 def _body_profile_summaries(
@@ -500,17 +536,34 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "reference_interpreter" if args.signature_cache_fixture else args.backend
     )
     phases = [event for event in phase_events if event.get("event") == "phase"]
+    timing_stderr = "\n".join([
+        stderr,
+        *_nested_probe_stderr_lines(probe_report, "mncs_timings"),
+    ])
+    profile_stderr = "\n".join([
+        stderr,
+        *_nested_probe_stderr_lines(probe_report, "tail"),
+    ])
     compiler_timing_events = [
         {"stage": stage, "elapsed_ms": int(milliseconds), "scope": "existing MNCS_TIMINGS event"}
         for stage, milliseconds in re.findall(
-            r"mncs-timing stage=([^\s]+) elapsed_ms=(\d+)", stderr
+            r"mncs-timing stage=([^\s]+) elapsed_ms=(\d+)", timing_stderr
         )
     ]
-    runtime_profiles, runtime_profile_parse_errors = _body_runtime_profiles(stderr)
+    runtime_profiles, runtime_profile_parse_errors = _body_runtime_profiles(profile_stderr)
+    ssa_runtime_profiles, ssa_profile_parse_errors = _ssa_runtime_profiles(profile_stderr)
+    runtime_profile_parse_errors.extend(
+        f"mncs-runtime-profile {error}" for error in ssa_profile_parse_errors
+    )
+    ssa_profile_phase_events = _named_profile_phases(profile_stderr, "mncs-ssa-profile")
+    artifact_profile_phase_events = _named_profile_phases(
+        profile_stderr, "mncs-artifact-profile"
+    )
     runtime_profile_modules, runtime_profile_hot_functions = _body_profile_summaries(runtime_profiles)
     cgroup_after = _cgroup_snapshot(cgroup_dir)
     phase_unknown = [
         "compiler semantic phase labels for parser/checker/proof/CFG/SSA remain UNKNOWN; opt-in function profiles report runtime work without asserting those phase boundaries",
+        "SSA validation/fingerprint profile phases describe backend preparation, not the MNCS compiler's semantic parser/checker/proof/CFG/SSA work",
         "per-function CPU time remains UNKNOWN; the runtime profile reports wall time, call count, and executor steps",
         "hardware instruction count is UNKNOWN; no permitted counter is exposed by this execution environment",
         "an exit signal alone does not identify OOM; cgroup deltas and process termination evidence are reported separately",
@@ -549,6 +602,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "body_runtime_profiles": runtime_profiles,
         "body_runtime_profile_module_totals": runtime_profile_modules,
         "body_runtime_profile_hot_functions": runtime_profile_hot_functions,
+        "ssa_runtime_profiles": ssa_runtime_profiles,
+        "ssa_profile_phase_events": ssa_profile_phase_events,
+        "artifact_profile_phase_events": artifact_profile_phase_events,
         "runtime_profile_parse_errors": runtime_profile_parse_errors,
         "probe_report": probe_report,
         "stderr_tail": stderr[-12000:],
