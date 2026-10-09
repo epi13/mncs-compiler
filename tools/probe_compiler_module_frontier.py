@@ -253,6 +253,21 @@ def _seed_target_specialization(*, target_only=False):
     os.environ["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
 
 
+def _target_execution_started(phase_timings_ns, response):
+    """Return whether target execution is confirmed, false, or still unknown.
+
+    The native request phase is recorded only when the target request is
+    submitted. A transport failure before that phase means the target did not
+    start. Once submitted, a returned executor status confirms execution;
+    timeout or child exit leaves semantic execution UNKNOWN.
+    """
+    if "native_request_transport_and_execution" not in phase_timings_ns:
+        return False
+    if response.get("status") in {"returned", "budget_exhausted", "step_limit_exceeded"}:
+        return True
+    return None
+
+
 def run(
     module_names=None,
     target_last=False,
@@ -444,6 +459,13 @@ def run(
                 "reason": "native request was rejected before project execution",
             }
 
+        target_request_attempted = "native_request_transport_and_execution" in phase_timings_ns
+        target_execution_started = _target_execution_started(phase_timings_ns, response)
+        target_execution_status = (
+            "NOT_ATTEMPTED" if not target_request_attempted
+            else "CONFIRMED" if target_execution_started is True
+            else "UNKNOWN"
+        )
         report = {
             "schema_version": 1,
             "kind": (
@@ -480,10 +502,9 @@ def run(
             ),
             "program_cache_preparation_only": prepare_program_cache_only,
             "backend_admission_only": admission_only,
-            "target_execution_started": (
-                not prepare_program_cache_only and not admission_only
-                and response.get("status") != "not_run"
-            ),
+            "target_request_attempted": target_request_attempted,
+            "target_execution_started": target_execution_started,
+            "target_execution_status": target_execution_status,
             "target_input_modules": [Path(source_id).stem for source_id, _, _ in sources],
             "stage0_admission_source_modules": os.environ.get("MNCS_PROBE_MODULES"),
             "execution_modules_requested": os.environ.get("MNCS_PROBE_EXECUTION_MODULES"),

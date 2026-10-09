@@ -4,6 +4,7 @@ import signal
 import unittest
 
 from test_project import classify_probe_exit
+from probe_compiler_module_frontier import _target_execution_started
 
 
 class ProbeExitClassificationTests(unittest.TestCase):
@@ -35,6 +36,25 @@ class ProbeExitClassificationTests(unittest.TestCase):
     def test_zero_exit_without_response_is_unknown(self):
         status, _ = classify_probe_exit(0)
         self.assertEqual(status, "UNKNOWN")
+
+
+class TargetExecutionEvidenceTests(unittest.TestCase):
+    def test_admission_timeout_does_not_claim_target_started(self):
+        phases = {"retained_session_admission": 60_000_000_000}
+        self.assertIs(_target_execution_started(phases, {}), False)
+
+    def test_returned_target_response_confirms_execution(self):
+        phases = {"native_request_transport_and_execution": 10_000_000}
+        self.assertIs(_target_execution_started(phases, {"status": "returned"}), True)
+
+    def test_dispatched_target_timeout_keeps_execution_unknown(self):
+        phases = {"native_request_transport_and_execution": 60_000_000_000}
+        self.assertIs(_target_execution_started(phases, {}), None)
+
+    def test_admission_only_run_does_not_claim_target_started(self):
+        phases = {"retained_session_admission": 10_000_000,
+                  "record_type_identity_admission": 10_000_000}
+        self.assertIs(_target_execution_started(phases, {"status": "not_run"}), False)
 
 
 if __name__ == "__main__":

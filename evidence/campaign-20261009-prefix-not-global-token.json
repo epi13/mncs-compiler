@@ -1,0 +1,457 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "mncs-compiler-correctness-and-resource-evidence",
+  "campaign": "prefix-not-token-20261009",
+  "observed_at": "2026-10-09T21:16:35+00:00",
+  "title": "Restore Stage-0-compatible prefix-not token while preserving the Profile 0.13 gate",
+  "identity": {
+    "entry_delivered_main_revision": "324c0b997edd68472bc4f44a6c08cb02056bc78c",
+    "candidate_base_revision": "324c0b997edd68472bc4f44a6c08cb02056bc78c",
+    "tested_candidate_git_head": "324c0b997edd68472bc4f44a6c08cb02056bc78c",
+    "tested_candidate_branch": "campaign/keyword-window4-20261009",
+    "tested_candidate_worktree_dirty": true,
+    "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_probe_reported_identity": "unknown/b05dfa2b9154; exact source revision is bound by mncs-language.lock.json",
+    "compiler_source_identities": {
+      "lexer_operation": {
+        "kind": "sha256 over sorted basename, NUL separator, and per-file source SHA-256 digest",
+        "selected_modules": [
+          "lexer",
+          "source"
+        ],
+        "sha256": "cfdb27465907d000182313c167a385c0fb45b1fb00fd5cf3101d8626a084b4ab",
+        "module_source_sha256": {
+          "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+          "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+        }
+      },
+      "parser_operation": {
+        "kind": "sha256 over sorted basename, NUL separator, and per-file source SHA-256 digest",
+        "selected_modules": [
+          "decl",
+          "lexer",
+          "parser",
+          "segment",
+          "source"
+        ],
+        "sha256": "d8d88a778e4269ae85e28f492456d48a7490c7e85b51ec28d7785bb2f958c587",
+        "module_source_sha256": {
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+        }
+      },
+      "candidate_base_lexer_operation": {
+        "kind": "same algorithm, using candidate-base Git blobs",
+        "selected_modules": [
+          "lexer",
+          "source"
+        ],
+        "sha256": "4af0a18aa02500452b24a31632d0e11f3e7f74e9891749d63bb1bc0ca3c0cefc",
+        "module_source_sha256": {
+          "lexer": "802523e5ce8a05e742ccd80576cddc083ac6713095b2f1a5b66b64c4e6bb5d10",
+          "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175"
+        }
+      }
+    },
+    "changed_file_sha256": {
+      "src/compiler/lexer.mncs": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+      "src/compiler/decl.mncs": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+      "src/compiler/token-kinds.json": "c3e347e75b158a1386b63e804684d669b960bcad5f638fcb94c4d03bfc410d3e"
+    },
+    "probe_binary": {
+      "path": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+      "sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c"
+    },
+    "tool_source_sha256": {
+      "tools/probe_compiler_module_frontier.py": "69a31cbab0185a8c0218cb16f5672eb773ffc7ad70be584ae4ad1942afa6d825",
+      "tools/test_probe_telemetry.py": "dbeca2b06af3e61a94be04c9a1c6ba71e39db70f8e8f7cdfdc13d43fd22d5c64"
+    }
+  },
+  "change": {
+    "lexer": "Bare byte 33 now returns token kind 40 (not), diagnostic 0; byte pair != remains token kind 85.",
+    "parser": "The existing prefix_not path now consumes kind 40 and remains gated on Profile 0.13+; exact one-byte source check is retained.",
+    "language_semantics_changed": false,
+    "numeric_scanner_batching_in_delivered_source": false
+  },
+  "tests": {
+    "page_edge_scan_modes": {
+      "status": "SUCCESS",
+      "tool": "tools/test_global_scan_modes.py",
+      "requested_backend": "reference_interpreter",
+      "reported_backend": null,
+      "retained_sessions": 0,
+      "input_bytes": 5250,
+      "input_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+      "page_width": 1024,
+      "native_steps": 237700,
+      "compiler_token_count": 11,
+      "stage0_token_count": 11,
+      "token_kind_span_diagnostic_parity": true,
+      "eof_and_global_span_parity": true,
+      "scope": "Word, whitespace, line-comment, number, nested block-comment, and page-boundary cases; compiler source runs in Stage-0 reference interpreter."
+    },
+    "global_keyword_dispatch": {
+      "status": "SUCCESS",
+      "tool": "tools/test_global_keyword_dispatch.py",
+      "requested_backend": "reference_interpreter",
+      "reported_backend": null,
+      "retained_sessions": 0,
+      "input_bytes": 31188,
+      "keywords": 30,
+      "near_misses": 60,
+      "page_boundary_keyword_starts": 30,
+      "native_steps": 1329941,
+      "compiler_token_count": 180,
+      "stage0_token_count": 180,
+      "token_kind_span_diagnostic_parity": true,
+      "eof_and_global_span_parity": true
+    },
+    "real_source_full_lex": {
+      "status": "SUCCESS",
+      "operation": "mncs.compiler.lexer.v1::lex_tokens_from<64,1024>",
+      "requested_backend": "reference_interpreter",
+      "reported_backend": null,
+      "retained_sessions": 0,
+      "input": "src/compiler/source.mncs",
+      "input_bytes": 10466,
+      "input_sha256": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+      "page_width": 1024,
+      "step_budget_per_batch": 4000000,
+      "batches": [
+        {
+          "cursor": 0,
+          "next": 3680,
+          "tokens": 1024,
+          "steps": 412293
+        },
+        {
+          "cursor": 3680,
+          "next": 6484,
+          "tokens": 1024,
+          "steps": 389154
+        },
+        {
+          "cursor": 6484,
+          "next": 9536,
+          "tokens": 1024,
+          "steps": 396925
+        },
+        {
+          "cursor": 9536,
+          "next": 10466,
+          "tokens": 303,
+          "steps": 138260
+        }
+      ],
+      "compiler_token_count": 3375,
+      "stage0_token_count": 3375,
+      "mismatch_count": 0,
+      "exact_kind_global_span_diagnostic_and_eof_parity": true,
+      "child_observation": {
+        "process_identity": {
+          "pid": 23,
+          "start_ticks": 50469931,
+          "executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+          "probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c"
+        },
+        "wall_seconds": 49.072792651,
+        "cpu_seconds": 48.76,
+        "peak_rss_bytes": 66277376,
+        "max_kernel_rss_high_water_bytes": 66277376,
+        "maximum_observed_fd_count": 8,
+        "threads": 1,
+        "io_read_bytes_delta": 0,
+        "io_write_bytes_delta": 0,
+        "samples": 101,
+        "sampling_overhead_ns": 24425771,
+        "sampling_overhead_fraction": 0.000498,
+        "process_limits": {
+          "cpu": "unlimited",
+          "address_space": "unlimited",
+          "resident_set": "unlimited",
+          "open_files": 524288
+        },
+        "cgroup": {
+          "status": "OBSERVED",
+          "attribution": "shared process scope, not child-specific",
+          "memory_max": "max",
+          "cpu_max": "max 100000",
+          "memory_events_before": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 4,
+            "oom_group_kill": 0,
+            "sock_throttled": 14
+          },
+          "memory_events_after": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 4,
+            "oom_group_kill": 0,
+            "sock_throttled": 14
+          },
+          "event_deltas": {
+            "low": 0,
+            "high": 0,
+            "max": 0,
+            "oom": 0,
+            "oom_kill": 0,
+            "oom_group_kill": 0,
+            "sock_throttled": 0
+          },
+          "cumulative_oom_kill_attribution": "UNKNOWN; the unchanged value 4 does not attribute historical events to this child"
+        },
+        "host_pressure_snapshot": {
+          "cpu": "some avg10=0.12, avg60=0.05; full 0",
+          "memory": "some/full avg10=0.00",
+          "io": "some avg10=0.01, avg60=0.26; full avg10=0.01, avg60=0.24"
+        }
+      }
+    },
+    "profile_gated_prefix_not": {
+      "status": "SUCCESS",
+      "operation": "mncs.compiler.decl.v1::parse_unit<1024,1024>",
+      "requested_backend": "reference_interpreter",
+      "reported_backend": null,
+      "retained_sessions": 0,
+      "cases": [
+        {
+          "profile": "0.18",
+          "source_bytes": 62,
+          "source_sha256": "645c16cc321502a5298d7ef8e86d732055d37ceb4a9c0bd82fb15142bb12aaa8",
+          "response": "returned",
+          "steps": 23096,
+          "stage0_diagnostics": 0,
+          "native_ast_structural_parity": true
+        },
+        {
+          "profile": "0.12",
+          "source_bytes": 62,
+          "source_sha256": "edff3d0f75341b6b131eaecd894c697224432ea0dfa2fac973117c78f1a61ed1",
+          "response": "returned",
+          "steps": 20465,
+          "stage0_diagnostics": 6,
+          "first_error_span_parity": true
+        }
+      ],
+      "warm_resource_replay": {
+        "wall_seconds_including_admission_two_targets_and_oracles": 9.436835587,
+        "frontend_program_cache_hits": 1,
+        "cache_misses": 0,
+        "child_identity": {
+          "pid": 23,
+          "start_ticks": 50495872,
+          "executable": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe"
+        },
+        "positive_case": {
+          "cpu_time_delta_ns": 6940000000,
+          "peak_rss_bytes": 905687040,
+          "max_kernel_rss_high_water_bytes": 958181376,
+          "peak_fd_count": 3,
+          "threads": 1,
+          "io_read_bytes_delta": 0,
+          "io_write_bytes_delta": 0,
+          "samples": 14,
+          "sampling_overhead_ns": 3367282
+        },
+        "negative_case": {
+          "cpu_time_delta_ns": 2050000000,
+          "peak_rss_bytes": 810459136,
+          "max_kernel_rss_high_water_bytes": 958181376,
+          "peak_fd_count": 3,
+          "threads": 1,
+          "io_read_bytes_delta": 0,
+          "io_write_bytes_delta": 0,
+          "samples": 5,
+          "sampling_overhead_ns": 1157450
+        },
+        "total_sampling_overhead_ns": 4959634,
+        "cgroup_before_only": {
+          "status": "OBSERVED",
+          "memory_max": "max",
+          "cpu_max": "max 100000",
+          "memory_events": "low 0; high 0; max 0; oom 0; oom_kill 4; oom_group_kill 0; sock_throttled 14"
+        },
+        "cgroup_after": "UNKNOWN_NOT_CAPTURED"
+      },
+      "cold_capture": {
+        "status": "SUCCESS",
+        "cache_misses": 1,
+        "wrapper_elapsed_seconds": 107.279272741,
+        "returned_parse_steps": 23096,
+        "resource_telemetry": "NOT_ENABLED; per-child CPU/RSS/FD for the cold request are UNKNOWN",
+        "interpretation": "Cold frontend setup dominates this elapsed time; it is not the parse target runtime."
+      }
+    },
+    "target_execution_boundary_reporting": {
+      "status": "SUCCESS",
+      "test": "tools/test_probe_telemetry.py",
+      "checks_run": 10,
+      "new_boundary_cases": 4,
+      "cases": {
+        "timeout_during_retained_session_admission": "target_execution_started=false; NOT_ATTEMPTED",
+        "returned_target_response": "target_execution_started=true; CONFIRMED",
+        "timeout_after_target_request_dispatch": "target_execution_started=null; UNKNOWN",
+        "backend_admission_only": "target_execution_started=false; NOT_ATTEMPTED"
+      },
+      "compiler_target_execution_status_semantics": "A returned executor result confirms execution. A dispatched request without a result stays UNKNOWN. No target request means NOT_ATTEMPTED."
+    }
+  },
+  "performance_assessment": {
+    "delivered_change_performance_win_demonstrated": false,
+    "same_input_real_source_comparison": {
+      "input_bytes": 10466,
+      "input_sha256": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+      "candidate_base_scanner": {
+        "source_identity_sha256": "4af0a18aa02500452b24a31632d0e11f3e7f74e9891749d63bb1bc0ca3c0cefc",
+        "steps": 1336632,
+        "wall_seconds": 49.135,
+        "child_cpu_seconds": 48.77,
+        "peak_rss_mib": 57.09,
+        "hwm_mib": 66.1,
+        "max_fds": 4,
+        "stage0_mismatches": [
+          {
+            "byte_offset": 7371,
+            "line": 155,
+            "source_text": "!valid",
+            "candidate_token": "unknown",
+            "candidate_diagnostic": 2,
+            "stage0_token": "not",
+            "stage0_diagnostic": 0
+          }
+        ]
+      },
+      "prefix_not_candidate": {
+        "source_identity_sha256": "cfdb27465907d000182313c167a385c0fb45b1fb00fd5cf3101d8626a084b4ab",
+        "steps": 1336632,
+        "wall_seconds": 49.072792651,
+        "child_cpu_seconds": 48.76,
+        "peak_rss_mib": 63.21,
+        "hwm_mib": 63.21,
+        "max_fds": 8,
+        "stage0_mismatches": 0
+      },
+      "step_delta": 0,
+      "wall_delta_seconds": -0.062207349,
+      "cpu_delta_seconds": -0.01,
+      "interpretation": "Correctness improved; timing differences are small and no speedup is claimed. Baseline metrics are retained from the prior same-input probe record; its standalone raw artifact is unavailable."
+    },
+    "numeric_batch_candidate_rejected": {
+      "candidate_source_identity": "UNKNOWN_NOT_RETAINED; temporary lexer change was reverted before final full-source measurement",
+      "synthetic_fixture": {
+        "input_bytes": 2599,
+        "input_sha256": "d5f649bd491f4a51cbc173a3f31ebcb4f973f01c7047937829ee033b399ee50b",
+        "tokens": 599,
+        "stage0_parity": true,
+        "baseline_steps": 315037,
+        "candidate_steps": 275248,
+        "step_reduction_fraction": 0.1263,
+        "baseline_wall_seconds": 9.609,
+        "candidate_wall_seconds": 9.394,
+        "baseline_cpu_seconds": 9.57,
+        "candidate_cpu_seconds": 9.37,
+        "baseline_peak_rss_mib": 56.18,
+        "candidate_peak_rss_mib": 57.97,
+        "baseline_hwm_mib": 65.55,
+        "candidate_hwm_mib": 65.68,
+        "baseline_max_fds": 4,
+        "candidate_max_fds": 3
+      },
+      "real_source_fixture": {
+        "input": "src/compiler/source.mncs",
+        "input_bytes": 10466,
+        "input_sha256": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+        "baseline_steps": 1336632,
+        "candidate_steps": 1334702,
+        "candidate_step_reduction_fraction": 0.0014,
+        "baseline_wall_seconds": 49.135,
+        "candidate_wall_seconds": 49.179,
+        "baseline_cpu_seconds": 48.77,
+        "candidate_cpu_seconds": 48.88,
+        "baseline_peak_rss_mib": 57.09,
+        "candidate_peak_rss_mib": 100.34,
+        "baseline_hwm_mib": 66.1,
+        "candidate_hwm_mib": 101.34,
+        "candidate_max_fds": 4,
+        "candidate_stage0_token_parity": true
+      },
+      "decision": "Rejected and reverted: the real compiler source saved only 0.14% executor steps, slightly increased wall/CPU time, and raised peak RSS by about 43 MiB."
+    }
+  },
+  "operational_probe_context": {
+    "classification": "TIMEOUT",
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024> on source-only target input",
+    "phase": "stage0_frontend_elaboration_specialization",
+    "target_execution_started": false,
+    "semantic_outcome": "UNKNOWN",
+    "operation_outcome": "INTERRUPTED_BY_60_SECOND_PROBE_DEADLINE",
+    "wall_seconds": 60.103,
+    "child_cpu_seconds": 59.85,
+    "child_peak_rss_kib": 50800,
+    "child_max_fd_count": 4,
+    "cgroup_oom_event_delta": 0,
+    "pipeline_evidence_artifact": ".build/campaign-artifacts/compiler-facts/campaign-numeric-batch-source-prefix-100k-20261009-source-compiler-module-pipeline-source-target-source.json",
+    "pipeline_evidence_sha256": "154fb9e83a3fd1d5a0546e9bd0845dc7a53092016c152cca6b4d159dabf4348c",
+    "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-numeric-batch-source-prefix-100k-20261009-source-measurement.json",
+    "measurement_sha256": "1786618aa423609453f3f3b5175ab2e19c9ad2a4a597dbfabe3e81108334d88b",
+    "phase_trace_sha256": "c958d119c6d79b424f9c97fc97529d1213af44a2aaa050419cb3a5cb262cee4c",
+    "pipeline_reported_target_execution_started_before_fix": true,
+    "observed_failure_phase": "retained_session_admission",
+    "phase_trace_last_event": "stage0_frontend_elaboration_specialization_begin",
+    "native_request_transport_and_execution_phase_present": false,
+    "reconciled_target_request_attempted": false,
+    "reconciled_target_execution_started": false,
+    "reconciled_target_execution_status": "NOT_ATTEMPTED",
+    "reclassification_reason": "The Stage-0 probe did not answer the retained-session execution_status request, so the runner never constructed or sent compile_project_target. The old report computed target_execution_started from an empty response and incorrectly reported true.",
+    "cgroup_memory_events_before": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 4,
+      "oom_group_kill": 0,
+      "sock_throttled": 14
+    },
+    "cgroup_memory_events_after": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 4,
+      "oom_group_kill": 0,
+      "sock_throttled": 14
+    },
+    "cgroup_memory_event_delta": {
+      "low": 0,
+      "high": 0,
+      "max": 0,
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "sock_throttled": 0
+    },
+    "cgroup_attribution": "shared process scope, not child-specific",
+    "cgroup_limits": {
+      "memory_max": "max",
+      "cpu_max": "max 100000"
+    }
+  },
+  "scope": {
+    "compiler_module_parse_check_proof_cfg_ssa_matrix_changed": false,
+    "whole_module_lexer_proof_reestablished": false,
+    "native_backend_execution": false,
+    "canonical_vm_conformance": false,
+    "stage1_executable": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "stage_boundary_note": "These focused differentials execute compiler MNCS source through the pinned Stage-0 reference interpreter. They do not renew the changed lexer/decl whole-module check, proof, CFG, verified-SSA evidence or establish executable creation."
+  }
+}
