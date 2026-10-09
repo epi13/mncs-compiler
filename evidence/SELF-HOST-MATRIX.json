@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-09T22:39:07Z",
+    "updated_at": "2026-10-09T22:53:11Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -1797,7 +1797,82 @@
         "stage2_claimed": false
       },
       "push_status": "NOT_REATTEMPTED; prior DNS and approval-policy block unchanged"
+    },
+    "lexer_initial_byte_window_campaign_20261009": {
+      "observed_at": "2026-10-09T22:53:11Z",
+      "entry_delivered_main_revision": "c88d0675d344c4af212841e667c9af2284b2cf29",
+      "candidate_base_revision": "c88d0675d344c4af212841e667c9af2284b2cf29",
+      "tested_candidate_git_head": "c88d0675d344c4af212841e667c9af2284b2cf29",
+      "tested_candidate_branch": "campaign/lexer-head-byte-window-20261009",
+      "tested_candidate_worktree_dirty": true,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "tested_candidate_source_identity": {
+        "kind": "sha256 over sorted module basename including .mncs, NUL, and raw per-file SHA-256 digest",
+        "sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+        "module_source_sha256": {
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+          "lexer": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+        }
+      },
+      "matched_baseline_source_identity": {
+        "kind": "sha256 over sorted module basename including .mncs, NUL, and raw per-file SHA-256 digest",
+        "sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+        "module_source_sha256": {
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+          "lexer": "b24da41d736b372751c5e0e2a2528e7c45ec835e03d4c074f1e508e9d71172c5",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+        }
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "source_pages": 896,
+        "linked_functions": 1330,
+        "ssa_functions": 379
+      },
+      "target_operation": "mncs.compiler.project.v1::compile_project_target",
+      "target_backend": "reference_interpreter",
+      "target_step_budget": 50000,
+      "target_execution_classification": "RESOURCE_EXHAUSTED at explicit step budget; no returned project result; semantic outcome UNKNOWN",
+      "matched_run_means": {
+        "wall_seconds": {
+          "baseline": 25.0335,
+          "candidate": 23.782,
+          "change_percent": -5.0
+        },
+        "child_cpu_seconds": {
+          "baseline": 22.69,
+          "candidate": 21.46,
+          "change_percent": -5.42
+        },
+        "child_peak_rss_kib": {
+          "baseline": 1751164.0,
+          "candidate": 1751028.0
+        },
+        "child_fd_max": {
+          "baseline": 5,
+          "candidate": 5
+        }
+      },
+      "cp0001_smoke": {
+        "token_span_eof_parity": "SUCCESS",
+        "candidate_wall_change_percent": 2.22,
+        "candidate_step_change_percent": 4.39
+      },
+      "decision": "retain for measured real-flow prefix improvement; record small-fixture regression and target UNKNOWN",
+      "evidence_artifact": "evidence/campaign-20261009-lexer-initial-byte-window-cost.json",
+      "evidence_artifact_sha256": "e16545a96740330b278732653fb96aee5bebb17299fd7e0924570bd1598f5d7d",
+      "implementation_commit": "14ad9e535ee8974012cb75892ce78bbac4f7dd8f",
+      "delivery_role": "Exact tested source identity and bounded execution measurements; does not alter module-stage rows or establish Stage-1/Stage-2."
     }
   },
-  "evidence_updated_at": "2026-10-09T22:39:07Z"
+  "evidence_updated_at": "2026-10-09T22:53:11Z"
 }
