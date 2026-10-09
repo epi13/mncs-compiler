@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.source-page-validation-cost",
+  "observed_at": "2026-10-09T21:55:21Z",
+  "change": {
+    "implementation_commit": "59be1277613f69c9600a6e74635539ad22814798",
+    "candidate_branch": "campaign/source-page-validation-20261009",
+    "candidate_base_revision": "8850e479d73aef06a7845fc2bd8d6025e7771d0a",
+    "summary": "validate_pages indexes one page per loop and passes only that bounded page and scalar page_count to validate_page_step; result codes 0\u20136 and terminal checks are preserved.",
+    "changed_files": [
+      "src/compiler/source.mncs",
+      "tools/test_vm_emit.py"
+    ],
+    "language_semantics_changed": false
+  },
+  "identity": {
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "compiler_probe_git_head": "8850e479d73aef06a7845fc2bd8d6025e7771d0a",
+    "baseline_compiler_source": {
+      "kind": "sha256 over sorted module basename including .mncs, NUL separator, and per-file source SHA-256 digest",
+      "sha256": "834e1ee89e8a448bac350325498baea3e2a96c5b02abc943674976053ec070ea",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "module_source_sha256": {
+        "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+        "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      }
+    },
+    "candidate_compiler_source": {
+      "kind": "sha256 over sorted module basename including .mncs, NUL separator, and per-file source SHA-256 digest",
+      "sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "module_source_sha256": {
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+        "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      }
+    },
+    "direct_source_module_sha256": {
+      "baseline": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+      "candidate": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+    },
+    "stage0_probe_build_receipt": {
+      "identity": "sha256:0a2ad177a67f060d3096287fdf250fd1b7233625cb94c018c2217003c30acd43",
+      "producer_source_revision": "4d957194d967952fd26411807f3862fa1cacb83c",
+      "assurance": "local build observation; not independent attestation"
+    },
+    "canonical_vm": {
+      "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "binary_sha256": "2209c9b72d5bceb6bd9002ca7845dbca4eee43f23907f5720f6542ba95d6f428"
+    },
+    "candidate_vm_artifact": {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-source-page-validation-vm-artifact-20261009.json",
+      "artifact_id": "sha256:395e1317b7626f4aa89398986d6caa5a2f82e6e9d4a3a4e69443d1a84dd824d4",
+      "file_sha256": "51d7d8668eddfdcd2f0f7af833f72d480227aa9006ce424c58b25aefe99da9d5",
+      "bytes": 422948,
+      "generic_entrypoint": "validate_pages<1024,1024>"
+    }
+  },
+  "direct_validator_differential": {
+    "fixture": "802-page validator input; width/stride 1024",
+    "cases": 9,
+    "status": "SUCCESS",
+    "values_and_statuses_match_stage0": true,
+    "values_and_statuses_match_canonical_vm": true,
+    "covered_result_codes": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "steps": {
+      "baseline": 22514,
+      "candidate": 22514,
+      "valid_shape_equal": true,
+      "invalid_code_3_delta": 3,
+      "invalid_code_4_delta": 2
+    },
+    "executor_elapsed_ns": {
+      "baseline": 166296666,
+      "candidate": 107154374,
+      "reduction_percent": 35.6
+    },
+    "host_wall_seconds": {
+      "baseline": 0.18367,
+      "candidate": 0.12472,
+      "reduction_percent": 32.1
+    },
+    "cpu_seconds_quantized_at_100_ticks_per_second": {
+      "baseline": 0.17,
+      "candidate": 0.1
+    },
+    "process_hwm_kib": {
+      "baseline": 20712,
+      "candidate": 20532
+    },
+    "sampled_fds": {
+      "baseline": 4,
+      "candidate": 4
+    }
+  },
+  "real_flow_prefix": {
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "input_pages_at_stride_1024": 895,
+    "stage0_oracle": {
+      "valid": true,
+      "diagnostics": 0,
+      "linked_functions": 1329,
+      "ssa_functions": 378
+    },
+    "bounded_target": {
+      "step_budget": 50000,
+      "baseline_status": "budget_exhausted",
+      "candidate_status": "budget_exhausted",
+      "semantic_result": "UNKNOWN",
+      "reported_steps_each": 50000
+    },
+    "measurements": {
+      "baseline_target_sha256": "1f35d00a29b6f001cd4864718b35d9b7ddcd151480688c4c3071326a6af3603",
+      "candidate_target_sha256": "2791223109f808f98ac42e076da250f681ce245b26aea5fb0e97d2fc39a8506a",
+      "candidate_cache_prep_sha256": "41f0293e44b6143c5cbd3ec489b7b2e52f46b556b1a79498c50890de62cd9b29",
+      "candidate_report_sha256": "ee946177abe341ce068f8ca25f8c40b866baa441a4659027dff9dcd7d3c4d23b"
+    },
+    "target_execution_seconds": {
+      "baseline": 34.657663,
+      "candidate": 22.82163,
+      "reduction_percent": 34.2
+    },
+    "target_runtime_profile_seconds": {
+      "baseline": 27.483,
+      "candidate": 15.644,
+      "reduction_percent": 43.1
+    },
+    "source_validate_page_step": {
+      "calls": 803,
+      "exclusive_seconds": {
+        "baseline": 11.654,
+        "candidate": 0.097,
+        "reduction_percent": 99.2
+      }
+    },
+    "whole_runner_wall_seconds": {
+      "baseline": 149.08,
+      "candidate": 137.703,
+      "reduction_percent": 7.6,
+      "unchanged_stage0_oracle_seconds": 107.0
+    },
+    "whole_runner_cpu_seconds": {
+      "baseline": 142.6,
+      "candidate": 131.16
+    },
+    "whole_runner_hwm_kib": {
+      "baseline": 1749948,
+      "candidate": 1749668
+    },
+    "sampled_fds": {
+      "baseline": 5,
+      "candidate": 5
+    },
+    "candidate_cache_preparation": {
+      "classification": "SUCCESS; preparation only",
+      "wall_seconds": 151.574,
+      "stage0_frontend_elaboration_specialization_seconds": 150.48,
+      "program_functions": 3128,
+      "encoded_artifact_uncompressed_bytes": 151014270,
+      "compressed_bytes": 5291138
+    },
+    "cgroup": {
+      "memory_max": "max",
+      "oom_delta": 0,
+      "oom_kill_delta": 0,
+      "scope_note": "cgroup may include siblings; no OOM attribution"
+    }
+  },
+  "cranelift_attempts": {
+    "classification": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "operation_outcome": "INTERRUPTED",
+    "stop_cap_mib": 2300,
+    "sampled_peak_mib": [
+      2380,
+      2420
+    ],
+    "cases": [
+      [
+        "source",
+        "lexer",
+        "segment"
+      ],
+      [
+        "source"
+      ]
+    ],
+    "cgroup_oom_delta": 0,
+    "interpretation": "runner stopped isolated children at sampled RSS cap; this is not a semantic rejection or evidence of kernel OOM"
+  },
+  "validation": {
+    "passed": [
+      "tools/test_vm_emit.py: byte_at<8> and validate_pages<1024,1024> direct-VM versus pinned Stage-0 oracle",
+      "nine-case validator differential"
+    ],
+    "known_unrelated_failure": {
+      "command": "MNCS_CP0001_TIERS=C tools/test_cp0001.py",
+      "expected_whitespace_token_end": 8193,
+      "actual_whitespace_token_end": 9216,
+      "baseline_candidate_result_equal": {
+        "kind": 1,
+        "start": 0,
+        "end": 9216,
+        "diagnostics": 0,
+        "steps": 367426
+      },
+      "classification": "PRE_EXISTING_BASELINE_MISMATCH"
+    },
+    "whole_module_source_proof_reestablished": false,
+    "whole_module_canonical_vm_conformance": false,
+    "stage1_executable_proven": false,
+    "stage2_succession_proven": false
+  },
+  "matrix_policy": {
+    "historical_top_level_compiler_head_preserved": true,
+    "historical_source_module_row_preserved": true,
+    "historical_source_proof_hash": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+    "old_source_proof_applies_to_candidate_bytes": false,
+    "direct_vm_callable_is_not_whole_module_proof_or_stage1": true,
+    "language_repository_changed": false
+  }
+}

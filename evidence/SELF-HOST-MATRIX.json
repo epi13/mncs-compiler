@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-09T21:17:22Z",
+    "updated_at": "2026-10-09T21:55:21Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -1572,7 +1572,63 @@
       "numeric_batching_candidate": "Rejected and reverted after negligible real-source step reduction, slightly worse wall/CPU, and increased RSS; exact temporary candidate source identity was not retained.",
       "push_status": "NOT_REATTEMPTED; prior push attempt remained blocked by DNS resolution and auto-review approval policy never; remote main revision remains UNKNOWN.",
       "origin_tracking_revision_at_campaign_entry": "dde76ba22698330a6f509322d6afbe97343796b2"
+    },
+    "source_page_validation_cost_campaign_20261009": {
+      "observed_at": "2026-10-09T21:55:21Z",
+      "entry_delivered_main_revision": "59be1277613f69c9600a6e74635539ad22814798",
+      "candidate_base_revision": "8850e479d73aef06a7845fc2bd8d6025e7771d0a",
+      "tested_candidate_git_head": "59be1277613f69c9600a6e74635539ad22814798",
+      "tested_candidate_branch": "campaign/source-page-validation-20261009",
+      "tested_candidate_worktree_dirty": false,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "tested_candidate_source_identity": {
+        "kind": "sha256 over sorted module basename including .mncs, NUL separator, and per-file source SHA-256 digest",
+        "sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "module_source_sha256": {
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+          "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        }
+      },
+      "evidence_artifact": "evidence/campaign-20261009-source-page-validation-cost.json",
+      "evidence_artifact_sha256": "6cfaa7f021355762ad906373a197e839a141ed0f65433dd7bd0e867e92ac86f4",
+      "implementation_commit": "59be1277613f69c9600a6e74635539ad22814798",
+      "delivery_role": "Reduces repeated whole-table copying during source page validation and extends direct VM/oracle differentials. The real-flow bounded request remains budget-exhausted; no whole-module proof or Stage-1/2 claim is made.",
+      "real_flow_prefix": {
+        "baseline_source_identity_sha256": "834e1ee89e8a448bac350325498baea3e2a96c5b02abc943674976053ec070ea",
+        "candidate_source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+        "baseline_measurement_sha256": "1f35d00a29b6f001cd4864718b35d9b7ddcd151480688c4c3071326a6af3603",
+        "candidate_measurement_sha256": "2791223109f808f98ac42e076da250f681ce245b26aea5fb0e97d2fc39a8506a",
+        "step_budget": 50000,
+        "statuses": [
+          "budget_exhausted",
+          "budget_exhausted"
+        ],
+        "target_execution_seconds": [
+          34.657663,
+          22.82163
+        ],
+        "source_validate_page_step_exclusive_seconds": [
+          11.654,
+          0.097
+        ],
+        "stage0_oracle_valid": true
+      },
+      "native_attempt_classification": "RESOURCE_EXHAUSTED_BY_EXPLICIT_SAMPLED_RSS_STOP_CAP; semantic UNKNOWN; cgroup OOM delta zero",
+      "matrix_row_policy": "Historical modules.source proof remains bound to source_sha256 5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89 and does not apply to candidate bytes; historical top-level compiler_head and module rows were not rewritten.",
+      "push_status": "NOT_REATTEMPTED; prior DNS and approval-policy block unchanged"
     }
   },
-  "evidence_updated_at": "2026-10-09T21:17:22Z"
+  "evidence_updated_at": "2026-10-09T21:55:21Z"
 }
