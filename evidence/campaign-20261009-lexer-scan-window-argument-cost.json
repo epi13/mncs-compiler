@@ -1,0 +1,696 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-measured-execution-optimization",
+  "observed_at": "2026-10-09T22:38:40Z",
+  "decision": "RETAIN_MEASURED_SCAN_ARGUMENT_REDUCTION",
+  "implementation": {
+    "file": "src/compiler/lexer.mncs",
+    "implementation_commit": "5b80c556f55a00875aa41d7fe3d86faebef458e8",
+    "candidate_base_git_revision": "f5aa9547592694afd11bc28cd8c2da9a17b44ef7",
+    "tested_candidate_git_head": "f5aa9547592694afd11bc28cd8c2da9a17b44ef7",
+    "tested_candidate_branch": "campaign/lexer-scan-window-arg-20261009",
+    "working_tree_was_dirty_when_profiled": true,
+    "description": "The four next_token_global scan loops compute ByteWindow4 once and pass the compact value into scan_chunk_window. The original generic scan_chunk_global signature remains as a compatibility wrapper.",
+    "semantic_scope": "Line comments, block comments, words, numbers, and whitespace retain their existing scan logic; only the location of byte-window acquisition and the scan helper argument shape changed."
+  },
+  "identities": {
+    "historical_matrix_compiler_head": "44fe937dca0cecaf5cc562a4b3e18127e6399d1c",
+    "historical_matrix_head_role": "Historical candidate/base identity captured at observed_at; see identity_ledger for campaign-entry and tested-candidate identities.",
+    "campaign_entry_delivered_main_revision": "f5aa9547592694afd11bc28cd8c2da9a17b44ef7",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "baseline_source_identity": {
+      "kind": "sha256 of sorted module basenames including .mncs, NUL separator, and per-file SHA-256 digest",
+      "sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+      "module_source_sha256": {
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+        "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      }
+    },
+    "candidate_source_identity": {
+      "kind": "sha256 of sorted module basenames including .mncs, NUL separator, and per-file SHA-256 digest",
+      "sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+      "module_source_sha256": {
+        "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "b24da41d736b372751c5e0e2a2528e7c45ec835e03d4c074f1e508e9d71172c5",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+      }
+    },
+    "source_identity_distinction": "Git head f5aa954 is the candidate base; source bundle hashes identify the exact tested module bytes; implementation commit 5b80c55 records the tested change and is the revision to fast-forward to main."
+  },
+  "flow_closure": {
+    "target_module": "flow",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "input_page_width": 1024,
+    "baseline": {
+      "source_pages": 895,
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1329,
+        "ssa_functions": 378
+      },
+      "source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb"
+    },
+    "candidate": {
+      "source_pages": 896,
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1330,
+        "ssa_functions": 379
+      },
+      "source_identity_sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f"
+    },
+    "retained_older_oracle_identity": {
+      "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-stage0-oracle-20261008-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "06f6d015acac35c03ba4f2c2b4ee4ae1803e8cc806ebb2d94958994957350c6d",
+      "bytes": 10632,
+      "source_identity_sha256": "05be65c36f5da657a81bac708ca2bce499f07bfc924c67d06e2b33b5474d6b4a",
+      "source_pages": 894,
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1324,
+        "ssa_functions": 376
+      },
+      "meaning": "Historical 894-page / 1324-function / 376-SSA oracle result remains bound to its own source identity; it is not overwritten by the current f5 baseline or candidate."
+    }
+  },
+  "measurement_contract": {
+    "backend_requested": "reference_interpreter",
+    "target": "mncs.compiler.project.v1::compile_project_target for source_index of flow",
+    "step_budget": 50000,
+    "timeout_seconds": 120,
+    "sampled_probe_child_rss_cap_mib": 3000,
+    "stage0_oracle_skipped_during_target_profile": true,
+    "stage0_oracles_run_separately": true,
+    "resource_cap_triggered": false,
+    "cgroup_oom_kill_delta": 0,
+    "target_status": "budget_exhausted in all four target runs",
+    "target_semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "classification_note": "RESOURCE_EXHAUSTED refers to the explicit 50000-step probe budget; no timeout, sampled RSS stop, or new cgroup OOM event occurred. This is not a semantic rejection or whole-flow success."
+  },
+  "performance_summary": {
+    "baseline_target_runs": 2,
+    "candidate_target_runs": 2,
+    "mean_wall_seconds": {
+      "baseline": 26.035,
+      "candidate": 25.034,
+      "change_percent": -3.85
+    },
+    "mean_child_cpu_seconds": {
+      "baseline": 23.855,
+      "candidate": 22.69,
+      "change_percent": -4.88
+    },
+    "mean_child_peak_rss_kib": {
+      "baseline": 1749822,
+      "candidate": 1751164,
+      "change_kib": 1342
+    },
+    "max_child_fd_count": {
+      "baseline": 5,
+      "candidate": 5
+    },
+    "mean_child_rchar_bytes": {
+      "baseline": 203707359,
+      "candidate": 179647084,
+      "interpretation": "Character reads include pipe traffic; read_bytes was zero in these runs, so this is not evidence of reduced physical storage I/O."
+    },
+    "profiled_module_steps_at_budget": {
+      "lexer": {
+        "baseline": 16152,
+        "candidate": 16152
+      },
+      "source": {
+        "baseline": 30851,
+        "candidate": 30851
+      }
+    },
+    "profiled_call_counts": {
+      "next_token_global": {
+        "baseline": 71,
+        "candidate": 71
+      },
+      "scan_helper": {
+        "baseline": 68,
+        "candidate": 68
+      },
+      "byte_window4_global": {
+        "baseline": 68,
+        "candidate": 68
+      }
+    },
+    "mean_scan_path_inclusive_seconds": {
+      "baseline_scan_chunk_global_including_nested_window_lookup": 2.867723,
+      "candidate_scan_chunk_window_plus_separate_window_lookup": 1.620304,
+      "change_percent": -43.5
+    },
+    "mean_lexer_module_inclusive_seconds": {
+      "baseline": 36.54382,
+      "candidate": 31.483245,
+      "change_percent": -13.85
+    },
+    "cgroup_memory_events_delta": {
+      "oom": 0,
+      "oom_kill": 0,
+      "oom_group_kill": 0,
+      "high": 0,
+      "max": 0
+    }
+  },
+  "verification": {
+    "cp0001_smoke": {
+      "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/cp0001-results.json",
+      "sha256": "01beafbc05814fd0e2ea6d2a8bb5c5e0410dd16843bc5830e6a45b848ddb5fcb",
+      "bytes": 1007,
+      "command": "MNCS_CP0001_SMOKE=1 MNCS_CP0001_TIERS=AB MNCS_PROBE_BACKEND=reference_interpreter python3 tools/test_cp0001.py",
+      "status": "SUCCESS",
+      "probe_requests": 1899,
+      "tokens_compared": 1283,
+      "result_sha256": "b8ff644ac7c0b527320e7239f5b78a49622b7ecd7ef62befd47833a7aff5d8c7",
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "elapsed_seconds": 35.334,
+      "splits_canonical": 10,
+      "splits_rejected": 9
+    },
+    "candidate_stage0_oracle": "SUCCESS valid, no diagnostics, 1330 linked functions and 379 SSA functions on exact candidate identity",
+    "baseline_stage0_oracle": "SUCCESS valid, no diagnostics, 1329 linked functions and 378 SSA functions on exact f5 baseline identity",
+    "flow_native_target": "INCOMPLETE; all target runs budget_exhausted at 50000 steps and returned no project result",
+    "whole_module_native_parse_check_proof_cfg_verified_ssa": false,
+    "canonical_vm_conformance": false,
+    "cranelift_or_research_bytecode_execution": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "artifacts": {
+    "baseline_cache_preparation": {
+      "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-prep-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "f220b2dfe0250d70cafab42ed39518fb49f268d3efb4dae8e1cf20005a9660c8",
+      "bytes": 580509,
+      "label": "flow-scan-window-baseline-prep-20261009",
+      "execution_mode": "frontend_cache_preparation",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 151.701,
+      "child_cpu_seconds": 150.14000000000001,
+      "child_user_cpu_seconds": 149.28,
+      "child_system_cpu_seconds": 0.86,
+      "child_peak_rss_kib": 2134376,
+      "child_max_fd_count": 5,
+      "child_io_rchar_bytes": 177823143,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 156310215,
+      "child_io_write_bytes": 5373952,
+      "cgroup_memory_events_delta": {
+        "high": 0,
+        "oom_group_kill": 0,
+        "low": 0,
+        "oom_kill": 0,
+        "max": 0,
+        "sock_throttled": 0,
+        "oom": 0
+      },
+      "target_status": "not_run",
+      "target_steps": 0,
+      "step_budget": 8000000,
+      "source_pages_at_stride_1024": 895,
+      "compiler_source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+      "stage0_oracle": {
+        "status": "not-run",
+        "reason": "program-cache preparation mode does not execute the compiler target or Stage-0 oracle"
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-prep-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "7e939d2138c68f09176f274bacffdb1dfc2be314eb9380907dfd1b83ebad238e",
+        "bytes": 6577
+      }
+    },
+    "baseline_target_run_1": {
+      "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "1111afa9ddf3a7843b6c84fa03fc1aabbf6aa76256c58fbc7c6415fc71d5c2b0",
+      "bytes": 175633,
+      "label": "flow-scan-window-baseline-50k-20261009",
+      "execution_mode": "reference_interpreter",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 26.036,
+      "child_cpu_seconds": 23.82,
+      "child_user_cpu_seconds": 23.44,
+      "child_system_cpu_seconds": 0.38,
+      "child_peak_rss_kib": 1749824,
+      "child_max_fd_count": 5,
+      "child_io_rchar_bytes": 203707359,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 151280043,
+      "child_io_write_bytes": 20480,
+      "cgroup_memory_events_delta": {
+        "max": 0,
+        "low": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "oom": 0,
+        "sock_throttled": 0,
+        "high": 0
+      },
+      "target_status": "budget_exhausted",
+      "target_steps": 50000,
+      "step_budget": 50000,
+      "source_pages_at_stride_1024": 895,
+      "compiler_source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+      "stage0_oracle": {
+        "status": "not-run",
+        "reason": "skipped for bounded native execution profiling; this run makes no Stage-0 differential claim"
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "51ef7c8922b9a04a50a9200159265a5e9a6832e30330a3252f6e53eff446570f",
+        "bytes": 8705
+      },
+      "profile": {
+        "lexer_module": {
+          "module": "mncs.compiler.lexer.v1",
+          "calls": 856,
+          "steps": 16152,
+          "inclusive_ns": 36407829264,
+          "exclusive_ns": 7519364598
+        },
+        "next_token_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+          "calls": 71,
+          "steps": 4036,
+          "inclusive_ns": 10546596435,
+          "exclusive_ns": 2393139704
+        },
+        "legacy_scan_chunk_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_global__spec_3c0ffe82",
+          "calls": 68,
+          "steps": 2499,
+          "inclusive_ns": 2858354293,
+          "exclusive_ns": 1841104453
+        },
+        "scan_chunk_window": null,
+        "byte_window4_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.source.v1::byte_window4_global__spec_3c0ffe82",
+          "calls": 68,
+          "steps": 3332,
+          "inclusive_ns": 1004709298,
+          "exclusive_ns": 1004709298
+        }
+      }
+    },
+    "baseline_target_run_2": {
+      "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "85200facbfbf5246f7c19e6636074657bd7f573044a996a14e412f69385d54e9",
+      "bytes": 175848,
+      "label": "flow-scan-window-baseline-repeat-50k-20261009",
+      "execution_mode": "reference_interpreter",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 26.035,
+      "child_cpu_seconds": 23.89,
+      "child_user_cpu_seconds": 23.44,
+      "child_system_cpu_seconds": 0.45,
+      "child_peak_rss_kib": 1749820,
+      "child_max_fd_count": 5,
+      "child_io_rchar_bytes": 203707359,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 151280091,
+      "child_io_write_bytes": 20480,
+      "cgroup_memory_events_delta": {
+        "oom_group_kill": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "sock_throttled": 0,
+        "high": 0,
+        "low": 0,
+        "max": 0
+      },
+      "target_status": "budget_exhausted",
+      "target_steps": 50000,
+      "step_budget": 50000,
+      "source_pages_at_stride_1024": 895,
+      "compiler_source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+      "stage0_oracle": {
+        "status": "not-run",
+        "reason": "skipped for bounded native execution profiling; this run makes no Stage-0 differential claim"
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "1c1f8a8ee54930733fdf4b1bc66f00ed965470d48d73a348d56cdfb16a9ac64e",
+        "bytes": 8752
+      },
+      "profile": {
+        "lexer_module": {
+          "module": "mncs.compiler.lexer.v1",
+          "calls": 856,
+          "steps": 16152,
+          "inclusive_ns": 36679810745,
+          "exclusive_ns": 7593452837
+        },
+        "next_token_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+          "calls": 71,
+          "steps": 4036,
+          "inclusive_ns": 10627979371,
+          "exclusive_ns": 2425798976
+        },
+        "legacy_scan_chunk_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_global__spec_3c0ffe82",
+          "calls": 68,
+          "steps": 2499,
+          "inclusive_ns": 2877092251,
+          "exclusive_ns": 1854480494
+        },
+        "scan_chunk_window": null,
+        "byte_window4_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.source.v1::byte_window4_global__spec_3c0ffe82",
+          "calls": 68,
+          "steps": 3332,
+          "inclusive_ns": 1009700398,
+          "exclusive_ns": 1009700398
+        }
+      }
+    },
+    "baseline_stage0_oracle": {
+      "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-stage0-oracle-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "729aae17e39864dd349d64fab07d1bfb329b2328c9309170fcdff5c7236a8c85",
+      "bytes": 256521,
+      "label": "flow-scan-window-baseline-stage0-oracle-20261009",
+      "execution_mode": "reference_interpreter",
+      "classification": "SUCCESS",
+      "operation_outcome": "STAGE0_ORACLE_COMPLETED",
+      "semantic_result": "UNKNOWN_NO_NATIVE_COMPILER_RESULT",
+      "wall_seconds": 112.646,
+      "child_cpu_seconds": 107.45,
+      "child_user_cpu_seconds": 106.5,
+      "child_system_cpu_seconds": 0.95,
+      "child_peak_rss_kib": 1044024,
+      "child_max_fd_count": 4,
+      "child_io_rchar_bytes": 3613448,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 92980172,
+      "child_io_write_bytes": 20480,
+      "cgroup_memory_events_delta": {
+        "max": 0,
+        "sock_throttled": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "oom": 0,
+        "low": 0,
+        "high": 0
+      },
+      "target_status": null,
+      "target_steps": null,
+      "step_budget": null,
+      "source_pages_at_stride_1024": 895,
+      "compiler_source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1329,
+        "ssa_functions": 378
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-baseline-stage0-oracle-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "59adb5da5db462359e0a2a19988baf19a3ef10b3b2df76f9b8fc9124cf2cc343",
+        "bytes": 5563
+      }
+    },
+    "candidate_cache_preparation": {
+      "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-v2-prep-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "83b09aacf6505d7b9c816f44501494ce41ef1c4154a87b321317c63e95b32bff",
+      "bytes": 578987,
+      "label": "flow-scan-window-candidate-v2-prep-20261009",
+      "execution_mode": "frontend_cache_preparation",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 151.699,
+      "child_cpu_seconds": 150.38,
+      "child_user_cpu_seconds": 149.63,
+      "child_system_cpu_seconds": 0.75,
+      "child_peak_rss_kib": 2132600,
+      "child_max_fd_count": 5,
+      "child_io_rchar_bytes": 153737836,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 156310225,
+      "child_io_write_bytes": 5349376,
+      "cgroup_memory_events_delta": {
+        "oom_kill": 0,
+        "low": 0,
+        "oom_group_kill": 0,
+        "max": 0,
+        "oom": 0,
+        "high": 0,
+        "sock_throttled": 0
+      },
+      "target_status": "not_run",
+      "target_steps": 0,
+      "step_budget": 8000000,
+      "source_pages_at_stride_1024": 896,
+      "compiler_source_identity_sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+      "stage0_oracle": {
+        "status": "not-run",
+        "reason": "program-cache preparation mode does not execute the compiler target or Stage-0 oracle"
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-v2-prep-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "4686368f1ed338d47750ef8b1a911b1a9f3fe2763309bc2e22a8011cc4e6da80",
+        "bytes": 6519
+      }
+    },
+    "candidate_target_run_1": {
+      "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-v2-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "26c853a8d52df7a1dab411ff6db6d7d5eb50a35e1e048de6853cec47d7cac324",
+      "bytes": 172176,
+      "label": "flow-scan-window-candidate-v2-50k-20261009",
+      "execution_mode": "reference_interpreter",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 25.034,
+      "child_cpu_seconds": 22.73,
+      "child_user_cpu_seconds": 22.34,
+      "child_system_cpu_seconds": 0.39,
+      "child_peak_rss_kib": 1751172,
+      "child_max_fd_count": 5,
+      "child_io_rchar_bytes": 179647059,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 151278950,
+      "child_io_write_bytes": 20480,
+      "cgroup_memory_events_delta": {
+        "max": 0,
+        "sock_throttled": 0,
+        "oom_group_kill": 0,
+        "high": 0,
+        "oom_kill": 0,
+        "oom": 0,
+        "low": 0
+      },
+      "target_status": "budget_exhausted",
+      "target_steps": 50000,
+      "step_budget": 50000,
+      "source_pages_at_stride_1024": 896,
+      "compiler_source_identity_sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+      "stage0_oracle": {
+        "status": "not-run",
+        "reason": "skipped for bounded native execution profiling; this run makes no Stage-0 differential claim"
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-v2-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "e2652e2f84f4d0c876d26a73980ed1e966eb7ce8f4b14786be7d49c6582a5180",
+        "bytes": 8761
+      },
+      "profile": {
+        "lexer_module": {
+          "module": "mncs.compiler.lexer.v1",
+          "calls": 856,
+          "steps": 16152,
+          "inclusive_ns": 31463095190,
+          "exclusive_ns": 6447844212
+        },
+        "next_token_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+          "calls": 71,
+          "steps": 4580,
+          "inclusive_ns": 9455934839,
+          "exclusive_ns": 2570518329
+        },
+        "legacy_scan_chunk_global": null,
+        "scan_chunk_window": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+          "calls": 68,
+          "steps": 1955,
+          "inclusive_ns": 621908041,
+          "exclusive_ns": 610399606
+        },
+        "byte_window4_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.source.v1::byte_window4_global__spec_3c0ffe82",
+          "calls": 68,
+          "steps": 3332,
+          "inclusive_ns": 1000658653,
+          "exclusive_ns": 1000658653
+        }
+      }
+    },
+    "candidate_target_run_2": {
+      "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-v2-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "40d1e2c9cc1568e84fec6972692243f25f7768891d7fb98795681bdab54120a5",
+      "bytes": 171541,
+      "label": "flow-scan-window-candidate-v2-repeat-50k-20261009",
+      "execution_mode": "reference_interpreter",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 25.033,
+      "child_cpu_seconds": 22.650000000000002,
+      "child_user_cpu_seconds": 22.28,
+      "child_system_cpu_seconds": 0.37,
+      "child_peak_rss_kib": 1751156,
+      "child_max_fd_count": 5,
+      "child_io_rchar_bytes": 179647108,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 151278953,
+      "child_io_write_bytes": 20480,
+      "cgroup_memory_events_delta": {
+        "low": 0,
+        "oom_group_kill": 0,
+        "max": 0,
+        "oom_kill": 0,
+        "sock_throttled": 0,
+        "oom": 0,
+        "high": 0
+      },
+      "target_status": "budget_exhausted",
+      "target_steps": 50000,
+      "step_budget": 50000,
+      "source_pages_at_stride_1024": 896,
+      "compiler_source_identity_sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+      "stage0_oracle": {
+        "status": "not-run",
+        "reason": "skipped for bounded native execution profiling; this run makes no Stage-0 differential claim"
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-v2-repeat-50k-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "26763123fa63db6f739c1cf3a017257372c5ae39577ea86d95006c6fc1420544",
+        "bytes": 8762
+      },
+      "profile": {
+        "lexer_module": {
+          "module": "mncs.compiler.lexer.v1",
+          "calls": 856,
+          "steps": 16152,
+          "inclusive_ns": 31503394273,
+          "exclusive_ns": 6440554339
+        },
+        "next_token_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+          "calls": 71,
+          "steps": 4580,
+          "inclusive_ns": 9461602726,
+          "exclusive_ns": 2561540397
+        },
+        "legacy_scan_chunk_global": null,
+        "scan_chunk_window": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+          "calls": 68,
+          "steps": 1955,
+          "inclusive_ns": 615254818,
+          "exclusive_ns": 603738647
+        },
+        "byte_window4_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.source.v1::byte_window4_global__spec_3c0ffe82",
+          "calls": 68,
+          "steps": 3332,
+          "inclusive_ns": 1002786942,
+          "exclusive_ns": 1002786942
+        }
+      }
+    },
+    "candidate_stage0_oracle": {
+      "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-stage0-oracle-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "6c65dff4ba0286f1ff77c9a174a73f4cae807a75c9b6af79c4166bb80c0567b4",
+      "bytes": 255499,
+      "label": "flow-scan-window-candidate-stage0-oracle-20261009",
+      "execution_mode": "reference_interpreter",
+      "classification": "SUCCESS",
+      "operation_outcome": "STAGE0_ORACLE_COMPLETED",
+      "semantic_result": "UNKNOWN_NO_NATIVE_COMPILER_RESULT",
+      "wall_seconds": 112.647,
+      "child_cpu_seconds": 107.58,
+      "child_user_cpu_seconds": 106.88,
+      "child_system_cpu_seconds": 0.7,
+      "child_peak_rss_kib": 1099144,
+      "child_max_fd_count": 4,
+      "child_io_rchar_bytes": 3617009,
+      "child_io_read_bytes": 0,
+      "child_io_wchar_bytes": 93954233,
+      "child_io_write_bytes": 20480,
+      "cgroup_memory_events_delta": {
+        "low": 0,
+        "oom_group_kill": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "sock_throttled": 0,
+        "max": 0,
+        "high": 0
+      },
+      "target_status": null,
+      "target_steps": null,
+      "step_budget": null,
+      "source_pages_at_stride_1024": 896,
+      "compiler_source_identity_sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1330,
+        "ssa_functions": 379
+      },
+      "phase_trace": {
+        "workspace_root_relative_path": ".worktrees/lexer-scan-window-arg-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-scan-window-candidate-stage0-oracle-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "2891274516b99ac91c9a598d458e70543b3b84bfeae95712a99753f2ab9fa207",
+        "bytes": 5595
+      }
+    }
+  },
+  "iteration_note": "An initial candidate had a duplicate terminal guard and a shifted prefix boundary; it was refined before the two reported candidate runs. The reported candidate results are both from the final tested source identity.",
+  "limitations": [
+    "Per-function CPU time and hardware instruction count are unavailable.",
+    "The bounded flow target reaches the step budget before returning a project result, so it establishes a performance prefix only.",
+    "The candidate source grows the selected closure by one page and one linked/SSA helper; Stage-0 accepts the candidate but prior native whole-module proof claims do not transfer to the changed lexer bytes.",
+    "The Store and Environment were not mutated; the canonical Store publication path was previously observed on a read-only /home mount in this execution namespace, so this evidence is local and not Store-published."
+  ]
+}

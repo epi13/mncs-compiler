@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-09T22:07:09Z",
+    "updated_at": "2026-10-09T22:39:07Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -1661,7 +1661,143 @@
         "stage1_claimed": false
       },
       "push_status": "NOT_REATTEMPTED; prior DNS and approval-policy block unchanged"
+    },
+    "lexer_scan_window_argument_campaign_20261009": {
+      "observed_at": "2026-10-09T22:38:40Z",
+      "entry_delivered_main_revision": "f5aa9547592694afd11bc28cd8c2da9a17b44ef7",
+      "candidate_base_revision": "f5aa9547592694afd11bc28cd8c2da9a17b44ef7",
+      "tested_candidate_git_head": "f5aa9547592694afd11bc28cd8c2da9a17b44ef7",
+      "tested_candidate_branch": "campaign/lexer-scan-window-arg-20261009",
+      "tested_candidate_worktree_dirty": true,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "tested_candidate_source_identity": {
+        "kind": "sha256 of sorted module basenames including .mncs, NUL separator, and per-file SHA-256 digest",
+        "sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+        "module_source_sha256": {
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+          "lexer": "b24da41d736b372751c5e0e2a2528e7c45ec835e03d4c074f1e508e9d71172c5",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+        }
+      },
+      "matched_baseline_source_identity": {
+        "kind": "sha256 of sorted module basenames including .mncs, NUL separator, and per-file SHA-256 digest",
+        "sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+        "module_source_sha256": {
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+          "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        }
+      },
+      "current_closure_oracle": {
+        "baseline": {
+          "source_pages_at_stride_1024": 895,
+          "source_identity_sha256": "52d954e26030a2431283a156ca33e1f8b2b0862e8a67e5e9c504684edb4b2dbb",
+          "stage0_oracle": {
+            "status": "valid",
+            "valid": true,
+            "diagnostics": [],
+            "linked_functions": 1329,
+            "ssa_functions": 378
+          }
+        },
+        "candidate": {
+          "source_pages_at_stride_1024": 896,
+          "source_identity_sha256": "6063aef335d1dfea66946952e71bc98a1515761d24ccaf81e257dde274360b2f",
+          "stage0_oracle": {
+            "status": "valid",
+            "valid": true,
+            "diagnostics": [],
+            "linked_functions": 1330,
+            "ssa_functions": 379
+          }
+        },
+        "historical_894_page_oracle": {
+          "workspace_root_relative_path": "mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-stage0-oracle-20261008-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "06f6d015acac35c03ba4f2c2b4ee4ae1803e8cc806ebb2d94958994957350c6d",
+          "bytes": 10632,
+          "source_identity_sha256": "05be65c36f5da657a81bac708ca2bce499f07bfc924c67d06e2b33b5474d6b4a",
+          "source_pages": 894,
+          "stage0_oracle": {
+            "status": "valid",
+            "valid": true,
+            "diagnostics": [],
+            "linked_functions": 1324,
+            "ssa_functions": 376
+          },
+          "meaning": "Historical 894-page / 1324-function / 376-SSA oracle result remains bound to its own source identity; it is not overwritten by the current f5 baseline or candidate."
+        }
+      },
+      "flow_target_profile": {
+        "step_budget": 50000,
+        "baseline_runs": 2,
+        "candidate_runs": 2,
+        "statuses": [
+          "budget_exhausted",
+          "budget_exhausted"
+        ],
+        "target_result_returned": false,
+        "mean_wall_seconds": {
+          "baseline": 26.035,
+          "candidate": 25.034,
+          "change_percent": -3.85
+        },
+        "mean_child_cpu_seconds": {
+          "baseline": 23.855,
+          "candidate": 22.69,
+          "change_percent": -4.88
+        },
+        "scan_path_inclusive_seconds": {
+          "baseline_scan_chunk_global_including_nested_window_lookup": 2.867723,
+          "candidate_scan_chunk_window_plus_separate_window_lookup": 1.620304,
+          "change_percent": -43.5
+        },
+        "mean_lexer_module_inclusive_seconds": {
+          "baseline": 36.54382,
+          "candidate": 31.483245,
+          "change_percent": -13.85
+        },
+        "mean_child_peak_rss_kib": {
+          "baseline": 1749822,
+          "candidate": 1751164,
+          "change_kib": 1342
+        },
+        "max_child_fd_count": {
+          "baseline": 5,
+          "candidate": 5
+        },
+        "cgroup_memory_events_delta": {
+          "oom": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "high": 0,
+          "max": 0
+        }
+      },
+      "evidence_artifact": "evidence/campaign-20261009-lexer-scan-window-argument-cost.json",
+      "evidence_artifact_sha256": "e45b05bdb98e7aa5fa374d3b5030a11c00c7f7d1e1f829efc899a243756b5d0d",
+      "implementation_commit": "5b80c556f55a00875aa41d7fe3d86faebef458e8",
+      "delivered_main_revision": "5b80c556f55a00875aa41d7fe3d86faebef458e8",
+      "delivery_role": "This commit contains the tested scan-window argument reduction and is fast-forwarded to local main. Candidate Git base, exact compiler source identity, and delivered implementation commit are recorded separately.",
+      "matrix_row_policy": "The historical compiler_head 44fe937 and module proof rows remain unchanged. The retained 894-page / 1324-function / 376-SSA oracle is preserved with its older source identity. Current f5 baseline and candidate oracles are recorded separately; the changed lexer does not inherit historical native whole-module proof or Stage-1 evidence.",
+      "result_scope": {
+        "cp0001_smoke_AB": "SUCCESS; 1899 requests, 1283 tokens, 18 Tier A and 26 Tier B cases",
+        "candidate_stage0_oracle": "SUCCESS; valid with no diagnostics, 1330 linked functions and 379 SSA functions",
+        "baseline_stage0_oracle": "SUCCESS; valid with no diagnostics, 1329 linked functions and 378 SSA functions",
+        "flow_target_50k": "RESOURCE_EXHAUSTED by the explicit step budget; no project result returned; semantic result UNKNOWN",
+        "whole_module_native_check_proof_cfg_verified_ssa": false,
+        "canonical_vm_conformance": false,
+        "native_executable_artifact": false,
+        "stage1_claimed": false,
+        "stage2_claimed": false
+      },
+      "push_status": "NOT_REATTEMPTED; prior DNS and approval-policy block unchanged"
     }
   },
-  "evidence_updated_at": "2026-10-09T22:07:09Z"
+  "evidence_updated_at": "2026-10-09T22:39:07Z"
 }
