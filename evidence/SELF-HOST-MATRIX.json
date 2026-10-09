@@ -1796,7 +1796,9 @@
         "stage1_claimed": false,
         "stage2_claimed": false
       },
-      "push_status": "NOT_REATTEMPTED; prior DNS and approval-policy block unchanged"
+      "push_status": "NOT_REATTEMPTED; prior DNS and approval-policy block unchanged",
+      "delivered_implementation_commit": "5b80c556f55a00875aa41d7fe3d86faebef458e8",
+      "delivered_evidence_commit": "c88d0675d344c4af212841e667c9af2284b2cf29"
     },
     "lexer_initial_byte_window_campaign_20261009": {
       "observed_at": "2026-10-09T22:53:11Z",
@@ -1871,7 +1873,10 @@
       "evidence_artifact": "evidence/campaign-20261009-lexer-initial-byte-window-cost.json",
       "evidence_artifact_sha256": "e16545a96740330b278732653fb96aee5bebb17299fd7e0924570bd1598f5d7d",
       "implementation_commit": "14ad9e535ee8974012cb75892ce78bbac4f7dd8f",
-      "delivery_role": "Exact tested source identity and bounded execution measurements; does not alter module-stage rows or establish Stage-1/Stage-2."
+      "delivery_role": "Exact tested source identity and bounded execution measurements; does not alter module-stage rows or establish Stage-1/Stage-2.",
+      "delivered_main_revision": "14ad9e535ee8974012cb75892ce78bbac4f7dd8f",
+      "delivered_implementation_commit": "14ad9e535ee8974012cb75892ce78bbac4f7dd8f",
+      "delivered_evidence_commit": "c756a15247b1eb184c7685b558f61973f376c144"
     },
     "lexer_byte_pair_window_experiment_campaign_20261009": {
       "observed_at": "2026-10-09T23:05:08Z",
@@ -1946,8 +1951,92 @@
       "evidence_artifact": "evidence/campaign-20261009-lexer-byte-pair-window-experiment.json",
       "evidence_artifact_sha256": "f6eab53f4c96b278183d66ca4383ad628f341ea02b3c6eaf676024cb9bb3e949",
       "implementation_commit": null,
-      "delivery_role": "Negative optimization evidence only; no compiler source changes delivered and no module-stage row changed."
+      "delivery_role": "Negative optimization evidence only; no compiler source changes delivered and no module-stage row changed.",
+      "delivered_main_revision": "2ea01d3af28ca9fc2795a8c7669a48773c110c5c",
+      "delivered_evidence_commit": "2ea01d3af28ca9fc2795a8c7669a48773c110c5c"
+    },
+    "flow_post_lexer_target_resource_profile_campaign_20261009": {
+      "observed_at": "2026-10-09T23:15:10.922254+00:00",
+      "entry_delivered_main_revision": "2ea01d3af28ca9fc2795a8c7669a48773c110c5c",
+      "tested_candidate_git_head": "2ea01d3af28ca9fc2795a8c7669a48773c110c5c",
+      "tested_candidate_branch": "main",
+      "tested_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and source bytes; module identities are bound by per-module SHA-256",
+        "sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "module_source_sha256": {
+          "decl": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+          "lexer": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+        }
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "cold_cache_attempt": {
+        "classification": "TIMEOUT",
+        "operation_outcome": "INTERRUPTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "target_request_started": false,
+        "wall_seconds": 150.311,
+        "child_cpu_seconds": 149.36,
+        "child_peak_sampled_rss_kib": 2132476,
+        "cgroup_oom_event_delta": 0
+      },
+      "warm_target_prefix": {
+        "classification": "RESOURCE_EXHAUSTED at 50000-step budget",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 24.032,
+        "child_cpu_seconds": 21.71,
+        "child_peak_sampled_rss_kib": 1751048,
+        "child_peak_fd_count": 5,
+        "cgroup_oom_event_delta": 0
+      },
+      "evidence_artifact": "evidence/campaign-20261009-flow-target-resource-profile.json",
+      "evidence_artifact_sha256": "d0c1f9c54e13bc4dcb45d428a05e44b9c0beb4c5e26d4008d301a1ecb39ce638",
+      "delivery_role": "The bounded-probe CLI control and compact phase/resource evidence are delivered in this compiler campaign; no MNCS compiler-source semantic change, module-stage promotion, or Stage-1/Stage-2 claim.",
+      "warm_100k_target_prefix": {
+        "overall_runner_classification": "TIMEOUT during follow-on Stage-0 oracle",
+        "target_request_status": "RESPONSE_RECEIVED",
+        "target_operation_status": "budget_exhausted at 100000 steps",
+        "target_semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "follow_on_stage0_oracle": "INTERRUPTED at 74.734 seconds; no oracle result",
+        "wall_seconds": 120.325,
+        "child_cpu_seconds": 117.91,
+        "child_peak_sampled_rss_kib": 1750796,
+        "cgroup_oom_event_delta": 0
+      },
+      "warm_100k_target_prefix_with_oracle_skip": {
+        "classification": "RESOURCE_EXHAUSTED at explicit 100000-step budget; measurement runner SUCCESS",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "stage0_oracle": "NOT_RUN by explicit request",
+        "wall_seconds": 46.062,
+        "child_cpu_seconds": 43.5,
+        "child_peak_sampled_rss_kib": 1750924,
+        "child_peak_fd_count": 5,
+        "cgroup_oom_event_delta": 0,
+        "measurement_artifact": "mncs-compiler/.worktrees/probe-stage0-oracle-skip-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261009-flow-target-cache-warm-100k-skip-oracle-profile-source-lexer-parser-segment-decl-flow-measurement.json"
+      },
+      "measurement_tool_change": {
+        "branch": "campaign/probe-stage0-oracle-skip-20261009",
+        "base_revision": "2ea01d3af28ca9fc2795a8c7669a48773c110c5c",
+        "measure_compiler_probe_sha256": "6f856aa5d046b078c567584390c970a7a8d72fca23b301f82cb3ee761b6c7aa8",
+        "contract_test_sha256": "1041dab1d2bebf24b870124416b462b65ee98ed842e6b6db496f4e79347c856c",
+        "contract_checks": "15 passed",
+        "integration_profile_tool_sha256": "6f856aa5d046b078c567584390c970a7a8d72fca23b301f82cb3ee761b6c7aa8",
+        "delivered_tool_sha256": "7502353ef2b0e2f511e6db84abb98df67b836e66853d9807665a57b1883ab2db",
+        "delivered_commit": "5653908ee345ef7b2ed7bcae2a4da71f4ca6a4da"
+      }
     }
   },
-  "evidence_updated_at": "2026-10-09T23:05:31Z"
+  "evidence_updated_at": "2026-10-09T23:57:20Z"
 }
