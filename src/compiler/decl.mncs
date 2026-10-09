@@ -3498,8 +3498,12 @@ fn parse_generic_params<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     let open: Expect = expect<P, N>(pages, stride, total, cursor, 58);
     if !(open.ok) { return GenericsParse { cursor: cursor, ok: false, err_start: open.err_start, err_end: open.err_end, list: GenericParamList.GNil }; }
     iterate i up_to 1024 carrying d: GenericsState = GenericsState { cursor: open.cursor, ok: true, err_start: 0, err_end: 0, list: GenericParamList.GNil, seen: NameList.NNil, done: false } {
+        if d.done { return finish_generics_parse<P, N>(pages, stride, total, d); }
         next d = generics_step<P, N>(pages, stride, total, d);
     }
+    return finish_generics_parse<P, N>(pages, stride, total, d);
+}
+fn finish_generics_parse<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, d: GenericsState) -> (result: GenericsParse) {
     if !(d.ok) { return GenericsParse { cursor: d.cursor, ok: false, err_start: d.err_start, err_end: d.err_end, list: GenericParamList.GNil }; }
     if !(d.done) { return GenericsParse { cursor: d.cursor, ok: false, err_start: d.cursor, err_end: d.cursor, list: GenericParamList.GNil }; }
     return GenericsParse { cursor: d.cursor, ok: true, err_start: 0, err_end: 0, list: reverse_generics<P, N>(pages, stride, total, d.list) };
@@ -3840,6 +3844,7 @@ fn reverse_names_step(st: NameRev) -> (result: NameRev) {
 record KnownState { rest: NameList, start: u64, end: u64, found: bool }
 fn name_known<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: NameList, start: u64, end: u64) -> (result: bool) {
     iterate i up_to 1024 carrying d: KnownState = KnownState { rest: list, start: start, end: end, found: false } {
+        if d.found || name_list_empty(d.rest) { return d.found; }
         next d = name_known_step<P, N>(pages, stride, total, d);
     }
     return d.found;

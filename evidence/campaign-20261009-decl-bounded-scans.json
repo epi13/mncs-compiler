@@ -1,0 +1,253 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-campaign-evidence",
+  "campaign": "decl-bounded-scans-20261009",
+  "observed_at": "2026-10-09T20:12:37Z",
+  "tested_candidate": {
+    "base_git_head": "5d884cd0d9e17452601324f66abb78b341497310",
+    "branch": "campaign/decl-bounded-scan-20261009",
+    "worktree_dirty": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "compiler_source_identity": {
+      "kind": "sha256 of sorted selected compiler source basenames and source bytes",
+      "sha256": "118b9d0972955e964b42440affee3b53819c76b8108598a568d72f2ee0c850be",
+      "selected_modules": [
+        "decl",
+        "flow",
+        "lexer",
+        "parser",
+        "project",
+        "segment",
+        "source",
+        "ssa"
+      ],
+      "module_source_sha256": {
+        "decl": "554af20d02b203e60722b671742f34d009ab8e27b649d34c09159515ad4a8b7e",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "project": "939e7803121d691cac02b0aab84ffeaeb006e2a5730915033ee8e00612c6d7d9",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+        "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+      }
+    }
+  },
+  "implementation": {
+    "module": "src/compiler/decl.mncs",
+    "baseline_source_sha256": "fd066efabad38d73d2f6c5f8f96988d95ac34aa65087dbfaa797afee705aed33",
+    "candidate_source_sha256": "554af20d02b203e60722b671742f34d009ab8e27b649d34c09159515ad4a8b7e",
+    "changes": [
+      "parse_generic_params exits the bounded 1024-iteration loop when GenericsState.done is true and routes loop exit through finish_generics_parse, preserving result, cursor, and error-span construction.",
+      "name_known exits when a match is found or the remaining NameList is empty."
+    ]
+  },
+  "focused_differential": {
+    "classification": "SUCCESS",
+    "method": "focused generic parameter parser/check comparison against the pinned Stage-0 oracle, using tools/test_decl.py helpers",
+    "runs": 2,
+    "semantic_runs_identical": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "positive_case": {
+      "generic_parameters": [
+        "F: Type -> Type",
+        "T"
+      ],
+      "stage0_diagnostics": 0,
+      "compiler_parse_ok": true
+    },
+    "negative_case": {
+      "duplicate_generic_parameter": true,
+      "compiler_error_span": [
+        30,
+        31
+      ],
+      "stage0_error_span": [
+        30,
+        31
+      ]
+    },
+    "check_unit_stage": 4,
+    "request_count_per_run": 3,
+    "steps_per_run": [
+      54354,
+      10001,
+      183163
+    ],
+    "semantic_digest": "ca7434a349efb949c511725fe9ac9d3c3ae9f1573645078878d2eccf564ce597",
+    "wall_seconds_per_run": [
+      27.906,
+      28.042
+    ],
+    "report_path": "../.worktrees/decl-bounded-scan-20261009/.build/decl-bounded-scan-targeted-diff.json",
+    "report_sha256": "30d8981ffd4682855c0d36c89b5651c4b5a7c487b052fa3cc6fc33a1eb03b3c6"
+  },
+  "whole_module_suite": {
+    "suite": "tools/test_decl.py",
+    "classification": "INTERRUPTED",
+    "semantic_result": "UNKNOWN",
+    "elapsed_seconds_before_interrupt": 202,
+    "child_cpu_percent_at_observation": 99.4,
+    "child_peak_rss_kib": 1558324,
+    "semantic_rejection_observed": false,
+    "interpretation": "The first request was still running when stopped; this is not a passing whole-module result."
+  },
+  "same_step_budget_frontier_comparison": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "compiler_source_target": "source",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "executor_step_budget": 100000,
+    "baseline": {
+      "compiler_git_head": "5d884cd0d9e17452601324f66abb78b341497310",
+      "decl_source_sha256": "fd066efabad38d73d2f6c5f8f96988d95ac34aa65087dbfaa797afee705aed33",
+      "program_cache_key": "04485a4faaacb97a094c4794b16dc2bea78b843074aa6df121ddc8b2a5fa2bdb",
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "operation_outcome": "budget_exhausted",
+      "steps": 100000,
+      "wall_seconds": 18.024,
+      "child_cpu_seconds": 17.4,
+      "child_peak_rss_kib": 1426420,
+      "child_max_fd_count": 5,
+      "cgroup_oom_event_delta": 0,
+      "stage0_oracle": {
+        "status": "valid",
+        "diagnostics": 0,
+        "linked_functions": 23,
+        "ssa_functions": 7
+      },
+      "measurement": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-source-source-prefix-100k-20261009-source-measurement.json",
+        "sha256": "20f070bce55f7cdb482fbce8c42065f526e03997e4f4cdf838369e5a9e58db59"
+      },
+      "phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-source-source-prefix-100k-20261009-source-phases.jsonl",
+        "sha256": "cdafa2e16569e01403d8643ba69a67748babc4c1e96639eb3da6920cc11dc85a"
+      },
+      "stderr": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-source-source-prefix-100k-20261009-source-probe-stderr.log",
+        "sha256": "76055c73b484cafbb165526d3832df553d7291fb6c9abfecbce6bef33d4accc6"
+      }
+    },
+    "candidate": {
+      "compiler_git_head": "5d884cd0d9e17452601324f66abb78b341497310",
+      "decl_source_sha256": "554af20d02b203e60722b671742f34d009ab8e27b649d34c09159515ad4a8b7e",
+      "program_cache_key": "d2e0c6a64d127dad465dc5b0a85cf4d63d2e1248bd56c0392b23ff5bfc488755",
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "operation_outcome": "budget_exhausted",
+      "steps": 100000,
+      "wall_seconds": 19.025,
+      "child_cpu_seconds": 18.34,
+      "child_peak_rss_kib": 1427088,
+      "child_max_fd_count": 5,
+      "cgroup_oom_event_delta": 0,
+      "stage0_oracle": {
+        "status": "valid",
+        "diagnostics": 0,
+        "linked_functions": 23,
+        "ssa_functions": 7
+      },
+      "measurement": {
+        "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-source-prefix-100k-20261009-source-measurement.json",
+        "sha256": "2f45a7bf0cc558c241af304881efc86f5391ee4d25dc5fcf31b606bbd5387124"
+      },
+      "phase_trace": {
+        "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-source-prefix-100k-20261009-source-phases.jsonl",
+        "sha256": "9ab83c7f8d7ced347e4c466b86a7fb9450acf64a204750f2b72fb9ed3929cc8d"
+      },
+      "stderr": {
+        "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-source-prefix-100k-20261009-source-probe-stderr.log",
+        "sha256": "552c5d9b2f4a6d7a09f9dcd66b6bdcb367e4df94573f14ca9850ca1d3ae59066"
+      }
+    },
+    "profile": {
+      "decl.parse_generic_params": {
+        "baseline_calls": 1,
+        "baseline_steps": 8227,
+        "baseline_inclusive_ms": 2359.63266,
+        "candidate_calls": 1,
+        "candidate_steps": 35,
+        "candidate_inclusive_ms": 316.859474
+      },
+      "decl.generics_step": {
+        "baseline_calls": 1024,
+        "baseline_steps": 6170,
+        "baseline_inclusive_ms": 1568.882816,
+        "candidate_calls": 1,
+        "candidate_steps": 32,
+        "candidate_inclusive_ms": 284.277908
+      },
+      "decl.name_known": {
+        "baseline_calls": 1,
+        "baseline_steps": 8201,
+        "baseline_inclusive_ms": 1054.441367,
+        "candidate_calls": 1,
+        "candidate_steps": 15,
+        "candidate_inclusive_ms": 1.293549
+      },
+      "decl.name_known_step": {
+        "baseline_calls": 1024,
+        "baseline_steps": 5120,
+        "baseline_inclusive_ms": 172.914942,
+        "candidate_calls": 0,
+        "candidate_steps": 0,
+        "candidate_inclusive_ms": 0
+      },
+      "lexer.next_token_global": {
+        "baseline_calls": 125,
+        "baseline_steps": 10122,
+        "candidate_calls": 177,
+        "candidate_steps": 13535
+      },
+      "lexer.scan_chunk_global": {
+        "baseline_calls": 327,
+        "baseline_steps": 11075,
+        "candidate_calls": 406,
+        "candidate_steps": 13978
+      },
+      "lexer.significant_global": {
+        "baseline_calls": 79,
+        "baseline_steps": 725,
+        "candidate_calls": 115,
+        "candidate_steps": 989
+      }
+    },
+    "interpretation": "At the same 100000-step prefix the candidate removes the observed fixed 1024-entry declaration scans and advances farther into parsing, reflected by 41.6% more next_token_global calls. Wall time rises 5.6% and child CPU rises 5.4% because the candidate executes more useful compiler work in that same prefix; these measurements do not establish a whole-request speedup or a complete project result.",
+    "target_input_module_identity_sha256": "d2412428699d2ea65eaefbd315cf05d901b3c9defa746f4eed54e85776b39d18"
+  },
+  "program_cache_preparation": {
+    "classification": "SUCCESS",
+    "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+    "admission": "ADMISSION_ONLY_SUCCESS",
+    "target_execution_started": false,
+    "compiler_source_identity_sha256": "118b9d0972955e964b4a75ebfeee3b53819c76b8108598a568d72f2ee0c850be",
+    "program_cache_key": "d2e0c6a64d127dad465dc5b0a85cf4d63d2e1248bd56c0392b23ff5bfc488755",
+    "wall_seconds": 151.701,
+    "child_cpu_seconds": 150.05,
+    "child_peak_rss_kib": 2131236,
+    "child_max_fd_count": 5,
+    "cgroup_oom_event_delta": 0,
+    "measurement": {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-project-cache-pinned-20261009-source-measurement.json",
+      "sha256": "129337a28c068d246ff982f41a43581b8347003c7487665f396d33f4738d4774"
+    },
+    "phase_trace": {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-project-cache-pinned-20261009-source-phases.jsonl",
+      "sha256": "8a9d5717e9206122f0d71664914262f0e542d2e90c13cd3d0af6851bd8600f70"
+    },
+    "stderr": {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-project-cache-pinned-20261009-source-probe-stderr.log",
+      "sha256": "b5986cc52e0e9053278f16fd4666fd23af25bb7dddef8e64f46149b17cc50fd2"
+    }
+  },
+  "module_stage_boundary": {
+    "historical_matrix_decl_source_sha256": "fd066efabad38d73d2f6c5f8f96988d95ac34aa65087dbfaa797afee705aed33",
+    "historical_matrix_decl_row_rewritten": false,
+    "current_decl_parse_evidence": "focused fixtures only; whole-module parse/signature status for candidate hash remains UNKNOWN",
+    "check_proof_cfg_ssa_for_candidate_hash": "not established",
+    "executable_artifact": "not established",
+    "stage1": "not established",
+    "stage2": "not established"
+  }
+}
