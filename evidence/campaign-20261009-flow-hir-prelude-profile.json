@@ -1,0 +1,545 @@
+{
+  "schema": "mncs.compiler.flow-hir-prelude-profile/1",
+  "observed_at": "2026-10-09",
+  "compiler_candidate": {
+    "tested_candidate_head": "76ccb18af4e1da9a849f421960ecb9634ca2409d",
+    "tested_candidate_head_role": "compiler repository identity used by the probe; language Stage-0 source identity is tracked separately",
+    "delivered_main_at_probe": "76ccb18af4e1da9a849f421960ecb9634ca2409d",
+    "compiler_source_sha256": "7a89b18b4bd00e871faa92ddf7923cd8e8b40a9999c8057c33a5a654efd505d6",
+    "source_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ]
+  },
+  "workload": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_input_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_input_pages_at_width_1024": 892,
+    "width": 1024,
+    "stage0_admission_source_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "historical_project_closure_evidence": {
+      "pages": 894,
+      "linked_functions": 1324,
+      "stage0_ssa_functions": 376,
+      "scope_path": "evidence/SELF-HOST-MATRIX.json",
+      "semantic_acceptance": "Stage-0 accepted without diagnostics"
+    }
+  },
+  "measurement_contract": {
+    "backend_requested": "research-bytecode",
+    "requested_step_budget": 8000000,
+    "timeout_seconds": 600,
+    "sampled_child_rss_stop_mib": 2560,
+    "sample_interval_seconds": 0.25,
+    "frontend_program_cache": "prepared independently for each exact Stage-0 identity; each target run loaded its matching cached Program",
+    "comparison_dimensions_held_constant": [
+      "compiler source bytes",
+      "target modules and page width",
+      "operation and generic arguments",
+      "backend request",
+      "step budget",
+      "timeout",
+      "RSS cap",
+      "sampling interval"
+    ],
+    "changing_dimension": "Stage-0 mncs-language model/compiler implementation source only",
+    "resource_attribution": "sampled process identity is the mncs-compiler-stage0-probe child; cgroup events are reported separately and are not child-specific"
+  },
+  "host_stage0_scope_caution": "The compiler-hir and compiler-ssa timings measure Stage-0 host preparation of the MNCS compiler Program before retained-session admission. They do not establish that the MNCS compiler accepted flow.mncs, produced verified SSA for that target, executed its target VM steps, or emitted an executable artifact.",
+  "frontend_cache_preparation_controls": [
+    {
+      "name": "baseline",
+      "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 152.398,
+      "child_cpu_seconds": 150.8,
+      "peak_rss_kib": 2129056,
+      "max_fd_count": 5,
+      "cgroup_memory_event_delta": {
+        "max": 0,
+        "low": 0,
+        "sock_throttled": 0,
+        "oom": 0,
+        "oom_kill": 0,
+        "high": 0,
+        "oom_group_kill": 0
+      },
+      "stage0_timing_ms": {
+        "parse": 1264,
+        "elaboration": 106928
+      },
+      "frontend_program_cache_key": "4ecbeacbd576d964dc14b58d37cfbc66ffd72570f3deb39741ff2c207bcb597e",
+      "raw_evidence": {
+        "measurement": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-baseline-cache-warm-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "9a9ed8fe60a3377f635835bfaa1020b32f6cb5f229359faf10a89d81f22cfd8e",
+          "bytes": 252340
+        },
+        "phase_trace": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-baseline-cache-warm-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "4ab0c1c620684f42d3b632b49032ae30dda450d214ac7e9a495b09c6edfb8101",
+          "bytes": 6622
+        },
+        "probe_stderr": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-baseline-cache-warm-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+          "sha256": "f8722b3bb741ff03f71d7e77dcfc982cc215f158898b7d3c523b54c025c28720",
+          "bytes": 220
+        }
+      }
+    },
+    {
+      "name": "validated_hir_reuse",
+      "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-eefce44c57045eaafdb2008b285b17e09061a259a77aeb03a134e9e5fc0a17ee",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 151.39,
+      "child_cpu_seconds": 149.59,
+      "peak_rss_kib": 2129100,
+      "max_fd_count": 5,
+      "cgroup_memory_event_delta": {
+        "oom_group_kill": 0,
+        "high": 0,
+        "max": 0,
+        "oom_kill": 0,
+        "sock_throttled": 0,
+        "low": 0,
+        "oom": 0
+      },
+      "stage0_timing_ms": {
+        "parse": 1250,
+        "elaboration": 106991
+      },
+      "frontend_program_cache_key": "800ec522c8e59fa921dc8d67be7b66b0e1d0c5cf3c81ef9a972f15c0f79756c5",
+      "raw_evidence": {
+        "measurement": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-cache-warm-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "98bd34f1caf33d557521ae575e82296ff4595c727aa0db24e2a4f3c2f0da5d75",
+          "bytes": 251147
+        },
+        "phase_trace": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-cache-warm-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "7fdf77a44b524e67394b81eaf46bccbacaa01a5041b27a54dd024b2cbb8721f9",
+          "bytes": 6795
+        },
+        "probe_stderr": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-cache-warm-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+          "sha256": "4c61a319f9545a647fa15489cd660d5e930a110fa3589bde6197e163ec73a5e7",
+          "bytes": 220
+        }
+      }
+    },
+    {
+      "name": "indexed_graph_and_hir",
+      "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-357a31413527121f5ca6846bc02e204d0fd566b1a4f735e94ca6a9d6a7e59a72",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 131.839,
+      "child_cpu_seconds": 130.54,
+      "peak_rss_kib": 2127348,
+      "max_fd_count": 5,
+      "cgroup_memory_event_delta": {
+        "oom": 0,
+        "max": 0,
+        "sock_throttled": 0,
+        "oom_group_kill": 0,
+        "low": 0,
+        "high": 0,
+        "oom_kill": 0
+      },
+      "stage0_timing_ms": {
+        "parse": 1245,
+        "elaboration": 107238
+      },
+      "frontend_program_cache_key": "7a782a74d6d40e68eb92e012dae3649acce564060ca3a79e4170fc359a916eb0",
+      "raw_evidence": {
+        "measurement": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-cache-warm-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "2e47e095b34858c83158c25d5671eaa93298ae4ad44c537fe379874c6e021352",
+          "bytes": 224367
+        },
+        "phase_trace": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-cache-warm-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "31ad8857c32171ba3a540f934f7ec59be630e49520ccec64e821d0a4da185854",
+          "bytes": 6759
+        },
+        "probe_stderr": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-cache-warm-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+          "sha256": "e4373f8694cd56f485677e32f39f7b0b9706484c46ea71d99261da0d529c7e08",
+          "bytes": 220
+        }
+      }
+    }
+  ],
+  "target_runs": [
+    {
+      "name": "baseline",
+      "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "stage0_source_profile": "0.18",
+      "probe_binary_sha256": "030b3b73adebe937a3d69f5ae430e8788d5ee78e315e74bb83029456bb68f80b",
+      "frontend_program_cache_key": "4ecbeacbd576d964dc14b58d37cfbc66ffd72570f3deb39741ff2c207bcb597e",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "INTERRUPTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "requested_vm_step_budget": 8000000,
+      "observed_vm_steps": "UNKNOWN_NOT_ADMITTED",
+      "termination": {
+        "cause": "sampled_probe_child_rss_cap",
+        "rss_limit_mib": 2560,
+        "rss_trigger_kib": 2627448,
+        "sampled_peak_rss_kib": 2627448,
+        "triggered_at_seconds": 122.325,
+        "signal": "SIGINT",
+        "cgroup_memory_max": "max\n",
+        "cgroup_memory_event_delta": {
+          "sock_throttled": 0,
+          "high": 0,
+          "oom_kill": 0,
+          "low": 0,
+          "oom_group_kill": 0,
+          "max": 0,
+          "oom": 0
+        },
+        "oom_attribution": "NOT_ESTABLISHED; cgroup event deltas are zero"
+      },
+      "actual_compiler_child": {
+        "pid": 3977106,
+        "start_time_ticks": 47612852,
+        "parent_pid": 3977104,
+        "executable_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/flow-hir-prelude/baseline-target/release/mncs-compiler-stage0-probe",
+        "max_fd_count": 5,
+        "cpu_seconds_at_stop": 121.69,
+        "user_cpu_seconds_at_stop": 120.63,
+        "system_cpu_seconds_at_stop": 1.06,
+        "io_rchar_bytes": 182671389,
+        "io_read_bytes": 0,
+        "io_write_bytes": 16384
+      },
+      "wall_seconds_to_stop": 122.489,
+      "compiler_timing_ms": {
+        "compiler-semantic": 1374,
+        "compiler-validation": 1948,
+        "ir-prelude": 31196,
+        "ir-functions": 84521,
+        "ir-total": 87776,
+        "compiler-hir": 91290,
+        "ssa-validate": 3797,
+        "ssa-ir-reused": 3797,
+        "ssa-functions": 4499,
+        "ssa-total": 10951,
+        "compiler-ssa": 103475
+      },
+      "probe_phase_progress": {
+        "backend_compilation_begin_seen": true,
+        "retained_session_admission_status": "INTERRUPTED",
+        "transport_failure_stage": "retained_session_admission",
+        "native_transport_outcome": "INTERRUPTED",
+        "execution_backend_admitted": null,
+        "project_result_returned": false,
+        "target_vm_execution_evidence": "UNKNOWN_NOT_ADMITTED"
+      },
+      "input_cache_artifact": {
+        "compressed_bytes": 5276788,
+        "cache_read_decode_ms": 600.100309
+      },
+      "raw_evidence": {
+        "measurement": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-baseline-target-rss2560-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "8cc5ce198edd13c47f59767ab1a1512c482117b23ef6652378d8448b9134cd6c",
+          "bytes": 293584
+        },
+        "phase_trace": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-baseline-target-rss2560-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "16b238d94a573dd8eb92da88345e467770edac94ed4309e12aeb74300bbe7177",
+          "bytes": 3252
+        },
+        "probe_stderr": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-baseline-target-rss2560-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+          "sha256": "df5ecbeee9e6155232800919188bd9d3801899a2f3f538c5dc898e44b61ea484",
+          "bytes": 529
+        }
+      }
+    },
+    {
+      "name": "validated_hir_reuse",
+      "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-eefce44c57045eaafdb2008b285b17e09061a259a77aeb03a134e9e5fc0a17ee",
+      "stage0_source_profile": "0.18",
+      "probe_binary_sha256": "39fa4ae7da6b2272a22d162a566be9fc1092c104648b76c1799013f0984dcdc4",
+      "frontend_program_cache_key": "800ec522c8e59fa921dc8d67be7b66b0e1d0c5cf3c81ef9a972f15c0f79756c5",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "INTERRUPTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "requested_vm_step_budget": 8000000,
+      "observed_vm_steps": "UNKNOWN_NOT_ADMITTED",
+      "termination": {
+        "cause": "sampled_probe_child_rss_cap",
+        "rss_limit_mib": 2560,
+        "rss_trigger_kib": 2628032,
+        "sampled_peak_rss_kib": 2628032,
+        "triggered_at_seconds": 113.312,
+        "signal": "SIGINT",
+        "cgroup_memory_max": "max\n",
+        "cgroup_memory_event_delta": {
+          "max": 0,
+          "oom_kill": 0,
+          "high": 0,
+          "oom": 0,
+          "sock_throttled": 0,
+          "low": 0,
+          "oom_group_kill": 0
+        },
+        "oom_attribution": "NOT_ESTABLISHED; cgroup event deltas are zero"
+      },
+      "actual_compiler_child": {
+        "pid": 3979099,
+        "start_time_ticks": 47653450,
+        "parent_pid": 3979097,
+        "executable_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/flow-hir-prelude/baseline-target/release/mncs-compiler-stage0-probe",
+        "max_fd_count": 5,
+        "cpu_seconds_at_stop": 112.7,
+        "user_cpu_seconds_at_stop": 111.68,
+        "system_cpu_seconds_at_stop": 1.02,
+        "io_rchar_bytes": 182678282,
+        "io_read_bytes": 0,
+        "io_write_bytes": 12288
+      },
+      "wall_seconds_to_stop": 113.476,
+      "compiler_timing_ms": {
+        "hir-prelude-canonicalization": 1332,
+        "compiler-semantic": 1332,
+        "ir-prelude-validation": 570,
+        "compiler-validation": 1903,
+        "ir-prelude-semantic-identities": 2971,
+        "ir-prelude-semantic-graph": 18862,
+        "ir-prelude-evidence-manifest": 0,
+        "ir-prelude-obligations": 259,
+        "ir-prelude": 22093,
+        "ir-functions": 76042,
+        "ir-total": 77793,
+        "compiler-hir": 81244,
+        "ssa-validate": 3729,
+        "ssa-ir-reused": 3729,
+        "ssa-functions": 4464,
+        "ssa-total": 11368,
+        "compiler-ssa": 93805
+      },
+      "probe_phase_progress": {
+        "backend_compilation_begin_seen": true,
+        "retained_session_admission_status": "INTERRUPTED",
+        "transport_failure_stage": "retained_session_admission",
+        "native_transport_outcome": "INTERRUPTED",
+        "execution_backend_admitted": null,
+        "project_result_returned": false,
+        "target_vm_execution_evidence": "UNKNOWN_NOT_ADMITTED"
+      },
+      "input_cache_artifact": {
+        "compressed_bytes": 5276830,
+        "cache_read_decode_ms": 578.73537
+      },
+      "raw_evidence": {
+        "measurement": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-target-rss2560-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "55a9716f0d4f7dde7f45e5a9c31fe33931e424b38568ece2ba06267de3641ae3",
+          "bytes": 277204
+        },
+        "phase_trace": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-target-rss2560-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "0a60ae8d1c7974a700dd4d06c012a8d1d86aeb376f79551eb60dc8798dca7224",
+          "bytes": 3456
+        },
+        "probe_stderr": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-target-rss2560-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+          "sha256": "2cd42015cf9522163286b482b70e8f8f947f89c0cf0958a65d4e41091ae2fbef",
+          "bytes": 888
+        }
+      }
+    },
+    {
+      "name": "indexed_graph_and_hir",
+      "stage0_source_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-357a31413527121f5ca6846bc02e204d0fd566b1a4f735e94ca6a9d6a7e59a72",
+      "stage0_source_profile": "0.18",
+      "probe_binary_sha256": "4e56013a021135c5934a91196c60c8e4f481dd53e96c52c047685d12921b28b3",
+      "frontend_program_cache_key": "7a782a74d6d40e68eb92e012dae3649acce564060ca3a79e4170fc359a916eb0",
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "INTERRUPTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "requested_vm_step_budget": 8000000,
+      "observed_vm_steps": "UNKNOWN_NOT_ADMITTED",
+      "termination": {
+        "cause": "sampled_probe_child_rss_cap",
+        "rss_limit_mib": 2560,
+        "rss_trigger_kib": 2649160,
+        "sampled_peak_rss_kib": 2649160,
+        "triggered_at_seconds": 95.006,
+        "signal": "SIGINT",
+        "cgroup_memory_max": "max\n",
+        "cgroup_memory_event_delta": {
+          "max": 0,
+          "high": 0,
+          "oom_kill": 0,
+          "low": 0,
+          "sock_throttled": 0,
+          "oom_group_kill": 0,
+          "oom": 0
+        },
+        "oom_attribution": "NOT_ESTABLISHED; cgroup event deltas are zero"
+      },
+      "actual_compiler_child": {
+        "pid": 3982090,
+        "start_time_ticks": 47712171,
+        "parent_pid": 3982088,
+        "executable_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/flow-hir-prelude/baseline-target/release/mncs-compiler-stage0-probe",
+        "max_fd_count": 5,
+        "cpu_seconds_at_stop": 94.19999999999999,
+        "user_cpu_seconds_at_stop": 92.99,
+        "system_cpu_seconds_at_stop": 1.21,
+        "io_rchar_bytes": 182680804,
+        "io_read_bytes": 0,
+        "io_write_bytes": 12288
+      },
+      "wall_seconds_to_stop": 95.17,
+      "compiler_timing_ms": {
+        "hir-prelude-canonicalization": 1362,
+        "compiler-semantic": 1362,
+        "ir-prelude-validation": 566,
+        "compiler-validation": 1929,
+        "ir-prelude-semantic-identities": 3025,
+        "ir-prelude-semantic-graph": 775,
+        "ir-prelude-evidence-manifest": 0,
+        "ir-prelude-obligations": 258,
+        "ir-prelude": 4060,
+        "ir-functions": 57789,
+        "ir-total": 59552,
+        "compiler-hir": 63052,
+        "ssa-validate": 3737,
+        "ssa-ir-reused": 3737,
+        "ssa-functions": 4444,
+        "ssa-total": 11150,
+        "compiler-ssa": 75411
+      },
+      "probe_phase_progress": {
+        "backend_compilation_begin_seen": true,
+        "retained_session_admission_status": "INTERRUPTED",
+        "transport_failure_stage": "retained_session_admission",
+        "native_transport_outcome": "INTERRUPTED",
+        "execution_backend_admitted": null,
+        "project_result_returned": false,
+        "target_vm_execution_evidence": "UNKNOWN_NOT_ADMITTED"
+      },
+      "input_cache_artifact": {
+        "compressed_bytes": 5276831,
+        "cache_read_decode_ms": 583.511931
+      },
+      "raw_evidence": {
+        "measurement": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-target-rss2560-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "59d87a37a0cca84e9651b71b6cb3a1bb6f0921ea18269e7a5fe4f53dbee7d2d7",
+          "bytes": 239237
+        },
+        "phase_trace": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-target-rss2560-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "ed8de1d69d12feddd2d47a7e636b9bb7230ef6ace7d1c5487a27ce8be26602d8",
+          "bytes": 3467
+        },
+        "probe_stderr": {
+          "scratch_path": "/home/epi13/Documents/Projects/.worktrees/flow-hir-prelude-compiler-run-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-hir-prelude-candidate-v2-target-rss2560-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+          "sha256": "3d25cdadb7c13b998c32c689e2ae1aeb982b6a100c202262b8ad8031f7249ba9",
+          "bytes": 885
+        }
+      }
+    }
+  ],
+  "measured_delta_summary": {
+    "baseline_to_v2": {
+      "hir_prelude_ms": {
+        "baseline": 31196,
+        "candidate": 4060,
+        "reduction_percent": 86.99
+      },
+      "semantic_graph_ms": {
+        "v1": 18862,
+        "v2": 775,
+        "reduction_percent": 95.89
+      },
+      "compiler_hir_ms": {
+        "baseline": 91290,
+        "candidate": 63052,
+        "reduction": 28238,
+        "reduction_percent": 30.93
+      },
+      "compiler_ssa_prep_ms": {
+        "baseline": 103475,
+        "candidate": 75411,
+        "reduction": 28064,
+        "reduction_percent": 27.12
+      },
+      "wall_to_resource_stop_s": {
+        "baseline": 122.489,
+        "candidate": 95.17,
+        "reduction_percent": 22.3
+      },
+      "child_cpu_to_stop_s": {
+        "baseline": 121.69,
+        "candidate": 94.19999999999999,
+        "reduction_percent": 22.59
+      },
+      "peak_rss_kib": {
+        "baseline": 2627448,
+        "candidate": 2649160,
+        "delta": 21712
+      },
+      "peak_fds": {
+        "baseline": 5,
+        "candidate": 5
+      }
+    }
+  },
+  "conclusions": [
+    "Reusing one canonical form and validated immutable Program reduces repeated identity, validation, and graph/evidence reconstruction while preserving exact identity and diagnostic behavior in differential tests.",
+    "Precomputing function identity lookup maps in semantic graph construction and HIR call lowering removes repeated full function-table scans. In the measured V2 candidate the semantic graph phase fell from 18.862 seconds in V1 to 0.775 seconds.",
+    "V2 reduced Stage-0 host HIR preparation from 91.290 to 63.052 seconds and host HIR-plus-SSA preparation from 103.475 to 75.411 seconds against pristine b05 Stage-0; these are preparation improvements, not target semantic results.",
+    "All target attempts were stopped by the bounded sampled child RSS runner at 2.5 GiB. Cgroup event deltas, including oom and oom_kill, were zero; kernel OOM is not established.",
+    "The V2 request reached backend_compilation_begin but did not return from retained_session_admission. The actual MNCS function response and target VM steps remain UNKNOWN; no semantic rejection, complete target proof/SSA, executable, Stage-1, or Stage-2 claim is made."
+  ],
+  "limitations": {
+    "per_function_cpu": "UNKNOWN",
+    "hardware_instructions": "UNKNOWN",
+    "child_memory_pressure": "UNKNOWN_FROM_CGROUP_ONLY",
+    "target_execution_steps": "UNKNOWN_NOT_ADMITTED",
+    "semantic_compiler_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "native_backend_result": "UNKNOWN",
+    "verified_target_ssa": "NOT_ESTABLISHED",
+    "stage1_executable": "NOT_ESTABLISHED",
+    "stage2_succession": "NOT_ESTABLISHED"
+  },
+  "language_source_delivery": {
+    "tested_source_base_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "tested_source_patch_sha256": "357a31413527121f5ca6846bc02e204d0fd566b1a4f735e94ca6a9d6a7e59a72",
+    "source_change_commit": "02aee19774b1bc88aa3ffd329cd0a90dd938a82f",
+    "delivered_main_revision": "3b9690c4c872b84cfdb11da45a8d532c34f1ee93",
+    "delivery_note": "The real Flow probe measured the exact source content identified by base plus patch SHA before Git delivery. The tested source commit and resulting main merge are recorded separately."
+  }
+}
