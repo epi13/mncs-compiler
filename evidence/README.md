@@ -163,12 +163,15 @@ ASCII lexer/header slice, not self-hosting or backend parity.
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)
-records exact compiler/source/Stage-0 identities, cold and warm frontend
-cache preparation, matched baseline/candidate backend-preparation runs, child
-CPU/RSS/FD/I/O observations, cgroup events, and phase traces. The backend runs
-were stopped at a sampled 1,600 MiB RSS threshold before returning a compiler
-result; they do not establish OOM or semantic rejection. The associated
-compiler finding is [CP-0026](../pressure/0026-real-flow-hir-prelude-reconstruction.md).
+records the earlier 1,600 MiB bounded pair. The follow-up
+[HIR prelude profile](campaign-20261009-flow-hir-prelude-profile.json) records
+matched pristine, V1, and indexed-lookup Stage-0 identities at a 2,560 MiB
+sampled child RSS stop. Reusing the validated HIR prelude and indexing
+function identities reduced Stage-0 host HIR preparation from 91.290 to
+63.052 seconds on the exact compiler input. The target request still stopped
+during retained-session admission without a returned compiler result; cgroup
+OOM deltas were zero. The associated compiler finding is
+[CP-0026](../pressure/0026-real-flow-hir-prelude-reconstruction.md).
 
 ## Current declaration-vertical evidence
 

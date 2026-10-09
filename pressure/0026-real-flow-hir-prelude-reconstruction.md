@@ -1,8 +1,8 @@
-# Real-Flow HIR prelude reconstruction cost
+# Real-Flow compiler HIR preparation and backend admission
 
 ID: CP-0026
 
-Status: Open; measured boundary narrowed
+Status: Open; measured HIR reconstruction bottlenecks reduced; retained-session admission remains incomplete
 
 Category: compiler architecture / model-pipeline cost
 
@@ -12,114 +12,117 @@ Frequency: recurring on a cold compiler-sized backend build
 
 ## Title
 
-The compiler-sized `Program::lower_to_ir` prelude has not completed within the
-bounded resource envelope for the real Flow target, before HIR timing begins.
+The bounded real-Flow compiler request reaches Stage-0 HIR and SSA preparation,
+then is interrupted during backend session admission without returning a
+compiler result.
 
 ## Compiler workload
 
-The real target is
-`mncs.compiler.project.v1::compile_project_target<1024,1024>`, loaded from
-the selected `source`, `lexer`, `parser`, `segment`, `decl`, and `flow`
-compiler modules. The matched probe uses Stage-0 `b05dfa2b`, Profile 0.18,
-research-bytecode, a cached frontend Program, and an 8,000,000-step request
-budget. The target request is sent, but the MNCS function body entry and its
-step count remain unknown because backend preparation did not return.
+The target operation is
+`mncs.compiler.project.v1::compile_project_target<1024,1024>`, loaded from the
+selected `source`, `lexer`, `parser`, `segment`, `decl`, and `flow` compiler
+modules. The matched probe uses Stage-0 Profile 0.18, `research-bytecode`, a
+frontend Program cache prepared for each exact Stage-0 identity, an
+8,000,000-step request budget, a 600-second timeout, and a 2,560 MiB sampled
+child RSS stop.
 
 The six target-input modules account for 892 pages at width 1024 in this
 probe. The existing 894-page accepted project-closure evidence, including
 1,324 linked functions and 376 Stage-0 SSA functions, remains a separate
 historical scope in `SELF-HOST-MATRIX.json` and is unchanged.
 
-## Reproduction
+The `compiler-hir` and `compiler-ssa` timings below are Stage-0 host
+preparation of the MNCS compiler Program. They do not establish that the MNCS
+compiler accepted `flow.mncs`, produced verified SSA for that target, executed
+target VM steps, or emitted an executable artifact.
 
-From the compiler repository, the bounded matched run is represented by:
+## Matched measurement
 
-```sh
-python3 tools/measure_compiler_probe.py \
-  --backend research-bytecode \
-  --modules source lexer parser segment decl flow \
-  --target-last --step-budget 8000000 \
-  --max-probe-rss-mib 1600 --timeout-seconds 120 \
-  --label flow-backend-artifact-only-pinned-20261009
-```
+The exact source, input, backend, resource, phase, and raw evidence identities
+are in [`campaign-20261009-flow-hir-prelude-profile.json`](../evidence/campaign-20261009-flow-hir-prelude-profile.json).
+The compiler input source SHA-256 is
+`7a89b18b4bd00e871faa92ddf7923cd8e8b40a9999c8057c33a5a654efd505d6` and the
+probe candidate head is `76ccb18af4e1da9a849f421960ecb9634ca2409d`. Stage-0
+identities are explicitly distinguished from that compiler revision.
 
-The exact source, Stage-0, cache, binary, and phase identities are recorded in
+| Stage-0 source | HIR prelude | Semantic graph | Host compiler HIR | Host compiler SSA | Wall to RSS stop | Child CPU | Peak RSS |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| pristine `b05dfa2b` | 31.196 s | not separately timed | 91.290 s | 103.475 s | 122.489 s | 121.69 s | 2,627,448 KiB |
+| validated HIR reuse, patch `eefce44c` | 22.093 s | 18.862 s | 81.244 s | 93.805 s | 113.476 s | 112.70 s | 2,628,032 KiB |
+| indexed graph and HIR, patch `357a3141` | 4.060 s | 0.775 s | 63.052 s | 75.411 s | 95.170 s | 94.20 s | 2,649,160 KiB |
+
+Across the baseline-to-V2 pair, host HIR preparation fell by 28.238 seconds
+(30.9%), host HIR-plus-SSA preparation by 28.064 seconds (27.1%), and wall and
+child CPU to the resource stop by about 22%. Peak RSS remained near 2.5 GiB
+and was 21,712 KiB higher in V2 than baseline; peak FDs remained five.
+
+The indexed semantic graph fell from 18.862 seconds in V1 to 0.775 seconds in
+V2. The compiler and model now reuse a single canonical form and validated
+Program for HIR construction, then use function-identity maps instead of
+repeated full function-table scans in graph construction and HIR call lowering.
+Differential tests preserve the public identities, graph, evidence manifest,
+HIR, fingerprints, invalid reports, and exact callee identity behavior.
+
+All three target attempts were classified `RESOURCE_EXHAUSTED` by the bounded
+sampled child RSS runner and ended `INTERRUPTED` with semantic result
+`UNKNOWN_NO_RETURNED_PROJECT_RESULT`. V2 reached the observed
+`backend_compilation` begin event, but its transport then stopped at
+`retained_session_admission`; backend admission was not observed and target VM
+steps remain UNKNOWN. The cgroup memory maximum was unlimited and event deltas,
+including `oom` and `oom_kill`, were zero. This is not evidence of a kernel OOM
+or a semantic rejection.
+
+## Earlier bounded observation
+
+The earlier 1,600 MiB paired emission experiment remains recorded in
 [`campaign-20261009-flow-resource-profile.json`](../evidence/campaign-20261009-flow-resource-profile.json).
-The matching baseline differs only in requested probe artifact emissions.
-
-## Observed behavior
-
-- Both measured runs loaded the same content-addressed frontend Program
-  (`4ecbeacb…`) and began backend request construction at about 2.26 seconds.
-- Baseline requested Semantic, HIR, SSA, TargetLoweringPlan, and BackendArtifact
-  emissions. Candidate requested BackendArtifact only.
-- Both runs emitted `compiler-semantic` and `compiler-validation` timing events,
-  then reached the 1,600 MiB sampled RSS stop at about 31 seconds. Peak sampled
-  RSS was 1,708,220 KiB and 1,708,208 KiB; child CPU was 30.74 and 30.67
-  seconds; peak FDs were five in each run.
-- The only measured deltas were −0.252 seconds wall time, −0.07 seconds CPU,
-  −12 KiB peak RSS, no FD change, and +205 bytes of logical reads. Emission
-  selection therefore did not materially reduce work.
-- No `ir-prelude`, `compiler-hir`, `compiler-ssa`, `compiler-backend`, or final
-  timing event was observed before the stop. No semantic result was returned.
-- The runner revalidated the isolated Rust child identity before sending
-  SIGINT. The sampled cap is an orderly probe boundary, not a process or cgroup
-  memory limit. Cgroup memory was unlimited and per-run OOM event deltas were
-  zero.
-
-Source inspection shows `ReferenceCompiler::compile_inner` validates the
-Program, then calls `Program::lower_to_ir`. That method validates again and
-builds the semantic graph, evidence manifest, and obligations before emitting
-`ir-prelude`. This makes the prelude the next profiling boundary; it does not
-yet establish which operation dominates or how much memory each contributes.
+It stopped before HIR timing began and showed no material emission-selection
+gain. The new 2,560 MiB measurement uses a later phase-instrumented path and
+reaches host HIR/SSA preparation; neither observation is rewritten as a
+successful target compilation.
 
 ## Smallest faithful reproduction
 
-The real Flow project target is currently the smallest faithful reproduction.
-No reduced MNCS fixture has isolated this compiler-model cost. Warm frontend
-cache preparation is a useful bounded control, but it does not enter backend
-compilation or exercise the prelude.
+The real Flow compiler project target is still the smallest faithful
+reproduction. The frontend cache preparation is an admission-only control: it
+runs Stage-0 parsing/elaboration but does not enter backend compilation or run
+the compiler function.
 
-## Current workaround and limitation
+## Remaining boundary and desired behavior
 
-The backend-independent frontend Program cache removes repeated cold
-elaboration for an exact compiler/source/seed identity: the cold preparation
-took 150.553 seconds of specialization and peaked at 2,129,132 KiB; the warm
-cache-only preparation took 1.004 seconds and peaked at 301,256 KiB. The warm
-operation is admission-only and does not run the target. Once backend
-preparation begins, the resource profile still reaches the same cap.
+The repeated semantic identity and callee lookup scans measured in the HIR
+path have been reduced. The remaining boundary is backend compilation and
+retained-session admission under the bounded RSS envelope. Complete a matched
+run that admits the session and returns the `compile_project_target` result,
+then establish the target's exact parse/check/proof/CFG/verified-SSA facts
+before making executable or Stage-1 claims. Preserve exact diagnostics,
+resource classifications, and Stage-0 differential authority.
 
-## Desired behavior
-
-Complete the HIR prelude for the real target within a measured finite envelope
-while preserving semantic graph identities, evidence-manifest fingerprints,
-obligations, diagnostics, and downstream HIR/SSA results. Reuse a validated
-Program result and shared semantic identities if profiling confirms those
-reconstructions are material; add phase timings before choosing a larger
-resource bound.
-
-## Likely ownership
-
-`mncs-language` compiler/model pipeline. This is a compiler implementation and
-reuse question, not evidence for a missing language feature.
+No language syntax or semantic change was needed. This is an owner-local
+`mncs-language` compiler/model implementation and `mncs-compiler` measurement
+question.
 
 ## Impact
 
-- Compiler succession: blocks a complete native check/proof/CFG/verified-SSA
-  result for the real Flow module closure; no semantic rejection has been
-  demonstrated.
-- Execution: backend artifact preparation does not complete within the
-  measured cap, so no executable artifact or canonical VM conformance is
-  established.
-- Resource attribution: observed child RSS/CPU/FD/I/O and cgroup events are
-  available; exact internal prelude phase attribution remains unknown.
+- Compiler succession: no new target semantic result, verified target SSA,
+  executable artifact, Stage-1, or Stage-2 succession is established.
+- Execution efficiency: Stage-0 host HIR/SSA preparation is materially faster
+  on the exact measured source, while peak RSS and retained-session admission
+  remain limiting.
+- Resource attribution: child CPU/RSS/FD/I/O and cgroup event deltas are
+  recorded; hardware instructions, target VM steps, and per-function CPU remain
+  UNKNOWN.
 - Correctness: Stage-0 project acceptance remains independently authoritative
-  for its supported subset; this finding adds no semantic verdict.
+  for its supported subset. This finding adds neither a semantic pass nor a
+  semantic failure for the real target.
 
 ## Evidence and upstream tracking
 
+- [`evidence/campaign-20261009-flow-hir-prelude-profile.json`](../evidence/campaign-20261009-flow-hir-prelude-profile.json)
 - [`evidence/campaign-20261009-flow-resource-profile.json`](../evidence/campaign-20261009-flow-resource-profile.json)
-- `mncs-language` issue/PR: not opened yet
-- Resolution revision: pending
-- Follow-up evidence: pending an instrumented `mncs-language` change and a
-  same-input real Flow remeasurement
+- `mncs-language` source change commit: `02aee19774b1bc88aa3ffd329cd0a90dd938a82f`
+- Delivered `mncs-language` main: `3b9690c4c872b84cfdb11da45a8d532c34f1ee93`
+- Tests: `cargo test -p mncs-model` (215 passed) and `cargo test -p mncs-compiler -- --test-threads=4` (120 passed across targets)
+- Follow-up: instrument the measured backend compilation/admission boundary
+  and reduce its memory/work cost without raising the budget to hide the
+  bottleneck.
