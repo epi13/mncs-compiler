@@ -1,6 +1,6 @@
 {
   "schema_version": "mncs.compiler.execution-efficiency/1",
-  "observed_at": "2026-10-09T17:32:41Z",
+  "observed_at": "2026-10-09T17:35:32.889127Z",
   "scope": {
     "campaign_entry_main_revision": "6d73c7a383193974618fabcbe3baa9cf3fc2ec60",
     "delivery_branch": "campaign/streaming-probe-cache-20261009",
@@ -9,7 +9,14 @@
     "tested_compiler_source_identity": {
       "kind": "probe-reported SHA-256 of ordered selected compiler module ids and source bytes",
       "sha256": "eb24218ed9aae5a43c0e2bf5d664c1c07d316efcc1fc2373ebd91f3216c3af85",
-      "selected_modules": ["source", "lexer", "parser", "segment", "decl", "flow"],
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
       "module_source_sha256": {
         "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
         "lexer": "40ca998e7b4ae0b5d274b833a1adc9034c011c797fe035494a3bd608c3f686d8",
@@ -117,7 +124,7 @@
       "steps": 8000000,
       "frames": 329600,
       "instructions": 5782159,
-      "ssa_profile_seconds": 2.388825660,
+      "ssa_profile_seconds": 2.38882566,
       "frame_setup_seconds": 0.246249817,
       "input_arguments": 1532559,
       "reused_validated_arguments": 1532556,
@@ -125,11 +132,17 @@
       "result_sha256": "6bf903e12e2255093d3c7039e642bc6c1e448f9d6a28d1942f3798ae8f787e6a"
     },
     "comparison": {
-      "matched_warm_runner_wall_seconds_baseline_to_candidate": [37.603, 33.342],
-      "matched_child_cpu_seconds_baseline_to_candidate": [35.56, 31.16],
+      "matched_warm_runner_wall_seconds_baseline_to_candidate": [
+        37.603,
+        33.342
+      ],
+      "matched_child_cpu_seconds_baseline_to_candidate": [
+        35.56,
+        31.16
+      ],
       "ssa_profile_time_reduction_percent": 64.76,
       "frame_setup_time_reduction_percent": 94.56,
-      "input_validation_time_reduction_percent": 99.90,
+      "input_validation_time_reduction_percent": 99.9,
       "semantic_status_and_result_hash_unchanged": true,
       "limitation": "The unchanged 8,000,000-step budget is exhausted. The identical report hash is an incomplete execution report digest, not a successful compiler output. Stage-0 oracle and native flow module parse/check/proof/CFG/SSA result were not established by this probe."
     }
@@ -139,7 +152,7 @@
     "next_action": "Profile semantic work within this function and the remaining CP-0011 recursion pressure; do not raise the 8M budget without measured need."
   },
   "delivery": {
-    "implementation_commit": null,
+    "implementation_commit": "4826d1f820244dbbaf08348e444a204c28033064",
     "delivery_role": "The tested candidate source digest and probe Git head are independent of the delivered compiler main revision.",
     "protected_untracked_evidence_preserved": true
   }
