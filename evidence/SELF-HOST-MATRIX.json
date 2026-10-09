@@ -867,7 +867,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-09T06:06:20.805256+00:00",
+    "updated_at": "2026-10-09T08:54:54.149898+00:00",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -956,7 +956,61 @@
         "result_sha256": "8c8663b45e3aa0c4f62494efdd753103bb4078ec46417aa9c3d4b79f8d67942b",
         "status": "SUCCESS"
       }
+    },
+    "lazy_keyword_classification_campaign_20261009": {
+      "observed_at": "2026-10-09T08:17:18.371647+00:00",
+      "entry_delivered_main_revision": "97db51927d017123847735baf13409e94d27dc7f",
+      "candidate_base_revision": "d281ad540f6ab87c7c24f2ac52a479d02ce18761",
+      "tested_candidate_git_head": "d281ad540f6ab87c7c24f2ac52a479d02ce18761",
+      "tested_candidate_branch": "campaign/lazy-keyword-classification-20261009",
+      "tested_candidate_worktree_dirty": true,
+      "tested_compiler_source_identity": {
+        "kind": "SHA-256 of src/compiler/lexer.mncs bytes",
+        "module": "src/compiler/lexer.mncs",
+        "sha256": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c"
+      },
+      "matched_baseline_lexer_source_sha256": "b68edd4e2dcbf69ea47ed4d0a4cbe11cb7a2053a6ed2770526b8468ab2a55550",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "evidence_artifact": "evidence/campaign-20261009-lazy-keyword-classification.json",
+      "delivered_implementation_commit": "97db51927d017123847735baf13409e94d27dc7f",
+      "delivery_role": "This delivered main commit contains the measured lexer source. The candidate base Git head and candidate source identity remain separate; see the performance evidence for matched outcomes."
+    },
+    "flow_admission_classification_campaign_20261009": {
+      "observed_at": "2026-10-09T08:41:17.766659+00:00",
+      "entry_delivered_main_revision": "97db51927d017123847735baf13409e94d27dc7f",
+      "tested_candidate_git_head": "97db51927d017123847735baf13409e94d27dc7f",
+      "tested_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "ab9c93a32a7dad14fe4a0cb32995043f6b9322bb1b2ce2589b2d8bcdb567eb18",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "module_source_sha256": {
+          "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+          "lexer": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "decl": "ae93a228da29488da02332d94d5cfac5a0d55d4619d565cc9860d290de1e86ca",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        }
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target",
+      "operation_classification": "TIMEOUT",
+      "operation_phase": "retained_session_admission",
+      "target_execution_started": false,
+      "evidence_artifact": "evidence/campaign-20261009-flow-admission-timeout.json",
+      "delivered_main_revision": "9f55339c502dc86d468bf734764baca05dfc7276",
+      "delivery_role": "The measurement/classification tooling and compact timeout evidence are delivered at this compiler main revision; the flow target produced no native compiler result and does not change module-stage evidence.",
+      "delivered_implementation_commit": "9f55339c502dc86d468bf734764baca05dfc7276",
+      "measurement_tool_source_sha256": "7111a8b25719441e5cc64ab1974ae9bbf4ccfc89408a0d0728a29c91cad6ed11",
+      "reclassification_tool_sha256": "9b750ee608fe023abeab169b6388fd011620a63f5f2436c74aa89eae9fe3bee1"
     }
   },
-  "evidence_updated_at": "2026-10-09T06:06:20.805256+00:00"
+  "evidence_updated_at": "2026-10-09T08:54:54.149898+00:00"
 }
