@@ -392,7 +392,15 @@ fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         if end1 >= total { return Scan { ..st, end: end1 }; }
         let a1: u64 = window.b1;
         if a1 == 10 { return Scan { ..st, end: end1, done: true }; }
-        return Scan { ..st, end: end1 + 1 };
+        let end2: u64 = st.end + 2;
+        if end2 >= total { return Scan { ..st, end: end2 }; }
+        let a2: u64 = window.b2;
+        if a2 == 10 { return Scan { ..st, end: end2, done: true }; }
+        let end3: u64 = st.end + 3;
+        if end3 >= total { return Scan { ..st, end: end3 }; }
+        let a3: u64 = window.b3;
+        if a3 == 10 { return Scan { ..st, end: end3, done: true }; }
+        return Scan { ..st, end: end3 + 1 };
     }
     if word {
         if !(letter(a0) || digit(a0)) { return Scan { ..st, done: true }; }
@@ -400,7 +408,15 @@ fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         if end1 >= total { return Scan { ..st, end: end1 }; }
         let a1: u64 = window.b1;
         if !(letter(a1) || digit(a1)) { return Scan { ..st, end: end1, done: true }; }
-        return Scan { ..st, end: end1 + 1 };
+        let end2: u64 = st.end + 2;
+        if end2 >= total { return Scan { ..st, end: end2 }; }
+        let a2: u64 = window.b2;
+        if !(letter(a2) || digit(a2)) { return Scan { ..st, end: end2, done: true }; }
+        let end3: u64 = st.end + 3;
+        if end3 >= total { return Scan { ..st, end: end3 }; }
+        let a3: u64 = window.b3;
+        if !(letter(a3) || digit(a3)) { return Scan { ..st, end: end3, done: true }; }
+        return Scan { ..st, end: end3 + 1 };
     }
     if ws {
         if !space(a0) { return Scan { ..st, done: true }; }
@@ -408,7 +424,15 @@ fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         if end1 >= total { return Scan { ..st, end: end1 }; }
         let a1: u64 = window.b1;
         if !space(a1) { return Scan { ..st, end: end1, done: true }; }
-        return Scan { ..st, end: end1 + 1 };
+        let end2: u64 = st.end + 2;
+        if end2 >= total { return Scan { ..st, end: end2 }; }
+        let a2: u64 = window.b2;
+        if !space(a2) { return Scan { ..st, end: end2, done: true }; }
+        let end3: u64 = st.end + 3;
+        if end3 >= total { return Scan { ..st, end: end3 }; }
+        let a3: u64 = window.b3;
+        if !space(a3) { return Scan { ..st, end: end3, done: true }; }
+        return Scan { ..st, end: end3 + 1 };
     }
     if number {
         let b0: u64 = window.b1;
