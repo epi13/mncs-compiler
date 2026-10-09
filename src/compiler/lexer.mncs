@@ -363,33 +363,67 @@ fn token_from_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     return Token { kind: select(st.dotted, 6, 5), start: start, end: st.end, diagnostic: diagnostic };
 }
 
-fn scan_step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
+fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
     if st.done || st.end >= total { return st; }
-    let a: u64 = source.byte_at_global<P, N>(pages, stride, total, st.end);
+    let window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, st.end);
+    let a0: u64 = window.b0;
     if block {
-        let b: u64 = source.byte_at_global<P, N>(pages, stride, total, st.end + 1);
-        if a == 47 && b == 42 { return Scan { ..st, end: st.end + 2, depth: st.depth + 1 }; }
-        if a == 42 && b == 47 { return Scan { ..st, end: st.end + 2, depth: st.depth - 1, done: st.depth == 1 }; }
-        return Scan { ..st, end: st.end + 1 };
+        let b0: u64 = window.b1;
+        let open0: bool = a0 == 47 && b0 == 42;
+        let close0: bool = a0 == 42 && b0 == 47;
+        let end1: u64 = st.end + select(open0 || close0, 2, 1);
+        let depth1: u64 = st.depth + select(open0, 1, 0) - select(close0, 1, 0);
+        let first: Scan = Scan { ..st, end: end1, depth: depth1 };
+        if close0 && st.depth == 1 { return Scan { ..first, done: true }; }
+        if end1 >= total { return first; }
+        let a1: u64 = select(open0 || close0, window.b2, b0);
+        let b1: u64 = select(open0 || close0, window.b3, window.b2);
+        let open1: bool = a1 == 47 && b1 == 42;
+        let close1: bool = a1 == 42 && b1 == 47;
+        let end2: u64 = end1 + select(open1 || close1, 2, 1);
+        let depth2: u64 = depth1 + select(open1, 1, 0) - select(close1, 1, 0);
+        let second: Scan = Scan { ..first, end: end2, depth: depth2 };
+        if close1 && depth1 == 1 { return Scan { ..second, done: true }; }
+        return second;
     }
     if line {
-        let advance: bool = a != 10;
-        return Scan { ..st, end: st.end + select(advance, 1, 0), done: !advance };
+        if a0 == 10 { return Scan { ..st, done: true }; }
+        let end1: u64 = st.end + 1;
+        if end1 >= total { return Scan { ..st, end: end1 }; }
+        let a1: u64 = window.b1;
+        if a1 == 10 { return Scan { ..st, end: end1, done: true }; }
+        return Scan { ..st, end: end1 + 1 };
     }
     if word {
-        let advance: bool = letter(a) || digit(a);
-        return Scan { ..st, end: st.end + select(advance, 1, 0), done: !advance };
+        if !(letter(a0) || digit(a0)) { return Scan { ..st, done: true }; }
+        let end1: u64 = st.end + 1;
+        if end1 >= total { return Scan { ..st, end: end1 }; }
+        let a1: u64 = window.b1;
+        if !(letter(a1) || digit(a1)) { return Scan { ..st, end: end1, done: true }; }
+        return Scan { ..st, end: end1 + 1 };
     }
     if ws {
-        let advance: bool = space(a);
-        return Scan { ..st, end: st.end + select(advance, 1, 0), done: !advance };
+        if !space(a0) { return Scan { ..st, done: true }; }
+        let end1: u64 = st.end + 1;
+        if end1 >= total { return Scan { ..st, end: end1 }; }
+        let a1: u64 = window.b1;
+        if !space(a1) { return Scan { ..st, end: end1, done: true }; }
+        return Scan { ..st, end: end1 + 1 };
     }
-    // Preserve Stage-0's unusual continuation of dots after the first version dot.
     if number {
-        let b: u64 = source.byte_at_global<P, N>(pages, stride, total, st.end + 1);
-        let dot: bool = a == 46 && (st.dotted || digit(b));
-        let advance: bool = digit(a) || dot;
-        return Scan { ..st, end: st.end + select(advance, 1, 0), dotted: st.dotted || dot, done: !advance };
+        let b0: u64 = window.b1;
+        let dot0: bool = a0 == 46 && (st.dotted || digit(b0));
+        let advance0: bool = digit(a0) || dot0;
+        if !advance0 { return Scan { ..st, done: true }; }
+        let end1: u64 = st.end + 1;
+        let dotted1: bool = st.dotted || dot0;
+        if end1 >= total { return Scan { ..st, end: end1, dotted: dotted1 }; }
+        let a1: u64 = b0;
+        let b1: u64 = window.b2;
+        let dot1: bool = a1 == 46 && (dotted1 || digit(b1));
+        let advance1: bool = digit(a1) || dot1;
+        if !advance1 { return Scan { ..st, end: end1, dotted: dotted1, done: true }; }
+        return Scan { ..st, end: end1 + 1, dotted: dotted1 || dot1 };
     }
     return Scan { ..st, done: true };
 }
@@ -412,71 +446,45 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
         iterate i up_to 1024 carrying s0: Scan = seed {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s0, line, block, word, number, ws);
+            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s0, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s0 = advanced;
         }
         iterate i up_to 1024 carrying s1: Scan = s0 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s1, line, block, word, number, ws);
+            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s1, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s1 = advanced;
         }
         iterate i up_to 1024 carrying s2: Scan = s1 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s2, line, block, word, number, ws);
+            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s2, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s2 = advanced;
         }
         iterate i up_to 1024 carrying s3: Scan = s2 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s3, line, block, word, number, ws);
+            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s3, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s3 = advanced;
         }
-        iterate i up_to 1024 carrying s4: Scan = s3 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s4, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
-            }
-            next s4 = advanced;
-        }
-        iterate i up_to 1024 carrying s5: Scan = s4 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s5, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
-            }
-            next s5 = advanced;
-        }
-        iterate i up_to 1024 carrying s6: Scan = s5 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s6, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
-            }
-            next s6 = advanced;
-        }
-        iterate i up_to 1024 carrying s7: Scan = s6 {
-            let advanced: Scan = scan_step_global<P, N>(pages, stride, total, s7, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
-            }
-            next s7 = advanced;
-        }
-        // The 8192-byte per-call scan budget is exhausted mid-token. Trivia
+        // Each chunk handles at most two transitions; four bounded passes
+        // retain the previous 8192-transition per-call scan budget.
+        // The scan budget is exhausted mid-token. Trivia
         // continues at the prefix end (diagnostic 6); significant content is
         // refused as overlong (diagnostic 5) rather than silently split.
-        if s7.done || s7.end >= total {
-            return token_from_scan_global<P, N>(pages, stride, total, start, s7, line, block, word, ws);
+        if s3.done || s3.end >= total {
+            return token_from_scan_global<P, N>(pages, stride, total, start, s3, line, block, word, ws);
         }
         if ws || line || block {
-            return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: s7.end, diagnostic: 6 };
+            return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: s3.end, diagnostic: 6 };
         }
-        return Token { kind: 7, start: start, end: s7.end, diagnostic: 5 };
+        return Token { kind: 7, start: start, end: s3.end, diagnostic: 5 };
     }
     let kind: u64 = punctuation(a, b);
     return Token { kind: kind, start: start, end: start + select(kind >= 80, 2, 1), diagnostic: select(kind == 7, 2, 0) };

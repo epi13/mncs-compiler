@@ -97,6 +97,44 @@ fn byte_at_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     return view[intra] as u64;
 }
 
+// Read four adjacent bytes from a logical source. The common case stays in
+// one page and avoids four separate global address calculations; page edges,
+// short inputs, and malformed views retain byte_at_global's total behavior.
+record ByteWindow4 { b0: u64, b1: u64, b2: u64, b3: u64 }
+
+fn byte_at_global_delta<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64, delta: u64) -> (result: u64) {
+    if offset > 18446744073709551615 - delta { return 256; }
+    return byte_at_global<P, N>(pages, stride, total, offset + delta);
+}
+
+fn missing_window4() -> (result: ByteWindow4) {
+    return ByteWindow4 { b0: 256, b1: 256, b2: 256, b3: 256 };
+}
+
+// The common case stays in one page and avoids four global address
+// calculations. Page edges and malformed views retain byte_at_global behavior.
+fn byte_window4_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64) -> (result: ByteWindow4) {
+    if stride == 0 { return missing_window4(); }
+    if offset >= total { return missing_window4(); }
+    let page: u64 = offset / stride;
+    let intra: u64 = offset % stride;
+    if page >= pages.len { return missing_window4(); }
+    let view: [byte; up_to N] = pages[page];
+    if intra >= view.len { return missing_window4(); }
+    if total - offset >= 4 && stride - intra >= 4 && view.len - intra >= 4 {
+        let b0: u64 = view[intra + 0] as u64;
+        let b1: u64 = view[intra + 1] as u64;
+        let b2: u64 = view[intra + 2] as u64;
+        let b3: u64 = view[intra + 3] as u64;
+        return ByteWindow4 { b0: b0, b1: b1, b2: b2, b3: b3 };
+    }
+    let b0: u64 = byte_at_global_delta<P, N>(pages, stride, total, offset, 0);
+    let b1: u64 = byte_at_global_delta<P, N>(pages, stride, total, offset, 1);
+    let b2: u64 = byte_at_global_delta<P, N>(pages, stride, total, offset, 2);
+    let b3: u64 = byte_at_global_delta<P, N>(pages, stride, total, offset, 3);
+    return ByteWindow4 { b0: b0, b1: b1, b2: b2, b3: b3 };
+}
+
 // Global spans are stable across stride choices: the same content chunked
 // at any stride lexes to identical spans.
 fn span_valid_global(total: u64, start: u64, end: u64) -> (result: bool) {
