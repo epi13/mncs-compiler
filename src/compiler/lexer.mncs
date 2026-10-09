@@ -363,9 +363,7 @@ fn token_from_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     return Token { kind: select(st.dotted, 6, 5), start: start, end: st.end, diagnostic: diagnostic };
 }
 
-fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
-    if st.done || st.end >= total { return st; }
-    let window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, st.end);
+fn scan_chunk_window(total: u64, window: source.ByteWindow4, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
     let a0: u64 = window.b0;
     if block {
         let b0: u64 = window.b1;
@@ -452,6 +450,12 @@ fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     return Scan { ..st, done: true };
 }
 
+fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
+    if st.done || st.end >= total { return st; }
+    let window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, st.end);
+    return scan_chunk_window(total, window, st, line, block, word, number, ws);
+}
+
 fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
     if start > total { return Token { kind: 0, start: total, end: total, diagnostic: 4 }; }
     if start == total { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
@@ -470,28 +474,36 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
         iterate i up_to 1024 carrying s0: Scan = seed {
-            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s0, line, block, word, number, ws);
+            if s0.done || s0.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s0, line, block, word, ws); }
+            let window0: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s0.end);
+            let advanced: Scan = scan_chunk_window(total, window0, s0, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s0 = advanced;
         }
         iterate i up_to 1024 carrying s1: Scan = s0 {
-            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s1, line, block, word, number, ws);
+            if s1.done || s1.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s1, line, block, word, ws); }
+            let window1: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s1.end);
+            let advanced: Scan = scan_chunk_window(total, window1, s1, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s1 = advanced;
         }
         iterate i up_to 1024 carrying s2: Scan = s1 {
-            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s2, line, block, word, number, ws);
+            if s2.done || s2.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s2, line, block, word, ws); }
+            let window2: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s2.end);
+            let advanced: Scan = scan_chunk_window(total, window2, s2, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
             next s2 = advanced;
         }
         iterate i up_to 1024 carrying s3: Scan = s2 {
-            let advanced: Scan = scan_chunk_global<P, N>(pages, stride, total, s3, line, block, word, number, ws);
+            if s3.done || s3.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s3, line, block, word, ws); }
+            let window3: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s3.end);
+            let advanced: Scan = scan_chunk_window(total, window3, s3, line, block, word, number, ws);
             if advanced.done || advanced.end >= total {
                 return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
             }
