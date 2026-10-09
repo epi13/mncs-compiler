@@ -459,8 +459,9 @@ fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
     if start > total { return Token { kind: 0, start: total, end: total, diagnostic: 4 }; }
     if start == total { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
-    let a: u64 = source.byte_at_global<P, N>(pages, stride, total, start);
-    let b: u64 = source.byte_at_global<P, N>(pages, stride, total, start + 1);
+    let initial_window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, start);
+    let a: u64 = initial_window.b0;
+    let b: u64 = initial_window.b1;
     if a >= 128 {
         let width: u64 = utf8_width(a);
         let remaining: u64 = total - start;
