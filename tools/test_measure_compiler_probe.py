@@ -2,6 +2,7 @@
 """Contract tests for execution and measurement-runner outcome classes."""
 
 import json
+import signal
 import sys
 from pathlib import Path
 
@@ -131,6 +132,61 @@ def test_probe_child_rss_cap_is_scoped_and_classified_as_resource_exhausted():
     assert measurement._operation_classification(None, runner) == "RESOURCE_EXHAUSTED"
 
 
+def test_only_revalidated_isolated_probe_group_is_signaled(monkeypatch):
+    records = {
+        101: {
+            "pid": 101,
+            "cmdline": "/tmp/mncs-compiler-stage0-probe",
+            "process_group_id": 101,
+            "session_id": 101,
+            "start_time_ticks": 1234,
+            "executable_path": "/tmp/mncs-compiler-stage0-probe",
+        },
+        102: {
+            "pid": 102,
+            "cmdline": "/tmp/mncs-compiler-stage0-probe",
+            "process_group_id": 102,
+            "session_id": 102,
+            "start_time_ticks": 2345,
+            "executable_path": "/tmp/mncs-compiler-stage0-probe",
+        },
+    }
+    current = {
+        101: {
+            "start_time_ticks": 1234,
+            "executable_path": "/tmp/mncs-compiler-stage0-probe",
+            "process_group_id": 101,
+            "session_id": 101,
+        },
+        102: {
+            "start_time_ticks": 9999,
+            "executable_path": "/tmp/mncs-compiler-stage0-probe",
+            "process_group_id": 102,
+            "session_id": 102,
+        },
+    }
+    sent = []
+    monkeypatch.setattr(measurement, "_proc_snapshot", lambda pid: current.get(pid))
+    monkeypatch.setattr(measurement.os, "killpg", lambda pgid, sig: sent.append((pgid, sig)))
+
+    result = measurement._signal_verified_probe_children(records, signal.SIGINT)
+
+    assert sent == [(101, signal.SIGINT)]
+    assert result[0]["outcome"] == "sent"
+    assert result[1]["outcome"] == "identity_changed_or_not_isolated"
+
+
+def test_phase_trace_keeps_valid_partial_events_and_hashes_raw_bytes(tmp_path):
+    trace = tmp_path / "trace.jsonl"
+    trace.write_text('{"event":"probe_start"}\nnot-json\n{"event":"phase"}\n')
+
+    events, errors, digest = measurement._read_phase_trace(trace)
+
+    assert [event["event"] for event in events] == ["probe_start", "phase"]
+    assert len(errors) == 1
+    assert digest is not None and len(digest) == 64
+
+
 def test_budget_and_protocol_failures_are_distinct():
     budget = {"native_request_status": "budget_exhausted"}
     invalid = {"native_request_status": "invalid_request"}
@@ -172,6 +228,30 @@ def test_stage0_oracle_completion_is_not_native_compiler_evidence():
     assert measurement._semantic_result(report) == "UNKNOWN_NO_NATIVE_COMPILER_RESULT"
 
 
+def test_program_cache_preparation_is_admission_only_and_not_semantic_evidence():
+    report = {
+        "kind": "compiler-program-cache-preparation",
+        "native_request_status": "not_run",
+        "probe_internal_trace": {
+            "events": [
+                {
+                    "event": "phase",
+                    "phase": "artifact_cache_gzip_write",
+                    "cache_file_suffix": ".program.json.gz",
+                    "success": True,
+                },
+            ],
+        },
+    }
+
+    assert measurement._operation_outcome(report) == "ADMISSION_ONLY_SUCCESS"
+    assert measurement._operation_classification(report, "SUCCESS") == "SUCCESS"
+    assert measurement._semantic_result(report) == "NOT_RUN_CACHE_PREPARATION"
+
+    unknown = {"kind": "compiler-program-cache-preparation", "probe_internal_trace": {"events": []}}
+    assert measurement._operation_outcome(unknown) == "UNKNOWN_CACHE_PREPARATION"
+
+
 if __name__ == "__main__":
     tests = [
         test_body_profiles_are_read_from_nested_probe_stderr,
@@ -179,6 +259,9 @@ if __name__ == "__main__":
         test_ssa_and_artifact_profile_events_are_structured,
         test_inner_timeout_is_not_runner_success,
         test_outer_runner_statuses_are_preserved,
+        test_probe_child_rss_cap_is_scoped_and_classified_as_resource_exhausted,
+        test_only_revalidated_isolated_probe_group_is_signaled,
+        test_phase_trace_keeps_valid_partial_events_and_hashes_raw_bytes,
         test_budget_and_protocol_failures_are_distinct,
         test_child_interruption_and_unknown_remain_distinct,
         test_execution_success_is_separate_from_semantic_rejection,

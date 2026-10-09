@@ -160,6 +160,16 @@ See [bounded frontend contracts and reproduction](FRONTEND.md),
 [qualified Stage-0 compilation results](compile-results.json). These establish a bounded
 ASCII lexer/header slice, not self-hosting or backend parity.
 
+## Current real-Flow resource profile (2026-10-09)
+
+The [Flow resource profile](campaign-20261009-flow-resource-profile.json)
+records exact compiler/source/Stage-0 identities, cold and warm frontend
+cache preparation, matched baseline/candidate backend-preparation runs, child
+CPU/RSS/FD/I/O observations, cgroup events, and phase traces. The backend runs
+were stopped at a sampled 1,600 MiB RSS threshold before returning a compiler
+result; they do not establish OOM or semantic rejection. The associated
+compiler finding is [CP-0026](../pressure/0026-real-flow-hir-prelude-reconstruction.md).
+
 ## Current declaration-vertical evidence
 
 See [declaration/symbol/IR contracts and reproduction](DECL.md) and

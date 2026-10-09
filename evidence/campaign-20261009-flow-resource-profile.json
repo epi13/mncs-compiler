@@ -1,0 +1,483 @@
+{
+  "schema": "mncs.compiler.flow-target-resource-profile/1",
+  "kind": "flow-target backend compilation resource profile",
+  "observed_at": "2026-10-09T12:39:18Z",
+  "identities": {
+    "tested_candidate_base_revision": "fc3bf3c09e785f52b5b72d057cf8e40c2bdc418d",
+    "tested_candidate_branch": "campaign/flow-measurement-rss-cap-20261009",
+    "delivery_revision": "recorded in SELF-HOST-MATRIX identity ledger after delivery",
+    "compiler_source_identity_kind": "sha256 of selected compiler module ids and source bytes; ids are basenames; sources are sorted by basename",
+    "compiler_source_identity_sha256": "7a89b18b4bd00e871faa92ddf7923cd8e8b40a9999c8057c33a5a654efd505d6",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "module_source_sha256": {
+      "source": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+      "lexer": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "fd066efabad38d73d2f6c5f8f96988d95ac34aa65087dbfaa797afee705aed33",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+    },
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_source_profile": "0.18",
+    "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "program_cache_key": "4ecbeacbd576d964dc14b58d37cfbc66ffd72570f3deb39741ff2c207bcb597e",
+    "program_cache_identity_scope": "Stage-0/compiler identity, loaded source closure, module identity and specialization seed"
+  },
+  "workload": {
+    "target_input_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "selected_source_count": 6,
+    "target_input_pages_at_width_1024": 892,
+    "target_input_page_count_scope": "sum of selected six target-input module pages; distinct from the established 894-page real project-closure evidence retained in SELF-HOST-MATRIX.json",
+    "stage0_admission_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "admission_source_bytes": 1336347,
+    "specialization_seed_count": 1,
+    "target_request_sent": true,
+    "target_function_body_entry": "UNKNOWN_NOT_OBSERVED; backend preparation did not return a response and no compiler semantic result was produced",
+    "requested_execution_step_budget": 8000000,
+    "reported_execution_steps": null,
+    "reported_execution_steps_semantics": "UNKNOWN; no completed target result returned",
+    "stage0_project_acceptance_reference": {
+      "valid": true,
+      "diagnostics": 0,
+      "linked_functions": 1324,
+      "ssa_functions": 376,
+      "page_count_at_width_1024": 894,
+      "source": "evidence/SELF-HOST-MATRIX.json historical real-flow project-closure evidence",
+      "scope_note": "Independent Stage-0 oracle acceptance; not a current native compiler result or executable/Stage-1 proof."
+    }
+  },
+  "frontend_cache_preparation": {
+    "cold_attempt": {
+      "classification": "FAILURE_AFTER_CACHE_WRITE",
+      "runner_wall_seconds": 152.134,
+      "child_cpu_seconds": 150.57000000000002,
+      "child_peak_sampled_rss_kib": 2129132,
+      "child_peak_fds": 5,
+      "child_read_characters_bytes": 177398621,
+      "child_kernel_read_bytes": 0,
+      "frontend_specialization_ms": 150553.277732,
+      "program_functions": 3121,
+      "encoded_program_uncompressed_bytes": 150597056,
+      "compressed_program_bytes": 5276788,
+      "cache_write_succeeded": true,
+      "failure": "Tool bug: prepare-only path still built the project request after writing cache and raised KeyError(ProjectSource); no target request was sent. The guard was fixed before the warm run.",
+      "cgroup_oom_event_delta": 0
+    },
+    "warm_attempt": {
+      "classification": "ADMISSION_ONLY_SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "runner_wall_seconds": 1.004,
+      "child_cpu_seconds": 0.6799999999999999,
+      "child_peak_sampled_rss_kib": 301256,
+      "child_peak_fds": 5,
+      "program_cache_read_decode_ms": 584.232443,
+      "target_execution_started": false,
+      "meaning": "ADMISSION_ONLY_SUCCESS; frontend Program cache hit and status request only, no target execution or backend compilation."
+    },
+    "cache_key": "4ecbeacbd576d964dc14b58d37cfbc66ffd72570f3deb39741ff2c207bcb597e",
+    "repeat_work_reduction": "Warm frontend preparation avoids the cold 150.55-second specialization and 2,129,132 KiB peak, but this cache does not avoid the backend compilation bottleneck measured below."
+  },
+  "matched_backend_preparation_comparison": {
+    "backend": "research-bytecode",
+    "comparison_control": {
+      "same_source_identity": true,
+      "same_stage0_revision": true,
+      "same_program_cache_key": true,
+      "same_target_seed": true,
+      "same_cached_frontend_program": true,
+      "only_probe_emission_request_changed": true,
+      "baseline_requested_emissions": [
+        "Semantic",
+        "HIR",
+        "SSA",
+        "TargetLoweringPlan",
+        "BackendArtifact"
+      ],
+      "candidate_requested_emissions": [
+        "BackendArtifact"
+      ],
+      "baseline_stage0_probe_src_main_sha256": "0b4efefd86e1f164ffc7298ff6d56c35abb7e183cc85bfefb93dd178bbb56a03",
+      "candidate_stage0_probe_src_main_sha256": "7904cd5db7a158b22436d8a7ddde06f3b7f5f7ec411b8c3054cc2cc7072fb905",
+      "baseline_probe_binary_sha256": "a0ef762a8b7f36e8977ad923fb9a2824e62a05e04bd152a6ce63e7a25649220d",
+      "candidate_probe_binary_sha256": "c9f848ffe20173a18fc926f95fbd1379998962acda225bdbedb873c4b24a3635"
+    },
+    "runner_rss_stop_threshold_mib": 1600,
+    "baseline": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "runner_status": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "INTERRUPTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 31.194,
+      "child": {
+        "pid": 3955632,
+        "start_time_ticks": 47367657,
+        "executable": "mncs-compiler-stage0-probe",
+        "peak_sampled_rss_kib": 1708220,
+        "peak_kernel_hwm_kib": 1708220,
+        "cpu_seconds": 30.740000000000002,
+        "cpu_user_seconds": 30.26,
+        "cpu_system_seconds": 0.48,
+        "peak_fds": 5,
+        "io_read_characters_bytes": 182671191,
+        "kernel_read_bytes": 0,
+        "sample_count": 124,
+        "process_identity": {
+          "pid": 3955632,
+          "parent_pid": 3955630,
+          "process_group_id": 3955632,
+          "session_id": 3955632,
+          "start_time_ticks": 47367657,
+          "executable_path": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe"
+        }
+      },
+      "rss_stop": {
+        "kind": "sampled_probe_child_rss",
+        "limit_mib": 1600,
+        "observed_at_trigger_kib": 1708220,
+        "final_sampled_peak_kib": 1708220,
+        "triggered": true,
+        "triggered_at_seconds": 31.08,
+        "action": "SIGINT verified isolated compiler-child process group after sampled VmRSS reached limit; escalate only after identity revalidation",
+        "sample_interval_seconds": 0.25,
+        "scope_note": "sampling can overshoot between observations; this is an orderly runner stop threshold, not a kernel memory limit"
+      },
+      "cgroup_memory_events_delta": {
+        "oom_group_kill": 0,
+        "low": 0,
+        "sock_throttled": 0,
+        "oom_kill": 0,
+        "oom": 0,
+        "high": 0,
+        "max": 0
+      },
+      "cgroup_memory_max": "max\n",
+      "phases": [
+        {
+          "phase": "source_resolution",
+          "duration_ms": 6.6610890000000005,
+          "process_elapsed_ms": 6.740169
+        },
+        {
+          "phase": "toolchain_identity",
+          "duration_ms": 119.924818,
+          "process_elapsed_ms": 126.68562299999999,
+          "backend": "research-bytecode"
+        },
+        {
+          "phase": "dependency_closure_resolution",
+          "duration_ms": 0.246867,
+          "process_elapsed_ms": 126.951586
+        },
+        {
+          "phase": "frontend_program_cache_read_decode",
+          "duration_ms": 575.960743,
+          "process_elapsed_ms": 713.51681,
+          "decoded": true,
+          "usable": true
+        },
+        {
+          "phase": "backend_request_construction",
+          "duration_ms": 1546.3848850000002,
+          "process_elapsed_ms": 2259.981102,
+          "backend": "research-bytecode"
+        }
+      ],
+      "trace_sha256": "690f0fff2524be1810ce29c9017bd07ef2d3b50fbeb454b6809c1cbae693fbba",
+      "termination": {
+        "stop_cause": "sampled_probe_child_rss_cap",
+        "signals": {
+          "interrupt_targets": [
+            {
+              "pid": 3955632,
+              "process_group_id": 3955632,
+              "start_time_ticks": 47367657,
+              "executable_path": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+              "signal": "SIGINT",
+              "outcome": "sent"
+            }
+          ],
+          "kill_targets": [],
+          "parent_interrupt_sent": false,
+          "parent_kill_sent": false
+        },
+        "runner_returncode": 0,
+        "inner_operation_outcome": "INTERRUPTED",
+        "inner_semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "cgroup_memory_events_delta": {
+          "oom_group_kill": 0,
+          "low": 0,
+          "sock_throttled": 0,
+          "oom_kill": 0,
+          "oom": 0,
+          "high": 0,
+          "max": 0
+        },
+        "lingering_child_after_runner": false
+      }
+    },
+    "candidate": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "runner_status": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "INTERRUPTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 30.942,
+      "child": {
+        "pid": 3955829,
+        "start_time_ticks": 47371506,
+        "executable": "mncs-compiler-stage0-probe",
+        "peak_sampled_rss_kib": 1708208,
+        "peak_kernel_hwm_kib": 1708208,
+        "cpu_seconds": 30.669999999999998,
+        "cpu_user_seconds": 30.22,
+        "cpu_system_seconds": 0.45,
+        "peak_fds": 5,
+        "io_read_characters_bytes": 182671396,
+        "kernel_read_bytes": 0,
+        "sample_count": 123,
+        "process_identity": {
+          "pid": 3955829,
+          "parent_pid": 3955827,
+          "process_group_id": 3955829,
+          "session_id": 3955829,
+          "start_time_ticks": 47371506,
+          "executable_path": "/home/epi13/Documents/Projects/.worktrees/flow-measurement-rss-cap-20261009/tools/stage0-probe/target/release/mncs-compiler-stage0-probe"
+        }
+      },
+      "rss_stop": {
+        "kind": "sampled_probe_child_rss",
+        "limit_mib": 1600,
+        "observed_at_trigger_kib": 1708208,
+        "final_sampled_peak_kib": 1708208,
+        "triggered": true,
+        "triggered_at_seconds": 30.828,
+        "action": "SIGINT verified isolated compiler-child process group after sampled VmRSS reached limit; escalate only after identity revalidation",
+        "sample_interval_seconds": 0.25,
+        "scope_note": "sampling can overshoot between observations; this is an orderly runner stop threshold, not a kernel memory limit"
+      },
+      "cgroup_memory_events_delta": {
+        "low": 0,
+        "oom": 0,
+        "high": 0,
+        "sock_throttled": 0,
+        "oom_group_kill": 0,
+        "max": 0,
+        "oom_kill": 0
+      },
+      "cgroup_memory_max": "max\n",
+      "phases": [
+        {
+          "phase": "source_resolution",
+          "duration_ms": 6.752465,
+          "process_elapsed_ms": 6.842986
+        },
+        {
+          "phase": "toolchain_identity",
+          "duration_ms": 121.73016100000001,
+          "process_elapsed_ms": 128.592429,
+          "backend": "research-bytecode"
+        },
+        {
+          "phase": "dependency_closure_resolution",
+          "duration_ms": 0.24402000000000001,
+          "process_elapsed_ms": 128.856461
+        },
+        {
+          "phase": "frontend_program_cache_read_decode",
+          "duration_ms": 571.209714,
+          "process_elapsed_ms": 710.6259689999999,
+          "decoded": true,
+          "usable": true
+        },
+        {
+          "phase": "backend_request_construction",
+          "duration_ms": 1546.8031529999998,
+          "process_elapsed_ms": 2257.5069000000003,
+          "backend": "research-bytecode"
+        }
+      ],
+      "trace_sha256": "6db07c3d48071f7f1d31a45790d108aef30379b6c155b50a236cd16b87f95373",
+      "termination": {
+        "stop_cause": "sampled_probe_child_rss_cap",
+        "signals": {
+          "interrupt_targets": [
+            {
+              "pid": 3955829,
+              "process_group_id": 3955829,
+              "start_time_ticks": 47371506,
+              "executable_path": "/home/epi13/Documents/Projects/.worktrees/flow-measurement-rss-cap-20261009/tools/stage0-probe/target/release/mncs-compiler-stage0-probe",
+              "signal": "SIGINT",
+              "outcome": "sent"
+            }
+          ],
+          "kill_targets": [],
+          "parent_interrupt_sent": false,
+          "parent_kill_sent": false
+        },
+        "runner_returncode": 0,
+        "inner_operation_outcome": "INTERRUPTED",
+        "inner_semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "cgroup_memory_events_delta": {
+          "low": 0,
+          "oom": 0,
+          "high": 0,
+          "sock_throttled": 0,
+          "oom_group_kill": 0,
+          "max": 0,
+          "oom_kill": 0
+        },
+        "lingering_child_after_runner": false
+      }
+    },
+    "candidate_minus_baseline": {
+      "wall_seconds": -0.252,
+      "cpu_seconds": -0.07,
+      "peak_sampled_rss_kib": -12,
+      "peak_fds": 0,
+      "io_read_characters_bytes": 205
+    },
+    "phase_findings": {
+      "frontend_program_cache": "hit in both runs; read/decode ~0.57 seconds",
+      "backend_request_construction_ms": {
+        "baseline": 1546.3848850000002,
+        "candidate": 1546.8031529999998
+      },
+      "compiler_timing_events": {
+        "baseline": [
+          {
+            "stage": "compiler-semantic",
+            "elapsed_ms": 1345,
+            "scope": "existing MNCS_TIMINGS event"
+          },
+          {
+            "stage": "compiler-validation",
+            "elapsed_ms": 1914,
+            "scope": "existing MNCS_TIMINGS event"
+          }
+        ],
+        "candidate": [
+          {
+            "stage": "compiler-semantic",
+            "elapsed_ms": 1348,
+            "scope": "existing MNCS_TIMINGS event"
+          },
+          {
+            "stage": "compiler-validation",
+            "elapsed_ms": 1913,
+            "scope": "existing MNCS_TIMINGS event"
+          }
+        ]
+      },
+      "missing_events": [
+        "ir-prelude",
+        "compiler-hir",
+        "compiler-ssa",
+        "compiler-backend",
+        "final compiler timing"
+      ],
+      "interpretation": "Both traces reached compiler semantic/validation events and spent ~1.55 seconds constructing the backend request. No HIR-prelude completion event was observed before the RSS stop; exact work inside the prelude and behavior after it remain UNKNOWN.",
+      "timing_scope_note": "MNCS_TIMINGS values are cumulative elapsed values from the same compiler compile_inner start, not exclusive durations and must not be summed."
+    },
+    "result": "No meaningful memory or elapsed-time improvement from requesting only BackendArtifact. This is a matched incomplete measurement, not proof of semantic rejection or backend failure."
+  },
+  "measurement_unknowns": [
+    "Exact elapsed/RSS contribution of the second Program validation, semantic graph, evidence manifest and obligation generation inside Program::lower_to_ir is UNKNOWN because the ir-prelude completion event was not reached.",
+    "Whether HIR/SSA/backend generation completes beyond the 1,600 MiB sampled stop threshold is UNKNOWN.",
+    "The stop threshold is a runner policy, not a kernel memory limit. Cgroup memory.max was unlimited and per-run cgroup memory event deltas (including oom and oom_kill) were zero.",
+    "Hardware instruction counts are UNKNOWN; the host did not provide an authorized instruction counter.",
+    "No semantic diagnostic or target execution-step count was returned.",
+    "The outer RSS sampler samples /proc at 250 ms intervals in the measurement runner; its own exact CPU/IO overhead was not separately attributed to the compiler child. It does not spawn a process per sample."
+  ],
+  "raw_artifacts": [
+    {
+      "role": "cold_cache_prepare_with_request_construction_bug",
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-front-cache-prep-b05-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "8071b6c10458628633054b42febdd7e38166d17b32ef3b89e75d880bd1b4e3bb",
+      "retention": "local ignored measurement input; summary copies required measurements",
+      "phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-front-cache-prep-b05-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "afe09e53598f5e8383d9219ab68f69e2794b172269621b0803d2f0bf57b08ce8"
+      }
+    },
+    {
+      "role": "warm_cache_prepare",
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-front-cache-prep-b05-warm-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "d12955fc1e2e1c741f28033a6e6bd885389aaf1c112f11bc52be212557fdd8d0",
+      "retention": "local ignored measurement input; summary copies required measurements",
+      "phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-front-cache-prep-b05-warm-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "339cae5ef33a7b9ca426331ebcebd36bfd4bace4eb35c6e7bccb725518220c3e"
+      }
+    },
+    {
+      "role": "baseline_all_artifact_emissions",
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-backend-emissions-baseline-pinned-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "17cd6f4342beb55aa82c089eea830498a5d6c10d221f9de4a3383fb5a38fcd7b",
+      "retention": "local ignored measurement input; summary copies required measurements",
+      "phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-backend-emissions-baseline-pinned-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "690f0fff2524be1810ce29c9017bd07ef2d3b50fbeb454b6809c1cbae693fbba"
+      }
+    },
+    {
+      "role": "candidate_backend_artifact_only",
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-backend-artifact-only-pinned-20261009-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "5df39c9e32215e84ce3b3f9c56c84ebaead92e5ea68bfe0af5279dcd1c45567a",
+      "retention": "local ignored measurement input; summary copies required measurements",
+      "phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-backend-artifact-only-pinned-20261009-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "6db07c3d48071f7f1d31a45790d108aef30379b6c155b50a236cd16b87f95373"
+      }
+    },
+    {
+      "role": "baseline_nested_stderr",
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-backend-emissions-baseline-pinned-20261009-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+      "sha256": "2702f23554b11907fe4891e9439c1a816b164f26b8d4013dbd5068c5920745e6",
+      "bytes": 106,
+      "tail": "mncs-timing stage=compiler-semantic elapsed_ms=1345\nmncs-timing stage=compiler-validation elapsed_ms=1914\n",
+      "retention": "local ignored measurement input; event tail copied here"
+    },
+    {
+      "role": "candidate_nested_stderr",
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-backend-artifact-only-pinned-20261009-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+      "sha256": "3ff684feaeae893648562e87e1d0a6718efd9ac8d19c7f4cb5477db322aeb24a",
+      "bytes": 106,
+      "tail": "mncs-timing stage=compiler-semantic elapsed_ms=1348\nmncs-timing stage=compiler-validation elapsed_ms=1913\n",
+      "retention": "local ignored measurement input; event tail copied here"
+    }
+  ],
+  "measurement_tool_changes": {
+    "actual_child_sampler": "tools/measure_compiler_probe.py samples the Rust child by PID/start time/executable identity, records CPU/RSS/HWM/FD/swap/I/O and cgroup event deltas, and sends signals only after isolated process-group identity is revalidated.",
+    "probe_emission_reduction": "tools/stage0-probe/src/main.rs requests only BackendArtifact in this backend probe; matched run established no material savings.",
+    "cache_prepare_only": "tools/probe_compiler_module_frontier.py and tools/measure_compiler_probe.py support prepare-only cache warming; target is not run and outcome is explicitly ADMISSION_ONLY_SUCCESS."
+  },
+  "scope": {
+    "compiler_module_stage_matrix_changed": false,
+    "canonical_vm_conformance": false,
+    "executable_artifact_created": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import hashlib
 import os
 import re
 import signal
@@ -52,7 +53,14 @@ def _proc_snapshot(pid: int) -> dict[str, object] | None:
         return None
     comm = stat_text[open_paren + 1 : close_paren]
     fields = stat_text[close_paren + 2 :].split()  # starts at proc stat field 3
-    if len(fields) < 13:
+    if len(fields) < 20:
+        return None
+    try:
+        parent_pid = int(fields[1])
+        process_group_id = int(fields[2])
+        session_id = int(fields[3])
+        start_time_ticks = int(fields[19])
+    except ValueError:
         return None
     cpu_user_seconds = int(fields[11]) / TICKS_PER_SECOND
     cpu_system_seconds = int(fields[12]) / TICKS_PER_SECOND
@@ -76,11 +84,20 @@ def _proc_snapshot(pid: int) -> dict[str, object] | None:
 
     cmdline_raw = _read_text(base / "cmdline") or ""
     cmdline = cmdline_raw.replace("\x00", " ").strip()
+    try:
+        executable_path = os.readlink(base / "exe")
+    except OSError:
+        executable_path = None
     rss_kib = _kib(status.get("VmRSS"))
     hwm_kib = _kib(status.get("VmHWM"))
     swap_kib = _kib(status.get("VmSwap"))
     return {
         "pid": pid,
+        "parent_pid": parent_pid,
+        "process_group_id": process_group_id,
+        "session_id": session_id,
+        "start_time_ticks": start_time_ticks,
+        "executable_path": executable_path,
         "comm": comm,
         "cmdline": cmdline,
         "rss_kib": rss_kib,
@@ -186,6 +203,11 @@ def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
         pid,
         {
             "pid": pid,
+            "parent_pid": sample["parent_pid"],
+            "process_group_id": sample["process_group_id"],
+            "session_id": sample["session_id"],
+            "start_time_ticks": sample["start_time_ticks"],
+            "executable_path": sample["executable_path"],
             "comm": sample["comm"],
             "cmdline": sample["cmdline"],
             "samples": 0,
@@ -281,6 +303,135 @@ def _probe_rss_peak_kib(records: dict[int, dict[str, object]]) -> int | None:
     return max(values) if values else None
 
 
+def _signal_verified_probe_children(
+    records: dict[int, dict[str, object]], signal_number: int
+) -> list[dict[str, object]]:
+    """Signal only isolated probe groups whose sampled PID identity still matches."""
+    outcomes: list[dict[str, object]] = []
+    signaled_groups: set[int] = set()
+    for row in records.values():
+        cmdline = str(row.get("cmdline", ""))
+        if "mncs-compiler-stage0-probe" not in cmdline:
+            continue
+        pid = row.get("pid")
+        pgid = row.get("process_group_id")
+        if not isinstance(pid, int) or not isinstance(pgid, int) or pgid in signaled_groups:
+            continue
+        expected = {
+            "start_time_ticks": row.get("start_time_ticks"),
+            "executable_path": row.get("executable_path"),
+            "process_group_id": pgid,
+            "session_id": row.get("session_id"),
+        }
+        current = _proc_snapshot(pid)
+        actual = {
+            key: current.get(key) if current is not None else None
+            for key in expected
+        }
+        if (
+            current is None
+            or any(value is None for value in expected.values())
+            or actual != expected
+            or pgid != pid
+            or row.get("session_id") != pid
+            or not isinstance(row.get("executable_path"), str)
+        ):
+            outcomes.append({
+                "pid": pid,
+                "process_group_id": pgid,
+                "signal": signal.Signals(signal_number).name,
+                "outcome": "identity_changed_or_not_isolated",
+                "expected_identity": expected,
+                "observed_identity": actual,
+            })
+            continue
+        signaled_groups.add(pgid)
+        try:
+            os.killpg(pgid, signal_number)
+            outcome = "sent"
+        except ProcessLookupError:
+            outcome = "already_exited"
+        except PermissionError:
+            outcome = "permission_denied"
+        outcomes.append({
+            "pid": pid,
+            "process_group_id": pgid,
+            "start_time_ticks": expected["start_time_ticks"],
+            "executable_path": expected["executable_path"],
+            "signal": signal.Signals(signal_number).name,
+            "outcome": outcome,
+        })
+    return outcomes
+
+
+def _stop_probe_children(
+    proc: subprocess.Popen[bytes],
+    records: dict[int, dict[str, object]],
+    *,
+    grace_seconds: float = 5.0,
+) -> dict[str, object]:
+    """Interrupt probe children, escalating only after revalidating their identity."""
+    result: dict[str, object] = {
+        "interrupt_targets": _signal_verified_probe_children(records, signal.SIGINT),
+        "kill_targets": [],
+        "parent_interrupt_sent": False,
+        "parent_kill_sent": False,
+    }
+    try:
+        proc.wait(timeout=grace_seconds)
+        return result
+    except subprocess.TimeoutExpired:
+        pass
+
+    result["kill_targets"] = _signal_verified_probe_children(records, signal.SIGKILL)
+    try:
+        proc.wait(timeout=grace_seconds)
+        return result
+    except subprocess.TimeoutExpired:
+        pass
+
+    if proc.poll() is None:
+        try:
+            proc.send_signal(signal.SIGINT)
+            result["parent_interrupt_sent"] = True
+        except ProcessLookupError:
+            pass
+        try:
+            proc.wait(timeout=grace_seconds)
+            return result
+        except subprocess.TimeoutExpired:
+            pass
+    if proc.poll() is None:
+        try:
+            proc.kill()
+            result["parent_kill_sent"] = True
+        except ProcessLookupError:
+            pass
+    proc.wait()
+    return result
+
+
+def _read_phase_trace(path: Path) -> tuple[list[dict[str, object]], list[str], str | None]:
+    raw = _read_text(path)
+    if raw is None:
+        return [], [], None
+    events: list[dict[str, object]] = []
+    errors: list[str] = []
+    for line_number, line in enumerate(raw.splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError as error:
+            errors.append(f"line {line_number}: {error}")
+            continue
+        if isinstance(event, dict):
+            events.append(event)
+        else:
+            errors.append(f"line {line_number}: event is not an object")
+    return events, errors, hashlib.sha256(raw.encode()).hexdigest()
+
+
 def _rss_cap_state(
     records: dict[int, dict[str, object]], limit_mib: int | None
 ) -> tuple[bool, int | None]:
@@ -295,6 +446,8 @@ def _rss_cap_state(
 def _semantic_result(report: dict[str, object] | None) -> str:
     if report is None:
         return "UNKNOWN_NO_COMPILER_RESULT"
+    if report.get("kind") == "compiler-program-cache-preparation":
+        return "NOT_RUN_CACHE_PREPARATION"
     if report.get("kind") == "stage0-project-oracle-frontier":
         return "UNKNOWN_NO_NATIVE_COMPILER_RESULT"
     status = report.get("native_request_status")
@@ -316,6 +469,28 @@ def _semantic_result(report: dict[str, object] | None) -> str:
 def _operation_outcome(report: dict[str, object] | None) -> str:
     if report is None:
         return "UNKNOWN_NO_COMPILER_RESULT"
+    if report.get("kind") == "compiler-program-cache-preparation":
+        trace = report.get("probe_internal_trace")
+        events = trace.get("events") if isinstance(trace, dict) else None
+        if isinstance(events, list):
+            cache_written = any(
+                isinstance(event, dict)
+                and event.get("event") == "phase"
+                and event.get("phase") == "artifact_cache_gzip_write"
+                and event.get("cache_file_suffix") == ".program.json.gz"
+                and event.get("success") is True
+                for event in events
+            )
+            cache_reused = any(
+                isinstance(event, dict)
+                and event.get("event") == "phase"
+                and event.get("phase") == "frontend_program_cache_read_decode"
+                and event.get("usable") is True
+                for event in events
+            )
+            if cache_written or cache_reused:
+                return "ADMISSION_ONLY_SUCCESS"
+        return "UNKNOWN_CACHE_PREPARATION"
     if report.get("kind") == "stage0-project-oracle-frontier":
         oracle = report.get("stage0_oracle")
         if isinstance(oracle, dict) and oracle.get("status") in {"valid", "invalid"}:
@@ -360,7 +535,7 @@ def _operation_classification(report: dict[str, object] | None, runner_status: s
     outcome = _operation_outcome(report)
     if outcome in {"TIMEOUT", "INTERRUPTED", "RESOURCE_EXHAUSTED", "FAILURE"}:
         return outcome
-    if outcome in {"COMPLETED_WITH_RESULT", "STAGE0_ORACLE_COMPLETED"}:
+    if outcome in {"COMPLETED_WITH_RESULT", "STAGE0_ORACLE_COMPLETED", "ADMISSION_ONLY_SUCCESS"}:
         return "SUCCESS"
     if outcome == "REJECTED_BEFORE_COMPILER_EXECUTION":
         return "FAILURE"
@@ -467,14 +642,16 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     selection = "-".join(args.modules)
     base = f"compiler-probe-{label}-{selection}"
     trace_path = ARTIFACTS / f"{base}-phases.jsonl"
+    nested_stderr_path = ARTIFACTS / f"{base}-probe-stderr.log"
     measurement_path = ARTIFACTS / f"{base}-measurement.json"
-    if trace_path.exists() or measurement_path.exists():
+    if trace_path.exists() or nested_stderr_path.exists() or measurement_path.exists():
         raise FileExistsError(f"refusing to overwrite existing measurement {base}")
 
     env = os.environ.copy()
     env["MNCS_PROBE_BACKEND"] = args.backend
     env["MNCS_PROBE_TELEMETRY"] = "1"
     env["MNCS_PROBE_TRACE_PATH"] = str(trace_path)
+    env["MNCS_PROBE_STDERR_PATH"] = str(nested_stderr_path)
     env["MNCS_PROBE_ARTIFACT_LABEL"] = f"{label}-{selection}"
     env["MNCS_TIMINGS"] = "1"
     if args.runtime_profile:
@@ -482,6 +659,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     command = [sys.executable, str(ROOT / "tools" / "probe_compiler_module_frontier.py"), "--modules", *args.modules]
     if args.target_last:
         command.append("--target-last")
+    if args.prepare_program_cache_only:
+        command.append("--prepare-program-cache-only")
     if args.oracle_only:
         command.append("--oracle-only")
     if args.signature_cache_fixture:
@@ -516,7 +695,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         rss_cap_triggered = False
         rss_cap_triggered_at_seconds: float | None = None
         rss_cap_observed_kib: int | None = None
-        runner_sent_sigkill = False
+        termination_actions: dict[str, object] | None = None
         while proc.poll() is None:
             for pid in [proc.pid, *_descendants(proc.pid)]:
                 _record_sample(records, pid)
@@ -528,34 +707,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
                     rss_cap_triggered = True
                     rss_cap_triggered_at_seconds = time.monotonic() - started
                     rss_cap_observed_kib = rss_peak_kib
-                    try:
-                        os.killpg(proc.pid, signal.SIGINT)
-                    except ProcessLookupError:
-                        pass
-                    try:
-                        proc.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        runner_sent_sigkill = True
-                        try:
-                            os.killpg(proc.pid, signal.SIGKILL)
-                        except ProcessLookupError:
-                            pass
-                        proc.wait()
+                    termination_actions = _stop_probe_children(proc, records)
                     break
             if time.monotonic() >= deadline:
                 timed_out = True
-                try:
-                    os.killpg(proc.pid, signal.SIGINT)
-                except ProcessLookupError:
-                    pass
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    proc.wait()
+                termination_actions = _stop_probe_children(proc, records)
                 break
             time.sleep(args.sample_seconds)
         returncode = proc.wait()
@@ -577,16 +733,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     classification = _operation_classification(probe_report, runner_status)
 
-    try:
-        phase_events = [json.loads(line) for line in trace_path.read_text().splitlines() if line.strip()]
-    except (OSError, json.JSONDecodeError):
-        phase_events = []
+    phase_events, phase_trace_errors, phase_trace_sha256 = _read_phase_trace(trace_path)
     probe_start = next(
         (event for event in phase_events if event.get("event") == "probe_start"),
         {},
     )
     execution_mode = (
-        "reference_interpreter" if args.signature_cache_fixture else args.backend
+        "frontend_cache_preparation" if args.prepare_program_cache_only
+        else "reference_interpreter" if args.signature_cache_fixture
+        else args.backend
     )
     phases = [event for event in phase_events if event.get("event") == "phase"]
     timing_stderr = "\n".join([
@@ -614,6 +769,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     )
     runtime_profile_modules, runtime_profile_hot_functions = _body_profile_summaries(runtime_profiles)
     cgroup_after = _cgroup_snapshot(cgroup_dir)
+    nested_stderr = _read_text(nested_stderr_path)
+    nested_stderr_bytes = nested_stderr.encode() if nested_stderr is not None else None
     phase_unknown = [
         "compiler semantic phase labels for parser/checker/proof/CFG/SSA remain UNKNOWN; opt-in function profiles report runtime work without asserting those phase boundaries",
         "SSA validation/fingerprint profile phases describe backend preparation, not the MNCS compiler's semantic parser/checker/proof/CFG/SSA work",
@@ -649,7 +806,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "triggered": rss_cap_triggered,
             "triggered_at_seconds": (round(rss_cap_triggered_at_seconds, 3)
                                       if rss_cap_triggered_at_seconds is not None else None),
-            "action": "SIGINT process group after sampled compiler-child VmRSS reached limit",
+            "action": "SIGINT verified isolated compiler-child process group after sampled VmRSS reached limit; escalate only after identity revalidation",
             "sample_interval_seconds": args.sample_seconds,
             "scope_note": "sampling can overshoot between observations; this is an orderly runner stop threshold, not a kernel memory limit",
         },
@@ -657,7 +814,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "measurement_stop_cause": ("sampled_probe_child_rss_cap" if rss_cap_triggered
                                         else "measurement_timeout" if timed_out
                                         else "probe_returned_or_child_terminated"),
-            "runner_sent_sigkill_after_grace": runner_sent_sigkill,
+            "signals": termination_actions,
             "runner_returncode": returncode,
             "cgroup_memory_events_delta": _cgroup_delta(cgroup_before, cgroup_after)["memory_events"],
         },
@@ -669,8 +826,18 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "cgroup_delta": _cgroup_delta(cgroup_before, cgroup_after),
         "resource_observation": _probe_resource_summary(records),
         "phase_trace_path": str(trace_path.relative_to(ROOT)),
+        "phase_trace_sha256": phase_trace_sha256,
+        "phase_trace_parse_errors": phase_trace_errors,
         "phase_events": len(phase_events),
         "phase_rows": phases,
+        "nested_probe_stderr": {
+            "path": str(nested_stderr_path.relative_to(ROOT)),
+            "available": nested_stderr is not None,
+            "bytes": len(nested_stderr_bytes) if nested_stderr_bytes is not None else None,
+            "sha256": hashlib.sha256(nested_stderr_bytes).hexdigest()
+            if nested_stderr_bytes is not None else None,
+            "tail": nested_stderr[-12000:] if nested_stderr is not None else None,
+        },
         "compiler_timing_events": compiler_timing_events,
         "body_runtime_profiles": runtime_profiles,
         "body_runtime_profile_module_totals": runtime_profile_modules,
@@ -694,6 +861,7 @@ def main() -> int:
     parser.add_argument("--target-last", action="store_true")
     parser.add_argument("--oracle-only", action="store_true", help="run and measure only the Stage-0 project oracle")
     parser.add_argument("--signature-cache-fixture", action="store_true", help="run a reduced two-call imported-signature cache differential through the reference interpreter")
+    parser.add_argument("--prepare-program-cache-only", action="store_true", help="elaborate and persist the backend-independent Program cache without admitting a backend or executing the compiler target; requires --backend reference_interpreter")
     parser.add_argument("--step-budget", type=int, help="use a smaller execution step budget for a bounded prefix (maximum 8,000,000)")
     parser.add_argument("--runtime-profile", action="store_true", help="enable opt-in function-level body executor profiling")
     parser.add_argument("--timeout-seconds", type=float, default=120.0)
@@ -708,6 +876,10 @@ def main() -> int:
         parser.error("--step-budget must be between 1 and 8,000,000")
     if args.max_probe_rss_mib is not None and not 1 <= args.max_probe_rss_mib <= 16_384:
         parser.error("--max-probe-rss-mib must be between 1 and 16384")
+    if args.prepare_program_cache_only and args.backend != "reference_interpreter":
+        parser.error("--prepare-program-cache-only requires --backend reference_interpreter")
+    if args.prepare_program_cache_only and args.signature_cache_fixture:
+        parser.error("--prepare-program-cache-only cannot be combined with --signature-cache-fixture")
     print(json.dumps(run(args), indent=2))
     return 0
 

@@ -13,7 +13,7 @@ use mncs_model::{
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs::{File, OpenOptions},
     io::{self, BufRead, BufReader, BufWriter, Read, Write},
     sync::{Mutex, OnceLock},
@@ -84,6 +84,16 @@ fn trace_phase(phase: &str, started: Instant, details: Value) {
         json!(started.elapsed().as_secs_f64() * 1000.0),
     );
     trace_event(Value::Object(fields));
+}
+
+fn backend_probe_emissions() -> BTreeSet<ArtifactRepresentation> {
+    // This probe consumes only the executable backend artifact. The compiler
+    // still performs its semantic, HIR, SSA, and lowering work, but retaining
+    // those additional emissions in the returned result duplicates large
+    // compiler values that this execution path never inspects.
+    [ArtifactRepresentation::BackendArtifact]
+        .into_iter()
+        .collect()
 }
 
 struct Sources(BTreeMap<String, SourceEnvelope>);
@@ -937,15 +947,7 @@ fn main() {
                         }));
                         return (name.clone(), artifact);
                     }
-                    let emit = [
-                        ArtifactRepresentation::Semantic,
-                        ArtifactRepresentation::Hir,
-                        ArtifactRepresentation::Ssa,
-                        ArtifactRepresentation::TargetLoweringPlan,
-                        ArtifactRepresentation::BackendArtifact,
-                    ]
-                    .into_iter()
-                    .collect();
+                    let emit = backend_probe_emissions();
                     let request_started = Instant::now();
                     let request = compiler
                         .request_for_program_with_backend(program, emit, backend)
@@ -1467,6 +1469,14 @@ mod tests {
         BackendArtifact, BackendIdentity, CompilerArtifactRef, ExecutionTypeArgument,
         TransformationStatus,
     };
+
+    #[test]
+    fn backend_probe_retains_only_the_consumed_artifact_emission() {
+        assert_eq!(
+            backend_probe_emissions(),
+            BTreeSet::from([ArtifactRepresentation::BackendArtifact])
+        );
+    }
 
     /// Hand-built identity with real in-memory driver parts and fixed
     /// file/toolchain parts, so each mutation test changes exactly one

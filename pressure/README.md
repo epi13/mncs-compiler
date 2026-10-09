@@ -14,7 +14,7 @@ measurements. Current pressure probes are in
 and current native syntax results are in
 [`../evidence/campaign-20261003-profile-surface-results.json`](../evidence/campaign-20261003-profile-surface-results.json).
 
-## Current reconciliation (2026-10-08)
+## Current reconciliation (2026-10-09)
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
@@ -41,6 +41,7 @@ and current native syntax results are in
 | [CP-0021 declaration logical-source fuel](0021-declaration-logical-source-fuel.md) | Resolved in compiler | `decl`/`flow`/`ssa`/`project` consume logical pages with global positions (flat pages + descriptors + cover check in `project`). Full ABCD + 1,362 s closure green; `test_decl.py` digest byte-identical. Remaining ceilings: 1024-byte span-compare fail-closed, M=1024 page arrays. |
 | [CP-0022 native lexical `not` kind](0022-native-lexical-not-kind.md) | Decided: version-neutral contract kept | Bare `!` stays kind 7 + MNL002 with the `decl` 0.13-gated reinterpretation (no `not` kind). Parse/proof conformance proven via CP-0015; differentials keep comparing modulo the classified pair. |
 | [CP-0023 backend value-arena ceiling](0023-backend-value-arena-ceiling.md) | Open; full project boundary unresolved | Current `decl.mncs` whole-source parse/signature ingestion passes at the 1513bdf pin, while the earlier `source.mncs` + `lexer.mncs` project request exhausted the 128 MiB arena at the recorded 3e874f pin. The current real `flow.mncs` project target ended before a compiler result, so it neither confirms nor clears the arena pressure; owner remains `mncs-language`. |
+| [CP-0026 real-flow HIR prelude reconstruction](0026-real-flow-hir-prelude-reconstruction.md) | Open; measured boundary narrowed | Matched research-bytecode backend-preparation runs reach `Program::lower_to_ir` after validation, then stop at a 1,600 MiB sampled RSS threshold before its `ir-prelude` completion event. Reducing requested artifact emissions did not materially change cost. This is a compiler/model pipeline optimization in `mncs-language`, not a language-syntax request or semantic rejection. |
 
 ## Operating sequence
 

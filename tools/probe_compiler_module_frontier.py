@@ -253,7 +253,12 @@ def _seed_target_specialization(*, target_only=False):
     os.environ["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
 
 
-def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
+def run(
+    module_names=None,
+    target_last=False,
+    step_budget=DEFAULT_STEP_BUDGET,
+    prepare_program_cache_only=False,
+):
     campaign_started = time.monotonic_ns()
     phase_timings_ns = {}
     transport_failure = None
@@ -319,8 +324,16 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
     stderr_path = None
     if os.environ.get("MNCS_PROBE_TELEMETRY") == "1":
         suffix = time.time_ns()
-        trace_path = artifact.with_name(f"{artifact.stem}-trace-{suffix}.jsonl").resolve()
-        stderr_path = artifact.with_name(f"{artifact.stem}-stderr-{suffix}.log").resolve()
+        trace_path = (
+            Path(previous_trace_path).expanduser().resolve()
+            if previous_trace_path
+            else artifact.with_name(f"{artifact.stem}-trace-{suffix}.jsonl").resolve()
+        )
+        stderr_path = (
+            Path(previous_stderr_path).expanduser().resolve()
+            if previous_stderr_path
+            else artifact.with_name(f"{artifact.stem}-stderr-{suffix}.log").resolve()
+        )
         os.environ["MNCS_PROBE_TRACE_PATH"] = str(trace_path)
         os.environ["MNCS_PROBE_STDERR_PATH"] = str(stderr_path)
         os.environ["MNCS_TIMINGS"] = "1"
@@ -333,7 +346,12 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
             transport_failure = {"stage": "retained_session_admission", **error.observation}
         phase_timings_ns["retained_session_admission"] = time.monotonic_ns() - phase_started
 
-        if transport_failure is None:
+        if transport_failure is None and prepare_program_cache_only:
+            # The readiness exchange follows backend-independent frontend
+            # elaboration and cache publication. This mode stops before any
+            # backend admission or target compiler execution.
+            response = {"status": "not_run"}
+        elif transport_failure is None:
             phase_started = time.monotonic_ns()
             try:
                 identities = project.identity_map(probe)
@@ -342,7 +360,7 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
             phase_timings_ns["record_type_identity_admission"] = time.monotonic_ns() - phase_started
 
         request = None
-        if transport_failure is None:
+        if transport_failure is None and not prepare_program_cache_only:
             phase_started = time.monotonic_ns()
             request = project.request_value(identities, sources)
             request["step_budget"] = step_budget
@@ -370,7 +388,8 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
         elif response.get("steps") is not None:
             probe.steps.append(response["steps"])
 
-        if (transport_failure is None and module_names and not skip_stage0_oracle and response.get("status") in
+        if (transport_failure is None and not prepare_program_cache_only
+                and module_names and not skip_stage0_oracle and response.get("status") in
                 {"returned", "budget_exhausted", "step_limit_exceeded"}):
             phase_started = time.monotonic_ns()
             try:
@@ -398,6 +417,11 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
                 transport_failure = {"stage": "stage0_project_oracle", **error.observation}
                 stage0_oracle = {"status": "UNKNOWN", "reason": str(error)}
             phase_timings_ns["stage0_oracle"] = time.monotonic_ns() - phase_started
+        elif prepare_program_cache_only:
+            stage0_oracle = {
+                "status": "not-run",
+                "reason": "program-cache preparation mode does not execute the compiler target or Stage-0 oracle",
+            }
         elif transport_failure is None and module_names and skip_stage0_oracle:
             stage0_oracle = {
                 "status": "not-run",
@@ -411,7 +435,11 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
 
         report = {
             "schema_version": 1,
-            "kind": "compiler-module-pipeline-frontier",
+            "kind": (
+                "compiler-program-cache-preparation"
+                if prepare_program_cache_only
+                else "compiler-module-pipeline-frontier"
+            ),
             "observed_at": datetime.now(timezone.utc).isoformat(),
             "compiler_head": head,
             "compiler_identity_role": "tested candidate head; delivered main identity is recorded separately in Git state",
@@ -437,6 +465,10 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
             "program_release_after_identities": (
                 os.environ.get("MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES") == "1"
             ),
+            "program_cache_preparation_only": prepare_program_cache_only,
+            "target_execution_started": (
+                not prepare_program_cache_only and response.get("status") != "not_run"
+            ),
             "target_input_modules": [Path(source_id).stem for source_id, _, _ in sources],
             "stage0_admission_source_modules": os.environ.get("MNCS_PROBE_MODULES"),
             "execution_modules_requested": os.environ.get("MNCS_PROBE_EXECUTION_MODULES"),
@@ -444,8 +476,12 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
             "retained_sessions": execution.get("retained_sessions"),
             "native_request_status": response.get("status"),
             "native_failure": response.get("failure"),
-            "native_transport_outcome": (transport_failure.get("status")
-                                         if transport_failure else "RESPONSE_RECEIVED"),
+            "native_transport_outcome": (
+                transport_failure.get("status")
+                if transport_failure
+                else "NOT_RUN" if prepare_program_cache_only
+                else "RESPONSE_RECEIVED"
+            ),
             "transport_failure": transport_failure,
             "native_project_valid": native["valid"] if native else None,
             "native_project_ssa_valid": native["value_ssa_valid"] if native else None,
@@ -545,6 +581,7 @@ if __name__ == "__main__":
     target_last = "--target-last" in args
     oracle_only = "--oracle-only" in args
     signature_cache_fixture = "--signature-cache-fixture" in args
+    prepare_program_cache_only = "--prepare-program-cache-only" in args
     step_budget = DEFAULT_STEP_BUDGET
     if "--step-budget" in args:
         position = args.index("--step-budget")
@@ -560,14 +597,22 @@ if __name__ == "__main__":
     args = [arg for arg in args if arg != "--target-last"]
     args = [arg for arg in args if arg != "--oracle-only"]
     args = [arg for arg in args if arg != "--signature-cache-fixture"]
+    args = [arg for arg in args if arg != "--prepare-program-cache-only"]
     if args:
         if args[0] != "--modules" or len(args) < 2:
-            raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--oracle-only] [--signature-cache-fixture]")
+            raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--oracle-only] [--signature-cache-fixture] [--prepare-program-cache-only]")
         names = args[1:]
     if signature_cache_fixture:
         report = run_imported_signature_cache_fixture(step_budget)
     elif oracle_only:
         report = run_stage0_oracle_only(names)
     else:
-        report = run(names, target_last=target_last, step_budget=step_budget)
+        if prepare_program_cache_only and not target_last:
+            raise SystemExit("--prepare-program-cache-only requires --target-last")
+        report = run(
+            names,
+            target_last=target_last,
+            step_budget=step_budget,
+            prepare_program_cache_only=prepare_program_cache_only,
+        )
     print(json.dumps(report, indent=2))
