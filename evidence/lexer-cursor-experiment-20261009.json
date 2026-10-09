@@ -1,0 +1,90 @@
+{
+  "schema_version": "mncs.compiler.execution-experiment/1",
+  "observed_at": "2026-10-09T18:53:54Z",
+  "experiment": "source-owned global byte cursor in the MNCS lexer",
+  "disposition": "not-adopted-no-measured-improvement",
+  "compiler_revision_under_test": "4d957194d967952fd26411807f3862fa1cacb83c",
+  "stage0_identity": "b05dfa2b91541e4bd4a75aecff6abdedd708608e+hir-prelude-sha256-500c5220d15488044e69396e42a6b58466580f44e4d00d083c4d066746c43820",
+  "identity_scope": {
+    "baseline_program_fingerprint": "a83484358ca7990410e6a5fe862706d00cdc0815df3d84d6571e188a77ffef38",
+    "candidate_program_fingerprint": "473201dfd1d4bfd850e7e3b6b8a86005cbbd2b69fd079bb34d1363333c28a5ea",
+    "candidate_file_source_hashes": "UNKNOWN_NOT_RETAINED",
+    "current_source_sha256_after_discard": {
+      "source.mncs": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
+      "lexer.mncs": "c678da91fa7b07f2fccefb726dd56f5d360d40ee8445949e23a73fc1eb76276c"
+    }
+  },
+  "semantic_differential": {
+    "suite": "tools/test_global_keyword_dispatch.py",
+    "status": "passed",
+    "keywords": 30,
+    "near_misses": 60,
+    "tokens": 180,
+    "source_bytes": 31188,
+    "native_steps": 3244905,
+    "stage0_token_count": 180,
+    "native_matches_stage0": true,
+    "eof_and_global_spans_match": true
+  },
+  "real_target_profile": {
+    "target": "mncs.compiler.project.v1::compile_project_target",
+    "selection": ["source", "lexer"],
+    "resolved_compiler_modules": 8,
+    "backend": "reference_interpreter",
+    "runtime_profile": true,
+    "step_budget": 250000,
+    "baseline_outcome": "RESOURCE_EXHAUSTED",
+    "candidate_outcome": "RESOURCE_EXHAUSTED",
+    "semantic_result_both": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "baseline_program_fingerprint": "a83484358ca7990410e6a5fe862706d00cdc0815df3d84d6571e188a77ffef38",
+    "candidate_program_fingerprint": "473201dfd1d4bfd850e7e3b6b8a86005cbbd2b69fd079bb34d1363333c28a5ea",
+    "baseline_target_inclusive_seconds": 38.643,
+    "candidate_target_inclusive_seconds": 47.574,
+    "candidate_target_inclusive_delta_percent": 23.1,
+    "baseline_full_run_wall_seconds": 47.374,
+    "candidate_full_run_wall_seconds": 187.736,
+    "candidate_cold_frontend_elaboration_seconds": 106.651,
+    "full_run_wall_comparison": "not-comparable-candidate-includes-cold-frontend-elaboration",
+    "baseline_child_cpu_seconds": 46.79,
+    "candidate_child_cpu_seconds_including_frontend": 186.28,
+    "candidate_target_cpu_seconds": "UNKNOWN",
+    "baseline_peak_rss_kib": 1327456,
+    "candidate_peak_rss_kib": 1842936,
+    "peak_rss_comparison": "not-comparable-candidate-includes-cold-frontend-elaboration",
+    "baseline_max_fd_count": 5,
+    "candidate_max_fd_count": 5,
+    "candidate_cgroup_oom_delta": 0
+  },
+  "profile_composition": {
+    "baseline_module_steps": {
+      "lexer": 167830,
+      "source": 71745,
+      "decl": 9335,
+      "segment": 751,
+      "project": 339
+    },
+    "candidate_module_steps": {
+      "lexer": 127528,
+      "source": 114597,
+      "decl": 6989,
+      "segment": 547,
+      "project": 339
+    },
+    "baseline_lexer_plus_source_steps": 239575,
+    "candidate_lexer_plus_source_steps": 242125,
+    "baseline_byte_at_global_calls_and_steps": [3365, 70651],
+    "candidate_byte_at_global_calls_and_steps": [558, 11718],
+    "candidate_cursor_read_calls_and_steps": [1889, 47225],
+    "candidate_cursor_advance_one_calls_and_steps": [1876, 41272],
+    "candidate_cursor_construction_calls_and_steps": [532, 10640],
+    "interpretation": "The scanner's local step count fell while cursor helper work increased source steps; combined steps rose by 2550 in this fixed prefix. The candidate target call also took longer."
+  },
+  "raw_measurements": {
+    "baseline": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-profile-prefix-250k-20261009-source-lexer-measurement.json",
+    "baseline_sha256": "abb7614bfd902f490be2d8a39c3ecba1fcc497243b1b88998cbfa449625e3682",
+    "candidate": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-cursor-250k-20261009-source-lexer-measurement.json",
+    "candidate_sha256": "27b6893b869e108a40e1d0e9fb1041153b936722cb08c3f5aa803b030a1b8459",
+    "candidate_phase_trace": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-cursor-250k-20261009-source-lexer-phases.jsonl"
+  },
+  "conclusion": "The cursor prototype preserved the tested token semantics and reduced byte_at_global call count, but added more cursor helper work and did not advance the fixed prefix. Its source changes were discarded; no full compiler proof or semantic rejection was produced."
+}
