@@ -114,6 +114,23 @@ def test_outer_runner_statuses_are_preserved():
     assert measurement._operation_classification(None, "FAILURE") == "FAILURE"
 
 
+def test_probe_child_rss_cap_is_scoped_and_classified_as_resource_exhausted():
+    records = {
+        100: {"cmdline": "python3 measure_compiler_probe.py", "max_rss_kib": 4_000_000},
+        101: {"cmdline": "/tmp/mncs-compiler-stage0-probe", "max_rss_kib": 1_945_600},
+    }
+
+    assert measurement._probe_rss_peak_kib(records) == 1_945_600
+    assert measurement._rss_cap_state(records, 1900) == (True, 1_945_600)
+    assert measurement._rss_cap_state(records, 1901) == (False, 1_945_600)
+    assert measurement._rss_cap_state({}, 1900) == (False, None)
+    runner = measurement._measurement_runner_status(
+        timed_out=False, returncode=-2, resource_cap_triggered=True
+    )
+    assert runner == "RESOURCE_EXHAUSTED"
+    assert measurement._operation_classification(None, runner) == "RESOURCE_EXHAUSTED"
+
+
 def test_budget_and_protocol_failures_are_distinct():
     budget = {"native_request_status": "budget_exhausted"}
     invalid = {"native_request_status": "invalid_request"}

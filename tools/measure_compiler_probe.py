@@ -270,6 +270,28 @@ def _cgroup_delta(before: dict[str, object], after: dict[str, object]) -> dict[s
     }
 
 
+def _probe_rss_peak_kib(records: dict[int, dict[str, object]]) -> int | None:
+    """Return the sampled high-water RSS of the actual compiler probe child."""
+    values = [
+        int(row["max_rss_kib"])
+        for row in records.values()
+        if "mncs-compiler-stage0-probe" in str(row.get("cmdline", ""))
+        and isinstance(row.get("max_rss_kib"), int)
+    ]
+    return max(values) if values else None
+
+
+def _rss_cap_state(
+    records: dict[int, dict[str, object]], limit_mib: int | None
+) -> tuple[bool, int | None]:
+    """Compare the compiler-child RSS sample with a declared stop threshold."""
+    peak_kib = _probe_rss_peak_kib(records)
+    return (
+        limit_mib is not None and peak_kib is not None and peak_kib >= limit_mib * 1024,
+        peak_kib,
+    )
+
+
 def _semantic_result(report: dict[str, object] | None) -> str:
     if report is None:
         return "UNKNOWN_NO_COMPILER_RESULT"
@@ -317,9 +339,13 @@ def _operation_outcome(report: dict[str, object] | None) -> str:
     return "UNKNOWN_NO_RETURNED_PROJECT_RESULT"
 
 
-def _measurement_runner_status(*, timed_out: bool, returncode: int) -> str:
+def _measurement_runner_status(
+    *, timed_out: bool, returncode: int, resource_cap_triggered: bool = False
+) -> str:
     if timed_out:
         return "TIMEOUT"
+    if resource_cap_triggered:
+        return "RESOURCE_EXHAUSTED"
     if returncode == 0:
         return "SUCCESS"
     if returncode < 0:
@@ -487,11 +513,35 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         records: dict[int, dict[str, object]] = {}
         deadline = started + args.timeout_seconds
         timed_out = False
+        rss_cap_triggered = False
+        rss_cap_triggered_at_seconds: float | None = None
+        rss_cap_observed_kib: int | None = None
+        runner_sent_sigkill = False
         while proc.poll() is None:
             for pid in [proc.pid, *_descendants(proc.pid)]:
                 _record_sample(records, pid)
                 if cgroup_dir is None and "mncs-compiler-stage0-probe" in str((records.get(pid) or {}).get("cmdline", "")):
                     cgroup_dir = _cgroup_path(pid)
+            if args.max_probe_rss_mib is not None:
+                reached_cap, rss_peak_kib = _rss_cap_state(records, args.max_probe_rss_mib)
+                if reached_cap:
+                    rss_cap_triggered = True
+                    rss_cap_triggered_at_seconds = time.monotonic() - started
+                    rss_cap_observed_kib = rss_peak_kib
+                    try:
+                        os.killpg(proc.pid, signal.SIGINT)
+                    except ProcessLookupError:
+                        pass
+                    try:
+                        proc.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        runner_sent_sigkill = True
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        proc.wait()
+                    break
             if time.monotonic() >= deadline:
                 timed_out = True
                 try:
@@ -521,7 +571,10 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         probe_report = json.loads(stdout) if stdout.strip() else None
     except json.JSONDecodeError:
         probe_report = None
-    runner_status = _measurement_runner_status(timed_out=timed_out, returncode=returncode)
+    runner_status = _measurement_runner_status(
+        timed_out=timed_out, returncode=returncode,
+        resource_cap_triggered=rss_cap_triggered,
+    )
     classification = _operation_classification(probe_report, runner_status)
 
     try:
@@ -588,6 +641,26 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "semantic_result": _semantic_result(probe_report),
         "operation_outcome": _operation_outcome(probe_report),
         "returncode": returncode,
+        "resource_cap": {
+            "kind": "sampled_probe_child_rss",
+            "limit_mib": args.max_probe_rss_mib,
+            "observed_at_trigger_kib": rss_cap_observed_kib,
+            "final_sampled_peak_kib": _probe_rss_peak_kib(records),
+            "triggered": rss_cap_triggered,
+            "triggered_at_seconds": (round(rss_cap_triggered_at_seconds, 3)
+                                      if rss_cap_triggered_at_seconds is not None else None),
+            "action": "SIGINT process group after sampled compiler-child VmRSS reached limit",
+            "sample_interval_seconds": args.sample_seconds,
+            "scope_note": "sampling can overshoot between observations; this is an orderly runner stop threshold, not a kernel memory limit",
+        },
+        "termination_evidence": {
+            "measurement_stop_cause": ("sampled_probe_child_rss_cap" if rss_cap_triggered
+                                        else "measurement_timeout" if timed_out
+                                        else "probe_returned_or_child_terminated"),
+            "runner_sent_sigkill_after_grace": runner_sent_sigkill,
+            "runner_returncode": returncode,
+            "cgroup_memory_events_delta": _cgroup_delta(cgroup_before, cgroup_after)["memory_events"],
+        },
         "wall_seconds": round(elapsed, 3),
         "host_mem_available_bytes_before": before_host,
         "host_mem_available_bytes_after": _host_mem_available(),
@@ -625,10 +698,16 @@ def main() -> int:
     parser.add_argument("--runtime-profile", action="store_true", help="enable opt-in function-level body executor profiling")
     parser.add_argument("--timeout-seconds", type=float, default=120.0)
     parser.add_argument("--sample-seconds", type=float, default=0.5)
+    parser.add_argument(
+        "--max-probe-rss-mib", type=int,
+        help="orderly stop when the sampled compiler child VmRSS reaches this MiB threshold (1..16384)",
+    )
     parser.add_argument("--label")
     args = parser.parse_args()
     if args.step_budget is not None and not 1 <= args.step_budget <= 8_000_000:
         parser.error("--step-budget must be between 1 and 8,000,000")
+    if args.max_probe_rss_mib is not None and not 1 <= args.max_probe_rss_mib <= 16_384:
+        parser.error("--max-probe-rss-mib must be between 1 and 16384")
     print(json.dumps(run(args), indent=2))
     return 0
 
