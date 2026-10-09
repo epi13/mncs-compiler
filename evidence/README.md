@@ -170,7 +170,13 @@ sampled child RSS stop. Reusing the validated HIR prelude and indexing
 function identities reduced Stage-0 host HIR preparation from 91.290 to
 63.052 seconds on the exact compiler input. The target request still stopped
 during retained-session admission without a returned compiler result; cgroup
-OOM deltas were zero. The associated compiler finding is
+OOM deltas were zero. The
+[phase-correlated RSS repeat](campaign-20261009-flow-phase-resource-samples.json)
+adds time-series samples for the actual child and shows RSS rising by about
+567 MiB between the host compiler-SSA timing point and the bounded stop. This
+narrows the next investigation to the tail of the research-bytecode backend
+compilation/admission path, without attributing it to a specific allocation.
+The associated compiler finding is
 [CP-0026](../pressure/0026-real-flow-hir-prelude-reconstruction.md).
 
 ## Current declaration-vertical evidence
