@@ -1,0 +1,414 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-campaign-evidence",
+  "campaign": "lexer-fourbyte-scan-20261009",
+  "observed_at": "2026-10-09T20:40:38.526804+00:00",
+  "tested_candidate": {
+    "base_git_head": "dde76ba22698330a6f509322d6afbe97343796b2",
+    "branch": "campaign/decl-bounded-scan-20261009",
+    "worktree_dirty_during_tests": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "compiler_source_identity": {
+      "kind": "sha256 of selected compiler source basenames, NUL separators, and per-file sha256 digests; modules sorted by basename",
+      "selected_modules": [
+        "decl",
+        "flow",
+        "lexer",
+        "parser",
+        "project",
+        "segment",
+        "source",
+        "ssa"
+      ],
+      "baseline_sha256": "118b9d0972955e964b42440affee3b53819c76b8108598a568d72f2ee0c850be",
+      "candidate_sha256": "d9705d6e3939535bf3ae4c711510a191f73786b59586a387b2e02c055e4b6b56",
+      "baseline_module_source_sha256": {
+        "decl": "554af20d02b203e60722b671742f34d009ab8e27b649d34c09159515ad4a8b7e",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "project": "939e7803121d691cac02b0aab84ffeaeb006e2a5730915033ee8e00612c6d7d9",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+        "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+      },
+      "candidate_module_source_sha256": {
+        "decl": "554af20d02b203e60722b671742f34d009ab8e27b649d34c09159515ad4a8b7e",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "802523e5ce8a05e742ccd80576cddc083ac6713095b2f1a5b66b64c4e6bb5d10",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "project": "939e7803121d691cac02b0aab84ffeaeb006e2a5730915033ee8e00612c6d7d9",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+        "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+      }
+    },
+    "stage0_probe_binary": {
+      "path": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+      "sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c",
+      "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e"
+    }
+  },
+  "implementation": {
+    "module": "src/compiler/lexer.mncs",
+    "baseline_source_sha256": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+    "candidate_source_sha256": "802523e5ce8a05e742ccd80576cddc083ac6713095b2f1a5b66b64c4e6bb5d10",
+    "change": "scan_chunk_global now consumes up to four bytes per window for line comments, identifier words, and whitespace, preserving delimiter checks and guarding every offset against total; block-comment and numeric scanning are unchanged.",
+    "source_change_commit": "346bd972c01a7b107325111e34ac0e0b2c6908ea"
+  },
+  "differential": {
+    "suite": "tools/test_global_scan_modes.py",
+    "baseline": {
+      "status": "passed",
+      "backend": "MNCS function through retained Stage-0 probe; canonical VM not involved",
+      "source_bytes": 5250,
+      "source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+      "page_size": 1024,
+      "token_count": 11,
+      "stage0_token_count": 11,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true,
+      "native_steps": 340128,
+      "capture": "stdout observed before candidate edit in this session; separate output file was not retained"
+    },
+    "candidate": {
+      "status": "passed",
+      "backend": null,
+      "source_bytes": 5250,
+      "source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+      "page_size": 1024,
+      "boundary_cases": [
+        "word at offset 1023",
+        "number at offset 2046",
+        "block opener at offset 3071 with nesting",
+        "block closer at offset 4095",
+        "line comment at offset 5118 with newline after page edge"
+      ],
+      "native_steps": 237700,
+      "token_count": 11,
+      "stage0_token_count": 11,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true,
+      "capture_path": ".build/campaign-artifacts/compiler-facts/lexer-fourbyte-global-scan-modes.json"
+    },
+    "executor_step_reduction_percent": 30.11,
+    "boundary_coverage": [
+      "word at offset 1023",
+      "number at offset 2046",
+      "block opener at offset 3071 with nesting",
+      "block closer at offset 4095",
+      "line comment at offset 5118 with newline after page edge"
+    ],
+    "keyword_dispatch_candidate": {
+      "status": "passed",
+      "backend": null,
+      "keywords": 30,
+      "near_misses": 60,
+      "page_boundary_starts": 30,
+      "source_bytes": 31188,
+      "native_steps": 1329941,
+      "token_count": 180,
+      "stage0_token_count": 180,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true,
+      "capture_path": ".build/campaign-artifacts/compiler-facts/lexer-fourbyte-global-keyword.json"
+    },
+    "keyword_assertions": "30 reserved words and 60 near-misses; all 30 keywords begin at a page boundary; exact Stage-0 token/span/EOF parity."
+  },
+  "real_compiler_prefix": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_input_module": "source",
+    "target_input_source_sha256": "d2412428699d2ea65eaefbd315cf05d901b3c9defa746f4eed54e85776b39d18",
+    "stage0_oracle_scope": "source compiler module project; valid with 0 diagnostics, 23 linked functions, 7 Stage-0 SSA functions",
+    "matched_step_budget": 100000,
+    "baseline": {
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-source-prefix-100k-20261009-source-measurement.json",
+      "measurement_sha256": "2f45a7bf0cc558c241af304881efc86f5391ee4d25dc5fcf31b606bbd5387124",
+      "observed_at": "2026-10-09T20:04:58.512453+00:00",
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "step_budget": 100000,
+      "reported_steps": 100000,
+      "request_execution_wall_ms": 17891.331524999998,
+      "wall_seconds": 19.025,
+      "child_cpu_seconds": 18.34,
+      "child_cpu_user_seconds": 18.02,
+      "child_cpu_system_seconds": 0.32,
+      "child_peak_rss_kib": 1427088,
+      "child_max_fd_count": 5,
+      "cgroup_oom_event_delta": 0,
+      "cgroup_oom_kill_event_delta": 0,
+      "frontend_program_cache": {
+        "key": "d2e0c6a64d127dad465dc5b0a85cf4d63d2e1248bd56c0392b23ff5bfc488755",
+        "usable": true,
+        "duration_ms": 611.43783
+      },
+      "body_profile_elapsed_ns": 10743898414,
+      "body_profile_steps": 100000,
+      "body_profile_status": "budget_exhausted",
+      "hot_functions": {
+        "lexer.next_token_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+          "calls": 177,
+          "steps": 13535,
+          "exclusive_ns": 3695327312,
+          "inclusive_ns": 8320766623
+        },
+        "lexer.scan_chunk_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_global__spec_3c0ffe82",
+          "calls": 406,
+          "steps": 13978,
+          "exclusive_ns": 3380397033,
+          "inclusive_ns": 3607489801
+        },
+        "lexer.significant_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82",
+          "calls": 115,
+          "steps": 989,
+          "exclusive_ns": 672412861,
+          "inclusive_ns": 9264172342
+        },
+        "segment.significant_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.segment.v1::significant_global__spec_3c0ffe82",
+          "calls": 115,
+          "steps": 230,
+          "exclusive_ns": 246894377,
+          "inclusive_ns": 9511066719
+        },
+        "decl.parse_stmts": {
+          "identity": "mncs:0.2:function:mncs.compiler.decl.v1::parse_stmts__spec_3c0ffe82",
+          "calls": 1,
+          "steps": 147,
+          "exclusive_ns": 3926408,
+          "inclusive_ns": 4735442193
+        }
+      },
+      "native_request_status": "budget_exhausted",
+      "native_failure": {
+        "identity": "mncs:0.2:operation:mncs.compiler.source.v1::byte_at_global__spec_3c0ffe82::b12::%24mncs%24cast%2415",
+        "reason": "execution step budget exhausted"
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 23,
+        "ssa_functions": 7
+      },
+      "input": {
+        "modules": [
+          "source"
+        ],
+        "source_count": 1,
+        "source_identity_sha256": "d2412428699d2ea65eaefbd315cf05d901b3c9defa746f4eed54e85776b39d18",
+        "total_pages_at_stride_1024": 11,
+        "target_source_index": 0
+      }
+    },
+    "candidate": {
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-fourbyte-source-prefix-100k-20261009-source-measurement.json",
+      "measurement_sha256": "e045438c631e04a93b065fdf981d2a679e8e901a924c1eb6d120ee3f8acea259",
+      "observed_at": "2026-10-09T20:35:36.929033+00:00",
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "step_budget": 100000,
+      "reported_steps": 100000,
+      "request_execution_wall_ms": 18204.432541,
+      "wall_seconds": 19.224,
+      "child_cpu_seconds": 18.91,
+      "child_cpu_user_seconds": 18.55,
+      "child_cpu_system_seconds": 0.36,
+      "child_peak_rss_kib": 1428988,
+      "child_max_fd_count": 5,
+      "cgroup_oom_event_delta": 0,
+      "cgroup_oom_kill_event_delta": 0,
+      "frontend_program_cache": {
+        "key": "ca7e9abf82ca7b312318dacefa1aedc21bbb8ecdae7a1ed8057451929d43de5a",
+        "usable": true,
+        "duration_ms": 610.409282
+      },
+      "body_profile_elapsed_ns": 10985131195,
+      "body_profile_steps": 100000,
+      "body_profile_status": "budget_exhausted",
+      "hot_functions": {
+        "lexer.next_token_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+          "calls": 204,
+          "steps": 12914,
+          "exclusive_ns": 3861492267,
+          "inclusive_ns": 8159672843
+        },
+        "lexer.scan_chunk_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_global__spec_3c0ffe82",
+          "calls": 275,
+          "steps": 12797,
+          "exclusive_ns": 2988223797,
+          "inclusive_ns": 3154138085
+        },
+        "lexer.significant_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82",
+          "calls": 137,
+          "steps": 1124,
+          "exclusive_ns": 774349377,
+          "inclusive_ns": 9245013148
+        },
+        "segment.significant_global": {
+          "identity": "mncs:0.2:function:mncs.compiler.segment.v1::significant_global__spec_3c0ffe82",
+          "calls": 137,
+          "steps": 274,
+          "exclusive_ns": 290403740,
+          "inclusive_ns": 9535416888
+        },
+        "decl.parse_stmts": {
+          "identity": "mncs:0.2:function:mncs.compiler.decl.v1::parse_stmts__spec_3c0ffe82",
+          "calls": 1,
+          "steps": 147,
+          "exclusive_ns": 3799844,
+          "inclusive_ns": 4534007661
+        }
+      },
+      "native_request_status": "budget_exhausted",
+      "native_failure": {
+        "identity": null,
+        "reason": "execution step budget exhausted"
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 23,
+        "ssa_functions": 7
+      },
+      "input": {
+        "modules": [
+          "source"
+        ],
+        "source_count": 1,
+        "source_identity_sha256": "d2412428699d2ea65eaefbd315cf05d901b3c9defa746f4eed54e85776b39d18",
+        "total_pages_at_stride_1024": 11,
+        "target_source_index": 0
+      }
+    },
+    "profile_comparison": {
+      "next_token_global_calls": [
+        177,
+        204
+      ],
+      "scan_chunk_global_calls": [
+        406,
+        275
+      ],
+      "scan_chunk_call_reduction_percent": 32.27,
+      "interpretation": "Both executions exhaust the same 100000-step budget and return no native project result. The candidate profile records fewer scan_chunk_global calls and more next_token_global calls, consistent with farther parser progress, but wall time and child CPU are slightly higher; this does not establish a whole-request runtime win."
+    }
+  },
+  "excluded_invalid_request": {
+    "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-lexer-fourbyte-prefix-100k-20261009-decl-flow-lexer-parser-project-segment-ssa-source-measurement.json",
+    "measurement_sha256": "540b443010da667266c10e10dcc952a49e2f9211ba9e0ef92464d6e624150f8b",
+    "observed_at": "2026-10-09T20:28:52.066054+00:00",
+    "classification": "FAILURE",
+    "semantic_result": "REJECTED_BEFORE_COMPILER_EXECUTION",
+    "operation_outcome": "REJECTED_BEFORE_COMPILER_EXECUTION",
+    "step_budget": 100000,
+    "reported_steps": 0,
+    "request_execution_wall_ms": 8568.620884,
+    "wall_seconds": 162.56,
+    "child_cpu_seconds": 159.1,
+    "child_cpu_user_seconds": 158.17,
+    "child_cpu_system_seconds": 0.93,
+    "child_peak_rss_kib": 2283192,
+    "child_max_fd_count": 5,
+    "cgroup_oom_event_delta": 0,
+    "cgroup_oom_kill_event_delta": 0,
+    "frontend_program_cache": {
+      "key": "ca7e9abf82ca7b312318dacefa1aedc21bbb8ecdae7a1ed8057451929d43de5a",
+      "usable": false,
+      "duration_ms": 6.394197
+    },
+    "body_profile_elapsed_ns": 3445544,
+    "body_profile_steps": 0,
+    "body_profile_status": "invalid_request",
+    "hot_functions": {
+      "lexer.next_token_global": null,
+      "lexer.scan_chunk_global": null,
+      "lexer.significant_global": null,
+      "segment.significant_global": null,
+      "decl.parse_stmts": null
+    },
+    "native_request_status": "invalid_request",
+    "native_failure": {
+      "identity": null,
+      "reason": "argument does not match parameter \"flat_pages\" (function mncs.compiler.project.v1::compile_project_target, argument index 1): expected [[byte; up_to 1024]; up_to 1024] (sequence<sequence<byte;up_to 1024>;up_to 1024>) but received sequence(len=1313); MNCS_VALUE_CONTRACT argument 1: view length exceeds capacity: capacity 1024, received 1313"
+    },
+    "stage0_oracle": {
+      "status": "not-run",
+      "reason": "native request was rejected before project execution"
+    },
+    "input": {
+      "modules": [
+        "decl",
+        "flow",
+        "lexer",
+        "parser",
+        "project",
+        "segment",
+        "ssa",
+        "source"
+      ],
+      "source_count": 8,
+      "source_identity_sha256": "d9705d6e3939535bf3ae4c711510a191f73786b59586a387b2e02c055e4b6b56",
+      "total_pages_at_stride_1024": 1313,
+      "target_source_index": 6
+    },
+    "excluded_reason": "Harness passed eight compiler source files as target input (1313 pages) to an operation with capacity 1024; invalid request before compiler execution, Stage-0 oracle not run."
+  },
+  "scope_limits": {
+    "semantic_outcome_for_real_compiler_prefix": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "full_flow_closure": "not measured in this slice",
+    "canonical_vm_conformance": false,
+    "native_executable_artifact": false,
+    "stage1": false,
+    "stage2": false,
+    "module_stage_matrix_changed": false
+  },
+  "artifacts": [
+    {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-bounded-scan-source-prefix-100k-20261009-source-measurement.json",
+      "sha256": "2f45a7bf0cc558c241af304881efc86f5391ee4d25dc5fcf31b606bbd5387124",
+      "bytes": 203439,
+      "git_tracked": false
+    },
+    {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-lexer-fourbyte-source-prefix-100k-20261009-source-measurement.json",
+      "sha256": "e045438c631e04a93b065fdf981d2a679e8e901a924c1eb6d120ee3f8acea259",
+      "bytes": 371505,
+      "git_tracked": false
+    },
+    {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-lexer-fourbyte-source-prefix-100k-20261009-source-phases.jsonl",
+      "sha256": "df148bf74af68b6dec60ff4343d8832b374a0d0a619e330bb31898c1e596fe08",
+      "bytes": 11437,
+      "git_tracked": false
+    },
+    {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-lexer-fourbyte-source-prefix-100k-20261009-source-probe-stderr.log",
+      "sha256": "90c98d3f408a3dbadf7fa41ac8854b9b57732a9710b1792436f7b5c8839ef28d",
+      "bytes": 23956,
+      "git_tracked": false
+    },
+    {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/lexer-fourbyte-global-scan-modes.json",
+      "sha256": "599a075ae350f8706c725e37bdaf334419e3991ca84e25cea89dbcfd634285dd",
+      "bytes": 551,
+      "git_tracked": false
+    },
+    {
+      "path": "../.worktrees/decl-bounded-scan-20261009/.build/campaign-artifacts/compiler-facts/lexer-fourbyte-global-keyword.json",
+      "sha256": "319c81aa42574c5b726de7cdd6e68f67e071b59f86c4786d835c24fb0d99ef65",
+      "bytes": 287,
+      "git_tracked": false
+    }
+  ]
+}

@@ -1400,7 +1400,72 @@
       "delivered_implementation_commit": "5866aa4cb5f2b471f41161145db85a7e0e6d8ad5",
       "delivered_main_revision": "5866aa4cb5f2b471f41161145db85a7e0e6d8ad5",
       "delivered_at": "2026-10-09T20:21:52Z"
+    },
+    "lexer_fourbyte_scan_campaign_20261009": {
+      "observed_at": "2026-10-09T20:40:38.526804+00:00",
+      "entry_delivered_main_revision": "dde76ba22698330a6f509322d6afbe97343796b2",
+      "candidate_base_revision": "dde76ba22698330a6f509322d6afbe97343796b2",
+      "tested_candidate_git_head": "dde76ba22698330a6f509322d6afbe97343796b2",
+      "tested_candidate_branch": "campaign/decl-bounded-scan-20261009",
+      "tested_candidate_worktree_dirty": true,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "tested_compiler_source_identity": {
+        "kind": "sha256 of selected compiler source basenames, NUL separators, and per-file sha256 digests; modules sorted by basename",
+        "selected_modules": [
+          "decl",
+          "flow",
+          "lexer",
+          "parser",
+          "project",
+          "segment",
+          "source",
+          "ssa"
+        ],
+        "baseline_sha256": "118b9d0972955e964b42440affee3b53819c76b8108598a568d72f2ee0c850be",
+        "candidate_sha256": "d9705d6e3939535bf3ae4c711510a191f73786b59586a387b2e02c055e4b6b56",
+        "module_source_sha256": {
+          "decl": "554af20d02b203e60722b671742f34d009ab8e27b649d34c09159515ad4a8b7e",
+          "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+          "lexer": "802523e5ce8a05e742ccd80576cddc083ac6713095b2f1a5b66b64c4e6bb5d10",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "project": "939e7803121d691cac02b0aab84ffeaeb006e2a5730915033ee8e00612c6d7d9",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "source": "afe7e1299cc54d5aa97d2ea18277c17a3b95502a4b33482e27828bb07fec8175",
+          "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+        }
+      },
+      "changed_module": "lexer",
+      "baseline_lexer_source_sha256": "053717a7cd5a863417d564e4eb026610ad3a5936b23d59bbda3f5e33bbede063",
+      "candidate_lexer_source_sha256": "802523e5ce8a05e742ccd80576cddc083ac6713095b2f1a5b66b64c4e6bb5d10",
+      "implementation_commit": "346bd972c01a7b107325111e34ac0e0b2c6908ea",
+      "evidence_artifact": "evidence/campaign-20261009-lexer-fourbyte-scan.json",
+      "evidence_file_sha256": "3a2a86acb7d83a77d41551f2bf3acc4aa96ccc35048964a61d6036295206a440",
+      "delivery_role": "Four-byte global scanner for identifiers, whitespace, and line comments. Direct Stage-0 lexical parity shows a 30.11% executor-step reduction on the page-boundary fixture; the 100k source compiler prefix remains RESOURCE_EXHAUSTED with semantic outcome UNKNOWN and no whole-request time improvement established.",
+      "result_scope": {
+        "global_scan_modes": "SUCCESS; exact token/span/EOF parity across page boundaries and nested comment cases",
+        "keyword_dispatch": "SUCCESS; 30 keyword and 60 near-miss differential cases",
+        "real_source_prefix": "RESOURCE_EXHAUSTED at 100000 steps; Stage-0 valid; compiler result UNKNOWN",
+        "whole_request_runtime_speedup": false,
+        "canonical_vm_conformance": false,
+        "native_executable_artifact": false,
+        "stage1_claimed": false,
+        "stage2_claimed": false
+      },
+      "performance_observation": {
+        "fixture_executor_steps_baseline": 340128,
+        "fixture_executor_steps_candidate": 237700,
+        "fixture_step_reduction_percent": 30.11,
+        "compiler_scan_chunk_calls_baseline": 406,
+        "compiler_scan_chunk_calls_candidate": 275,
+        "compiler_next_token_calls_baseline": 177,
+        "compiler_next_token_calls_candidate": 204,
+        "baseline_wall_seconds": 19.025,
+        "candidate_wall_seconds": 19.224,
+        "baseline_child_cpu_seconds": 18.34,
+        "candidate_child_cpu_seconds": 18.91
+      },
+      "historical_matrix_rows_rewritten": false
     }
   },
-  "evidence_updated_at": "2026-10-09T20:21:52Z"
+  "evidence_updated_at": "2026-10-09T20:40:38.526804+00:00"
 }
