@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.lexer-keyword-window-experiment",
+  "observed_at": "2026-10-09T22:07:09Z",
+  "decision": "REJECTED_NO_MEASURED_EFFICIENCY_GAIN",
+  "motivation": {
+    "prior_profile_measurement_sha256": "2791223109f808f98ac42e076da250f681ce245b26aea5fb0e97d2fc39a8506a",
+    "baseline_hot_function_profile": {
+      "keyword_global_calls": 34,
+      "keyword_global_exclusive_ns": 796638705,
+      "byte_at_global_calls": 237,
+      "byte_at_global_exclusive_ns": 3456219258
+    },
+    "hypothesis": "Batch keyword literal byte reads through the existing four-byte logical-source window to reduce repeated full-page-table argument transport."
+  },
+  "identity": {
+    "candidate_base_revision": "22f771df5b4865623ded5100e09e7a8ad214ed3d",
+    "tested_worktree": "/home/epi13/Documents/Projects/.worktrees/lexer-keyword-windows-20261009",
+    "tested_git_head": "22f771df5b4865623ded5100e09e7a8ad214ed3d",
+    "tested_candidate_was_uncommitted": true,
+    "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_probe_path": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c",
+    "operation_source_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "kernel"
+    ],
+    "baseline_source_identity": {
+      "kind": "sha256 over sorted module basename including .mncs, NUL separator, and per-file source SHA-256 digest",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "kernel"
+      ],
+      "sha256": "4c9b4a0d60635a93f31c56fe37e437ed7d7098d1318fd6d61bfd0403a5f6c6d3",
+      "module_source_sha256": {
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+        "lexer": "8befc8490b2bb3d93d468f9e86497c3e6132c1bc1e694ba4a58fe607f60de75f",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6"
+      }
+    },
+    "tested_candidates": {
+      "keyword_windows_only": {
+        "sha256": "ca590ada8cc17d07ee977ce8d14960cd4e8670dc89e0e98e61d4818b8596ee8b",
+        "module_source_sha256": {
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+          "lexer": "14290975d546a9f1ce7268184c82d30f30b1ca1488da48c1b51d2839d43c7511",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6"
+        }
+      },
+      "keyword_and_next_token_windows": {
+        "sha256": "c52f65444b211512cde2e8f12cf0d3c0480a7ef000033f66c21a69dc02b003cc",
+        "module_source_sha256": {
+          "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+          "lexer": "be731a8bf40485e5d797c0df531b051755e696ca81b1c275cc7bbfe3e1647a44",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6"
+        }
+      }
+    }
+  },
+  "test": {
+    "command": "MNCS_CP0001_SMOKE=1 MNCS_CP0001_TIERS=AB MNCS_PROBE_BACKEND=reference_interpreter tools/test_cp0001.py",
+    "execution_modules": [
+      "mncs.compiler.source.v1",
+      "mncs.compiler.segment.v1",
+      "mncs.compiler.kernel.v1"
+    ],
+    "same_stage0_probe_for_all_runs": true,
+    "oracle_differential_passed": true,
+    "semantic_mismatches": 0,
+    "baseline": {
+      "classification": "SUCCESS",
+      "elapsed_seconds": 32.521,
+      "requests": 1899,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "steps_total": 2096193,
+      "steps_max": 68727,
+      "result_sha256": "fde86c9b952a7ac26d077a77bb4495c8410f30d9c1f49f2e708ad83971b5c3d5"
+    },
+    "keyword_windows_only": {
+      "classification": "SUCCESS",
+      "elapsed_seconds": 32.764,
+      "requests": 1899,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "steps_total": 2106134,
+      "steps_max": 69948,
+      "result_sha256": "1fe031d4d3254a2cd9ce1526d603904e434f5fa18035fbc42193c5823ffcab01"
+    },
+    "keyword_and_next_token_windows": {
+      "classification": "SUCCESS",
+      "warm_cache": true,
+      "elapsed_seconds": 33.668,
+      "requests": 1899,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "steps_total": 2198116,
+      "steps_max": 76049,
+      "result_sha256": "717470339b2bef9cce152331e4c0a4821aa4f0ccd7359a68a64e447e34712e03"
+    },
+    "result_digest_includes_steps": true,
+    "candidate_result_digest_difference_is_not_a_semantic_mismatch": true,
+    "cpu_rss_and_fd_measurements": "UNKNOWN; this test runner did not collect process resource telemetry",
+    "timing_scope": "one sequential warm-cache run per variant; small elapsed differences are not treated as conclusive speedups",
+    "full_tier_ab_attempt": "INTERRUPTED before a result during the unbounded boundary sweep; reduced smoke AB completed"
+  },
+  "outcome": {
+    "keyword_only_wall_delta_percent": 0.75,
+    "keyword_only_step_delta_percent": 0.47,
+    "combined_wall_delta_percent": 3.53,
+    "combined_step_delta_percent": 4.86,
+    "reason": "Both variants increased interpreter work; keyword-only wall time was effectively flat and slightly slower, while the combined variant was slower. No source change retained."
+  }
+}
