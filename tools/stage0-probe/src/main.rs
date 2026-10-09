@@ -15,9 +15,9 @@ use serde_json::{json, Value};
 use std::{
     collections::BTreeMap,
     fs::{File, OpenOptions},
-    io::{self, BufRead, BufWriter, Write},
+    io::{self, BufRead, BufReader, BufWriter, Read, Write},
     sync::{Mutex, OnceLock},
-    time::Instant,
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 #[path = "../../vm_emit.rs"]
@@ -134,6 +134,26 @@ struct ToolchainIdentity {
     compiler_host: CompilerHostIdentity,
     build_host: BuildHostIdentity,
     rustc_version: String,
+}
+
+#[derive(serde::Serialize)]
+struct ProbeCacheEntry<'a> {
+    identity: &'a ToolchainIdentity,
+    program: &'a mncs_model::Program,
+    artifact: Option<&'a mncs_model::BackendArtifact>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProbeCacheProgramEntry {
+    identity: ToolchainIdentity,
+    program: mncs_model::Program,
+}
+
+#[derive(serde::Deserialize)]
+struct ProbeCacheBackendEntry {
+    identity: ToolchainIdentity,
+    program: mncs_model::Program,
+    artifact: Option<mncs_model::BackendArtifact>,
 }
 
 fn gather_toolchain_identity(
@@ -294,31 +314,45 @@ fn cache_key_hex(
 }
 
 /// Parse one decompressed cache entry. Every failure mode is a safe
-/// miss (`None`): corrupt bytes, missing fields, a stored toolchain
-/// identity that differs from the current one, or an artifact whose own
-/// identity does not validate.
+/// miss (`None`): corrupt bytes, missing identity or program, a stored
+/// toolchain identity that differs from the current one, or an artifact
+/// whose own identity does not validate.
+#[cfg(test)]
 fn parse_cache_entry(
     raw: &[u8],
     expected: &ToolchainIdentity,
     backend_name: Option<&str>,
 ) -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
-    let entry: serde_json::Value = serde_json::from_slice(raw).ok()?;
-    let stored: ToolchainIdentity = serde_json::from_value(entry.get("identity")?.clone()).ok()?;
-    if &stored != expected {
+    parse_cache_entry_reader(raw, expected, backend_name)
+}
+
+fn parse_cache_entry_reader<R: Read>(
+    reader: R,
+    expected: &ToolchainIdentity,
+    backend_name: Option<&str>,
+) -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
+    if backend_name.is_none() {
+        let entry: ProbeCacheProgramEntry = serde_json::from_reader(reader).ok()?;
+        if &entry.identity != expected {
+            return None;
+        }
+        return Some((entry.program, None));
+    }
+    let entry: ProbeCacheBackendEntry = serde_json::from_reader(reader).ok()?;
+    if &entry.identity != expected {
         return None;
     }
-    let program =
-        serde_json::from_value::<mncs_model::Program>(entry.get("program")?.clone()).ok()?;
-    if backend_name.is_none() {
-        return Some((program, None));
-    }
-    let artifact =
-        serde_json::from_value::<mncs_model::BackendArtifact>(entry.get("artifact")?.clone())
-            .ok()?;
+    let Some(artifact) = entry.artifact else {
+        // A backend-specific entry may contain a valid frontend Program
+        // whose backend compilation was interrupted. Reuse the Program and
+        // compile the backend again; only a non-null artifact is reusable as
+        // an executable session.
+        return Some((entry.program, None));
+    };
     if !artifact.identity_is_valid() {
         return None;
     }
-    Some((program, Some(artifact)))
+    Some((entry.program, Some(artifact)))
 }
 
 fn short_hash(value: &str) -> &str {
@@ -479,14 +513,37 @@ fn main() {
         |key: &str| -> Option<(mncs_model::Program, Option<mncs_model::BackendArtifact>)> {
             let dir = cache_dir.as_ref()?;
             let toolchain = toolchain.as_ref()?;
-            let output = std::process::Command::new("gzip")
-                .args(["-dc", &format!("{dir}/{key}.json.gz")])
-                .output()
+            let path = format!("{dir}/{key}.json.gz");
+            let started = Instant::now();
+            let mut gzip = std::process::Command::new("gzip")
+                .args(["-dc", &path])
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::null())
+                .spawn()
                 .ok()?;
-            if !output.status.success() {
-                return None;
-            }
-            parse_cache_entry(&output.stdout, toolchain, backend_name.as_deref())
+            let gzip_pid = gzip.id();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "artifact_cache_gzip_read",
+                "cache_key": key,
+                "gzip_pid": gzip_pid
+            }));
+            let reader = gzip.stdout.take()?;
+            let reader = BufReader::with_capacity(1024 * 1024, reader);
+            let parsed = parse_cache_entry_reader(reader, toolchain, backend_name.as_deref());
+            let status = gzip.wait().ok()?;
+            trace_phase(
+                "artifact_cache_gzip_read",
+                started,
+                json!({
+                    "cache_key": key,
+                    "gzip_pid": gzip_pid,
+                    "exit_code": status.code(),
+                    "success": status.success(),
+                    "compressed_bytes": std::fs::metadata(path).map(|metadata| metadata.len()).ok()
+                }),
+            );
+            if status.success() { parsed } else { None }
         };
     let cache_store = |key: &str,
                        program: &mncs_model::Program,
@@ -497,58 +554,145 @@ fn main() {
         if std::fs::create_dir_all(dir).is_err() {
             return;
         }
-        let entry =
-            serde_json::json!({"identity": toolchain, "program": program, "artifact": artifact});
+        let unique_suffix = format!(
+            "{}.{}",
+            std::process::id(),
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        );
+        let raw_tmp = format!("{dir}/{key}.{unique_suffix}.json.tmp");
         let encode_started = Instant::now();
-        let entry_bytes = serde_json::to_vec(&entry).expect("entry serializes");
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "artifact_cache_encode",
+            "cache_key": key,
+            "artifact_present": artifact.is_some()
+        }));
+        let encoded_bytes = (|| -> io::Result<u64> {
+            let file = File::create(&raw_tmp)?;
+            let mut writer = BufWriter::new(file);
+            serde_json::to_writer(
+                &mut writer,
+                &ProbeCacheEntry {
+                    identity: toolchain,
+                    program,
+                    artifact,
+                },
+            )
+            .map_err(|error| io::Error::new(io::ErrorKind::Other, error))?;
+            writer.flush()?;
+            drop(writer);
+            Ok(std::fs::metadata(&raw_tmp)?.len())
+        })();
+        let encoded_bytes = match encoded_bytes {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                let _ = std::fs::remove_file(&raw_tmp);
+                trace_phase(
+                    "artifact_cache_encode",
+                    encode_started,
+                    json!({"cache_key": key, "success": false, "error": error.to_string()}),
+                );
+                return;
+            }
+        };
         trace_phase(
             "artifact_cache_encode",
             encode_started,
-            json!({"cache_key": key, "uncompressed_bytes": entry_bytes.len()}),
+            json!({"cache_key": key, "uncompressed_bytes": encoded_bytes}),
         );
-        // Compress via a temp file, not a stdin pipe: entries are hundreds
-        // of MB, and piping both stdin and stdout through 64KB kernel
-        // buffers deadlocks once both fill with no drainer.
-        let raw_tmp = format!("{dir}/{key}.json.tmp");
-        if std::fs::write(&raw_tmp, &entry_bytes).is_err() {
-            return;
-        }
+        let compressed_tmp = format!("{dir}/{key}.{unique_suffix}.json.gz.tmp");
         let gzip_started = Instant::now();
-        let output = std::process::Command::new("gzip")
-            .args(["-n", "-c", &raw_tmp])
-            .output();
-        let _ = std::fs::remove_file(&raw_tmp);
-        let Ok(output) = output else {
-            trace_phase(
-                "artifact_cache_gzip_write",
-                gzip_started,
-                json!({"cache_key": key, "success": false}),
-            );
-            return;
+        let compressed_file = match File::create(&compressed_tmp) {
+            Ok(file) => file,
+            Err(error) => {
+                let _ = std::fs::remove_file(&raw_tmp);
+                trace_phase(
+                    "artifact_cache_gzip_write",
+                    gzip_started,
+                    json!({"cache_key": key, "success": false, "error": error.to_string()}),
+                );
+                return;
+            }
         };
-        if !output.status.success() {
-            trace_phase(
-                "artifact_cache_gzip_write",
-                gzip_started,
-                json!({
-                    "cache_key": key,
-                    "success": false,
-                    "exit_code": output.status.code()
-                }),
-            );
-            return;
+        let mut gzip = match std::process::Command::new("gzip")
+            .args(["-n", "-c", &raw_tmp])
+            .stdout(std::process::Stdio::from(compressed_file))
+            .stderr(std::process::Stdio::null())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) => {
+                let _ = std::fs::remove_file(&raw_tmp);
+                let _ = std::fs::remove_file(&compressed_tmp);
+                trace_phase(
+                    "artifact_cache_gzip_write",
+                    gzip_started,
+                    json!({"cache_key": key, "success": false, "error": error.to_string()}),
+                );
+                return;
+            }
+        };
+        let gzip_pid = gzip.id();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "artifact_cache_gzip_write",
+            "cache_key": key,
+            "gzip_pid": gzip_pid
+        }));
+        let status = gzip.wait();
+        let _ = std::fs::remove_file(&raw_tmp);
+        let compressed_bytes = std::fs::metadata(&compressed_tmp)
+            .map(|metadata| metadata.len())
+            .ok();
+        let status = match status {
+            Ok(status) if status.success() => status,
+            Ok(status) => {
+                let _ = std::fs::remove_file(&compressed_tmp);
+                trace_phase(
+                    "artifact_cache_gzip_write",
+                    gzip_started,
+                    json!({
+                        "cache_key": key,
+                        "success": false,
+                        "gzip_pid": gzip_pid,
+                        "exit_code": status.code()
+                    }),
+                );
+                return;
+            }
+            Err(error) => {
+                let _ = std::fs::remove_file(&compressed_tmp);
+                trace_phase(
+                    "artifact_cache_gzip_write",
+                    gzip_started,
+                    json!({
+                        "cache_key": key,
+                        "success": false,
+                        "gzip_pid": gzip_pid,
+                        "error": error.to_string()
+                    }),
+                );
+                return;
+            }
+        };
+        let stored = compressed_bytes.is_some()
+            && std::fs::rename(&compressed_tmp, format!("{dir}/{key}.json.gz")).is_ok();
+        if !stored {
+            let _ = std::fs::remove_file(&compressed_tmp);
         }
-        let tmp = format!("{dir}/{key}.json.gz.tmp");
-        let stored = std::fs::write(&tmp, &output.stdout).is_ok()
-            && std::fs::rename(&tmp, format!("{dir}/{key}.json.gz")).is_ok();
         trace_phase(
             "artifact_cache_gzip_write",
             gzip_started,
             json!({
                 "cache_key": key,
                 "success": stored,
-                "uncompressed_bytes": entry_bytes.len(),
-                "compressed_bytes": output.stdout.len()
+                "gzip_pid": gzip_pid,
+                "exit_code": status.code(),
+                "uncompressed_bytes": encoded_bytes,
+                "compressed_bytes": compressed_bytes
             }),
         );
     };
@@ -564,11 +708,15 @@ fn main() {
         if cache_dir.is_some() {
             let key = cache_key(name);
             let cache_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "artifact_cache_read_decode",
+                "module": name,
+                "cache_key": key
+            }));
             let cached = cache_load(&key);
             let cache_decoded = cached.is_some();
-            let cache_usable = cached
-                .as_ref()
-                .is_some_and(|(_, artifact)| backend_name.is_none() || artifact.is_some());
+            let cache_usable = cached.is_some();
             trace_phase(
                 "artifact_cache_read_decode",
                 cache_started,
@@ -580,14 +728,12 @@ fn main() {
                 }),
             );
             if let Some((program, artifact)) = cached {
-                if backend_name.is_none() || artifact.is_some() {
-                    cache_hits += 1;
-                    if let Some(artifact) = artifact {
-                        cached_artifacts.insert(name.clone(), artifact);
-                    }
-                    programs.insert(name.clone(), program);
-                    continue;
+                cache_hits += 1;
+                if let Some(artifact) = artifact {
+                    cached_artifacts.insert(name.clone(), artifact);
                 }
+                programs.insert(name.clone(), program);
+                continue;
             }
             cache_misses += 1;
         }
@@ -625,15 +771,14 @@ fn main() {
         );
         assert!(frontend_valid, "{name}: {:?}", result.diagnostics);
         let program = result.program.unwrap();
-        if backend_name.is_none() && cache_dir.is_some() {
+        if cache_dir.is_some() {
+            // Preserve the expensive frontend result before backend compile.
+            // If backend work is interrupted, the next run can reuse this
+            // exact Program and retry only backend compilation.
             cache_store(&cache_key(name), &program, None);
         }
         programs.insert(name.clone(), program);
     }
-    let sessions: BTreeMap<_, _> = programs
-        .iter()
-        .map(|(name, program)| (name.clone(), BodyExecutionSession::new(program)))
-        .collect();
     // Optional development path: compile the exact loaded reference Program
     // once, retain its backend session, then answer the same requests through
     // that executable artifact. The ordinary interpreter remains available
@@ -645,14 +790,14 @@ fn main() {
             programs
                 .iter()
                 .map(|(name, program)| {
-                    if let Some(artifact) = cached_artifacts.get(name) {
+                    if let Some(artifact) = cached_artifacts.remove(name) {
                         trace_event(json!({
                             "event": "artifact_reuse",
                             "phase": "backend_compile",
                             "module": name,
                             "source": "content_addressed_cache"
                         }));
-                        return (name.clone(), artifact.clone());
+                        return (name.clone(), artifact);
                     }
                     let emit = [
                         ArtifactRepresentation::Semantic,
@@ -672,16 +817,20 @@ fn main() {
                         request_started,
                         json!({"module": name, "backend": backend}),
                     );
+                    trace_event(json!({
+                        "event": "phase_begin",
+                        "phase": "backend_compilation",
+                        "module": name,
+                        "backend": backend
+                    }));
                     let compile_started = Instant::now();
-                    let result = compiler.compile(request, program);
-                    let artifact = result
-                        .emissions
-                        .backend
-                        .as_ref()
-                        .unwrap_or_else(|| {
-                            panic!("{backend} emitted no artifact for {name}: {result:?}")
-                        })
-                        .clone();
+                    let mut result = compiler.compile(request, program);
+                    let artifact = result.emissions.backend.take().unwrap_or_else(|| {
+                        panic!("{backend} emitted no artifact for {name}: {result:?}")
+                    });
+                    // The retained artifact is the only compiler emission
+                    // needed below; release the rest before cache encoding.
+                    drop(result);
                     let payload_bytes = artifact.bytes_hex.len() / 2;
                     trace_phase(
                         "backend_compilation",
@@ -702,21 +851,42 @@ fn main() {
                 .collect()
         })
         .unwrap_or_default();
-    let session_admission_started = Instant::now();
-    let backend_sessions: BTreeMap<_, _> = backend_artifacts
+    let artifact_summaries = backend_artifacts
         .iter()
         .map(|(name, artifact)| {
+            (
+                name.clone(),
+                artifact.backend.name.clone(),
+                artifact.artifact_kind.clone(),
+                artifact.identity_is_valid(),
+            )
+        })
+        .collect::<Vec<_>>();
+    let session_admission_started = Instant::now();
+    let backend_sessions: BTreeMap<_, _> = backend_artifacts
+        .into_iter()
+        .map(|(name, artifact)| {
+            let backend = artifact.backend.name.clone();
+            let artifact_kind = artifact.artifact_kind.clone();
+            let artifact_payload_bytes = artifact.bytes_hex.len() / 2;
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "retained_session_admission",
+                "module": name,
+                "backend": backend,
+                "artifact_payload_bytes": artifact_payload_bytes
+            }));
             let started = Instant::now();
-            let session = OwnedExecutionSession::new(artifact.clone())
+            let session = OwnedExecutionSession::new(artifact)
                 .unwrap_or_else(|error| panic!("backend session for {name}: {error}"));
             trace_phase(
                 "retained_session_admission",
                 started,
                 json!({
                     "module": name,
-                    "backend": artifact.backend.name,
-                    "artifact_kind": artifact.artifact_kind,
-                    "artifact_payload_bytes": artifact.bytes_hex.len() / 2,
+                    "backend": backend,
+                    "artifact_kind": artifact_kind,
+                    "artifact_payload_bytes": artifact_payload_bytes,
                     "admitted": true
                 }),
             );
@@ -760,21 +930,161 @@ fn main() {
             .values()
             .filter(|session| session.reused())
             .count();
-        let artifacts = backend_artifacts
-            .iter()
-            .map(|(name, artifact)| {
-                (
-                    name,
-                    artifact.backend.name.as_str(),
-                    artifact.artifact_kind.as_str(),
-                    artifact.identity_is_valid(),
-                )
-            })
-            .collect::<Vec<_>>();
-        eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifacts:?} cache_hits={cache_hits} cache_misses={cache_misses} stage0={} ready_s={:.1}", backend_sessions.len(), stage0.as_deref().unwrap_or("cache=off"), t_start.elapsed().as_secs_f64());
+        eprintln!("mncs-stage0-probe backend={backend} modules={} retained_sessions={reused} artifacts={artifact_summaries:?} cache_hits={cache_hits} cache_misses={cache_misses} stage0={} ready_s={:.1}", backend_sessions.len(), stage0.as_deref().unwrap_or("cache=off"), t_start.elapsed().as_secs_f64());
     } else if cache_dir.is_some() {
         eprintln!("mncs-stage0-probe backend=none modules={} cache_hits={cache_hits} cache_misses={cache_misses} stage0={}", programs.len(), stage0.as_deref().unwrap_or("cache=off"));
     }
+    let release_programs_after_identities = backend_name.is_some()
+        && std::env::var("MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES").as_deref() == Ok("1");
+    if release_programs_after_identities {
+        let mut record_types_cache = BTreeMap::<String, Value>::new();
+        for line in io::stdin().lock().lines() {
+            let line = line.unwrap();
+            let parse_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "request_json_decode",
+                "request_bytes": line.len()
+            }));
+            let mut deserializer = serde_json::Deserializer::from_str(&line);
+            deserializer.disable_recursion_limit();
+            let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
+            let request_kind = if input.get("execution_status").is_some() {
+                "execution_status"
+            } else if input.get("record_types").is_some() {
+                "record_types"
+            } else {
+                "mncs_function_execution"
+            };
+            let request_module = input
+                .get("target")
+                .and_then(|target| target.get("module"))
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            let request_function = input
+                .get("target")
+                .and_then(|target| target.get("function"))
+                .and_then(Value::as_str)
+                .map(str::to_owned);
+            let request_step_budget = input.get("step_budget").and_then(Value::as_u64);
+            trace_phase(
+                "request_json_decode",
+                parse_started,
+                json!({
+                    "request_kind": request_kind,
+                    "request_bytes": line.len(),
+                    "target_module": request_module,
+                    "target_function": request_function
+                }),
+            );
+            let dispatch_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "request_execution",
+                "request_kind": request_kind,
+                "target_module": request_module,
+                "target_function": request_function,
+                "step_budget": request_step_budget
+            }));
+            let output = if input.get("execution_status").is_some() {
+                json!({
+                    "backend": backend_name,
+                    "modules": backend_sessions.len(),
+                    "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count(),
+                })
+            } else if let Some(module) = input.get("record_types").and_then(Value::as_str) {
+                if let Some(record_types) = record_types_cache.get(module) {
+                    record_types.clone()
+                } else {
+                    let (record_types, function_count) = {
+                        let program = programs
+                            .get(module)
+                            .unwrap_or_else(|| panic!("record_types for unknown module {module}"));
+                        (
+                            serde_json::to_value(&program.record_types).unwrap(),
+                            program.functions.len(),
+                        )
+                    };
+                    if backend_sessions.contains_key(module) {
+                        record_types_cache.insert(module.to_owned(), record_types.clone());
+                        programs.remove(module);
+                        trace_event(json!({
+                            "event": "program_release",
+                            "module": module,
+                            "reason": "backend session is admitted and record identities are retained",
+                            "function_count": function_count
+                        }));
+                    }
+                    record_types
+                }
+            } else {
+                let request: ExecutionRequest = serde_json::from_value(input).unwrap();
+                let session = backend_sessions
+                    .get(&request.target.module)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "program-release profile requires an admitted backend for {}",
+                            request.target.module
+                        )
+                    });
+                json!(session.execute(&request))
+            };
+            trace_phase(
+                "request_execution",
+                dispatch_started,
+                json!({
+                    "request_kind": request_kind,
+                    "target_module": request_module,
+                    "target_function": request_function,
+                    "step_budget": request_step_budget,
+                    "reported_steps": output.get("steps"),
+                    "reported_status": output.get("status"),
+                    "reported_valid": output.get("valid"),
+                    "reported_steps_semantics": match backend_name.as_deref() {
+                        Some("research-bytecode") => "research-bytecode execution budget units",
+                        Some("canonical-vm") => "canonical VM reported steps",
+                        Some("cranelift") => "Cranelift does not report VM instruction steps",
+                        _ => "not an instruction-count metric"
+                    }
+                }),
+            );
+            if telemetry_enabled() {
+                trace_event(json!({
+                    "event": "process_cost_report",
+                    "report": mncs_model::cost_report()
+                }));
+            }
+            let encode_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "response_json_encode",
+                "request_kind": request_kind
+            }));
+            let output_line = serde_json::to_string(&output).unwrap();
+            trace_phase(
+                "response_json_encode",
+                encode_started,
+                json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
+            );
+            let write_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "response_write",
+                "request_kind": request_kind,
+                "response_bytes": output_line.len()
+            }));
+            let stdout = io::stdout();
+            let mut stdout = stdout.lock();
+            writeln!(stdout, "{output_line}").unwrap();
+            trace_phase(
+                "response_write",
+                write_started,
+                json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
+            );
+        }
+        return;
+    }
+    let mut sessions: BTreeMap<String, BodyExecutionSession<'_>> = BTreeMap::new();
     for line in io::stdin().lock().lines() {
         // Local test transport over a pipe: requests carry whole native
         // Functions (deeply nested wire values), so the untrusted-input
@@ -784,6 +1094,11 @@ fn main() {
         // real-module Functions through verify-style requests.
         let line = line.unwrap();
         let parse_started = Instant::now();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "request_json_decode",
+            "request_bytes": line.len()
+        }));
         let mut deserializer = serde_json::Deserializer::from_str(&line);
         deserializer.disable_recursion_limit();
         let input: Value = serde::de::Deserialize::deserialize(&mut deserializer).unwrap();
@@ -824,6 +1139,14 @@ fn main() {
             }),
         );
         let dispatch_started = Instant::now();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "request_execution",
+            "request_kind": request_kind,
+            "target_module": request_module,
+            "target_function": request_function,
+            "step_budget": request_step_budget
+        }));
         let output = if let Some(text) = input.get("oracle").and_then(Value::as_str) {
             serde_json::to_value(mncs_syntax::parse(&envelope(text.to_owned()))).unwrap()
         } else if input.get("execution_status").is_some() {
@@ -833,8 +1156,7 @@ fn main() {
                 "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count(),
             })
         } else if let Some(module) = input.get("record_types").and_then(Value::as_str) {
-            let program = &programs[module];
-            json!(program.record_types)
+            json!(programs[module].record_types)
         } else if let Some(request) = input.get("project_oracle") {
             let root = request["root"].as_str().expect("project root source");
             let mut imported = BTreeMap::new();
@@ -926,9 +1248,15 @@ fn main() {
             let request: ExecutionRequest = serde_json::from_value(input).unwrap();
             if let Some(session) = backend_sessions.get(&request.target.module) {
                 json!(session.execute(&request))
-            } else {
-                let session = &sessions[&request.target.module];
+            } else if let Some(session) = sessions.get(&request.target.module) {
                 json!(session.execute(&request))
+            } else {
+                let module = request.target.module.clone();
+                let program = programs
+                    .get(&module)
+                    .unwrap_or_else(|| panic!("no retained backend or program for {module}"));
+                sessions.insert(module.clone(), BodyExecutionSession::new(program));
+                json!(sessions[&module].execute(&request))
             }
         };
         trace_phase(
@@ -957,6 +1285,11 @@ fn main() {
             }));
         }
         let encode_started = Instant::now();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "response_json_encode",
+            "request_kind": request_kind
+        }));
         let output_line = serde_json::to_string(&output).unwrap();
         trace_phase(
             "response_json_encode",
@@ -964,6 +1297,12 @@ fn main() {
             json!({"request_kind": request_kind, "response_bytes": output_line.len()}),
         );
         let write_started = Instant::now();
+        trace_event(json!({
+            "event": "phase_begin",
+            "phase": "response_write",
+            "request_kind": request_kind,
+            "response_bytes": output_line.len()
+        }));
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
         writeln!(stdout, "{output_line}").unwrap();
@@ -1165,6 +1504,19 @@ mod tests {
         }))
         .unwrap();
         assert!(parse_cache_entry(&unparseable, &backended, Some("cranelift")).is_none());
+        // A completed frontend Program remains reusable when its backend
+        // compile did not produce an artifact.
+        let interrupted_backend = serde_json::to_vec(&serde_json::json!({
+            "identity": backended,
+            "program": program,
+            "artifact": serde_json::Value::Null,
+        }))
+        .unwrap();
+        let (loaded, artifact) =
+            parse_cache_entry(&interrupted_backend, &backended, Some("cranelift"))
+                .expect("frontend-only backend cache hit");
+        assert!(artifact.is_none());
+        assert_eq!(loaded.module, program.module);
     }
 
     #[test]
@@ -1180,6 +1532,17 @@ mod tests {
         let (loaded, artifact) = parse_cache_entry(&entry, &plain, None).expect("hit");
         assert!(artifact.is_none());
         assert_eq!(loaded.module, program.module);
+        let backended = test_toolchain(Some("cranelift"));
+        let frontend_only = serde_json::to_vec(&serde_json::json!({
+            "identity": backended,
+            "program": program,
+            "artifact": serde_json::Value::Null,
+        }))
+        .unwrap();
+        assert!(
+            parse_cache_entry(&frontend_only, &backended, Some("cranelift"))
+                .is_some_and(|(_, artifact)| artifact.is_none())
+        );
         let backended = test_toolchain(Some("cranelift"));
         let artifact = test_artifact();
         assert!(artifact.identity_is_valid());

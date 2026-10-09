@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -253,6 +254,27 @@ def _seed_target_specialization(*, target_only=False):
 
 
 def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
+    campaign_started = time.monotonic_ns()
+    phase_timings_ns = {}
+    transport_failure = None
+    execution = {}
+    response = {}
+    native = None
+    module_rows = []
+    sources = []
+    target_stem = None
+    target_source_index = None
+    identities = {}
+    stage0_oracle = {
+        "status": "UNKNOWN",
+        "reason": "native request and Stage-0 oracle have not completed",
+    }
+    skip_stage0_oracle = os.environ.get("MNCS_PROBE_SKIP_STAGE0_ORACLE", "0") == "1"
+    if (os.environ.get("MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES") == "1"
+            and not skip_stage0_oracle):
+        raise ValueError(
+            "program-release profiling requires MNCS_PROBE_SKIP_STAGE0_ORACLE=1"
+        )
     if target_last:
         _seed_target_specialization(target_only=True)
     lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
@@ -260,70 +282,139 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
         capture_output=True, text=True,
     ).stdout.strip()
+    phase_started = time.monotonic_ns()
+    sources = _load_sources(module_names)
+    phase_timings_ns["source_resolution_and_dependency_selection"] = time.monotonic_ns() - phase_started
+    page_count = sum((len(source) + project.STRIDE_DEFAULT - 1) // project.STRIDE_DEFAULT
+                     for _, _, source in sources)
+    source_identity = hashlib.sha256(b"".join(
+        source_id.encode() + b"\0" + hashlib.sha256(source).digest()
+        for source_id, _, source in sources
+    )).hexdigest()
+    if target_last:
+        if not module_names:
+            raise ValueError("--target-last requires an explicit --modules selection")
+        target_stem = module_names[-1]
+        target_source_index = next(i for i, (source_id, _, _) in enumerate(sources)
+                                   if Path(source_id).stem == target_stem)
+    selection = "all" if not module_names else "-".join(module_names)
+    if target_stem is not None:
+        selection += "-target-" + target_stem
+    artifact_label = os.environ.get("MNCS_PROBE_ARTIFACT_LABEL")
+    if artifact_label and not re.fullmatch(r"[A-Za-z0-9_.-]+", artifact_label):
+        raise ValueError("MNCS_PROBE_ARTIFACT_LABEL must be a simple filename label")
+    artifact_prefix = (
+        f"campaign-{artifact_label}"
+        if artifact_label
+        else f"campaign-{datetime.now(timezone.utc):%Y%m%d}"
+    )
+    artifact = ROOT / ".build" / "campaign-artifacts" / "compiler-facts" / (
+        f"{artifact_prefix}-compiler-module-pipeline-{selection}.json"
+    )
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    previous_trace_path = os.environ.get("MNCS_PROBE_TRACE_PATH")
+    previous_stderr_path = os.environ.get("MNCS_PROBE_STDERR_PATH")
+    previous_mncs_timings = os.environ.get("MNCS_TIMINGS")
+    trace_path = None
+    stderr_path = None
+    if os.environ.get("MNCS_PROBE_TELEMETRY") == "1":
+        suffix = time.time_ns()
+        trace_path = artifact.with_name(f"{artifact.stem}-trace-{suffix}.jsonl").resolve()
+        stderr_path = artifact.with_name(f"{artifact.stem}-stderr-{suffix}.log").resolve()
+        os.environ["MNCS_PROBE_TRACE_PATH"] = str(trace_path)
+        os.environ["MNCS_PROBE_STDERR_PATH"] = str(stderr_path)
+        os.environ["MNCS_TIMINGS"] = "1"
     probe = project.Probe()
     try:
-        execution = probe.send({"execution_status": True})
-        identities = project.identity_map(probe)
-        sources = _load_sources(module_names)
-        request = project.request_value(identities, sources)
-        request["step_budget"] = step_budget
-        target_stem = None
-        target_source_index = None
-        if target_last:
-            if not module_names:
-                raise ValueError("--target-last requires an explicit --modules selection")
-            target_stem = module_names[-1]
-            target_source_index = next(i for i, (source_id, _, _) in enumerate(sources)
-                                       if Path(source_id).stem == target_stem)
-            request["target"] = {"module": project.PROJECT_MODULE, "function": "compile_project_target"}
-            request["arguments"].append(project.integer(target_source_index))
-        response = probe.send(request)
-        page_count = sum((len(source) + project.STRIDE_DEFAULT - 1) // project.STRIDE_DEFAULT for _, _, source in sources)
-        module_rows = []
-        stage0_oracle = {"status": "not-run", "reason": "whole compiler project exceeds the step-counted oracle envelope; focused Stage-0 differentials are run separately"}
-        native = None
+        phase_started = time.monotonic_ns()
+        try:
+            execution = probe.send({"execution_status": True})
+        except (project.ProbeTimeout, project.ProbeExited) as error:
+            transport_failure = {"stage": "retained_session_admission", **error.observation}
+        phase_timings_ns["retained_session_admission"] = time.monotonic_ns() - phase_started
+
+        if transport_failure is None:
+            phase_started = time.monotonic_ns()
+            try:
+                identities = project.identity_map(probe)
+            except (project.ProbeTimeout, project.ProbeExited) as error:
+                transport_failure = {"stage": "record_type_identity_admission", **error.observation}
+            phase_timings_ns["record_type_identity_admission"] = time.monotonic_ns() - phase_started
+
+        request = None
+        if transport_failure is None:
+            phase_started = time.monotonic_ns()
+            request = project.request_value(identities, sources)
+            request["step_budget"] = step_budget
+            if target_last:
+                request["target"] = {"module": project.PROJECT_MODULE, "function": "compile_project_target"}
+                request["arguments"].append(project.integer(target_source_index))
+            phase_timings_ns["native_request_construction"] = time.monotonic_ns() - phase_started
+            phase_started = time.monotonic_ns()
+            try:
+                response = probe.send(request)
+            except (project.ProbeTimeout, project.ProbeExited) as error:
+                transport_failure = {"stage": "native_compiler_execution", **error.observation}
+            phase_timings_ns["native_request_transport_and_execution"] = time.monotonic_ns() - phase_started
+
         if response.get("status") == "returned" and response.get("returned"):
-            probe.steps.append(response["steps"])
+            if response.get("steps") is not None:
+                probe.steps.append(response["steps"])
+            phase_started = time.monotonic_ns()
             native = project.decode(response["returned"][0])
             for module in project.flist(native["modules"]):
                 source_index = module["source_index"]
                 source = sources[source_index][2]
                 module_rows.append(_module_summary(module, source))
-        else:
-            if response.get("steps") is not None:
-                probe.steps.append(response["steps"])
-        if module_names and response.get("status") in {
-            "returned", "budget_exhausted", "step_limit_exceeded",
-        }:
-            # Keep the independently authoritative Stage-0 oracle result even
-            # when native execution reaches its explicit VM step envelope.
-            root_stem = module_names[-1]
-            root_index = next(i for i, (source_id, _, _) in enumerate(sources)
-                              if Path(source_id).stem == root_stem)
-            module_map = {
-                _module_name_from_source(source): source.decode()
-                for i, (_, _, source) in enumerate(sources) if i != root_index
-            }
-            oracle = probe.send({"project_oracle": {
-                "root": sources[root_index][2].decode(),
-                "modules": module_map,
-            }})
+            phase_timings_ns["response_decode_and_summary"] = time.monotonic_ns() - phase_started
+        elif response.get("steps") is not None:
+            probe.steps.append(response["steps"])
+
+        if (transport_failure is None and module_names and not skip_stage0_oracle and response.get("status") in
+                {"returned", "budget_exhausted", "step_limit_exceeded"}):
+            phase_started = time.monotonic_ns()
+            try:
+                root_stem = module_names[-1]
+                root_index = next(i for i, (source_id, _, _) in enumerate(sources)
+                                  if Path(source_id).stem == root_stem)
+                module_map = {
+                    _module_name_from_source(source): source.decode()
+                    for i, (_, _, source) in enumerate(sources) if i != root_index
+                }
+                oracle = probe.send({"project_oracle": {
+                    "root": sources[root_index][2].decode(),
+                    "modules": module_map,
+                }})
+                stage0_oracle = {
+                    "status": ("valid" if oracle.get("valid") else
+                               "invalid" if "valid" in oracle else
+                               oracle.get("status", "not-returned")),
+                    "valid": oracle.get("valid"),
+                    "diagnostics": oracle.get("diagnostics"),
+                    "linked_functions": len(oracle.get("program", {}).get("functions", [])) if oracle.get("program") else 0,
+                    "ssa_functions": len(oracle.get("ssa", {}).get("functions", [])) if oracle.get("ssa") else 0,
+                }
+            except (project.ProbeTimeout, project.ProbeExited) as error:
+                transport_failure = {"stage": "stage0_project_oracle", **error.observation}
+                stage0_oracle = {"status": "UNKNOWN", "reason": str(error)}
+            phase_timings_ns["stage0_oracle"] = time.monotonic_ns() - phase_started
+        elif transport_failure is None and module_names and skip_stage0_oracle:
             stage0_oracle = {
-                "status": ("valid" if oracle.get("valid") else
-                           "invalid" if "valid" in oracle else
-                           oracle.get("status", "not-returned")),
-                "valid": oracle.get("valid"),
-                "diagnostics": oracle.get("diagnostics"),
-                "linked_functions": len(oracle.get("program", {}).get("functions", [])) if oracle.get("program") else 0,
-                "ssa_functions": len(oracle.get("ssa", {}).get("functions", [])) if oracle.get("ssa") else 0,
+                "status": "not-run",
+                "reason": "skipped for bounded native execution profiling; this run makes no Stage-0 differential claim",
             }
-        elif module_names:
-            stage0_oracle = {"status": "not-run", "reason": "native request was rejected before project execution"}
+        elif transport_failure is None and module_names:
+            stage0_oracle = {
+                "status": "not-run",
+                "reason": "native request was rejected before project execution",
+            }
+
         report = {
             "schema_version": 1,
             "kind": "compiler-module-pipeline-frontier",
             "observed_at": datetime.now(timezone.utc).isoformat(),
             "compiler_head": head,
+            "compiler_identity_role": "tested candidate head; delivered main identity is recorded separately in Git state",
             "compiler_branch": subprocess.run(
                 ["git", "branch", "--show-current"], cwd=ROOT, check=True,
                 capture_output=True, text=True,
@@ -337,46 +428,115 @@ def run(module_names=None, target_last=False, step_budget=DEFAULT_STEP_BUDGET):
             "compiler_source_count": len(sources),
             "input_total_page_count_at_stride_1024": page_count,
             "input_page_bound": 1024,
-            "compiler_source_sha256": hashlib.sha256(b"".join(
-                source_id.encode() + b"\0" + hashlib.sha256(source).digest()
-                for source_id, _, source in sources
-            )).hexdigest(),
-            "execution_backend": execution["backend"],
+            "compiler_source_sha256": source_identity,
+            "compiler_source_identity_kind": "sha256 of selected compiler module ids and bytes",
+            "execution_backend_requested": os.environ.get("MNCS_PROBE_BACKEND"),
+            "execution_backend": execution.get("backend"),
+            "execution_backend_admitted": execution.get("backend"),
+            "reference_execution_session_preparation": "lazy_on_demand",
+            "program_release_after_identities": (
+                os.environ.get("MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES") == "1"
+            ),
+            "target_input_modules": [Path(source_id).stem for source_id, _, _ in sources],
+            "stage0_admission_source_modules": os.environ.get("MNCS_PROBE_MODULES"),
             "execution_modules_requested": os.environ.get("MNCS_PROBE_EXECUTION_MODULES"),
             "generic_seed_requests": json.loads(os.environ.get("MNCS_PROBE_GENERIC_SEEDS", "[]")),
-            "retained_sessions": execution["retained_sessions"],
+            "retained_sessions": execution.get("retained_sessions"),
             "native_request_status": response.get("status"),
             "native_failure": response.get("failure"),
+            "native_transport_outcome": (transport_failure.get("status")
+                                         if transport_failure else "RESPONSE_RECEIVED"),
+            "transport_failure": transport_failure,
             "native_project_valid": native["valid"] if native else None,
             "native_project_ssa_valid": native["value_ssa_valid"] if native else None,
             "module_count": len(module_rows),
             "modules": module_rows,
             "diagnostics": project.flist(native["diagnostics"]) if native else [],
             "stage0_oracle": stage0_oracle,
+            "stage0_oracle_skipped": skip_stage0_oracle,
             "requests": probe.requests,
+            "request_attempts": len(probe.request_observations),
+            "request_observations": probe.request_observations,
             "native_execution_steps_total": sum(probe.steps),
             "result_sha256": probe.digest.hexdigest(),
+            "phase_timings_ns": phase_timings_ns,
+            "campaign_elapsed_ns_before_close": time.monotonic_ns() - campaign_started,
+            "probe_spawn_elapsed_ns": sum(
+                getattr(proc, "_mncs_spawn_elapsed_ns", 0) for proc in probe._procs.values()
+            ),
+            "resource_telemetry_enabled": probe._telemetry,
+            "request_timeout_s": probe._request_timeout_s,
+            "address_space_limit_bytes": probe._address_space_limit_bytes,
+            "process_observations": probe.process_observations,
         }
-        selection = "all" if not module_names else "-".join(module_names)
-        if target_stem is not None:
-            selection += "-target-" + target_stem
-        artifact_label = os.environ.get("MNCS_PROBE_ARTIFACT_LABEL")
-        if artifact_label and not re.fullmatch(r"[A-Za-z0-9_.-]+", artifact_label):
-            raise ValueError("MNCS_PROBE_ARTIFACT_LABEL must be a simple filename label")
-        artifact_prefix = (
-            f"campaign-{artifact_label}"
-            if artifact_label
-            else f"campaign-{datetime.now(timezone.utc):%Y%m%d}"
-        )
-        artifact = ROOT / ".build" / "campaign-artifacts" / "compiler-facts" / (
-            f"{artifact_prefix}-compiler-module-pipeline-{selection}.json"
-        )
-        artifact.parent.mkdir(parents=True, exist_ok=True)
-        artifact.write_text(json.dumps(report, indent=2) + "\n")
         report["evidence_artifact"] = str(artifact.relative_to(ROOT))
-        return report
     finally:
-        probe.close()
+        try:
+            probe.close()
+        except AssertionError as error:
+            if "report" in locals():
+                report["probe_close_error"] = str(error)
+        if previous_trace_path is None:
+            os.environ.pop("MNCS_PROBE_TRACE_PATH", None)
+        else:
+            os.environ["MNCS_PROBE_TRACE_PATH"] = previous_trace_path
+        if previous_stderr_path is None:
+            os.environ.pop("MNCS_PROBE_STDERR_PATH", None)
+        else:
+            os.environ["MNCS_PROBE_STDERR_PATH"] = previous_stderr_path
+        if previous_mncs_timings is None:
+            os.environ.pop("MNCS_TIMINGS", None)
+        else:
+            os.environ["MNCS_TIMINGS"] = previous_mncs_timings
+    if "report" in locals():
+        report["process_observations"] = probe.process_observations
+        report["campaign_elapsed_ns"] = time.monotonic_ns() - campaign_started
+        if trace_path is not None:
+            trace_events = []
+            try:
+                trace_events = [json.loads(line) for line in trace_path.read_text().splitlines() if line]
+                report["probe_internal_trace"] = {
+                    "status": "OBSERVED",
+                    "path": str(trace_path.relative_to(ROOT)),
+                    "sha256": hashlib.sha256(trace_path.read_bytes()).hexdigest(),
+                    "event_count": len(trace_events),
+                    "events": trace_events,
+                }
+            except OSError as error:
+                report["probe_internal_trace"] = {
+                    "status": "UNKNOWN",
+                    "path": str(trace_path.relative_to(ROOT)),
+                    "reason": type(error).__name__,
+                }
+        else:
+            report["probe_internal_trace"] = {"status": "UNKNOWN", "reason": "MNCS_PROBE_TELEMETRY is disabled"}
+        if stderr_path is not None:
+            try:
+                stderr_bytes = stderr_path.read_bytes()
+                stderr_lines = stderr_bytes.decode(errors="replace").splitlines()
+                report["probe_stderr"] = {
+                    "status": "OBSERVED",
+                    "path": str(stderr_path.relative_to(ROOT)),
+                    "sha256": hashlib.sha256(stderr_bytes).hexdigest(),
+                    "bytes": len(stderr_bytes),
+                    "mncs_timings": [line for line in stderr_lines if line.startswith("mncs-timing ")],
+                    "tail": stderr_lines[-128:],
+                }
+            except OSError as error:
+                report["probe_stderr"] = {
+                    "status": "UNKNOWN",
+                    "path": str(stderr_path.relative_to(ROOT)),
+                    "reason": type(error).__name__,
+                }
+        else:
+            report["probe_stderr"] = {"status": "UNKNOWN", "reason": "MNCS_PROBE_TELEMETRY is disabled"}
+        serialization_started = time.monotonic_ns()
+        serialized_report = json.dumps(report, indent=2) + "\n"
+        report["phase_timings_ns"]["result_serialization"] = time.monotonic_ns() - serialization_started
+        # Include serialization cost in the persisted report. Its value is
+        # measured immediately before the final encoding/write pass.
+        artifact.write_text(json.dumps(report, indent=2) + "\n")
+        return report
 
 
 if __name__ == "__main__":

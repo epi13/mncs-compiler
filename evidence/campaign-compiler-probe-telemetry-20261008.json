@@ -1,0 +1,267 @@
+{
+  "schema_version": "mncs.compiler.execution-probe-telemetry/1",
+  "kind": "real-flow execution cost and termination evidence",
+  "observed_at": "2026-10-09T01:11:58.456432+00:00",
+  "compiler_identity": {
+    "candidate_git_head": "386e618218afbf2d06e2d0daa03e0836f9e1c997",
+    "candidate_branch": "campaign/probe-telemetry-20261008",
+    "source_content_sha256": "1f09ee520a8d277f55c524e9b31c9a16553348cd82ec351dcf365c8eeaa29abf",
+    "source_content_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "flow_source_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+    "delivered_main_at_campaign_entry": "386e618218afbf2d06e2d0daa03e0836f9e1c997"
+  },
+  "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+  "target": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_source_index": 1,
+    "input_pages": 894,
+    "page_width": 1024,
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "execution_modules": "mncs.compiler.project.v1",
+    "generic_seed_requests": [
+      {
+        "module": "mncs.compiler.project.v1",
+        "function": "compile_project_target",
+        "type_arguments": [
+          {
+            "kind": "nat",
+            "value": 1024
+          },
+          {
+            "kind": "nat",
+            "value": 1024
+          }
+        ]
+      }
+    ],
+    "step_budget": 8000000,
+    "backend_requested": "cranelift",
+    "backend_admitted": "cranelift",
+    "retained_sessions": 1,
+    "stage0_oracle_skipped_for_this_probe": true,
+    "prior_stage0_project_oracle": {
+      "stage0_revision": "1513bdf62bbcf4d366238dba1d8f2396b2e94128",
+      "valid": true,
+      "diagnostics": 0,
+      "linked_functions": 1324,
+      "ssa_functions": 376,
+      "evidence": "evidence/SELF-HOST-MATRIX.json#frontier_probes[real-flow-module-pipeline-frontier]"
+    }
+  },
+  "cold_frontend_baseline": {
+    "status": "TIMEOUT",
+    "wait_seconds": 300.001,
+    "child_cpu_seconds": 297.0,
+    "frontend_elapsed_seconds": 159.861,
+    "frontend_program_functions": 3100,
+    "program_cache_raw_bytes": 150090737,
+    "program_cache_gzip_bytes": 5225303,
+    "outcome": "TIMEOUT during retained-session admission; no compiler semantic request result",
+    "stage0_compiler_phase_timings_ms": {
+      "parse": 1194,
+      "elaboration": 111970,
+      "compiler-semantic": 1668,
+      "compiler-validation": 2637,
+      "ir-prelude": 38814,
+      "ir-functions": 101916,
+      "ir-total": 105416,
+      "compiler-hir": 109820,
+      "ssa-validate": 4195,
+      "ssa-ir-reused": 4195,
+      "ssa-functions": 5006,
+      "ssa-total": 14769,
+      "compiler-ssa": 125912
+    }
+  },
+  "backend_artifact_cache": {
+    "backend_compile_elapsed_seconds": 198.629,
+    "backend_artifact_payload_bytes": 404487441,
+    "artifact_cache_raw_bytes": 987506539,
+    "artifact_cache_gzip_bytes": 42830228,
+    "artifact_cache_encode_seconds": 1.618,
+    "artifact_cache_gzip_seconds": 11.169,
+    "warm_decode_seconds": 10.352,
+    "warm_artifact_reused": true,
+    "warm_backend_compile_count": 0,
+    "warm_canonical_hash_count_after_session_admission": 7492,
+    "warm_semantic_validation_count_after_session_admission": 0,
+    "program_released_after_identity_admission": true,
+    "program_function_count_released": 3100,
+    "interpretation": "Frontend and backend artifacts are reusable and identity-checked; cache admission success is distinct from compiler target success.",
+    "stage0_compiler_backend_phase_timings_ms": {
+      "compiler-semantic": 1406,
+      "compiler-validation": 2001,
+      "ir-prelude": 34540,
+      "ir-functions": 95856,
+      "ir-total": 99101,
+      "compiler-hir": 102663,
+      "ssa-validate": 3822,
+      "ssa-ir-reused": 3822,
+      "ssa-functions": 4563,
+      "ssa-total": 11980,
+      "compiler-ssa": 115868,
+      "compiler-backend": 182868,
+      "compiler-bundle-seal": 182991,
+      "compiler-bundle-validate": 183185,
+      "compiler-total": 190613
+    }
+  },
+  "target_execution_address_space_comparison": {
+    "six_gib_cap": {
+      "status": "RESOURCE_EXHAUSTED",
+      "return_code": -6,
+      "elapsed_seconds": 62.336,
+      "child_cpu_seconds": 43.35,
+      "peak_rss_bytes": 6283780096,
+      "peak_fd_count": 4,
+      "peak_threads": 2,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 4096,
+      "sample_count": 125,
+      "sample_overhead_ns": 36342120,
+      "classification_reason": "allocator reported a failed memory allocation",
+      "resource_limits": {
+        "status": "OBSERVED",
+        "values": {
+          "Max cpu time": "unlimited unlimited seconds",
+          "Max resident set": "unlimited unlimited bytes",
+          "Max open files": "524288 524288 files",
+          "Max address space": "6442450944 6442450944 bytes"
+        }
+      },
+      "cgroup_scope": {
+        "memory_max": "max",
+        "oom_kill_before": 4,
+        "oom_kill_after": 4,
+        "oom_before": 0,
+        "oom_after": 0,
+        "attribution": "cgroup scope, not child-specific"
+      }
+    },
+    "six_gib_cap_with_program_release": {
+      "status": "RESOURCE_EXHAUSTED",
+      "return_code": -6,
+      "elapsed_seconds": 59.759,
+      "child_cpu_seconds": 42.04,
+      "peak_rss_bytes": 6309482496,
+      "peak_fd_count": 4,
+      "peak_threads": 2,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 4096,
+      "sample_count": 120,
+      "sample_overhead_ns": 33266511,
+      "classification_reason": "allocator reported a failed memory allocation",
+      "resource_limits": {
+        "status": "OBSERVED",
+        "values": {
+          "Max cpu time": "unlimited unlimited seconds",
+          "Max resident set": "unlimited unlimited bytes",
+          "Max open files": "524288 524288 files",
+          "Max address space": "6442450944 6442450944 bytes"
+        }
+      },
+      "cgroup_scope": {
+        "memory_max": "max",
+        "oom_kill_before": 4,
+        "oom_kill_after": 4,
+        "oom_before": 0,
+        "oom_after": 0,
+        "attribution": "cgroup scope, not child-specific"
+      }
+    },
+    "eight_gib_cap_with_program_release": {
+      "status": "RESOURCE_EXHAUSTED",
+      "return_code": -6,
+      "elapsed_seconds": 75.861,
+      "child_cpu_seconds": 44.57,
+      "peak_rss_bytes": 8456445952,
+      "peak_fd_count": 4,
+      "peak_threads": 2,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 4096,
+      "sample_count": 152,
+      "sample_overhead_ns": 43645367,
+      "classification_reason": "allocator reported a failed memory allocation",
+      "resource_limits": {
+        "status": "OBSERVED",
+        "values": {
+          "Max cpu time": "unlimited unlimited seconds",
+          "Max resident set": "unlimited unlimited bytes",
+          "Max open files": "524288 524288 files",
+          "Max address space": "8589934592 8589934592 bytes"
+        }
+      },
+      "cgroup_scope": {
+        "memory_max": "max",
+        "oom_kill_before": 4,
+        "oom_kill_after": 4,
+        "oom_before": 0,
+        "oom_after": 0,
+        "attribution": "cgroup scope, not child-specific"
+      }
+    },
+    "allocator_stderr": [
+      "memory allocation of 32768 bytes failed"
+    ],
+    "semantic_result": "UNKNOWN; no returned native project result",
+    "classification": "RESOURCE_EXHAUSTED based on explicit allocator failure; cgroup memory limit is unlimited and cgroup OOM counters did not increase; SIGABRT alone is not the basis for classification."
+  },
+  "phase_measurement_seconds": {
+    "warm_source_resolution_and_dependency_selection": 0.001,
+    "warm_retained_session_admission": 48.143,
+    "warm_record_identity_admission": 0.063,
+    "warm_native_request_construction": 0.679,
+    "warm_native_request_transport_and_execution": 76.6
+  },
+  "raw_measurement_artifact": {
+    "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-8gib-20261008-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+    "sha256": "c36a8e3ac27ed4c4564f2372f2441e4e3cc2455340396fa79fac6e210527cf20",
+    "trace": {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-8gib-20261008-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791508192969265872.jsonl",
+      "sha256": "ba7df0e041f0a6cb291098fd411f451047767de1a34ba584911039ae276be950",
+      "event_count": 34
+    },
+    "stderr": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-8gib-20261008-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791508192969265872.log"
+  },
+  "scope_note": "The resource profile measured the actual Stage-0 probe child (PID and process start ticks are in the raw artifact). Cranelift does not report VM instruction steps. These measurements do not establish a native semantic rejection, OOM kill, or Stage-1 executable.",
+  "redundant_reference_session_work": {
+    "before_lazy_reference_session": {
+      "canonical_hash_count_after_admission": 2253673,
+      "semantic_validation_count_after_admission": 6,
+      "source_artifact": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-stream-20261008-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791507071885027328.jsonl"
+    },
+    "after_lazy_or_release_profile": {
+      "canonical_hash_count_after_admission": 7492,
+      "semantic_validation_count_after_admission": 0,
+      "source_artifact": ".build/campaign-artifacts/compiler-facts/campaign-flow-cache-8gib-20261008-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791508192969265872.jsonl"
+    },
+    "scope": "Observed before the target request, after retained Cranelift session admission. The warm run did not construct an unused reference BodyExecutionSession."
+  },
+  "measurement_instrumentation": {
+    "sample_period_ms": 500,
+    "resource_summary_sample_overhead_ns": 43645367,
+    "stage0_frontend_event": {
+      "duration_ms": 159860.739715,
+      "program_function_count": 3100
+    },
+    "backend_compile_event": {
+      "duration_ms": 198629.190124,
+      "artifact_payload_bytes": 404487441
+    }
+  }
+}

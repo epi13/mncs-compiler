@@ -17,11 +17,18 @@ import hashlib
 import copy
 import json
 import os
+import selectors
+import signal
 from pathlib import Path
 from datetime import datetime, timezone
 import subprocess
 import tempfile
 import time
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - Windows transport probes remain unbounded.
+    resource = None
 
 ROOT = Path(__file__).resolve().parents[1]
 CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", datetime.now(timezone.utc).strftime("%Y%m%d"))
@@ -58,6 +65,24 @@ def integer(n):
 
 def pages_value(chunks):
     return {"sequence": {"values": [byte_sequence(chunk) for chunk in chunks]}}
+
+
+def classify_probe_exit(return_code, stderr_tail=b""):
+    """Classify child exits without inferring causes from a signal alone."""
+    tail = stderr_tail.lower()
+    if (return_code == -signal.SIGABRT
+            and b"memory allocation" in tail
+            and b" failed" in tail):
+        return "RESOURCE_EXHAUSTED", "allocator reported a failed memory allocation"
+    if return_code in (-signal.SIGINT, -signal.SIGTERM):
+        return "INTERRUPTED", f"child terminated by signal {-return_code}"
+    if return_code == -signal.SIGKILL:
+        return "UNKNOWN", "child received SIGKILL; the cause is not established"
+    if return_code is not None and return_code > 0:
+        return "FAILURE", f"child exited with status {return_code} before a response"
+    if return_code is not None and return_code < 0:
+        return "UNKNOWN", f"child terminated by signal {-return_code}; the cause is not established"
+    return "UNKNOWN", "child exited without a protocol response"
 
 
 def chunk(data, stride):
@@ -139,6 +164,24 @@ class Probe:
             and SSA_MODULE in configured
         )
         self._execution_modules = configured
+        self._telemetry = os.environ.get("MNCS_PROBE_TELEMETRY", "0") == "1"
+        try:
+            self._request_timeout_s = float(os.environ.get("MNCS_PROBE_REQUEST_TIMEOUT_S", "0"))
+        except ValueError as error:
+            raise ValueError("MNCS_PROBE_REQUEST_TIMEOUT_S must be a positive number") from error
+        if self._request_timeout_s < 0:
+            raise ValueError("MNCS_PROBE_REQUEST_TIMEOUT_S must be a positive number")
+        try:
+            self._address_space_limit_bytes = int(os.environ.get("MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES", "0"))
+        except ValueError as error:
+            raise ValueError("MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES must be a positive integer") from error
+        if self._address_space_limit_bytes < 0:
+            raise ValueError("MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES must be a positive integer")
+        self.request_observations = []
+        self.process_observations = {}
+        self._stdout_buffers = {}
+        self._timed_out_pids = set()
+        self._spawn_elapsed_ns = 0
         if self._split:
             project_env = dict(base)
             project_env["MNCS_PROBE_EXECUTION_MODULES"] = PROJECT_MODULE
@@ -162,13 +205,256 @@ class Probe:
 
     @staticmethod
     def _spawn(env):
-        return subprocess.Popen(
-            [env.get("MNCS_PROBE_BIN", str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            text=True,
-            env=env,
-        )
+        started = time.monotonic_ns()
+        command = [env.get("MNCS_PROBE_BIN", str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))]
+        kwargs = {
+            "stdin": subprocess.PIPE,
+            "stdout": subprocess.PIPE,
+            "text": False,
+            "start_new_session": (os.name == "posix"),
+            "env": env,
+        }
+        address_space_limit = int(env.get("MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES", "0"))
+        if address_space_limit and os.name == "posix" and resource is not None:
+            def apply_child_limit():
+                _, hard_limit = resource.getrlimit(resource.RLIMIT_AS)
+                effective_limit = (
+                    min(address_space_limit, hard_limit)
+                    if hard_limit != resource.RLIM_INFINITY
+                    else address_space_limit
+                )
+                resource.setrlimit(resource.RLIMIT_AS, (effective_limit, effective_limit))
+            kwargs["preexec_fn"] = apply_child_limit
+        stderr_path = env.get("MNCS_PROBE_STDERR_PATH")
+        if stderr_path:
+            with open(stderr_path, "ab", buffering=0) as stderr_file:
+                proc = subprocess.Popen(command, stderr=stderr_file, **kwargs)
+        else:
+            proc = subprocess.Popen(command, **kwargs)
+        proc._mncs_stderr_path = stderr_path
+        proc._mncs_spawn_elapsed_ns = time.monotonic_ns() - started
+        return proc
+
+    @staticmethod
+    def _proc_snapshot(pid):
+        """Read low-rate Linux child observations; unavailable fields stay UNKNOWN."""
+        snapshot = {
+            "status": "UNKNOWN",
+            "cpu_time_ns": None,
+            "rss_bytes": None,
+            "rss_high_water_bytes": None,
+            "fd_count": None,
+            "io_read_bytes": None,
+            "io_write_bytes": None,
+            "threads": None,
+            "process_start_ticks": None,
+        }
+        if not Path("/proc").is_dir():
+            snapshot["reason"] = "Linux /proc is unavailable"
+            return snapshot
+        proc_root = Path("/proc") / str(pid)
+        try:
+            stat = (proc_root / "stat").read_text()
+            # comm is parenthesized and may contain spaces or parentheses.
+            fields = stat[stat.rfind(")") + 2:].split()
+            ticks = os.sysconf("SC_CLK_TCK")
+            snapshot["cpu_time_ns"] = (int(fields[11]) + int(fields[12])) * 1_000_000_000 // ticks
+            snapshot["process_start_ticks"] = int(fields[19])
+            status = {}
+            for line in (proc_root / "status").read_text().splitlines():
+                key, _, value = line.partition(":")
+                if key in {"VmRSS", "VmHWM", "Threads"}:
+                    status[key] = value.strip().split()[0]
+            snapshot["rss_bytes"] = int(status["VmRSS"]) * 1024 if "VmRSS" in status else None
+            snapshot["rss_high_water_bytes"] = int(status["VmHWM"]) * 1024 if "VmHWM" in status else None
+            snapshot["threads"] = int(status["Threads"]) if "Threads" in status else None
+            snapshot["fd_count"] = len(list((proc_root / "fd").iterdir()))
+            io = {}
+            for line in (proc_root / "io").read_text().splitlines():
+                key, _, value = line.partition(":")
+                io[key] = value.strip()
+            snapshot["io_read_bytes"] = int(io["read_bytes"]) if "read_bytes" in io else None
+            snapshot["io_write_bytes"] = int(io["write_bytes"]) if "write_bytes" in io else None
+            snapshot["status"] = "OBSERVED"
+        except (FileNotFoundError, PermissionError, ProcessLookupError) as error:
+            snapshot["reason"] = f"process observation unavailable: {type(error).__name__}"
+        except (OSError, ValueError, IndexError, KeyError) as error:
+            snapshot["reason"] = f"process observation incomplete: {type(error).__name__}"
+        return snapshot
+
+    @staticmethod
+    def _cgroup_snapshot(pid):
+        """Capture cgroup v2 context and mark its attribution as scope-level."""
+        result = {"status": "UNKNOWN", "path": None, "attribution": "cgroup scope, not child-specific"}
+        if not Path("/proc").is_dir():
+            result["reason"] = "Linux /proc is unavailable"
+            return result
+        try:
+            rows = (Path("/proc") / str(pid) / "cgroup").read_text().splitlines()
+            unified = next((row.split(":", 2)[2] for row in rows if row.startswith("0::")), None)
+            if unified is None:
+                result["reason"] = "unified cgroup v2 path unavailable"
+                return result
+            root = Path("/sys/fs/cgroup") / unified.lstrip("/")
+            result.update({"status": "OBSERVED", "path": unified})
+            for name in ("memory.current", "memory.max", "cpu.max", "cpu.stat", "memory.events", "memory.pressure", "cpu.pressure", "io.pressure"):
+                try:
+                    result[name.replace(".", "_")] = (root / name).read_text().strip()
+                except (FileNotFoundError, PermissionError, OSError):
+                    result[name.replace(".", "_")] = "UNKNOWN"
+            host_pressure = {}
+            for name in ("cpu", "memory", "io"):
+                try:
+                    host_pressure[name] = Path(f"/proc/pressure/{name}").read_text().strip()
+                except (FileNotFoundError, PermissionError, OSError):
+                    host_pressure[name] = "UNKNOWN"
+            result["host_pressure"] = host_pressure
+        except (FileNotFoundError, PermissionError, OSError, IndexError) as error:
+            result["reason"] = f"cgroup observation unavailable: {type(error).__name__}"
+        return result
+
+    @classmethod
+    def _process_identity(cls, proc):
+        identity = {"pid": proc.pid, "start_ticks": None, "executable": None, "cmdline": None}
+        try:
+            snapshot = cls._proc_snapshot(proc.pid)
+            identity["start_ticks"] = snapshot.get("process_start_ticks")
+            identity["executable"] = os.readlink(f"/proc/{proc.pid}/exe")
+            identity["cmdline"] = [part.decode(errors="replace") for part in
+                                   Path(f"/proc/{proc.pid}/cmdline").read_bytes().split(b"\0") if part]
+        except (FileNotFoundError, PermissionError, OSError):
+            pass
+        return identity
+
+    @staticmethod
+    def _resource_limits(pid):
+        limits = {}
+        try:
+            for line in Path(f"/proc/{pid}/limits").read_text().splitlines()[1:]:
+                label, _, values = line.partition("  ")
+                if label.strip() in {"Max cpu time", "Max address space", "Max resident set", "Max open files"}:
+                    limits[label.strip()] = " ".join(values.split())
+            return {"status": "OBSERVED", "values": limits}
+        except (FileNotFoundError, PermissionError, OSError) as error:
+            return {"status": "UNKNOWN", "reason": type(error).__name__}
+
+    @staticmethod
+    def _request_kind(request):
+        if isinstance(request, dict) and "execution_status" in request:
+            return "retained_session_admission"
+        if isinstance(request, dict) and "project_oracle" in request:
+            return "stage0_project_oracle"
+        if isinstance(request, dict) and "record_types" in request:
+            return "record_type_identity_admission"
+        target = request.get("target", {}) if isinstance(request, dict) else {}
+        if isinstance(target, dict):
+            return f"{target.get('module', 'unknown')}::{target.get('function', 'unknown')}"
+        return "probe_request"
+
+    def _kill_timed_out(self, proc):
+        self._timed_out_pids.add(proc.pid)
+        try:
+            if os.name == "posix":
+                os.killpg(proc.pid, signal.SIGTERM)
+            else:
+                proc.terminate()
+        except ProcessLookupError:
+            pass
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                if os.name == "posix":
+                    os.killpg(proc.pid, signal.SIGKILL)
+                else:
+                    proc.kill()
+            except ProcessLookupError:
+                pass
+            proc.wait(timeout=5)
+
+    @staticmethod
+    def _stderr_tail(proc, limit_bytes=8192):
+        path = getattr(proc, "_mncs_stderr_path", None) or os.environ.get("MNCS_PROBE_STDERR_PATH")
+        if not path:
+            return b""
+        try:
+            with open(path, "rb") as stderr_file:
+                stderr_file.seek(0, os.SEEK_END)
+                stderr_file.seek(max(0, stderr_file.tell() - limit_bytes))
+                return stderr_file.read(limit_bytes)
+        except OSError:
+            return b""
+
+    def _readline(self, proc, timeout_s, observation):
+        buffer = self._stdout_buffers.setdefault(proc.pid, bytearray())
+        started = time.monotonic_ns()
+        deadline = started + int(timeout_s * 1_000_000_000) if timeout_s else None
+        next_sample = started
+        sample_count = 0
+        sample_overhead_ns = 0
+        samples = []
+        selector = selectors.DefaultSelector()
+        selector.register(proc.stdout, selectors.EVENT_READ, "stdout")
+        try:
+            while True:
+                newline = buffer.find(b"\n")
+                if newline >= 0:
+                    line = bytes(buffer[:newline])
+                    del buffer[:newline + 1]
+                    observation["wait_elapsed_ns"] = time.monotonic_ns() - started
+                    observation["sample_count"] = sample_count
+                    observation["sample_overhead_ns"] = sample_overhead_ns
+                    observation["samples"] = samples
+                    if self._telemetry:
+                        observation["final_process"] = self._proc_snapshot(proc.pid)
+                        observation["cgroup_after"] = self._cgroup_snapshot(proc.pid)
+                    observation["return_code_at_response"] = proc.poll()
+                    return line
+                now = time.monotonic_ns()
+                if self._telemetry and now >= next_sample:
+                    sampled_at = time.monotonic_ns()
+                    samples.append(self._proc_snapshot(proc.pid))
+                    sample_overhead_ns += time.monotonic_ns() - sampled_at
+                    sample_count += 1
+                    next_sample = now + 500_000_000
+                if deadline is not None and now >= deadline:
+                    observation["wait_elapsed_ns"] = now - started
+                    observation["sample_count"] = sample_count
+                    observation["sample_overhead_ns"] = sample_overhead_ns
+                    observation["samples"] = samples
+                    observation["cgroup_after"] = self._cgroup_snapshot(proc.pid) if self._telemetry else None
+                    observation["final_process"] = self._proc_snapshot(proc.pid) if self._telemetry else None
+                    self._kill_timed_out(proc)
+                    observation["termination"] = "INTERRUPTED_BY_PROBE_TIMEOUT"
+                    observation["return_code"] = proc.returncode
+                    raise ProbeTimeout(observation)
+                interval = 0.25 if deadline is None else min(0.25, max(0.0, (deadline - now) / 1e9))
+                ready = selector.select(interval)
+                if ready:
+                    block = os.read(proc.stdout.fileno(), 65536)
+                    if not block:
+                        observation["wait_elapsed_ns"] = time.monotonic_ns() - started
+                        observation["sample_count"] = sample_count
+                        observation["sample_overhead_ns"] = sample_overhead_ns
+                        observation["samples"] = samples
+                        observation["final_process"] = self._proc_snapshot(proc.pid) if self._telemetry else None
+                        observation["cgroup_after"] = self._cgroup_snapshot(proc.pid) if self._telemetry else None
+                        observation["termination"] = "CHILD_EXITED_WITHOUT_RESPONSE"
+                        observation["return_code"] = proc.poll()
+                        raise ProbeExited(observation)
+                    buffer.extend(block)
+                if not ready and proc.poll() is not None:
+                    observation["wait_elapsed_ns"] = time.monotonic_ns() - started
+                    observation["sample_count"] = sample_count
+                    observation["sample_overhead_ns"] = sample_overhead_ns
+                    observation["samples"] = samples
+                    observation["final_process"] = self._proc_snapshot(proc.pid) if self._telemetry else None
+                    observation["cgroup_after"] = self._cgroup_snapshot(proc.pid) if self._telemetry else None
+                    observation["termination"] = "CHILD_EXITED_WITHOUT_RESPONSE"
+                    observation["return_code"] = proc.returncode
+                    raise ProbeExited(observation)
+        finally:
+            selector.close()
 
     def _route(self, request):
         if not self._split:
@@ -177,24 +463,6 @@ class Probe:
         if target.get("module") == SSA_MODULE:
             return self._procs[SSA_MODULE]
         return self._procs[PROJECT_MODULE]
-
-    def _status(self):
-        statuses = {}
-        for name, proc in self._procs.items():
-            proc.stdin.write(json.dumps({"execution_status": True}) + "\n")
-            proc.stdin.flush()
-            line = proc.stdout.readline()
-            assert line, f"Stage-0 probe terminated: {proc.poll()}"
-            statuses[name] = json.loads(line)
-        if not self._split:
-            return next(iter(statuses.values()))
-        backends = {status.get("backend") for status in statuses.values()}
-        return {
-            "backend": next(iter(backends)) if len(backends) == 1 else sorted(backends),
-            "modules": sum(status.get("modules", 0) for status in statuses.values()),
-            "retained_sessions": sum(status.get("retained_sessions", 0)
-                                     for status in statuses.values()),
-        }
 
     @staticmethod
     def _digest_payload(result):
@@ -211,20 +479,110 @@ class Probe:
     def send(self, request):
         if isinstance(request, dict) and "execution_status" in request:
             result = self._status()
-            self.last_response = result
             self.digest.update(json.dumps([request, self._digest_payload(result)], sort_keys=True).encode())
             self.requests += 1
             return result
         proc = self._route(request)
-        proc.stdin.write(json.dumps(request) + "\n")
+        return self._send_one(proc, request)
+
+    def _status(self):
+        statuses = {}
+        for name, proc in self._procs.items():
+            response = self._send_one(
+                proc, {"execution_status": True}, record_digest=False, count_request=False)
+            statuses[name] = response
+        if not self._split:
+            return next(iter(statuses.values()))
+        backends = {status.get("backend") for status in statuses.values()}
+        return {
+            "backend": next(iter(backends)) if len(backends) == 1 else sorted(backends),
+            "modules": sum(status.get("modules", 0) for status in statuses.values()),
+            "retained_sessions": sum(status.get("retained_sessions", 0)
+                                     for status in statuses.values()),
+        }
+
+    def _send_one(self, proc, request, *, record_digest=True, count_request=True):
+        kind = self._request_kind(request)
+        observation = {
+            "request_index": self.requests,
+            "kind": kind,
+            "process": self._process_identity(proc) if self._telemetry else {"pid": proc.pid},
+            "status": "UNKNOWN",
+            "request_bytes": None,
+        }
+        if self._telemetry:
+            observation["cgroup_before"] = self._cgroup_snapshot(proc.pid)
+            observation["initial_process"] = self._proc_snapshot(proc.pid)
+            observation["resource_limits"] = self._resource_limits(proc.pid)
+        encode_started = time.monotonic_ns()
+        encoded = json.dumps(request, separators=(",", ":")).encode() + b"\n"
+        observation["request_encode_ns"] = time.monotonic_ns() - encode_started
+        observation["request_bytes"] = len(encoded) - 1
+        write_started = time.monotonic_ns()
+        proc.stdin.write(encoded)
         proc.stdin.flush()
-        line = proc.stdout.readline()
-        assert line, f"Stage-0 probe terminated: {proc.poll()}"
+        observation["request_write_ns"] = time.monotonic_ns() - write_started
+        try:
+            line = self._readline(proc, self._request_timeout_s, observation)
+        except (ProbeTimeout, ProbeExited) as error:
+            if isinstance(error, ProbeTimeout):
+                observation["status"] = "TIMEOUT"
+                observation["classification_reason"] = "request deadline expired"
+            else:
+                status, reason = classify_probe_exit(
+                    error.observation.get("return_code"), self._stderr_tail(proc)
+                )
+                observation["status"] = status
+                observation["classification_reason"] = reason
+            if self._telemetry:
+                self._summarize_resources(observation)
+            self.request_observations.append(observation)
+            self.process_observations[str(proc.pid)] = observation
+            raise
+        parse_started = time.monotonic_ns()
         result = json.loads(line)
+        observation["response_parse_ns"] = time.monotonic_ns() - parse_started
+        digest_started = time.monotonic_ns()
+        if record_digest:
+            self.digest.update(json.dumps([request, self._digest_payload(result)], sort_keys=True).encode())
+        observation["digest_ns"] = time.monotonic_ns() - digest_started
+        observation["status"] = "RESPONSE_RECEIVED"
+        observation["response_status"] = result.get("status") if isinstance(result, dict) else None
+        observation["execution_steps"] = result.get("steps") if isinstance(result, dict) else None
+        if self._telemetry:
+            observation["final_process"] = self._proc_snapshot(proc.pid)
+            observation["cgroup_after"] = self._cgroup_snapshot(proc.pid)
+            self._summarize_resources(observation)
         self.last_response = result
-        self.digest.update(json.dumps([request, self._digest_payload(result)], sort_keys=True).encode())
-        self.requests += 1
+        if count_request:
+            self.requests += 1
+        self.request_observations.append(observation)
+        self.process_observations[str(proc.pid)] = observation
         return result
+
+    @staticmethod
+    def _summarize_resources(observation):
+        snapshots = [observation.get("initial_process", {})]
+        snapshots.extend(observation.get("samples", []))
+        snapshots.append(observation.get("final_process", {}))
+        result = {"sample_count": sum(1 for sample in snapshots if sample.get("status") == "OBSERVED")}
+        for source, target in (("rss_bytes", "peak_rss_bytes"),
+                               ("rss_high_water_bytes", "max_kernel_rss_high_water_bytes"),
+                               ("fd_count", "peak_fd_count"),
+                               ("threads", "peak_threads")):
+            values = [sample[source] for sample in snapshots if sample.get(source) is not None]
+            result[target] = max(values) if values else None
+        first_cpu = next((sample for sample in snapshots if sample.get("cpu_time_ns") is not None), None)
+        last_cpu = next((sample for sample in reversed(snapshots) if sample.get("cpu_time_ns") is not None), None)
+        result["cpu_time_delta_ns"] = (
+            max(0, last_cpu["cpu_time_ns"] - first_cpu["cpu_time_ns"])
+            if first_cpu and last_cpu else None)
+        for key, target in (("io_read_bytes", "io_read_bytes_delta"),
+                            ("io_write_bytes", "io_write_bytes_delta")):
+            first = next((sample for sample in snapshots if sample.get(key) is not None), None)
+            last = next((sample for sample in reversed(snapshots) if sample.get(key) is not None), None)
+            result[target] = max(0, last[key] - first[key]) if first and last else None
+        observation["resource_summary"] = result
 
     def native(self, request):
         result = self.send(request)
@@ -237,7 +595,26 @@ class Probe:
             if proc.poll() is None:
                 proc.stdin.close()
         for proc in self._procs.values():
-            assert proc.wait(timeout=60) == 0
+            return_code = proc.wait(timeout=60)
+            self.process_observations.setdefault(str(proc.pid), {})["close_return_code"] = return_code
+            if return_code != 0 and proc.pid not in self._timed_out_pids:
+                raise AssertionError(f"Stage-0 probe exited with status {return_code}")
+
+
+class ProbeTimeout(TimeoutError):
+    """A bounded execution wait expired; this is operational, not semantic."""
+
+    def __init__(self, observation):
+        super().__init__(f"probe request timed out after {observation.get('wait_elapsed_ns', 0) / 1e9:.3f}s")
+        self.observation = observation
+
+
+class ProbeExited(RuntimeError):
+    """The child exited before producing a complete protocol response."""
+
+    def __init__(self, observation):
+        super().__init__(f"probe child exited without response ({observation.get('return_code')})")
+        self.observation = observation
 
 
 def identity_map(probe):
