@@ -721,6 +721,18 @@ def _body_profile_summaries(
     return module_rows, functions[:25]
 
 
+def _configure_stage0_oracle_skip(
+    env: dict[str, str], requested: bool, *, oracle_required: bool = False
+) -> bool:
+    """Forward the explicit bounded-probe choice to the project probe child."""
+    if oracle_required:
+        env.pop("MNCS_PROBE_SKIP_STAGE0_ORACLE", None)
+        return False
+    if requested:
+        env["MNCS_PROBE_SKIP_STAGE0_ORACLE"] = "1"
+    return env.get("MNCS_PROBE_SKIP_STAGE0_ORACLE", "0") == "1"
+
+
 def run(args: argparse.Namespace) -> dict[str, object]:
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     label = args.label or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
@@ -739,6 +751,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
     env["MNCS_PROBE_STDERR_PATH"] = str(nested_stderr_path)
     env["MNCS_PROBE_ARTIFACT_LABEL"] = f"{label}-{selection}"
     env["MNCS_TIMINGS"] = "1"
+    stage0_oracle_skip_requested = _configure_stage0_oracle_skip(
+        env,
+        args.skip_stage0_oracle,
+        oracle_required=args.oracle_only or args.signature_cache_fixture,
+    )
     if args.runtime_profile:
         env["MNCS_RUNTIME_PROFILE"] = "1"
     command = [sys.executable, str(ROOT / "tools" / "probe_compiler_module_frontier.py"), "--modules", *args.modules]
@@ -891,6 +908,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "target_last": args.target_last,
         "admission_only": args.admission_only,
         "oracle_only": args.oracle_only,
+        "stage0_oracle_skip_requested": stage0_oracle_skip_requested,
         "signature_cache_fixture": args.signature_cache_fixture,
         "step_budget": args.step_budget if args.step_budget is not None else 8_000_000,
         "runtime_profile_enabled": bool(env.get("MNCS_RUNTIME_PROFILE")),
@@ -964,6 +982,10 @@ def main() -> int:
     parser.add_argument("--modules", nargs="+", default=["source", "lexer", "parser", "segment", "decl", "flow"])
     parser.add_argument("--target-last", action="store_true")
     parser.add_argument(
+        "--skip-stage0-oracle", action="store_true",
+        help="skip the follow-on Stage-0 project oracle after a bounded target request; no Stage-0 differential claim is made",
+    )
+    parser.add_argument(
         "--admission-only", action="store_true",
         help="compile and admit the selected backend session, then skip target execution",
     )
@@ -988,6 +1010,8 @@ def main() -> int:
         parser.error("--prepare-program-cache-only requires --backend reference_interpreter")
     if args.prepare_program_cache_only and args.signature_cache_fixture:
         parser.error("--prepare-program-cache-only cannot be combined with --signature-cache-fixture")
+    if args.skip_stage0_oracle and (args.oracle_only or args.signature_cache_fixture):
+        parser.error("--skip-stage0-oracle cannot be combined with --oracle-only or --signature-cache-fixture")
     if args.admission_only and not args.target_last:
         parser.error("--admission-only requires --target-last")
     if args.admission_only and (
