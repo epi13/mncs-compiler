@@ -1,10 +1,11 @@
 {
   "schema_version": 1,
   "kind": "mncs.compiler.schema-page-reuse-campaign-evidence/1",
-  "observed_at": "2026-10-09T07:32:28.810626Z",
+  "observed_at": "2026-10-09T07:50:21.211654Z",
   "identity_ledger": {
     "delivery_base_revision": "45f84477a2f455cedae645045882f7e5c23bbe9a",
-    "tested_candidate_revision": "45f84477a2f455cedae645045882f7e5c23bbe9a plus candidate working-tree source",
+    "tested_candidate_revision": "865f1396b7d8929e834a27f4a5ab3b2266bb49f7",
+    "delivered_main_revision_at_latest_probe": "865f1396b7d8929e834a27f4a5ab3b2266bb49f7",
     "candidate_project_source_sha256": "939e7803121d691cac02b0aab84ffeaeb006e2a5730915033ee8e00612c6d7d9",
     "baseline_project_source_sha256": "de0f3f1adf2afa350360e8e1e94486d41b416aac8f37a77875cb4163c1b4b3b3",
     "candidate_loaded_compiler_closure_identity": "0d99d177e977b4122d0683a65ff0013df73685001b70539e738832984523e530",
@@ -161,6 +162,50 @@
     },
     "comparability": "The baseline cold artifact cache timed out during admission; the candidate had a warm artifact-cache hit and reached MNCS execution. These are different cache states and cannot establish an end-to-end speedup or a baseline/candidate semantic difference.",
     "candidate_program_source_growth_bytes": 2934,
+    "candidate_10g_diagnostic": {
+      "observed_at": "2026-10-09T07:50:21.211654Z",
+      "input_pages": 890,
+      "page_width": 1024,
+      "input_source_identity": "c4fccde6e45fcca97eed7c28aae23de9861e2602c970db01d5c40fc83b5bd6e6",
+      "compiler_program_source_bytes": 1335346,
+      "backend": "cranelift",
+      "artifact_cache_hits": 1,
+      "artifact_cache_misses": 0,
+      "artifact_payload_bytes": 404919220,
+      "step_budget": 8000000,
+      "request_timeout_ns": 120000000000,
+      "address_space_limit_bytes": 10737418240,
+      "status": "RESOURCE_EXHAUSTED",
+      "child_exit_status": -6,
+      "allocator_stderr": "memory allocation of 632 bytes failed",
+      "native_result_status": "UNKNOWN: no compiler response",
+      "stage0_oracle_status": "UNKNOWN: request did not produce a result",
+      "reported_execution_steps": null,
+      "request_bytes": 20495231,
+      "request_wall_ns": 80334149572,
+      "phase_transport_and_execution_wall_ns": 80751761084,
+      "retained_session_admission_wall_ns": 47627820177,
+      "artifact_cache_decode_wall_ns": 10274133509,
+      "retained_session_admission_phase_wall_ns": 30005171867,
+      "request_json_decode_ns": 427847156,
+      "request_encode_ns": 401683986,
+      "request_write_ns": 14324797,
+      "child_cpu_delta_ns": 45630000000,
+      "child_peak_rss_bytes": 10656198656,
+      "child_peak_fds": 4,
+      "child_peak_threads": 2,
+      "resource_sample_count": 161,
+      "resource_sampling_overhead_ns": 65571055,
+      "cgroup_memory_limit": "max",
+      "cgroup_oom_kill_counter": "4 before and after",
+      "live_proc_observation_near_limit": {
+        "elapsed_seconds": 107,
+        "rss_kib": 10406444,
+        "virtual_size_kib": 10485760
+      },
+      "final_process_observation": "UNKNOWN: /proc read returned PermissionError after the request ended; probe close observed child exit status -6.",
+      "interpretation": "A 10 GiB address-space ceiling did not yield a response; the child filled the observed virtual-size limit and allocator failure followed. Cgroup memory was unlimited with no OOM-kill counter increment. This remains RESOURCE_EXHAUSTED, not a semantic rejection; no larger limit was attempted."
+    },
     "classification_limit": "The child exited -6 after allocator failure under the explicitly imposed 8 GiB RLIMIT_AS. The observed cgroup had no memory.max limit and no OOM-kill counter increment. The final child proc sample remains UNKNOWN; do not classify this as a cgroup OOM or semantic rejection."
   },
   "succession": {
@@ -190,6 +235,18 @@
     {
       "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-baseline-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791531028692694678.log",
       "sha256": "579176795703b394113ac4a14888ec6ed093fb41eb4e1e54eda70b24ca46d793"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-10g-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+      "sha256": "65f34e326d74b36a0c3297cdf4a4462836cebae26f2eaca9813f3173ce416327"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-10g-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791532092120057855.jsonl",
+      "sha256": "5a1ef110bf81600855e874916e8274b9d3a56a8fe0154b2f96ea4849c0eaff84"
+    },
+    {
+      "path": ".build/campaign-artifacts/compiler-facts/campaign-schema-pages-flow-10g-20261009-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791532092120057855.log",
+      "sha256": "be29dbe7a75ffdf7b857989871a3524f5d52f58faa39a90dffe73e84f2d51486"
     }
   ]
 }
