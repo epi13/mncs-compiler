@@ -1,0 +1,792 @@
+{
+  "classification": {
+    "cgroup_oom_kill_delta": 0,
+    "probe_runner": "SUCCESS",
+    "resource_cap_mib": 2300,
+    "resource_cap_triggered": false,
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "target_operation": "RESOURCE_EXHAUSTED",
+    "termination": "Stage-0 request exhausted the 500000-step budget during decl.parse_variants specialization call 13; runner returned code 0 with a budget_exhausted response."
+  },
+  "delivery_worktree_verification": {
+    "checks": {
+      "exact_error_span": [
+        106,
+        107
+      ],
+      "full_parse_steps": 48652,
+      "malformed_provider_body_rejected": true,
+      "same_function_signature_and_span": true,
+      "signature_parse_steps": 48655,
+      "stage0_error_span_matches": true,
+      "stage0_project_oracle_error_spans": [
+        [
+          33,
+          41
+        ],
+        [
+          106,
+          107
+        ]
+      ]
+    },
+    "command": "MNCS_PROBE_BIN=<Stage-0 probe at sha256 recorded in experiment> python3 tools/test_decl_provider_body_retention.py",
+    "observed_at": "2026-10-10T07:56:43+00:00",
+    "scope_note": "Focused parser contract only; no result for the 500000-step whole compiler target.",
+    "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "status": "passed"
+  },
+  "evidence_policy": {
+    "performance_result": "bounded repeatable target-time reduction under the measured reference-interpreter workload",
+    "raw_large_measurements": "Raw per-process time series remain in the local campaign artifact directory; compact metrics, exact source identities, measurement digests, and phase-trace digests are retained here. Store artifact publication is currently unavailable because the canonical Store path is on a read-only /home mount in this execution namespace.",
+    "semantic_conformance": "unknown because the target request returned no project result",
+    "stage1_or_stage2_claimed": false
+  },
+  "experiment": {
+    "baseline_source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+    "candidate_base_revision": "7454704f5b25a166bb0fa6737dcd4cc0028f6302",
+    "candidate_decl_source_sha256": "1749477765ea6ca051741295743885e8442f23319768ef278c8c10cda0dd905c",
+    "candidate_source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+    "change": "Replace 89 decl calls to segment.significant_global with direct calls to lexer.significant_global. segment.significant_global is an exact forwarding wrapper to lexer.significant_global; segment remains imported for byte access.",
+    "delivered_main_at_start": "7454704f5b25a166bb0fa6737dcd4cc0028f6302",
+    "probe_binary_sha256": "a93b649aa843b9e9a24f5c88d2b4d5d1e313d2e684cada0b66df384b0b0c51a9",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "stage0_lock_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "tested_candidate_branch": "campaign/decl-significant-direct-repeat-20261010",
+    "tested_candidate_worktree_dirty_during_measurement": true
+  },
+  "focused_contract": {
+    "artifact": "decl-provider-body-retention-contract.json",
+    "artifact_sha256": "b802952b5f56e5bf6b93b794ea0e1f9e58f06ae12a0b94f5e11838a071e4371f",
+    "checks": {
+      "full_body_statement_count": 1,
+      "full_parse_steps": 48652,
+      "full_parser_error_span": [
+        106,
+        107
+      ],
+      "malformed_provider_body_rejected": true,
+      "retained_provider_body_statement_count": 0,
+      "same_function_signature_and_span": true,
+      "signature_parse_steps": 48655,
+      "signature_parser_error_span": [
+        106,
+        107
+      ],
+      "stage0_error_span_matches": true,
+      "stage0_project_oracle_error_spans": [
+        [
+          33,
+          41
+        ],
+        [
+          106,
+          107
+        ]
+      ],
+      "syntax_parse_completed_before_body_discard": true
+    },
+    "status": "passed"
+  },
+  "kind": "declaration-significant-token-direct-dispatch-repeat",
+  "late_interleaved_comparison": {
+    "baseline_actual_child_cpu_seconds_mean": 76.24000000000001,
+    "baseline_actual_child_peak_rss_kib_mean": 1759410,
+    "baseline_target_seconds": {
+      "mean": 75.4177525,
+      "runs": [
+        75.193385,
+        75.64212
+      ]
+    },
+    "baseline_whole_runner_wall_seconds_mean": 78.859,
+    "candidate_actual_child_cpu_seconds_mean": 73.07,
+    "candidate_actual_child_peak_rss_kib_mean": 1758932,
+    "candidate_target_seconds": {
+      "mean": 72.2767525,
+      "runs": [
+        72.11897,
+        72.434535
+      ]
+    },
+    "candidate_whole_runner_wall_seconds_mean": 75.604,
+    "cpu_reduction_percent": 4.157922350472213,
+    "pairwise_target_reduction_percent": [
+      4.088677481403453,
+      4.240474751368693
+    ],
+    "peak_fd_count": 5,
+    "target_execution_reduction_percent": 4.164801914509459,
+    "wall_reduction_percent": 4.127620182858007
+  },
+  "measurements": {
+    "late_interleaved_run_labels": [
+      "decl-repeat-candidate-warm-3-20261010",
+      "decl-repeat-baseline-warm-3-20261010",
+      "decl-repeat-baseline-warm-4-20261010",
+      "decl-repeat-candidate-warm-4-20261010"
+    ],
+    "observed_unprofiled_run_order": [
+      "decl-repeat-baseline-warm-1-20261010",
+      "decl-repeat-baseline-warm-2-20261010",
+      "decl-repeat-candidate-warm-1-20261010",
+      "decl-repeat-candidate-warm-2-20261010",
+      "decl-repeat-candidate-warm-3-20261010",
+      "decl-repeat-baseline-warm-3-20261010",
+      "decl-repeat-baseline-warm-4-20261010",
+      "decl-repeat-candidate-warm-4-20261010"
+    ],
+    "paired_profile_runs": [
+      {
+        "actual_child": {
+          "cpu_seconds": 75.95,
+          "cpu_system_seconds": 0.39,
+          "cpu_user_seconds": 75.56,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180278920,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 7362,
+            "wchar": 151788387,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759200,
+          "peak_rss_kib": 1759200,
+          "pid": 25,
+          "sample_count": 155
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": null,
+        "failure_reason": "execution step budget exhausted",
+        "hot_functions": {
+          "lexer_next_token_global": [
+            {
+              "calls": 515,
+              "exclusive_ns": 33097171371,
+              "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+              "inclusive_ns": 45490013030,
+              "steps": 112116
+            }
+          ],
+          "lexer_scan_chunk_window": [
+            {
+              "calls": 2159,
+              "exclusive_ns": 3857119286,
+              "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+              "inclusive_ns": 3922496812,
+              "steps": 94233
+            }
+          ],
+          "lexer_significant_global": [
+            {
+              "calls": 186,
+              "exclusive_ns": 4887419347,
+              "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82",
+              "inclusive_ns": 50439420052,
+              "steps": 4488
+            }
+          ],
+          "segment_significant_global": [
+            {
+              "calls": 186,
+              "exclusive_ns": 3219679144,
+              "identity": "mncs:0.2:function:mncs.compiler.segment.v1::significant_global__spec_3c0ffe82",
+              "inclusive_ns": 53659099196,
+              "steps": 372
+            }
+          ]
+        },
+        "input_pages_at_stride_1024": 900,
+        "label": "decl-repeat-baseline-profile-20261010",
+        "measurement_sha256": "7066e7d0ace894d3d7527b9d5c16f2859e321975cc0352904e3f4aeda3323b73",
+        "phase_trace_sha256": "79301d44b34f08b3c4a63df6c35a0150c0c1378193c394147035014375c8e714",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759200,
+        "resource_cap_triggered": false,
+        "run_type": "paired_profile",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "steps": 500000,
+        "target_execution_seconds": 75.12413,
+        "version": "baseline",
+        "whole_runner_wall_seconds": 78.606
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 72.98,
+          "cpu_system_seconds": 0.45,
+          "cpu_user_seconds": 72.53,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180268625,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 7326,
+            "wchar": 151783817,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759244,
+          "peak_rss_kib": 1759244,
+          "pid": 25,
+          "sample_count": 150
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": "mncs:0.2:operation:mncs.compiler.decl.v1::parse_variants__spec_3c0ffe82::b2::%24mncs%24call%2413",
+        "failure_reason": "execution step budget exhausted",
+        "hot_functions": {
+          "lexer_next_token_global": [
+            {
+              "calls": 515,
+              "exclusive_ns": 33207991918,
+              "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+              "inclusive_ns": 45612385335,
+              "steps": 112116
+            }
+          ],
+          "lexer_scan_chunk_window": [
+            {
+              "calls": 2159,
+              "exclusive_ns": 3854682152,
+              "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+              "inclusive_ns": 3920039023,
+              "steps": 94233
+            }
+          ],
+          "lexer_significant_global": [
+            {
+              "calls": 186,
+              "exclusive_ns": 4919660350,
+              "identity": "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82",
+              "inclusive_ns": 50594650012,
+              "steps": 4488
+            }
+          ],
+          "segment_significant_global": []
+        },
+        "input_pages_at_stride_1024": 899,
+        "label": "decl-repeat-candidate-profile-20261010",
+        "measurement_sha256": "499afde58abf7129bbc206b7d6572a6f02010cfe2c4b6676c53d263c5fca0cd6",
+        "phase_trace_sha256": "39e7997f1e3e2ab58854c0a74730ba2dcac63aa6289e0ce729205100e2b0fb56",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759244,
+        "resource_cap_triggered": false,
+        "run_type": "paired_profile",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "steps": 500000,
+        "target_execution_seconds": 72.579122,
+        "version": "candidate",
+        "whole_runner_wall_seconds": 76.103
+      }
+    ],
+    "program_cache_fill_runs": [
+      {
+        "actual_compiler_child_cpu_seconds": 163.35,
+        "actual_compiler_child_peak_fds": 5,
+        "actual_compiler_child_peak_rss_kib": 2142232,
+        "measurement_sha256": "7b4b1615b7e4e630f2ded9773d1a003b5b8fc57eda881c0ed625717756e2fa38",
+        "phase_trace_sha256": "9063a43eb6738fbf34954ba246204f1eeaf1cea56d2a67e57041ddbf9c45de90",
+        "program_cache_fill_only": true,
+        "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "timing_events": [
+          {
+            "elapsed_ms": 1313,
+            "scope": "existing MNCS_TIMINGS event",
+            "stage": "parse"
+          },
+          {
+            "elapsed_ms": 114068,
+            "scope": "existing MNCS_TIMINGS event",
+            "stage": "elaboration"
+          }
+        ],
+        "version": "baseline",
+        "wall_seconds": 165.237
+      },
+      {
+        "actual_compiler_child_cpu_seconds": 155.92,
+        "actual_compiler_child_peak_fds": 5,
+        "actual_compiler_child_peak_rss_kib": 2142512,
+        "measurement_sha256": "fc2731aa1f26e7439c97e8e208fd83917fcda71d33eeac86a8a88ec34a87882c",
+        "phase_trace_sha256": "dc989cd3b899309dbe2f8361bfe5aaf42b7d3a9e4f1c8e04b3833ce377d28ac3",
+        "program_cache_fill_only": true,
+        "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "timing_events": [
+          {
+            "elapsed_ms": 1314,
+            "scope": "existing MNCS_TIMINGS event",
+            "stage": "parse"
+          },
+          {
+            "elapsed_ms": 110722,
+            "scope": "existing MNCS_TIMINGS event",
+            "stage": "elaboration"
+          }
+        ],
+        "version": "candidate",
+        "wall_seconds": 157.715
+      }
+    ],
+    "warm_unprofiled_runs": [
+      {
+        "actual_child": {
+          "cpu_seconds": 81.84,
+          "cpu_system_seconds": 0.43,
+          "cpu_user_seconds": 81.41,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180278920,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 4677,
+            "wchar": 151775474,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1758888,
+          "peak_rss_kib": 1758888,
+          "pid": 25,
+          "sample_count": 168
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": null,
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 900,
+        "label": "decl-repeat-baseline-warm-1-20261010",
+        "measurement_sha256": "9ab56b5c482523311ee188cde08c745824994491bd21c5c74d5deb930a5dd041",
+        "phase_trace_sha256": "2409dc03822f56bbd5619f025de2071b3ea1863b4854861940c573da8e92eae9",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1758888,
+        "resource_cap_triggered": false,
+        "run_type": "initial_sequential_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "steps": 500000,
+        "target_execution_seconds": 81.19091,
+        "version": "baseline",
+        "whole_runner_wall_seconds": 84.625
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 82.57,
+          "cpu_system_seconds": 0.49,
+          "cpu_user_seconds": 82.08,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180278969,
+            "read_bytes": 0,
+            "syscr": 4958,
+            "syscw": 4677,
+            "wchar": 151775466,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759376,
+          "peak_rss_kib": 1759376,
+          "pid": 25,
+          "sample_count": 170
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": null,
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 900,
+        "label": "decl-repeat-baseline-warm-2-20261010",
+        "measurement_sha256": "a4e7592051cd4d9cd9c446ec4ce316910286ab638ea5e5a9390af5ea61a23b9d",
+        "phase_trace_sha256": "7a3b7816381d4664fe29ecb2685f2d98b628d0920e7f4cef4a328714db0fea67",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759376,
+        "resource_cap_triggered": false,
+        "run_type": "initial_sequential_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "steps": 500000,
+        "target_execution_seconds": 82.06673,
+        "version": "baseline",
+        "whole_runner_wall_seconds": 85.627
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 76.05,
+          "cpu_system_seconds": 0.42,
+          "cpu_user_seconds": 75.63,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {},
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759264,
+          "peak_rss_kib": 1759264,
+          "pid": 25,
+          "sample_count": 156
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": null,
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 900,
+        "label": "decl-repeat-baseline-warm-3-20261010",
+        "measurement_sha256": "5909d4982cb0c774dea69c608f70cd5458025b9d89704d43c648920913eddd97",
+        "phase_trace_sha256": "b1eae54a1a4ee1177ebd47e2b45043b15ce9fb840822f33d6a29d3abfa8401ba",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759264,
+        "resource_cap_triggered": false,
+        "run_type": "late_interleaved_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "steps": 500000,
+        "target_execution_seconds": 75.193385,
+        "version": "baseline",
+        "whole_runner_wall_seconds": 78.609
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 76.43,
+          "cpu_system_seconds": 0.42,
+          "cpu_user_seconds": 76.01,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180278920,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 4677,
+            "wchar": 151775444,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759556,
+          "peak_rss_kib": 1759556,
+          "pid": 25,
+          "sample_count": 156
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": null,
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 900,
+        "label": "decl-repeat-baseline-warm-4-20261010",
+        "measurement_sha256": "8d03271e2cb30068447acc76e96bb154066d9799edfb018b705a01ca275a8864",
+        "phase_trace_sha256": "568d57eec06645a85c3442917892c09833c58d7f3b552e5ab7ef5935d0aec04f",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759556,
+        "resource_cap_triggered": false,
+        "run_type": "late_interleaved_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "steps": 500000,
+        "target_execution_seconds": 75.64212,
+        "version": "baseline",
+        "whole_runner_wall_seconds": 79.109
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 73.24000000000001,
+          "cpu_system_seconds": 0.37,
+          "cpu_user_seconds": 72.87,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180268723,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 4677,
+            "wchar": 151771149,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759084,
+          "peak_rss_kib": 1759084,
+          "pid": 25,
+          "sample_count": 150
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": "mncs:0.2:operation:mncs.compiler.decl.v1::parse_variants__spec_3c0ffe82::b2::%24mncs%24call%2413",
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 899,
+        "label": "decl-repeat-candidate-warm-1-20261010",
+        "measurement_sha256": "11b1a7334539eed7e2f578c12bfdc793f46845d5bb71fea8b13f8dea33e18462",
+        "phase_trace_sha256": "e44efe6906c3f09d639a675732cb980bb4a3d0f5acfa80bc6f9dae6283090c05",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759084,
+        "resource_cap_triggered": false,
+        "run_type": "initial_sequential_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "steps": 500000,
+        "target_execution_seconds": 72.412043,
+        "version": "candidate",
+        "whole_runner_wall_seconds": 75.604
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 73.67,
+          "cpu_system_seconds": 0.41,
+          "cpu_user_seconds": 73.26,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180268674,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 4677,
+            "wchar": 151771182,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759132,
+          "peak_rss_kib": 1759132,
+          "pid": 25,
+          "sample_count": 151
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": "mncs:0.2:operation:mncs.compiler.decl.v1::parse_variants__spec_3c0ffe82::b2::%24mncs%24call%2413",
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 899,
+        "label": "decl-repeat-candidate-warm-2-20261010",
+        "measurement_sha256": "65a2c1d331fc03490a5c1e887b94e78cd111f612cd83ab2cf428f48385787678",
+        "phase_trace_sha256": "195382648d611ea88f78de32e3e20ea5728363ae8317ffdea68a3bf492f94aee",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759132,
+        "resource_cap_triggered": false,
+        "run_type": "initial_sequential_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "steps": 500000,
+        "target_execution_seconds": 72.888598,
+        "version": "candidate",
+        "whole_runner_wall_seconds": 76.103
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 72.93,
+          "cpu_system_seconds": 0.34,
+          "cpu_user_seconds": 72.59,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180268625,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 4677,
+            "wchar": 151771129,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1759004,
+          "peak_rss_kib": 1759004,
+          "pid": 25,
+          "sample_count": 149
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": "mncs:0.2:operation:mncs.compiler.decl.v1::parse_variants__spec_3c0ffe82::b2::%24mncs%24call%2413",
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 899,
+        "label": "decl-repeat-candidate-warm-3-20261010",
+        "measurement_sha256": "cbe3270a4112bc7a1b820a593731c18bff660384f5029e4e38b05a45f226e2a8",
+        "phase_trace_sha256": "c5efd326af00d416090b7620e8c6e126096b390ac6760b4c05a0e26789d40375",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1759004,
+        "resource_cap_triggered": false,
+        "run_type": "late_interleaved_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "steps": 500000,
+        "target_execution_seconds": 72.11897,
+        "version": "candidate",
+        "whole_runner_wall_seconds": 75.604
+      },
+      {
+        "actual_child": {
+          "cpu_seconds": 73.21,
+          "cpu_system_seconds": 0.41,
+          "cpu_user_seconds": 72.8,
+          "executable": "mncs-compiler-stage0-probe",
+          "io": {
+            "cancelled_write_bytes": 0,
+            "rchar": 180268625,
+            "read_bytes": 0,
+            "syscr": 4957,
+            "syscw": 4677,
+            "wchar": 151771143,
+            "write_bytes": 0
+          },
+          "parent_pid": 23,
+          "peak_file_descriptors": 5,
+          "peak_hwm_kib": 1758860,
+          "peak_rss_kib": 1758860,
+          "pid": 25,
+          "sample_count": 150
+        },
+        "cgroup_memory_event_delta": {
+          "high": 0,
+          "low": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "sock_throttled": 0
+        },
+        "classification": "RESOURCE_EXHAUSTED",
+        "failure_identity": "mncs:0.2:operation:mncs.compiler.decl.v1::parse_variants__spec_3c0ffe82::b2::%24mncs%24call%2413",
+        "failure_reason": "execution step budget exhausted",
+        "input_pages_at_stride_1024": 899,
+        "label": "decl-repeat-candidate-warm-4-20261010",
+        "measurement_sha256": "ad1120d2192027009cff4cee803e3b45a4e92dcf41de7ee4db3758c1b6f88d64",
+        "phase_trace_sha256": "9c3cb71e2556b69b8d1152560d55388ee8cae46e614078fd5a9fcc7760617717",
+        "probe_internal_status": "budget_exhausted",
+        "resource_cap_peak_kib": 1758860,
+        "resource_cap_triggered": false,
+        "run_type": "late_interleaved_block",
+        "runner_returncode": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "steps": 500000,
+        "target_execution_seconds": 72.434535,
+        "version": "candidate",
+        "whole_runner_wall_seconds": 75.604
+      }
+    ]
+  },
+  "observed_at": "2026-10-10T07:50:48+00:00",
+  "profile_interpretation": {
+    "baseline_and_candidate_lexer_next_token_calls": 515,
+    "baseline_and_candidate_lexer_scan_chunk_calls": 2159,
+    "baseline_lexer_next_token_exclusive_seconds": 33.097,
+    "baseline_lexer_scan_chunk_exclusive_seconds": 3.857,
+    "baseline_segment_significant_calls": 186,
+    "baseline_segment_significant_exclusive_seconds": 3.22,
+    "candidate_lexer_next_token_exclusive_seconds": 33.208,
+    "candidate_lexer_scan_chunk_exclusive_seconds": 3.855,
+    "candidate_segment_significant_entry": "absent; 89 source call sites directly call the lexer owner",
+    "note": "The matched profile shows identical lexer token and scan call counts; next_token_global remains the largest measured cost. Profiling overhead is excluded from the warm-run comparison."
+  },
+  "schema_version": "mncs.compiler-performance-repeat-evidence/1",
+  "workload": {
+    "baseline_input_pages_at_stride_1024": 900,
+    "candidate_input_pages_at_stride_1024": 899,
+    "execution_backend": "reference_interpreter",
+    "note": "These counts describe the compiler source input used by this probe, not the separately retained 894-page flow-project closure evidence. Stage-0 oracle was skipped for these bounded runtime measurements.",
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "program_cache": "warm, exact-identity-specific program cache",
+    "selected_execution_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "step_budget": 500000,
+    "target_last": true
+  }
+}

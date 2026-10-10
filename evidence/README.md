@@ -186,3 +186,22 @@ See [declaration/symbol/IR contracts and reproduction](DECL.md) and
 bounded declaration parsing with oracle span parity, function-name symbol
 facts, resolve/span walking, and depth-verified stack-IR lowering for
 256-byte units, not whole-module compilation or backend parity.
+
+## Declaration lexer dispatch repeat (2026-10-10)
+
+The [dispatch repeat report](campaign-20261010-decl-significant-dispatch-repeat.json)
+records four warm unprofiled runs per source identity and a paired runtime
+profile for the 500,000-step `compile_project_target<1024,1024>` request.
+The late interleaved pairs reduced target execution time from 75.418 to
+72.277 seconds (4.16%) and actual child CPU from 76.24 to 73.07 seconds
+(4.16%); peak RSS stayed near 1.68 GiB and the child held five file
+descriptors. The earlier sequential block showed a larger timing difference,
+so it is retained as context rather than used for the stable effect estimate.
+
+The candidate removes 186 profiled `segment.significant_global` wrapper calls
+(3.22 seconds exclusive in the baseline). `lexer.next_token_global` remains
+the largest measured cost at about 33.2 seconds exclusive. Both bounded target
+runs exhausted the same step budget while parsing `decl`, returned no project
+result, and therefore leave semantic outcome UNKNOWN. There was no sampled RSS
+cap or cgroup OOM event. This evidence does not promote any module stage or
+claim Stage-1/Stage-2 succession.
