@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T05:58:27+00:00",
+    "updated_at": "2026-10-10T06:08:42+00:00",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -2812,7 +2812,116 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The selected target still exhausts its fixed budget; no project result, executable artifact, Stage-1, or Stage-2 evidence is claimed."
+    },
+    "significant_trivia_inline_campaign_20261010": {
+      "observed_at": "2026-10-10T06:03:17.547146+00:00",
+      "candidate_base_revision": "ada80d0de4dc6f7b8522cf185930ba0db733d0d8",
+      "tested_candidate_git_head": "ada80d0de4dc6f7b8522cf185930ba0db733d0d8",
+      "tested_candidate_branch": "campaign/lexer-significant-trivia-inline-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "baseline_compiler_source_identity_sha256": "ec3d32c5c27776a5abbea007d31e1e69a9dccc8f4ac8015c2c69d4017e5dbbe1",
+      "candidate_compiler_source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+      "baseline_source_revision": "69b50cfd8231a8cd6c843aae72936fd859fa5767",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "implementation_commit": "a3357aefb9f4ba6b86c9fa2836897f9f3c9ee715",
+      "evidence_commit": "a480a5670c814009801c6d0245ca818d93fa21eb",
+      "delivered_local_main_revision": "a480a5670c814009801c6d0245ca818d93fa21eb",
+      "delivery_state": "implementation and evidence merged into local main and pushed to origin/main",
+      "push_status": "PUSHED_TO_origin_main",
+      "push_observed_at": "2026-10-10T06:08:42+00:00",
+      "delivery_role": "Inline known-trivia advancement in significant_global, removing the redundant internal skip_trivia_global call. No language or backend semantic change and no compiler-stage promotion.",
+      "evidence_artifact": "evidence/campaign-20261010-significant-trivia-inline.json",
+      "evidence_artifact_sha256": "f5f0705021e6c5f2e0bba6f34079a222edcd7d04df26575b6adf7dddc4d8ca6b",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "measurement_backend": "reference_interpreter",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "input_total_page_count_at_stride_1024": 900,
+      "page_count_metadata_reconciliation": {
+        "prior_campaign": "lexer_keyword_byte_reuse_campaign_20261010",
+        "prior_campaign_evidence": "evidence/campaign-20261010-lexer-keyword-byte-reuse.json",
+        "previously_recorded_page_count": 901,
+        "raw_request_builder_page_count": 900,
+        "raw_measurement_from_prior_campaign": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-1.json",
+        "raw_measurement_sha256": "c2ab758414ab333917f5e68830703797c0bdc229f40ed7cdc30260f5e5c6c06b",
+        "resolution": "The previous campaign's 901 value remains recorded in its evidence artifact. Its raw probe report and the current request builder report 900 for these six selected sources. The historical 894-page full flow closure is a separate scope and remains unchanged."
+      },
+      "step_budget": 200000,
+      "matched_warm_means": {
+        "baseline_wall_seconds": 32.5455,
+        "candidate_wall_seconds": 30.7915,
+        "wall_reduction_percent": 5.389,
+        "baseline_child_cpu_seconds": 30.21,
+        "candidate_child_cpu_seconds": 28.55,
+        "child_cpu_reduction_percent": 5.495,
+        "baseline_target_execution_ms": 29293.435,
+        "candidate_target_execution_ms": 27623.783,
+        "target_execution_reduction_percent": 5.7,
+        "baseline_peak_rss_kib": 1759044,
+        "candidate_peak_rss_kib": 1757840,
+        "peak_rss_delta_kib": -1204,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ],
+        "physical_io_read_bytes_baseline_candidate": [
+          0,
+          0
+        ],
+        "physical_io_write_bytes_baseline_candidate": [
+          0,
+          0
+        ]
+      },
+      "runtime_profile": {
+        "baseline_skip_trivia_global_calls": 112,
+        "baseline_skip_trivia_global_exclusive_ms": 2189.931,
+        "candidate_skip_trivia_global_calls": 0,
+        "baseline_significant_global_inclusive_ms": 22388.362,
+        "candidate_significant_global_inclusive_ms": 18122.788
+      },
+      "bounded_target_outcome": {
+        "baseline": "RESOURCE_EXHAUSTED",
+        "candidate": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "reported_steps_each_run": 200000,
+        "rss_cap_mib": 2300,
+        "rss_cap_triggered": false,
+        "cgroup_oom_kill_delta": 0
+      },
+      "cp0001_differential": {
+        "tiers": "BC",
+        "classification": "SUCCESS",
+        "backend": "cranelift",
+        "requests": 12787,
+        "tier_b_tokens_compared": 39501,
+        "tier_b_cases": 114,
+        "tier_c_keywords": 30,
+        "tier_c_near_miss_identifiers": 60,
+        "result_sha256": "3c6beb0a7e50c173bf1a1e082d7532368d6f13b0a583913391aa96c144330bd2"
+      },
+      "cold_cache_fill": {
+        "classification": "RESOURCE_EXHAUSTED",
+        "wall_seconds": 190.755,
+        "child_cpu_seconds": 186.59,
+        "child_peak_rss_kib": 2142420,
+        "parse_ms": 1260,
+        "frontend_elaboration_ms": 109471,
+        "target_execution_ms": 33022.196,
+        "program_artifact_uncompressed_bytes": 151516072,
+        "program_artifact_gzip_bytes": 5311363,
+        "rss_cap_triggered": false
+      },
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The bounded target still exhausts its step budget; this work establishes neither project acceptance nor executable, Stage-1, or Stage-2 evidence."
     }
   },
-  "evidence_updated_at": "2026-10-10T05:58:27+00:00"
+  "evidence_updated_at": "2026-10-10T06:08:42+00:00"
 }
