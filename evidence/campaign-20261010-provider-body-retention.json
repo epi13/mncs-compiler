@@ -1,0 +1,318 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.provider-body-retention-campaign/1",
+  "observed_at": "2026-10-10T02:51:06Z",
+  "identity": {
+    "entry_main_revision": "ea87c5c5e97d89d219c22f5d25ed728b0547c649",
+    "candidate_base_revision": "ea87c5c5e97d89d219c22f5d25ed728b0547c649",
+    "tested_candidate_git_head": "ea87c5c5e97d89d219c22f5d25ed728b0547c649",
+    "tested_candidate_branch": "campaign/project-provider-body-retention-20261010",
+    "tested_worktree_dirty": true,
+    "compiler_source_identity_sha256": "51497d74c7ee22650e353c03f43ba6610c56dce9911f00d044371882439b7b3c",
+    "compiler_source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "changed_module_source_sha256": {
+      "decl": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+      "project": "92ae7e8ec79b090ed74c99f7e9986a4a40429fe1ece7c12db72b652085d8b768"
+    },
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "target_operation": "mncs.compiler.project.v1::compile_project_target",
+    "target_module": "flow",
+    "selected_measurement_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_source_index": 1,
+    "backend": "reference_interpreter"
+  },
+  "implementation": {
+    "status": "bounded provider AST retention optimization; full syntax parse remains in force",
+    "changes": [
+      "decl.parse_unit_signatures uses the same complete parser and diagnostics, then returns function declarations with empty bodies",
+      "project.compile_project_target selects signature parsing only for non-target provider sources",
+      "target module and whole-project compile keep function bodies",
+      "provider records, enums, imports, function signatures, and source spans remain available"
+    ],
+    "ownership": "compiler semantic implementation; no Language behavior or Stage0 oracle change",
+    "semantic_claim": "parser contract verified; whole real-flow target result and compiler succession remain UNKNOWN/unproven"
+  },
+  "tests": {
+    "decl_test": {
+      "path": "tools/test_decl_provider_body_retention.py",
+      "sha256": "0fdaaca6cc8b1d368d44d35a9edb020f5f4ccd3dca5535a5a4e44134dff4e385",
+      "status": "PASS",
+      "full_body_statement_count": 1,
+      "signature_mode_body_statement_count": 0,
+      "signature_and_span_equal": true,
+      "syntax_error_span_equal": true
+    },
+    "project_test": {
+      "path": "tools/test_project_provider_body_retention.py",
+      "sha256": "3395f1312568cdd2eb2c5cd01f580e4442c3b65c49ea91f7fb14d47eea1434ca",
+      "status": "PASS",
+      "provider_body_statement_count": 8,
+      "retained_provider_body_statement_count": 0,
+      "target_body_statement_count": 8,
+      "whole_project_body_statement_count": 8,
+      "provider_signature_identical": true,
+      "stage0_imported_nominal_project_valid": true,
+      "malformed_provider_span": [
+        107,
+        108
+      ],
+      "stage0_related_spans": [
+        [
+          33,
+          41
+        ],
+        [
+          107,
+          108
+        ]
+      ],
+      "executor_reported_steps": {
+        "provider": 101993,
+        "target": 101991,
+        "whole_project": 101991,
+        "malformed_provider": 33755
+      }
+    }
+  },
+  "flow_250k_comparison": {
+    "scope": "matched 250000-step real flow target prefix, same Stage0 pin, module set, target, backend, and runtime profile; compiler source identities differ because candidate changes compiler source",
+    "baseline": {
+      "label": "campaign-20261010-flow-250k-provider-retention-baseline",
+      "source_identity_sha256": "5accae1c8bbbd18cb59b023d7cc66f509a7c8399f51f4e2f1a5a52a4e957d77b",
+      "classification": "RESOURCE_EXHAUSTED",
+      "runner_status": "SUCCESS",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "step_budget": 250000,
+      "steps_returned": 250000,
+      "wall_seconds": 68.184,
+      "actual_child": {
+        "pid": 25,
+        "process_start_ticks": 52198824,
+        "status": "RESPONSE_RECEIVED",
+        "max_rss_kib": 1752240,
+        "max_hwm_kib": 1752240,
+        "peak_fd_count": 5,
+        "last_fd_count": 4,
+        "cpu_seconds": 65.64999999999999,
+        "cpu_user_seconds": 64.96,
+        "cpu_system_seconds": 0.69,
+        "rchar_bytes": 179699750,
+        "physical_read_bytes": 0,
+        "write_bytes": 49152
+      },
+      "cgroup_event_delta": {
+        "max": 0,
+        "high": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "low": 0,
+        "oom_kill": 0,
+        "sock_throttled": 0
+      },
+      "hot_functions": {
+        "byte_window4_global": {
+          "calls": 1701,
+          "executor_steps": 83312,
+          "exclusive_ns": 25664776387
+        },
+        "next_token_global": {
+          "calls": 245,
+          "executor_steps": 42398,
+          "exclusive_ns": 13595381655
+        }
+      },
+      "measurement_artifact": {
+        "path": "/tmp/mncs-flow-250k-provider-retention-baseline.json",
+        "sha256": "8795cbf48fc63863585d1eb959ea937951b6afe6b9eb33266b0017872edf1382",
+        "bytes": 485624
+      },
+      "phase_trace_sha256": "2d9fc584087075ff29ee7e4a69fb0fb05c1cebf718b0e4eb3d978f455c962b8d"
+    },
+    "candidate": {
+      "label": "campaign-20261010-flow-250k-provider-body-retention",
+      "source_identity_sha256": "51497d74c7ee22650e353c03f43ba6610c56dce9911f00d044371882439b7b3c",
+      "classification": "RESOURCE_EXHAUSTED",
+      "runner_status": "SUCCESS",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "step_budget": 250000,
+      "steps_returned": 250000,
+      "wall_seconds": 70.1,
+      "actual_child": {
+        "pid": 24,
+        "process_start_ticks": 52370379,
+        "status": "RESPONSE_RECEIVED",
+        "max_rss_kib": 1752068,
+        "max_hwm_kib": 1752068,
+        "peak_fd_count": 5,
+        "last_fd_count": 4,
+        "cpu_seconds": 67.35,
+        "cpu_user_seconds": 66.96,
+        "cpu_system_seconds": 0.39,
+        "rchar_bytes": 179897872,
+        "physical_read_bytes": 0,
+        "write_bytes": 32768
+      },
+      "cgroup_event_delta": {
+        "low": 0,
+        "high": 0,
+        "sock_throttled": 0,
+        "max": 0,
+        "oom_group_kill": 0,
+        "oom": 0,
+        "oom_kill": 0
+      },
+      "hot_functions": {
+        "byte_window4_global": {
+          "calls": 1700,
+          "executor_steps": 83279,
+          "exclusive_ns": 26210174713
+        },
+        "next_token_global": {
+          "calls": 245,
+          "executor_steps": 42377,
+          "exclusive_ns": 13907142239
+        }
+      },
+      "measurement_artifact": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-250k-provider-body-retention-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "c9c72606e7f9e2ab4986b30932543918c60815c043b15302d07bff4e360ede1d",
+        "bytes": 342988
+      },
+      "phase_trace_sha256": "dd51c791140488159af2415ba5aac30312bec00dcc08884d00a83b9aac46efc6"
+    },
+    "delta_percent": {
+      "wall": 2.81,
+      "actual_child_cpu": 2.589
+    },
+    "peak_rss_delta_kib": -172,
+    "decision": "NO_MEASURED_EFFICIENCY_GAIN_IN_THIS_PREFIX",
+    "reason": "The returned step count and outcome match, but profiles show execution remains in source/lexer/header scanning; unit_fn and parse_fn were not reached, so provider body retention could not affect this prefix."
+  },
+  "flow_500k_attempt": {
+    "label": "campaign-20261010-flow-500k-provider-body-retention",
+    "source_identity_sha256": "51497d74c7ee22650e353c03f43ba6610c56dce9911f00d044371882439b7b3c",
+    "step_budget_requested": 500000,
+    "classification": "TIMEOUT",
+    "runner_status": "TIMEOUT",
+    "operation_outcome": "INTERRUPTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "target_request_attempted": true,
+    "target_execution_status": "UNKNOWN",
+    "steps_returned": 0,
+    "wall_seconds": 180.416,
+    "actual_child": {
+      "pid": 24,
+      "process_start_ticks": 52394904,
+      "status": "INTERRUPTED",
+      "max_rss_kib": 1751856,
+      "max_hwm_kib": 1751856,
+      "peak_fd_count": 5,
+      "last_fd_count": 4,
+      "cpu_seconds": 177.92000000000002,
+      "cpu_user_seconds": 177.36,
+      "cpu_system_seconds": 0.56,
+      "rchar_bytes": 179897872,
+      "physical_read_bytes": 3170304,
+      "write_bytes": 12288
+    },
+    "termination": {
+      "signal": "child terminated by signal 2",
+      "wait_elapsed_ns": 178498897124,
+      "cgroup_memory_event_delta": {
+        "sock_throttled": 0,
+        "max": 0,
+        "low": 0,
+        "oom_kill": 0,
+        "oom": 0,
+        "high": 0,
+        "oom_group_kill": 0
+      },
+      "sampled_rss_limit_mib": 2300,
+      "sampled_rss_limit_triggered": false
+    },
+    "oracle": "SKIPPED",
+    "semantic_phase_profile": "NOT_RETURNED",
+    "trace_phases": [
+      {
+        "phase": "source_resolution",
+        "duration_ms": 7.285
+      },
+      {
+        "phase": "cached_frontend_program_read_decode",
+        "duration_ms": 619.209
+      },
+      {
+        "phase": "target_request_json_decode",
+        "duration_ms": 413.034,
+        "request_bytes": 20679041
+      },
+      {
+        "phase": "target_request_execution",
+        "started": true,
+        "returned": false
+      }
+    ],
+    "measurement_artifact": {
+      "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-500k-provider-body-retention-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "71a2d0b4a9cb8c9e7f2edbffd842df71f697a05adad654cdd34b4fea45c55a65",
+      "bytes": 836728
+    },
+    "phase_trace_sha256": "ca5c0d9bbc929ffc4bd7b02df0be15d04730895cb4f44b188fe9d0a4076c3690"
+  },
+  "additional_incomplete_attempts": [
+    {
+      "operation": "compile_project_target on a two-module imported nominal fixture",
+      "backend": "reference_interpreter",
+      "per_request_timeout_seconds": 60,
+      "classification": "TIMEOUT",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "telemetry": "no resource sample retained"
+    }
+  ],
+  "efficiency_interpretation": {
+    "identified_hot_path": "source.byte_window4_global repeatedly called while tokenizing the large compiler decl module, followed by lexer.next_token_global and trivia scanning",
+    "dominant_prefix_profile": {
+      "source.byte_window4_global": {
+        "calls": 1701,
+        "executor_steps": 83312,
+        "exclusive_ms": 25664.776
+      },
+      "lexer.next_token_global": {
+        "calls": 245,
+        "executor_steps": 42398,
+        "exclusive_ms": 13595.382
+      }
+    },
+    "provider_body_retention_resource_measurement": "not established; the bounded fixture proves eight retained provider AST statements are dropped, but process RSS reduction was not measured",
+    "no_oom_inference": "250k cgroup memory event deltas were all zero; 500k was stopped by runner SIGINT at its deadline and cgroup OOM event deltas remained zero; SIGINT/SIGKILL are not treated as compiler semantic outcomes"
+  },
+  "stage_frontier": {
+    "matrix_preserved": true,
+    "complete_native_parse_check_proof_cfg_verified_ssa_modules": [
+      "segment",
+      "parser",
+      "source",
+      "lexer",
+      "kernel"
+    ],
+    "whole_module_parse_and_signature_modules_without_whole_module_check_proof_cfg_ssa": [
+      "decl",
+      "flow",
+      "ssa",
+      "project"
+    ],
+    "new_proof_scope": "provider signature parse with body omission after syntax completion only",
+    "executable_artifact": false,
+    "stage1": false,
+    "stage2": false
+  }
+}

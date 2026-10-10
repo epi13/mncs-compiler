@@ -3576,7 +3576,7 @@ fn parse_fn_generics<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 
 // `fn name(params) -> (results) clauses { body }`, with an optional
 // generic parameter list between the name and the parameter list.
-fn parse_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, start: u64, profile_013: bool) -> (result: FnDecl) {
+fn parse_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, start: u64, profile_013: bool, retain_body: bool) -> (result: FnDecl) {
     let bad: FnDecl = FnDecl { ok: false, err_start: cursor, err_end: cursor, sig: FnSig { name_start: cursor, name_end: cursor, generics: GenericParamList.GNil, params: FieldList.FNil, results: FieldList.FNil, contracts: ClauseList.CNil, effects: EffectList.XNil, capabilities: CapList.ANil }, body: FnBody { body: StmtList.SNil, ret: Expr.Name { start: cursor, end: cursor }, has_ret: false }, fn_start: start, fn_end: cursor, cursor: cursor };
     let name: NameParse = parse_name<P, N>(pages, stride, total, cursor, 1);
     if !(name.ok) { return FnDecl { ..bad, err_start: name.err_start, err_end: name.err_end }; }
@@ -3609,6 +3609,13 @@ fn parse_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tota
     if !(close3.ok) { return FnDecl { ..bad, err_start: close3.err_start, err_end: close3.err_end }; }
     let sig: FnSig = FnSig { name_start: name.start, name_end: name.end, generics: generics.list, params: params.list, results: results.list, contracts: clauses.contracts, effects: clauses.effects, capabilities: clauses.capabilities };
     let fnbody: FnBody = FnBody { body: body.list, ret: tail.node, has_ret: true };
+    if !(retain_body) {
+        // Provider units still parse the complete body above so syntax
+        // failures and spans match whole-unit parsing; only the retained AST
+        // omits body nodes because target compilation never lowers providers.
+        let empty_body: FnBody = FnBody { body: StmtList.SNil, ret: Expr.Name { start: cursor, end: cursor }, has_ret: false };
+        return FnDecl { ok: true, err_start: 0, err_end: 0, sig: sig, body: empty_body, fn_start: start, fn_end: close3.cursor, cursor: close3.cursor };
+    }
     return FnDecl { ok: true, err_start: 0, err_end: 0, sig: sig, body: fnbody, fn_start: start, fn_end: close3.cursor, cursor: close3.cursor };
 }
 record ReturnParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, node: Expr }
@@ -3627,8 +3634,17 @@ fn parse_return_tail<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 
 // Whole logical-source unit: header, imports, then interleaved record,
 // enum, and function declarations through EOF.
-record UnitState { cursor: u64, ok: bool, err_start: u64, err_end: u64, uses: UseList, records: RecordList, enums: EnumList, fns: FnList, count: u64, done: bool, profile_013: bool }
+record UnitState { cursor: u64, ok: bool, err_start: u64, err_end: u64, uses: UseList, records: RecordList, enums: EnumList, fns: FnList, count: u64, done: bool, profile_013: bool, retain_bodies: bool }
 fn parse_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: Unit) {
+    return parse_unit_mode<P, N>(pages, stride, total, true);
+}
+// Provider parsing follows the identical full syntax path and retains all
+// declaration signatures, but drops function bodies after each successful
+// parse to reduce the target-only project's retained module graph.
+fn parse_unit_signatures<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: Unit) {
+    return parse_unit_mode<P, N>(pages, stride, total, false);
+}
+fn parse_unit_mode<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, retain_bodies: bool) -> (result: Unit) {
     let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     let bad: Unit = Unit { ok: false, err_start: 0, err_end: 0, header: empty, uses: UseList.UNil, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, cursor: 0 };
     // CP-0021: the declaration stage consumes the logical paged source. A
@@ -3643,7 +3659,7 @@ fn parse_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
     // The logical source is bounded to 1 MiB. Nested bounded passes allow
     // up to 1024 chunks of 1024 declarations, while terminal state returns
     // immediately so short modules do not pay the full bound.
-    iterate chunk up_to 1024 carrying outer: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false, profile_013: profile_013 } {
+    iterate chunk up_to 1024 carrying outer: UnitState = UnitState { cursor: uses.cursor, ok: true, err_start: 0, err_end: 0, uses: uses.list, records: RecordList.RNil, enums: EnumList.GNil, fns: FnList.DNil, count: 0, done: false, profile_013: profile_013, retain_bodies: retain_bodies } {
         iterate i up_to 1024 carrying inner: UnitState = outer {
             if inner.done || !(inner.ok) { return finish_unit<P, N>(pages, stride, total, head, inner); }
             next inner = unit_step<P, N>(pages, stride, total, inner);
@@ -3698,26 +3714,26 @@ fn reverse_uses_step(st: UseRev) -> (result: UseRev) {
 fn unit_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: UnitState) -> (result: UnitState) {
     if !(st.ok) || st.done { return st; }
     let token: lexer.Token = segment.significant_global<P, N>(pages, stride, total, st.cursor);
-    if token.diagnostic != 0 || token.kind == 0 { return UnitState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
+    if token.diagnostic != 0 || token.kind == 0 { return UnitState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013, retain_bodies: st.retain_bodies }; }
     if token.kind == 27 { return unit_enum<P, N>(pages, stride, total, st, token); }
     if token.kind == 29 { return unit_record<P, N>(pages, stride, total, st, token); }
     if token.kind == 12 { return unit_fn<P, N>(pages, stride, total, st, token); }
-    return UnitState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 };
+    return UnitState { cursor: st.cursor, ok: false, err_start: token.start, err_end: token.end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013, retain_bodies: st.retain_bodies };
 }
 fn unit_enum<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
     let decl: EnumDecl = parse_enum<P, N>(pages, stride, total, token.end, token.start, st.profile_013);
-    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
-    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: EnumList.GCons { head: decl, tail: st.enums }, fns: st.fns, count: st.count + 1, done: false, profile_013: st.profile_013 };
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013, retain_bodies: st.retain_bodies }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: EnumList.GCons { head: decl, tail: st.enums }, fns: st.fns, count: st.count + 1, done: false, profile_013: st.profile_013, retain_bodies: st.retain_bodies };
 }
 fn unit_record<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
     let decl: RecordDecl = parse_record<P, N>(pages, stride, total, token.end, token.start, st.profile_013);
-    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
-    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: RecordList.RCons { head: decl, tail: st.records }, enums: st.enums, fns: st.fns, count: st.count + 1, done: false, profile_013: st.profile_013 };
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013, retain_bodies: st.retain_bodies }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: RecordList.RCons { head: decl, tail: st.records }, enums: st.enums, fns: st.fns, count: st.count + 1, done: false, profile_013: st.profile_013, retain_bodies: st.retain_bodies };
 }
 fn unit_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: UnitState, token: lexer.Token) -> (result: UnitState) {
-    let decl: FnDecl = parse_fn<P, N>(pages, stride, total, token.end, token.start, st.profile_013);
-    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013 }; }
-    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: FnList.DCons { head: decl, tail: st.fns }, count: st.count + 1, done: false, profile_013: st.profile_013 };
+    let decl: FnDecl = parse_fn<P, N>(pages, stride, total, token.end, token.start, st.profile_013, st.retain_bodies);
+    if !(decl.ok) { return UnitState { cursor: st.cursor, ok: false, err_start: decl.err_start, err_end: decl.err_end, uses: st.uses, records: st.records, enums: st.enums, fns: st.fns, count: st.count, done: true, profile_013: st.profile_013, retain_bodies: st.retain_bodies }; }
+    return UnitState { cursor: decl.cursor, ok: true, err_start: 0, err_end: 0, uses: st.uses, records: st.records, enums: st.enums, fns: FnList.DCons { head: decl, tail: st.fns }, count: st.count + 1, done: false, profile_013: st.profile_013, retain_bodies: st.retain_bodies };
 }
 fn finish_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, head: parser.Header, st: UnitState) -> (result: Unit) {
     let empty: parser.Header = parser.Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };

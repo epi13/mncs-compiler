@@ -146,7 +146,7 @@ record ProjectResult {
 }
 
 record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64, parse_failed: bool, parse_index: u64, parse_start: u64, parse_end: u64 }
-fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M]) -> (result: ModuleBuild) {
+fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64, target_only: bool) -> (result: ModuleBuild) {
     iterate i over sources carrying st: ModuleBuild = ModuleBuild {
         rest: ModuleList.MNil,
         acc: ModuleList.MNil,
@@ -157,15 +157,15 @@ fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages:
         parse_start: 0,
         parse_end: 0
     } {
-        next st = build_one_module<M, N>(sources, flat_pages, i, st);
+        next st = build_one_module<M, N>(sources, flat_pages, i, target_source_index, target_only, st);
     }
     return st;
 }
-fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, st: ModuleBuild) -> (result: ModuleBuild) {
+fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, target_source_index: u64, target_only: bool, st: ModuleBuild) -> (result: ModuleBuild) {
     if index >= sources.len { return ModuleBuild { rest: st.rest, acc: st.acc, valid: false, count: st.count, parse_failed: true, parse_index: select(st.parse_failed, st.parse_index, index), parse_start: select(st.parse_failed, st.parse_start, 0), parse_end: select(st.parse_failed, st.parse_end, 0) }; }
     let item: ProjectSource = sources[index];
     let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, index);
-    let unit: decl.Unit = decl.parse_unit<1024, N>(pages, item.stride, item.total);
+    let unit: decl.Unit = parse_project_unit<M, N>(pages, item.stride, item.total, index, target_source_index, target_only);
     return ModuleBuild {
         rest: st.rest,
         acc: ModuleList.MCons {
@@ -184,6 +184,10 @@ fn build_one_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pag
         parse_start: select(st.parse_failed, st.parse_start, unit.err_start),
         parse_end: select(st.parse_failed, st.parse_end, unit.err_end)
     };
+}
+fn parse_project_unit<M: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, source_index: u64, target_source_index: u64, target_only: bool) -> (result: decl.Unit) {
+    if target_only && source_index != target_source_index { return decl.parse_unit_signatures<1024, N>(pages, stride, total); }
+    return decl.parse_unit<1024, N>(pages, stride, total);
 }
 
 fn reverse_modules<M: Nat>(sources: [ProjectSource; up_to M], modules: ModuleList) -> (result: ModuleList) {
@@ -1578,7 +1582,7 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte
     // page array in source order; a gap, overlap, or trailing page fails
     // the project exactly like the old source/view count mismatch did.
     let counts_match: bool = descriptors_cover<M, N>(snapshot.sources, flat_pages);
-    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, flat_pages);
+    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, flat_pages, 0, false);
     let parsed: ModuleList = reverse_modules<64>(snapshot.sources, built.acc);
     let duplicate: DiagnosticList = duplicate_modules<M, N>(snapshot.sources, flat_pages, parsed);
     let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, flat_pages, parsed);
@@ -1611,7 +1615,9 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte
 fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: ProjectResult) {
     let ordered: bool = source_ordered<64>(snapshot.sources);
     let counts_match: bool = descriptors_cover<M, N>(snapshot.sources, flat_pages);
-    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, flat_pages);
+    // Parse target bodies for lowering; parse provider bodies fully for the
+    // same syntax diagnostics, then retain only their import signatures.
+    let built: ModuleBuild = build_modules<M, N>(snapshot.sources, flat_pages, target_source_index, true);
     let parsed: ModuleList = reverse_modules<64>(snapshot.sources, built.acc);
     let duplicate: DiagnosticList = duplicate_modules<M, N>(snapshot.sources, flat_pages, parsed);
     let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, flat_pages, parsed);
