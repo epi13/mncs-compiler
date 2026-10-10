@@ -1,0 +1,167 @@
+{
+  "schema_version": "mncs.compiler.execution-efficiency-evidence/1",
+  "kind": "native_trivia_prefix_budget_repair",
+  "observed_at": "2026-10-10T01:20:01Z",
+  "summary": "Fixed a native lexer budget overrun: simple line, word, and whitespace modes had four bounded passes that each consumed up to four characters, exceeding the documented 8,192-transition per-request bound. They now stop after two such passes; number and block modes retain four passes because their chunks consume at most two transitions per step.",
+  "identities": {
+    "candidate_base_revision": "176c145b4de29caf6a0279b0ebdb194b6ae6e938",
+    "tested_candidate_git_head_at_execution": "581cbc8faaf1371d03b3f06018e54e87327dafda",
+    "tested_candidate_branch": "campaign/lexer-trivia-prefix-budget-20261010",
+    "tested_candidate_worktree_dirty_at_execution": false,
+    "implementation_commit": "581cbc8faaf1371d03b3f06018e54e87327dafda",
+    "changed_module": "lexer",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c",
+    "test_input_identity": {
+      "kind": "sha256 over sorted compiler source filenames, NUL separators, and per-file SHA-256 digests",
+      "selected_modules": [
+        "kernel",
+        "lexer",
+        "parser",
+        "segment",
+        "source"
+      ],
+      "baseline_sha256": "eac9b4ec432f3a15e06a9213a0100edb556193c247477061dc7767b5185434a3",
+      "candidate_sha256": "5e78f0fe7ac883909d4595c77eb4b2ff9ef02cefc13a940b4ea15186305aa844",
+      "module_source_sha256": {
+        "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+        "lexer": {
+          "baseline": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+          "candidate": "dd9fe8c5f7610a6534b9e76c7e29fed0693d0f2d8f0aa3ab7b2e656b2538e18d"
+        },
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+      }
+    },
+    "test_file_sha256": {
+      "tools/test_cp0001.py": "4f735f5da6155f80d7260590dac4c5389cd4378b82cbb93badd68ac0bd14c7d6",
+      "tools/test_global_scan_modes.py": "6bbe6f1a0c35065c0c0bc69dbffd30ce3fc34db41ecb4da14ec4647af5c2b76d"
+    }
+  },
+  "native_boundary_differential": {
+    "operation": "mncs.compiler.segment.v1::next_token_global",
+    "backend": "reference_interpreter",
+    "input": "9216 ASCII spaces divided into 9 pages at stride 1024; start offset 0",
+    "request_step_budget": 8000000,
+    "expected_native_contract": {
+      "kind": 1,
+      "start": 0,
+      "end": 8193,
+      "diagnostic": 6
+    },
+    "unchanged_main": {
+      "status": "returned",
+      "token": {
+        "kind": 1,
+        "start": 0,
+        "end": 9216,
+        "diagnostic": 0
+      },
+      "execution_steps": 367432
+    },
+    "fixed_candidate": {
+      "status": "returned",
+      "token": {
+        "kind": 1,
+        "start": 0,
+        "end": 8193,
+        "diagnostic": 6
+      },
+      "execution_steps": 326657
+    },
+    "independent_stage0_lexical_oracle": {
+      "tokens": [
+        {
+          "kind": "whitespace",
+          "start": 0,
+          "end": 9216
+        }
+      ],
+      "diagnostics": [],
+      "scope_note": "Stage-0 lexical oracle does not apply the native request fuel bound; its complete token is not the expected native per-request result."
+    },
+    "execution_step_change": {
+      "absolute_reduction": 40775,
+      "reduction_percent": 11.0973,
+      "interpretation": "The fixed request stops at its specified bound and processes a shorter prefix. This is contract enforcement, not a throughput claim for equal semantic work."
+    },
+    "wall_seconds": "UNKNOWN_NOT_COLLECTED",
+    "child_cpu_seconds": "UNKNOWN_NOT_COLLECTED",
+    "child_peak_rss": "UNKNOWN_NOT_COLLECTED",
+    "fd_count": "UNKNOWN_NOT_COLLECTED"
+  },
+  "verification": {
+    "cp0001_smoke_abc_reference_interpreter": {
+      "status": "SUCCESS",
+      "requests": 1951,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "canonical_splits": 10,
+      "rejected_splits": 9,
+      "headers_ok": 4,
+      "result_sha256": "e48a2bca6f9025e961574e3e420af2858c82ac028e8541279f8dde0e90f151cc"
+    },
+    "cp0001_smoke_abc_cranelift": {
+      "status": "SUCCESS",
+      "requests": 1951,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "canonical_splits": 10,
+      "rejected_splits": 9,
+      "headers_ok": 4,
+      "result_sha256": "f843c1dd5378daec1f1817155abda3d8b94240e953a4a172fc565e8f2b38f259"
+    },
+    "cp0001_full_tier_c_reference_interpreter": {
+      "status": "SUCCESS",
+      "requests": 84,
+      "result_sha256": "49c9287ae636316a350e47f259e26b053a0db1f2dd6644a313d5e60699a1315e"
+    },
+    "cp0001_full_tier_c_cranelift": {
+      "status": "SUCCESS",
+      "requests": 84,
+      "result_sha256": "0419648802be67c7f26662320f44852b59fe37840466a3bafe3b72fdf0e384bd"
+    },
+    "global_page_edge_fixture": {
+      "status": "SUCCESS",
+      "executor": "reference_interpreter with independent Stage-0 lexical oracle",
+      "source_bytes": 5250,
+      "page_size": 1024,
+      "token_count": 11,
+      "stage0_token_count": 11,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true,
+      "execution_steps": 238202,
+      "input_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da"
+    },
+    "unbounded_tier_a_b_reference_trial": {
+      "status": "FAIL_KNOWN_CP0022",
+      "failure": "Tier A randomized input containing ! differs in the pre-existing prefix-not/punctuation mapping; Tier B was not reached. The changed simple trivia/word budget path does not handle !; no expectation was changed."
+    },
+    "unbounded_tier_b_reference_trial": {
+      "status": "INTERRUPTED",
+      "exit_code": 130,
+      "reason": "Stopped after more than five minutes without a result; no passing claim is made."
+    },
+    "flow_target_profile_after_change": "NOT_RUN; this slice does not establish a complete flow compile result."
+  },
+  "delivery": {
+    "decision": "IMPLEMENTED_NATIVE_TRIVIA_SCAN_BOUND_FIX",
+    "implementation_delivered": true,
+    "module_stage_rows_changed": false,
+    "canonical_vm_conformance_established": false,
+    "executable_artifact_created": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "test_expectations_changed": false,
+    "snapshot_or_golden_changed": false
+  },
+  "historical_observation_correction": {
+    "supersedes_artifact": "evidence/campaign-20261010-lexer-initial-window-reuse-rejection.json",
+    "superseded_classification": "Existing Tier C assertion/oracle contract mismatch; expectation left unchanged.",
+    "corrected_classification": "The unchanged native lexer exceeded its own documented 8,192-transition request bound. Stage-0 returns the entire whitespace token because its lexical oracle does not impose that native execution bound; the Tier C prefix expectation is a native bounded-execution contract.",
+    "baseline_and_candidate_window_reuse_outputs_remain_unchanged": true
+  }
+}

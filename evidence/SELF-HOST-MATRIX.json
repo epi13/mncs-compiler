@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T00:46:01Z",
+    "updated_at": "2026-10-10T01:20:01Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -2133,14 +2133,72 @@
       },
       "decision": "REJECTED_NO_MEASURED_EFFICIENCY_GAIN",
       "evidence_artifact": "evidence/campaign-20261010-lexer-initial-window-reuse-rejection.json",
-      "evidence_artifact_sha256": "67659a5d244cb69f564b912a40a9ed31f9f10d1293988ae20a5a485eebdcc673",
+      "evidence_artifact_sha256": "eb2b6f5e79ad7a09c7d06108271b608ea2768ed46e43a4c9183283c24a51e5ce",
       "delivery_role": "Negative optimization evidence only. Evidence commit 5edce39 was pushed to main; candidate source remained in its isolated worktree and no implementation or module-stage claim was delivered.",
       "matrix_row_policy": "Historical top-level compiler_head and module rows were left unchanged. No executable artifact, Stage-1, or Stage-2 claim is made.",
       "delivered_evidence_commit": "5edce39f3bf62b62d43ba9f9fb409d28a1defe68",
       "delivered_main_revision": "5edce39f3bf62b62d43ba9f9fb409d28a1defe68",
       "push_status": "PUSHED_TO_origin_main",
-      "updated_at": "2026-10-10T00:48:06Z"
+      "updated_at": "2026-10-10T00:48:06Z",
+      "classification_followup_artifact": "evidence/campaign-20261010-lexer-trivia-prefix-budget.json"
+    },
+    "lexer_trivia_prefix_budget_campaign_20261010": {
+      "observed_at": "2026-10-10T01:20:01Z",
+      "entry_delivered_main_revision": "176c145b4de29caf6a0279b0ebdb194b6ae6e938",
+      "candidate_base_revision": "176c145b4de29caf6a0279b0ebdb194b6ae6e938",
+      "tested_candidate_git_head_at_execution": "581cbc8faaf1371d03b3f06018e54e87327dafda",
+      "tested_candidate_branch": "campaign/lexer-trivia-prefix-budget-20261010",
+      "tested_candidate_worktree_dirty_at_execution": false,
+      "implementation_commit": "581cbc8faaf1371d03b3f06018e54e87327dafda",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "baseline_test_source_identity_sha256": "eac9b4ec432f3a15e06a9213a0100edb556193c247477061dc7767b5185434a3",
+      "candidate_test_source_identity_sha256": "5e78f0fe7ac883909d4595c77eb4b2ff9ef02cefc13a940b4ea15186305aa844",
+      "baseline_lexer_source_sha256": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+      "candidate_lexer_source_sha256": "dd9fe8c5f7610a6534b9e76c7e29fed0693d0f2d8f0aa3ab7b2e656b2538e18d",
+      "target_operation": "mncs.compiler.segment.v1::next_token_global",
+      "baseline_result": {
+        "kind": 1,
+        "start": 0,
+        "end": 9216,
+        "diagnostic": 0
+      },
+      "candidate_result": {
+        "kind": 1,
+        "start": 0,
+        "end": 8193,
+        "diagnostic": 6
+      },
+      "baseline_execution_steps": 367432,
+      "candidate_execution_steps": 326657,
+      "candidate_smoke_abc_reference": {
+        "status": "SUCCESS",
+        "requests": 1951,
+        "tokens_compared": 1283,
+        "tier_a_cases": 18,
+        "tier_b_cases": 26,
+        "canonical_splits": 10,
+        "rejected_splits": 9,
+        "headers_ok": 4,
+        "result_sha256": "e48a2bca6f9025e961574e3e420af2858c82ac028e8541279f8dde0e90f151cc"
+      },
+      "candidate_smoke_abc_cranelift": {
+        "status": "SUCCESS",
+        "requests": 1951,
+        "tokens_compared": 1283,
+        "tier_a_cases": 18,
+        "tier_b_cases": 26,
+        "canonical_splits": 10,
+        "rejected_splits": 9,
+        "headers_ok": 4,
+        "result_sha256": "f843c1dd5378daec1f1817155abda3d8b94240e953a4a172fc565e8f2b38f259"
+      },
+      "full_flow_target_profile": "NOT_RUN",
+      "evidence_artifact": "evidence/campaign-20261010-lexer-trivia-prefix-budget.json",
+      "evidence_artifact_sha256": "7536cc0df917c44f23112778311cfc7ed9521a5eabb3932eb6cf81098eac6eeb",
+      "decision": "FIXED_NATIVE_SCAN_BOUND_REGRESSION",
+      "delivery_role": "Compiler lexer fix restoring the documented native trivia/word scan bound; existing Stage-0 oracle and test expectations remain unchanged.",
+      "matrix_row_policy": "Historical compiler_head, Stage-0 field, and all module-stage rows remain unchanged. No canonical VM, executable-artifact, Stage-1, or Stage-2 claim is made."
     }
   },
-  "evidence_updated_at": "2026-10-10T00:48:06Z"
+  "evidence_updated_at": "2026-10-10T01:20:01Z"
 }
