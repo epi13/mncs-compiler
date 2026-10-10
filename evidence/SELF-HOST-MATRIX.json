@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T06:08:42+00:00",
+    "updated_at": "2026-10-10T07:14:12+00:00",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -2921,7 +2921,48 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The bounded target still exhausts its step budget; this work establishes neither project acceptance nor executable, Stage-1, or Stage-2 evidence."
+    },
+    "decl_lexer_dispatch_500k_campaign_20261010": {
+      "observed_at": "2026-10-10T07:14:12+00:00",
+      "delivered_main_revision_at_experiment_start": "47222cab8c89aaadbadc3052cd746e04e173b429",
+      "candidate_base_revision": "47222cab8c89aaadbadc3052cd746e04e173b429",
+      "tested_candidate_git_head": "47222cab8c89aaadbadc3052cd746e04e173b429",
+      "tested_candidate_branch": "campaign/decl-lexer-call-boundary-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "baseline_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ]
+      },
+      "tested_candidate_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "input_total_page_count_at_stride_1024": 899
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "bounded_operation_classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "evidence_artifact": "evidence/campaign-20261010-decl-lexer-dispatch-profile.json",
+      "delivered_implementation_commit": null,
+      "delivery_role": "Evidence-only campaign entry. The direct-call candidate passed its focused parser contract but did not show a repeatable unprofiled gain; candidate source was restored and no module-stage promotion is claimed.",
+      "historical_matrix_policy": "The top-level compiler_head and module-stage rows remain historical snapshots. This entry records the experiment base, tested candidate source identity, and delivered evidence separately."
     }
   },
-  "evidence_updated_at": "2026-10-10T06:08:42+00:00"
+  "evidence_updated_at": "2026-10-10T07:14:12+00:00"
 }

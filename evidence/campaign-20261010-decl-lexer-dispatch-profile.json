@@ -1,0 +1,396 @@
+{
+  "schema": "mncs.compiler.decl-lexer-dispatch-experiment/1",
+  "observed_at": "2026-10-10T07:14:12+00:00",
+  "delivered_main_at_experiment_start": "47222cab8c89aaadbadc3052cd746e04e173b429",
+  "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+  "selected_modules": [
+    "source",
+    "lexer",
+    "parser",
+    "segment",
+    "decl",
+    "flow"
+  ],
+  "stage0": {
+    "revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "measurement_probe_binary_sha256": "2f194aef499fb244ced96ca000be0654bcd9e89010dfddd9f8a9d6e66a4c68e5",
+    "measurement_backend": "reference_interpreter"
+  },
+  "baseline_identity": {
+    "git_head": "47222cab8c89aaadbadc3052cd746e04e173b429",
+    "source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+    "input_total_page_count_at_stride_1024": 900
+  },
+  "tested_candidate_identity": {
+    "candidate_base_revision": "47222cab8c89aaadbadc3052cd746e04e173b429",
+    "branch": "campaign/decl-lexer-call-boundary-20261010",
+    "working_tree_dirty": true,
+    "source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+    "input_total_page_count_at_stride_1024": 899,
+    "change": "Replaced 89 segment.significant_global calls in decl.mncs with lexer.significant_global; retained the segment import because decl still uses segment.byte_at_global.",
+    "specialized_program_functions": {
+      "baseline": 3135,
+      "candidate_cold": 3134
+    }
+  },
+  "resource_envelope": {
+    "step_budget": 500000,
+    "sampled_child_rss_stop_mib": 2300,
+    "fd_limit": "UNKNOWN/no explicit limit established by this measurement",
+    "interpretation": "The operation reached the fixed executor step budget; sampled RSS stop did not trigger. cgroup OOM event deltas were zero in measured runs."
+  },
+  "profiled_runs": {
+    "baseline": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "step_budget": 500000,
+      "reported_status": null,
+      "reported_steps": null,
+      "target_execution_seconds": 0.513,
+      "wall_seconds": 84.121,
+      "child_cpu_seconds": 81.26,
+      "child_peak_rss_kib": 1759360,
+      "child_max_fds": 5,
+      "rss_stop_triggered": false,
+      "cgroup_memory_event_delta": {
+        "high": 0,
+        "low": 0,
+        "oom_group_kill": 0,
+        "sock_throttled": 0,
+        "oom": 0,
+        "max": 0,
+        "oom_kill": 0
+      },
+      "compiler_source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "input_total_page_count_at_stride_1024": 900,
+      "raw_measurement": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-prefix-reference-500k-profile-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "a092c3bd1c88515fa705ad740b4174aabbcd50f352571cc6cda9e86b2101698f"
+      },
+      "raw_phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-prefix-reference-500k-profile-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "6a4e84121f917577090ac4e8900391acd08676b75df3fd87f3c52090d2037a2a"
+      },
+      "runtime_profile_hot_functions": {
+        "mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82": {
+          "calls": 515,
+          "steps": 112116,
+          "exclusive_seconds": 35.557,
+          "inclusive_seconds": 48.862
+        },
+        "mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82": {
+          "calls": 186,
+          "steps": 4488,
+          "exclusive_seconds": 5.268,
+          "inclusive_seconds": 54.199
+        },
+        "mncs.compiler.lexer.v1::scan_chunk_window": {
+          "calls": 2159,
+          "steps": 94233,
+          "exclusive_seconds": 4.143,
+          "inclusive_seconds": 4.216
+        },
+        "mncs.compiler.segment.v1::significant_global__spec_3c0ffe82": {
+          "calls": 186,
+          "steps": 372,
+          "exclusive_seconds": 3.478,
+          "inclusive_seconds": 57.677
+        },
+        "mncs.compiler.source.v1::byte_window4_page__spec_62591ec4": {
+          "calls": 2674,
+          "steps": 157626,
+          "exclusive_seconds": 1.258,
+          "inclusive_seconds": 1.258
+        }
+      }
+    },
+    "candidate": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "step_budget": 500000,
+      "reported_status": null,
+      "reported_steps": null,
+      "target_execution_seconds": 0.437,
+      "wall_seconds": 81.619,
+      "child_cpu_seconds": 78.7,
+      "child_peak_rss_kib": 1759060,
+      "child_max_fds": 5,
+      "rss_stop_triggered": false,
+      "cgroup_memory_event_delta": {
+        "sock_throttled": 0,
+        "oom_group_kill": 0,
+        "oom": 0,
+        "max": 0,
+        "low": 0,
+        "high": 0,
+        "oom_kill": 0
+      },
+      "compiler_source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "input_total_page_count_at_stride_1024": 899,
+      "raw_measurement": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-warm-profile-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "aae1f0b551de5b5b46089b0ed0446f9a25011761ce59a17d634fe8fe222a3078"
+      },
+      "raw_phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-warm-profile-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "b8e27c9c7a7f27010f3cd1e08e94777111fdcdf795db3417c9b8434a6cd3a477"
+      },
+      "runtime_profile_hot_functions": {
+        "mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82": {
+          "calls": 515,
+          "steps": 112116,
+          "exclusive_seconds": 35.42,
+          "inclusive_seconds": 48.905
+        },
+        "mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82": {
+          "calls": 186,
+          "steps": 4488,
+          "exclusive_seconds": 5.304,
+          "inclusive_seconds": 54.28
+        },
+        "mncs.compiler.lexer.v1::scan_chunk_window": {
+          "calls": 2159,
+          "steps": 94233,
+          "exclusive_seconds": 4.124,
+          "inclusive_seconds": 4.199
+        },
+        "mncs.compiler.source.v1::byte_window4_page__spec_62591ec4": {
+          "calls": 2674,
+          "steps": 157626,
+          "exclusive_seconds": 1.268,
+          "inclusive_seconds": 1.268
+        }
+      }
+    },
+    "comparison": {
+      "target_time_change_percent": -14.81,
+      "candidate_segment_significant_global_profile_entry": "absent; the direct lexer call removes the forwarding function from this call graph",
+      "candidate_next_token_calls_and_steps": "unchanged at 515 calls and 112116 steps"
+    }
+  },
+  "unprofiled_runs": {
+    "baseline": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "step_budget": 500000,
+        "reported_status": null,
+        "reported_steps": null,
+        "target_execution_seconds": 0.417,
+        "wall_seconds": 83.118,
+        "child_cpu_seconds": 78.77,
+        "child_peak_rss_kib": 1759140,
+        "child_max_fds": 5,
+        "rss_stop_triggered": false,
+        "cgroup_memory_event_delta": {
+          "sock_throttled": 0,
+          "oom_kill": 0,
+          "oom": 0,
+          "high": 0,
+          "max": 0,
+          "low": 0,
+          "oom_group_kill": 0
+        },
+        "compiler_source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "input_total_page_count_at_stride_1024": 900,
+        "raw_measurement": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-prefix-reference-500k-baseline-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "57d2e5598b5787acd1c566c9573e34bcefb911278949592273958f84984ba780"
+        },
+        "raw_phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-flow-prefix-reference-500k-baseline-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "3f514967e2c47664a4214bf31ac9de994a78b20355f952ad42254726094ae522"
+        }
+      }
+    ],
+    "candidate": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "step_budget": 500000,
+        "reported_status": null,
+        "reported_steps": null,
+        "target_execution_seconds": 0.486,
+        "wall_seconds": 83.123,
+        "child_cpu_seconds": 79.10000000000001,
+        "child_peak_rss_kib": 1758784,
+        "child_max_fds": 5,
+        "rss_stop_triggered": false,
+        "cgroup_memory_event_delta": {
+          "low": 0,
+          "sock_throttled": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "high": 0,
+          "oom_group_kill": 0
+        },
+        "compiler_source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "input_total_page_count_at_stride_1024": 899,
+        "raw_measurement": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-warm-1-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "5cf0b40b67a43aff9f56b74bd0b708867a18e7ff0ca230c589e4834e76954291"
+        },
+        "raw_phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-warm-1-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "6458a2090bbf16c85c578b3ce1fc29ea35fc5bf94746ec3c9c8927e9f26aa445"
+        }
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "step_budget": 500000,
+        "reported_status": null,
+        "reported_steps": null,
+        "target_execution_seconds": 0.448,
+        "wall_seconds": 81.119,
+        "child_cpu_seconds": 78.35,
+        "child_peak_rss_kib": 1759132,
+        "child_max_fds": 5,
+        "rss_stop_triggered": false,
+        "cgroup_memory_event_delta": {
+          "sock_throttled": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "max": 0,
+          "high": 0,
+          "oom_kill": 0,
+          "low": 0
+        },
+        "compiler_source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "input_total_page_count_at_stride_1024": 899,
+        "raw_measurement": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-warm-2-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "2ebdb78c420d0f41be9bef136740726e4c5865f8c452c6534b5e65a82169d019"
+        },
+        "raw_phase_trace": {
+          "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-warm-2-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+          "sha256": "e9e49fb88a6791a6bb0b722becbb3fb24eed36da73503bf62609e454e2b7d2fc"
+        }
+      }
+    ],
+    "candidate_unprofiled_mean_target_seconds": 0.467,
+    "candidate_vs_single_baseline_target_change_percent": 11.99,
+    "candidate_cold_cache_run": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "step_budget": 500000,
+      "reported_status": null,
+      "reported_steps": null,
+      "target_execution_seconds": 0.196,
+      "wall_seconds": 260.877,
+      "child_cpu_seconds": 255.26000000000002,
+      "child_peak_rss_kib": 2142132,
+      "child_max_fds": 5,
+      "rss_stop_triggered": false,
+      "cgroup_memory_event_delta": {
+        "high": 0,
+        "oom": 0,
+        "sock_throttled": 0,
+        "oom_kill": 0,
+        "low": 0,
+        "oom_group_kill": 0,
+        "max": 0
+      },
+      "compiler_source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "input_total_page_count_at_stride_1024": 899,
+      "raw_measurement": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-cold-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+        "sha256": "2b38aad2840041fae391844d476255e8aab34cf5860964ea24df3805f49b654b"
+      },
+      "raw_phase_trace": {
+        "path": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lexer-direct-500k-cold-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+        "sha256": "646740bc3790bf49f639ed322e261580a552028b2ab9325b7a7e6dda23cc6212"
+      },
+      "stage0_frontend_elaboration_seconds": 161.837,
+      "program_function_count": 3134
+    },
+    "comparison_limit": "One warm baseline run and two warm candidate runs are too few to distinguish a roughly 1.2% mean shift from run-to-run variation. Cold-cache wall time is not compared with warm-cache runs."
+  },
+  "semantic_contract": {
+    "status": "PASSED",
+    "test": "tools/test_decl_provider_body_retention.py",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "probe_binary_sha256": "a93b649aa843b9e9a24f5c88d2b4d5d1e313d2e684cada0b66df384b0b0c51a9",
+    "backend": "reference_interpreter",
+    "full_parse_steps": 48652,
+    "signature_parse_steps": 48655,
+    "same_function_signature_and_span": true,
+    "full_body_statement_count": 1,
+    "retained_provider_body_statement_count": 0,
+    "malformed_provider_body_rejected": true,
+    "full_parser_error_span": [
+      106,
+      107
+    ],
+    "signature_parser_error_span": [
+      106,
+      107
+    ],
+    "stage0_error_span_matches": true
+  },
+  "result": {
+    "target_operation_outcome": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "module_stage_promotion": false,
+    "stage1_or_stage2_claim": false,
+    "disposition": "REJECTED_NO_CONFIRMED_UNPROFILED_GAIN; candidate source restored",
+    "reason": "The paired profile run was 3.3% faster, but candidate unprofiled runs were 79.619s and 77.529s versus one 79.528s baseline. The 1.2% mean reduction is not established as repeatable."
+  }
+}

@@ -194,3 +194,41 @@ A same-operation eight-byte lexer-window experiment passed the focused
 scanner/Stage-0 token and span differential, but two warm target measurements
 were slower than the restored baseline. The source change was reverted; it
 does not promote the lexer or flow module evidence.
+
+## Follow-up: 500k reference profile and declaration dispatch
+
+At the same six-module closure and reference-interpreter backend, a 500,000-step
+baseline reached the fixed step budget after 79.528 seconds in the target
+request. It used 78.77 CPU seconds, peaked at 1,759,140 KiB RSS, and held five
+FDs. The sampled 2,300 MiB stop did not trigger; cgroup memory event deltas,
+including `oom` and `oom_kill`, were zero. The request returned no project
+result, so its semantic outcome remains UNKNOWN.
+
+The function profile located the largest measured cost in
+`lexer.next_token_global`: 515 calls, 112,116 VM steps, and 35.557 seconds
+exclusive time (48.862 seconds inclusive). `lexer.significant_global` ran 186
+times for 5.268 seconds exclusive. `segment.significant_global` forwarded the
+same 186 calls and accounted for 3.478 seconds exclusive. `scan_chunk_window`
+ran 2,159 times for 4.143 seconds exclusive; `source.byte_window4_page` ran
+2,674 times for 1.258 seconds. This profile identifies token scanning and
+interpreter dispatch as measured costs; it does not establish a particular
+allocator or native backend cause.
+
+A candidate changed the 89 declaration-parser calls from
+`segment.significant_global` to `lexer.significant_global`, keeping the
+`segment` import for remaining byte access. The paired profile target time was
+78.040 seconds, 3.3% below the profiled baseline; the segment forwarding entry
+disappeared, while lexer token-call count and steps stayed unchanged. Two warm
+unprofiled candidate target times were 79.619 and 77.529 seconds, against one
+79.528-second unprofiled baseline. The 78.574-second candidate mean is only
+1.2% lower and is not repeatable evidence with these sample counts. The direct
+call source was restored.
+
+On the same candidate source identity, the focused
+`test_decl_provider_body_retention.py` contract passed against pinned Stage-0
+`b05dfa2b`: full and signature-only parse agreed on function signature and
+span, and malformed provider-body rejection matched the Stage-0 diagnostic
+span. The bounded real-flow request still exhausted its 500,000-step budget
+without returning a project result. No module-stage, executable, Stage-1, or
+Stage-2 claim is added. Compact metrics and raw measurement/trace hashes are in
+[`campaign-20261010-decl-lexer-dispatch-profile.json`](../evidence/campaign-20261010-decl-lexer-dispatch-profile.json).
