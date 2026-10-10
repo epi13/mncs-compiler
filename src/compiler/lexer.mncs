@@ -647,15 +647,15 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 fn significant_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
     let first: Token = next_token_global<P, N>(pages, stride, total, start);
     if !(is_trivia_cont(first)) { return first; }
-    let second: Token = skip_trivia_global<P, N>(pages, stride, total, first);
+    let second: Token = next_token_global<P, N>(pages, stride, total, first.end);
     if !(is_trivia_cont(second)) { return second; }
     iterate i up_to 1024 carrying token: Token = second {
         if !(is_trivia_cont(token)) { return token; }
-        next token = skip_trivia_global<P, N>(pages, stride, total, token);
+        next token = next_token_global<P, N>(pages, stride, total, token.end);
     }
     iterate i up_to 1024 carrying token2: Token = token {
         if !(is_trivia_cont(token2)) { return token2; }
-        next token2 = skip_trivia_global<P, N>(pages, stride, total, token2);
+        next token2 = next_token_global<P, N>(pages, stride, total, token2.end);
     }
     return token2;
 }
