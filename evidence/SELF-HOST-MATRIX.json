@@ -2253,7 +2253,93 @@
       "delivered_main_revision": "7e30177edcee0a10cb428a6183c009923f536fe7",
       "push_status": "PUSHED_TO_origin_main",
       "delivery_recorded_at": "2026-10-10T02:54:45Z"
+    },
+    "source_local_byte_window_campaign_20261010": {
+      "candidate_base_revision": "85f4886f73eab6699084339ea486d91b5cd95d9c",
+      "entry_delivered_main_revision": "85f4886f73eab6699084339ea486d91b5cd95d9c",
+      "tested_candidate_git_head": "85f4886f73eab6699084339ea486d91b5cd95d9c",
+      "tested_candidate_worktree_dirty": true,
+      "baseline_compiler_source_identity_sha256": "51497d74c7ee22650e353c03f43ba6610c56dce9911f00d044371882439b7b3c",
+      "candidate_compiler_source_identity_sha256": "be2a36ec870199a42a5ad0e92c71e015be903e1eccd914897df7412727b2723b",
+      "baseline_module_source_sha256": {
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5",
+        "lexer": "dd9fe8c5f7610a6534b9e76c7e29fed0693d0f2d8f0aa3ab7b2e656b2538e18d",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "candidate_module_source_sha256": {
+        "source": "ac7dbf85aa919fdb48aa68b34f2974d1858cf60303ea287bd51e67cb8a06a1a1",
+        "lexer": "4ec7f174ba75c0c6bf47da015703493b87cf3e524c9713f2236b2a03ce7ef843",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "implementation_commit": null,
+      "delivered_main_revision": null,
+      "delivery_state": "verified_candidate_worktree; commit_and_main_integration_pending",
+      "delivery_role": "Measured compiler-source execution optimization with exact Stage-0 lexical parity; no module-stage, executable, Stage-1, or Stage-2 promotion.",
+      "evidence_artifact": "evidence/campaign-20261010-source-local-byte-window.json",
+      "evidence_artifact_sha256": "b225c91fbdf6d009196c72940238aa9294e8508cd4fce6042b3dc6b2ed714638",
+      "observed_at": "2026-10-10T03:35:59.391044+00:00",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "measurement_backend": "reference_interpreter",
+      "target_input": {
+        "module_stems": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "pages_at_width_1024": 899,
+        "page_scope_note": "The 899 pages cover the six selected target-input modules. The historical full flow closure remains 894 pages in SELF-HOST-MATRIX.json.",
+        "step_budgets": [
+          50000,
+          100000
+        ]
+      },
+      "bounded_100k_delta": {
+        "baseline_target_execution_ms": 32441.192,
+        "candidate_target_execution_ms": 26794.23,
+        "target_execution_reduction_percent": 17.41,
+        "baseline_target_cpu_seconds_sampled": 32.64,
+        "candidate_target_cpu_seconds_sampled": 26.87,
+        "target_cpu_reduction_percent": 17.68,
+        "baseline_global_window_calls": 495,
+        "candidate_global_window_calls": 112,
+        "global_window_call_reduction_percent": 77.37,
+        "baseline_global_window_exclusive_ms": 7376.898,
+        "candidate_global_window_exclusive_ms": 1662.834,
+        "baseline_peak_sampled_rss_kib": 1754664,
+        "candidate_peak_sampled_rss_kib": 1755860,
+        "baseline_peak_fds": 5,
+        "candidate_peak_fds": 5,
+        "classification": "RESOURCE_EXHAUSTED at 100000 steps in both; semantic_result UNKNOWN_NO_RETURNED_PROJECT_RESULT"
+      },
+      "stage0_differentials": {
+        "tier_b_result_sha256": "2f7eb281a47795845950db95888072f56a73339c6fac58e81c0d72cf5ca7fcec",
+        "tier_b_requests": 12691,
+        "tier_b_tokens_compared": 39501,
+        "tier_b_baseline_candidate_match": true,
+        "tier_c_result_sha256": "d0583b824e1cf9d6b7074a71e37bba6b52e45c2a88030664f42ba288eafab910",
+        "tier_c_requests": 85,
+        "tier_c_baseline_candidate_match": true,
+        "tier_a_existing_oracle_mismatch": "BASELINE_MISMATCH_REPRODUCED"
+      },
+      "unfinished_self_compile": {
+        "operation": "compile_project_target on changed source module with 8,000,000-step existing budget",
+        "runner_status": "INTERRUPTED",
+        "semantic_result": "UNKNOWN_NO_COMPILER_RESULT",
+        "termination": "Caller sent SIGINT after about three minutes because this invocation had no internal phase telemetry; it returned no project result.",
+        "stage_promotion": false
+      },
+      "stage1_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-10T02:54:45Z"
+  "evidence_updated_at": "2026-10-10T03:35:59.391044+00:00"
 }

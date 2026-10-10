@@ -748,6 +748,19 @@ def tier_c(probe, kinds_inv, stats):
                            (integer(total + 1),))
     assert (bad["kind"], bad["start"], bad["end"],
             bad["diagnostic"]) == (0, total, total, 4)
+    # A valid first page followed by a missing transported page stays total:
+    # after the block scanner reaches that boundary, the page-local fast path
+    # must fall back to global sentinels without indexing beyond pages.len.
+    malformed_scan = probe.run_global(
+        seg, "next_token_global", [b"/*ab"], 4, 8, (integer(0),))
+    assert (malformed_scan["kind"], malformed_scan["start"],
+            malformed_scan["end"], malformed_scan["diagnostic"]) == \
+           (3, 0, 8, 1), malformed_scan
+    stats["malformed_page_table_scan"] = {
+        "shape": {"pages": 1, "stride": 4, "claimed_total": 8},
+        "token": [malformed_scan["kind"], malformed_scan["start"],
+                  malformed_scan["end"], malformed_scan["diagnostic"]],
+    }
     assert probe.run_plain(seg, "span_valid_global",
                            [integer(total), integer(5), integer(3)]) is False
     # Trivia-prefix budget: 9KB of whitespace splits into clean trivia that

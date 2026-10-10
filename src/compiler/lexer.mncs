@@ -474,67 +474,53 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     let ws: bool = space(a);
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
-        iterate i up_to 1024 carrying s0: Scan = seed {
-            if s0.done || s0.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s0, line, block, word, ws); }
-            let window0: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s0.end);
-            let advanced: Scan = scan_chunk_window(total, window0, s0, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+        // Keep each scan window in the current page when it fits. Passing the
+        // entire page table to byte_window4_global for every chunk made frame
+        // setup scale with the number of source pages; only page-edge and
+        // malformed layouts need the total global fallback.
+        iterate pass up_to 4 carrying outer: Scan = seed {
+            iterate i up_to 1024 carrying inner: Scan = outer {
+                if inner.done || inner.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, inner, line, block, word, ws); }
+                let address: source.GlobalPageAddress = source.global_page_address(stride, total, inner.end);
+                // A scan can only enter this loop after the first byte was
+                // resolved from a non-empty page table. Clamp an impossible
+                // later page index to page zero; byte_window4_page rejects
+                // the mismatch and the global total path returns sentinels.
+                let selected_page: u64 = select(address.page < pages.len, address.page, 0);
+                let page: [byte; up_to N] = pages[selected_page];
+                let choice: source.ByteWindow4Choice = source.byte_window4_page<N>(page, selected_page, address, stride, total);
+                let window: source.ByteWindow4 = match choice {
+                    Direct { window: local } => local,
+                    GlobalFallback => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
+                };
+                let advanced: Scan = scan_chunk_window(total, window, inner, line, block, word, number, ws);
+                if advanced.done || advanced.end >= total {
+                    return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+                }
+                next inner = advanced;
             }
-            next s0 = advanced;
-        }
-        iterate i up_to 1024 carrying s1: Scan = s0 {
-            if s1.done || s1.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s1, line, block, word, ws); }
-            let window1: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s1.end);
-            let advanced: Scan = scan_chunk_window(total, window1, s1, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            if inner.done || inner.end >= total {
+                return token_from_scan_global<P, N>(pages, stride, total, start, inner, line, block, word, ws);
             }
-            next s1 = advanced;
-        }
-        // The 8192-transition per-call bound remains the same. Line, word,
-        // and whitespace chunks can consume four characters per pass, so
-        // they stop after two 1024-step passes. Number and block chunks
-        // consume at most two transitions per step and use all four passes.
-        if s1.done || s1.end >= total {
-            return token_from_scan_global<P, N>(pages, stride, total, start, s1, line, block, word, ws);
-        }
-        if line || word || ws {
-            if line || ws {
-                return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: s1.end, diagnostic: 6 };
+            // Line, word, and whitespace chunks consume four bytes per
+            // window, so their 8192-transition budget is two passes.
+            if pass == 1 && (line || word || ws) {
+                if line || ws {
+                    return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: inner.end, diagnostic: 6 };
+                }
+                return Token { kind: 7, start: start, end: inner.end, diagnostic: 5 };
             }
-            return Token { kind: 7, start: start, end: s1.end, diagnostic: 5 };
-        }
-        iterate i up_to 1024 carrying s2: Scan = s1 {
-            if s2.done || s2.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s2, line, block, word, ws); }
-            let window2: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s2.end);
-            let advanced: Scan = scan_chunk_window(total, window2, s2, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+            // Number and block-comment chunks consume at most two bytes per
+            // window and keep all four bounded passes (8192 transitions).
+            if pass == 3 {
+                if ws || line || block {
+                    return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: inner.end, diagnostic: 6 };
+                }
+                return Token { kind: 7, start: start, end: inner.end, diagnostic: 5 };
             }
-            next s2 = advanced;
+            next outer = inner;
         }
-        iterate i up_to 1024 carrying s3: Scan = s2 {
-            if s3.done || s3.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s3, line, block, word, ws); }
-            let window3: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s3.end);
-            let advanced: Scan = scan_chunk_window(total, window3, s3, line, block, word, number, ws);
-            if advanced.done || advanced.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
-            }
-            next s3 = advanced;
-        }
-        // Each remaining chunk handles at most two transitions; four
-        // bounded passes retain the 8192-transition per-call scan budget.
-        // The scan budget is exhausted mid-token. Trivia
-        // continues at the prefix end (diagnostic 6); significant content is
-        // refused as overlong (diagnostic 5) rather than silently split.
-        if s3.done || s3.end >= total {
-            return token_from_scan_global<P, N>(pages, stride, total, start, s3, line, block, word, ws);
-        }
-        if ws || line || block {
-            return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: s3.end, diagnostic: 6 };
-        }
-        return Token { kind: 7, start: start, end: s3.end, diagnostic: 5 };
+        return token_from_scan_global<P, N>(pages, stride, total, start, outer, line, block, word, ws);
     }
     let kind: u64 = punctuation(a, b);
     return Token { kind: kind, start: start, end: start + select(kind >= 80, 2, 1), diagnostic: select(kind == 7, 2, 0) };

@@ -101,6 +101,38 @@ fn byte_at_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
 // one page and avoids four separate global address calculations; page edges,
 // short inputs, and malformed views retain byte_at_global's total behavior.
 record ByteWindow4 { b0: u64, b1: u64, b2: u64, b3: u64 }
+record GlobalPageAddress { valid: bool, page: u64, intra: u64, offset: u64 }
+enum ByteWindow4Choice {
+    Direct { window: ByteWindow4 },
+    GlobalFallback
+}
+
+// Resolve the logical page and offset without transporting the page table to
+// each scan step. The page-table bound is checked by the caller before it
+// indexes the selected page.
+fn global_page_address(stride: u64, total: u64, offset: u64) -> (result: GlobalPageAddress) {
+    if stride == 0 || offset >= total {
+        return GlobalPageAddress { valid: false, page: 0, intra: 0, offset: offset };
+    }
+    return GlobalPageAddress { valid: true, page: offset / stride, intra: offset % stride, offset: offset };
+}
+
+// Produce the common same-page window from one already-selected page. The
+// caller uses byte_window4_global for cross-page, short, or malformed cases,
+// which remains the total authority for global reads.
+fn byte_window4_page<N: Nat>(view: [byte; up_to N], selected_page: u64, address: GlobalPageAddress, stride: u64, total: u64) -> (result: ByteWindow4Choice) {
+    if !address.valid || selected_page != address.page || stride == 0 || address.offset >= total || address.intra >= stride || address.intra >= view.len {
+        return ByteWindow4Choice.GlobalFallback;
+    }
+    if total - address.offset >= 4 && stride - address.intra >= 4 && view.len - address.intra >= 4 {
+        let b0: u64 = view[address.intra + 0] as u64;
+        let b1: u64 = view[address.intra + 1] as u64;
+        let b2: u64 = view[address.intra + 2] as u64;
+        let b3: u64 = view[address.intra + 3] as u64;
+        return ByteWindow4Choice.Direct { window: ByteWindow4 { b0: b0, b1: b1, b2: b2, b3: b3 } };
+    }
+    return ByteWindow4Choice.GlobalFallback;
+}
 
 fn byte_at_global_delta<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64, delta: u64) -> (result: u64) {
     if offset > 18446744073709551615 - delta { return 256; }
