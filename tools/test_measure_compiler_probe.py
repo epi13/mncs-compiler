@@ -38,8 +38,16 @@ def test_probe_cache_directory_is_shared_across_linked_worktrees(tmp_path):
     )
 
     expected = repository / ".build" / "probe-cache"
-    assert measurement._probe_cache_directory(repository) == expected
-    assert measurement._probe_cache_directory(worktree) == expected
+    (repository / ".bootstrap").mkdir()
+    (repository / ".bootstrap" / "revision").write_text("provisioned-pin\n")
+    assert measurement.probe_cache_directory(repository) == expected
+    assert measurement.probe_cache_directory(worktree) == expected
+    assert measurement.probe_toolchain_identity_root(repository) == repository
+    assert measurement.probe_toolchain_identity_root(worktree) == repository
+
+    (worktree / ".bootstrap").mkdir()
+    (worktree / ".bootstrap" / "revision").write_text("worktree-pin\n")
+    assert measurement.probe_toolchain_identity_root(worktree) == worktree
 
 
 def test_body_profiles_are_read_from_nested_probe_stderr():

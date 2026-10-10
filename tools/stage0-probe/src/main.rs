@@ -552,10 +552,13 @@ fn main() {
     // version probe. Skipped entirely when the cache is disabled.
     let toolchain = cache_dir.as_ref().map(|_| {
         let started = Instant::now();
+        let identity_root = std::env::var_os("MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| std::path::PathBuf::from("."));
         let identity = gather_toolchain_identity(
             backend_name.as_deref(),
-            std::path::Path::new("mncs-language.lock.json"),
-            std::path::Path::new(".bootstrap"),
+            &identity_root.join("mncs-language.lock.json"),
+            &identity_root.join(".bootstrap"),
         );
         trace_phase(
             "toolchain_identity",
@@ -564,6 +567,7 @@ fn main() {
                 "backend": backend_name,
                 "stage0_revision": identity.provisioned_revision,
                 "lock_revision": identity.lock_revision,
+                "identity_root": identity_root,
                 "cache_enabled": true
             }),
         );

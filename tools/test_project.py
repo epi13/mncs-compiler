@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 import subprocess
 import tempfile
 import time
+from probe_paths import probe_cache_directory, probe_toolchain_identity_root
 
 try:
     import resource
@@ -32,7 +33,19 @@ except ImportError:  # pragma: no cover - Windows transport probes remain unboun
 
 ROOT = Path(__file__).resolve().parents[1]
 CAMPAIGN_ID = os.environ.get("MNCS_CAMPAIGN_ID", datetime.now(timezone.utc).strftime("%Y%m%d"))
-BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
+
+_DEFAULT_TOOLCHAIN_ROOT = Path(
+    os.environ.get(
+        "MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT",
+        probe_toolchain_identity_root(ROOT),
+    )
+).expanduser()
+BOOTSTRAP_TARGET = Path(
+    os.environ.get(
+        "MNCS_BOOTSTRAP_TARGET_DIR",
+        _DEFAULT_TOOLCHAIN_ROOT / ".bootstrap" / "target",
+    )
+).expanduser()
 os.chdir(ROOT)
 os.environ.setdefault("MNCS_PROBE_MODULES", "source,lexer,parser,segment,decl,flow,ssa,project")
 os.environ.setdefault("MNCS_PROBE_EXECUTION_MODULES", "mncs.compiler.project.v1,mncs.compiler.ssa.v1")
@@ -154,7 +167,11 @@ class Probe:
         base = os.environ.copy()
         if base.get("MNCS_PROBE_BACKEND") == "reference_interpreter":
             base.pop("MNCS_PROBE_BACKEND", None)
-        base.setdefault("MNCS_PROBE_CACHE_DIR", str(ROOT / ".build" / "probe-cache"))
+        base.setdefault("MNCS_PROBE_CACHE_DIR", str(probe_cache_directory(ROOT)))
+        base.setdefault(
+            "MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT",
+            str(probe_toolchain_identity_root(ROOT)),
+        )
         configured = [part.strip() for part in
                       base.get("MNCS_PROBE_EXECUTION_MODULES", "").split(",")
                       if part.strip()]
