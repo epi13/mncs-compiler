@@ -777,6 +777,37 @@ def tier_c(probe, kinds_inv, stats):
         "split_page_fallback": [split_page_keyword["kind"], split_page_keyword["end"]],
         "missing_page_fallback": [malformed_keyword["kind"], malformed_keyword["end"]],
     }
+    # Reuse of page-local keyword bytes must preserve every keyword and leave
+    # same-length identifiers untouched across local and global page paths.
+    keywords = [
+        "mncs", "module", "fn", "return", "let", "if", "else", "fail",
+        "requires", "ensures", "assumes", "property", "invariant",
+        "metamorphic", "effect", "capability", "authorized_by", "enum",
+        "use", "record", "match", "iterate", "up_to", "carrying", "next",
+        "over", "as", "while", "true", "false",
+    ]
+    keyword_corpus = " ".join(
+        part for word in keywords for part in (word, word + "x", "x" + word)
+    ).encode("ascii")
+    expected_keywords, _ = oracle_tokens(probe, kinds_inv, keyword_corpus)
+    keyword_corpus_strides = {}
+    for stride in (1, 2, 7, 64, 1024):
+        pages = chunk(keyword_corpus, stride)
+        observed, batch = batch_walk(probe, pages, stride, len(keyword_corpus))
+        actual = [(token["kind"], token["start"], token["end"],
+                   token["diagnostic"]) for token in observed[:-1]]
+        assert actual == expected_keywords, (stride, actual, expected_keywords)
+        assert batch["eof"] is True and batch["next"] == len(keyword_corpus)
+        keyword_corpus_strides[str(stride)] = {
+            "pages": len(pages), "tokens": len(actual),
+        }
+    stats["keyword_corpus"] = {
+        "keyword_count": len(keywords),
+        "near_miss_count": len(keywords) * 2,
+        "token_count": len(expected_keywords),
+        "stage0_oracle_exact": True,
+        "strides": keyword_corpus_strides,
+    }
     # A valid first page followed by a missing transported page stays total:
     # after the block scanner reaches that boundary, the page-local fast path
     # must fall back to global sentinels without indexing beyond pages.len.

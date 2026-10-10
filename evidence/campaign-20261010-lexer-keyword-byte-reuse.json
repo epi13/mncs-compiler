@@ -1,0 +1,494 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-lexer-keyword-byte-reuse",
+  "observed_at": "2026-10-10T05:40:15.042773+00:00",
+  "decision": "KEEP_MEASURED_IMPLEMENTATION",
+  "change": {
+    "file": "src/compiler/lexer.mncs",
+    "candidate_file_sha256": "39436fadb0ef5de3426bedec1f06fc4573abd5f65a25b02ac2ebc7d6ff61312a",
+    "baseline_file_sha256": "1a01bccf07055535c774d39b009e7c7a17751dd1f692cbe0a9ad496def07a796",
+    "description": "The page-local keyword matcher loads each byte once for the matching keyword length, then compares the cached values against the unchanged token table.",
+    "language_or_backend_semantics_changed": false
+  },
+  "identities": {
+    "repository": "mncs-compiler",
+    "candidate_base_revision": "aa18c166dffbe8d19ace6c70cd109463881f05a6",
+    "tested_candidate_git_head": "aa18c166dffbe8d19ace6c70cd109463881f05a6",
+    "tested_candidate_branch": "campaign/lexer-keyword-byte-reuse-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "baseline_git_revision": "6af2e42a548defe5af25b33711b5ac838583acef",
+    "baseline_compiler_source_identity_sha256": "2a8f43f1f0c8e0a6bcbf5fcb021d42167b0ab681562b4f9ed20e7ab418d71b83",
+    "candidate_compiler_source_identity_sha256": "f6cd4e0bf22f59a165703acf2a9857db0de9f8312cc89c9deb6a325aa169205d",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_probe_sha256": "2f194aef499fb244ced96ca000be0654bcd9e89010dfddd9f8a9d6e66a4c68e5",
+    "measurement_tool_sha256": {
+      "tools/measure_compiler_probe.py": "7502353ef2b0e2f511e6db84abb98df67b836e66853d9807665a57b1883ab2db",
+      "tools/probe_compiler_module_frontier.py": "69a31cbab0185a8c0218cb16f5672eb773ffc7ad70be584ae4ad1942afa6d825"
+    },
+    "test_tool_sha256": {
+      "tools/test_cp0001.py": "c2ce28226a409a96122d16d1344d1468cf3487fef51354e9bba2687419c3da9c"
+    }
+  },
+  "stage0_differential": {
+    "tier": "CP-0001 Tier C",
+    "backend": "reference_interpreter",
+    "requests": 91,
+    "semantic_digest_excludes_executor_step_count": true,
+    "baseline_semantic_digest_sha256": "270fb1eafaa08565e5f78e999a7c20ee5765cdeb4c397c87753a4ed12cdb8957",
+    "candidate_semantic_digest_sha256": "270fb1eafaa08565e5f78e999a7c20ee5765cdeb4c397c87753a4ed12cdb8957",
+    "semantic_outputs_match": true,
+    "baseline_steps": 3363634,
+    "candidate_steps": 3360615,
+    "step_delta": -3019
+  },
+  "keyword_corpus": {
+    "executed_in": "CP-0001 Tier C, tools/test_cp0001.py",
+    "execution_backend": "cranelift",
+    "stage0_oracle_comparison": "exact token kind/span/diagnostic equality",
+    "keywords": 30,
+    "near_miss_identifiers": 60,
+    "expected_token_count": 179,
+    "page_widths": [
+      1,
+      2,
+      7,
+      64,
+      1024
+    ],
+    "pages_and_tokens_by_width": {
+      "1": {
+        "pages": 665,
+        "tokens": 179
+      },
+      "2": {
+        "pages": 333,
+        "tokens": 179
+      },
+      "7": {
+        "pages": 95,
+        "tokens": 179
+      },
+      "64": {
+        "pages": 11,
+        "tokens": 179
+      },
+      "1024": {
+        "pages": 1,
+        "tokens": 179
+      }
+    },
+    "suite_requests": 96,
+    "suite_result_sha256": "70302a8575b59beb9e8b0f953a3efa43a0a354aff171482d03907465018ccb59",
+    "suite_elapsed_seconds": 2.683,
+    "suite_output_artifact": {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/cp0001-results.json",
+      "sha256": "3218c96bda2a7c56c395f28cf9bfc55b944622e041dfee564e842d0e79a667e7",
+      "bytes": 2810
+    }
+  },
+  "program_cache_preparation": {
+    "classification": "SUCCESS",
+    "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+    "wall_seconds": 167.244,
+    "child_cpu_seconds": 164.39,
+    "child_peak_rss_kib": 2142216,
+    "child_peak_fds": 5,
+    "frontend_elaboration_ms": 165771.428103,
+    "program_function_count": 3135,
+    "program_artifact_uncompressed_bytes": 151503628,
+    "program_artifact_gzip_bytes": 5310744,
+    "program_cache_key": "376fe386221f393dbe0e9cae33789230b42b4cb203d9f9f933f81cc325bcfcea",
+    "rss_cap_triggered": false,
+    "cgroup_memory_events_delta": {
+      "oom_group_kill": 0,
+      "oom_kill": 0,
+      "oom": 0,
+      "low": 0,
+      "high": 0,
+      "sock_throttled": 0,
+      "max": 0
+    },
+    "operation_outcome": "ADMISSION_ONLY_SUCCESS"
+  },
+  "target": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "execution_backend": "reference_interpreter",
+    "selected_input_pages_at_width_1024": 901,
+    "page_count_scope_note": "Measurement page count for this selected request/source set. It is distinct from the established 894-page real-flow project closure recorded in SELF-HOST-MATRIX.json.",
+    "step_budget": 200000,
+    "timeout_seconds": 120,
+    "sampled_child_rss_stop_mib": 2300,
+    "stage0_project_oracle": "skipped for the target attempt; no project acceptance or rejection is claimed",
+    "baseline": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "target_execution_status": "CONFIRMED",
+        "request_status": "budget_exhausted",
+        "reported_steps": 200000,
+        "wall_seconds": 42.062,
+        "child_cpu_seconds": 39.45,
+        "child_peak_rss_kib": 1761244,
+        "child_peak_fds": 5,
+        "proc_io_read_bytes": 0,
+        "proc_io_write_bytes": 20480,
+        "sampled_rss_cap_mib": 2300,
+        "sampled_rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "high": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "low": 0,
+          "oom_group_kill": 0,
+          "max": 0,
+          "sock_throttled": 0
+        },
+        "cgroup_scope_attribution": "cgroup scope, not child-specific",
+        "cgroup_memory_max": "max",
+        "cgroup_cpu_max": "max 100000",
+        "host_pressure_some_avg10_pct": {
+          "cpu_before": 2.25,
+          "cpu_after": 2.07,
+          "memory_before": 0.0,
+          "memory_after": 0.0,
+          "io_before": 0.15,
+          "io_after": 0.03
+        },
+        "target_phase_ms": {
+          "source_resolution_and_dependency_selection": 0.673458,
+          "retained_session_admission": 790.311689,
+          "record_type_identity_admission": 9.604436,
+          "native_request_construction": 769.106633,
+          "native_request_transport_and_execution": 39780.401311,
+          "result_serialization": 0.462266
+        },
+        "compiler_source_identity_sha256": "2a8f43f1f0c8e0a6bcbf5fcb021d42167b0ab681562b4f9ed20e7ab418d71b83"
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "target_execution_status": "CONFIRMED",
+        "request_status": "budget_exhausted",
+        "reported_steps": 200000,
+        "wall_seconds": 39.558,
+        "child_cpu_seconds": 36.720000000000006,
+        "child_peak_rss_kib": 1761084,
+        "child_peak_fds": 5,
+        "proc_io_read_bytes": 0,
+        "proc_io_write_bytes": 24576,
+        "sampled_rss_cap_mib": 2300,
+        "sampled_rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "max": 0,
+          "oom_group_kill": 0,
+          "high": 0,
+          "oom": 0,
+          "low": 0,
+          "sock_throttled": 0,
+          "oom_kill": 0
+        },
+        "cgroup_scope_attribution": "cgroup scope, not child-specific",
+        "cgroup_memory_max": "max",
+        "cgroup_cpu_max": "max 100000",
+        "host_pressure_some_avg10_pct": {
+          "cpu_before": 2.75,
+          "cpu_after": 1.82,
+          "memory_before": 0.0,
+          "memory_after": 0.0,
+          "io_before": 0.18,
+          "io_after": 0.03
+        },
+        "target_phase_ms": {
+          "source_resolution_and_dependency_selection": 1.195282,
+          "retained_session_admission": 824.73157,
+          "record_type_identity_admission": 13.337587,
+          "native_request_construction": 834.844436,
+          "native_request_transport_and_execution": 37240.453803,
+          "result_serialization": 0.436606
+        },
+        "compiler_source_identity_sha256": "2a8f43f1f0c8e0a6bcbf5fcb021d42167b0ab681562b4f9ed20e7ab418d71b83"
+      }
+    ],
+    "candidate": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "target_execution_status": "CONFIRMED",
+        "request_status": "budget_exhausted",
+        "reported_steps": 200000,
+        "wall_seconds": 37.555,
+        "child_cpu_seconds": 34.98,
+        "child_peak_rss_kib": 1758804,
+        "child_peak_fds": 5,
+        "proc_io_read_bytes": 0,
+        "proc_io_write_bytes": 20480,
+        "sampled_rss_cap_mib": 2300,
+        "sampled_rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "low": 0,
+          "oom_kill": 0,
+          "max": 0,
+          "sock_throttled": 0,
+          "high": 0,
+          "oom_group_kill": 0,
+          "oom": 0
+        },
+        "cgroup_scope_attribution": "cgroup scope, not child-specific",
+        "cgroup_memory_max": "max",
+        "cgroup_cpu_max": "max 100000",
+        "host_pressure_some_avg10_pct": {
+          "cpu_before": 2.04,
+          "cpu_after": 2.33,
+          "memory_before": 0.0,
+          "memory_after": 0.0,
+          "io_before": 0.02,
+          "io_after": 0.0
+        },
+        "target_phase_ms": {
+          "source_resolution_and_dependency_selection": 0.650425,
+          "retained_session_admission": 681.435627,
+          "record_type_identity_admission": 7.347527,
+          "native_request_construction": 777.750588,
+          "native_request_transport_and_execution": 35471.113344,
+          "result_serialization": 0.46782
+        },
+        "compiler_source_identity_sha256": "f6cd4e0bf22f59a165703acf2a9857db0de9f8312cc89c9deb6a325aa169205d"
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "target_execution_status": "CONFIRMED",
+        "request_status": "budget_exhausted",
+        "reported_steps": 200000,
+        "wall_seconds": 37.056,
+        "child_cpu_seconds": 34.660000000000004,
+        "child_peak_rss_kib": 1758812,
+        "child_peak_fds": 5,
+        "proc_io_read_bytes": 0,
+        "proc_io_write_bytes": 20480,
+        "sampled_rss_cap_mib": 2300,
+        "sampled_rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_kill": 0,
+          "oom": 0,
+          "low": 0,
+          "sock_throttled": 0,
+          "max": 0,
+          "high": 0,
+          "oom_group_kill": 0
+        },
+        "cgroup_scope_attribution": "cgroup scope, not child-specific",
+        "cgroup_memory_max": "max",
+        "cgroup_cpu_max": "max 100000",
+        "host_pressure_some_avg10_pct": {
+          "cpu_before": 2.24,
+          "cpu_after": 1.3,
+          "memory_before": 0.0,
+          "memory_after": 0.0,
+          "io_before": 0.02,
+          "io_after": 0.28
+        },
+        "target_phase_ms": {
+          "source_resolution_and_dependency_selection": 0.701584,
+          "retained_session_admission": 678.845633,
+          "record_type_identity_admission": 7.043162,
+          "native_request_construction": 765.086028,
+          "native_request_transport_and_execution": 35229.538815,
+          "result_serialization": 2.125425
+        },
+        "compiler_source_identity_sha256": "f6cd4e0bf22f59a165703acf2a9857db0de9f8312cc89c9deb6a325aa169205d"
+      }
+    ],
+    "means": {
+      "baseline": {
+        "wall_seconds": 40.81,
+        "child_cpu_seconds": 38.08500000000001,
+        "child_peak_rss_kib": 1761164
+      },
+      "candidate": {
+        "wall_seconds": 37.305499999999995,
+        "child_cpu_seconds": 34.82,
+        "child_peak_rss_kib": 1758808
+      },
+      "candidate_minus_baseline": {
+        "wall_seconds": -3.5045000000000073,
+        "wall_reduction_percent": 8.587356040186247,
+        "child_cpu_seconds": -3.2650000000000077,
+        "child_cpu_reduction_percent": 8.57292897466196,
+        "peak_rss_kib": -2356,
+        "peak_rss_reduction_percent": 0.13377516233581882,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ]
+      }
+    },
+    "target_outcome": {
+      "baseline_classification": "RESOURCE_EXHAUSTED",
+      "candidate_classification": "RESOURCE_EXHAUSTED",
+      "baseline_request_status": "budget_exhausted",
+      "candidate_request_status": "budget_exhausted",
+      "reported_steps_each": 200000,
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "interpretation": "Both targets returned at the fixed execution step budget; neither was a timeout, RSS-cap termination, OOM event, or demonstrated semantic rejection."
+    }
+  },
+  "profiled_target": {
+    "baseline": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "runtime_profile_enabled": true,
+      "wall_seconds_instrumented": 39.061,
+      "reported_steps": 200000,
+      "functions": {
+        "next_token_global": {
+          "calls": 171,
+          "steps": 41130,
+          "inclusive_ms": 20909.597365,
+          "exclusive_ms": 12786.103543
+        },
+        "keyword": {
+          "calls": 38,
+          "steps": 3958,
+          "inclusive_ms": 2111.11242,
+          "exclusive_ms": 2074.803806
+        },
+        "keyword_global": {
+          "calls": 38,
+          "steps": 1368,
+          "inclusive_ms": 3052.262419,
+          "exclusive_ms": 936.988065
+        }
+      }
+    },
+    "candidate": {
+      "classification": "RESOURCE_EXHAUSTED",
+      "runtime_profile_enabled": true,
+      "wall_seconds_instrumented": 36.053,
+      "reported_steps": 200000,
+      "functions": {
+        "next_token_global": {
+          "calls": 173,
+          "steps": 41788,
+          "inclusive_ms": 18472.992459,
+          "exclusive_ms": 12188.769159
+        },
+        "keyword_global": {
+          "calls": 38,
+          "steps": 1368,
+          "inclusive_ms": 1505.561929,
+          "exclusive_ms": 883.515673
+        },
+        "keyword": {
+          "calls": 38,
+          "steps": 3028,
+          "inclusive_ms": 618.619033,
+          "exclusive_ms": 608.346374
+        }
+      }
+    }
+  },
+  "resource_observation": {
+    "rss_cap_triggered_in_any_target_run": false,
+    "cgroup_oom_kill_delta_in_any_target_run": false,
+    "scope_note": "CPU/RSS/FD measurements identify the actual mncs-compiler-stage0-probe child. cgroup and host pressure are sampled at its containing user session scope and are not child-specific.",
+    "hardware_instruction_count": "UNKNOWN; no permitted counter was exposed",
+    "io_observation": "Per-process physical read/write byte counters were observed in the retained raw measurements (read bytes were zero; writes were 20\u201324 KiB). Character-I/O counter comparison is incomplete, so no character-I/O delta is claimed."
+  },
+  "stage_promotion": {
+    "module_stage_matrix_changed": false,
+    "executable_artifact_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "reason": "The bounded compile_project_target request exhausted its 200000-step budget without returning a project result."
+  },
+  "raw_measurement_artifacts": [
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-cache-program-cache-prep.json",
+      "sha256": "518ae6a1b9e268b19e5fe3a0222db4039c263476ef5e40324b8b862ee4bfcfe0",
+      "bytes": 635151
+    },
+    {
+      "path_from_projects_root": ".worktrees/reference-argument-validation-cache-20261010/mncs-compiler/.build/keyword-byte-matched-baseline-1.json",
+      "sha256": "860f25f6d5a343d16693fb3eab26432fcedc815f2fc8cb43059e89f02ff4682e",
+      "bytes": 203991
+    },
+    {
+      "path_from_projects_root": ".worktrees/reference-argument-validation-cache-20261010/mncs-compiler/.build/keyword-byte-matched-baseline-2.json",
+      "sha256": "359f460ecda2a398c52fbc9262c5f2d8261a69678eb95a949b1f598fc3da4768",
+      "bytes": 194969
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-1.json",
+      "sha256": "c2ab758414ab333917f5e68830703797c0bdc229f40ed7cdc30260f5e5c6c06b",
+      "bytes": 187667
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-2.json",
+      "sha256": "0903f3146aacae090b2e6e2548f4bbc364bdc084c8066f608e319cd796f23609",
+      "bytes": 186872
+    },
+    {
+      "path_from_projects_root": ".worktrees/reference-argument-validation-cache-20261010/mncs-compiler/.build/keyword-byte-profile-baseline.json",
+      "sha256": "0b886915ed12c45acc845d8c7535b65ed9bb3230be254a4a1162dd0f69d034e7",
+      "bytes": 229082
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-profile-candidate.json",
+      "sha256": "baac0e6a20c97a201ebe3aff1dd13ac28800a4ba405491735dff1ac432407505",
+      "bytes": 217409
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/cp0001-results.json",
+      "sha256": "3218c96bda2a7c56c395f28cf9bfc55b944622e041dfee564e842d0e79a667e7",
+      "bytes": 2810
+    }
+  ],
+  "tool_generated_phase_trace_artifacts": [
+    {
+      "path_from_projects_root": ".worktrees/reference-argument-validation-cache-20261010/mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-matched-baseline-1-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "c34e6ce36c205093329cf18048a1a2243e061a09e6900d2193ec1bca22b3b3cc",
+      "bytes": 8748,
+      "measurement": "baseline_run_1"
+    },
+    {
+      "path_from_projects_root": ".worktrees/reference-argument-validation-cache-20261010/mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-matched-baseline-2-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "de944d47343b082066279d022ade54a377a43a8d79ebfd692daa6339d72bd0ab",
+      "bytes": 8765,
+      "measurement": "baseline_run_2"
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-matched-candidate-1-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "873c57e8eff85d8a86fdbb515e6107201c8ee3d90ac2402e06f06df620d025f5",
+      "bytes": 8767,
+      "measurement": "candidate_run_1"
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-matched-candidate-2-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "10450aafddf02582f2365e55dd2b43a8002c837f64c0fcda468fbaed9f410ea5",
+      "bytes": 8719,
+      "measurement": "candidate_run_2"
+    },
+    {
+      "path_from_projects_root": ".worktrees/reference-argument-validation-cache-20261010/mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-profile-baseline-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "7077bde3714c363cbbe712fdd78159646ecb2d747d99746386698bd4719c78d8",
+      "bytes": 8800,
+      "measurement": "baseline_profile"
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-profile-candidate-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "816bbe694dab6895c1ec88db15cdec0108c1597b6cded75e688f8a43e8148028",
+      "bytes": 8785,
+      "measurement": "candidate_profile"
+    },
+    {
+      "path_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-keyword-byte-cache-program-cache-prep-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "3db20593c9b048dd5915a5b5434cae5b152843b51fd3086325613d3d000ce0c5",
+      "bytes": 6529,
+      "measurement": "program_cache_preparation"
+    }
+  ]
+}
