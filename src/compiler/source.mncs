@@ -67,19 +67,18 @@ fn validate_pages<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     if pages.len == 0 { return 0; }
     iterate i over pages carrying code: u64 = 0 {
         let page: [byte; up_to N] = pages[i];
-        next code = validate_page_step<N>(page, stride, i, pages.len, code);
+        // Keep these checks in the page loop: a helper call per page added
+        // interpreter work without sharing any validation state.
+        let too_large: bool = page.len > stride;
+        let short_middle: bool = i + 1 < pages.len && page.len != stride;
+        let page_error: u64 = select(too_large, 3, select(short_middle, 4, 0));
+        next code = select(code != 0, code, page_error);
     }
     if code != 0 { return code; }
     let last: u64 = pages.len - 1;
     if total < last * stride { return 6; }
     let terminal: [byte; up_to N] = pages[last];
     if terminal.len != total - last * stride { return 6; }
-    return 0;
-}
-fn validate_page_step<N: Nat>(page: [byte; up_to N], stride: u64, index: u64, page_count: u64, code: u64) -> (result: u64) {
-    if code != 0 { return code; }
-    if page.len > stride { return 3; }
-    if index + 1 < page_count && page.len != stride { return 4; }
     return 0;
 }
 

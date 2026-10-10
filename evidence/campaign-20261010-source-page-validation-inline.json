@@ -1,0 +1,255 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.execution-efficiency-evidence/1",
+  "evidence_kind": "inline_source_page_validation",
+  "observed_at": "2026-10-10T05:02:22Z",
+  "decision": "IMPLEMENTED_MEASURED_EFFICIENCY_GAIN",
+  "summary": "Inline the per-page shape checks in source.validate_pages to remove the repeated helper frame. Validation codes and precedence remain unchanged.",
+  "identities": {
+    "repository": "mncs-compiler",
+    "candidate_base_revision": "a1818976da578f60e53aebdd739273e1b4b86b0d",
+    "tested_candidate_git_head": "a1818976da578f60e53aebdd739273e1b4b86b0d",
+    "tested_candidate_branch": "campaign/reference-argument-validation-cache-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "baseline_compiler_source_identity_sha256": "7de25ba8e60eda9a3c62b0da068a40d86eef215da6c1ef794c47b8d9a86f6950",
+    "candidate_compiler_source_identity_sha256": "2a8f43f1f0c8e0a6bcbf5fcb021d42167b0ab681562b4f9ed20e7ab418d71b83",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "module_source_sha256": {
+      "source": {
+        "baseline": "ac7dbf85aa919fdb48aa68b34f2974d1858cf60303ea287bd51e67cb8a06a1a1",
+        "candidate": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1"
+      },
+      "lexer": "1a01bccf07055535c774d39b009e7c7a17751dd1f692cbe0a9ad496def07a796",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+    }
+  },
+  "target": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "execution_backend": "reference_interpreter",
+    "stage0_oracle": "skipped for the bounded target execution; this probe makes no target semantic differential claim",
+    "selected_input_pages_at_width_1024": 901,
+    "step_budget": 200000,
+    "timeout_seconds": 120,
+    "sampled_child_rss_stop_mib": 2300,
+    "target_execution_status": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "returned_status": "budget_exhausted",
+    "stage_promotion": false
+  },
+  "stage0_program_cache_preparation": {
+    "status": "SUCCESS_ADMISSION_ONLY",
+    "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+    "baseline": {
+      "wall_seconds": 158.213,
+      "child_cpu_seconds": 156.0,
+      "child_peak_rss_kib": 2148272,
+      "child_peak_fds": 5,
+      "stage0_parse_ms": 1261,
+      "stage0_elaboration_ms": 109596,
+      "frontend_elaboration_specialization_ms": 156932.427,
+      "program_function_count": 3137,
+      "program_artifact_uncompressed_bytes": 151694007,
+      "program_artifact_gzip_bytes": 5317440
+    },
+    "candidate": {
+      "wall_seconds": 155.704,
+      "child_cpu_seconds": 154.1,
+      "child_peak_rss_kib": 2148356,
+      "child_peak_fds": 5,
+      "stage0_parse_ms": 1266,
+      "stage0_elaboration_ms": 108055,
+      "frontend_elaboration_specialization_ms": 154096.174,
+      "program_function_count": 3135,
+      "program_artifact_uncompressed_bytes": 151688551,
+      "program_artifact_gzip_bytes": 5317452
+    },
+    "resource_event_deltas": {
+      "cgroup_oom": 0,
+      "cgroup_oom_kill": 0
+    }
+  },
+  "matched_warm_measurements": {
+    "cache_state": "program artifact cache hit for both targets; same Stage-0 binary, backend, selected modules, target operation, runner, and resource bounds",
+    "runner_status": "SUCCESS",
+    "baseline": [
+      {
+        "wall_seconds": 37.553,
+        "child_cpu_seconds": 35.33,
+        "child_peak_rss_kib": 1760680,
+        "child_peak_fds": 5,
+        "io": {
+          "rchar": 180477655,
+          "wchar": 151961646,
+          "syscr": 4962,
+          "syscw": 6360,
+          "physical_read_bytes": 0,
+          "physical_write_bytes": 0
+        },
+        "cgroup_oom_kill_delta": 0
+      },
+      {
+        "wall_seconds": 37.553,
+        "child_cpu_seconds": 34.92,
+        "child_peak_rss_kib": 1761284,
+        "child_peak_fds": 5,
+        "io": {
+          "rchar": 180477606,
+          "wchar": 151961574,
+          "syscr": 4962,
+          "syscw": 6360,
+          "physical_read_bytes": 0,
+          "physical_write_bytes": 0
+        },
+        "cgroup_oom_kill_delta": 0
+      }
+    ],
+    "candidate": [
+      {
+        "wall_seconds": 36.55,
+        "child_cpu_seconds": 34.27,
+        "child_peak_rss_kib": 1761048,
+        "child_peak_fds": 5,
+        "io": {
+          "rchar": 204559909,
+          "wchar": 151955956,
+          "syscr": 6869,
+          "syscw": 6324,
+          "physical_read_bytes": 0,
+          "physical_write_bytes": 32768
+        },
+        "cgroup_oom_kill_delta": 0
+      },
+      {
+        "wall_seconds": 35.549,
+        "child_cpu_seconds": 33.36,
+        "child_peak_rss_kib": 1761020,
+        "child_peak_fds": 5,
+        "io": {
+          "rchar": 204559909,
+          "wchar": 151956021,
+          "syscr": 6870,
+          "syscw": 6324,
+          "physical_read_bytes": 0,
+          "physical_write_bytes": 24576
+        },
+        "cgroup_oom_kill_delta": 0
+      }
+    ],
+    "means": {
+      "baseline_wall_seconds": 37.553,
+      "candidate_wall_seconds": 36.0495,
+      "wall_reduction_percent": 4.003,
+      "baseline_child_cpu_seconds": 35.125,
+      "candidate_child_cpu_seconds": 33.815,
+      "child_cpu_reduction_percent": 3.729,
+      "baseline_peak_rss_kib": 1760982,
+      "candidate_peak_rss_kib": 1761034,
+      "peak_rss_delta_kib": 52,
+      "peak_fds_baseline_candidate": [
+        5,
+        5
+      ]
+    },
+    "io_note": "rchar/wchar and physical byte counters are preserved as observed child counters; rchar rose by about 24 MB on the candidate, while physical reads stayed zero. The cause of the character-read delta is UNKNOWN and is not treated as a storage-I/O improvement."
+  },
+  "page_validation_profile": {
+    "baseline_runs": [
+      {
+        "validate_pages_steps": 8094,
+        "validate_pages_inclusive_ns": 2049204545,
+        "validate_page_step_calls": 805,
+        "validate_page_step_steps": 14490,
+        "validate_page_step_exclusive_ns": 120445202
+      },
+      {
+        "validate_pages_steps": 8094,
+        "validate_pages_inclusive_ns": 1892512488,
+        "validate_page_step_calls": 805,
+        "validate_page_step_steps": 14490,
+        "validate_page_step_exclusive_ns": 103857287
+      }
+    ],
+    "candidate_runs": [
+      {
+        "validate_pages_steps": 20169,
+        "validate_pages_inclusive_ns": 72534163
+      },
+      {
+        "validate_pages_steps": 20169,
+        "validate_pages_inclusive_ns": 75820245
+      }
+    ],
+    "combined_validation_steps": {
+      "baseline": 22584,
+      "candidate": 20169,
+      "saved": 2415,
+      "reduction_percent": 10.693
+    },
+    "inclusive_validation_time_mean_ns": {
+      "baseline": 1970858516.5,
+      "candidate": 74177104,
+      "reduction_percent": 96.237
+    }
+  },
+  "candidate_runtime_profile": {
+    "step_budget_consumed": 200000,
+    "next_token_global_calls": 171,
+    "next_token_global_steps": 41130,
+    "next_token_global_exclusive_ms": 12151.125,
+    "byte_window4_page_calls": 1010,
+    "byte_window4_page_steps": 59507,
+    "byte_window4_page_exclusive_ms": 455.211,
+    "semantic_parser_checker_proof_cfg_ssa_phase_boundaries": "UNKNOWN; per-function runtime profiles do not map to compiler semantic phases",
+    "per_function_cpu_time": "UNKNOWN"
+  },
+  "stage0_tier_c_parity": {
+    "backend": "reference_interpreter",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "requests": 91,
+    "semantic_calls_compared": 89,
+    "baseline_semantic_outputs_sha256": "cdb1971ee7e995d464dcbcc056586289aa359a494578ade049a5ef3925a250f9",
+    "candidate_semantic_outputs_sha256": "cdb1971ee7e995d464dcbcc056586289aa359a494578ade049a5ef3925a250f9",
+    "semantic_outputs_match": true,
+    "baseline_interpreter_steps_total": 3363634,
+    "candidate_interpreter_steps_total": 3363601,
+    "malformed_validation_codes": {
+      "stride-zero": 1,
+      "stride-huge": 2,
+      "page-over-stride": 3,
+      "short-middle": 4,
+      "empty-middle": 4,
+      "extra-page": 5,
+      "missing-page": 5,
+      "total-points-elsewhere": 5,
+      "total-off-by-one": 6,
+      "terminal-mismatch": 6,
+      "empty-noncanonical": 5
+    },
+    "transport_faults": 2
+  },
+  "incomplete_probes": [
+    {
+      "scope": "CP-0001 Tier A+C batch",
+      "classification": "INTERRUPTED",
+      "elapsed_seconds_before_interrupt": 120,
+      "result": "UNKNOWN_NO_RESULT"
+    }
+  ],
+  "stage_promotion": {
+    "module_matrix_changed": false,
+    "executable_artifact_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
