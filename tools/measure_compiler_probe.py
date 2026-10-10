@@ -28,6 +28,35 @@ ARTIFACTS = ROOT / ".build" / "campaign-artifacts" / "compiler-facts"
 TICKS_PER_SECOND = os.sysconf("SC_CLK_TCK")
 
 
+def _probe_cache_directory(repository_root: Path = ROOT) -> Path:
+    """Use the main checkout's ignored cache directory from linked worktrees.
+
+    Probe cache keys bind the Stage-0 toolchain, compiler source closure,
+    specialization seeds, and (for backend artifacts) the backend identity.
+    Cache entries are validated on read and published by atomic rename, so
+    sharing this content-addressed directory does not share mutable compiler
+    state between checkouts.
+    """
+    fallback = repository_root / ".build" / "probe-cache"
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+            cwd=repository_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return fallback
+    common_directory = result.stdout.strip()
+    if not common_directory:
+        return fallback
+    common_path = Path(common_directory).expanduser()
+    if not common_path.is_absolute():
+        common_path = repository_root / common_path
+    return common_path.resolve().parent / ".build" / "probe-cache"
+
+
 def _read_text(path: Path) -> str | None:
     try:
         return path.read_text()
@@ -810,6 +839,11 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         raise FileExistsError(f"refusing to overwrite existing measurement {base}")
 
     env = os.environ.copy()
+    cache_directory_scope = (
+        "caller_configured" if "MNCS_PROBE_CACHE_DIR" in env
+        else "git_common_directory"
+    )
+    env.setdefault("MNCS_PROBE_CACHE_DIR", str(_probe_cache_directory(ROOT)))
     env["MNCS_PROBE_BACKEND"] = args.backend
     env["MNCS_PROBE_TELEMETRY"] = "1"
     env["MNCS_PROBE_TRACE_PATH"] = str(trace_path)
@@ -841,7 +875,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "function": "compile_project_target",
             "type_arguments": [{"kind": "nat", "value": 1024}, {"kind": "nat", "value": 1024}],
         }])
-        env["MNCS_PROBE_CACHE_DIR"] = str(ROOT / ".build" / "probe-cache")
+        env["MNCS_PROBE_CACHE_DIR"] = str(_probe_cache_directory(ROOT))
+        cache_directory_scope = "git_common_directory"
     if args.step_budget is not None:
         command.extend(["--step-budget", str(args.step_budget)])
 
@@ -986,6 +1021,8 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "signature_cache_fixture": args.signature_cache_fixture,
         "step_budget": args.step_budget if args.step_budget is not None else 8_000_000,
         "runtime_profile_enabled": bool(env.get("MNCS_RUNTIME_PROFILE")),
+        "probe_cache_directory": env.get("MNCS_PROBE_CACHE_DIR") or None,
+        "probe_cache_directory_scope": cache_directory_scope,
         "timeout_seconds": args.timeout_seconds,
         "classification": classification,
         "measurement_runner_status": runner_status,

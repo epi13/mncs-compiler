@@ -3,12 +3,43 @@
 
 import json
 import signal
+import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import measure_compiler_probe as measurement
+
+
+def test_probe_cache_directory_is_shared_across_linked_worktrees(tmp_path):
+    repository = tmp_path / "repository"
+    repository.mkdir()
+    subprocess.run(["git", "init", "--quiet", str(repository)], check=True)
+    (repository / "seed.txt").write_text("cache identity is content addressed\n")
+    subprocess.run(
+        ["git", "-C", str(repository), "add", "seed.txt"], check=True
+    )
+    subprocess.run(
+        [
+            "git", "-C", str(repository), "-c", "user.name=Cache Test",
+            "-c", "user.email=cache-test@example.invalid", "commit", "--quiet",
+            "-m", "seed",
+        ],
+        check=True,
+    )
+    worktree = tmp_path / "linked-worktree"
+    subprocess.run(
+        [
+            "git", "-C", str(repository), "worktree", "add", "--quiet",
+            "--detach", str(worktree), "HEAD",
+        ],
+        check=True,
+    )
+
+    expected = repository / ".build" / "probe-cache"
+    assert measurement._probe_cache_directory(repository) == expected
+    assert measurement._probe_cache_directory(worktree) == expected
 
 
 def test_body_profiles_are_read_from_nested_probe_stderr():
@@ -507,6 +538,7 @@ if __name__ == "__main__":
                 setattr(target, name, original)
 
     tests = [
+        test_probe_cache_directory_is_shared_across_linked_worktrees,
         test_body_profiles_are_read_from_nested_probe_stderr,
         test_nested_probe_timing_lines_are_available,
         test_explicit_stage0_oracle_skip_is_forwarded_and_recordable,

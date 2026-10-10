@@ -217,3 +217,7 @@ comparison.
 ## Declaration name-token reuse (2026-10-10)
 
 The [token-reuse report](campaign-20261010-decl-name-token-reuse.json) records a focused `parse_project_unit` fixture covering record fields, payload enum fields, and generic parameters. Reusing the token already read by `fields_step`, `variants_step`, and `generics_step` reduced mean request execution from 17.161 to 16.230 seconds (5.43%) and executor steps from 85,933 to 77,324 (10.02%) over two warm runs per source identity. The Stage-0 oracle accepted the positive fixture and matched the malformed-field diagnostic span. A larger `compile_project_target` follow-up timed out without a result and remains UNKNOWN. No module-stage, executable, Stage-1, or Stage-2 claim is made.
+
+## Shared probe cache across linked worktrees (2026-10-10)
+
+The [shared-cache report](campaign-20261010-shared-probe-cache.json) records a bounded cache-preparation replay from a linked worktree. With the same compiler source identity, Stage-0 toolchain, and frontend cache key, shared-cache preparation returned a validated hit in 0.755 seconds (0.73 seconds of Stage-0 child CPU, 305 MiB peak RSS, five peak FDs). The matching cold miss spent 155.257 seconds in retained-session admission (154.39 seconds of child CPU, 2.04 GiB peak RSS) before producing the cache entry. The target compiler request was not run in the cache replay; this establishes reusable frontend preparation, not target execution or semantic success. Cache keys continue to bind exact toolchain and compiler source identities.
