@@ -213,3 +213,7 @@ OOM counters remained clear. No response or step count was returned, so the
 classification is TIMEOUT / INTERRUPTED with semantic outcome UNKNOWN. The
 follow-up record is in the same report and is not a matched performance
 comparison.
+
+## Declaration name-token reuse (2026-10-10)
+
+The [token-reuse report](campaign-20261010-decl-name-token-reuse.json) records a focused `parse_project_unit` fixture covering record fields, payload enum fields, and generic parameters. Reusing the token already read by `fields_step`, `variants_step`, and `generics_step` reduced mean request execution from 17.161 to 16.230 seconds (5.43%) and executor steps from 85,933 to 77,324 (10.02%) over two warm runs per source identity. The Stage-0 oracle accepted the positive fixture and matched the malformed-field diagnostic span. A larger `compile_project_target` follow-up timed out without a result and remains UNKNOWN. No module-stage, executable, Stage-1, or Stage-2 claim is made.

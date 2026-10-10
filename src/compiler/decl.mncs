@@ -2691,6 +2691,9 @@ fn expect<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total:
 record NameParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, start: u64, end: u64 }
 fn parse_name<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, mode: u64) -> (result: NameParse) {
     let token: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, cursor);
+    return parse_name_token(cursor, token, mode);
+}
+fn parse_name_token(cursor: u64, token: lexer.Token, mode: u64) -> (result: NameParse) {
     if token.diagnostic != 0 { return NameParse { cursor: cursor, ok: false, err_start: token.start, err_end: token.end, start: token.start, end: token.end }; }
     if token.kind == 4 || (mode == 1 && token.kind == 25) || (mode == 2 && token.kind == 34) {
         return NameParse { cursor: token.end, ok: true, err_start: 0, err_end: 0, start: token.start, end: token.end };
@@ -2837,7 +2840,7 @@ fn fields_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     let next_field: bool = name_mode == 2 && token.kind == 34 && profile_013;
     if token.diagnostic != 0 || token.kind == closer || (!(is_value_name(token.kind)) && token.kind != 4 && !(next_field)) { return FieldsParse { ..st, done: true }; }
     if token.kind != 4 && !(name_mode == 1 && token.kind == 25) && !(next_field) { return FieldsParse { ..st, done: true }; }
-    let name: NameParse = parse_name<P, N>(pages, stride, total, st.cursor, name_mode);
+    let name: NameParse = parse_name_token(st.cursor, token, name_mode);
     if !(name.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
     let colon: Expect = expect<P, N>(pages, stride, total, name.cursor, 62);
     if !(colon.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: colon.err_start, err_end: colon.err_end, list: st.list, done: true }; }
@@ -2995,7 +2998,7 @@ fn variants_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
     if !(st.ok) || st.done { return st; }
     let token: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, st.cursor);
     if token.diagnostic != 0 || token.kind != 4 { return VariantsState { cursor: st.cursor, ok: true, err_start: 0, err_end: 0, list: st.list, done: true }; }
-    let name: NameParse = parse_name<P, N>(pages, stride, total, st.cursor, 0);
+    let name: NameParse = parse_name_token(st.cursor, token, 0);
     if !(name.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
     let payload: FieldsParse = parse_variant_payload<P, N>(pages, stride, total, name.cursor, profile_013);
     if !(payload.ok) { return VariantsState { cursor: st.cursor, ok: false, err_start: payload.err_start, err_end: payload.err_end, list: st.list, done: true }; }
@@ -3510,7 +3513,7 @@ fn generics_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
     if !(st.ok) || st.done { return st; }
     let token: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, st.cursor);
     if token.diagnostic == 0 && token.kind == 59 { return GenericsState { cursor: token.end, ok: true, err_start: 0, err_end: 0, list: st.list, seen: st.seen, done: true }; }
-    let name: NameParse = parse_name<P, N>(pages, stride, total, st.cursor, 0);
+    let name: NameParse = parse_name_token(st.cursor, token, 0);
     if !(name.ok) { return GenericsState { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, seen: st.seen, done: true }; }
     if name_known<P, N>(pages, stride, total, st.seen, name.start, name.end) {
         let after: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, name.cursor);

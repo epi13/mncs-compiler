@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.declaration-token-reuse-experiment",
+  "observed_at": "2026-10-10T08:32:05+00:00",
+  "identity": {
+    "repository": "mncs-compiler",
+    "candidate_base_revision": "a852da763f78900a68f3e57c3fcf4568424d8436",
+    "tested_candidate_git_head": "a852da763f78900a68f3e57c3fcf4568424d8436",
+    "tested_candidate_branch": "campaign/decl-name-token-reuse-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "source_identity_kind": "SHA-256 of ordered selected compiler module ids and bytes for source, lexer, parser, segment, decl, flow",
+    "baseline_source_identity_sha256": "352cd6cd9d48ee2c03be789984aacccc0ab6685832adda785ff1505e7d678ea5",
+    "candidate_source_identity_sha256": "42b4c04dd8adb335bbdfadb640c4bea1d12b85e153a12a4f9db4529e1aa76e92",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "delivery_implementation_commit": null,
+    "delivery_main_revision": null
+  },
+  "change": {
+    "module": "src/compiler/decl.mncs",
+    "description": "Share the significant lexer.Token already read by fields_step, variants_step, and generics_step with parse_name_token instead of lexing the same cursor again through parse_name.",
+    "semantic_owner": "MNCS declaration parser",
+    "language_change": "none"
+  },
+  "target": {
+    "operation": "mncs.compiler.project.v1::parse_project_unit<1024,1024>",
+    "backend_requested": "reference_interpreter",
+    "backend_reported_by_probe": null,
+    "retained_backend_sessions": 0,
+    "execution_scope": "MNCS project parser request interpreted by the Stage-0 language runtime; the backend artifact path was not admitted or exercised.",
+    "step_budget": 8000000,
+    "positive_fixture": "mncs 0.18; module demo.token_reuse; record R { count: u64, enabled: bool } enum F { Empty, Has { count: u64, flag: bool } } fn id<P: Nat, N: Nat>(x: u64) -> (r: u64) { return x; }",
+    "negative_fixture": "mncs 0.18; module demo.token_reuse; record R { count: }",
+    "program_cache": {
+      "baseline_key": "df69039eff4c0a25f052da226149a5b23fbad86486f93def891c94ea71854c2e",
+      "candidate_key": "a16975bacd40e3e9073a5b116d196a36880f72153aa3c67a77e28c55875f7028",
+      "warm_measurements_cache_hit": true,
+      "cache_identity_includes_stage0_toolchain_and_source_closure": true
+    }
+  },
+  "correctness": {
+    "positive_fixture": {
+      "candidate_native_status": "returned",
+      "candidate_parse_ok": true,
+      "stage0_oracle_valid": true,
+      "native_steps": 77324,
+      "oracle": "Rust Stage-0 project front end plus SSA lowering returned valid=true."
+    },
+    "negative_fixture": {
+      "candidate_native_status": "returned",
+      "candidate_parse_ok": false,
+      "candidate_error_span": [
+        54,
+        55
+      ],
+      "stage0_oracle_valid": false,
+      "stage0_diagnostic_spans": [
+        [
+          54,
+          55
+        ],
+        [
+          55,
+          55
+        ]
+      ],
+      "candidate_span_matches_stage0": true,
+      "native_steps": 13302
+    },
+    "expanded_compile_project_target_followup": {
+      "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "classification": "TIMEOUT",
+      "operation_outcome": "INTERRUPTED_BY_PROBE_TIMEOUT",
+      "timeout_seconds": 180,
+      "response_received": false,
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "resource_telemetry": "UNKNOWN; this focused request did not enable resource sampling.",
+      "interpretation": "An inconclusive larger request; it is not a semantic rejection and is not counted as a passing target compilation."
+    }
+  },
+  "unprofiled_measurements": {
+    "baseline": {
+      "runs": [
+        {
+          "run": "baseline-1",
+          "cache_hit": true,
+          "target_execution_ms": 17125.73258,
+          "steps": 85933,
+          "probe_child_cpu_delta_seconds": 17.8,
+          "probe_child_peak_rss_bytes": 1468571648,
+          "probe_child_peak_fd_count": 4,
+          "process_samples": 38
+        },
+        {
+          "run": "baseline-2",
+          "cache_hit": true,
+          "target_execution_ms": 17196.913229,
+          "steps": 85933,
+          "probe_child_cpu_delta_seconds": 17.85,
+          "probe_child_peak_rss_bytes": 1468510208,
+          "probe_child_peak_fd_count": 4,
+          "process_samples": 38
+        }
+      ],
+      "mean_target_execution_ms": 17161.3229045,
+      "mean_probe_child_cpu_delta_seconds": 17.825000000000003,
+      "mean_probe_child_peak_rss_bytes": 1468540928
+    },
+    "candidate": {
+      "runs": [
+        {
+          "run": "candidate-1",
+          "cache_hit": true,
+          "target_execution_ms": 16071.12471,
+          "steps": 77324,
+          "probe_child_cpu_delta_seconds": 16.64,
+          "probe_child_peak_rss_bytes": 1468018688,
+          "probe_child_peak_fd_count": 4,
+          "process_samples": 36
+        },
+        {
+          "run": "candidate-2",
+          "cache_hit": true,
+          "target_execution_ms": 16388.720481,
+          "steps": 77324,
+          "probe_child_cpu_delta_seconds": 16.95,
+          "probe_child_peak_rss_bytes": 1468203008,
+          "probe_child_peak_fd_count": 4,
+          "process_samples": 37
+        }
+      ],
+      "mean_target_execution_ms": 16229.9225955,
+      "mean_probe_child_cpu_delta_seconds": 16.795,
+      "mean_probe_child_peak_rss_bytes": 1468110848
+    },
+    "effect": {
+      "target_execution_reduction_percent": 5.427322323477586,
+      "probe_child_cpu_delta_reduction_percent": 5.77840112201964,
+      "step_reduction_percent": 10.01827004759522,
+      "steps_baseline": 85933,
+      "steps_candidate": 77324,
+      "peak_fd_count_baseline": 4,
+      "peak_fd_count_candidate": 4,
+      "cpu_scope_note": "Per-process /proc CPU delta starts with the actual Stage-0 probe child before request write and ends after its response; it includes startup and is not a per-function CPU measurement.",
+      "timing_scope_note": "The target_execution_ms values are the probe child request_execution phase for the returned parse_project_unit request; profile-enabled runs are excluded."
+    }
+  },
+  "profiled_run": {
+    "purpose": "Explain the unprofiled change in executed MNCS work; profile timing is not used in the performance means.",
+    "status": "returned",
+    "steps_baseline": 85933,
+    "steps_candidate": 77324,
+    "functions": {
+      "mncs.compiler.decl.v1::fields_step": {
+        "baseline": {
+          "calls": 64,
+          "steps": 1058,
+          "inclusive_ns": 3102071140,
+          "exclusive_ns": 74080392
+        },
+        "candidate": {
+          "calls": 64,
+          "steps": 1058,
+          "inclusive_ns": 2418217699,
+          "exclusive_ns": 68891428
+        }
+      },
+      "mncs.compiler.decl.v1::generics_step": {
+        "baseline": {
+          "calls": 2,
+          "steps": 64,
+          "inclusive_ns": 721519078,
+          "exclusive_ns": 9513268
+        },
+        "candidate": {
+          "calls": 2,
+          "steps": 64,
+          "inclusive_ns": 623884202,
+          "exclusive_ns": 9778779
+        }
+      },
+      "mncs.compiler.decl.v1::parse_name": {
+        "baseline": {
+          "calls": 15,
+          "steps": 480,
+          "inclusive_ns": 1544478570,
+          "exclusive_ns": 36616820
+        },
+        "candidate": {
+          "calls": 5,
+          "steps": 15,
+          "inclusive_ns": 526431870,
+          "exclusive_ns": 18093858
+        }
+      },
+      "mncs.compiler.decl.v1::parse_name_token": {
+        "baseline": {
+          "calls": 0,
+          "steps": 0,
+          "inclusive_ns": 0,
+          "exclusive_ns": 0
+        },
+        "candidate": {
+          "calls": 15,
+          "steps": 465,
+          "inclusive_ns": 2253082,
+          "exclusive_ns": 2253082
+        }
+      },
+      "mncs.compiler.decl.v1::variants_step": {
+        "baseline": {
+          "calls": 1024,
+          "steps": 6257,
+          "inclusive_ns": 2071899792,
+          "exclusive_ns": 127890465
+        },
+        "candidate": {
+          "calls": 1024,
+          "steps": 6257,
+          "inclusive_ns": 1566748817,
+          "exclusive_ns": 128141258
+        }
+      },
+      "mncs.compiler.lexer.v1::significant_global": {
+        "baseline": {
+          "calls": 102,
+          "steps": 852,
+          "inclusive_ns": 7020486094,
+          "exclusive_ns": 602857181
+        },
+        "candidate": {
+          "calls": 92,
+          "steps": 760,
+          "inclusive_ns": 6051506893,
+          "exclusive_ns": 547445774
+        }
+      },
+      "mncs.compiler.lexer.v1::next_token_global": {
+        "baseline": {
+          "calls": 159,
+          "steps": 15697,
+          "inclusive_ns": 6399001024,
+          "exclusive_ns": 4005994890
+        },
+        "candidate": {
+          "calls": 142,
+          "steps": 13701,
+          "inclusive_ns": 5487369705,
+          "exclusive_ns": 3529544761
+        }
+      }
+    },
+    "derived_call_reductions": {
+      "parse_name_percent": 66.66666666666667,
+      "significant_global_calls": 10,
+      "next_token_global_calls": 17
+    }
+  },
+  "cache_preparation": {
+    "baseline": {
+      "classification": "SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 155.707,
+      "actual_probe_child_cpu_seconds": 154.28,
+      "actual_probe_child_peak_rss_kib": 2142112,
+      "actual_probe_child_peak_fd_count": 5,
+      "stage0_frontend_elaboration_specialization_seconds": 154.157038696,
+      "program_function_count": 3134,
+      "cgroup_memory_event_delta": {
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "max": 0,
+        "high": 0
+      }
+    },
+    "candidate": {
+      "classification": "SUCCESS",
+      "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "wall_seconds": 155.711,
+      "actual_probe_child_cpu_seconds": 154.22,
+      "actual_probe_child_peak_rss_kib": 2142028,
+      "actual_probe_child_peak_fd_count": 5,
+      "stage0_frontend_elaboration_specialization_seconds": 154.167458396,
+      "program_function_count": 3135,
+      "cgroup_memory_event_delta": {
+        "oom": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0,
+        "max": 0,
+        "high": 0
+      }
+    },
+    "interpretation": "The large compiler Program elaboration/admission preparation remained effectively unchanged. Cache-preparation success is not a compiler semantic result."
+  },
+  "measurement_artifacts": {
+    "baseline": {
+      "path": "/home/epi13/Documents/Projects/mncs-compiler/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-name-token-baseline-cachefill-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "f86e8eaea0310d1101288a30e913216cadfa2961bd0203799a24ee51cd3b08de",
+      "phase_trace_sha256": "6a3713c90b4c7a6268bb95abcae32d5f6e059270cb9ae71fa0c0c3e68cd72da0"
+    },
+    "candidate": {
+      "path": "/tmp/mncs-compiler-decl-name-reuse-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-decl-name-token-candidate-cachefill-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "f37e2c5b024624d2b93611fad96f9aa83c758fb7ec3e9c4d28e136daf52eb22d",
+      "phase_trace_sha256": "60b3df7d75ac9e8420b9d103aaca870bccf32c0bdce0e2f84090fa2f696a7d21"
+    }
+  },
+  "limits": [
+    "This proves a focused parser request only; it does not establish whole-module check, proof, CFG, verified SSA, executable artifact, Stage-1, or Stage-2 succession.",
+    "The direct parser run uses a pre-elaborated Stage-0 Program and the reference interpreter; no Cranelift, research-bytecode, or canonical VM execution was tested.",
+    "The expanded compile_project_target request returned no semantic result and remains UNKNOWN.",
+    "Hardware instruction counts and per-function CPU are UNKNOWN."
+  ]
+}
