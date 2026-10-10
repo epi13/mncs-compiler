@@ -1,0 +1,201 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "compiler-lexer-keyword-local-index-optimization",
+  "observed_at": "2026-10-10T12:56:45Z",
+  "candidate": {
+    "base_revision": "cc8e9c007bc8270cb49c4dc3a2d3a123fbec0d0b",
+    "branch": "campaign/keyword-local-index-20261010",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "selected_module_source_identity_baseline": "21934d956c6766e48b1695a4733bf5f3c415963dd7d811b3ca15a8186c3fd769",
+    "selected_module_source_identity_candidate": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+    "lexer_source_sha256_baseline": "8b3bd43b783f95e7f22983b004e6187d5b68b8d8bada42199be6271303a471bb",
+    "lexer_source_sha256_candidate": "d1c15547846f0e235e32ca8a85228927efe7485d905f110a3e202802ade43f5c",
+    "change_summary": "In keyword<N>, guard the token range once and read validated page-local bytes directly instead of making 78 source.byte_at calls. Invalid ranges retain the prior unknown-keyword result.",
+    "language_semantics_changed": false
+  },
+  "semantic_validation": {
+    "cp0001": {
+      "tiers": ["A", "B", "C"],
+      "command": "MNCS_CP0001_SMOKE=1 MNCS_CP0001_TIERS=ABC MNCS_PROBE_BIN=/tmp/mncs-compiler-stage0-e8-stage0-probe-20261010 MNCS_PROBE_CACHE_DIR=/tmp/mncs-cp0001-keyword-local-index-20261010 python3 tools/test_cp0001.py",
+      "backend": "cranelift",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "probe_requests": 1963,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "canonical_splits": 10,
+      "rejected_splits": 9,
+      "headers_ok": 4,
+      "result_sha256": "f7657fa3f4c857b0d36d69069c05c894bf27faee5ad4675c6ab747ab7652028b"
+    },
+    "flow_root_stage0_oracle": {
+      "baseline": {
+        "source_identity_sha256": "21934d956c6766e48b1695a4733bf5f3c415963dd7d811b3ca15a8186c3fd769",
+        "pages_at_width_1024": 901,
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1334,
+        "ssa_functions": 382,
+        "result_sha256": "8c59f8a58ad9ca6e08ab06728413febc8876aa8ca2c3e6d109c2c2c77c955491",
+        "measurement_sha256": "3bd4b03e108b059b173bf55a21fe139fb18f18fc0b4a4bbacb3b9fd58cbe6b40"
+      },
+      "candidate": {
+        "source_identity_sha256": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+        "pages_at_width_1024": 900,
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1334,
+        "ssa_functions": 382,
+        "result_sha256": "5b291452b3d99a056532e67862f1d8710c6b98a46b6097f006dc1ea5e12fce05",
+        "measurement_sha256": "68773a5cc8c632a6ab3aa5a97e24d1fcfb571cf4d518c6b328f862027c0cdb42"
+      },
+      "scope_note": "The selected six-module flow-root closure is current-source evidence. The older 894-page / 1324-linked / 376-SSA closure remains historical evidence with its own source identity."
+    },
+    "full_project_root_stage0_oracle": {
+      "baseline": {
+        "source_identity_sha256": "309ef83a90c4b9b01114528d35b7f10f305cd452184f90e59220d9ab92e0fcf5",
+        "pages_at_width_1024": 1319,
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1881,
+        "ssa_functions": 508,
+        "result_sha256": "dc53815ff13136771aa51588dc262ab99e35119dc8f15366aedb143840b8427a",
+        "measurement_sha256": "237326497575128731019e3930c8f63e1485a75f6592c491dfc45bcee5cb1877",
+        "wall_seconds": 67.33,
+        "child_cpu_seconds": 58.5,
+        "peak_rss_kib": 1655452,
+        "peak_fds": 4
+      },
+      "candidate": {
+        "source_identity_sha256": "f3dc0b9051c82429cd50262628603507c3ed1df73817c2bc3bef226b72fa82e2",
+        "pages_at_width_1024": 1318,
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1881,
+        "ssa_functions": 508,
+        "result_sha256": "cb8a00ee62ad967a54feb6498ba0ac44babc94f1d2113d78230456b8b83ca942",
+        "measurement_sha256": "8c1e8f2828b359551ed8faf78906bc7aaee8475b6314bc7cbdae2bd4031ae58f",
+        "wall_seconds": 66.725,
+        "child_cpu_seconds": 58.21,
+        "peak_rss_kib": 1655032,
+        "peak_fds": 4
+      },
+      "scope_note": "All eight compiler source modules were selected with project as the root. This is a Stage-0 oracle result, not native whole-module proof or compiler succession."
+    },
+    "whole_module_native_proof_or_canonical_vm": "NOT_ESTABLISHED"
+  },
+  "flow_target_measurement": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_source_module": "flow",
+    "selected_modules": ["source", "lexer", "parser", "segment", "decl", "flow"],
+    "backend": "reference_interpreter",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "step_budget": 1000000,
+    "runtime_profile_enabled": true,
+    "warm_runs": {
+      "baseline": [
+        {
+          "measurement_sha256": "acfb87cc4c5cade5040abbb3bc5c2c6b868e101cff2cd6114dc9b750872eeea1",
+          "pages_at_width_1024": 901,
+          "wall_seconds": 95.764,
+          "child_cpu_seconds": 93.25,
+          "target_execution_ms": 92524.606851,
+          "peak_rss_kib": 1753060,
+          "peak_fds": 5,
+          "target_status": "budget_exhausted",
+          "reported_steps": 1000000,
+          "cgroup_oom_kill_delta": 0,
+          "rss_cap_triggered": false
+        },
+        {
+          "measurement_sha256": "370c94c8b203b8430abe604e98e79787a633d8f6fe6fc7ac5e49f212ac502878",
+          "pages_at_width_1024": 901,
+          "wall_seconds": 95.529,
+          "child_cpu_seconds": 93.29,
+          "target_execution_ms": 92356.237385,
+          "peak_rss_kib": 1752984,
+          "peak_fds": 5,
+          "target_status": "budget_exhausted",
+          "reported_steps": 1000000,
+          "cgroup_oom_kill_delta": 0,
+          "rss_cap_triggered": false
+        }
+      ],
+      "candidate": [
+        {
+          "measurement_sha256": "5955d3dbb3600b9f4aa137b25a94d95d5d787c51459b0ed0878711411ae1a9af",
+          "pages_at_width_1024": 900,
+          "wall_seconds": 89.334,
+          "child_cpu_seconds": 86.8,
+          "target_execution_ms": 86122.007126,
+          "peak_rss_kib": 1751880,
+          "peak_fds": 5,
+          "target_status": "budget_exhausted",
+          "reported_steps": 1000000,
+          "cgroup_oom_kill_delta": 0,
+          "rss_cap_triggered": false
+        },
+        {
+          "measurement_sha256": "51d3fc940bef5c47fd354c61a28a8aa7da6bede2d9f806cfad8428e6ed63b320",
+          "pages_at_width_1024": 900,
+          "wall_seconds": 89.84,
+          "child_cpu_seconds": 86.98,
+          "target_execution_ms": 86692.630792,
+          "peak_rss_kib": 1751864,
+          "peak_fds": 5,
+          "target_status": "budget_exhausted",
+          "reported_steps": 1000000,
+          "cgroup_oom_kill_delta": 0,
+          "rss_cap_triggered": false
+        }
+      ]
+    },
+    "matched_means": {
+      "baseline_wall_seconds": 95.6465,
+      "candidate_wall_seconds": 89.587,
+      "wall_reduction_percent": 6.335,
+      "baseline_child_cpu_seconds": 93.27,
+      "candidate_child_cpu_seconds": 86.89,
+      "child_cpu_reduction_percent": 6.84,
+      "baseline_target_execution_ms": 92440.422118,
+      "candidate_target_execution_ms": 86407.318959,
+      "target_execution_reduction_percent": 6.526,
+      "baseline_peak_rss_kib": 1753022,
+      "candidate_peak_rss_kib": 1751872,
+      "peak_rss_change_kib": -1150,
+      "peak_fds_baseline_candidate": [5, 5]
+    },
+    "runtime_profile": {
+      "keyword_baseline_mean_exclusive_ms": 6940.279,
+      "keyword_candidate_mean_exclusive_ms": 365.86,
+      "keyword_exclusive_time_reduction_percent": 94.728,
+      "keyword_calls_baseline_candidate": [376, 381],
+      "keyword_profile_steps_baseline_candidate": [40394, 45279],
+      "next_token_global_candidate_mean_exclusive_ms": 39840.472
+    },
+    "candidate_cache_preparation": {
+      "measurement_sha256": "5487f06baabdae06e8554523e607c404fe501adcff72039910e961f26f383c6e",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "target_execution_attempted": false,
+      "wall_seconds": 52.68,
+      "child_cpu_seconds": 51.57,
+      "peak_rss_kib": 1852208,
+      "peak_fds": 5,
+      "rss_cap_mib": 1900,
+      "rss_cap_triggered": false
+    },
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "unknowns": [
+      "Both matched runs stop at the same 1000000-step execution budget; neither returns a compiler project result.",
+      "The candidate consumes more profiled steps inside keyword<N> while completing the bounded target prefix faster; total executor budget remains 1000000 in both runs.",
+      "Per-function CPU and hardware instruction counts are unavailable.",
+      "No native whole-module proof, Stage-1 executable, or Stage-2 succession is established by this experiment."
+    ]
+  },
+  "decision": {
+    "retain_candidate": true,
+    "reason": "Two matched warm candidate runs show a stable 6.3% wall and 6.8% child-CPU reduction against two matched baseline runs, with lower sampled RSS and unchanged FDs. Cranelift CP-0001 and the current flow-root Stage-0 oracle preserve focused semantics; the 1M-step target outcome remains RESOURCE_EXHAUSTED/UNKNOWN."
+  }
+}

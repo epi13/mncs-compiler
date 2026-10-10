@@ -25,26 +25,28 @@ fn space(c: u64) -> (result: bool) {
     return c == 32 || (c >= 9 && c <= 13);
 }
 fn keyword<N: Nat>(text: [byte; up_to N], start: u64, end: u64) -> (result: u64) {
+    // Preserve the out-of-range sentinel behavior before using proven-local indices.
+    if start > end || end > text.len { return 4; }
     let length: u64 = end - start;
     if length == 2 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
         if b0 == 102 && b1 == 110 { return 12; }
         if b0 == 105 && b1 == 102 { return 15; }
         if b0 == 97 && b1 == 115 { return 36; }
     }
     if length == 3 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
         if b0 == 108 && b1 == 101 && b2 == 116 { return 14; }
         if b0 == 117 && b1 == 115 && b2 == 101 { return 28; }
     }
     if length == 4 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
         if b0 == 109 && b1 == 110 && b2 == 99 && b3 == 115 { return 10; }
         if b0 == 101 && b1 == 108 && b2 == 115 && b3 == 101 { return 16; }
         if b0 == 102 && b1 == 97 && b2 == 105 && b3 == 108 { return 17; }
@@ -54,106 +56,106 @@ fn keyword<N: Nat>(text: [byte; up_to N], start: u64, end: u64) -> (result: u64)
         if b0 == 116 && b1 == 114 && b2 == 117 && b3 == 101 { return 38; }
     }
     if length == 5 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
         if b0 == 109 && b1 == 97 && b2 == 116 && b3 == 99 && b4 == 104 { return 30; }
         if b0 == 117 && b1 == 112 && b2 == 95 && b3 == 116 && b4 == 111 { return 32; }
         if b0 == 119 && b1 == 104 && b2 == 105 && b3 == 108 && b4 == 101 { return 37; }
         if b0 == 102 && b1 == 97 && b2 == 108 && b3 == 115 && b4 == 101 { return 39; }
     }
     if length == 6 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
         if b0 == 109 && b1 == 111 && b2 == 100 && b3 == 117 && b4 == 108 && b5 == 101 { return 11; }
         if b0 == 114 && b1 == 101 && b2 == 116 && b3 == 117 && b4 == 114 && b5 == 110 { return 13; }
         if b0 == 101 && b1 == 102 && b2 == 102 && b3 == 101 && b4 == 99 && b5 == 116 { return 24; }
         if b0 == 114 && b1 == 101 && b2 == 99 && b3 == 111 && b4 == 114 && b5 == 100 { return 29; }
     }
     if length == 8 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
-        let b6: u64 = source.byte_at<N>(text, start + 6);
-        let b7: u64 = source.byte_at<N>(text, start + 7);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
+        let b6: u64 = text[start + 6] as u64;
+        let b7: u64 = text[start + 7] as u64;
         if b0 == 114 && b1 == 101 && b2 == 113 && b3 == 117 && b4 == 105 && b5 == 114 && b6 == 101 && b7 == 115 { return 18; }
         if b0 == 112 && b1 == 114 && b2 == 111 && b3 == 112 && b4 == 101 && b5 == 114 && b6 == 116 && b7 == 121 { return 21; }
         if b0 == 99 && b1 == 97 && b2 == 114 && b3 == 114 && b4 == 121 && b5 == 105 && b6 == 110 && b7 == 103 { return 33; }
     }
     if length == 7 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
-        let b6: u64 = source.byte_at<N>(text, start + 6);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
+        let b6: u64 = text[start + 6] as u64;
         if b0 == 101 && b1 == 110 && b2 == 115 && b3 == 117 && b4 == 114 && b5 == 101 && b6 == 115 { return 19; }
         if b0 == 97 && b1 == 115 && b2 == 115 && b3 == 117 && b4 == 109 && b5 == 101 && b6 == 115 { return 20; }
         if b0 == 105 && b1 == 116 && b2 == 101 && b3 == 114 && b4 == 97 && b5 == 116 && b6 == 101 { return 31; }
     }
     if length == 9 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
-        let b6: u64 = source.byte_at<N>(text, start + 6);
-        let b7: u64 = source.byte_at<N>(text, start + 7);
-        let b8: u64 = source.byte_at<N>(text, start + 8);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
+        let b6: u64 = text[start + 6] as u64;
+        let b7: u64 = text[start + 7] as u64;
+        let b8: u64 = text[start + 8] as u64;
         if b0 == 105 && b1 == 110 && b2 == 118 && b3 == 97 && b4 == 114 && b5 == 105 && b6 == 97 && b7 == 110 && b8 == 116 { return 22; }
     }
     if length == 11 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
-        let b6: u64 = source.byte_at<N>(text, start + 6);
-        let b7: u64 = source.byte_at<N>(text, start + 7);
-        let b8: u64 = source.byte_at<N>(text, start + 8);
-        let b9: u64 = source.byte_at<N>(text, start + 9);
-        let b10: u64 = source.byte_at<N>(text, start + 10);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
+        let b6: u64 = text[start + 6] as u64;
+        let b7: u64 = text[start + 7] as u64;
+        let b8: u64 = text[start + 8] as u64;
+        let b9: u64 = text[start + 9] as u64;
+        let b10: u64 = text[start + 10] as u64;
         if b0 == 109 && b1 == 101 && b2 == 116 && b3 == 97 && b4 == 109 && b5 == 111 && b6 == 114 && b7 == 112 && b8 == 104 && b9 == 105 && b10 == 99 { return 23; }
     }
     if length == 10 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
-        let b6: u64 = source.byte_at<N>(text, start + 6);
-        let b7: u64 = source.byte_at<N>(text, start + 7);
-        let b8: u64 = source.byte_at<N>(text, start + 8);
-        let b9: u64 = source.byte_at<N>(text, start + 9);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
+        let b6: u64 = text[start + 6] as u64;
+        let b7: u64 = text[start + 7] as u64;
+        let b8: u64 = text[start + 8] as u64;
+        let b9: u64 = text[start + 9] as u64;
         if b0 == 99 && b1 == 97 && b2 == 112 && b3 == 97 && b4 == 98 && b5 == 105 && b6 == 108 && b7 == 105 && b8 == 116 && b9 == 121 { return 25; }
     }
     if length == 13 {
-        let b0: u64 = source.byte_at<N>(text, start + 0);
-        let b1: u64 = source.byte_at<N>(text, start + 1);
-        let b2: u64 = source.byte_at<N>(text, start + 2);
-        let b3: u64 = source.byte_at<N>(text, start + 3);
-        let b4: u64 = source.byte_at<N>(text, start + 4);
-        let b5: u64 = source.byte_at<N>(text, start + 5);
-        let b6: u64 = source.byte_at<N>(text, start + 6);
-        let b7: u64 = source.byte_at<N>(text, start + 7);
-        let b8: u64 = source.byte_at<N>(text, start + 8);
-        let b9: u64 = source.byte_at<N>(text, start + 9);
-        let b10: u64 = source.byte_at<N>(text, start + 10);
-        let b11: u64 = source.byte_at<N>(text, start + 11);
-        let b12: u64 = source.byte_at<N>(text, start + 12);
+        let b0: u64 = text[start + 0] as u64;
+        let b1: u64 = text[start + 1] as u64;
+        let b2: u64 = text[start + 2] as u64;
+        let b3: u64 = text[start + 3] as u64;
+        let b4: u64 = text[start + 4] as u64;
+        let b5: u64 = text[start + 5] as u64;
+        let b6: u64 = text[start + 6] as u64;
+        let b7: u64 = text[start + 7] as u64;
+        let b8: u64 = text[start + 8] as u64;
+        let b9: u64 = text[start + 9] as u64;
+        let b10: u64 = text[start + 10] as u64;
+        let b11: u64 = text[start + 11] as u64;
+        let b12: u64 = text[start + 12] as u64;
         if b0 == 97 && b1 == 117 && b2 == 116 && b3 == 104 && b4 == 111 && b5 == 114 && b6 == 105 && b7 == 122 && b8 == 101 && b9 == 100 && b10 == 95 && b11 == 98 && b12 == 121 { return 26; }
     }
     return 4;
