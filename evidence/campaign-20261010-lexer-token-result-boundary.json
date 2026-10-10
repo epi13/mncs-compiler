@@ -1,0 +1,378 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-token-result-helper-page-table-elision",
+  "observed_at": "2026-10-10T05:55:37+00:00",
+  "decision": "KEEP_MEASURED_IMPLEMENTATION",
+  "change": {
+    "file": "src/compiler/lexer.mncs",
+    "baseline_file_sha256": "39436fadb0ef5de3426bedec1f06fc4573abd5f65a25b02ac2ebc7d6ff61312a",
+    "candidate_file_sha256": "dd797ef905fd565306b204cc6dadc572248bb5257e1365b931671f7babe5f427",
+    "description": "Split scanned word tokens from scanned nonword tokens. Only keyword classification receives the full logical page table; trivia and number token construction is page-independent.",
+    "language_or_backend_semantics_changed": false,
+    "source_scope": "Compiler-owned lexer implementation only; punctuation token path unchanged."
+  },
+  "identities": {
+    "repository": "mncs-compiler",
+    "candidate_base_revision": "fc381ea",
+    "tested_candidate_git_head": "fc381ea",
+    "tested_candidate_branch": "campaign/lexer-token-result-boundary-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "implementation_commit": "69b50cf8b90778d9e6155bdd2c2df7fcf8c2f6c1",
+    "baseline_compiler_source_identity_sha256": "f6cd4e0bf22f59a165703acf2a9857db0de9f8312cc89c9deb6a325aa169205d",
+    "candidate_compiler_source_identity_sha256": "ec3d32c5c27776a5abbea007d31e1e69a9dccc8f4ac8015c2c69d4017e5dbbe1",
+    "selected_compiler_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_probe_sha256": "2f194aef499fb244ced96ca000be0654bcd9e89010dfddd9f8a9d6e66a4c68e5",
+    "measurement_tool_sha256": {
+      "tools/measure_compiler_probe.py": "7502353ef2b0e2f511e6db84abb98df67b836e66853d9807665a57b1883ab2db",
+      "tools/probe_compiler_module_frontier.py": "69a31cbab0185a8c0218cb16f5672eb773ffc7ad70be584ae4ad1942afa6d825"
+    },
+    "test_tool_sha256": {
+      "tools/test_cp0001.py": "c2ce28226a409a96122d16d1344d1468cf3487fef51354e9bba2687419c3da9c"
+    }
+  },
+  "correctness": {
+    "tier_b": {
+      "classification": "SUCCESS",
+      "backend": "cranelift",
+      "stage0_oracle_exact": true,
+      "requests": 12691,
+      "cases": 114,
+      "tokens_compared": 39501,
+      "result_sha256": "2f7eb281a47795845950db95888072f56a73339c6fac58e81c0d72cf5ca7fcec",
+      "canonical_splits": 42,
+      "rejected_splits": 40,
+      "elapsed_seconds": 19.279
+    },
+    "tier_c": {
+      "classification": "SUCCESS",
+      "backend": "cranelift",
+      "stage0_oracle_exact": true,
+      "requests": 96,
+      "result_sha256": "70302a8575b59beb9e8b0f953a3efa43a0a354aff171482d03907465018ccb59",
+      "keywords": 30,
+      "near_miss_identifiers": 60,
+      "tokens_per_page_width": 179,
+      "page_widths": [
+        1,
+        2,
+        7,
+        64,
+        1024
+      ],
+      "elapsed_seconds": 2.653
+    },
+    "tier_a": {
+      "classification": "FAILURE_KNOWN_REFERENCE_DIVERGENCE_CP0022",
+      "failure": "The randomized Tier A case contains a standalone !. The native compiler lexer returns kind 40 (not, diagnostic 0); the locked Stage-0 oracle returns kind 7 (unknown, MNL002).",
+      "candidate_change_touches_divergent_path": false,
+      "status_note": "No Tier A pass is claimed. The existing test corpus has a known single-bang reference divergence; this change does not alter punctuation dispatch."
+    }
+  },
+  "real_flow_target": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "input_source_bytes": 918480,
+    "selected_input_pages_at_width_1024": 900,
+    "page_scope_note": "This selected request uses 901 pages. The established 894-page real-flow closure evidence remains unchanged.",
+    "backend": "reference_interpreter",
+    "step_budget": 200000,
+    "timeout_seconds": 120,
+    "stage0_oracle_skipped_for_target": true,
+    "baseline": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 37.555,
+        "child_cpu_seconds": 34.98,
+        "child_peak_rss_kib": 1758804,
+        "child_peak_fds": 5,
+        "target_execution_ms": 34010.770482,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "low": 0,
+          "oom_kill": 0,
+          "max": 0,
+          "sock_throttled": 0,
+          "high": 0,
+          "oom_group_kill": 0,
+          "oom": 0
+        },
+        "measurement_artifact": {
+          "location_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-1.json",
+          "sha256": "c2ab758414ab333917f5e68830703797c0bdc229f40ed7cdc30260f5e5c6c06b",
+          "bytes": 187667
+        }
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 37.056,
+        "child_cpu_seconds": 34.660000000000004,
+        "child_peak_rss_kib": 1758812,
+        "child_peak_fds": 5,
+        "target_execution_ms": 33764.447269000004,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_kill": 0,
+          "oom": 0,
+          "low": 0,
+          "sock_throttled": 0,
+          "max": 0,
+          "high": 0,
+          "oom_group_kill": 0
+        },
+        "measurement_artifact": {
+          "location_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-2.json",
+          "sha256": "0903f3146aacae090b2e6e2548f4bbc364bdc084c8066f608e319cd796f23609",
+          "bytes": 186872
+        }
+      }
+    ],
+    "candidate": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 32.547,
+        "child_cpu_seconds": 30.12,
+        "child_peak_rss_kib": 1759228,
+        "child_peak_fds": 5,
+        "target_execution_ms": 29248.39835,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_group_kill": 0,
+          "low": 0,
+          "oom_kill": 0,
+          "max": 0,
+          "high": 0,
+          "sock_throttled": 0,
+          "oom": 0
+        },
+        "measurement_artifact": {
+          "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-1-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "d8bf697f3f72f059bce97f8b0ce31484114580cd547a3527f626c7e7ee835b11",
+          "bytes": 169661
+        }
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 32.544,
+        "child_cpu_seconds": 30.3,
+        "child_peak_rss_kib": 1758860,
+        "child_peak_fds": 5,
+        "target_execution_ms": 29338.47196,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "low": 0,
+          "high": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "oom": 0,
+          "max": 0,
+          "sock_throttled": 0
+        },
+        "measurement_artifact": {
+          "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-2-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "cce498e7dc4741768db54e05d8cd9221ba7aab11a55b676b0d69be40e1d2485a",
+          "bytes": 169396
+        }
+      }
+    ],
+    "matched_warm_means": {
+      "baseline": {
+        "wall_seconds": 37.305499999999995,
+        "child_cpu_seconds": 34.82,
+        "child_peak_rss_kib": 1758808,
+        "target_execution_ms": 33887.6088755
+      },
+      "candidate": {
+        "wall_seconds": 32.5455,
+        "child_cpu_seconds": 30.21,
+        "child_peak_rss_kib": 1759044,
+        "target_execution_ms": 29293.435155
+      },
+      "candidate_minus_baseline": {
+        "wall_reduction_percent": 12.759512672394147,
+        "child_cpu_reduction_percent": 13.239517518667432,
+        "target_execution_reduction_percent": 13.557090254961865,
+        "peak_rss_delta_kib": 236,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ]
+      }
+    },
+    "outcome": {
+      "baseline": "RESOURCE_EXHAUSTED",
+      "candidate": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "reported_steps_each_run": 200000
+    },
+    "resource_observation": {
+      "rss_cap_mib": 2300,
+      "rss_cap_triggered_all_runs": false,
+      "cgroup_oom_deltas_all_zero": true,
+      "child_fd_peak_each_run": 5,
+      "scope_note": "Child CPU/RSS/FD values identify the actual Stage-0 probe child. cgroup events are user-session scope, not child-specific."
+    }
+  },
+  "runtime_profile": {
+    "baseline": {
+      "wall_seconds": 36.053,
+      "target_execution_ms": 32568.632143000003,
+      "token_from_scan_global": {
+        "calls": 151,
+        "steps": 2176,
+        "exclusive_ms": 2514.003613,
+        "inclusive_ms": 4019.565542
+      },
+      "next_token_global": {
+        "calls": 173,
+        "steps": 41788,
+        "exclusive_ms": 12188.769159,
+        "inclusive_ms": 18472.992459
+      }
+    },
+    "candidate": {
+      "wall_seconds": 33.546,
+      "target_execution_ms": 30243.770645,
+      "token_from_nonword_scan": {
+        "calls": 113,
+        "steps": 1452,
+        "exclusive_ms": 12.381052,
+        "inclusive_ms": 12.381052
+      },
+      "token_from_word_scan_global": {
+        "calls": 38,
+        "steps": 228,
+        "exclusive_ms": 668.599175,
+        "inclusive_ms": 2137.060868
+      },
+      "next_token_global": {
+        "calls": 173,
+        "steps": 42091,
+        "exclusive_ms": 12084.773474,
+        "inclusive_ms": 16498.173041
+      }
+    },
+    "interpretation": "The scanned nonword helper ran 113 times and reports about 12 ms exclusive wall time. The prior combined helper spent about 2.514 s exclusive; profile timing is wall time, not per-function CPU."
+  },
+  "cold_cache_fill": {
+    "classification": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "wall_seconds": 197.767,
+    "child_cpu_seconds": 193.2,
+    "child_peak_rss_kib": 2142312,
+    "frontend_elaboration_ms": 109941.51698,
+    "target_execution_ms": 38139.406691,
+    "program_cache_key": "305ea99bc2d4b51bc2d6b094ac42f312b2cfeb2bb272403edcd90ac1a223c373",
+    "program_artifact_uncompressed_bytes": 151514694,
+    "program_artifact_gzip_bytes": 5311270,
+    "purpose_note": "First request built the source-specific frontend Program cache; excluded from matched warm means."
+  },
+  "stage_promotion": {
+    "module_stage_matrix_changed": false,
+    "executable_artifact_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "reason": "The matched target still exhausts its fixed 200000-step budget without returning a project result."
+  },
+  "raw_measurement_artifacts": [
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-1-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "d8bf697f3f72f059bce97f8b0ce31484114580cd547a3527f626c7e7ee835b11",
+      "bytes": 169661
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-2-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "cce498e7dc4741768db54e05d8cd9221ba7aab11a55b676b0d69be40e1d2485a",
+      "bytes": 169396
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-candidate-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "a019c197dbdebcdb27525fa5761670e83bf69d8c43b1a15f8d522461b3cf8e76",
+      "bytes": 11370
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-profile-candidate-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "b611655fe50aea6a05c9f01ef7018700047d83e1aa785725827a73133c209f55",
+      "bytes": 8713
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-1-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "32d5e701c67e368d8ddf2ea189ce2446f9750468e717bf5bb38782921460ddf1",
+      "bytes": 8711
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-2-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "eadfb01fb3aad9f5dc50c42709e908f349f70548d44065001fedc7e4eed09533",
+      "bytes": 8711
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/token-result-boundary-cp0001-tier-b.json",
+      "sha256": "829ec1324694ebbf027f9086517851ce0bfa22780526088061a79aa135d913f3",
+      "bytes": 1012
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/token-result-boundary-cp0001-tier-c.json",
+      "sha256": "e6fa17a6bd0f465ca6acee920acfc5159d25121e202ca8d240b0937a54a98bac",
+      "bytes": 2810
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-profile-candidate-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "72947cf1e06fb07df2546130db9e03ae823eaad505bc378999013e51f96f7614",
+      "bytes": 208309
+    },
+    {
+      "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-candidate-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "d963637b7e8245a30de430bb3b4b9e91e3a587e14bc463ecb1a8a2babddb4e60",
+      "bytes": 651265
+    }
+  ],
+  "baseline_raw_measurement_artifacts": [
+    {
+      "location_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-1.json",
+      "sha256": "c2ab758414ab333917f5e68830703797c0bdc229f40ed7cdc30260f5e5c6c06b",
+      "bytes": 187667
+    },
+    {
+      "location_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-matched-candidate-2.json",
+      "sha256": "0903f3146aacae090b2e6e2548f4bbc364bdc084c8066f608e319cd796f23609",
+      "bytes": 186872
+    },
+    {
+      "location_from_projects_root": ".worktrees/lexer-token-frame-carry-20261010/.build/keyword-byte-profile-candidate.json",
+      "sha256": "baac0e6a20c97a201ebe3aff1dd13ac28800a4ba405491735dff1ac432407505",
+      "bytes": 217409
+    }
+  ],
+  "limitations": [
+    "Hardware instruction count unavailable.",
+    "Per-function CPU is unavailable; runtime profiles are wall-time observations.",
+    "Host pressure and cgroup memory events are not child-specific.",
+    "No semantic result is claimed for the budget-exhausted compile_project_target request."
+  ]
+}
