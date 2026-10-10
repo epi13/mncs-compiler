@@ -399,6 +399,9 @@ POS = [
     'mncs 0.18; module t; enum E { Item { next: u64 }, No } fn f(v: u64) -> (r: E) { return E.Item { next: v }; }',
     'mncs 0.18; module t; enum E { Item { next: u64 }, No } fn f(x: E) -> (r: u64) { return match x { Item { next: n } => n, No => 0 }; }',
     'mncs 0.10; module t; use a.b as c; record R { x: u64 } fn f(v: R) -> (r: u64) { return v.x; }',
+    # Multi-segment paths stop at the first non-dot token without rescanning
+    # that terminal token through the remainder of the defensive path bound.
+    'mncs 0.18; module demo.alpha.beta.gamma; use demo.source.segment.lexer as lib; fn f(x: u64) -> (r: u64) { return x; }',
     'mncs 0.10; module t; fn f(a: u64) -> (r: u64) { if a == 1 { return 1; } else { return 2; } return 0; }',
     # An inner if without `else` must finish without consuming the parent's
     # closing brace; the block parser reprocesses that token on its frame stack.
@@ -490,6 +493,9 @@ POS = [
 NEG = [
     'mncs 0.10; module t;',
     'mncs 0.18; module ;',
+    # A dotted path with no following identifier keeps Stage-0's first-error
+    # span at the token after the separator.
+    'mncs 0.18; module demo.root; use demo.alpha. as dep; fn f(x: u64) -> (r: u64) { return x; }',
     'mncs 0.10; module t; record R {}',
     'mncs 0.10; module t; fn f() -> (r: u64) { return 1 + ; }',
     'mncs 0.18; module t; enum F { No } fn f(s: u64) -> (r: u64) { return match s { F. => 0 }; }',

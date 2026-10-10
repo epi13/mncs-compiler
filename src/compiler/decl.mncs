@@ -2926,19 +2926,18 @@ fn parse_module_path<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         return NameParse { cursor: cursor, ok: false, err_start: first.start, err_end: first.end, start: cursor, end: cursor };
     }
     iterate i up_to 1024 carrying d: NameParse = NameParse { cursor: first.end, ok: true, err_start: 0, err_end: 0, start: first.start, end: first.end } {
-        next d = path_step<P, N>(pages, stride, total, d);
+        // A module path ends at its first non-separator. Return immediately
+        // instead of rescanning that same terminal token for the unused tail
+        // of the defensive segment bound.
+        let separator: lexer.Token = segment.significant_global<P, N>(pages, stride, total, d.cursor);
+        if separator.diagnostic != 0 || separator.kind != 61 { return d; }
+        let seg: lexer.Token = segment.significant_global<P, N>(pages, stride, total, separator.end);
+        if seg.diagnostic != 0 || (seg.kind != 4 && seg.kind != 10) {
+            return NameParse { cursor: d.cursor, ok: false, err_start: seg.start, err_end: seg.end, start: d.start, end: d.end };
+        }
+        next d = NameParse { cursor: seg.end, ok: true, err_start: 0, err_end: 0, start: d.start, end: seg.end };
     }
     return d;
-}
-fn path_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NameParse) -> (result: NameParse) {
-    if !(st.ok) { return st; }
-    let token: lexer.Token = segment.significant_global<P, N>(pages, stride, total, st.cursor);
-    if token.diagnostic != 0 || token.kind != 61 { return st; }
-    let seg: lexer.Token = segment.significant_global<P, N>(pages, stride, total, token.end);
-    if seg.diagnostic != 0 || (seg.kind != 4 && seg.kind != 10) {
-        return NameParse { cursor: st.cursor, ok: false, err_start: seg.start, err_end: seg.end, start: st.start, end: st.end };
-    }
-    return NameParse { cursor: seg.end, ok: true, err_start: 0, err_end: 0, start: st.start, end: seg.end };
 }
 fn parse_use_alias<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64) -> (result: NameParse) {
     let token: lexer.Token = segment.significant_global<P, N>(pages, stride, total, cursor);
