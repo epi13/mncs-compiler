@@ -485,6 +485,71 @@ def _read_phase_trace(path: Path) -> tuple[list[dict[str, object]], list[str], s
     return events, errors, hashlib.sha256(raw.encode()).hexdigest()
 
 
+def _incomplete_phases_at_stop(
+    events: list[dict[str, object]],
+    resource_observation: dict[str, object],
+    stop_cause: str,
+) -> list[dict[str, object]]:
+    """Retain phase starts that have no completion event when sampling stops."""
+    pending: list[dict[str, object]] = []
+    for event in events:
+        event_kind = event.get("event")
+        if event_kind == "phase_begin":
+            pending.append(event)
+            continue
+        if event_kind != "phase":
+            continue
+        identity = (event.get("pid"), event.get("phase"), event.get("gzip_pid"))
+        for index in range(len(pending) - 1, -1, -1):
+            started = pending[index]
+            if (started.get("pid"), started.get("phase"), started.get("gzip_pid")) == identity:
+                del pending[index]
+                break
+
+    samples_by_pid: dict[int, list[float]] = {}
+    samples = resource_observation.get("probe_samples")
+    if isinstance(samples, list):
+        for sample in samples:
+            if not isinstance(sample, dict):
+                continue
+            try:
+                pid = int(sample["pid"])
+                elapsed_ms = float(sample["elapsed_ms"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            samples_by_pid.setdefault(pid, []).append(elapsed_ms)
+
+    incomplete = []
+    for started in pending:
+        pid = started.get("pid")
+        begin_elapsed_ms = started.get("process_elapsed_ms")
+        last_sample_ms = None
+        try:
+            samples_for_pid = samples_by_pid.get(int(pid), [])
+        except (TypeError, ValueError):
+            samples_for_pid = []
+        if samples_for_pid:
+            last_sample_ms = max(samples_for_pid)
+        elapsed_to_last_sample: float | str = "UNKNOWN"
+        try:
+            if last_sample_ms is not None:
+                elapsed_to_last_sample = round(max(0.0, last_sample_ms - float(begin_elapsed_ms)), 3)
+        except (TypeError, ValueError):
+            pass
+        incomplete.append({
+            "phase": started.get("phase", "UNKNOWN"),
+            "execution_pid": pid,
+            "child_pid": started.get("gzip_pid"),
+            "status": "INCOMPLETE_AT_MEASUREMENT_STOP",
+            "stop_cause": stop_cause,
+            "phase_start_process_elapsed_ms": begin_elapsed_ms,
+            "last_sample_process_elapsed_ms": last_sample_ms if last_sample_ms is not None else "UNKNOWN",
+            "elapsed_ms_to_last_sample": elapsed_to_last_sample,
+            "observation_basis": resource_observation.get("probe_sample_clock", "UNKNOWN"),
+        })
+    return incomplete
+
+
 def _rss_cap_state(
     records: dict[int, dict[str, object]], limit_mib: int | None
 ) -> tuple[bool, int | None]:
@@ -849,6 +914,15 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         else args.backend
     )
     phases = [event for event in phase_events if event.get("event") == "phase"]
+    measurement_stop_cause = (
+        "sampled_probe_child_rss_cap" if rss_cap_triggered
+        else "measurement_timeout" if timed_out
+        else "probe_returned_or_child_terminated"
+    )
+    resource_observation = _probe_resource_summary(records)
+    incomplete_phases = _incomplete_phases_at_stop(
+        phase_events, resource_observation, measurement_stop_cause
+    )
     timing_stderr = "\n".join([
         stderr,
         *_nested_probe_stderr_lines(probe_report, "mncs_timings"),
@@ -897,7 +971,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "an exit signal alone does not identify OOM; cgroup deltas and process termination evidence are reported separately",
     ]
     result = {
-        "schema": "mncs-compiler.probe-resource-measurement/3",
+        "schema": "mncs-compiler.probe-resource-measurement/4",
         "label": label,
         "command": command,
         "backend_cli_argument": args.backend,
@@ -931,9 +1005,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "scope_note": "sampling can overshoot between observations; this is an orderly runner stop threshold, not a kernel memory limit",
         },
         "termination_evidence": {
-            "measurement_stop_cause": ("sampled_probe_child_rss_cap" if rss_cap_triggered
-                                        else "measurement_timeout" if timed_out
-                                        else "probe_returned_or_child_terminated"),
+            "measurement_stop_cause": measurement_stop_cause,
             "signals": termination_actions,
             "runner_returncode": returncode,
             "cgroup_memory_events_delta": _cgroup_delta(cgroup_before, cgroup_after)["memory_events"],
@@ -944,12 +1016,13 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "cgroup_before": cgroup_before,
         "cgroup_after": cgroup_after,
         "cgroup_delta": _cgroup_delta(cgroup_before, cgroup_after),
-        "resource_observation": _probe_resource_summary(records),
+        "resource_observation": resource_observation,
         "phase_trace_path": str(trace_path.relative_to(ROOT)),
         "phase_trace_sha256": phase_trace_sha256,
         "phase_trace_parse_errors": phase_trace_errors,
         "phase_events": len(phase_events),
         "phase_rows": phases,
+        "incomplete_phases_at_stop": incomplete_phases,
         "nested_probe_stderr": {
             "path": str(nested_stderr_path.relative_to(ROOT)),
             "available": nested_stderr is not None,

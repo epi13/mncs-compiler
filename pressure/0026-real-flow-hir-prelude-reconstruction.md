@@ -155,3 +155,42 @@ question.
 - Follow-up: instrument the measured backend compilation/admission boundary
   and reduce its memory/work cost without raising the budget to hide the
   bottleneck.
+
+## Follow-up on delivered compiler main (2026-10-10)
+
+A separate bounded observation used delivered compiler main `aca7f5b` and
+source-content identity `d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318`
+for the six selected target modules (900 pages at width 1024). The Stage-0
+lock remained `b05dfa2b`; the tested compiler head and source-content identity
+are recorded separately in
+[`campaign-20261010-flow-execution-and-phase-stop.json`](../evidence/campaign-20261010-flow-execution-and-phase-stop.json).
+
+The warm reference-interpreter request exhausted its unchanged 200,000-step
+budget after 29.726 seconds of target execution. It returned no project result,
+so semantic acceptance remains UNKNOWN. The actual probe child used 30.62 CPU
+seconds, peaked at 1,759,260 KiB RSS and five FDs, and did not reach the
+2,300 MiB runner stop.
+
+The research-bytecode request used the same compiler source identity and a
+200,000-step budget, but its frontend Program cache was cold. Stage-0
+frontend elaboration took 154.230 seconds and produced a 3,135-function
+Program. The trace then entered backend compilation. The process reached the
+2,300 MiB sampled RSS stop 104.541 seconds after that phase began, at
+2,435,696 KiB RSS and 259.34 CPU seconds. The 0.5-second sampler overshot the
+stop threshold by 80,496 KiB. The runner sent SIGINT to the revalidated
+isolated child; no cgroup OOM or `oom_kill` event occurred. Backend session
+admission and target execution were not reached, and the semantic result is
+UNKNOWN. This pair does not isolate an allocator or backend data structure.
+
+`measure_compiler_probe.py` now emits schema 4 with an
+`incomplete_phases_at_stop` field. It matches phase-begin and phase-completion
+events, then reports any active phase alongside the last sampled child time.
+The raw research-bytecode measurement remains schema 3; its unmatched
+`backend_compilation` phase was reconstructed from the hash-verified trace
+using the new helper. A subsequent normal bounded reference-interpreter run
+emitted schema 4 with an empty incomplete-phase list.
+
+A same-operation eight-byte lexer-window experiment passed the focused
+scanner/Stage-0 token and span differential, but two warm target measurements
+were slower than the restored baseline. The source change was reverted; it
+does not promote the lexer or flow module evidence.

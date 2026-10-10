@@ -369,6 +369,33 @@ def test_phase_trace_keeps_valid_partial_events_and_hashes_raw_bytes(tmp_path):
     assert digest is not None and len(digest) == 64
 
 
+def test_measurement_stop_names_incomplete_phase_and_last_sample():
+    events = [
+        {"event": "phase_begin", "pid": 24, "phase": "backend_compilation", "process_elapsed_ms": 1200.0},
+        {"event": "phase_begin", "pid": 24, "gzip_pid": 28, "phase": "artifact_cache_gzip_write", "process_elapsed_ms": 1300.0},
+        {"event": "phase", "pid": 24, "gzip_pid": 28, "phase": "artifact_cache_gzip_write", "process_elapsed_ms": 1400.0},
+    ]
+    resources = {
+        "probe_sample_clock": "per-process elapsed sample aligned to phase trace",
+        "probe_samples": [
+            {"pid": 24, "elapsed_ms": 1190.0},
+            {"pid": 24, "elapsed_ms": 2250.0},
+        ],
+    }
+
+    incomplete = measurement._incomplete_phases_at_stop(
+        events, resources, "sampled_probe_child_rss_cap"
+    )
+
+    assert len(incomplete) == 1
+    assert incomplete[0]["phase"] == "backend_compilation"
+    assert incomplete[0]["status"] == "INCOMPLETE_AT_MEASUREMENT_STOP"
+    assert incomplete[0]["stop_cause"] == "sampled_probe_child_rss_cap"
+    assert incomplete[0]["phase_start_process_elapsed_ms"] == 1200.0
+    assert incomplete[0]["last_sample_process_elapsed_ms"] == 2250.0
+    assert incomplete[0]["elapsed_ms_to_last_sample"] == 1050.0
+
+
 def test_budget_and_protocol_failures_are_distinct():
     budget = {"native_request_status": "budget_exhausted"}
     invalid = {"native_request_status": "invalid_request"}
@@ -490,6 +517,7 @@ if __name__ == "__main__":
         test_probe_child_samples_keep_process_elapsed_resource_series,
         test_only_revalidated_isolated_probe_group_is_signaled,
         test_phase_trace_keeps_valid_partial_events_and_hashes_raw_bytes,
+        test_measurement_stop_names_incomplete_phase_and_last_sample,
         test_budget_and_protocol_failures_are_distinct,
         test_child_interruption_and_unknown_remain_distinct,
         test_execution_success_is_separate_from_semantic_rejection,
