@@ -649,8 +649,6 @@ if __name__ == "__main__":
     elif oracle_only:
         report = run_stage0_oracle_only(names)
     else:
-        if prepare_program_cache_only and not target_last:
-            raise SystemExit("--prepare-program-cache-only requires --target-last")
         report = run(
             names,
             target_last=target_last,

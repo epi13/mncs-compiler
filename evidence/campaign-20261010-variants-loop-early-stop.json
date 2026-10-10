@@ -1,0 +1,419 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.variants-loop-early-stop-evidence",
+  "observed_at": "2026-10-10T09:30:43.126288+00:00",
+  "compiler_identity": {
+    "candidate_base_git_head": "92503a499532cc156e7e67f188d1257a8aa92cba",
+    "candidate_branch": "campaign/common-probe-cache-20261010",
+    "candidate_worktree_dirty_during_measurements": true,
+    "tested_source_identity": {
+      "kind": "sha256 of selected compiler module ids and source bytes",
+      "sha256": "ef04cc83a8e201d843b15843da7228c76509b639ceaafad97488335af3774cea",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl"
+      ],
+      "decl_source_sha256": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516"
+    },
+    "baseline_source_identity": {
+      "kind": "sha256 of selected compiler module ids and source bytes",
+      "sha256": "bc522b7b84d83df8e180c3f689f4ac204f843b9524768ff6f047ca8236071e34",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl"
+      ]
+    },
+    "delivered_main_revision": null,
+    "delivery_identity_note": "Candidate base Git head, exact source digest, and delivered main revision are separate. The implementation commit and delivered main revision are recorded after merge; historical top-level matrix compiler_head is unchanged."
+  },
+  "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+  "implementation": {
+    "path": "src/compiler/decl.mncs",
+    "behavior": "parse_variants runs a 64-call fast path, returns once variants_step reaches its terminal done state, then runs the remaining 960 calls only when needed. The original 1024-call ceiling is preserved.",
+    "semantic_basis": "variants_step returns its input unchanged when done is true; focused positive and negative differentials cross the 64-call boundary.",
+    "language_or_backend_changes": false
+  },
+  "target_measurement": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_input_root": "src/compiler/decl.mncs",
+    "selected_compiler_inputs": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl"
+    ],
+    "backend": "reference_interpreter",
+    "step_budget": 500000,
+    "timeout_seconds": 120,
+    "sampled_child_rss_stop_mib": 2300,
+    "stage0_project_oracle": "skipped for bounded execution profiling",
+    "baseline": {
+      "runs": [
+        {
+          "label": "campaign-20261010-variants-loop-baseline-1",
+          "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-variants-loop-baseline-1-source-lexer-parser-segment-decl-measurement.json",
+          "measurement_sha256": "8383bbe550edee5491d1cf617aa1abec84ecd05f7615b59179798e9b5e2e1028",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 88.621,
+          "compiler_head_at_probe": "92503a499532cc156e7e67f188d1257a8aa92cba",
+          "compiler_source_identity_sha256": "bc522b7b84d83df8e180c3f689f4ac204f843b9524768ff6f047ca8236071e34",
+          "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+          "selected_modules": [
+            "decl",
+            "lexer",
+            "parser",
+            "segment",
+            "source"
+          ],
+          "input_total_page_count_at_stride_1024": 865,
+          "target_source_index": 0,
+          "frontend_program_cache": {
+            "key": "d5fb80cfe2c39ea74bda6b2434ea98ecae6b7388daecdb5f1b528d69a2357654",
+            "decoded": true,
+            "usable": true,
+            "duration_ms": 615.021321
+          },
+          "target_execution": {
+            "reported_status": "budget_exhausted",
+            "reported_steps": 500000,
+            "duration_ms": 85168.814629
+          },
+          "probe_child": {
+            "cpu_seconds": 84.66999999999999,
+            "cpu_user_seconds": 83.96,
+            "cpu_system_seconds": 0.71,
+            "peak_sampled_rss_kib": 1712584,
+            "peak_fd_count": 5
+          },
+          "rss_stop_threshold": {
+            "limit_mib": 2300,
+            "triggered": false
+          },
+          "cgroup_memory_events_delta": {
+            "high": 0,
+            "oom_kill": 0,
+            "max": 0,
+            "oom_group_kill": 0,
+            "oom": 0,
+            "low": 0,
+            "sock_throttled": 0
+          },
+          "variants_step_profile": null,
+          "next_token_global_profile": null
+        },
+        {
+          "label": "campaign-20261010-variants-loop-baseline-2",
+          "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-variants-loop-baseline-2-source-lexer-parser-segment-decl-measurement.json",
+          "measurement_sha256": "ef2e423ac62ef382bc17679f7d024b2c978456cab11f652e496c8e7fd51ba3b4",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 87.124,
+          "compiler_head_at_probe": "92503a499532cc156e7e67f188d1257a8aa92cba",
+          "compiler_source_identity_sha256": "bc522b7b84d83df8e180c3f689f4ac204f843b9524768ff6f047ca8236071e34",
+          "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+          "selected_modules": [
+            "decl",
+            "lexer",
+            "parser",
+            "segment",
+            "source"
+          ],
+          "input_total_page_count_at_stride_1024": 865,
+          "target_source_index": 0,
+          "frontend_program_cache": {
+            "key": "d5fb80cfe2c39ea74bda6b2434ea98ecae6b7388daecdb5f1b528d69a2357654",
+            "decoded": true,
+            "usable": true,
+            "duration_ms": 626.409112
+          },
+          "target_execution": {
+            "reported_status": "budget_exhausted",
+            "reported_steps": 500000,
+            "duration_ms": 83931.495219
+          },
+          "probe_child": {
+            "cpu_seconds": 84.76,
+            "cpu_user_seconds": 84.33,
+            "cpu_system_seconds": 0.43,
+            "peak_sampled_rss_kib": 1712656,
+            "peak_fd_count": 5
+          },
+          "rss_stop_threshold": {
+            "limit_mib": 2300,
+            "triggered": false
+          },
+          "cgroup_memory_events_delta": {
+            "oom": 0,
+            "high": 0,
+            "oom_kill": 0,
+            "max": 0,
+            "low": 0,
+            "sock_throttled": 0,
+            "oom_group_kill": 0
+          },
+          "variants_step_profile": null,
+          "next_token_global_profile": null
+        }
+      ],
+      "mean_wall_seconds": 87.873,
+      "mean_probe_child_cpu_seconds": 84.715,
+      "mean_target_execution_ms": 84550.155
+    },
+    "candidate": {
+      "runs": [
+        {
+          "label": "20261010-decl-target-candidate-1",
+          "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-20261010-decl-target-candidate-1-source-lexer-parser-segment-decl-measurement.json",
+          "measurement_sha256": "e5610507d2c6e149ffeec545a878855b57a682a38a6c00621a7a8e9230dd67cb",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 73.102,
+          "compiler_head_at_probe": "92503a499532cc156e7e67f188d1257a8aa92cba",
+          "compiler_source_identity_sha256": "ef04cc83a8e201d843b15843da7228c76509b639ceaafad97488335af3774cea",
+          "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+          "selected_modules": [
+            "decl",
+            "lexer",
+            "parser",
+            "segment",
+            "source"
+          ],
+          "input_total_page_count_at_stride_1024": 866,
+          "target_source_index": 0,
+          "frontend_program_cache": {
+            "key": "2646f6ad07fa70f86060f0e8e3cb57b9399be99e0b7b4ea9fa18aefe22749ffd",
+            "decoded": true,
+            "usable": true,
+            "duration_ms": 608.236829
+          },
+          "target_execution": {
+            "reported_status": "budget_exhausted",
+            "reported_steps": 500000,
+            "duration_ms": 70000.90380100001
+          },
+          "probe_child": {
+            "cpu_seconds": 70.78,
+            "cpu_user_seconds": 70.39,
+            "cpu_system_seconds": 0.39,
+            "peak_sampled_rss_kib": 1710228,
+            "peak_fd_count": 5
+          },
+          "rss_stop_threshold": {
+            "limit_mib": 2300,
+            "triggered": false
+          },
+          "cgroup_memory_events_delta": {
+            "oom_kill": 0,
+            "sock_throttled": 0,
+            "oom_group_kill": 0,
+            "high": 0,
+            "low": 0,
+            "max": 0,
+            "oom": 0
+          },
+          "variants_step_profile": null,
+          "next_token_global_profile": null
+        },
+        {
+          "label": "20261010-decl-target-candidate-2",
+          "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-20261010-decl-target-candidate-2-source-lexer-parser-segment-decl-measurement.json",
+          "measurement_sha256": "b4c33c656d254e2670ac11cf3d104154f1df22fc19badd1910f7987af6adcfdb",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 74.101,
+          "compiler_head_at_probe": "92503a499532cc156e7e67f188d1257a8aa92cba",
+          "compiler_source_identity_sha256": "ef04cc83a8e201d843b15843da7228c76509b639ceaafad97488335af3774cea",
+          "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+          "selected_modules": [
+            "decl",
+            "lexer",
+            "parser",
+            "segment",
+            "source"
+          ],
+          "input_total_page_count_at_stride_1024": 866,
+          "target_source_index": 0,
+          "frontend_program_cache": {
+            "key": "2646f6ad07fa70f86060f0e8e3cb57b9399be99e0b7b4ea9fa18aefe22749ffd",
+            "decoded": true,
+            "usable": true,
+            "duration_ms": 609.587586
+          },
+          "target_execution": {
+            "reported_status": "budget_exhausted",
+            "reported_steps": 500000,
+            "duration_ms": 70828.093052
+          },
+          "probe_child": {
+            "cpu_seconds": 70.57,
+            "cpu_user_seconds": 69.88,
+            "cpu_system_seconds": 0.69,
+            "peak_sampled_rss_kib": 1710608,
+            "peak_fd_count": 5
+          },
+          "rss_stop_threshold": {
+            "limit_mib": 2300,
+            "triggered": false
+          },
+          "cgroup_memory_events_delta": {
+            "low": 0,
+            "oom_group_kill": 0,
+            "max": 0,
+            "oom_kill": 0,
+            "oom": 0,
+            "high": 0,
+            "sock_throttled": 0
+          },
+          "variants_step_profile": null,
+          "next_token_global_profile": null
+        }
+      ],
+      "mean_wall_seconds": 73.602,
+      "mean_probe_child_cpu_seconds": 70.675,
+      "mean_target_execution_ms": 70414.498
+    },
+    "matched_prefix_change": {
+      "whole_runner_wall_reduction_percent": 16.24,
+      "probe_child_cpu_reduction_percent": 16.57,
+      "target_execution_phase_reduction_percent": 16.72,
+      "steps_each_run": 500000,
+      "classification_each_run": "RESOURCE_EXHAUSTED",
+      "semantic_result_each_run": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "rss_stop_triggered": false,
+      "cgroup_oom_or_oom_kill_delta": 0,
+      "peak_rss_change_interpretation": "approximately unchanged; both source identities sampled near 1.63 GiB and five FDs"
+    },
+    "profiled_function_delta": {
+      "function": "mncs.compiler.decl.v1::variants_step",
+      "baseline_calls": 1024,
+      "candidate_calls": 64,
+      "call_reduction_percent": 93.75,
+      "baseline_exclusive_seconds": 15.877,
+      "candidate_exclusive_seconds": 1.015,
+      "exclusive_time_reduction_percent": 93.61,
+      "profile_parse_errors": []
+    },
+    "remaining_profiled_hotspot": {
+      "calls": 507,
+      "steps": 112991,
+      "exclusive_ns": 34083734290
+    },
+    "target_program_cache_preparation": {
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "target_execution": "NOT_ATTEMPTED",
+      "wall_seconds": 155.708,
+      "probe_child_cpu_seconds": 154.25,
+      "probe_child_peak_rss_kib": 2142380,
+      "probe_child_peak_fd_count": 5,
+      "frontend_cache_key": "2646f6ad07fa70f86060f0e8e3cb57b9399be99e0b7b4ea9fa18aefe22749ffd",
+      "cache_decoded": false,
+      "cgroup_oom_or_oom_kill_delta": 0
+    },
+    "measurement_scope_note": "The baseline and candidate share target operation, selected module names, Stage-0 revision, backend, step budget, timeout, and sampled RSS stop. The changed decl source increases selected input pages from 865 to 866. These bounded runs do not finish the project target and are not semantic parity results."
+  },
+  "focused_parser_differential": {
+    "artifact_path": ".build/decl-variant-loop-boundary.json",
+    "artifact_sha256": "2a5be731849c4c5fbc77374f7bf33a958f490cdd73ccaa9c4799b1fd18f1df01",
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "backend": "reference_interpreter",
+    "retained_execution_sessions": 0,
+    "positive_variant_count": 65,
+    "positive_status": "SUCCESS",
+    "negative_status": "SUCCESS",
+    "stage0_first_error_span": [
+      428,
+      429
+    ],
+    "native_first_error_span": [
+      428,
+      429
+    ],
+    "whole_module_or_canonical_vm_claim": false,
+    "execution_mode": "reference_interpreter",
+    "retained_backend": null
+  },
+  "whole_module_decl_revalidation": {
+    "status": "INTERRUPTED",
+    "semantic_result": "UNKNOWN_NO_RESULT",
+    "request_scope": "decl.parse_unit on src/compiler/decl.mncs through tools/test_decl.py isolated_self_ingest_case",
+    "stage0_oracle": "NOT_REACHED; the native parse request did not return",
+    "termination": "SIGINT sent after prolonged response wait",
+    "wall_cpu_rss_fd_observations": "UNKNOWN; this direct helper has no child resource telemetry",
+    "previous_matrix_source_identity": "historical evidence remains unchanged and does not bind this edited decl source"
+  },
+  "measurement_artifacts": [
+    {
+      "label": "campaign-20261010-decl-target-profile-500k",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-decl-target-profile-500k-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "d2a741507649868d7f927f612aed13705330003af58eec7ae2b88754bf4a0af1"
+    },
+    {
+      "label": "campaign-20261010-variants-loop-baseline-1",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-variants-loop-baseline-1-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "8383bbe550edee5491d1cf617aa1abec84ecd05f7615b59179798e9b5e2e1028"
+    },
+    {
+      "label": "campaign-20261010-variants-loop-baseline-2",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-variants-loop-baseline-2-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "ef2e423ac62ef382bc17679f7d024b2c978456cab11f652e496c8e7fd51ba3b4"
+    },
+    {
+      "label": "20261010-decl-target-candidate-1",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-20261010-decl-target-candidate-1-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "e5610507d2c6e149ffeec545a878855b57a682a38a6c00621a7a8e9230dd67cb"
+    },
+    {
+      "label": "20261010-decl-target-candidate-2",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-20261010-decl-target-candidate-2-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "b4c33c656d254e2670ac11cf3d104154f1df22fc19badd1910f7987af6adcfdb"
+    },
+    {
+      "label": "20261010-decl-target-candidate-profile",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-20261010-decl-target-candidate-profile-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "b3d8028434019f6c45e8ce3fe77f3d356d4efeda52da8c73ed9e530cf62b39fe"
+    },
+    {
+      "label": "20261010-decl-target-cache-v2",
+      "measurement_path": ".build/campaign-artifacts/compiler-facts/compiler-probe-20261010-decl-target-cache-v2-source-lexer-parser-segment-decl-measurement.json",
+      "measurement_sha256": "1b62546963499974c1abe327b7f536269b4513a6cc89c06431eb5a464d285ee1"
+    }
+  ],
+  "stage_promotion": {
+    "decl_current_source_whole_module_parse": "not revalidated; direct attempt interrupted",
+    "whole_module_check_proof_cfg_verified_ssa": "not established by this campaign slice",
+    "executable_artifact": "not established",
+    "stage1": false,
+    "stage2": false
+  },
+  "broader_fixture_sweep": {
+    "status": "INTERRUPTED",
+    "semantic_result": "UNKNOWN_NO_COMPLETE_SWEEP_RESULT",
+    "request_scope": "all existing test_decl.POS/test_decl.NEG parser fixtures, with the extended enum structural assertions",
+    "termination": "SIGINT sent after prolonged run without progress output",
+    "completed_case_count": "UNKNOWN; the helper emits no per-case progress",
+    "wall_cpu_rss_fd_observations": "UNKNOWN; this direct helper has no child resource telemetry",
+    "focused_replacement_evidence": "the dedicated 65-variant positive and malformed-65th-variant differential completed successfully and matched [428,429]"
+  },
+  "validation": {
+    "focused_boundary_differential": "SUCCESS; 65th variant carries a payload field and matches Stage-0 structure; malformed 65th variant matches Stage-0 span [428,429]",
+    "tools_test_measure_compiler_probe": "SUCCESS; 17 checks passed",
+    "python_compile": "SUCCESS; test_decl.py, test_decl_variant_loop.py, probe_compiler_module_frontier.py, measure_compiler_probe.py, and probe_paths.py",
+    "git_diff_check": "SUCCESS",
+    "evidence_json_parse": "SUCCESS",
+    "broader_fixture_sweep": "INTERRUPTED; UNKNOWN; no complete result or per-case progress was observed",
+    "whole_module_decl_revalidation": "INTERRUPTED; UNKNOWN; no compiler result or child resource telemetry was returned"
+  }
+}

@@ -16,9 +16,21 @@ from pathlib import Path
 import subprocess
 import sys
 import time
+from probe_paths import probe_cache_directory, probe_toolchain_identity_root
 
 ROOT = Path(__file__).resolve().parents[1]
-BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
+_DEFAULT_TOOLCHAIN_ROOT = Path(
+    os.environ.get(
+        "MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT",
+        probe_toolchain_identity_root(ROOT),
+    )
+).expanduser()
+BOOTSTRAP_TARGET = Path(
+    os.environ.get(
+        "MNCS_BOOTSTRAP_TARGET_DIR",
+        _DEFAULT_TOOLCHAIN_ROOT / ".bootstrap" / "target",
+    )
+).expanduser()
 os.chdir(ROOT)
 OUT = ROOT / '.build'
 OUT.mkdir(exist_ok=True)
@@ -598,6 +610,20 @@ CHECKS = [
     ('mncs 0.7; module t; fn f(x: u64, a: u64, b: u64) -> (r: u64) { return x[a..b]; }', 4),
 ]
 
+VARIANT_BOUNDARY_POS = (
+    "mncs 0.18; module t; enum E { "
+    + ", ".join(f"V{i:03d}" for i in range(64))
+    + ", V064 { value: u64 }"
+    + " }"
+)
+VARIANT_BOUNDARY_NEG = (
+    "mncs 0.18; module t; enum E { "
+    + ", ".join(f"V{i:03d}" for i in range(64))
+    + ", V064 { value: } }"
+)
+POS.append(VARIANT_BOUNDARY_POS)
+NEG.append(VARIANT_BOUNDARY_NEG)
+
 # Self-ingestion: real compiler modules the native parser must consume
 # whole, with oracle agreement on declaration facts.
 SELF_INGEST = ['src/compiler/segment.mncs', 'src/compiler/parser.mncs', 'src/compiler/source.mncs',
@@ -655,7 +681,11 @@ class Probe:
              'type_arguments': [nat_arg(page_bound), nat_arg(STRIDE_BOUND)]}
             for function in ['parse_unit', 'check_unit', 'prove_unit']
         ])
-        env.setdefault('MNCS_PROBE_CACHE_DIR', str(ROOT / '.build' / 'probe-cache'))
+        env.setdefault('MNCS_PROBE_CACHE_DIR', str(probe_cache_directory(ROOT)))
+        env.setdefault(
+            'MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT',
+            str(probe_toolchain_identity_root(ROOT)),
+        )
         self.proc = subprocess.Popen(
             [env.get('MNCS_PROBE_BIN', str(BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))],
             stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, cwd=ROOT, env=env
@@ -729,6 +759,39 @@ def check_pos_parse(got, oracle, data, text):
         hstmts = canon_proj([norm_stmt(x, src) for x in flist(hf['body']['body'], 1)] +
                             [('ret', norm_expr(hf['body']['ret'], src))])
         assert [deep(x) for x in wstmts] == [deep(x) for x in hstmts], (text, hstmts, wstmts)
+
+
+def check_enum_types(got, oracle, data, text):
+    """Compare enum/variant structure for focused declaration fixtures."""
+    src = data
+    want_enums = [
+        (
+            item['name']['text'],
+            [
+                (
+                    variant['name']['text'],
+                    [(field['name']['text'], field['value_type']['text'])
+                     for field in variant.get('fields', [])],
+                )
+                for variant in item['variants']
+            ],
+        )
+        for item in oracle['ast']['finite_types']
+    ]
+    have_enums = [
+        (
+            src[item['name_start']:item['name_end']].decode(),
+            [
+                (
+                    src[variant['name_start']:variant['name_end']].decode(),
+                    [norm_field(field, src) for field in flist(variant['fields'], 1)],
+                )
+                for variant in flist(item['variants'], 1)
+            ],
+        )
+        for item in flist(got['enums'], 1)
+    ]
+    assert want_enums == have_enums, (text, have_enums, want_enums)
 
 
 def check_neg_parse(got, oracle, text):

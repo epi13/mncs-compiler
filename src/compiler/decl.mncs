@@ -2989,7 +2989,14 @@ fn parse_enum<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
 record VariantsParse { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList }
 record VariantsState { cursor: u64, ok: bool, err_start: u64, err_end: u64, list: VariantList, done: bool }
 fn parse_variants<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, profile_013: bool) -> (result: VariantsParse) {
-    iterate i up_to 1024 carrying d: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
+    // `done` is terminal in variants_step. Most enums finish well before the
+    // 1024-variant ceiling, so conditionally skip no-op calls while preserving
+    // the complete original bound for large declarations.
+    iterate i up_to 64 carrying d0: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
+        next d0 = variants_step<P, N>(pages, stride, total, d0, profile_013);
+    }
+    if d0.done { return finish_variants<P, N>(pages, stride, total, d0); }
+    iterate i up_to 960 carrying d: VariantsState = d0 {
         next d = variants_step<P, N>(pages, stride, total, d, profile_013);
     }
     return finish_variants<P, N>(pages, stride, total, d);

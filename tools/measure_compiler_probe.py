@@ -1085,7 +1085,7 @@ def main() -> int:
     )
     parser.add_argument("--oracle-only", action="store_true", help="run and measure only the Stage-0 project oracle")
     parser.add_argument("--signature-cache-fixture", action="store_true", help="run a reduced two-call imported-signature cache differential through the reference interpreter")
-    parser.add_argument("--prepare-program-cache-only", action="store_true", help="elaborate and persist the backend-independent Program cache without admitting a backend or executing the compiler target; requires --backend reference_interpreter")
+    parser.add_argument("--prepare-program-cache-only", action="store_true", help="elaborate and persist the backend-independent Program cache without admitting a backend or executing the selected compiler target; requires --backend reference_interpreter")
     parser.add_argument("--step-budget", type=int, help="use a smaller execution step budget for a bounded prefix (maximum 8,000,000)")
     parser.add_argument("--runtime-profile", action="store_true", help="enable opt-in function-level body executor profiling")
     parser.add_argument("--timeout-seconds", type=float, default=120.0)

@@ -19,10 +19,10 @@ Examples include:
 
 Do not describe a compiler capability as complete because source code for it exists. Link or store executable evidence showing that the behavior works with the pinned toolchain revision.
 
-## Current compiler-parity campaign (2026-09-29)
+## Compiler-parity snapshot (2026-09-29)
 
-The current Stage-0 pin is `a3ac17df69e68f6373cbff336db0a572667d73da`,
-Profile 0.18. See the [current parity report](PARITY.md),
+This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,
+Profile 0.18. See the [parity report](PARITY.md),
 [parity ledger](parity-ledger.json),
 [finite-match/enum-construction value-SSA record](campaign-20260929-cp0014-value-ssa.json),
 [project/value-SSA differential](campaign-20260929-project-results.json),
@@ -221,3 +221,30 @@ The [token-reuse report](campaign-20261010-decl-name-token-reuse.json) records a
 ## Shared probe cache across linked worktrees (2026-10-10)
 
 The [shared-cache report](campaign-20261010-shared-probe-cache.json) records a bounded cache-preparation replay from a linked worktree with no local `.bootstrap`. The probe selected the main checkout's pinned bootstrap and shared cache automatically. With the same compiler source identity, Stage-0 toolchain, and frontend cache key, preparation returned a validated hit in 0.761 seconds (0.72 seconds of Stage-0 child CPU, 305 MiB peak RSS, five peak FDs). The matching cold miss spent 155.257 seconds in retained-session admission (154.39 seconds of child CPU, 2.04 GiB peak RSS) before producing the cache entry. The target compiler request was not run in the cache replay; this establishes reusable frontend preparation, not target execution or semantic success. Cache keys continue to bind exact toolchain and compiler source identities.
+
+## Declaration variant-loop early exit (2026-10-10)
+
+The [variant-loop report](campaign-20261010-variants-loop-early-stop.json)
+records a source-owned optimization in `decl.parse_variants`: enums that reach
+the terminal state within the first 64 calls skip the remaining no-op calls,
+while the original 1,024-call ceiling remains. The focused Stage-0 differential
+accepted 65 variants and matched the exact malformed-65th-variant span
+`[428,429]`.
+
+On the same 500,000-step reference-interpreter prefix of
+`compile_project_target<1024,1024>`, two baseline runs averaged 87.873 seconds
+wall and 84.715 seconds of child CPU; two candidate runs averaged 73.602
+seconds wall and 70.675 seconds CPU. The runtime profile reduced
+`variants_step` from 1,024 calls / 15.877 seconds exclusive to 64 calls / 1.015
+seconds. Both target identities still exhausted the bounded step budget and
+returned no project result, so the semantic result remains UNKNOWN. The sampled
+RSS stop and cgroup OOM counters remained clear. `lexer.next_token_global` is
+now the leading measured function cost.
+
+The direct whole-module re-ingestion attempt for the edited `decl.mncs` source
+and the broader rerun of all legacy POS/NEG fixtures were interrupted before
+complete results and have no child-level resource telemetry. They do not
+establish fresh whole-module parse evidence or a complete legacy-fixture sweep.
+The dedicated boundary differential above completed. The historical matrix
+rows and compiler-head identity remain unchanged; this report keeps the
+candidate source digest and delivered revision separate.

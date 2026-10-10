@@ -25,7 +25,7 @@ remains the Stage-0/bootstrap/reference implementation.
 
 ## Status
 
-`mncs-compiler` is experimental. The Rust compiler in `mncs-language` remains the canonical Stage-0/reference compiler. The lock file pins the exact code-bearing Stage-0 revision exercised by this campaign, `a3ac17df69e68f6373cbff336db0a572667d73da`, at source profile 0.18. All compiler source modules now declare profile 0.18. Older pins named in historical campaign evidence (for example `709ba008` on 2026-09-25 and `843c5bc` on 2026-09-26) are preserved as measured and are not relabelled.
+`mncs-compiler` is experimental. The Rust compiler in `mncs-language` remains the canonical Stage-0/reference compiler. The lock file pins the exact code-bearing Stage-0 revision exercised by this campaign, `b05dfa2b91541e4bd4a75aecff6abdedd708608e`, at source profile 0.18. All compiler source modules now declare profile 0.18. Older pins named in historical campaign evidence (including `a3ac17df` and the 2026-09-25/26 pins `709ba008` and `843c5bc`) are preserved as measured and are not relabelled.
 
 The repository keeps compiler architecture in MNCS and records compiler-origin pressure here. Generic language/runtime changes are made in a separate `mncs-language` change.
 
