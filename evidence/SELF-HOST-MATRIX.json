@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T15:12:52Z",
+    "updated_at": "2026-10-10T15:49:22Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -3920,9 +3920,85 @@
       ],
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    "flow_word_scan_inline_fast_path_campaign_20261010": {
+      "observed_at": "2026-10-10T15:49:22Z",
+      "entry_delivered_main_revision": "45eb4f4abee05196db3a60c40eade7cb75ff3c51",
+      "tested_candidate_git_head": "45eb4f4abee05196db3a60c40eade7cb75ff3c51",
+      "tested_candidate_branch": "campaign/lexer-word-scan-select-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "tested_compiler_source_identity": {
+        "kind": "sha256 of sorted selected compiler module ids and exact source bytes",
+        "sha256": "72157f4063506784cdcb95a3e47affa117e1be7234cda600bd2e79819cf7ba24",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "lexer_source_sha256": "522b26afd02de0cb244a2c4c7285fccfb5068ed4ebbfa3f5314866a15412798b",
+        "baseline_source_identity_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "change_summary": "Inline the frequent four-byte word scan in next_token_global using integer match arms over select(boolean, 1, 0); retain guarded page-local windows, global fallback, and the mixed-mode helper for nonword scans.",
+      "native_self_ingestion": {
+        "status": "SUCCESS",
+        "backend": "cranelift",
+        "operation": "mncs.compiler.decl.v1::parse_unit<1024,1024>",
+        "retained_sessions": 1,
+        "lexer_bytes": 43132,
+        "function_count": 24,
+        "function_signature_names_and_generics_match_stage0": true,
+        "stage0_oracle_diagnostics": []
+      },
+      "scanner_differentials": {
+        "page_boundary_fixture": "SUCCESS_REFERENCE_INTERPRETER_AND_CRANELIFT",
+        "keyword_and_near_miss_fixture": "SUCCESS_REFERENCE_INTERPRETER",
+        "stage0_token_span_and_eof_parity": true
+      },
+      "matched_flow_target": {
+        "backend": "reference_interpreter",
+        "root_source": "flow.mncs",
+        "compiler_input_pages_at_width_1024": {
+          "baseline": 901,
+          "candidate": 903
+        },
+        "step_budget_100k_mean_function_execution_seconds": {
+          "baseline": 5.481497972,
+          "candidate": 5.118283719,
+          "candidate_delta_percent": -6.626
+        },
+        "step_budget_1m_function_execution_seconds": {
+          "baseline": 70.938846565,
+          "candidate": 66.237051449,
+          "candidate_delta_percent": -6.628
+        },
+        "step_budget_1m_child_cpu_seconds": {
+          "baseline": 78.13,
+          "candidate": 73.5,
+          "candidate_delta_percent": -5.926
+        },
+        "step_budget_1m_child_wall_seconds": {
+          "baseline": 78.348147371,
+          "candidate": 73.744784277,
+          "candidate_delta_percent": -5.876
+        },
+        "step_budget_8m_status": "budget_exhausted",
+        "step_budget_8m_complete_compiler_result": false,
+        "stage0_project_oracle_run": false
+      },
+      "evidence_artifact": "evidence/campaign-20261010-flow-word-scan-inline-fast-path.json",
+      "evidence_artifact_sha256": "44a4b42c64905ff93cdd76eeb8b85fed815f258ab31c945514b38d473429f248",
+      "module_stage_rows_changed": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "identity_policy": "Historical compiler_head and module-stage rows remain unchanged. The entry records tested candidate revision, exact source identity, Stage-0 pin, measurement scope, and delivery separately.",
+      "delivery_state": "TESTED_ON_CANDIDATE_BRANCH_PENDING_GIT_DELIVERY"
     }
   },
-  "evidence_updated_at": "2026-10-10T15:12:52Z",
+  "evidence_updated_at": "2026-10-10T15:49:22Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }

@@ -1,0 +1,326 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "compiler-flow-word-scan-inline-fast-path",
+  "observed_at": "2026-10-10T15:49:22Z",
+  "candidate": {
+    "campaign_entry_delivered_main_revision": "45eb4f4abee05196db3a60c40eade7cb75ff3c51",
+    "candidate_base_revision": "45eb4f4abee05196db3a60c40eade7cb75ff3c51",
+    "tested_candidate_git_head": "45eb4f4abee05196db3a60c40eade7cb75ff3c51",
+    "tested_candidate_branch": "campaign/lexer-word-scan-select-20261010",
+    "tested_candidate_worktree": "/tmp/mncs-compiler-session-admission-telemetry-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "changed_module": "src/compiler/lexer.mncs",
+    "candidate_lexer_source_sha256": "522b26afd02de0cb244a2c4c7285fccfb5068ed4ebbfa3f5314866a15412798b",
+    "baseline": {
+      "git_head": "45eb4f4abee05196db3a60c40eade7cb75ff3c51",
+      "worktree": "/tmp/mncs-compiler-flow-wordscan-baseline-20261010",
+      "worktree_state": "clean detached baseline",
+      "lexer_source_sha256": "63a6a2460efa39ee959ef9d02a040ba9a0aa41ab4a574e0ebaca33e576f20c2d"
+    },
+    "selected_compiler_source_identity": {
+      "kind": "sha256 of sorted selected compiler module ids and exact source bytes",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "baseline_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+      "candidate_sha256": "72157f4063506784cdcb95a3e47affa117e1be7234cda600bd2e79819cf7ba24",
+      "baseline_source_bytes": 919538,
+      "candidate_source_bytes": 921367,
+      "baseline_pages_at_width_1024": 901,
+      "candidate_pages_at_width_1024": 903,
+      "unchanged_root_flow_source_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+      "candidate_module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "522b26afd02de0cb244a2c4c7285fccfb5068ed4ebbfa3f5314866a15412798b",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      }
+    },
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "probe_binary": {
+      "path": "/tmp/mncs-compiler-session-telemetry-target-20261010/release/mncs-compiler-stage0-probe",
+      "sha256": "2a67faca1e00aa2a58a0900c54a4074818e755d02fcd3cb363d1ee607de818a2"
+    }
+  },
+  "change": {
+    "summary": "Inline the common four-byte word scan in next_token_global using integer match arms over select(boolean, 1, 0); preserve the mixed-mode helper for nonword scanning.",
+    "cause": "The reference-interpreter profile attributed 12.15 seconds of a 70.74-second 1M-step request to scan_chunk_window. A prior direct inline used boolean match arms, which the native declaration parser rejects. Scalar match arms retain the guarded sequential checks and are accepted by the current parser.",
+    "language_semantics_changed": false,
+    "language_or_backend_repository_changed": false,
+    "page_window_guards_changed": false,
+    "global_fallback_changed": false,
+    "execution_limits_changed": false,
+    "lexer_source_byte_delta": 1829,
+    "target_request_byte_delta_at_1m": 40795
+  },
+  "verification": {
+    "native_self_ingestion": {
+      "classification": "SUCCESS",
+      "operation": "mncs.compiler.decl.v1::parse_unit<1024,1024>",
+      "backend": "cranelift",
+      "retained_sessions": 1,
+      "backend_artifact_cache_hit": true,
+      "source_module": "src/compiler/lexer.mncs",
+      "source_bytes": 43132,
+      "function_count": 24,
+      "function_signature_names_and_generics_match_stage0": true,
+      "stage0_oracle_diagnostics": [],
+      "request_result_sha256": "09db38c12481b1a92938c7865e5f2ad501d6f22d8f0c8e8485561e1f49fac3a9",
+      "scope": "whole-module native parse and function-signature comparison only; no check, proof, CFG, SSA, executable artifact, Stage-1, or Stage-2 claim"
+    },
+    "page_boundary_scanner_differential": {
+      "test": "tools/test_global_scan_modes.py",
+      "classification": "SUCCESS",
+      "source_bytes": 5250,
+      "source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+      "page_width": 1024,
+      "backends": [
+        {
+          "backend": "reference_interpreter",
+          "reported_steps": 286838,
+          "native_tokens": 11,
+          "stage0_tokens": 11,
+          "tokens_and_spans_match": true
+        },
+        {
+          "backend": "cranelift",
+          "reported_steps": 1,
+          "steps_semantics": "not an instruction-count metric",
+          "native_tokens": 11,
+          "stage0_tokens": 11,
+          "tokens_and_spans_match": true
+        }
+      ],
+      "boundary_cases": [
+        "word at offset 1023",
+        "number at offset 2046",
+        "nested block opener at offset 3071",
+        "block closer at offset 4095",
+        "line comment at offset 5118 crossing a page"
+      ],
+      "eof_and_global_spans_match": true
+    },
+    "global_keyword_dispatch_differential": {
+      "test": "tools/test_global_keyword_dispatch.py",
+      "classification": "SUCCESS",
+      "source_bytes": 31188,
+      "keywords": 30,
+      "near_misses": 60,
+      "keyword_starts_at_page_boundaries": 30,
+      "native_tokens": 180,
+      "stage0_tokens": 180,
+      "native_matches_stage0": true,
+      "reported_reference_steps": 1626053
+    }
+  },
+  "flow_target_measurements": {
+    "operation": "mncs.compiler.project.v1::compile_project_target",
+    "root_source": "flow.mncs",
+    "target_source_index": 1,
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_input_module_order": [
+      "decl",
+      "flow",
+      "lexer",
+      "parser",
+      "segment",
+      "source"
+    ],
+    "page_width": 1024,
+    "backend": "reference_interpreter",
+    "stage0_oracle": "not run in bounded target executions",
+    "result_scope": "runtime cost and budget frontier only; budget exhaustion is incomplete, not semantic rejection",
+    "matched_100k_step_runs": {
+      "step_budget": 100000,
+      "baseline_samples": [
+        {
+          "function_execution_seconds": 5.481472568,
+          "child_wall_seconds": 13.025778554,
+          "child_cpu_seconds": 12.76,
+          "peak_rss_bytes": 1793785856,
+          "peak_fds": 4,
+          "sample_count": 29,
+          "sampling_overhead_ms": 6.840285
+        },
+        {
+          "function_execution_seconds": 5.481523376,
+          "child_wall_seconds": 12.887691162,
+          "child_cpu_seconds": 12.84,
+          "peak_rss_bytes": 1795149824,
+          "peak_fds": 4,
+          "sample_count": 28,
+          "sampling_overhead_ms": 7.367812
+        }
+      ],
+      "candidate_samples": [
+        {
+          "function_execution_seconds": 5.119385202,
+          "child_wall_seconds": 12.571352448,
+          "child_cpu_seconds": 12.54,
+          "peak_rss_bytes": 1798094848,
+          "peak_fds": 4,
+          "sample_count": 28,
+          "sampling_overhead_ms": 6.896674
+        },
+        {
+          "function_execution_seconds": 5.117182236,
+          "child_wall_seconds": 12.573588727,
+          "child_cpu_seconds": 12.5,
+          "peak_rss_bytes": 1797451776,
+          "peak_fds": 4,
+          "sample_count": 28,
+          "sampling_overhead_ms": 6.856542
+        }
+      ],
+      "candidate_delta_percent": {
+        "function_execution": -6.626,
+        "child_cpu": -2.188,
+        "child_wall": -2.966
+      },
+      "all_samples_status": "budget_exhausted",
+      "all_samples_reported_steps": 100000
+    },
+    "matched_1m_step_runs": {
+      "step_budget": 1000000,
+      "baseline": {
+        "function_execution_seconds": 70.938846565,
+        "child_wall_seconds": 78.348147371,
+        "child_cpu_seconds": 78.13,
+        "peak_rss_bytes": 1794826240,
+        "max_rss_high_water_bytes": 1795321856,
+        "peak_fds": 4,
+        "peak_threads": 1,
+        "sampling_overhead_ms": 40.927966,
+        "request_bytes": 20748303,
+        "status": "budget_exhausted",
+        "reported_steps": 1000000,
+        "result_sha256": "b2ff056686c3a9711d5a6ade61d1597b559454a540c6599cb057c9efb8c97144"
+      },
+      "candidate": {
+        "function_execution_seconds": 66.237051449,
+        "child_wall_seconds": 73.744784277,
+        "child_cpu_seconds": 73.5,
+        "peak_rss_bytes": 1797353472,
+        "max_rss_high_water_bytes": 1798856704,
+        "peak_fds": 4,
+        "peak_threads": 1,
+        "sampling_overhead_ms": 38.59227,
+        "request_bytes": 20789098,
+        "status": "budget_exhausted",
+        "reported_steps": 1000000,
+        "result_sha256": "a0f1e154021181ca1f31805a97b3acd48521ba139de1a202d13ce9d196d8aa6a"
+      },
+      "candidate_delta_percent": {
+        "function_execution": -6.628,
+        "child_cpu": -5.926,
+        "child_wall": -5.876,
+        "peak_rss": 0.141
+      },
+      "result_sha_comparison": "Different request/source identities; both responses are incomplete budget-exhausted prefixes, so no semantic result parity is asserted."
+    },
+    "candidate_2m_step_run": {
+      "step_budget": 2000000,
+      "function_execution_seconds": 145.81981007,
+      "child_wall_seconds": 153.348596505,
+      "child_cpu_seconds": 152.7,
+      "peak_rss_bytes": 1797378048,
+      "max_rss_high_water_bytes": 1798586368,
+      "peak_fds": 4,
+      "peak_threads": 1,
+      "sampling_overhead_ms": 87.187983,
+      "status": "budget_exhausted",
+      "reported_steps": 2000000,
+      "failure_identity": "UNKNOWN"
+    },
+    "candidate_8m_step_run": {
+      "step_budget": 8000000,
+      "function_execution_seconds": 633.249023504,
+      "child_wall_seconds": 640.870648222,
+      "child_cpu_seconds": 636.63,
+      "peak_rss_bytes": 1796513792,
+      "max_rss_high_water_bytes": 1798737920,
+      "peak_fds": 4,
+      "peak_threads": 1,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 0,
+      "resource_sample_count": 1282,
+      "sampling_overhead_seconds": 0.334993069,
+      "cgroup": {
+        "status": "OBSERVED",
+        "attribution": "scope-level, not child-specific",
+        "memory_max": "max",
+        "cpu_max": "max 100000",
+        "oom_kill_before": 4,
+        "oom_kill_after": 4,
+        "oom_kill_increment_observed": false,
+        "scope_cpu_pressure_avg10_before_after": [0.0, 0.0],
+        "scope_memory_pressure_avg10_before_after": [0.0, 0.0],
+        "scope_io_pressure_avg10_before_after": [0.0, 0.0],
+        "host_cpu_pressure_some_avg10_before_after": [0.12, 0.18],
+        "host_io_pressure_some_avg10_before_after": [0.52, 0.0]
+      },
+      "status": "budget_exhausted",
+      "reported_steps": 8000000,
+      "failure_identity": "UNKNOWN",
+      "complete_compiler_result_returned": false,
+      "stage0_oracle": "not run"
+    },
+    "stage1_executable_created": false,
+    "complete_native_check_proof_cfg_ssa_result": false
+  },
+  "raw_reports": [
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-baseline-warm1.json",
+      "sha256": "d28d5a8b58fcfaa7fff1354ce1a79fdd01801a362ebe0a1afebc9211692137ec"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-candidate-warm1.json",
+      "sha256": "094ff24c8041fd246be017b79d2e7c44ee3175b52058110c96e75ad27427af05"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-baseline-warm2.json",
+      "sha256": "93f80876a1f092eab053371cfaafb6f3540a4e076b1643d27dac4366dc825a04"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-candidate-warm2.json",
+      "sha256": "6d7fc274278e93e1b021e3f676e28fe65f1ac3147085f84d579253dee510b197"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-1m-baseline.json",
+      "sha256": "136f531db306f9ca717dd0e552c6d954b4e9d2f0e25b3c633fda716b19634240"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-1m-candidate.json",
+      "sha256": "dcbfc41189687c83db6c2663034bf8e173d67573dd5c92d09bda8251f442ec79"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-pair-2m-candidate.json",
+      "sha256": "b5ef008d036167c5a1501f98ca017013849fdf403d7a4315073f42ff8ab234df"
+    },
+    {
+      "path": "/tmp/mncs-flow-wordscan-inline-8m-candidate.json",
+      "sha256": "a8a6c3c6bc82c64c5d22de63fbe14428431866a0c3c3301358c36379abbc2569"
+    }
+  ],
+  "matrix_policy": {
+    "historical_compiler_head_and_module_stage_rows_preserved": true,
+    "executable_artifact_claimed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "delivery_state": "Implementation and evidence tested on a dirty candidate branch; delivery identity to main is recorded in the follow-up identity-ledger entry."
+}

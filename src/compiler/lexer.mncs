@@ -623,7 +623,34 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                     },
                     _ => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
                 };
-                let advanced: Scan = scan_chunk_window(total, window, inner, line, block, word, number, ws);
+                // Word scanning is the common chunk path. Keep the sequential
+                // stop checks local without asking the native declaration
+                // parser to consume boolean match patterns.
+                let advanced: Scan = match select(word, 1, 0) {
+                    0 => scan_chunk_window(total, window, inner, line, block, word, number, ws),
+                    _ => match select(letter(window.b0) || digit(window.b0), 1, 0) {
+                        0 => Scan { ..inner, done: true },
+                        _ => match select(inner.end + 1 >= total, 1, 0) {
+                            1 => Scan { ..inner, end: inner.end + 1 },
+                            _ => match select(letter(window.b1) || digit(window.b1), 1, 0) {
+                                0 => Scan { ..inner, end: inner.end + 1, done: true },
+                                _ => match select(inner.end + 2 >= total, 1, 0) {
+                                    1 => Scan { ..inner, end: inner.end + 2 },
+                                    _ => match select(letter(window.b2) || digit(window.b2), 1, 0) {
+                                        0 => Scan { ..inner, end: inner.end + 2, done: true },
+                                        _ => match select(inner.end + 3 >= total, 1, 0) {
+                                            1 => Scan { ..inner, end: inner.end + 3 },
+                                            _ => match select(letter(window.b3) || digit(window.b3), 1, 0) {
+                                                0 => Scan { ..inner, end: inner.end + 3, done: true },
+                                                _ => Scan { ..inner, end: inner.end + 4 }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
                 if advanced.done || advanced.end >= total {
                     if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, advanced, initial_page, initial_address); }
                     return token_from_nonword_scan(start, advanced, line, block, ws);
