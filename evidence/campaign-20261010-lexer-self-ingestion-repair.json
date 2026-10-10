@@ -1,0 +1,178 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "compiler-lexer-native-self-ingestion-repair",
+  "observed_at": "2026-10-10T14:14:55Z",
+  "candidate": {
+    "entry_delivered_main_revision": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+    "candidate_base_revision": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+    "tested_candidate_git_head_at_execution": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+    "tested_candidate_branch": "campaign/lexer-self-ingest-repair-20261010",
+    "tested_candidate_worktree_dirty_at_execution": true,
+    "worktree": "/tmp/mncs-compiler-lexer-self-ingest-repair-20261010",
+    "changed_module": "lexer",
+    "candidate_lexer_source_sha256": "63a6a2460efa39ee959ef9d02a040ba9a0aa41ab4a574e0ebaca33e576f20c2d",
+    "baseline_lexer_source_sha256": "d3504c9a5be351890651f802b0fc4177bef3094a524803394c2f38c8fcd15bd7",
+    "selected_module_ids": [
+      "lexer.mncs",
+      "source.mncs"
+    ],
+    "candidate_selected_module_source_identity_sha256": "dba825b8bd25e7d2a9aaf9dce3492bab6ba9dac04b9090943bbb0691de1a162d",
+    "baseline_selected_module_source_identity_sha256": "b5e2fcda5e59bb763817f474a17c77d66dd2a7ae4017a52a56bdd3c8efc2650d",
+    "unchanged_source_module_sha256": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9"
+  },
+  "change": {
+    "summary": "Use parser-supported scalar matches over select(condition, 1, 0) for lazy guarded four-byte windows, and retain the established scan_chunk_window call for word chunks. The global fallback and page bounds remain intact.",
+    "cause": "The current native declaration parser rejects boolean match patterns used by the inline window path. On the delivered source it reported the first true arm in lexer.mncs at bytes 32375-32379. The focused failure reproduced on clean main at the same source span, so it was not caused by the declaration-scalar experiment.",
+    "language_semantics_changed": false,
+    "language_or_backend_repository_changed": false,
+    "direct_reads_remain_guarded": true,
+    "global_fallback_preserved": true
+  },
+  "native_self_ingestion": {
+    "classification": "SUCCESS",
+    "operation": "mncs.compiler.decl.v1::parse_unit<1024,1024>",
+    "execution_backend": "cranelift",
+    "retained_sessions": 1,
+    "response_status": "returned",
+    "source_module": "src/compiler/lexer.mncs",
+    "source_bytes": 41303,
+    "function_count": 24,
+    "function_signature_names_and_generics_match_stage0": true,
+    "stage0_oracle_diagnostics": [],
+    "request_result_sha256": "ec9edddf1a47956a102655b935c2f5c1367271a0edb658e293487b15099685dc",
+    "scope": "whole-module native parse and function-signature comparison only; no current-source check/proof/CFG/SSA claim"
+  },
+  "global_scan_differential": {
+    "fixture_source_bytes": 5250,
+    "fixture_source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+    "page_size": 1024,
+    "boundary_cases": [
+      "word at offset 1023",
+      "number at offset 2046",
+      "nested block opener at offset 3071",
+      "block closer at offset 4095",
+      "line comment at offset 5118 crossing a page"
+    ],
+    "candidate": {
+      "classification": "SUCCESS",
+      "backend": "reference_interpreter",
+      "steps": 277422,
+      "native_tokens": 11,
+      "stage0_tokens": 11,
+      "eof_and_global_spans_match": true
+    },
+    "current_main_baseline": {
+      "classification": "SUCCESS",
+      "revision": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+      "steps": 260066,
+      "native_tokens": 11,
+      "stage0_tokens": 11,
+      "eof_and_global_spans_match": true
+    },
+    "reference_interpreter_step_delta_percent": 6.673
+  },
+  "retained_cranelift_execution": {
+    "target": "mncs.compiler.lexer.v1::lex_tokens_from<64,1024>",
+    "input_fixture_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+    "warmup_requests": 1,
+    "measured_requests": 100,
+    "baseline": {
+      "revision": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+      "wall_seconds": 1.105576,
+      "child_cpu_ns_delta": 510000000,
+      "peak_rss_bytes_sampled_after_admission": 225107968,
+      "process_rss_high_water_bytes": 241844224,
+      "peak_fd_count_sampled": 3,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 0,
+      "status": "returned",
+      "stage0_parity": true,
+      "result_sha256": "713c29d8a2e3217f3f56f2fb81095bcd4fc38dd37dd51d144872ba12bd913e0e"
+    },
+    "candidate": {
+      "wall_seconds": 1.078746,
+      "child_cpu_ns_delta": 470000000,
+      "peak_rss_bytes_sampled_after_admission": 144007168,
+      "process_rss_high_water_bytes": 153206784,
+      "peak_fd_count_sampled": 3,
+      "io_read_bytes_delta": 0,
+      "io_write_bytes_delta": 0,
+      "status": "returned",
+      "stage0_parity": true,
+      "result_sha256": "713c29d8a2e3217f3f56f2fb81095bcd4fc38dd37dd51d144872ba12bd913e0e"
+    },
+    "wall_delta_percent": -2.428,
+    "child_cpu_delta_percent": -7.843,
+    "measurement_notes": [
+      "CPU and wall measurements cover the same 100 warm semantic requests in the actual stage0-probe child; both processes used the same probe binary and Cranelift backend.",
+      "RSS high-water includes frontend/backend preparation and retained admission; sampled RSS is after admission during the repeated execution window.",
+      "Cranelift response steps were 1 per request and are not a VM instruction count."
+    ],
+    "candidate_cold_preparation_phases": {
+      "source_resolution_ms": 0.317,
+      "toolchain_identity_ms": 124.221,
+      "stage0_frontend_elaboration_ms": 1044.053,
+      "backend_compilation_ms": 2885.223,
+      "backend_artifact_payload_bytes": 16509918,
+      "compressed_backend_artifact_bytes": 1946841,
+      "retained_session_admission_ms": 401.698,
+      "ready_seconds": 5.1,
+      "single_warm_request_wall_ms": 13.043,
+      "single_warm_request_status": "returned"
+    },
+    "baseline_cold_preparation": {
+      "ready_seconds": 5.2,
+      "compressed_backend_artifact_bytes": 1998702,
+      "compressed_program_cache_bytes": 188285
+    },
+    "candidate_compressed_program_cache_bytes": 182438
+  },
+  "cp0001_abc": {
+    "candidate_classification": "FAILURE_BASELINE_MISMATCH",
+    "baseline_classification": "FAILURE_BASELINE_MISMATCH",
+    "candidate_and_baseline_same_first_failure": true,
+    "first_failure": {
+      "test": "tools/test_cp0001.py tier_a, stride 1",
+      "span": [
+        37,
+        38
+      ],
+      "byte": "!",
+      "native_candidate_and_baseline_token": [
+        40,
+        37,
+        38,
+        0
+      ],
+      "stage0_expected_token": [
+        7,
+        37,
+        38,
+        2
+      ]
+    },
+    "candidate_claimed_pass": false
+  },
+  "matrix_policy": {
+    "historical_top_level_compiler_head_and_module_stage_rows_preserved": true,
+    "historical_lexer_verified_ssa_source_sha256": "97f695f6d949a4e5071a6da6c866bcee999346ebab25f87814c1c8eb1efbb2f3",
+    "current_candidate_lexer_source_sha256": "63a6a2460efa39ee959ef9d02a040ba9a0aa41ab4a574e0ebaca33e576f20c2d",
+    "current_candidate_native_parse_only": true,
+    "canonical_vm_stage1_stage2_claimed": false
+  },
+  "global_keyword_dispatch": {
+    "classification": "SUCCESS",
+    "fixture_source_bytes": 31188,
+    "fixture_source_sha256": "be861084ce3b64fbcca5f8c8d83164c77b1e8df21944adefa431ad20261f0e26",
+    "keywords": 30,
+    "near_misses": 60,
+    "keyword_starts_at_page_boundaries": 30,
+    "candidate_tokens": 180,
+    "stage0_tokens": 180,
+    "native_matches_stage0": true,
+    "eof_and_global_spans_match": true,
+    "reference_interpreter_steps": 1565805
+  }
+}

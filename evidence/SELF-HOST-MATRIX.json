@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T10:49:33Z",
+    "updated_at": "2026-10-10T14:14:55Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -3747,9 +3747,52 @@
         "evidence/campaign-20261006-project-results.json",
         ".worktrees/"
       ]
+    },
+    "lexer_native_self_ingestion_repair_campaign_20261010": {
+      "observed_at": "2026-10-10T14:14:55Z",
+      "entry_delivered_main_revision": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+      "candidate_base_revision": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+      "tested_candidate_git_head_at_execution": "8d7be4e88afa18c4f6b773d573ab70b0ee240527",
+      "tested_candidate_branch": "campaign/lexer-self-ingest-repair-20261010",
+      "tested_candidate_worktree_dirty_at_execution": true,
+      "changed_module": "lexer",
+      "candidate_lexer_source_sha256": "63a6a2460efa39ee959ef9d02a040ba9a0aa41ab4a574e0ebaca33e576f20c2d",
+      "baseline_lexer_source_sha256": "d3504c9a5be351890651f802b0fc4177bef3094a524803394c2f38c8fcd15bd7",
+      "selected_module_ids": [
+        "lexer.mncs",
+        "source.mncs"
+      ],
+      "candidate_selected_module_source_identity_sha256": "dba825b8bd25e7d2a9aaf9dce3492bab6ba9dac04b9090943bbb0691de1a162d",
+      "baseline_selected_module_source_identity_sha256": "b5e2fcda5e59bb763817f474a17c77d66dd2a7ae4017a52a56bdd3c8efc2650d",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "implementation_commit": "PENDING_UNTIL_BRANCH_COMMIT",
+      "native_parse": {
+        "classification": "SUCCESS",
+        "operation": "mncs.compiler.decl.v1::parse_unit<1024,1024>",
+        "backend": "cranelift",
+        "retained_sessions": 1,
+        "source_bytes": 41303,
+        "function_count": 24,
+        "signature_names_and_generics_match_stage0": true,
+        "stage0_diagnostics": []
+      },
+      "measurement": {
+        "global_scan_modes": "SUCCESS: exact Stage-0 token/span parity, 11 tokens; reference interpreter 277422 steps versus 260066 on delivered main (+6.673%)",
+        "global_keyword_dispatch": "SUCCESS: 30 keywords and 60 near misses starting at 30 page boundaries; 180 exact Stage-0 tokens/spans; 1565805 reference-interpreter steps",
+        "retained_cranelift": "100 warm runs; candidate 1.078746 s wall and 0.47 s child CPU; baseline 1.105576 s and 0.51 s; exact Stage-0 parity; FDs 3 in both",
+        "cp0001_abc": "Both candidate and clean main stop at the same first stride-1 `!` token mismatch; candidate result is not counted as a pass"
+      },
+      "evidence_artifact": "evidence/campaign-20261010-lexer-self-ingestion-repair.json",
+      "evidence_artifact_sha256": "789efa58ce1c199d33c670b4654356ea416171b6b8c4421bd2b88b4460322e9a",
+      "module_stage_rows_changed": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "delivery_role": "Current lexer source has whole-module native parse and function-signature evidence only. Historical verified-SSA evidence is preserved with its earlier exact source hash; no check/proof/CFG/SSA, canonical VM, executable artifact, Stage-1, or Stage-2 claim is added.",
+      "matrix_row_policy": "Historical top-level compiler_head and lexer module stage row remain unchanged; tested Git revision, current source hashes, and delivered main identity are distinct.",
+      "delivery_state": "implementation and evidence are on the isolated candidate branch; update delivery revision after fast-forward"
     }
   },
-  "evidence_updated_at": "2026-10-10T13:45:43Z",
+  "evidence_updated_at": "2026-10-10T14:14:55Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }
