@@ -492,6 +492,19 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
             }
             next s1 = advanced;
         }
+        // The 8192-transition per-call bound remains the same. Line, word,
+        // and whitespace chunks can consume four characters per pass, so
+        // they stop after two 1024-step passes. Number and block chunks
+        // consume at most two transitions per step and use all four passes.
+        if s1.done || s1.end >= total {
+            return token_from_scan_global<P, N>(pages, stride, total, start, s1, line, block, word, ws);
+        }
+        if line || word || ws {
+            if line || ws {
+                return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: s1.end, diagnostic: 6 };
+            }
+            return Token { kind: 7, start: start, end: s1.end, diagnostic: 5 };
+        }
         iterate i up_to 1024 carrying s2: Scan = s1 {
             if s2.done || s2.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, s2, line, block, word, ws); }
             let window2: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, s2.end);
@@ -510,8 +523,8 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
             }
             next s3 = advanced;
         }
-        // Each chunk handles at most two transitions; four bounded passes
-        // retain the previous 8192-transition per-call scan budget.
+        // Each remaining chunk handles at most two transitions; four
+        // bounded passes retain the 8192-transition per-call scan budget.
         // The scan budget is exhausted mid-token. Trivia
         // continues at the prefix end (diagnostic 6); significant content is
         // refused as overlong (diagnostic 5) rather than silently split.
