@@ -3308,9 +3308,67 @@
         "evidence/campaign-20261006-project-results.json",
         ".worktrees/"
       ]
+    },
+    "flow_inline_window_optimization_campaign_20261010": {
+      "observed_at": "2026-10-10T12:08:21Z",
+      "candidate_base_revision": "cae25860b1cd88b811f94b3ffc76e3aefa37adb4",
+      "tested_candidate_git_head": "cae25860b1cd88b811f94b3ffc76e3aefa37adb4",
+      "tested_candidate_branch": "campaign/lexer-window-inline-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "changed_module": "lexer",
+      "baseline_lexer_source_sha256": "97f695f6d949a4e5071a6da6c866bcee999346ebab25f87814c1c8eb1efbb2f3",
+      "candidate_lexer_source_sha256": "8b3bd43b783f95e7f22983b004e6187d5b68b8d8bada42199be6271303a471bb",
+      "baseline_selected_module_source_identity_sha256": "61f2f38f15a59a61b466a8de63b62b8e1fd4042f380edc588a79a3e0037f2394",
+      "candidate_selected_module_source_identity_sha256": "21934d956c6766e48b1695a4733bf5f3c415963dd7d811b3ca15a8186c3fd769",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+      "focused_semantic_validation": {
+        "cp0001_tiers": ["A", "B", "C"],
+        "result": "PASS",
+        "stage0_project_oracle": "valid for selected source/lexer/parser modules; 54 linked functions, 19 SSA functions",
+        "canonical_vm_or_full_module_native_proof": "not established by the focused differentials"
+      },
+      "flow_target_result": {
+        "target": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+        "backend": "reference_interpreter",
+        "step_budget": 500000,
+        "baseline_unprofiled_wall_seconds": 46.511,
+        "candidate_mean_warm_wall_seconds": 43.1175,
+        "wall_reduction_percent": 7.296,
+        "baseline_unprofiled_child_cpu_seconds": 44.31,
+        "candidate_mean_child_cpu_seconds": 40.68,
+        "child_cpu_reduction_percent": 8.192,
+        "baseline_unprofiled_target_execution_ms": 43322.231,
+        "candidate_mean_target_execution_ms": 39940.789,
+        "target_execution_reduction_percent": 7.805,
+        "baseline_peak_rss_kib": 1752144,
+        "candidate_mean_peak_rss_kib": 1752746,
+        "peak_file_descriptors": 5,
+        "target_status": "budget_exhausted",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "cgroup_oom_event_delta": 0,
+        "selected_compiler_module_pages_baseline_candidate": [900, 901],
+        "historical_flow_closure_pages": 894
+      },
+      "cranelift_native_proof_attempt": {
+        "classification": "RESOURCE_EXHAUSTED",
+        "phase": "backend_compilation: ir-functions",
+        "rss_stop_mib": 1900,
+        "sampled_peak_rss_kib": 1959436,
+        "cgroup_oom_kill_delta": 0,
+        "returned_project_result": false,
+        "semantic_rejection": false
+      },
+      "evidence_artifact": "evidence/campaign-20261010-lexer-inline-window.json",
+      "evidence_artifact_sha256": "131c6e26e527c08944fb073248e197c815e1ea424c5fc0951ea493f6f2cd8fd8",
+      "matrix_policy": "Historical lexer whole-module proof remains bound to its previous source SHA. Candidate Stage-0 and focused differential results are recorded by the new source identity; no native whole-module proof or stage promotion is claimed.",
+      "module_stage_rows_changed": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "delivery_state": "Measured implementation and evidence staged for fast-forward delivery; a separate entry will record the delivered main revision."
     }
   },
-  "evidence_updated_at": "2026-10-10T11:50:15Z",
+  "evidence_updated_at": "2026-10-10T12:08:21Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }

@@ -1,0 +1,205 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "lexer-inline-page-window-performance-candidate",
+  "observed_at": "2026-10-10T12:08:21Z",
+  "candidate": {
+    "base_revision": "cae25860b1cd88b811f94b3ffc76e3aefa37adb4",
+    "branch": "campaign/lexer-window-inline-20261010",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "selected_module_source_identity_baseline": "61f2f38f15a59a61b466a8de63b62b8e1fd4042f380edc588a79a3e0037f2394",
+    "selected_module_source_identity_candidate": "21934d956c6766e48b1695a4733bf5f3c415963dd7d811b3ca15a8186c3fd769",
+    "lexer_source_sha256_baseline": "97f695f6d949a4e5071a6da6c866bcee999346ebab25f87814c1c8eb1efbb2f3",
+    "lexer_source_sha256_candidate": "8b3bd43b783f95e7f22983b004e6187d5b68b8d8bada42199be6271303a471bb",
+    "changed_path": "src/compiler/lexer.mncs",
+    "change_summary": "Inline the bounded four-byte fast-path reads inside next_token_global after global address resolution, retaining nested page/view guards and byte_window4_global fallback for malformed views, short windows, and page edges.",
+    "language_semantics_changed": false
+  },
+  "semantic_evidence": {
+    "cp0001_tiers_a_and_c": {
+      "command": "MNCS_CP0001_SMOKE=1 MNCS_CP0001_TIERS=A,C MNCS_PROBE_BIN=/tmp/mncs-compiler-stage0-e8-stage0-probe-20261010 MNCS_PROBE_CACHE_DIR=/tmp/mncs-cp0001-inline-window-cache-20261010 python3 tools/test_cp0001.py",
+      "result": "PASS",
+      "probe_requests": 526,
+      "tier_a_cases": 18,
+      "tokens_compared": 69,
+      "result_sha256": "be4de54a9826a60f3e58f4d0084a2fa5feb4cb09dfa3cb52302b9f62a66c42ac"
+    },
+    "cp0001_tier_b": {
+      "command": "MNCS_CP0001_SMOKE=1 MNCS_CP0001_TIERS=B MNCS_PROBE_BIN=/tmp/mncs-compiler-stage0-e8-stage0-probe-20261010 MNCS_PROBE_CACHE_DIR=/tmp/mncs-cp0001-inline-window-cache-20261010 python3 tools/test_cp0001.py",
+      "result": "PASS",
+      "probe_requests": 1437,
+      "tier_b_cases": 26,
+      "tokens_compared": 1214,
+      "canonical_splits": 10,
+      "rejected_splits": 9,
+      "result_sha256": "636880179ec263efd446ac4c70d14bca83078effa794968e8fafefd1485cba10"
+    },
+    "stage0_project_oracle": {
+      "measurement_sha256": "d4ebaf7b63d61cbe387c05bde00bc9f3e3ee898541e2ef2592a52ce1737b7e79",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "modules": ["source", "lexer", "parser"],
+      "compiler_source_identity_sha256": "3fab8f1a698c474a7b77773611477756acddf9e04b263cf7aa1382012a96bcee",
+      "selected_module_pages_at_width_1024": 59,
+      "status": "valid",
+      "diagnostics": [],
+      "linked_functions": 54,
+      "ssa_functions": 19,
+      "result_sha256": "c90ed8b7602fc76d0beafc325f609f1e4c488277e7c7033528442f873d112189",
+      "wall_seconds": 1.554,
+      "child_cpu_seconds": 1.22,
+      "peak_rss_kib": 75212,
+      "peak_fds": 4,
+      "scope_note": "This is a Stage-0 oracle for the selected source/lexer/parser project; it does not establish the separate historical 894-page flow project result or native whole-module proof."
+    },
+    "current_source_native_whole_module_proof": {
+      "status": "NOT_ESTABLISHED",
+      "cold_attempt": {
+        "measurement_sha256": "543b20f175fba6d35b33fb7ba410f88cb48ec4abb447d97d7c67255cf61caa3d",
+        "backend": "cranelift",
+        "modules": ["source", "lexer", "parser"],
+        "step_budget": 8000000,
+        "classification": "TIMEOUT",
+        "wall_seconds": 120.17,
+        "child_cpu_seconds": 118.89,
+        "peak_rss_kib": 1852424,
+        "peak_fds": 5,
+        "last_phase": "backend_compilation began after 53.252 seconds and remained incomplete at timeout",
+        "cgroup_oom_kill_delta": 0,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT"
+      },
+      "warm_frontend_attempt": {
+        "measurement_sha256": "da583410481a36968741dff83fa8fb4c0d117550904f30fa15ea7049cdef2183",
+        "backend": "cranelift",
+        "modules": ["source", "lexer", "parser"],
+        "step_budget": 8000000,
+        "timeout_seconds": 180,
+        "classification": "RESOURCE_EXHAUSTED",
+        "wall_seconds": 68.984,
+        "child_cpu_seconds": 68.37,
+        "sampled_peak_rss_kib": 1959436,
+        "sampled_rss_stop_mib": 1900,
+        "rss_stop_triggered": true,
+        "backend_ir_functions_phase_ms": 64018,
+        "cgroup_oom_kill_delta": 0,
+        "termination": "SIGINT sent to verified probe process group at sampled RSS threshold",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT"
+      },
+      "interpretation": "The current-source Cranelift compile did not return module proof facts. The operational timeout/RSS stop is not a semantic rejection or an OOM finding. Historical whole-module proof remains attached to the earlier lexer source hash."
+    }
+  },
+  "flow_frontier_measurement": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "backend": "reference_interpreter",
+    "step_budget": 500000,
+    "rss_stop_mib": 1900,
+    "baseline_compiler_source_identity_sha256": "61f2f38f15a59a61b466a8de63b62b8e1fd4042f380edc588a79a3e0037f2394",
+    "candidate_compiler_source_identity_sha256": "21934d956c6766e48b1695a4733bf5f3c415963dd7d811b3ca15a8186c3fd769",
+    "selected_compiler_module_pages_at_width_1024": {"baseline": 900, "candidate": 901},
+    "historical_flow_project_closure_pages_at_width_1024": 894,
+    "page_scope_note": "The 900/901 values count the selected six compiler input modules; the historical 894-page flow project closure is separate and unchanged.",
+    "baseline_warm_unprofiled": {
+      "measurement_sha256": "d1c7c3cb108d0c429107472d11f838d2841bcbb98cdefa2bd685cdde19ff313b",
+      "wall_seconds": 46.511,
+      "child_cpu_seconds": 44.31,
+      "target_execution_ms": 43322.231,
+      "child_peak_rss_kib": 1752144,
+      "peak_fds": 5,
+      "status": "budget_exhausted at 500000 steps",
+      "cgroup_oom_kill_delta": 0
+    },
+    "candidate_warm_unprofiled_runs": [
+      {
+        "measurement_sha256": "9fc367fab245647dae3a4d4aafa8580a56ae787687404de86deab26f767e6a53",
+        "wall_seconds": 43.242,
+        "child_cpu_seconds": 40.64,
+        "target_execution_ms": 40034.613,
+        "child_peak_rss_kib": 1752380,
+        "peak_fds": 5,
+        "status": "budget_exhausted at 500000 steps",
+        "cgroup_oom_kill_delta": 0
+      },
+      {
+        "measurement_sha256": "4d6e5aa3e899402f2cf0fade71e8461f9fb5a8fa84139ad3c6122fdbc091edc7",
+        "wall_seconds": 42.993,
+        "child_cpu_seconds": 40.72,
+        "target_execution_ms": 39846.964,
+        "child_peak_rss_kib": 1753112,
+        "peak_fds": 5,
+        "status": "budget_exhausted at 500000 steps",
+        "cgroup_oom_kill_delta": 0
+      }
+    ],
+    "means_and_deltas": {
+      "baseline_unprofiled_wall_seconds": 46.511,
+      "candidate_wall_seconds": 43.1175,
+      "wall_reduction_percent": 7.296,
+      "baseline_unprofiled_child_cpu_seconds": 44.31,
+      "candidate_child_cpu_seconds": 40.68,
+      "child_cpu_reduction_percent": 8.192,
+      "baseline_unprofiled_target_execution_ms": 43322.231,
+      "candidate_target_execution_ms": 39940.789,
+      "target_execution_reduction_percent": 7.805,
+      "baseline_unprofiled_peak_rss_kib": 1752144,
+      "candidate_mean_peak_rss_kib": 1752746,
+      "peak_rss_delta_kib": 602,
+      "peak_fds_baseline_candidate": [5, 5],
+      "baseline_runtime_profile_control": {
+        "wall_seconds": 46.513,
+        "child_cpu_seconds": 44.31,
+        "target_execution_ms": 43329.487
+      }
+    },
+    "cold_profile_run": {
+      "measurement_sha256": "704d7e208dfe3decde53fd44ce3705fa92eaa1f5e60c7b0d60a4fd74351cfac7",
+      "wall_seconds": 109.514,
+      "child_cpu_seconds": 106.11,
+      "target_execution_ms": 55382.255,
+      "cold_frontend_elaboration_ms": 50741.525,
+      "program_artifact_uncompressed_bytes": 151593534,
+      "child_peak_rss_kib": 1851564,
+      "peak_fds": 5,
+      "rss_stop_triggered": false,
+      "cgroup_oom_kill_delta": 0,
+      "target_status": "budget_exhausted at 500000 steps"
+    },
+    "baseline_profile_top_steps": [
+      {"function": "source.byte_window4_page", "steps": 159725, "calls": 2710},
+      {"function": "lexer.next_token_global", "steps": 112979, "calls": 507},
+      {"function": "lexer.scan_chunk_window", "steps": 96439, "calls": 2202}
+    ],
+    "candidate_profile_top_steps": [
+      {"function": "lexer.next_token_global", "steps": 240007, "calls": 616},
+      {"function": "lexer.scan_chunk_window", "steps": 102868, "calls": 2363}
+    ],
+    "candidate_module_steps": {
+      "lexer": 417887,
+      "source": 59601,
+      "decl": 21147,
+      "project": 1241,
+      "segment": 124
+    },
+    "unknowns": [
+      "The native target did not return a project result; parser/checker/proof/CFG/SSA semantic phase outcomes remain UNKNOWN.",
+      "Per-function CPU and hardware instruction counts are unavailable.",
+      "The probe-reported selected-module page totals do not replace the historical flow closure page count."
+    ]
+  },
+  "delivery_decision": {
+    "keep_candidate": true,
+    "reason": "Two matched warm unprofiled candidate runs show a repeatable 7.8% target-phase and 8.2% child-CPU reduction against the warm baseline, with bounded RSS change and focused Stage-0 parity coverage. The baseline runtime-profile control differed by only 0.002 seconds in wall time. The source candidate makes no whole-module native proof or stage-promotion claim.",
+    "whole_module_matrix_rows_rewritten": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "language_or_backend_source_changed": false
+  },
+  "raw_artifacts": [
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-e8-warm-unprofiled-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "d1c7c3cb108d0c429107472d11f838d2841bcbb98cdefa2bd685cdde19ff313b"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-e8-runtime-profile-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "9ae3e945baed4f905c1498f4b6bbcff4fe023ed4e553324e13c3fb93e14f6b92"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-lexer-inline-cold-profile-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "704d7e208dfe3decde53fd44ce3705fa92eaa1f5e60c7b0d60a4fd74351cfac7"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-lexer-inline-warm-unprofiled-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "9fc367fab245647dae3a4d4aafa8580a56ae787687404de86deab26f767e6a53"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-lexer-inline-warm-repeat2-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "4d6e5aa3e899402f2cf0fade71e8461f9fb5a8fa84139ad3c6122fdbc091edc7"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-lexer-inline-native-proof-source-lexer-parser-measurement.json", "sha256": "543b20f175fba6d35b33fb7ba410f88cb48ec4abb447d97d7c67255cf61caa3d"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-lexer-inline-native-proof-warm-source-lexer-parser-measurement.json", "sha256": "da583410481a36968741dff83fa8fb4c0d117550904f30fa15ea7049cdef2183"},
+    {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-lexer-inline-stage0-oracle-source-lexer-parser-measurement.json", "sha256": "d4ebaf7b63d61cbe387c05bde00bc9f3e3ee898541e2ef2592a52ce1737b7e79"}
+  ]
+}

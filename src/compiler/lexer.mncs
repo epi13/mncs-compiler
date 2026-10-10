@@ -565,10 +565,9 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     if initial_address.intra >= initial_page.len {
         return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 };
     }
-    let initial_choice: source.ByteWindow4Choice = source.byte_window4_page<N>(initial_page, initial_address.page, initial_address, stride, total);
-    let initial_window: source.ByteWindow4 = match initial_choice {
-        Direct { window: local } => local,
-        GlobalFallback => source.byte_window4_global<P, N>(pages, stride, total, start)
+    let initial_window: source.ByteWindow4 = match total - start >= 4 && stride - initial_address.intra >= 4 && initial_page.len - initial_address.intra >= 4 {
+        true => source.ByteWindow4 { b0: initial_page[initial_address.intra + 0] as u64, b1: initial_page[initial_address.intra + 1] as u64, b2: initial_page[initial_address.intra + 2] as u64, b3: initial_page[initial_address.intra + 3] as u64 },
+        false => source.byte_window4_global<P, N>(pages, stride, total, start)
     };
     let a: u64 = initial_window.b0;
     let b: u64 = initial_window.b1;
@@ -597,14 +596,20 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 let address: source.GlobalPageAddress = source.global_page_address(stride, total, inner.end);
                 // A scan can only enter this loop after the first byte was
                 // resolved from a non-empty page table. Clamp an impossible
-                // later page index to page zero; byte_window4_page rejects
-                // the mismatch and the global total path returns sentinels.
-                let selected_page: u64 = select(address.page < pages.len, address.page, 0);
+                // later page index to page zero; the guarded inline path uses
+                // the total global reader for mismatches and page edges.
+                let page_exists: bool = address.page < pages.len;
+                let selected_page: u64 = select(page_exists, address.page, 0);
                 let page: [byte; up_to N] = pages[selected_page];
-                let choice: source.ByteWindow4Choice = source.byte_window4_page<N>(page, selected_page, address, stride, total);
-                let window: source.ByteWindow4 = match choice {
-                    Direct { window: local } => local,
-                    GlobalFallback => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
+                let window: source.ByteWindow4 = match page_exists {
+                    true => match address.intra < page.len {
+                        true => match total - inner.end >= 4 && stride - address.intra >= 4 && page.len - address.intra >= 4 {
+                            true => source.ByteWindow4 { b0: page[address.intra + 0] as u64, b1: page[address.intra + 1] as u64, b2: page[address.intra + 2] as u64, b3: page[address.intra + 3] as u64 },
+                            false => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
+                        },
+                        false => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
+                    },
+                    false => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
                 };
                 let advanced: Scan = scan_chunk_window(total, window, inner, line, block, word, number, ws);
                 if advanced.done || advanced.end >= total {
