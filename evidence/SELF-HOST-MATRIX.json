@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T00:32:49Z",
+    "updated_at": "2026-10-10T00:46:01Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -2083,7 +2083,60 @@
       "matrix_row_policy": "Historical module rows and their previous identities remain unchanged. This focused parser proof does not promote decl, flow, executable-artifact, Stage-1, or Stage-2 status.",
       "delivered_implementation_commit": "6ece606f4cd017168d174d8f379b39b7c7f262c8",
       "delivered_main_revision": "6ece606f4cd017168d174d8f379b39b7c7f262c8"
+    },
+    "lexer_initial_window_reuse_rejection_campaign_20261010": {
+      "observed_at": "2026-10-10T00:46:01Z",
+      "entry_delivered_main_revision": "7b3829ee1586c178b1bdf606066014a8696bd491",
+      "candidate_base_revision": "7b3829ee1586c178b1bdf606066014a8696bd491",
+      "tested_candidate_git_head": "7b3829ee1586c178b1bdf606066014a8696bd491",
+      "tested_candidate_branch": "campaign/lexer-initial-window-reuse-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "baseline_source_identity_sha256": "72bcad64cf55b7bd8b18175d729b495b53ff509a16df509b89ef26721c421277",
+      "tested_candidate_source_identity_sha256": "e25cda0c12f375ebdbfb1879fa78da22201b336bf2226922b991aeb3a60996f6",
+      "baseline_lexer_source_sha256": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+      "candidate_lexer_source_sha256": "60726bc8ce283c1b4181a0191f2f7656fa5a89505f21a5b9a61dd15cedb15b5e",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target",
+      "target_module": "flow",
+      "step_budget": 100000,
+      "baseline_status": "RESOURCE_EXHAUSTED",
+      "candidate_status": "RESOURCE_EXHAUSTED",
+      "semantic_result_for_both": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_change_percent": 12.85,
+      "child_cpu_change_percent": 13.11,
+      "candidate_operation_profile": {
+        "source.byte_window4_global": {
+          "calls": 405,
+          "steps": 19802,
+          "exclusive_ms": 6028.687636
+        },
+        "source.byte_at_global": {
+          "calls": 280,
+          "steps": 5880,
+          "exclusive_ms": 4092.8003
+        },
+        "source.byte_at_global_delta": {
+          "calls": 120,
+          "steps": 960,
+          "exclusive_ms": 2067.619248
+        },
+        "lexer.window_after_start": {
+          "calls": 98,
+          "steps": 1462,
+          "exclusive_ms": 1847.086866
+        },
+        "lexer.next_token_global": {
+          "calls": 119,
+          "steps": 12609,
+          "exclusive_ms": 5150.040257
+        }
+      },
+      "decision": "REJECTED_NO_MEASURED_EFFICIENCY_GAIN",
+      "evidence_artifact": "evidence/campaign-20261010-lexer-initial-window-reuse-rejection.json",
+      "evidence_artifact_sha256": "67659a5d244cb69f564b912a40a9ed31f9f10d1293988ae20a5a485eebdcc673",
+      "delivery_role": "Negative optimization evidence only. Candidate source remained in its isolated worktree; no implementation or module-stage claim was delivered.",
+      "matrix_row_policy": "Historical top-level compiler_head and module rows were left unchanged. No executable artifact, Stage-1, or Stage-2 claim is made."
     }
   },
-  "evidence_updated_at": "2026-10-10T00:32:49Z"
+  "evidence_updated_at": "2026-10-10T00:46:01Z"
 }
