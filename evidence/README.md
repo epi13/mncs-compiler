@@ -205,3 +205,11 @@ runs exhausted the same step budget while parsing `decl`, returned no project
 result, and therefore leave semantic outcome UNKNOWN. There was no sampled RSS
 cap or cgroup OOM event. This evidence does not promote any module stage or
 claim Stage-1/Stage-2 succession.
+
+A candidate-only 1,000,000-step follow-up timed out at 240.497 seconds and the
+runner interrupted the still-active child. The child used 234.17 seconds of
+CPU, peaked at 1,758,896 KiB RSS, and held five FDs; the RSS stop and cgroup
+OOM counters remained clear. No response or step count was returned, so the
+classification is TIMEOUT / INTERRUPTED with semantic outcome UNKNOWN. The
+follow-up record is in the same report and is not a matched performance
+comparison.
