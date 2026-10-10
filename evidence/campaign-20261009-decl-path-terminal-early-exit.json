@@ -1,0 +1,306 @@
+{
+  "schema_version": "mncs.compiler.execution-efficiency-evidence/1",
+  "kind": "decl_path_terminal_token_early_exit",
+  "observed_at": "2026-10-10T00:26:29Z",
+  "summary": "parse_module_path now returns when its next significant token is not a dot. This avoids rescanning the same terminal token through the remaining defensive segment bound. The 1024 segment bound and Stage-0 diagnostic spans are unchanged.",
+  "identities": {
+    "candidate_base_revision": "9023152f87041ef07070331403cf30b1da1f9947",
+    "tested_candidate_git_head_at_measurement": "9023152f87041ef07070331403cf30b1da1f9947",
+    "tested_candidate_branch": "campaign/decl-path-early-exit-20261009",
+    "tested_candidate_worktree_dirty_at_measurement": true,
+    "tested_compiler_source_identity": {
+      "kind": "sha256 of selected compiler source basenames and bytes, ordered by basename",
+      "sha256": "72bcad64cf55b7bd8b18175d729b495b53ff509a16df509b89ef26721c421277",
+      "selected_modules": [
+        "decl",
+        "flow",
+        "lexer",
+        "parser",
+        "segment",
+        "source"
+      ],
+      "module_source_sha256_by_basename": {
+        "decl": "364be1e46ee7d77e2cf6802a1758d9d28c331c70bc756587cd7f7385dc9085c9",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "0b76943c2707f9697a67ee70c667f31458f294f550fc4129061b7226c775ea35",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "7dff3b14469c7f79c13b333ebfd66cc7e84cba28c0a86ff5a1d3ce524c2419a5"
+      },
+      "baseline_identity_sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+      "baseline_decl_source_sha256": "0fe57262f0cfd06c046103ec2cf6ab6f9db1c0425a4cd53cbaa7af2c397435c9",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "probe_binary_sha256": "a5ba3ec0149a12b91eb5b1d06e3c5bcec443b2ee2ec880a3be9a3755a5e81b8c"
+    }
+  },
+  "focused_parse_differential": {
+    "operation": "mncs.compiler.decl.v1::parse_unit",
+    "executor": "pinned Stage-0 probe reference interpreter",
+    "oracle": "independent Stage-0 oracle request from the same pinned probe",
+    "checks": "tools/test_decl.py check_pos_parse and check_neg_parse",
+    "results": [
+      {
+        "case": "four-segment module path and four-segment use path",
+        "expected": "positive parse; complete parsed structure agrees with Stage-0",
+        "result": "PASS",
+        "execution_steps": 46846
+      },
+      {
+        "case": "trailing separator in use path before alias",
+        "expected": "first-error span agrees with Stage-0",
+        "result": "PASS",
+        "native_span": [
+          45,
+          47
+        ],
+        "stage0_span": [
+          45,
+          47
+        ],
+        "execution_steps": 8483
+      }
+    ],
+    "child_observation": {
+      "wall_seconds_before_close_including_oracle_requests": 10.483,
+      "peak_hwm_kib": 934656,
+      "peak_fd_count": 3,
+      "retained_sessions": 0,
+      "cpu_seconds": "UNKNOWN; this focused differential run did not collect child CPU time"
+    }
+  },
+  "matched_flow_target_profile": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_module": "flow",
+    "backend_requested": "reference_interpreter",
+    "target_step_budget": 100000,
+    "target_step_budget_reached": true,
+    "compiler_input_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "compiler_input_pages_at_width_1024": 896,
+    "stage0_oracle": "explicitly skipped to isolate the target request; no candidate Stage-0 result was produced",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "baseline": {
+      "tested_candidate_git_head": "2ea01d3af28ca9fc2795a8c7669a48773c110c5c",
+      "source_identity_sha256": "5c44c8a56352684879ff2108b682294fe59157b7c7bcdf3ae91a7e3152c4dc0e",
+      "measurement_runner_status": "SUCCESS",
+      "operation_outcome": "RESOURCE_EXHAUSTED",
+      "reported_status": "budget_exhausted",
+      "reported_steps": 100000,
+      "wall_seconds": 46.062,
+      "child_cpu_seconds": 43.5,
+      "child_cpu_user_seconds": 43.1,
+      "child_cpu_system_seconds": 0.4,
+      "child_peak_sampled_rss_kib": 1750924,
+      "child_peak_fd_count": 5,
+      "frontend_program_cache_decode_ms": 604.596927,
+      "request_json_decode_ms": 403.562116,
+      "target_execution_ms": 42547.29009,
+      "cgroup_memory_event_delta": {
+        "oom": 0,
+        "oom_kill": 0,
+        "high": 0,
+        "max": 0
+      },
+      "profiled_path_function": {
+        "function": "decl.path_step",
+        "calls": 26,
+        "exclusive_ms": 459.807,
+        "inclusive_ms": 7848.182
+      }
+    },
+    "candidate_repeats": [
+      {
+        "label": "flow-decl-path-candidate-100k",
+        "measurement_runner_status": "SUCCESS",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "reported_status": "budget_exhausted",
+        "reported_steps": 100000,
+        "wall_seconds": 35.549,
+        "child_cpu_seconds": 33.2,
+        "child_cpu_user_seconds": 32.67,
+        "child_cpu_system_seconds": 0.53,
+        "child_peak_sampled_rss_kib": 1750848,
+        "child_peak_fd_count": 5,
+        "frontend_program_cache_decode_ms": 606.247258,
+        "request_json_decode_ms": 411.013072,
+        "target_execution_ms": 32471.269588,
+        "cgroup_memory_event_delta": {
+          "oom": 0,
+          "oom_kill": 0,
+          "high": 0,
+          "max": 0
+        },
+        "profiled_path_function": {
+          "function": "decl.parse_module_path",
+          "calls": 4,
+          "steps": 632,
+          "exclusive_ms": 139.409124,
+          "inclusive_ms": 6734.680878
+        }
+      },
+      {
+        "label": "flow-decl-path-candidate-100k-repeat",
+        "measurement_runner_status": "SUCCESS",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "reported_status": "budget_exhausted",
+        "reported_steps": 100000,
+        "wall_seconds": 35.548,
+        "child_cpu_seconds": 33.06,
+        "child_cpu_user_seconds": 32.67,
+        "child_cpu_system_seconds": 0.39,
+        "child_peak_sampled_rss_kib": 1750832,
+        "child_peak_fd_count": 5,
+        "frontend_program_cache_decode_ms": 603.60269,
+        "request_json_decode_ms": 401.347312,
+        "target_execution_ms": 32175.125473,
+        "cgroup_memory_event_delta": {
+          "oom": 0,
+          "oom_kill": 0,
+          "high": 0,
+          "max": 0
+        },
+        "profiled_path_function": {
+          "function": "decl.parse_module_path",
+          "calls": 4,
+          "steps": 632,
+          "exclusive_ms": 134.550338,
+          "inclusive_ms": 6672.151426
+        },
+        "path_step_present_in_candidate_profile": false
+      }
+    ],
+    "comparison": {
+      "candidate_wall_seconds_mean": 35.5485,
+      "wall_reduction_percent": 22.84,
+      "candidate_child_cpu_seconds_mean": 33.13,
+      "child_cpu_reduction_percent": 23.84,
+      "candidate_target_execution_ms_mean": 32323.1975305,
+      "target_execution_reduction_percent": 24.03,
+      "candidate_peak_sampled_rss_kib_mean": 1750840,
+      "rss_delta_kib_mean_candidate_minus_baseline": -84,
+      "child_fd_count": "5 in baseline and both candidate runs",
+      "interpretation": "Same 100000-step stop with lower wall and child CPU in two candidate repeats; target remains RESOURCE_EXHAUSTED with UNKNOWN semantic result. This is execution-efficiency evidence, not compiler-result or module-stage evidence."
+    },
+    "runtime_profile_note": "Function inclusive times overlap their callees and are not CPU-time totals. Measurements use the actual isolated probe child PID. The 896-page profile input is distinct from the retained matrix evidence for the 894-page real project closure.",
+    "stage0_source_resolution": {
+      "dependency_module_count": 8,
+      "dependency_source_bytes": 1341269,
+      "candidate_phase_durations_ms": [
+        6.938184,
+        6.95385
+      ]
+    }
+  },
+  "cache_preparation": {
+    "classification": "ADMISSION_ONLY_SUCCESS",
+    "semantic_result": "NOT_RUN_CACHE_PREPARATION",
+    "wall_seconds": 151.702,
+    "child_cpu_seconds": 150.26,
+    "child_peak_sampled_rss_kib": 2132264,
+    "child_peak_fd_count": 5,
+    "frontend_parse_ms": 1246,
+    "frontend_elaboration_ms": 106726,
+    "specialized_program_function_count": 3128,
+    "program_uncompressed_bytes": 151014804,
+    "compressed_cache_artifact": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/probe-cache/9da08faa715c7725db558a45c8c4d6bff634cfbf14c72505d0a2d7db432f5807.program.json.gz",
+      "cache_key": "9da08faa715c7725db558a45c8c4d6bff634cfbf14c72505d0a2d7db432f5807",
+      "bytes": 5288848,
+      "sha256": "443fa2f36e143b7f6ff773f251bb0caa25bf2b5bdb7d0774d9be8c1e89db49a6"
+    },
+    "cgroup_memory_event_delta": {
+      "oom": 0,
+      "oom_kill": 0,
+      "high": 0,
+      "max": 0
+    }
+  },
+  "remaining_work": {
+    "next_measured_hotspots_in_candidate": [
+      {
+        "function": "source.byte_window4_global",
+        "calls": 495,
+        "steps": 24248,
+        "exclusive_ms": 7345.46221
+      },
+      {
+        "function": "lexer.next_token_global",
+        "calls": 119,
+        "steps": 13347,
+        "exclusive_ms": 5095.152273
+      },
+      {
+        "function": "source.byte_at_global",
+        "calls": 164,
+        "steps": 3444,
+        "exclusive_ms": 2393.098449
+      },
+      {
+        "function": "source.validate_pages",
+        "calls": 1,
+        "steps": 8074,
+        "exclusive_ms": 1742.438777
+      }
+    ],
+    "no_native_project_result": true,
+    "no_executable_artifact": true,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "no_module_matrix_status_promoted": true
+  },
+  "raw_artifacts": {
+    "baseline_evidence": {
+      "path": "evidence/campaign-20261009-flow-target-resource-profile.json",
+      "bytes": 29277,
+      "sha256": "d0c1f9c54e13bc4dcb45d428a05e44b9c0beb4c5e26d4008d301a1ecb39ce638"
+    },
+    "baseline_measurement": {
+      "path": ".worktrees/probe-stage0-oracle-skip-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261009-flow-target-cache-warm-100k-skip-oracle-profile-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 246857,
+      "sha256": "086d749462bd0f5376470a1c40dc4292e098cee3526d241fbd5afdfc5708a403"
+    },
+    "candidate_first_measurement": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-100k-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 212305,
+      "sha256": "89537162ab2794939f8eeba4ba33b9c345c34b4c1a3ea1123d40cfa7d86dfc87"
+    },
+    "candidate_first_phase_trace": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-100k-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 8717,
+      "sha256": "3db346b1afc9921ec729ce8e6378cc4b9521cf18de3430eadc7f37fcedf50c3c"
+    },
+    "candidate_first_probe_stderr": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-100k-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+      "bytes": 7166,
+      "sha256": "2c83f4a685877f05be6fee22aabbc4ab76a3dc71f0940a65333d56cbabf5a9c5"
+    },
+    "candidate_repeat_measurement": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-100k-repeat-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 211283,
+      "sha256": "ab9d4d418a39a71b99da3d78daab2ee79ae176789ae4672a95b0e3d586dd716f"
+    },
+    "candidate_repeat_phase_trace": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-100k-repeat-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 8733,
+      "sha256": "7a4960ac69b06f073f8c8024deea68011fcca8ad07cae675b0be9c687c5fafd0"
+    },
+    "candidate_repeat_probe_stderr": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-100k-repeat-source-lexer-parser-segment-decl-flow-probe-stderr.log",
+      "bytes": 7168,
+      "sha256": "8f3d25c004fb9ebebf50e218a9e6c23b46d22bf1789ba55969ec48990ff0acfd"
+    },
+    "candidate_cache_preparation_measurement": {
+      "path": "../.worktrees/decl-path-early-exit-20261009/.build/campaign-artifacts/compiler-facts/compiler-probe-flow-decl-path-candidate-cache2-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 578511,
+      "sha256": "07847dbe8319c732c570a2f97bdd472e85db190feca9fc00a96629b8f8f8554a"
+    }
+  }
+}
