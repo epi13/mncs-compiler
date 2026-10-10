@@ -2616,7 +2616,89 @@
       },
       "stage1_claimed": false,
       "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The measured work remains bounded reference-interpreter execution and does not establish executable creation or compiler succession."
+    },
+    "lexer_keyword_byte_reuse_campaign_20261010": {
+      "observed_at": "2026-10-10T05:40:15.042773+00:00",
+      "candidate_base_revision": "aa18c166dffbe8d19ace6c70cd109463881f05a6",
+      "tested_candidate_git_head": "aa18c166dffbe8d19ace6c70cd109463881f05a6",
+      "tested_candidate_branch": "campaign/lexer-keyword-byte-reuse-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "baseline_git_revision": "6af2e42a548defe5af25b33711b5ac838583acef",
+      "baseline_compiler_source_identity_sha256": "2a8f43f1f0c8e0a6bcbf5fcb021d42167b0ab681562b4f9ed20e7ab418d71b83",
+      "candidate_compiler_source_identity_sha256": "f6cd4e0bf22f59a165703acf2a9857db0de9f8312cc89c9deb6a325aa169205d",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "implementation_commit": "51bb2dd9c0ef9304f2158634c86805480a8e1588",
+      "delivered_local_main_revision": "51bb2dd9c0ef9304f2158634c86805480a8e1588",
+      "delivery_state": "fast-forward merged into local main; push pending",
+      "push_status": "PENDING",
+      "delivery_role": "Reuse each keyword byte within page-local matching. No language or backend semantic change and no module-stage, executable, Stage-1, or Stage-2 promotion.",
+      "evidence_artifact": "evidence/campaign-20261010-lexer-keyword-byte-reuse.json",
+      "evidence_artifact_sha256": "8e46db4f11dd410fe0525a95a6868b535d210ec9209eeaa00b89a5dc54dc5e9a",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "measurement_backend": "reference_interpreter",
+      "step_budget": 200000,
+      "matched_warm_means": {
+        "baseline_wall_seconds": 40.810,
+        "candidate_wall_seconds": 37.3055,
+        "wall_reduction_percent": 8.587,
+        "baseline_child_cpu_seconds": 38.085,
+        "candidate_child_cpu_seconds": 34.820,
+        "child_cpu_reduction_percent": 8.573,
+        "baseline_peak_rss_kib": 1761164,
+        "candidate_peak_rss_kib": 1758808,
+        "peak_rss_delta_kib": -2356,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ]
+      },
+      "keyword_profile": {
+        "baseline_exclusive_ms": 2074.803806,
+        "candidate_exclusive_ms": 608.346374,
+        "exclusive_time_reduction_percent": 70.7,
+        "baseline_steps": 3958,
+        "candidate_steps": 3028
+      },
+      "stage0_differential": {
+        "tier_c_requests": 91,
+        "semantic_outputs_match": true,
+        "semantic_outputs_sha256": "270fb1eafaa08565e5f78e999a7c20ee5765cdeb4c397c87753a4ed12cdb8957",
+        "baseline_steps_total": 3363634,
+        "candidate_steps_total": 3360615,
+        "keyword_suite_backend": "cranelift",
+        "keyword_suite_requests": 96,
+        "keywords": 30,
+        "near_miss_identifiers": 60,
+        "keyword_page_widths": [
+          1,
+          2,
+          7,
+          64,
+          1024
+        ],
+        "keyword_suite_elapsed_seconds": 2.683,
+        "keyword_suite_result_sha256": "70302a8575b59beb9e8b0f953a3efa43a0a354aff171482d03907465018ccb59"
+      },
+      "target_outcome": {
+        "baseline": "RESOURCE_EXHAUSTED",
+        "candidate": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "rss_cap_triggered": false,
+        "cgroup_oom_kill_delta": 0
+      },
+      "program_cache_preparation": {
+        "classification": "SUCCESS",
+        "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+        "wall_seconds": 167.244,
+        "child_cpu_seconds": 164.39,
+        "child_peak_rss_kib": 2142216,
+        "program_function_count": 3135,
+        "artifact_uncompressed_bytes": 151503628,
+        "artifact_gzip_bytes": 5310744
+      },
+      "stage1_claimed": false,
+      "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The bounded target still exhausts its fixed budget; cache admission is not target execution or semantic acceptance."
     }
   },
-  "evidence_updated_at": "2026-10-10T05:08:42Z"
+  "evidence_updated_at": "2026-10-10T05:40:15.042773+00:00"
 }
