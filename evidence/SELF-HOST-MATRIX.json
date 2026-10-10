@@ -2203,7 +2203,53 @@
       "delivered_evidence_commit": "31139768454945bc5b4b007f77756229bc4023b3",
       "push_status": "PUSHED_TO_origin_main",
       "delivery_recorded_at": "2026-10-10T01:25:05Z"
+    },
+    "project_provider_body_retention_campaign_20261010": {
+      "observed_at": "2026-10-10T02:53:01Z",
+      "entry_delivered_main_revision": "ea87c5c5e97d89d219c22f5d25ed728b0547c649",
+      "candidate_base_revision": "ea87c5c5e97d89d219c22f5d25ed728b0547c649",
+      "tested_candidate_git_head": "ea87c5c5e97d89d219c22f5d25ed728b0547c649",
+      "tested_candidate_branch": "campaign/project-provider-body-retention-20261010",
+      "tested_candidate_worktree_dirty_at_execution": true,
+      "tested_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "51497d74c7ee22650e353c03f43ba6610c56dce9911f00d044371882439b7b3c",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "changed_modules": {
+          "decl": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+          "project": "92ae7e8ec79b090ed74c99f7e9986a4a40429fe1ece7c12db72b652085d8b768"
+        }
+      },
+      "baseline_compiler_source_identity_sha256": "5accae1c8bbbd18cb59b023d7cc66f509a7c8399f51f4e2f1a5a52a4e957d77b",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "implementation_commit": "622a960e70490d58f7005e6e8e8fd1288dfe8c5f",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target",
+      "target_module": "flow",
+      "result_scope": {
+        "provider_parser_contract": "PASS: full syntax parsing and exact error spans preserved; provider body AST omitted after success; target and whole-project modes retain bodies",
+        "provider_ast_fixture": "8 statement nodes omitted from provider result; same 8 retained for target and full-project result",
+        "stage0_imported_nominal_oracle": "PASS on the focused fixture",
+        "real_flow_250k_prefix": "RESOURCE_EXHAUSTED at 250000 steps for baseline and candidate; semantic result UNKNOWN; profiles end before unit_fn/parse_fn; no measurable improvement",
+        "real_flow_500k_candidate": "TIMEOUT after 180 seconds; interrupted by runner SIGINT; no semantic result and no cgroup OOM event delta",
+        "small_target_project_execution": "TIMEOUT after 60 seconds; semantic result UNKNOWN",
+        "executable_artifact": false,
+        "stage1_claimed": false,
+        "stage2_claimed": false
+      },
+      "decision": "IMPLEMENTED_BOUNDED_PROVIDER_AST_RETENTION; NO_MEASURED_REAL_FLOW_EFFICIENCY_GAIN",
+      "evidence_artifact": "evidence/campaign-20261010-provider-body-retention.json",
+      "evidence_artifact_sha256": "9d1e5323a9e02477339560e3e0c7b699b4f9a2eb97e0bcea2ead19c338d6195a",
+      "delivery_role": "Candidate Git HEAD and compiler source content identity describe the tested dirty worktree; implementation_commit is the delivered source change. The final main revision is separately reported from Git after integration.",
+      "matrix_row_policy": "Historical compiler_head, Stage-0 field, and module-stage rows remain unchanged. No executable, Stage-1, or Stage-2 status is promoted.",
+      "updated_at": "2026-10-10T02:53:01Z"
     }
   },
-  "evidence_updated_at": "2026-10-10T01:25:05Z"
+  "evidence_updated_at": "2026-10-10T02:53:01Z"
 }
