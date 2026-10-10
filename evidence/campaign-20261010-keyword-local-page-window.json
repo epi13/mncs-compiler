@@ -1,0 +1,296 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.execution-efficiency-evidence/1",
+  "evidence_kind": "keyword_local_page_fast_path",
+  "observed_at": "2026-10-10T04:01:39.575674+00:00",
+  "decision": "IMPLEMENTED_MEASURED_EFFICIENCY_GAIN",
+  "summary": "For keyword classification, read the complete word through the existing single-page byte accessor when the word fits in its selected source page; preserve the prior global per-byte fallback for page splits and malformed views.",
+  "identities": {
+    "baseline_compiler_source_identity_sha256": "f4592c3c8fe044278001bbe4f4d22d610776916a3dec4d2e27f247b4673eebae",
+    "candidate_compiler_source_identity_sha256": "7de25ba8e60eda9a3c62b0da068a40d86eef215da6c1ef794c47b8d9a86f6950",
+    "baseline_git_revision": "4a44f706918d48b37bd273bde27a8d3029f6a9da",
+    "candidate_base_git_revision": "05e8733f5ca55f71321cc6088f51724f2130b496",
+    "candidate_tested_git_head": "05e8733f5ca55f71321cc6088f51724f2130b496",
+    "candidate_worktree_dirty": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "measurement_backend": "reference_interpreter",
+    "module_source_sha256": {
+      "decl": {
+        "baseline_sha256": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+        "candidate_sha256": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f"
+      },
+      "flow": {
+        "baseline_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "candidate_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "lexer": {
+        "baseline_sha256": "79e6a783db9b21cc4f7766e5ebd7c15650251cb8c6739057549283938c503c74",
+        "candidate_sha256": "1a01bccf07055535c774d39b009e7c7a17751dd1f692cbe0a9ad496def07a796"
+      },
+      "parser": {
+        "baseline_sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "candidate_sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc"
+      },
+      "segment": {
+        "baseline_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "candidate_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+      },
+      "source": {
+        "baseline_sha256": "ac7dbf85aa919fdb48aa68b34f2974d1858cf60303ea287bd51e67cb8a06a1a1",
+        "candidate_sha256": "ac7dbf85aa919fdb48aa68b34f2974d1858cf60303ea287bd51e67cb8a06a1a1"
+      }
+    }
+  },
+  "workload": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "dependency_closure_module_count": 8,
+    "pages_at_width_1024": 899,
+    "baseline_source_bytes": 1346103,
+    "candidate_source_bytes": 1346854,
+    "step_budget": 200000,
+    "stage0_oracle": "skipped after target request to isolate bounded execution; separate CP-0001 Tier B/C differential tests were run",
+    "page_count_scope_note": "The 899 pages cover the six selected target-input modules; the historical full flow closure remains 894 pages."
+  },
+  "warm_comparison": {
+    "cache_state": "Program artifact cache hit for both runs; same backend, Stage-0 revision, module stems, target operation, step limit, and measurement wrapper.",
+    "baseline": {
+      "target_execution_ms": 34235.191395999995,
+      "whole_runner_wall_seconds": 37.552,
+      "probe_child_cpu_seconds": 35.14,
+      "probe_child_peak_sampled_rss_kib": 1757612,
+      "probe_child_peak_fd_count": 5,
+      "source_bytes": 1346103,
+      "keyword_global": {
+        "calls": 38,
+        "exclusive_ms": 1027.973609
+      },
+      "global_byte_at": {
+        "calls": 168,
+        "exclusive_ms": 2475.407007
+      },
+      "global_window": {
+        "calls": 2,
+        "exclusive_ms": 52.078498
+      },
+      "page_window": {
+        "calls": 1007,
+        "exclusive_ms": 424.398047
+      },
+      "next_token": {
+        "calls": 171,
+        "exclusive_ms": 11394.627251
+      },
+      "cgroup_memory_events_delta": {
+        "low": 0,
+        "sock_throttled": 0,
+        "oom": 0,
+        "max": 0,
+        "high": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "probe_io": {
+        "rchar_bytes": 180007696,
+        "wchar_bytes": 151528107,
+        "read_bytes": 8441856,
+        "write_bytes": 28672,
+        "cancelled_write_bytes": 0
+      },
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "reported_steps": 200000
+    },
+    "candidate": {
+      "target_execution_ms": 33367.69044,
+      "whole_runner_wall_seconds": 36.549,
+      "probe_child_cpu_seconds": 34.3,
+      "probe_child_peak_sampled_rss_kib": 1760624,
+      "probe_child_peak_fd_count": 5,
+      "source_bytes": 1346854,
+      "keyword_global": {
+        "calls": 38,
+        "exclusive_ms": 849.679095
+      },
+      "global_byte_at": {
+        "calls": 8,
+        "exclusive_ms": 114.747847
+      },
+      "global_window": {
+        "calls": 2,
+        "exclusive_ms": 50.707103
+      },
+      "page_window": {
+        "calls": 994,
+        "exclusive_ms": 415.685528
+      },
+      "next_token": {
+        "calls": 169,
+        "exclusive_ms": 11274.994023
+      },
+      "cgroup_memory_events_delta": {
+        "max": 0,
+        "sock_throttled": 0,
+        "oom_kill": 0,
+        "oom": 0,
+        "oom_group_kill": 0,
+        "high": 0,
+        "low": 0
+      },
+      "probe_io": {
+        "rchar_bytes": 180477359,
+        "wchar_bytes": 151961610,
+        "read_bytes": 0,
+        "write_bytes": 32768,
+        "cancelled_write_bytes": 0
+      },
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "reported_steps": 200000
+    },
+    "delta": {
+      "target_execution_reduction_percent": 2.5339451033457805,
+      "whole_runner_wall_reduction_percent": 2.670962931401788,
+      "probe_child_cpu_reduction_percent": 2.390438247011961,
+      "global_byte_at_call_reduction_percent": 95.23809523809523,
+      "global_byte_at_exclusive_reduction_percent": 95.3644856512277,
+      "candidate_rss_delta_kib": 3012,
+      "candidate_fd_delta": 0
+    },
+    "interpretation": "The warm target time and child CPU decreased while global byte_at calls fell by 95%. The candidate source set grew by the changed lexer implementation."
+  },
+  "cold_candidate_observation": {
+    "classification": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "whole_runner_wall_seconds": 196.26,
+    "front_end_specialization_ms": 152491.31878,
+    "target_execution_ms": 40452.64131,
+    "reported_steps": 200000,
+    "probe_child_cpu_seconds": 192.72,
+    "probe_child_peak_sampled_rss_kib": 2148176,
+    "probe_child_peak_fd_count": 5,
+    "rss_stop_cap_mib": 2300,
+    "rss_stop_cap_triggered": false,
+    "cgroup_memory_events_delta": {
+      "low": 0,
+      "oom_group_kill": 0,
+      "oom_kill": 0,
+      "oom": 0,
+      "max": 0,
+      "sock_throttled": 0,
+      "high": 0
+    },
+    "interpretation": "Cold front-end specialization cost 152.5 seconds. The process remained below the sampled RSS stop cap and did not increment cgroup OOM events."
+  },
+  "differential_tests": {
+    "tier_b": {
+      "status": "SUCCESS",
+      "baseline_candidate_result_hashes_match": true,
+      "requests": 12691,
+      "tokens_compared": 39501,
+      "cases": 114,
+      "result_sha256": "2f7eb281a47795845950db95888072f56a73339c6fac58e81c0d72cf5ca7fcec"
+    },
+    "tier_c": {
+      "status": "SUCCESS",
+      "baseline_candidate_result_hashes_match": true,
+      "requests": 91,
+      "result_sha256": "2986e52d66263a2fddb8e59dfc8cfc93f63ea602bae80d71acba3630551fab58",
+      "keyword_page_window_cases": {
+        "same_page": [
+          37,
+          5
+        ],
+        "split_page_fallback": [
+          37,
+          5
+        ],
+        "missing_page_fallback": [
+          4,
+          2
+        ]
+      },
+      "malformed_initial_window_cases": {
+        "empty_page_table": [
+          7,
+          0,
+          1,
+          3
+        ],
+        "empty_initial_page": [
+          7,
+          0,
+          1,
+          3
+        ],
+        "zero_stride": [
+          7,
+          0,
+          1,
+          3
+        ]
+      }
+    },
+    "tier_a": "NOT_RERUN; the existing random-soup baseline mismatch is retained in prior evidence; this change makes no claim to resolve it."
+  },
+  "resource_unknowns": [
+    "Both project target runs exhaust the 200000-step bound and return no project result; semantic compiler outcome remains UNKNOWN.",
+    "Parser/checker/proof/CFG/SSA semantic phases remain UNKNOWN; runtime profiles are executor observations rather than phase proof.",
+    "Hardware instruction count, per-function CPU, and sub-sample resource peaks remain UNKNOWN."
+  ],
+  "stage1_claimed": false,
+  "module_stage_promotion": false,
+  "raw_artifacts": [
+    {
+      "run": "baseline",
+      "path": ".worktrees/source-initial-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-initial-byte-window-200k-warm-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 224044,
+      "sha256": "be6b633ab767ec20d69111f4192a5d2b1e946be7e86c5bb9ad71150427bc1893"
+    },
+    {
+      "run": "baseline_phases",
+      "path": ".worktrees/source-initial-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-initial-byte-window-200k-warm-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 8769,
+      "sha256": "7dcecf2b79ca5b5a04e65a2a267de37bfbdd913bed782188e3f8bed5d8c9a598"
+    },
+    {
+      "run": "candidate_cold",
+      "path": ".worktrees/source-keyword-local-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-keyword-local-200k-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 689224,
+      "sha256": "753f11215eab037f058b2c4c7d0dbf9b9119c13c92ed57dd5a96e5d8ad7048ec"
+    },
+    {
+      "run": "candidate_cold_phases",
+      "path": ".worktrees/source-keyword-local-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-keyword-local-200k-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 11450,
+      "sha256": "0f4c20f64f2c5b322db495d13d2f1a288e0aef42370acc60212da00b1dccfa74"
+    },
+    {
+      "run": "candidate_warm",
+      "path": ".worktrees/source-keyword-local-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-keyword-local-200k-warm-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 219567,
+      "sha256": "822f4d9ff5a353f07bac375f958594ef14c98ca1e9a3595718162dfe90b5bdf5"
+    },
+    {
+      "run": "candidate_warm_phases",
+      "path": ".worktrees/source-keyword-local-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-keyword-local-200k-warm-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 8731,
+      "sha256": "ac7dd9106b5dead638888efd5583a86d044a6cd3d64ebfb902db46f56b1d94a6"
+    }
+  ],
+  "implementation": {
+    "changed_files": [
+      "src/compiler/lexer.mncs",
+      "tools/test_cp0001.py"
+    ],
+    "source_semantics_changed": false,
+    "fallback": "Existing keyword_global per-byte global path remains for cross-page words and malformed layouts; public token tests cover both paths."
+  }
+}

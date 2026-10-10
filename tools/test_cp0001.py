@@ -761,6 +761,22 @@ def tier_c(probe, kinds_inv, stats):
         stats.setdefault("malformed_initial_windows", {})[name] = [
             token["kind"], token["start"], token["end"], token["diagnostic"]
         ]
+    same_page_keyword = probe.run_global(
+        seg, "next_token_global", [b"while"], 5, 5, (integer(0),))
+    split_page_keyword = probe.run_global(
+        seg, "next_token_global", [b"wh", b"il", b"e"], 2, 5,
+        (integer(0),))
+    malformed_keyword = probe.run_global(
+        seg, "next_token_global", [b"wh"], 2, 5, (integer(0),))
+    assert (same_page_keyword["kind"], split_page_keyword["kind"],
+            malformed_keyword["kind"], malformed_keyword["end"]) == \
+        (37, 37, 4, 2), (
+            same_page_keyword, split_page_keyword, malformed_keyword)
+    stats["keyword_page_window_cases"] = {
+        "same_page": [same_page_keyword["kind"], same_page_keyword["end"]],
+        "split_page_fallback": [split_page_keyword["kind"], split_page_keyword["end"]],
+        "missing_page_fallback": [malformed_keyword["kind"], malformed_keyword["end"]],
+    }
     # A valid first page followed by a missing transported page stays total:
     # after the block scanner reaches that boundary, the page-local fast path
     # must fall back to global sentinels without indexing beyond pages.len.

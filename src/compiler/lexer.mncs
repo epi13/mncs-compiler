@@ -207,6 +207,20 @@ fn skip_trivia<N: Nat>(text: [byte; up_to N], token: Token) -> (result: Token) {
 // span pages arbitrarily; the host continues scanning trivia past them).
 fn keyword_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: u64) {
     let length: u64 = end - start;
+    // Keyword bytes usually stay inside the page where the word began. Read
+    // that page directly so every character comparison does not transport
+    // the full project page table through byte_at_global.
+    if stride > 0 && start < end && end <= total {
+        let address: source.GlobalPageAddress = source.global_page_address(stride, total, start);
+        if address.page < pages.len {
+            let page: [byte; up_to N] = pages[address.page];
+            if address.intra < stride && address.intra < page.len {
+                if length <= stride - address.intra && length <= page.len - address.intra {
+                    return keyword<N>(page, address.intra, address.intra + length);
+                }
+            }
+        }
+    }
     if length == 4 {
         let b0: u64 = source.byte_at_global<P, N>(pages, stride, total, start + 0);
         let b1: u64 = source.byte_at_global<P, N>(pages, stride, total, start + 1);
