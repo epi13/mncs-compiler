@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "kind": "compiler-hot-path-experiment",
+  "observed_at": "2026-10-10T15:06:23.151230+00:00",
+  "hypothesis": "Flattening nested direct-page window guards may reduce repeated scanner dispatch overhead in lexer.next_token_global.",
+  "candidate_change": {
+    "module": "src/compiler/lexer.mncs",
+    "candidate_module_source_sha256": "c41a3d7e3d65738241fbe8b39b4b352943260b2994f0342b504112d63572f931",
+    "candidate_selected_module_source_sha256": "078d51e330fb8306c3a0a324b5c6c49fc6de4c1eb94b411d2cfbcf7fbb0346d1",
+    "candidate_base_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+    "candidate_tree_was_dirty": true,
+    "patch_artifact": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-window-guard-optimization-20261010.patch",
+    "patch_sha256": "8c5828d4ec1b95454b74e53169ddf66c955190dcdb1fa1f92299d2f09cff92f9",
+    "delivery_state": "reverted after no improvement was demonstrated"
+  },
+  "focused_differential": {
+    "test": "tools/test_global_scan_modes.py",
+    "test_source_sha256": "6bbe6f1a0c35065c0c0bc69dbffd30ce3fc34db41ecb4da14ec4647af5c2b76d",
+    "status": "passed",
+    "fixture_source_bytes": 5250,
+    "fixture_source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+    "page_width": 1024,
+    "native_steps": 261474,
+    "native_token_count": 11,
+    "stage0_token_count": 11,
+    "token_kinds_spans_and_eof_match": true,
+    "boundary_cases": [
+      "word at page edge",
+      "number at page edge",
+      "nested block comment crossing pages",
+      "block closer at page edge",
+      "line comment crossing page edge"
+    ]
+  },
+  "matched_flow_observation": {
+    "baseline_source_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+    "candidate_source_sha256": "078d51e330fb8306c3a0a324b5c6c49fc6de4c1eb94b411d2cfbcf7fbb0346d1",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "operation": "mncs.compiler.project.v1::compile_project_target",
+    "root_source": "flow.mncs",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "compiler_input_pages_at_width_1024": 901,
+    "step_budget": 100000,
+    "runtime_profile_enabled": false,
+    "baseline_target_execution_ns": 5391210000,
+    "baseline_result_sha256": "4f31545e771d12e50e019b09306bdb66e542357317ab6538ca6753cd66685389",
+    "candidate_warm_target_execution_ns": 5575112605,
+    "candidate_warm_result_sha256": "9ba469713aed0303226e0f0c08414fc03e3e3eafb986ba201ce82421a2220dcd",
+    "candidate_target_execution_delta_percent": 3.411,
+    "baseline_child_cpu_time_ns": 12850000000,
+    "candidate_warm_child_cpu_time_ns": 12940000000,
+    "baseline_peak_rss_bytes": 1794113536,
+    "candidate_warm_peak_rss_bytes": 1794297856,
+    "baseline_and_candidate_status": "budget_exhausted at 100000 steps",
+    "semantic_result_parity": "UNKNOWN; both runs stopped before a complete project result and result digests differ because compiler source differs.",
+    "sample_count_per_identity": 1,
+    "classification": "NO_IMPROVEMENT_DEMONSTRATED",
+    "raw_runs": [
+      {
+        "observed_at": "2026-10-10T15:05:53.838228+00:00",
+        "report_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-window-guard-optimization-100k-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+        "report_sha256": "724e20b2bd1c5798a13668a39e6b0d9cfc54481412b521f569c8fe57596de6ef",
+        "cache_state": "cold_frontend_program_cache",
+        "target_execution_duration_ns": 7584437952,
+        "child_elapsed_wall_ns": 16154869897,
+        "child_cpu_time_delta_ns": 16110000000,
+        "peak_rss_bytes": 1825800192,
+        "peak_file_descriptors": 4,
+        "status": "budget_exhausted",
+        "reported_steps": 100000,
+        "result_sha256": "9ba469713aed0303226e0f0c08414fc03e3e3eafb986ba201ce82421a2220dcd",
+        "trace_sha256": "b7f3eff963ac4782fe4e7002d9733af7acde104b7ebec8b3933df638efa3bb16"
+      },
+      {
+        "observed_at": "2026-10-10T15:06:23.151230+00:00",
+        "report_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-window-guard-optimization-warm-100k-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+        "report_sha256": "f5cd0261e1944c978e6be55f4cb5d14bb04e3b142e4bf7dea7b7d68f1f8a8d66",
+        "cache_state": "warm_frontend_program_cache",
+        "target_execution_duration_ns": 5575112605,
+        "child_elapsed_wall_ns": 12972857350,
+        "child_cpu_time_delta_ns": 12940000000,
+        "peak_rss_bytes": 1794297856,
+        "peak_file_descriptors": 4,
+        "status": "budget_exhausted",
+        "reported_steps": 100000,
+        "result_sha256": "9ba469713aed0303226e0f0c08414fc03e3e3eafb986ba201ce82421a2220dcd",
+        "trace_sha256": "589997f45ce160eaa86e92abc7cd1a01037c6267d062db058f335f50c1d37fc7"
+      }
+    ],
+    "baseline_tested_candidate_head": "602832610080c838df3d94c9fdbac0fc55753acb",
+    "candidate_base_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+    "candidate_tested_candidate_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+    "candidate_branch": "campaign/session-admission-telemetry-20261010",
+    "candidate_tree_dirty_at_test": true,
+    "baseline_phase_telemetry_evidence": {
+      "path": "evidence/campaign-20261010-flow-execution-phase-telemetry.json",
+      "sha256": "8bcaa2752c0525a50e8641433a5d5530436fa5f1d0b2ae0bc6814cf81b910a93"
+    }
+  }
+}

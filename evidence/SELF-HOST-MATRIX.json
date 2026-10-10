@@ -247,7 +247,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Profile the exact Program::lower_to_ir prelude under the matched Flow input, then remove measured duplicate validation/semantic-identity reconstruction only with identity and diagnostic parity. Both matched runs reached the 1,600 MiB sampled RSS stop before the ir-prelude completion event; the HIR/SSA/backend completion outcome remains UNKNOWN. Preserve the separate 894-page accepted Stage-0 project-closure record.",
+  "next_frontier": "The latest 1M-step reference execution remains inside decl::parse_unit_mode while parsing the decl provider and spends most profiled time in lexer.next_token_global (37.998 s exclusive, 461104 steps), scan_chunk_window (12.146 s, 129042 steps), and significant_global (6.159 s, 10635 steps). The page-window guard prototype passed the small Stage-0 boundary differential but did not demonstrate a Flow speedup (one warm sample: 5.575 s versus 5.391 s baseline at 100k steps), so it was reverted. Cranelift timed out during retained-session backend admission before the target request; this is not a target semantic result or demonstrated OOM. Next, investigate parser/token work while preserving Stage-0 diagnostics, then rerun bounded target-only Flow. Provider bodies are currently parsed for Stage-0 syntax parity; tools/test_project_provider_body_retention.py specifically requires malformed provider bodies to be rejected. The separate historical 894-page accepted Stage-0 Flow project closure remains unchanged and is not the 901-page compiler-source input used by these probes.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T14:14:55Z",
+    "updated_at": "2026-10-10T15:12:08Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -3794,9 +3794,117 @@
       "delivery_role": "Current lexer source has whole-module native parse and function-signature evidence only. Historical verified-SSA evidence is preserved with its earlier exact source hash; no check/proof/CFG/SSA, canonical VM, executable artifact, Stage-1, or Stage-2 claim is added.",
       "matrix_row_policy": "Historical top-level compiler_head and lexer module stage row remain unchanged; tested Git revision, current source hashes, and delivered main identity are distinct.",
       "delivery_state": "PUSHED_TO_origin_main; Git confirmed 8d7be4e..78cdd9e main -> main"
+    },
+    "flow_execution_phase_telemetry_campaign_20261010": {
+      "observed_at": "2026-10-10T14:56:14.619991+00:00",
+      "entry_delivered_main_revision": "e1e9f111a40d7aab293c95747f2e525645447847",
+      "tested_candidate_git_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+      "tested_candidate_branch": "campaign/session-admission-telemetry-20261010",
+      "tested_candidate_worktree_dirty": false,
+      "tested_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ]
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "phase_instrumentation_evidence": {"path": "evidence/campaign-20261010-flow-execution-phase-telemetry.json", "sha256": "8bcaa2752c0525a50e8641433a5d5530436fa5f1d0b2ae0bc6814cf81b910a93"},
+      "flow_target_observation": {
+        "backend": "reference_interpreter",
+        "step_budget": 1000000,
+        "compiler_input_pages_at_width_1024": 901,
+        "status": "budget_exhausted",
+        "reported_steps": 1000000,
+        "current_function": "mncs.compiler.decl.v1::parse_unit_mode",
+        "dominant_profile_functions": [
+          {
+            "function": "mncs.compiler.lexer.v1::next_token_global",
+            "exclusive_wall_time_ms": 37997.544546,
+            "steps": 461104,
+            "calls": 1635
+          },
+          {
+            "function": "mncs.compiler.lexer.v1::scan_chunk_window",
+            "exclusive_wall_time_ms": 12145.704067,
+            "steps": 129042,
+            "calls": 3155
+          },
+          {
+            "function": "mncs.compiler.lexer.v1::significant_global",
+            "exclusive_wall_time_ms": 6159.270369,
+            "steps": 10635,
+            "calls": 887
+          }
+        ],
+        "complete_project_result_returned": false,
+        "stage0_oracle_run": false,
+        "evidence_artifact": "evidence/campaign-20261010-flow-one-million-step-observation.json",
+        "evidence_artifact_sha256": "729d3949b15d7e398e4f8c0fa3a64ae9b0752b454e5995e3a19ee258fc521a13"
+      },
+      "cranelift_observation": {
+        "classification": "TIMEOUT_DURING_RETAINED_SESSION_ADMISSION",
+        "timeout_seconds": 120,
+        "peak_child_rss_bytes": 3173580800,
+        "child_cpu_time_delta_ns": 118440000000,
+        "target_request_attempted": false,
+        "target_semantic_outcome": "UNKNOWN_NOT_SUBMITTED",
+        "oom_kill_increment_observed": false,
+        "evidence_artifact": "evidence/campaign-20261010-flow-cranelift-admission-timeout.json",
+        "evidence_artifact_sha256": "cafc4bf9a595c65f5e9c7acba80e723b95aad1ddbe1c7117f079d8e8e8853a46"
+      },
+      "module_stage_rows_changed": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "identity_policy": "The historical matrix compiler_head remains unchanged. This entry binds the tested compiler Git head, selected-module content identity, Stage-0 pin, and measurement scope separately."
+    },
+    "flow_window_guard_experiment_campaign_20261010": {
+      "observed_at": "2026-10-10T15:06:23.151230+00:00",
+      "candidate_base_revision": "e1e9f111a40d7aab293c95747f2e525645447847",
+      "baseline_tested_candidate_git_head": "602832610080c838df3d94c9fdbac0fc55753acb",
+      "candidate_tested_candidate_git_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+      "candidate_branch": "campaign/session-admission-telemetry-20261010",
+      "candidate_worktree_dirty_at_test": true,
+      "changed_module": "src/compiler/lexer.mncs",
+      "baseline_selected_module_source_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+      "candidate_selected_module_source_sha256": "078d51e330fb8306c3a0a324b5c6c49fc6de4c1eb94b411d2cfbcf7fbb0346d1",
+      "candidate_lexer_sha256": "c41a3d7e3d65738241fbe8b39b4b352943260b2994f0342b504112d63572f931",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "focused_differential": {
+        "test": "tools/test_global_scan_modes.py",
+        "source_sha256": "6bbe6f1a0c35065c0c0bc69dbffd30ce3fc34db41ecb4da14ec4647af5c2b76d",
+        "status": "passed",
+        "stage0_token_and_span_parity": true,
+        "page_boundary_fixture_bytes": 5250
+      },
+      "matched_flow_target": {
+        "step_budget_each_run": 100000,
+        "baseline_target_execution_ns": 5391210000,
+        "candidate_warm_target_execution_ns": 5575112605,
+        "candidate_target_execution_delta_percent": 3.411,
+        "sample_count_each_identity": 1,
+        "both_statuses": "budget_exhausted",
+        "complete_semantic_result_parity": "UNKNOWN",
+        "classification": "NO_IMPROVEMENT_DEMONSTRATED"
+      },
+      "candidate_patch_artifact": {
+        "path": ".build/campaign-artifacts/compiler-facts/campaign-flow-window-guard-optimization-20261010.patch",
+        "sha256": "8c5828d4ec1b95454b74e53169ddf66c955190dcdb1fa1f92299d2f09cff92f9"
+      },
+      "evidence_artifact": "evidence/campaign-20261010-flow-window-guard-experiment.json",
+      "evidence_artifact_sha256": "3afe3517bf6e075a5c4f6e746897a8fb7c9466a171438f19fd53f6ef3d3ceb55",
+      "implementation_delivery_state": "candidate was reverted; no source code change is delivered",
+      "module_stage_rows_changed": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-10T14:16:26Z",
+  "evidence_updated_at": "2026-10-10T15:12:08Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }

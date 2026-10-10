@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "kind": "compiler-backend-admission-observation",
+  "observed_at": "2026-10-10T15:00:11.986657+00:00",
+  "identity": {
+    "tested_candidate_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+    "identity_role": "tested candidate head; delivered main identity is recorded separately in Git state",
+    "branch_at_measurement": "campaign/session-admission-telemetry-20261010",
+    "selected_compiler_module_source_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+    "source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_source_profile": "0.18",
+    "probe_binary_sha256": "2a67faca1e00aa2a58a0900c54a4074818e755d02fcd3cb363d1ee607de818a2",
+    "raw_report": {
+      "path": "/tmp/mncs-flow-cranelift-admission-120s.json",
+      "sha256": "845e002ca740f90ba45e28e42ced34acbefa55490945e9d0063d0049462c9856"
+    }
+  },
+  "workload": {
+    "operation": "mncs.compiler.project.v1::compile_project_target",
+    "root_source": "flow.mncs",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_input_modules": [
+      "decl",
+      "flow",
+      "lexer",
+      "parser",
+      "segment",
+      "source"
+    ],
+    "compiler_input_pages_at_width_1024": 901,
+    "page_width": 1024,
+    "target_request_bytes": null,
+    "backend_requested": "cranelift",
+    "backend_admitted": null,
+    "step_budget": 100000
+  },
+  "outcome": {
+    "classification": "TIMEOUT_DURING_RETAINED_SESSION_ADMISSION",
+    "transport": "TIMEOUT",
+    "timeout_stage": "retained_session_admission",
+    "request_index": 0,
+    "request_kind": "retained_session_admission",
+    "admission_control_request_bytes": 25,
+    "target_request_attempted": false,
+    "target_execution_started": false,
+    "target_execution_status": "NOT_ATTEMPTED",
+    "compiler_result": "Target was not submitted; no semantic acceptance or rejection was observed.",
+    "termination": "INTERRUPTED_BY_PROBE_TIMEOUT",
+    "return_code": -15,
+    "classification_reason": "request deadline expired",
+    "steps": 0,
+    "stage0_oracle": {
+      "status": "not-run",
+      "reason": "backend admission mode does not execute the compiler target or Stage-0 oracle"
+    }
+  },
+  "phase_durations_ns": {
+    "source_resolution_and_dependency_selection": 657826,
+    "backend_request_construction": 1568400935,
+    "retained_session_admission_until_timeout": 120000646926,
+    "backend_compilation": "began; no completion event before timeout"
+  },
+  "child_resources": {
+    "process_identity": {
+      "pid": 25,
+      "start_ticks": 56893390,
+      "executable": "/tmp/mncs-compiler-session-telemetry-target-20261010/release/mncs-compiler-stage0-probe"
+    },
+    "elapsed_wall_ns": 120000646926,
+    "cpu_time_delta_ns": 118440000000,
+    "peak_rss_bytes": 3173580800,
+    "max_kernel_rss_high_water_bytes": 3173580800,
+    "peak_file_descriptors": 5,
+    "peak_threads": 1,
+    "io_read_bytes_delta": 0,
+    "io_write_bytes_delta": 0,
+    "resource_sample_count": 240,
+    "resource_sampling_overhead_ns": 66832198,
+    "cgroup": {
+      "status": "OBSERVED",
+      "attribution": "cgroup scope, not child-specific",
+      "memory_max": "max",
+      "cpu_max": "max 100000",
+      "memory_events_before": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 4,
+        "oom_group_kill": 0,
+        "sock_throttled": 36
+      },
+      "memory_events_after": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 4,
+        "oom_group_kill": 0,
+        "sock_throttled": 36
+      },
+      "oom_kill_increment_observed": false,
+      "memory_pressure_some_before": "some avg10=0.00 avg60=0.00 avg300=0.00 total=61846196",
+      "memory_pressure_some_after": "some avg10=0.00 avg60=0.00 avg300=0.00 total=61846203",
+      "cpu_pressure_some_before": "some avg10=0.00 avg60=0.00 avg300=0.75 total=1441483299",
+      "cpu_pressure_some_after": "some avg10=0.00 avg60=0.00 avg300=0.48 total=1441559963"
+    }
+  },
+  "backend_timings_reported_before_timeout": [
+    "mncs-timing stage=hir-prelude-canonicalization elapsed_ms=1359",
+    "mncs-timing stage=compiler-semantic elapsed_ms=1359",
+    "mncs-timing stage=ir-prelude-validation elapsed_ms=587",
+    "mncs-timing stage=compiler-validation elapsed_ms=1947",
+    "mncs-timing stage=ir-prelude-semantic-identities elapsed_ms=3105",
+    "mncs-timing stage=ir-prelude-semantic-graph elapsed_ms=771",
+    "mncs-timing stage=ir-prelude-evidence-manifest elapsed_ms=0",
+    "mncs-timing stage=ir-prelude-obligations elapsed_ms=264",
+    "mncs-timing stage=ir-prelude elapsed_ms=4141",
+    "mncs-timing stage=ir-functions elapsed_ms=63874",
+    "mncs-timing stage=ir-total elapsed_ms=65696",
+    "mncs-timing stage=compiler-hir elapsed_ms=69273",
+    "mncs-timing stage=ssa-validate elapsed_ms=3845",
+    "mncs-timing stage=ssa-ir-reused elapsed_ms=3845",
+    "mncs-timing stage=ssa-functions elapsed_ms=4587",
+    "mncs-timing stage=ssa-total elapsed_ms=12293",
+    "mncs-timing stage=compiler-ssa elapsed_ms=82809",
+    "mncs-timing stage=backend-artifact-bytes-digest elapsed_ms=1518",
+    "mncs-timing stage=backend-artifact-bytes-hex elapsed_ms=7238",
+    "mncs-timing stage=backend-artifact-identity-seal elapsed_ms=3316"
+  ],
+  "raw_artifacts": {
+    "trace_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-cranelift-admission-120s-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791644291818588142.jsonl",
+    "trace_sha256": "e84080c2a23301e163e2368d4645843ffaa549b2027f2260bce94798df6459e8",
+    "trace_event_count": 14,
+    "stderr_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-cranelift-admission-120s-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791644291818588142.log",
+    "stderr_sha256": "df7bbc5ae1406fbcfac2559373edddd2f2257ee50afeb5aac6e818911fa6091e",
+    "stderr_bytes": 1232
+  }
+}

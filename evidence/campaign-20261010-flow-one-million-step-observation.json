@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "kind": "compiler-target-execution-observation",
+  "observed_at": "2026-10-10T14:56:14.619991+00:00",
+  "identity": {
+    "tested_candidate_head": "e1e9f111a40d7aab293c95747f2e525645447847",
+    "identity_role": "tested candidate head; delivered main identity is recorded separately in Git state",
+    "branch_at_measurement": "campaign/session-admission-telemetry-20261010",
+    "selected_compiler_module_source_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+    "source_identity_kind": "sha256 of selected compiler module ids and bytes",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_source_profile": "0.18",
+    "probe_binary_sha256": "2a67faca1e00aa2a58a0900c54a4074818e755d02fcd3cb363d1ee607de818a2",
+    "raw_report": {
+      "path": "/tmp/mncs-flow-phase-telemetry-1m.json",
+      "sha256": "3d294914c15a93b8b1f01f97036e4cce398558ba4bc2c37b842e6c0052031cb3"
+    }
+  },
+  "workload": {
+    "operation": "mncs.compiler.project.v1::compile_project_target",
+    "root_source": "flow.mncs",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_input_modules": [
+      "decl",
+      "flow",
+      "lexer",
+      "parser",
+      "segment",
+      "source"
+    ],
+    "compiler_input_pages_at_width_1024": 901,
+    "page_width": 1024,
+    "target_request_bytes": 20748303,
+    "backend_requested": "reference_interpreter",
+    "backend_admitted": null,
+    "step_budget": 1000000
+  },
+  "outcome": {
+    "classification": "INCOMPLETE_BUDGET_EXHAUSTED",
+    "transport": "RESPONSE_RECEIVED",
+    "execution_started": true,
+    "execution_status": "budget_exhausted",
+    "reported_steps": 1000000,
+    "reported_step_semantics": "reference body-executor steps",
+    "result_sha256": "b2ff056686c3a9711d5a6ade61d1597b559454a540c6599cb057c9efb8c97144",
+    "compiler_result": "No complete parse/check/proof/CFG/verified-SSA result was returned.",
+    "stage0_oracle": {
+      "status": "not-run",
+      "reason": "skipped for bounded native execution profiling; this run makes no Stage-0 differential claim"
+    }
+  },
+  "phase_durations_ns": {
+    "source_resolution": 6995717,
+    "toolchain_identity": 123023400,
+    "dependency_closure_resolution": 262565,
+    "frontend_program_cache_read_decode": 584780035,
+    "request_json_decode": 423652211,
+    "execution_request_decode": 219741922,
+    "reference_execution_session_preparation": 6785664048,
+    "mncs_function_execution": 70743598911,
+    "request_execution": 77752765520,
+    "response_json_encode": 57056,
+    "response_write": 15175
+  },
+  "child_resources": {
+    "process_identity": {
+      "pid": 25,
+      "start_ticks": 56873610,
+      "executable": "/tmp/mncs-compiler-session-telemetry-target-20261010/release/mncs-compiler-stage0-probe"
+    },
+    "elapsed_wall_ns": 78177884899,
+    "cpu_time_delta_ns": 77950000000,
+    "peak_rss_bytes": 1794514944,
+    "max_kernel_rss_high_water_bytes": 1795485696,
+    "peak_file_descriptors": 4,
+    "peak_threads": 1,
+    "io_read_bytes_delta": 0,
+    "io_write_bytes_delta": 0,
+    "resource_sample_count": 157,
+    "resource_sampling_overhead_ns": 41432659,
+    "cgroup": {
+      "status": "OBSERVED",
+      "attribution": "cgroup scope, not child-specific",
+      "memory_max": "max",
+      "cpu_max": "max 100000",
+      "memory_events_before": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 4,
+        "oom_group_kill": 0,
+        "sock_throttled": 36
+      },
+      "memory_events_after": {
+        "low": 0,
+        "high": 0,
+        "max": 0,
+        "oom": 0,
+        "oom_kill": 4,
+        "oom_group_kill": 0,
+        "sock_throttled": 36
+      },
+      "oom_kill_increment_observed": false,
+      "memory_pressure_some_before": "some avg10=0.00 avg60=0.00 avg300=0.00 total=61845780",
+      "memory_pressure_some_after": "some avg10=0.00 avg60=0.00 avg300=0.00 total=61845815",
+      "cpu_pressure_some_before": "some avg10=0.00 avg60=0.18 avg300=1.50 total=1441431676",
+      "cpu_pressure_some_after": "some avg10=0.00 avg60=0.04 avg300=1.13 total=1441449847"
+    }
+  },
+  "runtime_profile": {
+    "enabled": true,
+    "profile_elapsed_ns": 70742754101,
+    "profile_scope": "MNCS reference body execution; exclusive wall time",
+    "top_functions": [
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_3c0ffe82",
+        "exclusive_ns": 37997544546,
+        "steps": 461104,
+        "calls": 1635
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+        "exclusive_ns": 12145704067,
+        "steps": 129042,
+        "calls": 3155
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global__spec_3c0ffe82",
+        "exclusive_ns": 6159270369,
+        "steps": 10635,
+        "calls": 887
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.decl.v1::parse_flat_type__spec_3c0ffe82",
+        "exclusive_ns": 2347503486,
+        "steps": 18095,
+        "calls": 124
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.decl.v1::fields_step__spec_3c0ffe82",
+        "exclusive_ns": 1352139406,
+        "steps": 20470,
+        "calls": 1426
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.lexer.v1::token_from_word_scan_global__spec_3c0ffe82",
+        "exclusive_ns": 1270688739,
+        "steps": 10324,
+        "calls": 356
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.segment.v1::byte_at_global__spec_3c0ffe82",
+        "exclusive_ns": 1147866834,
+        "steps": 692,
+        "calls": 346
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.decl.v1::scalar_kind__spec_3c0ffe82",
+        "exclusive_ns": 981064810,
+        "steps": 3330,
+        "calls": 123
+      }
+    ],
+    "progress_samples": [
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit_mode__spec_3c0ffe82",
+        "module": "mncs.compiler.decl.v1",
+        "block": "b18",
+        "call_depth": 5,
+        "frame_steps": 382830,
+        "progress_interval_steps": 250000
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit_mode__spec_3c0ffe82",
+        "module": "mncs.compiler.decl.v1",
+        "block": "b18",
+        "call_depth": 5,
+        "frame_steps": 722729,
+        "progress_interval_steps": 250000
+      },
+      {
+        "function_identity": "mncs:0.2:function:mncs.compiler.decl.v1::parse_unit_mode__spec_3c0ffe82",
+        "module": "mncs.compiler.decl.v1",
+        "block": "b18",
+        "call_depth": 5,
+        "frame_steps": 987138,
+        "progress_interval_steps": 250000
+      }
+    ],
+    "current_frontier": "Execution remained in decl::parse_unit_mode at block b18, call depth 5; the profiled work is declaration parsing and lexing, before whole Flow target results."
+  },
+  "raw_artifacts": {
+    "trace_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-phase-telemetry-1m-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791644094024597796.jsonl",
+    "trace_sha256": "7184a92a67b4d731ca850eac894df949bbdf0f6582bc89682d9b08c8e2ea456b",
+    "trace_event_count": 42,
+    "stderr_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-phase-telemetry-1m-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-stderr-1791644094024597796.log",
+    "stderr_sha256": "339678a295a23318b9da195eb7e90045321bce2397d6bb4e01b291c72004d99f",
+    "stderr_bytes": 14645
+  }
+}
