@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T08:04:09+00:00",
+    "updated_at": "2026-10-10T09:42:04Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -2640,11 +2640,11 @@
       "measurement_backend": "reference_interpreter",
       "step_budget": 200000,
       "matched_warm_means": {
-        "baseline_wall_seconds": 40.810,
+        "baseline_wall_seconds": 40.81,
         "candidate_wall_seconds": 37.3055,
         "wall_reduction_percent": 8.587,
         "baseline_child_cpu_seconds": 38.085,
-        "candidate_child_cpu_seconds": 34.820,
+        "candidate_child_cpu_seconds": 34.82,
         "child_cpu_reduction_percent": 8.573,
         "baseline_peak_rss_kib": 1761164,
         "candidate_peak_rss_kib": 1758808,
@@ -3065,7 +3065,139 @@
       "delivery_main_revision_at_implementation_merge": "65e1194ece6e45b495ab118531669f8bec3fb570",
       "delivery_role": "Commit 65e1194ece6e45b495ab118531669f8bec3fb570 contains the tested declaration parser improvement and evidence. Main was fast-forwarded to this implementation; the following evidence-only commit records its delivery identity. No module-stage promotion or executable/Stage-1/Stage-2 result is claimed.",
       "historical_matrix_policy": "Historical top-level compiler_head and module-stage rows remain unchanged; candidate Git identity, source-content identity, target scope, and delivery identity are recorded independently."
+    },
+    "shared_probe_cache_campaign_20261010": {
+      "observed_at": "2026-10-10T09:42:04Z",
+      "tested_candidate_git_head": "92503a499532cc156e7e67f188d1257a8aa92cba",
+      "tested_candidate_branch": "campaign/common-probe-cache-20261010",
+      "implementation_commits": [
+        "42fe86397c7981744566e5fc4c0cc3a112480edf",
+        "92503a499532cc156e7e67f188d1257a8aa92cba"
+      ],
+      "delivered_main_revision_at_implementation_merge": "e5bab6bd391379185a1b30a117ed498ce150aa9a",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "baseline_source_identity_sha256": "bc522b7b84d83df8e180c3f689f4ac204f843b9524768ff6f047ca8236071e34",
+      "cache_fill_source_identity_sha256": "ef04cc83a8e201d843b15843da7228c76509b639ceaafad97488335af3774cea",
+      "cache_fill_source_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl"
+      ],
+      "shared_cache_key_for_cache_fill_pair": "2646f6ad07fa70f86060f0e8e3cb57b9399be99e0b7b4ea9fa18aefe22749ffd",
+      "cold_wall_seconds": 155.708,
+      "warm_wall_seconds": 1.002,
+      "cold_child_cpu_seconds": 154.25,
+      "warm_child_cpu_seconds_external_sampler": 0.43,
+      "cold_peak_sampled_rss_kib": 2142380,
+      "warm_peak_sampled_rss_kib": 131184,
+      "cold_and_warm_peak_fds": [
+        5,
+        5
+      ],
+      "cache_fill_semantic_result": "NOT_RUN_CACHE_PREPARATION",
+      "target_compiler_request_attempted": false,
+      "evidence_artifact": "evidence/campaign-20261010-shared-probe-cache.json",
+      "evidence_artifact_sha256": "3fec520c51245b5722aaef62b3739272fc50bb3246438e0ac11d0cc5318eb515",
+      "delivery_state": "Implementation merged into local main; evidence ledger is recorded in the following evidence-only commit.",
+      "push_status": "PENDING",
+      "matrix_policy": "Historical top-level compiler_head and module-stage rows remain unchanged; cache admission is not target execution or semantic success."
+    },
+    "variant_loop_early_stop_campaign_20261010": {
+      "observed_at": "2026-10-10T09:42:04Z",
+      "candidate_base_revision": "92503a499532cc156e7e67f188d1257a8aa92cba",
+      "tested_candidate_git_head": "92503a499532cc156e7e67f188d1257a8aa92cba",
+      "tested_candidate_branch": "campaign/common-probe-cache-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "baseline_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "bc522b7b84d83df8e180c3f689f4ac204f843b9524768ff6f047ca8236071e34",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl"
+        ]
+      },
+      "tested_candidate_compiler_source_identity": {
+        "kind": "sha256 of selected compiler module ids and bytes",
+        "sha256": "ef04cc83a8e201d843b15843da7228c76509b639ceaafad97488335af3774cea",
+        "decl_source_sha256": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl"
+        ]
+      },
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "step_budget_each_run": 500000,
+      "baseline_mean_wall_seconds": 87.873,
+      "candidate_mean_wall_seconds": 73.602,
+      "wall_reduction_percent": 16.24,
+      "baseline_mean_child_cpu_seconds": 84.715,
+      "candidate_mean_child_cpu_seconds": 70.675,
+      "child_cpu_reduction_percent": 16.57,
+      "baseline_mean_target_execution_ms": 84550.155,
+      "candidate_mean_target_execution_ms": 70414.498,
+      "target_execution_reduction_percent": 16.72,
+      "input_pages_baseline_candidate": [
+        865,
+        866
+      ],
+      "variants_step_profile": {
+        "baseline_calls": 1024,
+        "candidate_calls": 64,
+        "baseline_exclusive_seconds": 15.877,
+        "candidate_exclusive_seconds": 1.015,
+        "calls_reduction_percent": 93.75,
+        "exclusive_time_reduction_percent": 93.61
+      },
+      "next_profiled_hotspot": {
+        "function": "lexer.next_token_global",
+        "candidate_calls": 507,
+        "candidate_steps": 112991,
+        "candidate_exclusive_seconds": 34.084
+      },
+      "bounded_target_outcome": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "rss_stop_triggered": false,
+      "cgroup_oom_kill_delta_each_run": 0,
+      "focused_differential": {
+        "status": "passed",
+        "positive": "65 variants accepted",
+        "negative_diagnostic_span_stage0_native": [
+          428,
+          429
+        ]
+      },
+      "whole_module_current_source_revalidation": {
+        "classification": "INTERRUPTED",
+        "returncode": 130,
+        "semantic_result": "UNKNOWN",
+        "stage_promotion": false
+      },
+      "broader_pos_neg_fixture_sweep": {
+        "classification": "INTERRUPTED",
+        "returncode": 130,
+        "semantic_result": "UNKNOWN",
+        "complete_case_count": "UNKNOWN",
+        "stage_promotion": false
+      },
+      "implementation_commit": "e5bab6bd391379185a1b30a117ed498ce150aa9a",
+      "delivered_main_revision_at_implementation_merge": "e5bab6bd391379185a1b30a117ed498ce150aa9a",
+      "evidence_artifact": "evidence/campaign-20261010-variants-loop-early-stop.json",
+      "evidence_artifact_sha256": "0baa2af6e7ec6bae8c75d9650c2f57fa6743ad9199643e9208766ec36d27a293",
+      "delivery_state": "Implementation and focused evidence fast-forward merged into local main; matrix identity entry appears in the following evidence-only commit.",
+      "push_status": "PENDING",
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "matrix_policy": "Historical top-level compiler_head and module-stage rows are unchanged. Resource exhaustion is not treated as semantic rejection; no current-source whole-module parse, executable artifact, Stage-1, or Stage-2 promotion is claimed."
     }
   },
-  "evidence_updated_at": "2026-10-10T08:34:32+00:00"
+  "evidence_updated_at": "2026-10-10T09:42:04Z"
 }
