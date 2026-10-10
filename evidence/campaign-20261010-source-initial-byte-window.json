@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.execution-efficiency-evidence/1",
+  "evidence_kind": "source_initial_window_page_local_fast_path",
+  "observed_at": "2026-10-10T03:51:01.198204+00:00",
+  "decision": "IMPLEMENTED_MEASURED_EFFICIENCY_GAIN",
+  "summary": "Resolve each token start window from its selected page in the existing lexer frame. The global page-table window routine remains the fallback for cross-page, short, missing, and malformed views.",
+  "identities": {
+    "baseline_compiler_source_identity_sha256": "be2a36ec870199a42a5ad0e92c71e015be903e1eccd914897df7412727b2723b",
+    "candidate_compiler_source_identity_sha256": "f4592c3c8fe044278001bbe4f4d22d610776916a3dec4d2e27f247b4673eebae",
+    "baseline_git_revision": "e05d3ede6a03fb2a02615771954fd2de8e641cb2",
+    "candidate_base_git_revision": "24b16cac69d2ea55e5b90273dd160593e1a5820c",
+    "candidate_tested_git_head": "24b16cac69d2ea55e5b90273dd160593e1a5820c",
+    "candidate_worktree_dirty": true,
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "measurement_backend": "reference_interpreter",
+    "module_source_sha256": {
+      "decl": {
+        "baseline_sha256": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f",
+        "candidate_sha256": "898ee151a5fc8842173b229d8b8ba65a4053deedfc26f82e1fb9c7a0f9ab697f"
+      },
+      "flow": {
+        "baseline_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "candidate_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "lexer": {
+        "baseline_sha256": "4ec7f174ba75c0c6bf47da015703493b87cf3e524c9713f2236b2a03ce7ef843",
+        "candidate_sha256": "79e6a783db9b21cc4f7766e5ebd7c15650251cb8c6739057549283938c503c74"
+      },
+      "parser": {
+        "baseline_sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "candidate_sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc"
+      },
+      "segment": {
+        "baseline_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "candidate_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+      },
+      "source": {
+        "baseline_sha256": "ac7dbf85aa919fdb48aa68b34f2974d1858cf60303ea287bd51e67cb8a06a1a1",
+        "candidate_sha256": "ac7dbf85aa919fdb48aa68b34f2974d1858cf60303ea287bd51e67cb8a06a1a1"
+      }
+    }
+  },
+  "workload": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "dependency_closure_module_count": 8,
+    "pages_at_width_1024": 899,
+    "baseline_source_bytes": 1345074,
+    "candidate_source_bytes": 1346103,
+    "step_budget": 200000,
+    "stage0_oracle": "skipped after target request to isolate bounded execution; separate CP-0001 differential tests were run",
+    "page_count_scope_note": "The 899 pages cover the six selected target-input modules; the full flow closure remains 894 pages in the historical matrix entry."
+  },
+  "warm_comparison": {
+    "cache_state": "program artifact cache hit for both baseline and candidate; same Stage-0 revision, backend, selected module stems, target operation, step budget, and measurement wrapper",
+    "baseline": {
+      "target_execution_ms": 36829.38276,
+      "whole_runner_wall_seconds": 40.054,
+      "probe_child_total_cpu_seconds": 37.75,
+      "probe_child_peak_sampled_rss_kib": 1756096,
+      "probe_child_peak_fd_count": 5,
+      "source_bytes": 1345074,
+      "global_window_calls": 181,
+      "global_window_exclusive_ms": 2741.322856,
+      "page_window_calls": 881,
+      "page_window_exclusive_ms": 370.258429,
+      "next_token_calls": 179,
+      "next_token_exclusive_ms": 11077.141558,
+      "cgroup_memory_events_delta": {
+        "sock_throttled": 0,
+        "high": 0,
+        "oom_group_kill": 0,
+        "low": 0,
+        "oom_kill": 0,
+        "max": 0,
+        "oom": 0
+      },
+      "probe_io": {
+        "rchar_bytes": 179902604,
+        "wchar_bytes": 151451107,
+        "read_bytes": 0,
+        "write_bytes": 28672,
+        "cancelled_write_bytes": 0
+      },
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "reported_steps": 200000
+    },
+    "candidate": {
+      "target_execution_ms": 34235.191395999995,
+      "whole_runner_wall_seconds": 37.552,
+      "probe_child_total_cpu_seconds": 35.14,
+      "probe_child_peak_sampled_rss_kib": 1757612,
+      "probe_child_peak_fd_count": 5,
+      "source_bytes": 1346103,
+      "global_window_calls": 2,
+      "global_window_exclusive_ms": 52.078498,
+      "page_window_calls": 1007,
+      "page_window_exclusive_ms": 424.398047,
+      "next_token_calls": 171,
+      "next_token_exclusive_ms": 11394.627251,
+      "cgroup_memory_events_delta": {
+        "low": 0,
+        "sock_throttled": 0,
+        "oom": 0,
+        "max": 0,
+        "high": 0,
+        "oom_kill": 0,
+        "oom_group_kill": 0
+      },
+      "probe_io": {
+        "rchar_bytes": 180007696,
+        "wchar_bytes": 151528107,
+        "read_bytes": 8441856,
+        "write_bytes": 28672,
+        "cancelled_write_bytes": 0
+      },
+      "classification": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "reported_steps": 200000
+    },
+    "delta": {
+      "target_execution_reduction_percent": 7.043808963362618,
+      "whole_runner_wall_reduction_percent": 6.2465671343686076,
+      "probe_child_cpu_reduction_percent": 6.9139072847682055,
+      "global_window_call_reduction_percent": 98.89502762430939,
+      "global_window_exclusive_reduction_percent": 98.10024208254002,
+      "candidate_rss_delta_kib": 1516,
+      "candidate_fd_delta": 0
+    },
+    "interpretation": "The target phase and sampled child CPU decreased on the matched warm runs while token-start global-window calls fell from nearly one per token to two total. The candidate input source set grew by 1029 bytes because it contains this implementation."
+  },
+  "cold_candidate_observation": {
+    "classification": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "whole_runner_wall_seconds": 196.76,
+    "front_end_specialization_ms": 151516.89043,
+    "target_execution_ms": 41857.17675,
+    "probe_child_total_cpu_seconds": 193.01,
+    "probe_child_peak_sampled_rss_kib": 2136172,
+    "probe_child_peak_fd_count": 5,
+    "rss_stop_cap_mib": 2300,
+    "rss_stop_cap_triggered": false,
+    "cgroup_memory_events_delta": {
+      "high": 0,
+      "oom": 0,
+      "low": 0,
+      "sock_throttled": 0,
+      "oom_group_kill": 0,
+      "max": 0,
+      "oom_kill": 0
+    },
+    "interpretation": "Cold specialization cost 151.5 seconds before the bounded target ran. The warm comparison above isolates target execution; no resource cap or OOM event occurred.",
+    "reported_steps": 200000
+  },
+  "differential_tests": {
+    "tier_b": {
+      "status": "SUCCESS",
+      "baseline_candidate_result_hashes_match": true,
+      "requests": 12691,
+      "tokens_compared": 39501,
+      "cases": 114,
+      "canonical_splits": 42,
+      "rejected_splits": 40,
+      "result_sha256": "2f7eb281a47795845950db95888072f56a73339c6fac58e81c0d72cf5ca7fcec"
+    },
+    "tier_c": {
+      "status": "SUCCESS",
+      "baseline_candidate_result_hashes_match": true,
+      "requests": 88,
+      "result_sha256": "64df239677d882e42cf9be6ad82336c9e993f3b173c42bc7c756f0182e1b0ea4",
+      "malformed_initial_windows": {
+        "empty_page_table": [
+          7,
+          0,
+          1,
+          3
+        ],
+        "empty_initial_page": [
+          7,
+          0,
+          1,
+          3
+        ],
+        "zero_stride": [
+          7,
+          0,
+          1,
+          3
+        ]
+      },
+      "existing_malformed_scan": [
+        3,
+        0,
+        8,
+        1
+      ]
+    },
+    "tier_a": "NOT_RERUN; the existing baseline random-soup mismatch remains recorded in the prior campaign evidence; this change makes no claim to resolve it."
+  },
+  "resource_unknowns": [
+    "The 200000-step bound is exhausted in both runs; the target returned no project result and compiler semantics remain UNKNOWN.",
+    "Parser/checker/proof/CFG/SSA semantic phase attribution remains UNKNOWN; function runtime profiles are not semantic stage evidence.",
+    "Hardware instruction count and per-function CPU remain UNKNOWN.",
+    "RSS is sampled at 0.5 second intervals; sub-sample peaks remain UNKNOWN."
+  ],
+  "stage1_claimed": false,
+  "module_stage_promotion": false,
+  "raw_artifacts": [
+    {
+      "path": ".worktrees/source-local-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-local-byte-window-200k-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 230747,
+      "sha256": "6c0bc8a344fc42eeca7feefdf54252b318ab83a6d369934adb7f00b8ad223f47"
+    },
+    {
+      "path": ".worktrees/source-local-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-local-byte-window-200k-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 8713,
+      "sha256": "f5303c252f6cd44ea5a6ece8a3337c602d478ccb12507cc10242feb1bc217969"
+    },
+    {
+      "path": ".worktrees/source-initial-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-initial-byte-window-200k-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 689009,
+      "sha256": "a31c3f3613700ccfd248c5cb1b6d82f52267dd397cbaeaa4e592e9272d1b16a3"
+    },
+    {
+      "path": ".worktrees/source-initial-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-initial-byte-window-200k-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 11383,
+      "sha256": "abdb64d56de2af8a39fa88722a02466ac2a347bec7b8e08325436add304a17d0"
+    },
+    {
+      "path": ".worktrees/source-initial-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-initial-byte-window-200k-warm-20261010-source-lexer-parser-segment-decl-flow-measurement.json",
+      "bytes": 224044,
+      "sha256": "be6b633ab767ec20d69111f4192a5d2b1e946be7e86c5bb9ad71150427bc1893"
+    },
+    {
+      "path": ".worktrees/source-initial-byte-window-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-source-initial-byte-window-200k-warm-20261010-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "bytes": 8769,
+      "sha256": "7dcecf2b79ca5b5a04e65a2a267de37bfbdd913bed782188e3f8bed5d8c9a598"
+    }
+  ],
+  "implementation": {
+    "changed_files": [
+      "src/compiler/lexer.mncs",
+      "tools/test_cp0001.py"
+    ],
+    "semantics_changed": false,
+    "fallback": "source.byte_window4_global remains authoritative for cross-page, short-view, and malformed-window cases; missing/empty initial page and zero-stride inputs retain the prior non-ASCII sentinel token."
+  }
+}

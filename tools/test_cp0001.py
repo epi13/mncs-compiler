@@ -748,6 +748,19 @@ def tier_c(probe, kinds_inv, stats):
                            (integer(total + 1),))
     assert (bad["kind"], bad["start"], bad["end"],
             bad["diagnostic"]) == (0, total, total, 4)
+    malformed_initials = [
+        ("empty-page-table", [], 16, 1),
+        ("empty-initial-page", [b""], 4, 1),
+        ("zero-stride", [b"x"], 0, 1),
+    ]
+    for name, pages, stride, claimed in malformed_initials:
+        token = probe.run_global(seg, "next_token_global", pages, stride,
+                                 claimed, (integer(0),))
+        assert (token["kind"], token["start"], token["end"],
+                token["diagnostic"]) == (7, 0, 1, 3), (name, token)
+        stats.setdefault("malformed_initial_windows", {})[name] = [
+            token["kind"], token["start"], token["end"], token["diagnostic"]
+        ]
     # A valid first page followed by a missing transported page stays total:
     # after the block scanner reaches that boundary, the page-local fast path
     # must fall back to global sentinels without indexing beyond pages.len.

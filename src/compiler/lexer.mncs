@@ -459,7 +459,25 @@ fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
     if start > total { return Token { kind: 0, start: total, end: total, diagnostic: 4 }; }
     if start == total { return Token { kind: 0, start: start, end: start, diagnostic: 0 }; }
-    let initial_window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, start);
+    // Resolve the first window from the selected page in this frame. Calling
+    // byte_window4_global here once per token still transported the full page
+    // table even after scan chunks had moved to page-local reads.
+    if stride == 0 || pages.len == 0 {
+        return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 };
+    }
+    let initial_address: source.GlobalPageAddress = source.global_page_address(stride, total, start);
+    if initial_address.page >= pages.len {
+        return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 };
+    }
+    let initial_page: [byte; up_to N] = pages[initial_address.page];
+    if initial_address.intra >= initial_page.len {
+        return Token { kind: 7, start: start, end: start + 1, diagnostic: 3 };
+    }
+    let initial_choice: source.ByteWindow4Choice = source.byte_window4_page<N>(initial_page, initial_address.page, initial_address, stride, total);
+    let initial_window: source.ByteWindow4 = match initial_choice {
+        Direct { window: local } => local,
+        GlobalFallback => source.byte_window4_global<P, N>(pages, stride, total, start)
+    };
     let a: u64 = initial_window.b0;
     let b: u64 = initial_window.b1;
     if a >= 128 {
