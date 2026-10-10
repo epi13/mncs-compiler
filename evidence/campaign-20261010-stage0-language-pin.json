@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.stage0-language-pin-campaign/1",
+  "observed_at": "2026-10-10T10:48:41Z",
+  "identity": {
+    "repository": "mncs-compiler",
+    "entry_delivered_main_revision": "8f19775c3fa499e17f5d7193e2df3fa33613b1a4",
+    "candidate_base_revision": "8f19775c3fa499e17f5d7193e2df3fa33613b1a4",
+    "tested_candidate_git_head": "8f19775c3fa499e17f5d7193e2df3fa33613b1a4",
+    "tested_candidate_branch": "campaign/stage0-language-pin-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "tested_candidate_change_scope": [
+      "mncs-language.lock.json"
+    ],
+    "tested_compiler_source_identity": {
+      "kind": "SHA-256 of ordered compiler module filenames and source bytes; filename ids sorted by byte value",
+      "sha256": "f14c5dcfae190500f9de215d5441751a7a511b6f9cfe69d9ad97c7a04e5596fe",
+      "selected_modules": [
+        "decl",
+        "flow",
+        "kernel",
+        "lexer",
+        "parser",
+        "project",
+        "segment",
+        "source",
+        "ssa"
+      ],
+      "module_source_sha256": {
+        "decl": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+        "lexer": "8f3471de48a295733a112b0b3cb043790a3265e70fe49bf517d433f28eecf385",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "project": "92ae7e8ec79b090ed74c99f7e9986a4a40429fe1ece7c12db72b652085d8b768",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "ssa": "27331dcc06c3c5a4bd6f9669598664f13f13ad587395af2ba85fae1372a9ca0e"
+      },
+      "src_compiler_git_tree": "7b38f4101f4f820b3eec4cb0a5cd77bdd472f672"
+    },
+    "previous_stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_repository": "https://github.com/epi13/mncs-language",
+    "stage0_source_resolution": "tools/bootstrap.sh archived the exact locked commit from MNCS_LANGUAGE_ROOT after git cat-file verified the commit"
+  },
+  "bootstrap": {
+    "command": "MNCS_LANGUAGE_ROOT=/home/epi13/Documents/Projects/mncs-language MNCS_BOOTSTRAP_TARGET_DIR=/tmp/mncs-compiler-stage0-language-pin-20261010/target bash tools/bootstrap.sh",
+    "status": "SUCCESS",
+    "stage0_revision_marker": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "release_builds": [
+      {
+        "artifact": "mncs-cli executable (target/release/mncs)",
+        "status": "SUCCESS",
+        "cargo_reported_build_seconds": 147,
+        "artifact_sha256": "851fadf8eb5ab5558ae44c280989dc139aeae5a14c8fcdb7f6a54226ea8db20e",
+        "artifact_bytes": 28698688
+      },
+      {
+        "artifact": "mncs-compiler-stage0-probe (target/release/mncs-compiler-stage0-probe)",
+        "status": "SUCCESS",
+        "cargo_reported_build_seconds": 128,
+        "artifact_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+        "artifact_bytes": 23765480
+      }
+    ],
+    "total_clean_release_build_seconds_approx": 275,
+    "target_directory": "/tmp/mncs-compiler-stage0-language-pin-20261010/target"
+  },
+  "verification": {
+    "pinned_language_model_test": {
+      "command": "CARGO_TARGET_DIR=/tmp/mncs-compiler-stage0-language-pin-20261010/target cargo test --manifest-path .bootstrap/Cargo.toml -p mncs-model body_call_reuses_only_same_typed_validated_parameters",
+      "status": "PASS",
+      "passed": 1,
+      "failed": 0,
+      "filtered": 222,
+      "test_execution_seconds": 0.0,
+      "cargo_compile_seconds": 23.22
+    },
+    "compiler_decl_provider_contract": {
+      "command": "PYTHONPATH=tools MNCS_BOOTSTRAP_TARGET_DIR=/tmp/mncs-compiler-stage0-language-pin-20261010/target MNCS_PROBE_BIN=/tmp/mncs-compiler-stage0-language-pin-20261010/target/release/mncs-compiler-stage0-probe python3 tools/test_decl_provider_body_retention.py",
+      "test_source_sha256": "0fdaaca6cc8b1d368d44d35a9edb020f5f4ccd3dca5535a5a4e44134dff4e385",
+      "status": "PASS",
+      "backend": "reference_interpreter",
+      "retained_native_sessions": 0,
+      "full_parse_steps": 46646,
+      "signature_parse_steps": 46649,
+      "function_signature_and_error_span_equal": true,
+      "malformed_provider_rejected": true,
+      "stage0_error_span_match": true,
+      "reported_wall_seconds_approx": 28.5
+    },
+    "compiler_project_provider_contract": {
+      "command": "PYTHONPATH=tools MNCS_BOOTSTRAP_TARGET_DIR=/tmp/mncs-compiler-stage0-language-pin-20261010/target MNCS_PROBE_BIN=/tmp/mncs-compiler-stage0-language-pin-20261010/target/release/mncs-compiler-stage0-probe python3 tools/test_project_provider_body_retention.py",
+      "test_source_sha256": "3395f1312568cdd2eb2c5cd01f580e4442c3b65c49ea91f7fb14d47eea1434ca",
+      "status": "PASS",
+      "backend": "reference_interpreter",
+      "retained_native_sessions": 0,
+      "stage0_imported_nominal_project_valid": true,
+      "provider_signature_identical": true,
+      "provider_body_statements": 8,
+      "retained_provider_body_statements": 0,
+      "target_body_statements": 8,
+      "whole_project_body_statements": 8,
+      "malformed_provider_body_rejected": true,
+      "diagnostic_span_match": true,
+      "executor_reported_steps": {
+        "provider": 116463,
+        "target": 116461,
+        "whole_project": 116461,
+        "malformed_provider": 37179
+      },
+      "executor_step_semantics": "UNKNOWN_EXECUTOR_SPECIFIC",
+      "wall_seconds": 111.68
+    }
+  },
+  "language_implementation_reference": {
+    "delivered_language_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "evidence_path": "../mncs-language/evidence/campaign-20261010-body-runtime-aggregate-validation-reuse.json",
+    "evidence_sha256": "a29867ff262b2b32dc724269073300967f346a504035e9c3e32d7204103b2acd",
+    "tested_language_source_sha256": "6091e1b8a22314642b54c1344487f2f093f2c39261e8d54c4f68ae6d7f65309f",
+    "same_compiler_frontier_revision": "8f19775c3fa499e17f5d7193e2df3fa33613b1a4",
+    "same_compiler_source_file_sha256": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+    "matched_reference_probe": true,
+    "measured_executor_median_improvement_percent": {
+      "2_pages": 16.8,
+      "4_pages": 19.4,
+      "8_pages": 25.4,
+      "16_pages": 29.1,
+      "32_pages": 33.4
+    },
+    "separate_one_page_followup": "effectively neutral; executor and request wall medians each changed by about 1 percent"
+  },
+  "resource_observation": {
+    "actual_probe_child_cpu_seconds": "UNKNOWN_NOT_SAMPLED",
+    "actual_probe_child_peak_rss": "UNKNOWN_NOT_SAMPLED",
+    "actual_probe_child_file_descriptor_peak": "UNKNOWN_NOT_SAMPLED",
+    "io_and_cgroup_pressure": "UNKNOWN_NOT_SAMPLED",
+    "resource_performance_claim": false
+  },
+  "succession_scope": {
+    "whole_flow_module_check_proof_cfg_verified_ssa": "NOT_RUN_BY_THIS_PIN_CAMPAIGN",
+    "compiler_executable_artifact": "NOT_ESTABLISHED",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "historical_module_matrix_rows_rewritten": false,
+    "semantics_changed_by_compiler_repository": false
+  },
+  "delivery": {
+    "status": "VERIFIED_CANDIDATE_PENDING_COMMIT",
+    "implementation_commit": null,
+    "delivered_main_revision": null
+  }
+}
