@@ -237,6 +237,71 @@ def test_probe_child_rss_cap_is_scoped_and_classified_as_resource_exhausted():
     assert measurement._operation_classification(None, runner) == "RESOURCE_EXHAUSTED"
 
 
+def test_custom_probe_executable_path_drives_resource_matching():
+    custom_executable = "/tmp/stage0-probe-custom-name"
+    records = {
+        100: {
+            "pid": 100,
+            "cmdline": "python3 measure_compiler_probe.py",
+            "max_rss_kib": 4_000_000,
+        },
+        101: {
+            "pid": 101,
+            "executable_path": custom_executable,
+            "cmdline": custom_executable,
+            "comm": "stage0-custom",
+            "start_time_ticks": 1200,
+            "max_rss_kib": 1_945_600,
+            "max_hwm_kib": 1_945_600,
+            "max_fd_count": 4,
+            "executable_sha256": "a" * 64,
+            "last_cpu_seconds": 8.0,
+            "last_cpu_user_seconds": 7.8,
+            "last_cpu_system_seconds": 0.2,
+            "last_io": {"rchar": 11, "wchar": 17, "read_bytes": 3, "write_bytes": 5},
+            "resource_samples": [],
+        },
+    }
+
+    assert measurement._probe_rss_peak_kib(records, custom_executable) == 1_945_600
+    assert measurement._rss_cap_state(records, 1900, custom_executable) == (
+        True, 1_945_600
+    )
+    summary = measurement._probe_resource_summary(records, custom_executable)
+    assert summary["probe_child_count_observed"] == 1
+    assert summary["probe_executable_identity_status"] == "OBSERVED"
+    assert summary["probe_executable_sha256"] == "a" * 64
+    assert summary["probe_max_fd_count"] == 4
+    assert summary["probe_last_cpu_seconds"] == 8.0
+    assert summary["probe_io_read_bytes"] == 3
+
+
+def test_probe_executable_identity_reports_conflicting_process_images():
+    executable = "/tmp/stage0-probe-custom-name"
+    records = {
+        pid: {
+            "pid": pid,
+            "executable_path": executable,
+            "cmdline": executable,
+            "executable_sha256": digest,
+            "max_rss_kib": 1024,
+            "max_hwm_kib": 1024,
+            "max_fd_count": 4,
+            "last_cpu_seconds": 1.0,
+            "last_cpu_user_seconds": 0.8,
+            "last_cpu_system_seconds": 0.2,
+            "last_io": {"rchar": 0, "wchar": 0, "read_bytes": 0, "write_bytes": 0},
+        }
+        for pid, digest in ((101, "a" * 64), (102, "b" * 64))
+    }
+
+    summary = measurement._probe_resource_summary(records, executable)
+
+    assert summary["probe_executable_identity_status"] == "CONFLICTING"
+    assert summary["probe_executable_sha256"] is None
+    assert summary["probe_executable_sha256s"] == ["a" * 64, "b" * 64]
+
+
 def test_probe_child_samples_keep_process_elapsed_resource_series(monkeypatch):
     sample = {
         "pid": 101,
@@ -257,6 +322,7 @@ def test_probe_child_samples_keep_process_elapsed_resource_series(monkeypatch):
         "io": {"rchar": 8192, "read_bytes": 0, "write_bytes": 16},
     }
     monkeypatch.setattr(measurement, "_proc_snapshot", lambda pid: sample)
+    monkeypatch.setattr(measurement, "_proc_executable_sha256", lambda pid: "b" * 64)
     monkeypatch.setattr(measurement.time, "monotonic", lambda: 12.5)
     monkeypatch.setattr(measurement, "TICKS_PER_SECOND", 100)
     records = {}
@@ -278,6 +344,8 @@ def test_probe_child_samples_keep_process_elapsed_resource_series(monkeypatch):
         "io": {"rchar": 8192, "read_bytes": 0, "write_bytes": 16},
     }]
     assert "CLOCK_MONOTONIC" in summary["probe_sample_clock"]
+    assert summary["probe_executable_identity_status"] == "OBSERVED"
+    assert summary["probe_executable_sha256"] == "b" * 64
 
 
 def test_probe_io_summary_keeps_read_and_write_bytes_separate():
@@ -395,6 +463,36 @@ def test_only_revalidated_isolated_probe_group_is_signaled(monkeypatch):
     assert sent == [(101, signal.SIGINT)]
     assert result[0]["outcome"] == "sent"
     assert result[1]["outcome"] == "identity_changed_or_not_isolated"
+
+
+def test_custom_probe_executable_path_is_used_when_signaling(monkeypatch):
+    custom_executable = "/tmp/stage0-probe-custom-name"
+    records = {
+        101: {
+            "pid": 101,
+            "cmdline": custom_executable,
+            "executable_path": custom_executable,
+            "process_group_id": 101,
+            "session_id": 101,
+            "start_time_ticks": 1234,
+        },
+    }
+    current = {
+        "start_time_ticks": 1234,
+        "executable_path": custom_executable,
+        "process_group_id": 101,
+        "session_id": 101,
+    }
+    sent = []
+    monkeypatch.setattr(measurement, "_proc_snapshot", lambda pid: current)
+    monkeypatch.setattr(measurement.os, "killpg", lambda pgid, sig: sent.append((pgid, sig)))
+
+    result = measurement._signal_verified_probe_children(
+        records, signal.SIGINT, custom_executable
+    )
+
+    assert sent == [(101, signal.SIGINT)]
+    assert result[0]["outcome"] == "sent"
 
 
 def test_phase_trace_keeps_valid_partial_events_and_hashes_raw_bytes(tmp_path):

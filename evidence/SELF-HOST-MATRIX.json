@@ -3248,9 +3248,53 @@
       "delivery_status": "MERGED_TO_LOCAL_MAIN_PENDING_REMOTE_VERIFICATION",
       "scope": "Exact Stage-0 pin update, clean pinned-source release bootstrap, and focused reference-interpreter compiler/provider checks. Existing whole-module stage evidence is retained unchanged.",
       "remote_push_status": "NOT_YET_ATTEMPTED"
+    },
+    "probe_executable_identity_campaign_20261010": {
+      "observed_at": "2026-10-10T11:39:41Z",
+      "candidate_base_revision": "7693b186fb9e15f5f839e7ed7f57e172404ee4bd",
+      "tested_candidate_git_head": "7693b186fb9e15f5f839e7ed7f57e172404ee4bd",
+      "tested_candidate_branch": "campaign/flow-stage0-pin-profile-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "delivered_compiler_source_identity_sha256": "61f2f38f15a59a61b466a8de63b62b8e1fd4042f380edc588a79a3e0037f2394",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+      "implementation_scope": [
+        "Match the configured probe executable by resolved path so resource sampling and RSS stops work with custom executable names.",
+        "Record the SHA-256 of the live /proc/<pid>/exe image with explicit observed/unknown/conflicting states.",
+        "Keep the compiler source fast-path experiment out of delivery after a matched warm run regressed."
+      ],
+      "flow_target": {
+        "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+        "backend": "reference_interpreter",
+        "selected_modules": ["source", "lexer", "parser", "segment", "decl", "flow"],
+        "step_budget": 500000,
+        "baseline_pages_for_six_selected_modules": 900,
+        "experimental_pages_for_six_selected_modules": 901,
+        "baseline_warm_wall_seconds": 46.511,
+        "experimental_warm_wall_seconds": 51.545,
+        "baseline_warm_child_cpu_seconds": 44.31,
+        "experimental_warm_child_cpu_seconds": 49.31,
+        "baseline_warm_peak_rss_kib": 1752144,
+        "experimental_warm_peak_rss_kib": 1752696,
+        "peak_file_descriptors": 5,
+        "target_status": "budget_exhausted",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "cgroup_oom_event_delta": 0,
+        "source_fast_path_delivery": "REJECTED_FOR_DELIVERY"
+      },
+      "evidence_artifact": "evidence/campaign-20261010-probe-executable-identity.json",
+      "evidence_artifact_sha256": "0eca5eb1355709677b4a8d4c6029df4437eb31fa157b78b49244bed85baaed60",
+      "measurement_tool_sha256": "2d031245a44c40d3c9c3554e20211540320370b91d9b162a92b9bc697d74b914",
+      "contract_test_sha256": "9a7c172abe991fdb439ae98fa825ffe53f8454e300f9864e818fbb99e2d3b602",
+      "contract_tests": "25 passed",
+      "environment_store_status": "Verified generation 43011; canonical publication-lock open remains blocked by the read-only /home mount with Errno 30. No checkpoint or claim release was recorded.",
+      "matrix_policy": "Historical module-stage rows and the separate 894-page flow project-closure evidence remain unchanged. A 500000-step budget result is operational RESOURCE_EXHAUSTED with semantic outcome UNKNOWN; it is not compiler rejection or Stage-1/Stage-2 evidence.",
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "delivery_state": "Implementation and evidence staged for normal Git delivery; current main/remote revision will be recorded in a delivery follow-up."
     }
   },
-  "evidence_updated_at": "2026-10-10T10:49:33Z",
+  "evidence_updated_at": "2026-10-10T11:39:41Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }

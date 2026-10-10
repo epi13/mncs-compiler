@@ -14,6 +14,7 @@ import json
 import hashlib
 import os
 import re
+import shlex
 import signal
 import subprocess
 import sys
@@ -35,6 +36,40 @@ def _read_text(path: Path) -> str | None:
         return path.read_text()
     except (OSError, ProcessLookupError):
         return None
+
+
+def _resolved_executable_path(value: str, root: Path = ROOT) -> str:
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    return str(path.resolve(strict=False))
+
+
+def _is_probe_process(
+    row: dict[str, object], expected_probe_executable: str | None = None
+) -> bool:
+    """Identify the actual probe executable, including caller-selected paths."""
+    if expected_probe_executable is not None:
+        expected = _resolved_executable_path(expected_probe_executable)
+        executable_path = row.get("executable_path")
+        if isinstance(executable_path, str) and _resolved_executable_path(executable_path) == expected:
+            return True
+        try:
+            command = shlex.split(str(row.get("cmdline", "")))
+        except ValueError:
+            command = []
+        return bool(command) and _resolved_executable_path(command[0]) == expected
+
+    executable_path = row.get("executable_path")
+    if isinstance(executable_path, str) and Path(executable_path).name == "mncs-compiler-stage0-probe":
+        return True
+    if row.get("comm") == "mncs-compiler-stage0-probe":
+        return True
+    try:
+        command = shlex.split(str(row.get("cmdline", "")))
+    except ValueError:
+        command = []
+    return bool(command) and Path(command[0]).name == "mncs-compiler-stage0-probe"
 
 
 def _proc_snapshot(pid: int) -> dict[str, object] | None:
@@ -112,6 +147,18 @@ def _proc_snapshot(pid: int) -> dict[str, object] | None:
         "cpu_system_seconds": cpu_system_seconds,
         "io": io,
     }
+
+
+def _proc_executable_sha256(pid: int) -> str | None:
+    """Hash the executable image opened by one live process, once per PID."""
+    try:
+        digest = hashlib.sha256()
+        with (Path("/proc") / str(pid) / "exe").open("rb") as executable:
+            for block in iter(lambda: executable.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+    except OSError:
+        return None
 
 
 def _kib(value: str | None) -> int | None:
@@ -198,7 +245,11 @@ def _cgroup_snapshot(directory: Path | None) -> dict[str, object]:
     }
 
 
-def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
+def _record_sample(
+    records: dict[int, dict[str, object]],
+    pid: int,
+    expected_probe_executable: str | None = None,
+) -> None:
     sample = _proc_snapshot(pid)
     if sample is None:
         return
@@ -236,7 +287,12 @@ def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
     current["last_hwm_kib"] = sample["hwm_kib"]
     current["last_swap_kib"] = sample["swap_kib"]
     current["last_fd_count"] = sample["fd_count"]
-    if "mncs-compiler-stage0-probe" in str(current.get("cmdline", "")):
+    if _is_probe_process(current, expected_probe_executable):
+        if "executable_sha256" not in current:
+            current["executable_sha256"] = _proc_executable_sha256(pid)
+            current["executable_sha256_status"] = (
+                "OBSERVED" if current["executable_sha256"] is not None else "UNKNOWN"
+            )
         start_ticks = int(sample["start_time_ticks"])
         elapsed_ms = max(
             0.0,
@@ -255,9 +311,12 @@ def _record_sample(records: dict[int, dict[str, object]], pid: int) -> None:
         })
 
 
-def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, object]:
+def _probe_resource_summary(
+    records: dict[int, dict[str, object]],
+    expected_probe_executable: str | None = None,
+) -> dict[str, object]:
     rows = list(records.values())
-    probe_rows = [row for row in rows if "mncs-compiler-stage0-probe" in str(row.get("cmdline", ""))]
+    probe_rows = [row for row in rows if _is_probe_process(row, expected_probe_executable)]
 
     def last_io_value(row: dict[str, object], field: str) -> int | None:
         latest = row.get("last_io")
@@ -301,11 +360,29 @@ def _probe_resource_summary(records: dict[int, dict[str, object]]) -> dict[str, 
         if isinstance(sample, dict)
     ]
     probe_samples.sort(key=lambda sample: (int(sample["start_time_ticks"]), float(sample["elapsed_ms"])))
+    executable_hashes = sorted({
+        str(row["executable_sha256"])
+        for row in probe_rows
+        if isinstance(row.get("executable_sha256"), str)
+    })
+    executable_identity_status = (
+        "UNKNOWN" if not probe_rows or any(
+            not isinstance(row.get("executable_sha256"), str)
+            for row in probe_rows
+        )
+        else "OBSERVED" if len(executable_hashes) == 1
+        else "CONFLICTING"
+    )
     return {
         "processes": sorted(rows, key=lambda row: int(row["pid"])),
         "probe_sample_clock": "elapsed_ms is CLOCK_MONOTONIC minus /proc stat start ticks; phase traces use process elapsed from Rust Instant and align within kernel tick resolution plus the configured sampling interval",
         "probe_samples": probe_samples,
         "probe_child_count_observed": len(probe_rows),
+        "probe_executable_identity_status": executable_identity_status,
+        "probe_executable_sha256": (
+            executable_hashes[0] if executable_identity_status == "OBSERVED" else None
+        ),
+        "probe_executable_sha256s": executable_hashes,
         "probe_max_sampled_rss_kib": max((int(row["max_rss_kib"]) for row in probe_rows), default=None),
         "probe_max_observed_hwm_kib": max((int(row["max_hwm_kib"]) for row in probe_rows), default=None),
         "probe_max_fd_count": max((int(row["max_fd_count"]) for row in probe_rows), default=None),
@@ -347,26 +424,30 @@ def _cgroup_delta(before: dict[str, object], after: dict[str, object]) -> dict[s
     }
 
 
-def _probe_rss_peak_kib(records: dict[int, dict[str, object]]) -> int | None:
+def _probe_rss_peak_kib(
+    records: dict[int, dict[str, object]],
+    expected_probe_executable: str | None = None,
+) -> int | None:
     """Return the sampled high-water RSS of the actual compiler probe child."""
     values = [
         int(row["max_rss_kib"])
         for row in records.values()
-        if "mncs-compiler-stage0-probe" in str(row.get("cmdline", ""))
+        if _is_probe_process(row, expected_probe_executable)
         and isinstance(row.get("max_rss_kib"), int)
     ]
     return max(values) if values else None
 
 
 def _signal_verified_probe_children(
-    records: dict[int, dict[str, object]], signal_number: int
+    records: dict[int, dict[str, object]],
+    signal_number: int,
+    expected_probe_executable: str | None = None,
 ) -> list[dict[str, object]]:
     """Signal only isolated probe groups whose sampled PID identity still matches."""
     outcomes: list[dict[str, object]] = []
     signaled_groups: set[int] = set()
     for row in records.values():
-        cmdline = str(row.get("cmdline", ""))
-        if "mncs-compiler-stage0-probe" not in cmdline:
+        if not _is_probe_process(row, expected_probe_executable):
             continue
         pid = row.get("pid")
         pgid = row.get("process_group_id")
@@ -424,10 +505,13 @@ def _stop_probe_children(
     records: dict[int, dict[str, object]],
     *,
     grace_seconds: float = 5.0,
+    expected_probe_executable: str | None = None,
 ) -> dict[str, object]:
     """Interrupt probe children, escalating only after revalidating their identity."""
     result: dict[str, object] = {
-        "interrupt_targets": _signal_verified_probe_children(records, signal.SIGINT),
+        "interrupt_targets": _signal_verified_probe_children(
+            records, signal.SIGINT, expected_probe_executable
+        ),
         "kill_targets": [],
         "parent_interrupt_sent": False,
         "parent_kill_sent": False,
@@ -438,7 +522,9 @@ def _stop_probe_children(
     except subprocess.TimeoutExpired:
         pass
 
-    result["kill_targets"] = _signal_verified_probe_children(records, signal.SIGKILL)
+    result["kill_targets"] = _signal_verified_probe_children(
+        records, signal.SIGKILL, expected_probe_executable
+    )
     try:
         proc.wait(timeout=grace_seconds)
         return result
@@ -553,10 +639,12 @@ def _incomplete_phases_at_stop(
 
 
 def _rss_cap_state(
-    records: dict[int, dict[str, object]], limit_mib: int | None
+    records: dict[int, dict[str, object]],
+    limit_mib: int | None,
+    expected_probe_executable: str | None = None,
 ) -> tuple[bool, int | None]:
     """Compare the compiler-child RSS sample with a declared stop threshold."""
-    peak_kib = _probe_rss_peak_kib(records)
+    peak_kib = _probe_rss_peak_kib(records, expected_probe_executable)
     return (
         limit_mib is not None and peak_kib is not None and peak_kib >= limit_mib * 1024,
         peak_kib,
@@ -826,6 +914,17 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         else "working_tree"
     )
     env.setdefault("MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT", str(toolchain_identity_root))
+    configured_probe_executable = env.get("MNCS_PROBE_BIN")
+    if configured_probe_executable is None:
+        bootstrap_target = Path(
+            env.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target")
+        )
+        if not bootstrap_target.is_absolute():
+            bootstrap_target = ROOT / bootstrap_target
+        configured_probe_executable = str(
+            bootstrap_target / "release" / "mncs-compiler-stage0-probe"
+        )
+    expected_probe_executable = _resolved_executable_path(configured_probe_executable)
     env["MNCS_PROBE_BACKEND"] = args.backend
     env["MNCS_PROBE_TELEMETRY"] = "1"
     env["MNCS_PROBE_TRACE_PATH"] = str(trace_path)
@@ -884,26 +983,36 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         termination_actions: dict[str, object] | None = None
         while proc.poll() is None:
             for pid in [proc.pid, *_descendants(proc.pid)]:
-                _record_sample(records, pid)
-                if cgroup_dir is None and "mncs-compiler-stage0-probe" in str((records.get(pid) or {}).get("cmdline", "")):
+                _record_sample(records, pid, expected_probe_executable)
+                if cgroup_dir is None and _is_probe_process(
+                    records.get(pid) or {}, expected_probe_executable
+                ):
                     cgroup_dir = _cgroup_path(pid)
             if args.max_probe_rss_mib is not None:
-                reached_cap, rss_peak_kib = _rss_cap_state(records, args.max_probe_rss_mib)
+                reached_cap, rss_peak_kib = _rss_cap_state(
+                    records, args.max_probe_rss_mib, expected_probe_executable
+                )
                 if reached_cap:
                     rss_cap_triggered = True
                     rss_cap_triggered_at_seconds = time.monotonic() - started
                     rss_cap_observed_kib = rss_peak_kib
-                    termination_actions = _stop_probe_children(proc, records)
+                    termination_actions = _stop_probe_children(
+                        proc, records,
+                        expected_probe_executable=expected_probe_executable,
+                    )
                     break
             if time.monotonic() >= deadline:
                 timed_out = True
-                termination_actions = _stop_probe_children(proc, records)
+                termination_actions = _stop_probe_children(
+                    proc, records,
+                    expected_probe_executable=expected_probe_executable,
+                )
                 break
             time.sleep(args.sample_seconds)
         returncode = proc.wait()
         elapsed = time.monotonic() - started
         for pid in [proc.pid, *_descendants(proc.pid)]:
-            _record_sample(records, pid)
+            _record_sample(records, pid, expected_probe_executable)
         stdout_file.seek(0)
         stderr_file.seek(0)
         stdout = stdout_file.read().decode("utf-8", errors="replace")
@@ -936,7 +1045,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         else "measurement_timeout" if timed_out
         else "probe_returned_or_child_terminated"
     )
-    resource_observation = _probe_resource_summary(records)
+    resource_observation = _probe_resource_summary(records, expected_probe_executable)
     incomplete_phases = _incomplete_phases_at_stop(
         phase_events, resource_observation, measurement_stop_cause
     )
@@ -988,7 +1097,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "an exit signal alone does not identify OOM; cgroup deltas and process termination evidence are reported separately",
     ]
     result = {
-        "schema": "mncs-compiler.probe-resource-measurement/4",
+        "schema": "mncs-compiler.probe-resource-measurement/5",
         "label": label,
         "command": command,
         "backend_cli_argument": args.backend,
@@ -1003,6 +1112,7 @@ def run(args: argparse.Namespace) -> dict[str, object]:
         "signature_cache_fixture": args.signature_cache_fixture,
         "step_budget": args.step_budget if args.step_budget is not None else 8_000_000,
         "runtime_profile_enabled": bool(env.get("MNCS_RUNTIME_PROFILE")),
+        "probe_executable_path": expected_probe_executable,
         "probe_cache_directory": env.get("MNCS_PROBE_CACHE_DIR") or None,
         "probe_cache_directory_scope": cache_directory_scope,
         "probe_toolchain_identity_root": env.get("MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT") or None,
@@ -1017,7 +1127,9 @@ def run(args: argparse.Namespace) -> dict[str, object]:
             "kind": "sampled_probe_child_rss",
             "limit_mib": args.max_probe_rss_mib,
             "observed_at_trigger_kib": rss_cap_observed_kib,
-            "final_sampled_peak_kib": _probe_rss_peak_kib(records),
+            "final_sampled_peak_kib": _probe_rss_peak_kib(
+                records, expected_probe_executable
+            ),
             "triggered": rss_cap_triggered,
             "triggered_at_seconds": (round(rss_cap_triggered_at_seconds, 3)
                                       if rss_cap_triggered_at_seconds is not None else None),

@@ -1,0 +1,213 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "probe-executable-identity-and-flow-frontier",
+  "observed_at": "2026-10-10T11:39:41Z",
+  "compiler": {
+    "candidate_base_revision": "7693b186fb9e15f5f839e7ed7f57e172404ee4bd",
+    "tested_candidate_git_head": "7693b186fb9e15f5f839e7ed7f57e172404ee4bd",
+    "tested_candidate_branch": "campaign/flow-stage0-pin-profile-20261010",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "delivered_compiler_source_identity_sha256": "61f2f38f15a59a61b466a8de63b62b8e1fd4042f380edc588a79a3e0037f2394",
+    "selected_modules": ["source", "lexer", "parser", "segment", "decl", "flow"],
+    "historical_flow_closure": {
+      "pages_at_width_1024": 894,
+      "stage0_linked_functions": 1324,
+      "stage0_ssa_functions": 376,
+      "note": "The 894-page project-closure evidence remains bound to its recorded source identity. Probe-reported 900/901-page counts below describe the selected six compiler input modules, not that historical closure."
+    },
+    "stage_matrix": {
+      "complete_native_parse_check_proof_cfg_verified_ssa": ["segment", "parser", "source", "lexer", "kernel"],
+      "whole_module_parse_and_signature_only": ["decl", "flow", "ssa", "project"],
+      "stage1_executable": false,
+      "stage2_succession": false
+    }
+  },
+  "flow_target_measurement": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "backend": "reference_interpreter",
+    "stage0_admission_modules": ["source", "lexer", "parser", "segment", "decl", "flow", "ssa", "project"],
+    "target_last": true,
+    "stage0_oracle_skipped": true,
+    "step_budget": 500000,
+    "resource_stop_threshold_mib": 1900,
+    "resource_stop_triggered": false,
+    "baseline_warm_unprofiled": {
+      "compiler_source_identity_sha256": "61f2f38f15a59a61b466a8de63b62b8e1fd4042f380edc588a79a3e0037f2394",
+      "selected_compiler_input_pages_at_width_1024": 900,
+      "wall_seconds": 46.511,
+      "child_cpu_seconds": 44.31,
+      "child_peak_rss_kib": 1752144,
+      "child_peak_file_descriptors": 5,
+      "target_execution_ms": 43322.231,
+      "target_status": "budget_exhausted",
+      "steps": 500000,
+      "transport": "RESPONSE_RECEIVED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "cgroup_oom_event_delta": 0,
+      "measurement_sha256": "d1c7c3cb108d0c429107472d11f838d2841bcbb98cdefa2bd685cdde19ff313b"
+    },
+    "experimental_local_window_warm_unprofiled": {
+      "compiler_source_identity_sha256": "9771257d1f9723ae958b19a786ae6bce7d8120396c4c93e601fe2b6241b45bf3",
+      "selected_compiler_input_pages_at_width_1024": 901,
+      "wall_seconds": 51.545,
+      "child_cpu_seconds": 49.31,
+      "child_peak_rss_kib": 1752696,
+      "child_peak_file_descriptors": 5,
+      "target_execution_ms": 48470.534,
+      "target_status": "budget_exhausted",
+      "steps": 500000,
+      "transport": "RESPONSE_RECEIVED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "cgroup_oom_event_delta": 0,
+      "measurement_sha256": "e442192efe566cabdd8329efe7a8b2aa8bd86ec6bd9a96676a8113f552c7746e"
+    },
+    "experimental_change_decision": {
+      "change": "Add byte_window4_local_page and call it from initial and loop lexer fast paths after global page resolution.",
+      "diagnostic_profile_enabled_run": {
+        "wall_seconds": 119.306,
+        "child_cpu_seconds": 116.01,
+        "child_peak_rss_kib": 1851032,
+        "child_peak_file_descriptors": 5,
+        "target_execution_ms": 65302.608,
+        "target_status": "budget_exhausted",
+        "steps": 500000,
+        "cgroup_oom_event_delta": 0,
+        "measurement_sha256": "d456cab487a652aba10ee06b05cd69b70e48a24ba82504af57204881fc42b7a0"
+      },
+      "result": "REJECTED_FOR_DELIVERY",
+      "reason": "The matched warm unprofiled candidate increased wall time by 10.7% and child CPU by 11.3%; peak RSS changed by only 552 KiB. The source and test changes were reverted. This run reached the explicit step budget and did not return compiler semantics.",
+      "candidate_semantic_checks": {
+        "tier_a": {"result": "PASS", "cases": 18, "result_sha256": "6cc9a7d218cef751f82f8110fdfbee6a0c0e37fc98b8a1e7a856783d90df7382"},
+        "tier_c": {"result": "PASS", "requests": 69, "result_sha256": "5d010ad74f2159672a635f173bf4e7d17b0bbd1dee4c21648556449954ac4384"},
+        "scope": "Experimental source snapshot only; no source fast-path change is delivered."
+      }
+    },
+    "warm_profile_control": {
+      "baseline_unprofiled_wall_seconds": 46.511,
+      "baseline_profiled_wall_seconds": 46.513,
+      "baseline_unprofiled_child_cpu_seconds": 44.31,
+      "baseline_profiled_child_cpu_seconds": 44.31,
+      "interpretation": "The profiler added negligible overhead on the unchanged baseline for this bounded run."
+    },
+    "profile_hot_functions_steps": {
+      "baseline": [
+        {"function": "source.byte_window4_page", "steps": 159725, "calls": 2710},
+        {"function": "lexer.next_token_global", "steps": 112979, "calls": 507},
+        {"function": "lexer.scan_chunk_window", "steps": 96439, "calls": 2202}
+      ],
+      "experimental_candidate": [
+        {"function": "lexer.next_token_global", "steps": 143512, "calls": 603},
+        {"function": "lexer.scan_chunk_window", "steps": 102499, "calls": 2353},
+        {"function": "source.byte_window4_local_page", "steps": 100392, "calls": 2956}
+      ],
+      "scope_note": "Runtime step attribution is available; per-function CPU and hardware instruction counts remain UNKNOWN."
+    },
+    "phase_observations": {
+      "baseline_warm_cache_decode_ms": 594.4,
+      "experimental_warm_cache_decode_ms": 594.4,
+      "experimental_cold_frontend_elaboration_ms": 50680.0,
+      "experimental_cold_program_artifact_uncompressed_bytes": 151595879,
+      "experimental_cold_program_artifact_compressed_bytes": 5313595,
+      "experimental_warm_target_request_decode_ms": 417.153,
+      "parser_checker_proof_cfg_ssa_semantic_phase_labels": "UNKNOWN"
+    },
+    "raw_measurements": [
+      {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-e8-warm-unprofiled-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "d1c7c3cb108d0c429107472d11f838d2841bcbb98cdefa2bd685cdde19ff313b"},
+      {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-e8-runtime-profile-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "9ae3e945baed4f905c1498f4b6bbcff4fe023ed4e553324e13c3fb93e14f6b92"},
+      {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-source-window-candidate-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "d456cab487a652aba10ee06b05cd69b70e48a24ba82504af57204881fc42b7a0"},
+      {"path": ".build/campaign-artifacts/compiler-facts/compiler-probe-campaign-20261010-flow-source-window-candidate-warm-unprofiled-source-lexer-parser-segment-decl-flow-measurement.json", "sha256": "e442192efe566cabdd8329efe7a8b2aa8bd86ec6bd9a96676a8113f552c7746e"}
+    ]
+  },
+  "measurement_tool_change": {
+    "schema": "mncs-compiler.probe-resource-measurement/5",
+    "files": ["tools/measure_compiler_probe.py", "tools/test_measure_compiler_probe.py"],
+    "behavior": [
+      "Match the configured probe executable by resolved path rather than relying on its process-name substring.",
+      "Apply resource sampling, RSS stop checks, and cancellation only to that identified executable.",
+      "Hash /proc/<pid>/exe once for each identified live probe child and report OBSERVED, UNKNOWN, or CONFLICTING identity."
+    ],
+    "validated_custom_executable_path": "/tmp/mncs-compiler-stage0-e8-stage0-probe-20261010",
+    "observed_child_executable_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "python_source_sha256": "2d031245a44c40d3c9c3554e20211540320370b91d9b162a92b9bc697d74b914",
+    "contract_test_source_sha256": "9a7c172abe991fdb439ae98fa825ffe53f8454e300f9864e818fbb99e2d3b602"
+  },
+  "verification": {
+    "python_compile": "PASS",
+    "focused_contract_tests": {"command": "python3 -m pytest -q tools/test_measure_compiler_probe.py", "passed": 25, "failed": 0},
+    "git_diff_check": "PASS",
+    "broad_regression": "NOT_RUN",
+    "compiler_stage_promotion": false
+  },
+  "environment_continuity": {
+    "session_id": "ses_d2537acde8b8a875",
+    "consumer_id": "luna-compiler-self-consumption-admission-20261009",
+    "live_claims": [
+      {"identity": "clm_5871ad9917e5210d", "repository": "mncs-compiler", "live": true},
+      {"identity": "clm_0a8ed881f6356df2", "repository": "mncs-language", "live": true}
+    ],
+    "write_authority_for_compiler": "ALLOW by active repository claim",
+    "store": {
+      "canonical_root": "/home/epi13/.local/share/mncs-environment/store",
+      "verify": "PASS",
+      "generation": 43011,
+      "objects": 43011,
+      "recovery": "RECOVERED_OLD",
+      "publication_lock_open_error": "Errno 30: Read-only file system",
+      "implementation": "mncs-store/python/mncs_store/embedded.py opens publication.lock with O_CREAT|O_RDWR before flock.",
+      "backing_mount": "/home is Btrfs ro; the Projects workspace is a separate rw submount.",
+      "lock_owner_uid_gid_mode": "1000:1000 0600",
+      "interpretation": "The lock open fails at the read-only backing mount boundary before flock. Unix ownership permits the session user; Store verification passed. No alternate Store, lock removal, remount, or policy change was used."
+    },
+    "continuity_actions": {
+      "resume_or_checkpoint": "NOT_COMPLETED because canonical Store mutation is denied by EROFS",
+      "claim_release": "NOT_ATTEMPTED; claims remain live with this session",
+      "publication_readback_and_cas": "NOT_RUN because the canonical Store cannot open its write lock"
+    },
+    "live_readiness_at": "2026-10-10T11:39:41Z",
+    "provider_revisions_and_artifacts": {
+      "mncs_compiler": {
+        "working_main_revision": "7693b186fb9e15f5f839e7ed7f57e172404ee4bd",
+        "environment_selected_revision": "4d957194d967952fd26411807f3862fa1cacb83c",
+        "selected_probe_artifact_sha256": "4ceec87b2b975ce0e84c750f1168aca9bd90a7a047f013576ac2e6f4e98c7f74",
+        "state": "stale selection; live source head differs"
+      },
+      "mncs_language": {
+        "working_main_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "environment_selected_revision": "3c3ba97e20504936d580e21b255584fd674cd48e",
+        "selected_cli_sha256": "88676fb9d5e8c828e75774993402a179bc7ec353bca5f647b10857637f28d683",
+        "state": "stale selected checkout and CLI"
+      },
+      "mncs_vm": {
+        "working_main_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "selected_vm_sha256": "2209c9b72d5bceb6bd9002ca7845dbca4eee43f23907f5720f6542ba95d6f428",
+        "state": "selected runtime checkout matches observed main"
+      },
+      "mncs_stdlib": {
+        "working_main_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+        "environment_binding": "UNKNOWN; no selected stdlib executable binding was exposed by the live execution composition"
+      },
+      "mncs_language_service": {
+        "working_main_revision": "40257bbf9b63f802ad55821c7e62eb305afb04fc",
+        "selected_host_sha256": "8149316c56247f6c75ad3dd0ad051a551fee2f2dacf65628696a43c0bad634ed",
+        "selected_toolchain_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "resident_socket_connect": "EPERM"
+      },
+      "mncs_forge": {"working_main_revision": "cc2516f073d47739d74e68266d97fd090c53da16", "resident_state": "unavailable because the Language Service input is not ready"},
+      "mncs_automation": {"working_main_revision": "b28781a2840e4aba90648e7b109474a35c184757", "resource_scheduling_loop": "not exercised"}
+    },
+    "live_blockers": [
+      "mncs-doctor:compiler-vm-coherence; the Doctor probe fails creating its Store-backed .prepare.lock with Errno 30",
+      "mncs-language-service:resident-workspace; AF_UNIX socket connect is denied with EPERM",
+      "selected-checkout-drift:mncs-compiler and mncs-language; last reconciliation remains 2026-10-09T18:14:19Z",
+      "mncs-forge:resident-workspace unavailable because its Language Service input is not ready"
+    ],
+    "resource_scheduling_loop": "NOT_ESTABLISHED"
+  },
+  "delivery_policy": {
+    "matrix_module_rows_changed": false,
+    "historical_evidence_rewritten": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
