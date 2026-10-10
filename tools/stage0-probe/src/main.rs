@@ -116,6 +116,57 @@ fn trace_phase(phase: &str, started: Instant, details: Value) {
     trace_event(Value::Object(fields));
 }
 
+fn trace_mncs_function_execution(
+    started: Instant,
+    executor: &str,
+    backend: Option<&str>,
+    request: &ExecutionRequest,
+    status: mncs_model::ExecutionStatus,
+    steps: u64,
+    retained_session_reused: bool,
+) {
+    let reported_steps_semantics = match backend {
+        Some("research-bytecode") => "research-bytecode execution budget units",
+        Some("canonical-vm") => "canonical VM reported steps",
+        Some("cranelift") => "not an instruction-count metric",
+        Some(_) => "backend-specific; UNKNOWN",
+        None => "reference body-executor steps",
+    };
+    trace_phase(
+        "mncs_function_execution",
+        started,
+        json!({
+            "executor": executor,
+            "backend": backend,
+            "target_module": request.target.module,
+            "target_function": request.target.function,
+            "step_budget": request.step_budget,
+            "reported_steps": steps,
+            "reported_status": serde_json::to_value(status).unwrap_or(Value::Null),
+            "reported_steps_semantics": reported_steps_semantics,
+            "retained_session_reused": retained_session_reused
+        }),
+    );
+}
+
+fn trace_mncs_function_execution_begin(
+    executor: &str,
+    backend: Option<&str>,
+    request: &ExecutionRequest,
+    retained_session_reused: bool,
+) {
+    trace_event(json!({
+        "event": "phase_begin",
+        "phase": "mncs_function_execution",
+        "executor": executor,
+        "backend": backend,
+        "target_module": request.target.module,
+        "target_function": request.target.function,
+        "step_budget": request.step_budget,
+        "retained_session_reused": retained_session_reused
+    }));
+}
+
 fn backend_probe_emissions() -> BTreeSet<ArtifactRepresentation> {
     // This probe consumes only the executable backend artifact. The compiler
     // still performs its semantic, HIR, SSA, and lowering work, but retaining
@@ -1487,18 +1538,99 @@ fn main() {
                 .and_then(|program| program.lower_to_ssa().ok());
             json!({"diagnostics": result.diagnostics, "ssa": ssa})
         } else {
+            let request_decode_started = Instant::now();
+            trace_event(json!({
+                "event": "phase_begin",
+                "phase": "execution_request_decode",
+                "request_bytes": line.len(),
+                "target_module": request_module,
+                "target_function": request_function
+            }));
             let request: ExecutionRequest = serde_json::from_value(input).unwrap();
+            trace_phase(
+                "execution_request_decode",
+                request_decode_started,
+                json!({
+                    "target_module": request.target.module,
+                    "target_function": request.target.function,
+                    "argument_count": request.arguments.len(),
+                    "type_argument_count": request.type_arguments.len()
+                }),
+            );
             if let Some(session) = backend_sessions.get(&request.target.module) {
-                json!(session.execute(&request))
+                let execution_started = Instant::now();
+                trace_mncs_function_execution_begin(
+                    "backend_session",
+                    backend_name.as_deref(),
+                    &request,
+                    true,
+                );
+                let result = session.execute(&request);
+                trace_mncs_function_execution(
+                    execution_started,
+                    "backend_session",
+                    backend_name.as_deref(),
+                    &request,
+                    result.status,
+                    result.steps,
+                    true,
+                );
+                json!(result)
             } else if let Some(session) = sessions.get(&request.target.module) {
-                json!(session.execute(&request))
+                let execution_started = Instant::now();
+                trace_mncs_function_execution_begin("reference_body_session", None, &request, true);
+                let result = session.execute(&request);
+                trace_mncs_function_execution(
+                    execution_started,
+                    "reference_body_session",
+                    None,
+                    &request,
+                    result.status,
+                    result.steps,
+                    true,
+                );
+                json!(result)
             } else {
                 let module = request.target.module.clone();
                 let program = programs
                     .get(&module)
                     .unwrap_or_else(|| panic!("no retained backend or program for {module}"));
-                sessions.insert(module.clone(), BodyExecutionSession::new(program));
-                json!(sessions[&module].execute(&request))
+                let session_preparation_started = Instant::now();
+                trace_event(json!({
+                    "event": "phase_begin",
+                    "phase": "reference_execution_session_preparation",
+                    "target_module": module.as_str(),
+                    "target_function": request.target.function.as_str()
+                }));
+                let session = BodyExecutionSession::new(program);
+                trace_phase(
+                    "reference_execution_session_preparation",
+                    session_preparation_started,
+                    json!({
+                        "target_module": module.as_str(),
+                        "target_function": request.target.function.as_str(),
+                        "program_function_count": program.functions.len()
+                    }),
+                );
+                sessions.insert(module.clone(), session);
+                let execution_started = Instant::now();
+                trace_mncs_function_execution_begin(
+                    "reference_body_session",
+                    None,
+                    &request,
+                    false,
+                );
+                let result = sessions[&module].execute(&request);
+                trace_mncs_function_execution(
+                    execution_started,
+                    "reference_body_session",
+                    None,
+                    &request,
+                    result.status,
+                    result.steps,
+                    false,
+                );
+                json!(result)
             }
         };
         trace_phase(

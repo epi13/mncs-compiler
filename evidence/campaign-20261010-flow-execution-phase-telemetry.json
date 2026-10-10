@@ -1,0 +1,106 @@
+{
+  "schema_version": 1,
+  "kind": "compiler-execution-phase-telemetry",
+  "observed_at": "2026-10-10T14:53:12.541932+00:00",
+  "compiler": {
+    "tested_candidate_head": "602832610080c838df3d94c9fdbac0fc55753acb",
+    "branch_at_measurement": "campaign/session-admission-telemetry-20261010",
+    "selected_source_sha256": "4c4bdf63926df52db704e2be64ec1970ae04e2761f22fae7ff3661fb7686dc17",
+    "source_identity_scope": "sorted selected compiler module ids and exact source bytes",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "workload": {
+    "target": "mncs.compiler.project.v1::compile_project_target",
+    "root_source": "flow.mncs",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target_source_index": 1,
+    "source_pages_at_width_1024": 901,
+    "execution_engine": "reference_interpreter",
+    "step_budget": 100000,
+    "request_bytes": 20748302
+  },
+  "outcome": {
+    "transport": "RESPONSE_RECEIVED",
+    "execution_started": true,
+    "execution_status": "budget_exhausted",
+    "reported_steps": 100000,
+    "classification": "INCOMPLETE_BUDGET_EXHAUSTED",
+    "compiler_result": "No complete parse/check/proof/CFG/SSA result was returned.",
+    "result_sha256": "4f31545e771d12e50e019b09306bdb66e542357317ab6538ca6753cd66685389"
+  },
+  "phases_ms": {
+    "frontend_program_cache_read_decode": 581.507,
+    "request_json_decode": 415.336,
+    "typed_execution_request_decode": 194.895,
+    "reference_execution_session_preparation": 6889.054,
+    "mncs_function_execution": 5391.210,
+    "outer_request_execution": 12479.507,
+    "response_json_encode": 0.107,
+    "response_write": 0.022
+  },
+  "child_resources": {
+    "process_identity": {
+      "pid": 25,
+      "start_ticks": 56861925,
+      "executable": "/tmp/mncs-compiler-session-telemetry-target-20261010/release/mncs-compiler-stage0-probe"
+    },
+    "elapsed_wall_seconds": 12.896,
+    "cpu_seconds": 12.85,
+    "peak_rss_bytes": 1794113536,
+    "peak_file_descriptors": 4,
+    "peak_threads": 1,
+    "io_read_bytes_delta": 0,
+    "io_write_bytes_delta": 0,
+    "resource_sample_count": 28,
+    "resource_sampling_overhead_ns": 6753244,
+    "cgroup": {
+      "status": "OBSERVED",
+      "attribution": "scope-level, not child-specific",
+      "memory_max": "max",
+      "oom_kill_count_before": 4,
+      "oom_kill_count_after": 4,
+      "oom_kill_count_increment_observed": false
+    }
+  },
+  "matched_instrumentation_comparison": {
+    "baseline_without_new_phase_events": {
+      "measurement_sha256": "9c40245c802a99339ae30cba9fb584fece0f38738c9f61ec47b24d83d75810a7",
+      "child_wall_seconds": 12.907,
+      "cpu_seconds": 12.87,
+      "peak_rss_bytes": 1794834432,
+      "status": "budget_exhausted",
+      "reported_steps": 100000
+    },
+    "instrumented": {
+      "measurement_sha256": "014f364bd2f1f298515b892bfdfa73955d090c5a0121d687fbad6b3c189cec26",
+      "child_wall_seconds": 12.896,
+      "cpu_seconds": 12.85,
+      "peak_rss_bytes": 1794113536,
+      "status": "budget_exhausted",
+      "reported_steps": 100000
+    },
+    "source_identity_equal": true,
+    "result_digest_equal": true,
+    "runtime_improvement_claimed": false
+  },
+  "trace": {
+    "schema": "phase events emitted by mncs-compiler-stage0-probe",
+    "event_count": 42,
+    "sha256": "c9d68fda8a40ca21b0b4af4e54ada652d885d682eb076cece10d9ec2bee411dc",
+    "probe_binary_sha256": "2a67faca1e00aa2a58a0900c54a4074818e755d02fcd3cb363d1ee607de818a2",
+    "raw_measurement_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-phase-telemetry-postfmt-100k-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow.json",
+    "raw_trace_path": "/tmp/mncs-compiler-session-admission-telemetry-20261010/.build/campaign-artifacts/compiler-facts/campaign-flow-phase-telemetry-postfmt-100k-20261010-compiler-module-pipeline-source-lexer-parser-segment-decl-flow-target-flow-trace-1791643977170939157.jsonl",
+    "baseline_measurement_path": "/tmp/mncs-flow-100k-unprofiled.json"
+  },
+  "reproduction": {
+    "build": "MNCS_LANGUAGE_ROOT=/home/epi13/Documents/Projects/mncs-language MNCS_BOOTSTRAP_TARGET_DIR=/tmp/mncs-compiler-session-telemetry-target-20261010 tools/bootstrap.sh",
+    "probe": "MNCS_BOOTSTRAP_TARGET_DIR=/tmp/mncs-compiler-session-telemetry-target-20261010 MNCS_PROBE_BIN=/tmp/mncs-compiler-session-telemetry-target-20261010/release/mncs-compiler-stage0-probe MNCS_PROBE_CACHE_DIR=/tmp/mncs-lexer-full-frontier-cache-20261010 MNCS_PROBE_BACKEND=reference_interpreter MNCS_PROBE_SKIP_STAGE0_ORACLE=1 MNCS_PROBE_REQUEST_TIMEOUT_S=60 MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_ARTIFACT_LABEL=flow-phase-telemetry-postfmt-100k-20261010 tools/probe_compiler_module_frontier.py --modules source lexer parser segment decl flow --target-last --step-budget 100000"
+  }
+}
