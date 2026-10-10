@@ -443,15 +443,15 @@ fn keyword_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     return 4;
 }
 
-fn token_from_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, st: Scan, line: bool, block: bool, word: bool, ws: bool) -> (result: Token) {
+fn token_from_word_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, st: Scan) -> (result: Token) {
+    let kind: u64 = keyword_global<P, N>(pages, stride, total, start, st.end);
+    return Token { kind: kind, start: start, end: st.end, diagnostic: 0 };
+}
+fn token_from_nonword_scan(start: u64, st: Scan, line: bool, block: bool, ws: bool) -> (result: Token) {
     let diagnostic: u64 = select(block && st.depth > 0, 1, 0);
     if ws { return Token { kind: 1, start: start, end: st.end, diagnostic: diagnostic }; }
     if line { return Token { kind: 2, start: start, end: st.end, diagnostic: diagnostic }; }
     if block { return Token { kind: 3, start: start, end: st.end, diagnostic: diagnostic }; }
-    if word {
-        let kind: u64 = keyword_global<P, N>(pages, stride, total, start, st.end);
-        return Token { kind: kind, start: start, end: st.end, diagnostic: diagnostic };
-    }
     return Token { kind: select(st.dotted, 6, 5), start: start, end: st.end, diagnostic: diagnostic };
 }
 
@@ -590,7 +590,10 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         // malformed layouts need the total global fallback.
         iterate pass up_to 4 carrying outer: Scan = seed {
             iterate i up_to 1024 carrying inner: Scan = outer {
-                if inner.done || inner.end >= total { return token_from_scan_global<P, N>(pages, stride, total, start, inner, line, block, word, ws); }
+                if inner.done || inner.end >= total {
+                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner); }
+                    return token_from_nonword_scan(start, inner, line, block, ws);
+                }
                 let address: source.GlobalPageAddress = source.global_page_address(stride, total, inner.end);
                 // A scan can only enter this loop after the first byte was
                 // resolved from a non-empty page table. Clamp an impossible
@@ -605,12 +608,14 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 };
                 let advanced: Scan = scan_chunk_window(total, window, inner, line, block, word, number, ws);
                 if advanced.done || advanced.end >= total {
-                    return token_from_scan_global<P, N>(pages, stride, total, start, advanced, line, block, word, ws);
+                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, advanced); }
+                    return token_from_nonword_scan(start, advanced, line, block, ws);
                 }
                 next inner = advanced;
             }
             if inner.done || inner.end >= total {
-                return token_from_scan_global<P, N>(pages, stride, total, start, inner, line, block, word, ws);
+                if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner); }
+                return token_from_nonword_scan(start, inner, line, block, ws);
             }
             // Line, word, and whitespace chunks consume four bytes per
             // window, so their 8192-transition budget is two passes.
@@ -630,7 +635,8 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
             }
             next outer = inner;
         }
-        return token_from_scan_global<P, N>(pages, stride, total, start, outer, line, block, word, ws);
+        if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, outer); }
+        return token_from_nonword_scan(start, outer, line, block, ws);
     }
     let kind: u64 = punctuation(a, b);
     return Token { kind: kind, start: start, end: start + select(kind >= 80, 2, 1), diagnostic: select(kind == 7, 2, 0) };
