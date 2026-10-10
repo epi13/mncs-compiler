@@ -1,0 +1,371 @@
+{
+  "schema_version": "mncs.compiler.campaign-evidence/1",
+  "kind": "compiler-lexer-word-scan-initial-page-reuse",
+  "observed_at": "2026-10-10T13:23:49Z",
+  "candidate": {
+    "base_revision": "77ee67b944430d9815f584530e2a45aded1cdca7",
+    "branch": "campaign/lexer-keyword-global-local-fast-path-20261010",
+    "worktree": "/tmp/mncs-compiler-keyword-global-page-local-20261010",
+    "tested_candidate_git_head": "77ee67b944430d9815f584530e2a45aded1cdca7",
+    "tested_candidate_worktree_dirty": true,
+    "changed_module": "lexer",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "baseline_lexer_source_sha256": "d1c15547846f0e235e32ca8a85228927efe7485d905f110a3e202802ade43f5c",
+    "candidate_lexer_source_sha256": "e211da581b022ab5a244e055a197a03eba3fd339bfe2de1ea4587129e83dd23d",
+    "baseline_selected_module_source_identity_sha256": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+    "candidate_selected_module_source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+    "change_summary": "Pass the initial page view and resolved global address into word-token classification. Use page-local keyword<N> reads when the scanned token fits within the selected page and stride; retain keyword_global fallback for page-crossing and malformed spans.",
+    "language_semantics_changed": false
+  },
+  "semantic_validation": {
+    "cp0001": {
+      "tiers": [
+        "A",
+        "B",
+        "C"
+      ],
+      "backend": "cranelift",
+      "classification": "SUCCESS",
+      "probe_requests": 1963,
+      "tokens_compared": 1283,
+      "tier_a_cases": 18,
+      "tier_b_cases": 26,
+      "canonical_splits": 10,
+      "rejected_splits": 9,
+      "headers_ok": 4,
+      "result_sha256": "f7657fa3f4c857b0d36d69069c05c894bf27faee5ad4675c6ab747ab7652028b"
+    },
+    "flow_root_stage0_oracle": {
+      "source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+      "pages_at_width_1024": 901,
+      "valid": true,
+      "diagnostics": [],
+      "linked_functions": 1334,
+      "ssa_functions": 382,
+      "containing_measurement_sha256": "ac2e25cc09e7c9d219fffaccbdaf6abf10b3b80b5e14df226d63729f9b787a05",
+      "containing_measurement_classification": "RESOURCE_EXHAUSTED",
+      "scope_note": "The bounded compiler target exhausted its 1M-step budget; the follow-on independent Stage-0 oracle nevertheless returned valid with no diagnostics. This is not native whole-module proof or Stage-1 evidence."
+    },
+    "native_whole_module_proof_or_canonical_vm": "NOT_ESTABLISHED"
+  },
+  "flow_target_measurement": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "target_source_module": "flow",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "backend": "reference_interpreter",
+    "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+    "step_budget": 1000000,
+    "runtime_profile_enabled": true,
+    "oracle_skipped_for_matched_performance_runs": true,
+    "warm_program_cache": true,
+    "rss_cap_mib": 1900,
+    "timeout_seconds": 120,
+    "sample_interval_seconds": 0.1,
+    "baseline_source_identity_sha256": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+    "candidate_source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+    "input_total_page_count_baseline_candidate": [
+      900,
+      901
+    ],
+    "baseline_runs": [
+      {
+        "measurement_sha256": "5955d3dbb3600b9f4aa137b25a94d95d5d787c51459b0ed0878711411ae1a9af",
+        "label": "keyword-local-index-flow-ref-1m-warm-20261010",
+        "compiler_source_identity_sha256": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+        "input_total_page_count_at_stride_1024": 900,
+        "classification": "RESOURCE_EXHAUSTED",
+        "native_request_status": "budget_exhausted",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 89.334,
+        "target_execution_ms": 87556.050446,
+        "body_profile_elapsed_ms": 79059.980984,
+        "child_cpu_seconds": 86.80000000000001,
+        "child_cpu_user_seconds": 86.37,
+        "child_cpu_system_seconds": 0.43,
+        "child_peak_rss_kib": 1751880,
+        "peak_file_descriptors": 5,
+        "child_io_last_sample": {},
+        "reported_steps": 1000000,
+        "keyword_global": {
+          "calls": 382,
+          "exclusive_ms": 3039.251666,
+          "steps": 13884
+        },
+        "token_from_word_scan_global": {
+          "calls": 382,
+          "exclusive_ms": 1426.132395,
+          "steps": 2292
+        },
+        "next_token_global": {
+          "calls": 1742,
+          "exclusive_ms": 39726.48327,
+          "inclusive_ms": 59624.599605,
+          "steps": 423275
+        },
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "sock_throttled": 0,
+          "max": 0,
+          "low": 0,
+          "oom_kill": 0,
+          "oom": 0,
+          "oom_group_kill": 0,
+          "high": 0
+        }
+      },
+      {
+        "measurement_sha256": "51d3fc940bef5c47fd354c61a28a8aa7da6bede2d9f806cfad8428e6ed63b320",
+        "label": "keyword-local-index-flow-ref-1m-repeat-20261010",
+        "compiler_source_identity_sha256": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+        "input_total_page_count_at_stride_1024": 900,
+        "classification": "RESOURCE_EXHAUSTED",
+        "native_request_status": "budget_exhausted",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 89.84,
+        "target_execution_ms": 88110.985162,
+        "body_profile_elapsed_ms": 79442.013083,
+        "child_cpu_seconds": 86.97999999999999,
+        "child_cpu_user_seconds": 86.46,
+        "child_cpu_system_seconds": 0.52,
+        "child_peak_rss_kib": 1751864,
+        "peak_file_descriptors": 5,
+        "child_io_last_sample": {
+          "rchar": 204515738,
+          "wchar": 151817255,
+          "syscr": 6878,
+          "syscw": 7696,
+          "read_bytes": 0,
+          "write_bytes": 0,
+          "cancelled_write_bytes": 0
+        },
+        "reported_steps": 1000000,
+        "keyword_global": {
+          "calls": 382,
+          "exclusive_ms": 3014.729613,
+          "steps": 13884
+        },
+        "token_from_word_scan_global": {
+          "calls": 382,
+          "exclusive_ms": 1431.388899,
+          "steps": 2292
+        },
+        "next_token_global": {
+          "calls": 1742,
+          "exclusive_ms": 39954.461027,
+          "inclusive_ms": 59900.431256,
+          "steps": 423275
+        },
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "max": 0,
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "high": 0,
+          "sock_throttled": 0,
+          "oom": 0,
+          "low": 0
+        }
+      }
+    ],
+    "candidate_runs": [
+      {
+        "measurement_sha256": "348fc1ce366a0fcd7f714dea22e57c24804f9d536dd3089f9786de388e17a4e4",
+        "label": "keyword-global-local-fast-flow-nooracle-a-20261010",
+        "compiler_source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+        "input_total_page_count_at_stride_1024": 901,
+        "classification": "RESOURCE_EXHAUSTED",
+        "native_request_status": "budget_exhausted",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 87.021,
+        "target_execution_ms": 85254.363466,
+        "body_profile_elapsed_ms": 76680.137602,
+        "child_cpu_seconds": 84.5,
+        "child_cpu_user_seconds": 84.04,
+        "child_cpu_system_seconds": 0.46,
+        "child_peak_rss_kib": 1753480,
+        "peak_file_descriptors": 5,
+        "child_io_last_sample": {
+          "rchar": 204602593,
+          "wchar": 151880969,
+          "syscr": 6880,
+          "syscw": 7698,
+          "read_bytes": 0,
+          "write_bytes": 0,
+          "cancelled_write_bytes": 0
+        },
+        "reported_steps": 1000000,
+        "keyword_global": {
+          "calls": 1,
+          "exclusive_ms": 21.446609,
+          "steps": 168
+        },
+        "token_from_word_scan_global": {
+          "calls": 384,
+          "exclusive_ms": 1395.721333,
+          "steps": 11136
+        },
+        "next_token_global": {
+          "calls": 1764,
+          "exclusive_ms": 40000.989662,
+          "inclusive_ms": 56970.981633,
+          "steps": 426705
+        },
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_group_kill": 0,
+          "oom": 0,
+          "low": 0,
+          "oom_kill": 0,
+          "high": 0,
+          "max": 0,
+          "sock_throttled": 0
+        }
+      },
+      {
+        "measurement_sha256": "3fb8ed4988e3315b7079b871b981b8768aa2182fbedc73bdf6939464ce39e52f",
+        "label": "keyword-global-local-fast-flow-nooracle-b-20261010",
+        "compiler_source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+        "input_total_page_count_at_stride_1024": 901,
+        "classification": "RESOURCE_EXHAUSTED",
+        "native_request_status": "budget_exhausted",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 87.022,
+        "target_execution_ms": 85263.951718,
+        "body_profile_elapsed_ms": 76791.357788,
+        "child_cpu_seconds": 84.64,
+        "child_cpu_user_seconds": 84.24,
+        "child_cpu_system_seconds": 0.4,
+        "child_peak_rss_kib": 1753500,
+        "peak_file_descriptors": 5,
+        "child_io_last_sample": {
+          "rchar": 204602544,
+          "wchar": 151880989,
+          "syscr": 6880,
+          "syscw": 7698,
+          "read_bytes": 0,
+          "write_bytes": 0,
+          "cancelled_write_bytes": 0
+        },
+        "reported_steps": 1000000,
+        "keyword_global": {
+          "calls": 1,
+          "exclusive_ms": 22.5588,
+          "steps": 168
+        },
+        "token_from_word_scan_global": {
+          "calls": 384,
+          "exclusive_ms": 1391.227892,
+          "steps": 11136
+        },
+        "next_token_global": {
+          "calls": 1764,
+          "exclusive_ms": 40113.072882,
+          "inclusive_ms": 57096.372253,
+          "steps": 426705
+        },
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "oom": 0,
+          "sock_throttled": 0,
+          "low": 0,
+          "high": 0,
+          "max": 0
+        }
+      }
+    ],
+    "matched_means": {
+      "baseline_mean_wall_seconds": 89.587,
+      "candidate_mean_wall_seconds": 87.022,
+      "wall_reduction_percent": 2.864,
+      "baseline_mean_child_cpu_seconds": 86.89,
+      "candidate_mean_child_cpu_seconds": 84.57,
+      "child_cpu_reduction_percent": 2.67,
+      "baseline_mean_target_execution_ms": 87833.518,
+      "candidate_mean_target_execution_ms": 85259.158,
+      "target_execution_reduction_percent": 2.931,
+      "baseline_mean_profile_elapsed_ms": 79250.997,
+      "candidate_mean_profile_elapsed_ms": 76735.748,
+      "profile_elapsed_reduction_percent": 3.174,
+      "baseline_mean_peak_rss_kib": 1751872,
+      "candidate_mean_peak_rss_kib": 1753490,
+      "peak_rss_change_kib": 1618,
+      "peak_file_descriptors_baseline_candidate": [
+        5,
+        5
+      ]
+    },
+    "runtime_profile": {
+      "keyword_global_calls_baseline_candidate": [
+        382,
+        1
+      ],
+      "keyword_global_mean_exclusive_ms_baseline": 3026.991,
+      "keyword_global_mean_exclusive_ms_candidate": 22.003,
+      "keyword_global_exclusive_reduction_percent": 99.273,
+      "token_from_word_scan_global_mean_exclusive_ms_baseline": 1428.761,
+      "token_from_word_scan_global_mean_exclusive_ms_candidate": 1393.475,
+      "next_token_global_mean_exclusive_ms_baseline": 39840.472,
+      "next_token_global_mean_exclusive_ms_candidate": 40057.031,
+      "next_token_global_mean_inclusive_ms_baseline": 59762.515,
+      "next_token_global_mean_inclusive_ms_candidate": 57033.677,
+      "next_token_global_inclusive_reduction_percent": 4.566,
+      "profiled_steps_keyword_global_baseline_candidate": [
+        13884,
+        168
+      ],
+      "profiled_steps_token_from_word_scan_baseline_candidate": [
+        2292,
+        11136
+      ],
+      "profiled_steps_next_token_global_baseline_candidate": [
+        423275,
+        426705
+      ],
+      "total_executor_steps_each_run": 1000000
+    },
+    "candidate_program_cache_preparation": {
+      "measurement_sha256": "4b6861512d813f74276f567b986f8e1c4e4769eff45d8a996a2dc43d894a8e6a",
+      "classification": "SUCCESS",
+      "operation_outcome": "ADMISSION_ONLY_SUCCESS",
+      "target_execution_attempted": false,
+      "wall_seconds": 52.177,
+      "child_cpu_seconds": 51.43,
+      "peak_rss_kib": 1852960,
+      "peak_fds": 5,
+      "rss_cap_mib": 1900,
+      "rss_cap_triggered": false,
+      "cgroup_memory_events_delta": {
+        "oom_group_kill": 0,
+        "high": 0,
+        "oom": 0,
+        "sock_throttled": 3,
+        "oom_kill": 0,
+        "max": 0,
+        "low": 0
+      }
+    },
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "bounded_target_result": "RESOURCE_EXHAUSTED_BUDGET_EXHAUSTED",
+    "unknowns": [
+      "Both matched runs reach exactly 1000000 execution steps and return no project result.",
+      "Target semantics remain UNKNOWN; RESOURCE_EXHAUSTED is not a semantic rejection.",
+      "Function-level CPU and hardware instruction counts are unavailable.",
+      "Cgroup counters are aggregate observations for the runner cgroup; the compiler child RSS, CPU, FDs, and I/O are sampled by PID.",
+      "No Stage-1 executable or Stage-2 succession is established."
+    ]
+  },
+  "decision": {
+    "retain_candidate": true,
+    "reason": "Two matched warm runs show a stable 2.93% reduction in bounded target wall time and 2.67% lower child CPU. Profiled keyword_global calls fall from 382 to one cross-page fallback, reducing its mean exclusive time by 99.27%. CP-0001 tiers A/B/C and a separate valid Stage-0 flow-root oracle preserve the supported lexical and project semantics; the target still exhausts the 1M-step budget."
+  }
+}

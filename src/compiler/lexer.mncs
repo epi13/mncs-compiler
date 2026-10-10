@@ -445,7 +445,17 @@ fn keyword_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     return 4;
 }
 
-fn token_from_word_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, st: Scan) -> (result: Token) {
+fn token_from_word_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, st: Scan, initial_page: [byte; up_to N], initial_address: source.GlobalPageAddress) -> (result: Token) {
+    let length: u64 = st.end - start;
+    // Reuse the initial page already selected by next_token_global for the
+    // common word that stays within that page. Cross-page words retain the
+    // total global classifier below.
+    if length > 0 && initial_address.intra < stride && initial_address.intra < initial_page.len {
+        if length <= stride - initial_address.intra && length <= initial_page.len - initial_address.intra {
+            let kind: u64 = keyword<N>(initial_page, initial_address.intra, initial_address.intra + length);
+            return Token { kind: kind, start: start, end: st.end, diagnostic: 0 };
+        }
+    }
     let kind: u64 = keyword_global<P, N>(pages, stride, total, start, st.end);
     return Token { kind: kind, start: start, end: st.end, diagnostic: 0 };
 }
@@ -592,7 +602,7 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         iterate pass up_to 4 carrying outer: Scan = seed {
             iterate i up_to 1024 carrying inner: Scan = outer {
                 if inner.done || inner.end >= total {
-                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner); }
+                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner, initial_page, initial_address); }
                     return token_from_nonword_scan(start, inner, line, block, ws);
                 }
                 let address: source.GlobalPageAddress = source.global_page_address(stride, total, inner.end);
@@ -615,13 +625,13 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 };
                 let advanced: Scan = scan_chunk_window(total, window, inner, line, block, word, number, ws);
                 if advanced.done || advanced.end >= total {
-                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, advanced); }
+                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, advanced, initial_page, initial_address); }
                     return token_from_nonword_scan(start, advanced, line, block, ws);
                 }
                 next inner = advanced;
             }
             if inner.done || inner.end >= total {
-                if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner); }
+                if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner, initial_page, initial_address); }
                 return token_from_nonword_scan(start, inner, line, block, ws);
             }
             // Line, word, and whitespace chunks consume four bytes per
@@ -642,7 +652,7 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
             }
             next outer = inner;
         }
-        if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, outer); }
+        if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, outer, initial_page, initial_address); }
         return token_from_nonword_scan(start, outer, line, block, ws);
     }
     let kind: u64 = punctuation(a, b);

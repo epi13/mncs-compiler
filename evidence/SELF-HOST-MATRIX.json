@@ -3496,9 +3496,99 @@
         "evidence/campaign-20261006-project-results.json",
         ".worktrees/"
       ]
+    },
+    "lexer_keyword_global_page_reuse_campaign_20261010": {
+      "observed_at": "2026-10-10T13:23:49Z",
+      "candidate_base_revision": "77ee67b944430d9815f584530e2a45aded1cdca7",
+      "tested_candidate_git_head": "77ee67b944430d9815f584530e2a45aded1cdca7",
+      "tested_candidate_branch": "campaign/lexer-keyword-global-local-fast-path-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "changed_module": "lexer",
+      "baseline_lexer_source_sha256": "d1c15547846f0e235e32ca8a85228927efe7485d905f110a3e202802ade43f5c",
+      "candidate_lexer_source_sha256": "e211da581b022ab5a244e055a197a03eba3fd339bfe2de1ea4587129e83dd23d",
+      "baseline_selected_module_source_identity_sha256": "c05f4cd9ab6f4be2bc8d0f990955fabe7a0d37b0181e9df2ce4d2084785aa1d0",
+      "candidate_selected_module_source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
+      "focused_semantic_validation": {
+        "cp0001_tiers": [
+          "A",
+          "B",
+          "C"
+        ],
+        "backend": "cranelift",
+        "classification": "SUCCESS",
+        "probe_requests": 1963,
+        "tokens_compared": 1283,
+        "result_sha256": "f7657fa3f4c857b0d36d69069c05c894bf27faee5ad4675c6ab747ab7652028b"
+      },
+      "current_flow_root_stage0_oracle": {
+        "source_identity_sha256": "501232af3ad0686b3cec60c56ea3044cdfb58057b4bbac05e9b65dfc1f63f47c",
+        "pages_at_width_1024": 901,
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1334,
+        "ssa_functions": 382,
+        "containing_measurement_sha256": "ac2e25cc09e7c9d219fffaccbdaf6abf10b3b80b5e14df226d63729f9b787a05"
+      },
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "target_backend": "reference_interpreter",
+      "target_step_budget": 1000000,
+      "matched_warm_runs": {
+        "baseline_runs": 2,
+        "candidate_runs": 2,
+        "baseline_mean_wall_seconds": 89.587,
+        "candidate_mean_wall_seconds": 87.022,
+        "wall_reduction_percent": 2.864,
+        "baseline_mean_child_cpu_seconds": 86.89,
+        "candidate_mean_child_cpu_seconds": 84.57,
+        "child_cpu_reduction_percent": 2.67,
+        "baseline_mean_target_execution_ms": 87833.518,
+        "candidate_mean_target_execution_ms": 85259.158,
+        "target_execution_reduction_percent": 2.931,
+        "baseline_mean_peak_rss_kib": 1751872,
+        "candidate_mean_peak_rss_kib": 1753490,
+        "peak_rss_change_kib": 1618,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ],
+        "step_status_baseline_candidate": [
+          "budget_exhausted",
+          "budget_exhausted"
+        ],
+        "reported_steps_each_run": 1000000,
+        "cgroup_oom_kill_delta_all_runs": 0,
+        "rss_cap_mib": 1900,
+        "rss_cap_triggered_all_runs": false,
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "input_pages_baseline_candidate": [
+          900,
+          901
+        ]
+      },
+      "runtime_profile": {
+        "keyword_global_calls_baseline_candidate": [
+          382,
+          1
+        ],
+        "keyword_global_mean_exclusive_ms_baseline": 3026.991,
+        "keyword_global_mean_exclusive_ms_candidate": 22.003,
+        "keyword_global_exclusive_reduction_percent": 99.273,
+        "next_token_global_mean_inclusive_ms_baseline": 59762.515,
+        "next_token_global_mean_inclusive_ms_candidate": 57033.677
+      },
+      "candidate_program_cache_preparation_sha256": "4b6861512d813f74276f567b986f8e1c4e4769eff45d8a996a2dc43d894a8e6a",
+      "evidence_artifact": "evidence/campaign-20261010-keyword-global-page-reuse.json",
+      "evidence_artifact_sha256": "c1de8549a425b463460248bad6dd30f9c5db5807fba681b7e40a461c9c2cc312",
+      "matrix_policy": "Page-local reuse is source-span guarded and retains the global fallback. Current flow-root Stage-0 oracle and focused CP-0001 parity are recorded by candidate source identity. The matched native target remains RESOURCE_EXHAUSTED/UNKNOWN; historical module-stage rows are unchanged.",
+      "module_stage_rows_changed": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "delivery_state": "Measured candidate and evidence staged for delivery; implementation main revision and push status will be recorded separately."
     }
   },
-  "evidence_updated_at": "2026-10-10T13:00:11Z",
+  "evidence_updated_at": "2026-10-10T13:23:49Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }
