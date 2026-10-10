@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-significant-trivia-inline",
+  "observed_at": "2026-10-10T06:03:17.547146+00:00",
+  "decision": "KEEP_MEASURED_IMPLEMENTATION",
+  "change": {
+    "file": "src/compiler/lexer.mncs",
+    "baseline_file_sha256": "dd797ef905fd565306b204cc6dadc572248bb5257e1365b931671f7babe5f427",
+    "candidate_file_sha256": "8f3471de48a295733a112b0b3cb043790a3265e70fe49bf517d433f28eecf385",
+    "description": "After significant_global confirms a token is trivia, call next_token_global directly. This removes the redundant skip_trivia_global page-table argument and rechecks no predicate already established by the caller.",
+    "language_or_backend_semantics_changed": false,
+    "compatibility": "skip_trivia_global remains available with its original behavior; only the known-trivia internal calls are inlined."
+  },
+  "identities": {
+    "repository": "mncs-compiler",
+    "candidate_base_revision": "ada80d0de4dc6f7b8522cf185930ba0db733d0d8",
+    "tested_candidate_git_head": "ada80d0de4dc6f7b8522cf185930ba0db733d0d8",
+    "tested_candidate_branch": "campaign/lexer-significant-trivia-inline-20261010",
+    "tested_candidate_worktree_dirty": true,
+    "baseline_compiler_source_identity_sha256": "ec3d32c5c27776a5abbea007d31e1e69a9dccc8f4ac8015c2c69d4017e5dbbe1",
+    "candidate_compiler_source_identity_sha256": "d1f29a87b7889342f74e6e9455967884faefe52ee1a31c115adc14af3cd55318",
+    "baseline_source_revision": "69b50cfd8231a8cd6c843aae72936fd859fa5767",
+    "selected_compiler_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+    "stage0_probe_sha256": "2f194aef499fb244ced96ca000be0654bcd9e89010dfddd9f8a9d6e66a4c68e5",
+    "measurement_tool_sha256": {
+      "tools/measure_compiler_probe.py": "7502353ef2b0e2f511e6db84abb98df67b836e66853d9807665a57b1883ab2db",
+      "tools/probe_compiler_module_frontier.py": "69a31cbab0185a8c0218cb16f5672eb773ffc7ad70be584ae4ad1942afa6d825"
+    },
+    "test_tool_sha256": {
+      "tools/test_cp0001.py": "c2ce28226a409a96122d16d1344d1468cf3487fef51354e9bba2687419c3da9c"
+    },
+    "implementation_commit": "a3357aefb9f4ba6b86c9fa2836897f9f3c9ee715"
+  },
+  "correctness": {
+    "cp0001_tier_b": {
+      "classification": "SUCCESS",
+      "backend": "cranelift",
+      "stage0_oracle_exact": true,
+      "requests": 12691,
+      "cases": 114,
+      "tokens_compared": 39501,
+      "canonical_splits": 42,
+      "rejected_splits": 40,
+      "result_sha256": "2f7eb281a47795845950db95888072f56a73339c6fac58e81c0d72cf5ca7fcec"
+    },
+    "cp0001_tier_c": {
+      "classification": "SUCCESS",
+      "backend": "cranelift",
+      "stage0_oracle_exact": true,
+      "requests": 96,
+      "keywords": 30,
+      "near_miss_identifiers": 60,
+      "tokens_per_width": 179,
+      "page_widths": [
+        1,
+        2,
+        7,
+        64,
+        1024
+      ],
+      "result_sha256": "70302a8575b59beb9e8b0f953a3efa43a0a354aff171482d03907465018ccb59"
+    },
+    "combined_run": {
+      "tiers": "BC",
+      "requests": 12787,
+      "tokens_compared": 39501,
+      "elapsed_seconds": 37.529,
+      "result_sha256": "3c6beb0a7e50c173bf1a1e082d7532368d6f13b0a583913391aa96c144330bd2"
+    },
+    "tier_a": "NOT_RUN_BY_THIS_FOCUSED_SLICE; the prior campaign records the existing standalone-bang CP-0022 Stage-0 oracle divergence."
+  },
+  "real_flow_target": {
+    "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "input_total_page_count_at_stride_1024": 900,
+    "page_count_scope_note": "The current request builder reports 900 pages for these six selected modules. The prior keyword-byte matrix row records 901; that historical value is retained unchanged. The established full flow closure remains 894 pages.",
+    "backend": "reference_interpreter",
+    "step_budget": 200000,
+    "timeout_seconds": 120,
+    "stage0_oracle_skipped_for_target": true,
+    "baseline": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 32.547,
+        "child_cpu_seconds": 30.12,
+        "child_peak_rss_kib": 1759228,
+        "child_peak_fds": 5,
+        "child_io": {
+          "rchar": 180277355,
+          "wchar": 151774161,
+          "read_bytes": 0,
+          "write_bytes": 0
+        },
+        "target_execution_ms": 29248.39835,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_group_kill": 0,
+          "low": 0,
+          "oom_kill": 0,
+          "max": 0,
+          "high": 0,
+          "sock_throttled": 0,
+          "oom": 0
+        },
+        "measurement_artifact": {
+          "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-1-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "d8bf697f3f72f059bce97f8b0ce31484114580cd547a3527f626c7e7ee835b11",
+          "bytes": 169661
+        }
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 32.544,
+        "child_cpu_seconds": 30.3,
+        "child_peak_rss_kib": 1758860,
+        "child_peak_fds": 5,
+        "child_io": {
+          "rchar": 180277404,
+          "wchar": 151774161,
+          "read_bytes": 0,
+          "write_bytes": 0
+        },
+        "target_execution_ms": 29338.47196,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "low": 0,
+          "high": 0,
+          "oom_group_kill": 0,
+          "oom_kill": 0,
+          "oom": 0,
+          "max": 0,
+          "sock_throttled": 0
+        },
+        "measurement_artifact": {
+          "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-warm-2-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "cce498e7dc4741768db54e05d8cd9221ba7aab11a55b676b0d69be40e1d2485a",
+          "bytes": 169396
+        }
+      }
+    ],
+    "candidate": [
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 31.041,
+        "child_cpu_seconds": 28.83,
+        "child_peak_rss_kib": 1756392,
+        "child_peak_fds": 5,
+        "child_io": {
+          "rchar": 180279045,
+          "wchar": 151775570,
+          "read_bytes": 0,
+          "write_bytes": 0
+        },
+        "target_execution_ms": 27900.1082,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_group_kill": 0,
+          "high": 0,
+          "max": 0,
+          "sock_throttled": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "low": 0
+        },
+        "measurement_artifact": {
+          "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-warm-1-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "6ac8294502210fc46ae2473dae25c23c32748cd10579af14d5cd6cfb3ccb16a0",
+          "bytes": 164499
+        }
+      },
+      {
+        "classification": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "wall_seconds": 30.542,
+        "child_cpu_seconds": 28.27,
+        "child_peak_rss_kib": 1759288,
+        "child_peak_fds": 5,
+        "child_io": {
+          "rchar": 180279094,
+          "wchar": 151775602,
+          "read_bytes": 0,
+          "write_bytes": 0
+        },
+        "target_execution_ms": 27347.457479,
+        "reported_steps": 200000,
+        "request_status": "budget_exhausted",
+        "rss_cap_triggered": false,
+        "cgroup_memory_events_delta": {
+          "oom_kill": 0,
+          "oom_group_kill": 0,
+          "sock_throttled": 0,
+          "high": 0,
+          "max": 0,
+          "low": 0,
+          "oom": 0
+        },
+        "measurement_artifact": {
+          "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-warm-2-retry-source-lexer-parser-segment-decl-flow-measurement.json",
+          "sha256": "7566c8136e233f93b382575e1a9c2ab7e1929c997c034379ff32be687d06bc9e",
+          "bytes": 162515
+        }
+      }
+    ],
+    "matched_warm_means": {
+      "baseline": {
+        "wall_seconds": 32.5455,
+        "child_cpu_seconds": 30.21,
+        "child_peak_rss_kib": 1759044,
+        "target_execution_ms": 29293.435155
+      },
+      "candidate": {
+        "wall_seconds": 30.7915,
+        "child_cpu_seconds": 28.549999999999997,
+        "child_peak_rss_kib": 1757840,
+        "target_execution_ms": 27623.7828395
+      },
+      "candidate_minus_baseline": {
+        "wall_reduction_percent": 5.389377947796156,
+        "child_cpu_reduction_percent": 5.494869248593194,
+        "target_execution_reduction_percent": 5.699749130361081,
+        "peak_rss_delta_kib": -1204,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ],
+        "physical_io_bytes_read_mean_baseline_candidate": [
+          0,
+          0
+        ],
+        "physical_io_bytes_written_mean_baseline_candidate": [
+          0,
+          0
+        ]
+      }
+    },
+    "outcome": {
+      "baseline": "RESOURCE_EXHAUSTED",
+      "candidate": "RESOURCE_EXHAUSTED",
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "reported_steps_each_run": 200000
+    },
+    "resource_observation": {
+      "rss_cap_mib": 2300,
+      "rss_cap_triggered_all_runs": false,
+      "cgroup_oom_kill_delta_all_runs": 0,
+      "child_fd_peak_each_run": 5,
+      "hardware_instruction_count": "UNKNOWN",
+      "per_function_cpu": "UNKNOWN",
+      "scope_note": "RSS, CPU, IO and FDs identify the actual Stage-0 child. cgroup and host pressure values are session-scoped."
+    }
+  },
+  "runtime_profile": {
+    "baseline": {
+      "wall_seconds": 33.546,
+      "target_execution_ms": 30243.770645,
+      "skip_trivia_global": {
+        "calls": 112,
+        "exclusive_ms": 2189.93066,
+        "inclusive_ms": 14600.333741,
+        "steps": 559
+      },
+      "significant_global": {
+        "calls": 61,
+        "steps": 1480,
+        "exclusive_ms": 1643.737457,
+        "inclusive_ms": 20365.033545
+      }
+    },
+    "candidate": {
+      "wall_seconds": 31.043,
+      "target_execution_ms": 27897.370316,
+      "skip_trivia_global_calls": 0,
+      "significant_global": {
+        "calls": 61,
+        "steps": 1618,
+        "exclusive_ms": 1646.314335,
+        "inclusive_ms": 18122.787906
+      },
+      "next_token_global": {
+        "calls": 175,
+        "steps": 42673,
+        "exclusive_ms": 12012.919775,
+        "inclusive_ms": 16454.748764
+      }
+    },
+    "interpretation": "skip_trivia_global had 112 profile calls in the previous candidate and has zero calls here; significant_global still performs the trivia predicate check before advancing. Profile timing is wall time, not per-function CPU."
+  },
+  "cold_cache_fill": {
+    "classification": "RESOURCE_EXHAUSTED",
+    "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+    "wall_seconds": 190.755,
+    "child_cpu_seconds": 186.59,
+    "child_peak_rss_kib": 2142420,
+    "parse_ms": 1260,
+    "frontend_elaboration_ms": 109471,
+    "target_execution_ms": 33022.196312,
+    "program_artifact_uncompressed_bytes": 151516072,
+    "program_artifact_gzip_bytes": 5311363,
+    "rss_cap_triggered": false,
+    "purpose_note": "First request populated the source-specific Program cache; excluded from matched warm means."
+  },
+  "stage_promotion": {
+    "module_stage_matrix_changed": false,
+    "executable_artifact_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "reason": "The matched target still exhausts its fixed step budget without returning a project result."
+  },
+  "baseline_evidence_artifact": {
+    "path": "evidence/campaign-20261010-lexer-token-result-boundary.json",
+    "sha256": "55478962051fa7df74fa5f01d50b96128b4f193a7c4a9ee507c9a607266945d5"
+  },
+  "baseline_profile_measurement_artifact": {
+    "location": "/tmp/mncs-lexer-token-result-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-token-result-boundary-profile-candidate-source-lexer-parser-segment-decl-flow-measurement.json",
+    "sha256": "72947cf1e06fb07df2546130db9e03ae823eaad505bc378999013e51f96f7614",
+    "bytes": 208309
+  },
+  "raw_measurement_artifacts": [
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-warm-1-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "6ac8294502210fc46ae2473dae25c23c32748cd10579af14d5cd6cfb3ccb16a0",
+      "bytes": 164499
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-warm-2-retry-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "7566c8136e233f93b382575e1a9c2ab7e1929c997c034379ff32be687d06bc9e",
+      "bytes": 162515
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-profile-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "345519d586c6e5a1b42a58cd969916a1b63c62ab99e93f5d54a7e0f66d55090d",
+      "bytes": 198916
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-candidate-source-lexer-parser-segment-decl-flow-measurement.json",
+      "sha256": "dba5a4be37f61b844d1b413161ad55dab3a4e3886e5d9df1ff0a516e852d4e97",
+      "bytes": 626795
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-candidate-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "ffda191c9586fc57df24d03d414d28d8f8051208c5bbc24ff7d12b1c1506cb3b",
+      "bytes": 11442
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-profile-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "b48b09cef677c11f2331118009f8154dd6372b50a36935fa4dfae1999ba5b676",
+      "bytes": 8721
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-warm-1-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "b6d235e6a822f91f45c633a9e33ff9642fe8976f26d02032fbad053211c63f11",
+      "bytes": 8722
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-inline-warm-2-retry-source-lexer-parser-segment-decl-flow-phases.jsonl",
+      "sha256": "6a6c91e02be69ec541eee0e022981a935265a6a455d8855d6ee1f4b258007275",
+      "bytes": 8754
+    },
+    {
+      "location": "/tmp/mncs-lexer-significant-trivia-20261010/.build/significant-trivia-cp0001-bc.json",
+      "sha256": "68511f25091f30318839db57869cb27df0a9c74a261660f4c9dc039a589b431f",
+      "bytes": 2830
+    }
+  ],
+  "limitations": [
+    "No target semantic result was returned.",
+    "Hardware instruction count and per-function CPU are unavailable.",
+    "A prior evidence row reports 901 input pages while the current request builder reports 900; both observations are preserved with scope noted."
+  ]
+}
