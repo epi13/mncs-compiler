@@ -948,7 +948,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T01:20:01Z",
+    "updated_at": "2026-10-10T05:55:37+00:00",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -2699,7 +2699,117 @@
       },
       "stage1_claimed": false,
       "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The bounded target still exhausts its fixed budget; cache admission is not target execution or semantic acceptance."
+    },
+    "lexer_token_result_page_table_elision_20261010": {
+      "observed_at": "2026-10-10T05:55:37+00:00",
+      "candidate_base_revision": "fc381ea395cdf9cd5f5101bc19c9b4f6ab692b1f",
+      "tested_candidate_git_head": "fc381ea395cdf9cd5f5101bc19c9b4f6ab692b1f",
+      "tested_candidate_branch": "campaign/lexer-token-result-boundary-20261010",
+      "tested_candidate_worktree_dirty": true,
+      "baseline_compiler_source_identity_sha256": "f6cd4e0bf22f59a165703acf2a9857db0de9f8312cc89c9deb6a325aa169205d",
+      "candidate_compiler_source_identity_sha256": "ec3d32c5c27776a5abbea007d31e1e69a9dccc8f4ac8015c2c69d4017e5dbbe1",
+      "stage0_revision": "b05dfa2b91541e4bd4a75aecff6abdedd708608e",
+      "implementation_commit": "69b50cfd8231a8cd6c843aae72936fd859fa5767",
+      "evidence_commit": "dfc1070e9646cacd4228539e269f934d9f9dc784",
+      "delivered_local_main_revision": "dfc1070e9646cacd4228539e269f934d9f9dc784",
+      "delivery_state": "fast-forward merged into local main",
+      "push_status_at_matrix_commit": "PENDING",
+      "delivery_role": "Avoid passing the logical page table to token-result construction for nonword scans. Keep keyword classification page-aware. No language or backend semantic change and no compiler-stage promotion.",
+      "evidence_artifact": "evidence/campaign-20261010-lexer-token-result-boundary.json",
+      "evidence_artifact_sha256": "55478962051fa7df74fa5f01d50b96128b4f193a7c4a9ee507c9a607266945d5",
+      "target_operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+      "measurement_backend": "reference_interpreter",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "selected_input_pages_at_width_1024": 901,
+      "step_budget": 200000,
+      "matched_warm_means": {
+        "baseline_wall_seconds": 37.3055,
+        "candidate_wall_seconds": 32.5455,
+        "wall_reduction_percent": 12.76,
+        "baseline_child_cpu_seconds": 34.82,
+        "candidate_child_cpu_seconds": 30.21,
+        "child_cpu_reduction_percent": 13.24,
+        "baseline_target_execution_ms": 33887.609,
+        "candidate_target_execution_ms": 29293.435,
+        "target_execution_reduction_percent": 13.56,
+        "baseline_peak_rss_kib": 1758808,
+        "candidate_peak_rss_kib": 1759044,
+        "peak_rss_delta_kib": 236,
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ]
+      },
+      "runtime_profile": {
+        "baseline_token_from_scan_global_calls": 151,
+        "baseline_token_from_scan_global_exclusive_ms": 2514.004,
+        "candidate_token_from_nonword_scan_calls": 113,
+        "candidate_token_from_nonword_scan_exclusive_ms": 12.381,
+        "candidate_token_from_word_scan_global_calls": 38,
+        "candidate_token_from_word_scan_global_exclusive_ms": 668.599,
+        "candidate_next_token_global_exclusive_ms": 12084.773
+      },
+      "bounded_target_outcome": {
+        "baseline": "RESOURCE_EXHAUSTED",
+        "candidate": "RESOURCE_EXHAUSTED",
+        "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+        "reported_steps_each_run": 200000,
+        "rss_cap_mib": 2300,
+        "rss_cap_triggered": false,
+        "cgroup_oom_kill_delta": 0
+      },
+      "cp0001_differential": {
+        "tier_b": {
+          "classification": "SUCCESS",
+          "backend": "cranelift",
+          "requests": 12691,
+          "cases": 114,
+          "tokens_compared": 39501,
+          "result_sha256": "2f7eb281a47795845950db95888072f56a73339c6fac58e81c0d72cf5ca7fcec"
+        },
+        "tier_c": {
+          "classification": "SUCCESS",
+          "backend": "cranelift",
+          "requests": 96,
+          "keywords": 30,
+          "near_miss_identifiers": 60,
+          "expected_tokens_per_width": 179,
+          "page_widths": [
+            1,
+            2,
+            7,
+            64,
+            1024
+          ],
+          "result_sha256": "70302a8575b59beb9e8b0f953a3efa43a0a354aff171482d03907465018ccb59"
+        },
+        "tier_a": {
+          "classification": "FAILURE_KNOWN_REFERENCE_DIVERGENCE_CP0022",
+          "detail": "The corpus contains a standalone !. The compiler lexer returns token kind 40 with no diagnostic; pinned Stage-0 returns unknown kind 7 with MNL002. The changed code path does not include punctuation dispatch.",
+          "candidate_change_touches_divergent_path": false
+        }
+      },
+      "cold_cache_fill": {
+        "wall_seconds": 197.767,
+        "child_cpu_seconds": 193.2,
+        "child_peak_rss_kib": 2142312,
+        "frontend_elaboration_ms": 109941.517,
+        "target_execution_ms": 38139.407,
+        "program_artifact_uncompressed_bytes": 151514694,
+        "program_artifact_gzip_bytes": 5311270,
+        "rss_cap_triggered": false
+      },
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "matrix_row_policy": "Historical top-level compiler_head and module-stage rows are unchanged. The selected target still exhausts its fixed budget; no project result, executable artifact, Stage-1, or Stage-2 evidence is claimed."
     }
   },
-  "evidence_updated_at": "2026-10-10T05:40:15.042773+00:00"
+  "evidence_updated_at": "2026-10-10T05:55:37+00:00"
 }
