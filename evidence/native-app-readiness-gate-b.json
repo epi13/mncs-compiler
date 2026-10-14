@@ -1,10 +1,32 @@
 {
   "application": {
-    "artifact_identity": "sha256:42bcc4a3dcba168a3f53689011b9f250f2e7b2eca8a2b9ad3a4fded8cc674932",
+    "artifact_identity": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5",
     "build_assumptions": {
       "backend": "mncs-vm-direct",
       "capabilities": [],
       "effect_assumptions": [],
+      "generic_seeds": [
+        {
+          "function": "equals_bytes",
+          "module": "mncs.test.assertions",
+          "type_arguments": [
+            {
+              "kind": "nat",
+              "value": 4
+            }
+          ]
+        },
+        {
+          "function": "summarize",
+          "module": "mncs.test.suite",
+          "type_arguments": [
+            {
+              "kind": "nat",
+              "value": 4
+            }
+          ]
+        }
+      ],
       "optimization_policy": "default",
       "target": "mncs-vm-0.1",
       "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1"
@@ -38,29 +60,30 @@
         "source_id": "mncs.test.suite"
       },
       {
-        "bytes": 1796,
+        "bytes": 1906,
         "module": "root",
-        "sha256": "sha256:2f1463c1c95116ae9de79a31346da6f4a5d77cad7ba6687a93f20361e143aac6",
+        "sha256": "sha256:d7d4087e5b4129f417a30d76ec4adf4ab5d937b1c169c50ed477d5055f6615b5",
         "source_id": "tests/native_readiness.mncs"
       }
     ],
-    "source_snapshot_identity": "sha256:3ef8d2a219a4b080c392aa9ddf4e36e06adcb51eae9e231f72507f4169e15a1f"
+    "source_snapshot_identity": "sha256:b50870f054417851a8312a171257872c41d46f1396ed961cec05381827cb2815"
   },
   "cache_key_inputs": [
     "exact root source ID and bytes plus exact imported module IDs and bytes",
+    "canonical generic specialization seed identities",
     "Stage-0 toolchain identity and probe executable SHA-256",
     "compiler contract version, canonical VM backend, selected target, and entry",
     "requested capabilities and effect assumptions",
     "optimization and verification policies"
   ],
   "compiler": {
-    "application_module_sha256": "sha256:bbd93ede1cdef5937e3e09675bcec86e15aeb44e694ddb0c4a2c8bf0387c2da4",
+    "application_module_sha256": "sha256:49facb37da32bdd74505926c3709db2c391594f34249367b60b6776d4eb7c1e2",
     "branch": "campaign/native-application-readiness-20261013",
-    "gate_a_harness_sha256": "sha256:f15b14b4c8ca376365134918c8313fa21f5dd9121a9ef3c3907f2d8c47d80b39",
-    "gate_b_harness_sha256": "sha256:b04f42502d653ec7468d7e20ef551cb033c5239db615d9c19346470cec772296",
+    "gate_a_harness_sha256": "sha256:2f1ec87cfcd07dbe351371dafcccdc44e1976229c4d391eb6d1599216dfc6a02",
+    "gate_b_harness_sha256": "sha256:cea0e19e9d5e62019c8cc3256534efc1ce657c232fc8910bc1fad15ff6ada722",
     "probe_dispatch_sha256": "sha256:118e63d6ad4c33cb5ee712f2e18667beebda5a0fa5ec9a4d3300c660e2114210",
-    "revision": "4e4bf038b46b6090900994bce7121dbe5eafd44f",
-    "stage0_probe_sha256": "sha256:3976f4d6b954f3f163539f15e29ba1900675d735e51515d6a90718f51666bdef",
+    "revision": "511ab25ae19b9a149ced027b344cd048900617fd",
+    "stage0_probe_sha256": "sha256:61bcb2ab34457446b3af92520222947a628094e89d36296a4e6eaf0716058c62",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
     "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
@@ -69,7 +92,7 @@
   "experiments": {
     "cold_build": {
       "cache": {
-        "key": "sha256:2b6376f69b49aef9e2cb2456579ff3b08942710dea05dafdd9fef24f89216ead",
+        "key": "sha256:8a529de795b235512a97e7407cace8ab15cda07545c5dc214b84255c16da196e",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -85,16 +108,16 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 56791040,
+        "peak_rss_bytes": 56176640,
         "peak_threads": 1,
         "request_sequence": 2,
-        "wall_seconds": 0.434095
+        "wall_seconds": 0.447626
       }
     },
     "dependency_change": {
-      "artifact_identity": "sha256:4c1a49b52fedfaf66fdfbfbdec2197fe94acd217afe9918f01b0c8c26075c929",
+      "artifact_identity": "sha256:e4176125e8eab1361b8e4da26b979ac4030b94fd707b8d483e9ddde6efdf08c9",
       "cache": {
-        "key": "sha256:60fe74bcb846d0cfec1a64b36f331dc16eac445f243b969562de24ac70571ef4",
+        "key": "sha256:78e507fff6cd99edcd1da804950742e6596040f725d7cf9cf7935b0e0fbd974f",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -111,22 +134,22 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 57024512,
+        "peak_rss_bytes": 58654720,
         "peak_threads": 1,
         "request_sequence": 5,
-        "wall_seconds": 0.344628
+        "wall_seconds": 0.338314
       },
       "graph_identity_after": "sha256:e7c00147214a1e1ea37ba1b92f57e8ae6838cd90c591acb7ce61df7bc33f1e3a",
       "graph_identity_before": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
       "oracle_metrics": {
-        "cpu_seconds": 0.23,
+        "cpu_seconds": 0.24,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 56844288,
+        "peak_rss_bytes": 58462208,
         "peak_threads": 1,
         "request_sequence": 4,
-        "wall_seconds": 0.245672
+        "wall_seconds": 0.250702
       },
       "oracle_result": {
         "property_case": {
@@ -136,18 +159,18 @@
         },
         "state": {
           "$p": {
-            "checks": 3
+            "checks": 4
           },
           "$v": 0
         },
-        "state_value": 3,
+        "state_value": 4,
         "suite": {
-          "assertion_count": 2,
+          "assertion_count": 3,
           "failed": 0,
           "failure_count": 0,
-          "passed": 2,
+          "passed": 3,
           "skipped": 1,
-          "total": 3,
+          "total": 4,
           "unsupported": 0,
           "verdict_code": 0
         },
@@ -163,17 +186,17 @@
         "verified_vm_artifact"
       ],
       "reused_units": [],
-      "source_snapshot_identity": "sha256:daea42d74a7e43eb35ce938b4e42eeb8e8e7076dd4e144928ad713d51a80baef",
+      "source_snapshot_identity": "sha256:efdd72af5491d4785f9e275b7bee74b4a729144beea01e8b5f14060beb52bf5f",
       "vm_metrics": {
         "cpu_seconds": 0.16,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
-        "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 27467776,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 23019520,
         "peak_threads": 1,
         "process_count": 1,
         "stderr": "",
-        "wall_seconds": 0.165975
+        "wall_seconds": 0.17301
       },
       "vm_result": {
         "property_case": {
@@ -183,18 +206,18 @@
         },
         "state": {
           "$p": {
-            "checks": 3
+            "checks": 4
           },
           "$v": 0
         },
-        "state_value": 3,
+        "state_value": 4,
         "suite": {
-          "assertion_count": 2,
+          "assertion_count": 3,
           "failed": 0,
           "failure_count": 0,
-          "passed": 2,
+          "passed": 3,
           "skipped": 1,
-          "total": 3,
+          "total": 4,
           "unsupported": 0,
           "verdict_code": 0
         },
@@ -214,7 +237,7 @@
       },
       "entry_after_cancel_exists": true,
       "fresh_process_cache": {
-        "key": "sha256:0903b11c7fe6986d6f7add81e80ee83235e3226238a435e04b75700876e25e14",
+        "key": "sha256:8de8ed2bcaebdf80e9306968d0c9d17bfb323938dde7666a42fa0b1d59629a20",
         "publication": "previously_published",
         "recomputed_units": [],
         "reused_units": [
@@ -228,14 +251,14 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 53964800,
+        "peak_rss_bytes": 54083584,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.237249
+        "wall_seconds": 0.241391
       },
       "matching_temp_or_entry_paths_after_cancel": [],
       "retry_cache": {
-        "key": "sha256:0903b11c7fe6986d6f7add81e80ee83235e3226238a435e04b75700876e25e14",
+        "key": "sha256:8de8ed2bcaebdf80e9306968d0c9d17bfb323938dde7666a42fa0b1d59629a20",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -251,13 +274,13 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 56418304,
+        "peak_rss_bytes": 57470976,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.558225
+        "wall_seconds": 0.563923
       },
       "seed_cache": {
-        "key": "sha256:0903b11c7fe6986d6f7add81e80ee83235e3226238a435e04b75700876e25e14",
+        "key": "sha256:8de8ed2bcaebdf80e9306968d0c9d17bfb323938dde7666a42fa0b1d59629a20",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -268,11 +291,11 @@
         "schema_version": "mncs.compiler.application-build-cache-observation/1",
         "status": "miss"
       },
-      "unique_policy_key": "sha256:0903b11c7fe6986d6f7add81e80ee83235e3226238a435e04b75700876e25e14"
+      "unique_policy_key": "sha256:8de8ed2bcaebdf80e9306968d0c9d17bfb323938dde7666a42fa0b1d59629a20"
     },
     "invalid_source": {
       "cache": {
-        "key": "sha256:5296b306c0dd001584e8c34d52dc737d73b57431db5a34df29537e9ebb7e8dc1",
+        "key": "sha256:97279297aeb5e30860320f586480e60ab8b017f26bd4aab6d4b876e0ad9848b5",
         "publication": "not_published",
         "recomputed_units": [
           "source_semantic_check"
@@ -290,9 +313,9 @@
           "severity": "error",
           "span": {
             "column": 56,
-            "end": 1189,
-            "line": 32,
-            "start": 1176
+            "end": 1299,
+            "line": 33,
+            "start": 1286
           },
           "stage": "elaboration"
         }
@@ -303,24 +326,24 @@
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 3,
-          "peak_rss_bytes": 57024512,
+          "peak_rss_bytes": 58654720,
           "peak_threads": 1,
           "request_sequence": 6,
-          "wall_seconds": 0.026202
+          "wall_seconds": 0.026847
         },
         {
           "cpu_seconds": 0.02,
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 3,
-          "peak_rss_bytes": 57024512,
+          "peak_rss_bytes": 58654720,
           "peak_threads": 1,
           "request_sequence": 7,
-          "wall_seconds": 0.026227
+          "wall_seconds": 0.026684
         }
       ],
       "repeat_cache": {
-        "key": "sha256:5296b306c0dd001584e8c34d52dc737d73b57431db5a34df29537e9ebb7e8dc1",
+        "key": "sha256:97279297aeb5e30860320f586480e60ab8b017f26bd4aab6d4b876e0ad9848b5",
         "publication": "not_published",
         "recomputed_units": [
           "source_semantic_check"
@@ -333,9 +356,9 @@
       "response_status": "rejected"
     },
     "small_semantic_edit": {
-      "artifact_identity": "sha256:a8ca6178da00590df14e02bcec918801411aa69c79bbbbd91608aa3fea7a4ab6",
+      "artifact_identity": "sha256:31f7708c5feabad250a0fcb1f889cb6a90d049b7d2f0e31384a76ce297187004",
       "cache": {
-        "key": "sha256:76ac164976ba5fd95a41140375a82444b5dd0d736e0f9eaa6e0175a84c8771a8",
+        "key": "sha256:fa51815abfe8b4a84be5c2e3eb2b381c75779a8c49f73a9e4d8a667b16d5bb41",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -347,25 +370,25 @@
         "status": "miss"
       },
       "compile_metrics": {
-        "cpu_seconds": 0.31,
+        "cpu_seconds": 0.33,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 56844288,
+        "peak_rss_bytes": 54120448,
         "peak_threads": 1,
         "request_sequence": 3,
-        "wall_seconds": 0.335211
+        "wall_seconds": 0.344356
       },
       "directly_changed_source": "tests/native_readiness.mncs",
       "oracle_metrics": {
-        "cpu_seconds": 0.23,
+        "cpu_seconds": 0.24,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 54243328,
+        "peak_rss_bytes": 54120448,
         "peak_threads": 1,
         "request_sequence": 2,
-        "wall_seconds": 0.244632
+        "wall_seconds": 0.250568
       },
       "oracle_result": {
         "property_case": {
@@ -381,12 +404,12 @@
         },
         "state_value": 1,
         "suite": {
-          "assertion_count": 2,
+          "assertion_count": 3,
           "failed": 1,
           "failure_count": 1,
-          "passed": 1,
+          "passed": 2,
           "skipped": 1,
-          "total": 3,
+          "total": 4,
           "unsupported": 0,
           "verdict_code": 1
         },
@@ -402,17 +425,17 @@
         "verified_vm_artifact"
       ],
       "reused_units": [],
-      "source_snapshot_identity": "sha256:7d8e90c19b5991d569debca63998252a976260001c6743260b540ad2d0b1c543",
+      "source_snapshot_identity": "sha256:b34f2f69b28401e4004c8c3e6001c3ea957b46dbe16a2db557fce70e5b6c27a9",
       "vm_metrics": {
-        "cpu_seconds": 0.14,
+        "cpu_seconds": 0.15,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 22827008,
+        "peak_rss_bytes": 23289856,
         "peak_threads": 1,
         "process_count": 1,
         "stderr": "",
-        "wall_seconds": 0.165486
+        "wall_seconds": 0.172813
       },
       "vm_result": {
         "property_case": {
@@ -428,12 +451,12 @@
         },
         "state_value": 1,
         "suite": {
-          "assertion_count": 2,
+          "assertion_count": 3,
           "failed": 1,
           "failure_count": 1,
-          "passed": 1,
+          "passed": 2,
           "skipped": 1,
-          "total": 3,
+          "total": 4,
           "unsupported": 0,
           "verdict_code": 1
         },
@@ -453,17 +476,17 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 57024512,
+        "peak_rss_bytes": 58654720,
         "peak_threads": 1,
         "request_sequence": 8,
-        "wall_seconds": 0.000293
+        "wall_seconds": 0.000238
       },
       "response_status": "unavailable"
     },
     "warm_unchanged_fresh_process": {
-      "artifact_identity": "sha256:42bcc4a3dcba168a3f53689011b9f250f2e7b2eca8a2b9ad3a4fded8cc674932",
+      "artifact_identity": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5",
       "cache": {
-        "key": "sha256:2b6376f69b49aef9e2cb2456579ff3b08942710dea05dafdd9fef24f89216ead",
+        "key": "sha256:8a529de795b235512a97e7407cace8ab15cda07545c5dc214b84255c16da196e",
         "publication": "previously_published",
         "recomputed_units": [],
         "reused_units": [
@@ -472,18 +495,18 @@
         "schema_version": "mncs.compiler.application-build-cache-observation/1",
         "status": "hit"
       },
-      "cpu_speedup": 2.05,
+      "cpu_speedup": 2.15,
       "metrics": {
-        "cpu_seconds": 0.21,
+        "cpu_seconds": 0.2,
         "peak_cgroup_memory_bytes": null,
-        "peak_child_processes": 0,
-        "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 54362112,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54120448,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.240479
+        "wall_seconds": 0.242953
       },
-      "wall_speedup": 1.81
+      "wall_speedup": 1.84
     }
   },
   "fine_grained_invalidation": {
@@ -493,7 +516,7 @@
   "gate_a": "pass",
   "gate_b": "partial",
   "kind": "mncs-native-incremental-build-evidence",
-  "observed_at": "2026-10-14T07:25:34.560990+00:00",
+  "observed_at": "2026-10-14T08:37:08.742833+00:00",
   "producer_diagnostics_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n",
   "resource_notes": {
     "cgroup_memory_bytes": "unknown when the sandbox exposes no usable cgroup memory counter",

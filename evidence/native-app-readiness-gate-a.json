@@ -1,8 +1,8 @@
 {
   "application": {
-    "artifact_identity": "sha256:42bcc4a3dcba168a3f53689011b9f250f2e7b2eca8a2b9ad3a4fded8cc674932",
+    "artifact_identity": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5",
     "artifact_schema": "mncs.vm.artifact/1",
-    "artifact_sha256": "sha256:e7cab5a54cd8931b8d295694e30bc76a244a48395ef149b79b80f78a9883f1b6",
+    "artifact_sha256": "sha256:871b022112c1bc2fc22b35ed3ab318296b01c29b7d1084f45d0e742869517f36",
     "contract_status": "unsupported",
     "dependency_graph": {
       "details": {
@@ -58,7 +58,29 @@
       "status": "verified",
       "target": "mncs-vm-0.1"
     },
-    "interface_identity": "05bd75d133b3a926bed1037267b607debf3ff1d79bceab0975a1cd18374c5776",
+    "generic_seeds": [
+      {
+        "function": "equals_bytes",
+        "module": "mncs.test.assertions",
+        "type_arguments": [
+          {
+            "kind": "nat",
+            "value": 4
+          }
+        ]
+      },
+      {
+        "function": "summarize",
+        "module": "mncs.test.suite",
+        "type_arguments": [
+          {
+            "kind": "nat",
+            "value": 4
+          }
+        ]
+      }
+    ],
+    "interface_identity": "363a9a7c98c5600fa67a5c149506503d6814e0760864b69d78221cc622ebcd45",
     "module": "tests.native_readiness",
     "name": "mncs-test native readiness suite core",
     "producer": {
@@ -66,7 +88,7 @@
       "probe": {
         "kind": "mncs.stage0-reference-compiler",
         "probe_executable": "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-compiler-stage0-probe",
-        "probe_executable_sha256": "sha256:3976f4d6b954f3f163539f15e29ba1900675d735e51515d6a90718f51666bdef"
+        "probe_executable_sha256": "sha256:61bcb2ab34457446b3af92520222947a628094e89d36296a4e6eaf0716058c62"
       },
       "stage0_toolchain": {
         "backend_configuration": null,
@@ -131,13 +153,25 @@
         "source_id": "mncs.test.suite"
       },
       {
-        "bytes": 1796,
+        "bytes": 1906,
         "module": "root",
-        "sha256": "sha256:2f1463c1c95116ae9de79a31346da6f4a5d77cad7ba6687a93f20361e143aac6",
+        "sha256": "sha256:d7d4087e5b4129f417a30d76ec4adf4ab5d937b1c169c50ed477d5055f6615b5",
         "source_id": "tests/native_readiness.mncs"
       }
     ],
-    "source_snapshot_identity": "sha256:3ef8d2a219a4b080c392aa9ddf4e36e06adcb51eae9e231f72507f4169e15a1f",
+    "source_snapshot_identity": "sha256:b50870f054417851a8312a171257872c41d46f1396ed961cec05381827cb2815",
+    "specialized_callables": [
+      {
+        "function": "mncs:0.4:ssa:function:0a77e12b4bcf344d164b5155644985dcf872421ed641162e97497304d7c58bd0",
+        "module": "mncs.test.assertions",
+        "name": "equals_bytes__spec_f10cf230"
+      },
+      {
+        "function": "mncs:0.4:ssa:function:4ad8afbbbe8cfdb57dbc11edcc5db7c48e7db28fb72b5010a6038c86ab2933e3",
+        "module": "mncs.test.suite",
+        "name": "summarize__spec_f10cf230"
+      }
+    ],
     "unresolved_obligations": [
       "export mncs.test.assertions::equals_bytes: no ssa instance",
       "export mncs.test.suite::summarize: no ssa instance"
@@ -148,7 +182,7 @@
     "cache_reuse_claimed": true,
     "first_build": {
       "cache": {
-        "key": "sha256:2b6376f69b49aef9e2cb2456579ff3b08942710dea05dafdd9fef24f89216ead",
+        "key": "sha256:8a529de795b235512a97e7407cace8ab15cda07545c5dc214b84255c16da196e",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -160,19 +194,44 @@
         "status": "miss"
       },
       "metrics": {
-        "cpu_seconds": 0.4,
+        "cpu_seconds": 0.43,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 54652928,
+        "peak_rss_bytes": 58548224,
         "peak_threads": 1,
         "request_sequence": 2,
-        "wall_seconds": 0.427743
+        "wall_seconds": 0.450393
+      }
+    },
+    "generic_specialization_change": {
+      "artifact_identity": "sha256:2e520a80cc5a7db61afb800fd634aad2e2d1ffb73694297cf60fc99d803e979f",
+      "cache": {
+        "key": "sha256:a004ebad8216efc425e9a7324341b55887aa2d03b56d4c94ee296c32afb693c6",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/1",
+        "status": "miss"
+      },
+      "metrics": {
+        "cpu_seconds": 0.34,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 59457536,
+        "peak_threads": 1,
+        "request_sequence": 4,
+        "wall_seconds": 0.347377
       }
     },
     "identical_repeat": {
       "cache": {
-        "key": "sha256:2b6376f69b49aef9e2cb2456579ff3b08942710dea05dafdd9fef24f89216ead",
+        "key": "sha256:8a529de795b235512a97e7407cace8ab15cda07545c5dc214b84255c16da196e",
         "publication": "previously_published",
         "recomputed_units": [],
         "reused_units": [
@@ -186,26 +245,26 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 56475648,
+        "peak_rss_bytes": 58548224,
         "peak_threads": 1,
         "request_sequence": 3,
-        "wall_seconds": 0.018582
+        "wall_seconds": 0.02012
       }
     },
-    "identical_repeat_artifact_identity": "sha256:42bcc4a3dcba168a3f53689011b9f250f2e7b2eca8a2b9ad3a4fded8cc674932"
+    "identical_repeat_artifact_identity": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5"
   },
   "canonical_vm": {
-    "artifact_id": "sha256:42bcc4a3dcba168a3f53689011b9f250f2e7b2eca8a2b9ad3a4fded8cc674932",
+    "artifact_id": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5",
     "metrics": {
-      "cpu_seconds": 0.15,
+      "cpu_seconds": 0.16,
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
       "peak_open_file_descriptors": 4,
-      "peak_rss_bytes": 27656192,
+      "peak_rss_bytes": 23044096,
       "peak_threads": 1,
       "process_count": 1,
       "stderr": "",
-      "wall_seconds": 0.166046
+      "wall_seconds": 0.175568
     },
     "outcome": {
       "kind": "completed"
@@ -218,18 +277,18 @@
       },
       "state": {
         "$p": {
-          "checks": 3
+          "checks": 4
         },
         "$v": 0
       },
-      "state_value": 3,
+      "state_value": 4,
       "suite": {
-        "assertion_count": 2,
+        "assertion_count": 3,
         "failed": 0,
         "failure_count": 0,
-        "passed": 2,
+        "passed": 3,
         "skipped": 1,
-        "total": 3,
+        "total": 4,
         "unsupported": 0,
         "verdict_code": 0
       },
@@ -238,13 +297,13 @@
         "length": 4
       }
     },
-    "returned_value_sha256": "sha256:1e173bd10596e16e5d784007dfe4db611bfa34866472c39f1706e95b6e5821a7",
+    "returned_value_sha256": "sha256:b69f5302304fc9bd27419131e83b087a278bb848f2088479c01126ffdf5b7be3",
     "steps": null
   },
   "compiler": {
     "branch": "campaign/native-application-readiness-20261013",
-    "revision": "3c8e2116a8f6158b452875e1928bf6ce10b4ade4",
-    "stage0_probe_sha256": "sha256:3976f4d6b954f3f163539f15e29ba1900675d735e51515d6a90718f51666bdef",
+    "revision": "511ab25ae19b9a149ced027b344cd048900617fd",
+    "stage0_probe_sha256": "sha256:61bcb2ab34457446b3af92520222947a628094e89d36296a4e6eaf0716058c62",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
     "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
@@ -253,6 +312,33 @@
   "gate_a": "pass",
   "kind": "mncs-native-application-readiness-gate-a",
   "negative_cases": {
+    "generic_seed_count_limit": {
+      "code": "MCA110",
+      "message": "generic specialization count exceeds the bounded application input"
+    },
+    "invalid_generic_specialization": {
+      "diagnostics": [
+        {
+          "code": "MNE131",
+          "expected": [],
+          "found": null,
+          "message": "host type arguments name unknown function 'mncs.test.suite::missing'",
+          "severity": "error",
+          "span": {
+            "column": 8,
+            "end": 40,
+            "line": 2,
+            "start": 18
+          },
+          "stage": "elaboration"
+        }
+      ],
+      "status": "rejected"
+    },
+    "malformed_generic_seeds": {
+      "code": "MCA109",
+      "message": "generic_seeds must be an array of specialization requests"
+    },
     "unknown_field": {
       "diagnostics": [
         {
@@ -263,15 +349,19 @@
           "severity": "error",
           "span": {
             "column": 56,
-            "end": 1189,
-            "line": 32,
-            "start": 1176
+            "end": 1299,
+            "line": 33,
+            "start": 1286
           },
           "stage": "elaboration"
         }
       ],
-      "source_snapshot_identity": "sha256:f7c9814982dad7d56eca31e187b648064ffe925c7f6d62211f86324123dd4877",
+      "source_snapshot_identity": "sha256:e7e63e3633d7e30a806fc89f895cdd5a27c6dcb3c8e6b2dde2dca46920fbc1ac",
       "status": "rejected"
+    },
+    "unknown_generic_seed_field": {
+      "code": "MCA109",
+      "message": "generic_seeds contains a malformed specialization request"
     },
     "unsupported_target": {
       "error": {
@@ -281,20 +371,20 @@
       "status": "unavailable"
     }
   },
-  "observed_at": "2026-10-14T08:08:08.303933+00:00",
+  "observed_at": "2026-10-14T08:37:00.872672+00:00",
   "oracle": {
     "diagnostics": [],
     "kind": "Stage-0 ReferenceCompiler + execute_ssa_module project oracle",
-    "linked_functions": 23,
+    "linked_functions": 24,
     "metrics": {
-      "cpu_seconds": 0.33,
+      "cpu_seconds": 0.34,
       "peak_cgroup_memory_bytes": null,
-      "peak_child_processes": 0,
-      "peak_open_file_descriptors": 3,
-      "peak_rss_bytes": 54132736,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 5,
+      "peak_rss_bytes": 54218752,
       "peak_threads": 1,
       "request_sequence": 1,
-      "wall_seconds": 0.361434
+      "wall_seconds": 0.381546
     },
     "returned_value": {
       "property_case": {
@@ -304,18 +394,18 @@
       },
       "state": {
         "$p": {
-          "checks": 3
+          "checks": 4
         },
         "$v": 0
       },
-      "state_value": 3,
+      "state_value": 4,
       "suite": {
-        "assertion_count": 2,
+        "assertion_count": 3,
         "failed": 0,
         "failure_count": 0,
-        "passed": 2,
+        "passed": 3,
         "skipped": 1,
-        "total": 3,
+        "total": 4,
         "unsupported": 0,
         "verdict_code": 0
       },
@@ -324,8 +414,8 @@
         "length": 4
       }
     },
-    "returned_value_sha256": "sha256:1e173bd10596e16e5d784007dfe4db611bfa34866472c39f1706e95b6e5821a7",
-    "ssa_functions": 21,
+    "returned_value_sha256": "sha256:b69f5302304fc9bd27419131e83b087a278bb848f2088479c01126ffdf5b7be3",
+    "ssa_functions": 22,
     "valid": true
   },
   "schema_version": 1,

@@ -29,7 +29,7 @@ and its exact working-tree identities are recorded separately.
 - **Gate B — partial.** An atomic content-addressed cache reuses successful
   complete application artifacts across fresh probe processes. In the
   expanded bounded workload the cold miss took about 0.45 s and the warm hit
-  about 0.24 s (1.87× wall reduction on the latest run). Changed root and
+  about 0.24 s (1.84× wall reduction on the latest run). Changed root and
   imported sources miss and rebuild; invalid source retains the same `MNE162`
   diagnostic; a killed build publishes no result and a later retry succeeds.
   Measurements and cache keys are in
