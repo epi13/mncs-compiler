@@ -22,8 +22,8 @@ specializations, typed failures, and explicit host effects.
   five-module closure; the canonical VM and Stage-0 project oracle agree on
   the report and typed failures. An invalid record projection returns
   `MNE162`. Evidence `evidence/native-app-readiness-gate-a.json` has SHA-256
-  `640f7e3d062f9f99c5f575af4baf4642711205a3d1a6cff103303cca145f65bc`.
-  The artifact is `sha256:cff9e5cc4cb47ea19096ec735384263fb87d211d3d7d835173b56bca3e2ea879`.
+  `b52f3a4baff2d38220900d3714a5748c9e86f47a8dc19d02f884edc6d95be3f3`.
+  The artifact is `sha256:874730ef4022ccd9414127a70b4af495a9192d7770f494b0916c6fc3965ac0cd`.
   A direct `mncs.test.digest::build_digest` proof checks mixed pass/fail/skip
   aggregation, failure caps one and zero, omission counts, and all-pass
   results against Stage-0 and three canonical VM executions. Its `/4` artifact
@@ -41,20 +41,37 @@ specializations, typed failures, and explicit host effects.
   the runner independently checks those rows against admitted SSA. Stage-0
   and VM results agree for all three cases. Missing capability is denied, and
   a rejected write returns typed exit 3 without publishing output. Artifact
-  `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919`,
+  `sha256:da7f6609992c33975c1f02ad71f31bddafe55ca8e524e6cddedc9ac299643a3d`,
   interface `sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2`,
   and evidence `evidence/native-app-readiness-test-digest-app.json` (SHA-256
-  `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`).
-  Build measured 0.628 s / 0.590 CPU / 64.9 MiB RSS; VM cases took
-  0.024–0.028 s / 0.010 CPU and 12.2–12.5 MiB RSS. Producer identities are
+  `7b385f42d16bf1c4bf011fe307362b5bd6d48fccb95a98acb8ee770398679898`).
+  Build measured 0.839 s / 0.620 CPU / 62.6 MiB RSS; VM cases took
+  0.022–0.024 s / 0.010 CPU and 11.3–11.4 MiB RSS. Producer identities are
   Test `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib
   `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language
   `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM
   `1c19a94732c9d24029dd00e2d5af13710f481d02`, Stage-0
   `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, and release probe SHA-256
-  `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`.
+  `0c574df5c69330b2bdc753bfe744638304d6c4d7a61b80e899c78c6e6dae6827`.
   cgroup memory counters were unavailable. These application proofs do not
   establish compiler succession or full Test command parity.
+- **Application VM SSA projection — verified.** Compiler commit
+  `c70dc851717b623f091d844dab23eab0c810052b` serializes only the selected
+  exports' verified transitive call closure, including bounded-iteration
+  callees, and revalidates the projected module at the lowering boundary. The
+  artifact retains the full selected-SSA identity and fingerprint as source
+  provenance and adds an `application-ssa-closure/1` fingerprint for the
+  executable payload. Capabilities and dispatch bindings are derived from that
+  same closure. Missing or bodyless callees and attached proof relationships
+  fail closed. The same `digest_app` source snapshot emits a 1,108,394-byte
+  artifact versus 1,161,949 bytes in the prior artifact
+  `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919`
+  (53,555 bytes / 4.6091% smaller). Stage-0 and VM outputs still agree across
+  all three effectful cases; interface identity is unchanged. Build measured
+  0.839 s / 0.620 CPU, so this establishes smaller artifacts rather than faster
+  compilation. The closure fingerprint, artifact hash and size comparison are
+  retained in `evidence/native-app-readiness-test-digest-app.json`. The
+  self-consumption matrix is unchanged; Stage-1 and Stage-2 remain unproven.
 - **Gate B — partial.** Current readiness-suite evidence
   `evidence/native-app-readiness-gate-b.json` has SHA-256
   `65106578dc52ac9ea89412cde06b7a0578e989d9101e2c4c79d0e67e9f098f03` and
