@@ -17,7 +17,7 @@ import test_vm_native_application as app
 ROOT = app.ROOT
 PROVIDER = ROOT / "tools/application_build_provider.py"
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/3"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/4"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 
 
@@ -143,6 +143,9 @@ def main() -> None:
                 "interface_identity", "required_capabilities",
                 "unresolved_obligations", "value",
             },
+            "capability_dispatch": {
+                "schema_version", "status", "bindings", "unresolved_obligations",
+            },
             "entry": {"module", "function", "status", "interface"},
             "execution_target_compatibility": {
                 "target", "status", "compatible", "execution_status",
@@ -164,6 +167,14 @@ def main() -> None:
             raise AssertionError("contract artifact identity does not match VM artifact")
         if artifact.get("schema_version") != "mncs.vm.artifact/1":
             raise AssertionError("application response does not expose canonical VM artifact schema")
+        capability_dispatch = cold_response["capability_dispatch"]
+        if (
+            capability_dispatch.get("schema_version") != "mncs.compiler.capability-dispatch/1"
+            or capability_dispatch.get("status") != "verified"
+            or not isinstance(capability_dispatch.get("bindings"), list)
+            or capability_dispatch.get("unresolved_obligations") != []
+        ):
+            raise AssertionError("application response capability dispatch contract is unresolved")
         if not isinstance(artifact.get("interface_identity"), str) or not artifact["interface_identity"]:
             raise AssertionError("application response has no callable interface identity")
         callable_interface = cold_response["entry"]["interface"]
@@ -192,6 +203,8 @@ def main() -> None:
             raise AssertionError("Environment summary changed dependency identity")
         if cold.get("artifact_identity") != artifact.get("identity"):
             raise AssertionError("Environment summary changed artifact identity")
+        if cold.get("capability_dispatch") != capability_dispatch:
+            raise AssertionError("Environment summary changed compiler capability dispatch")
         if cold_response.get("cache", {}).get("status") != "miss":
             raise AssertionError("first provider build did not compile the request")
 

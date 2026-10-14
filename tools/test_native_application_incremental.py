@@ -175,7 +175,7 @@ def main() -> None:
         raise
     if cold.get('cache', {}).get('status') != 'miss' or cold.get('cache', {}).get('publication') != 'stored':
         raise AssertionError('cold run was not compiled and atomically published')
-    if cold.get('schema_version') != 'mncs.compiler.application-build/3':
+    if cold.get('schema_version') != 'mncs.compiler.application-build/4':
         raise AssertionError('incremental experiment did not use the current /3 producer')
     if cold.get('status') != 'verified' or cold.get('entry', {}).get('status') != 'verified':
         raise AssertionError('cold selected application scope was not verified')

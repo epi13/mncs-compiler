@@ -21,7 +21,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use mncs_compiler::ReferenceCompiler;
 use mncs_model::{
-    ArtifactRepresentation, CompilationStatus, Program, SsaModule, TargetContractRef,
+    ArtifactRepresentation, CompilationStatus, Program, SsaInstructionKind, SsaModule,
+    TargetContractRef,
 };
 
 /// Must match `mncs_vm::artifact::ARTIFACT_SCHEMA_VERSION`.
@@ -114,6 +115,20 @@ struct ArtifactRequirements {
     vm_contract: String,
 }
 
+/// One compiler-verified mapping from a canonical capability identity to
+/// the exact key used by the selected VM instruction.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+pub struct CapabilityDispatchBinding {
+    pub capability_identity: String,
+    pub runtime_capability_key: String,
+    pub runtime_key_kind: String,
+    pub operation: String,
+    pub function_identity: String,
+    pub instruction_identity: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_operation_identity: Option<String>,
+}
+
 /// `sha256:<hex>` over canonical bytes. Must match
 /// `mncs_vm::artifact::artifact_id_of`.
 fn artifact_id_of(bytes: &[u8]) -> String {
@@ -204,7 +219,7 @@ pub fn emit_vm_artifact_with_source_map(
     source_map: Option<mncs_compiler::ExecutionSourceMap>,
 ) -> Result<(serde_json::Value, Option<mncs_compiler::ExecutionSourceMap>), String> {
     emit_vm_artifact_scoped(compiler, program, producer, source_map, None, None)
-        .map(|(artifact, source_map, _)| (artifact, source_map))
+        .map(|(artifact, source_map, _, _)| (artifact, source_map))
 }
 
 /// Emit a closed application surface consisting of its selected entry and
@@ -218,7 +233,14 @@ pub fn emit_vm_application_artifact_with_producer(
     entry_module: &str,
     entry_function: &str,
     generic_seed_functions: &BTreeSet<(String, String)>,
-) -> Result<(serde_json::Value, Vec<String>), String> {
+) -> Result<
+    (
+        serde_json::Value,
+        Vec<String>,
+        Vec<CapabilityDispatchBinding>,
+    ),
+    String,
+> {
     let mut selected_exports =
         BTreeSet::from([(entry_module.to_owned(), entry_function.to_owned())]);
     for (generic_module, generic_function) in generic_seed_functions {
@@ -240,7 +262,7 @@ pub fn emit_vm_application_artifact_with_producer(
             }
         }
     }
-    let (artifact, _, unselected_unresolved) = emit_vm_artifact_scoped(
+    let (artifact, _, unselected_unresolved, capability_bindings) = emit_vm_artifact_scoped(
         compiler,
         program,
         producer,
@@ -248,7 +270,7 @@ pub fn emit_vm_application_artifact_with_producer(
         Some(&selected_exports),
         Some(generic_seed_functions),
     )?;
-    Ok((artifact, unselected_unresolved))
+    Ok((artifact, unselected_unresolved, capability_bindings))
 }
 
 fn emit_vm_artifact_scoped(
@@ -263,6 +285,7 @@ fn emit_vm_artifact_scoped(
         serde_json::Value,
         Option<mncs_compiler::ExecutionSourceMap>,
         Vec<String>,
+        Vec<CapabilityDispatchBinding>,
     ),
     String,
 > {
@@ -282,6 +305,7 @@ fn emit_vm_artifact_scoped(
         "selected ssa identity is valid for {}",
         program.module
     );
+    let capability_bindings = capability_dispatch_bindings(&ssa)?;
     let selected = result
         .artifacts
         .iter()
@@ -389,22 +413,31 @@ fn emit_vm_artifact_scoped(
             ))
     });
 
-    let mut capabilities: Vec<String> = ssa
-        .functions
-        .iter()
-        .flat_map(|function| {
-            function.blocks.iter().flat_map(|block| {
-                block.instructions.iter().flat_map(|instruction| {
+    let mut capability_set = BTreeSet::new();
+    for function in &ssa.functions {
+        for block in &function.blocks {
+            for instruction in &block.instructions {
+                capability_set.extend(
                     instruction
                         .capability_uses
                         .iter()
-                        .map(|use_| use_.capability.0.clone())
-                })
-            })
-        })
-        .collect();
-    capabilities.sort();
-    capabilities.dedup();
+                        .map(|usage| usage.capability.0.clone()),
+                );
+                if let SsaInstructionKind::Call {
+                    required_capabilities,
+                    ..
+                } = &instruction.kind
+                {
+                    capability_set.extend(
+                        required_capabilities
+                            .iter()
+                            .map(|identity| identity.0.clone()),
+                    );
+                }
+            }
+        }
+    }
+    let capabilities: Vec<String> = capability_set.into_iter().collect();
 
     // Runtime events name selected SSA operations. Preserve the original
     // semantic rows and add exact compiler-owned SSA -> source correspondences.
@@ -500,7 +533,87 @@ fn emit_vm_artifact_scoped(
         serde_json::to_value(&sealed).expect("sealed artifact serializes"),
         source_map,
         unselected_unresolved,
+        capability_bindings,
     ))
+}
+
+fn capability_dispatch_bindings(ssa: &SsaModule) -> Result<Vec<CapabilityDispatchBinding>, String> {
+    let mut bindings = BTreeSet::new();
+    for function in &ssa.functions {
+        for block in &function.blocks {
+            for instruction in &block.instructions {
+                let function_identity = function.semantic_identity.0.clone();
+                let instruction_identity = instruction.identity.0.clone();
+                let source_operation_identity = instruction
+                    .semantic_identity
+                    .as_ref()
+                    .map(|identity| identity.0.clone());
+                match &instruction.kind {
+                    SsaInstructionKind::HostCall {
+                        capability,
+                        operation,
+                    } => {
+                        if instruction.capability_uses.len() != 1 {
+                            return Err(format!(
+                                "HostCall {} has {} canonical capability uses; expected exactly one",
+                                instruction_identity,
+                                instruction.capability_uses.len()
+                            ));
+                        }
+                        let usage = &instruction.capability_uses[0];
+                        bindings.insert(CapabilityDispatchBinding {
+                            capability_identity: usage.capability.0.clone(),
+                            runtime_capability_key: capability.clone(),
+                            runtime_key_kind: "source-alias".to_owned(),
+                            operation: operation.clone(),
+                            function_identity,
+                            instruction_identity,
+                            source_operation_identity,
+                        });
+                    }
+                    SsaInstructionKind::Call {
+                        required_capabilities,
+                        ..
+                    } => {
+                        for identity in required_capabilities {
+                            bindings.insert(CapabilityDispatchBinding {
+                                capability_identity: identity.0.clone(),
+                                runtime_capability_key: identity.0.clone(),
+                                runtime_key_kind: "canonical-identity".to_owned(),
+                                operation: "call-admission".to_owned(),
+                                function_identity: function_identity.clone(),
+                                instruction_identity: instruction_identity.clone(),
+                                source_operation_identity: source_operation_identity.clone(),
+                            });
+                        }
+                    }
+                    _ => {
+                        let operation = if matches!(instruction.kind, SsaInstructionKind::Effect) {
+                            instruction
+                                .effects
+                                .first()
+                                .map(|effect| format!("effect:{}", effect.0))
+                                .unwrap_or_else(|| "effect".to_owned())
+                        } else {
+                            "instruction-capability".to_owned()
+                        };
+                        for usage in &instruction.capability_uses {
+                            bindings.insert(CapabilityDispatchBinding {
+                                capability_identity: usage.capability.0.clone(),
+                                runtime_capability_key: usage.capability.0.clone(),
+                                runtime_key_kind: "canonical-identity".to_owned(),
+                                operation: operation.clone(),
+                                function_identity: function_identity.clone(),
+                                instruction_identity: instruction_identity.clone(),
+                                source_operation_identity: source_operation_identity.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    Ok(bindings.into_iter().collect())
 }
 
 /// Bind one module-qualified function to its SSA instance. Panics

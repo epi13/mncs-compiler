@@ -17,7 +17,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/3"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/4"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 INPUT_ARTIFACT_SCHEMA = "mncs.environment.provider-input-artifacts/1"
 INPUT_ARTIFACT_DIR_ENV = "MNCS_ENV_INPUT_ARTIFACT_DIR"
@@ -258,6 +258,7 @@ def summary(response: dict, output_name: str | None) -> dict:
             response.get("artifact", {}).get("identity")
             if isinstance(response.get("artifact"), dict) else None
         ),
+        "capability_dispatch": response.get("capability_dispatch"),
         "result_file": output_name,
     }
 

@@ -20,7 +20,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static CACHE_NONCE: AtomicU64 = AtomicU64::new(0);
 static PRODUCER_IDENTITY: OnceLock<(String, Value)> = OnceLock::new();
 
-const CONTRACT: &str = "mncs.compiler.application-build/3";
+const CONTRACT: &str = "mncs.compiler.application-build/4";
+const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
 const REQUEST: &str = "mncs.compiler.application-build-request/1";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
@@ -90,6 +91,12 @@ fn error_contract(status: &str, code: &str, message: &str) -> Value {
         "status": status,
         "error": { "code": code, "message": message },
         "artifact": null,
+        "capability_dispatch": {
+            "schema_version": CAPABILITY_DISPATCH_SCHEMA,
+            "status": "unknown",
+            "bindings": [],
+            "unresolved_obligations": [],
+        },
         "diagnostics": [],
         "unresolved_obligations": [],
         "unselected_unresolved_exports": [],
@@ -1205,6 +1212,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 },
                 "entry": { "module": entry_module, "function": entry_function },
                 "artifact": null,
+                "capability_dispatch": {
+                    "schema_version": CAPABILITY_DISPATCH_SCHEMA,
+                    "status": "unknown",
+                    "bindings": [],
+                    "unresolved_obligations": [],
+                },
                 "diagnostics": diagnostics,
                 "unresolved_obligations": [],
                 "unselected_unresolved_exports": [],
@@ -1295,7 +1308,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         }
     }
     let producer_reference = format!("stage0-probe:{probe_identity}");
-    let (artifact, unselected_unresolved, emission_error) =
+    let (artifact, unselected_unresolved, capability_bindings, emission_error) =
         match vm_emit::emit_vm_application_artifact_with_producer(
             &compiler,
             program,
@@ -1304,11 +1317,17 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             entry_function,
             &generic_seed_functions,
         ) {
-            Ok((artifact, unselected_unresolved)) => (Some(artifact), unselected_unresolved, None),
-            Err(error) => (None, Vec::new(), Some(error)),
+            Ok((artifact, unselected_unresolved, capability_bindings)) => (
+                Some(artifact),
+                unselected_unresolved,
+                capability_bindings,
+                None,
+            ),
+            Err(error) => (None, Vec::new(), Vec::new(), Some(error)),
         };
 
     let Some(artifact) = artifact else {
+        let obligation = emission_error.unwrap_or_else(|| "artifact emission failed".to_owned());
         return annotate_cache(
             json!({
                 "schema_version": CONTRACT,
@@ -1322,8 +1341,14 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 },
                 "entry": { "module": entry_module, "function": entry_function },
                 "artifact": null,
+                "capability_dispatch": {
+                    "schema_version": CAPABILITY_DISPATCH_SCHEMA,
+                    "status": "unsupported",
+                    "bindings": [],
+                    "unresolved_obligations": [obligation],
+                },
                 "diagnostics": diagnostics,
-                "unresolved_obligations": [emission_error.unwrap_or_else(|| "artifact emission failed".to_owned())],
+                "unresolved_obligations": [obligation],
                 "unselected_unresolved_exports": unselected_unresolved,
             }),
             &cache_key,
@@ -1392,6 +1417,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         "verified"
     };
 
+    let capability_dispatch = json!({
+        "schema_version": CAPABILITY_DISPATCH_SCHEMA,
+        "status": "verified",
+        "bindings": capability_bindings,
+        "unresolved_obligations": [],
+    });
     let response = json!({
         "schema_version": CONTRACT,
         "status": status,
@@ -1437,6 +1468,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "unresolved_obligations": unresolved,
             "value": artifact,
         },
+        "capability_dispatch": capability_dispatch,
         "entry": {
             "module": entry_module,
             "function": entry_function,

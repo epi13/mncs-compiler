@@ -381,7 +381,7 @@ def main() -> None:
         artifact = built.get('artifact', {}).get('value')
         if not isinstance(artifact, dict):
             raise AssertionError('no canonical VM artifact: ' + json.dumps(built, indent=2)[:8000])
-        if built.get('schema_version') != 'mncs.compiler.application-build/3':
+        if built.get('schema_version') != 'mncs.compiler.application-build/4':
             raise AssertionError('application producer contract did not advance to /3')
         callable_interface = built.get('entry', {}).get('interface')
         if not isinstance(callable_interface, dict):
