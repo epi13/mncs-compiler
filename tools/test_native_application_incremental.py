@@ -167,8 +167,14 @@ def main() -> None:
         raise
     if cold.get('cache', {}).get('status') != 'miss' or cold.get('cache', {}).get('publication') != 'stored':
         raise AssertionError('cold run was not compiled and atomically published')
-    if cold.get('entry', {}).get('status') != 'verified':
-        raise AssertionError('cold entry was not verified')
+    if cold.get('schema_version') != 'mncs.compiler.application-build/3':
+        raise AssertionError('incremental experiment did not use the current /3 producer')
+    if cold.get('status') != 'verified' or cold.get('entry', {}).get('status') != 'verified':
+        raise AssertionError('cold selected application scope was not verified')
+    if cold.get('unresolved_obligations') != []:
+        raise AssertionError('selected application scope retained unresolved obligations')
+    if cold.get('callable_scope', {}).get('kind') != 'entry_and_explicit_generic_seeds':
+        raise AssertionError('incremental evidence omitted selected callable scope')
     artifact = cold['artifact']['value']
 
     # A new process proves the host cache survives session teardown.
@@ -351,6 +357,8 @@ fn value() -> (result: u64) { return 1; }'''
         'application': {
             'module': app.APP_MODULE, 'entry': 'run',
             'contract_schema': cold.get('schema_version'),
+            'callable_scope': cold.get('callable_scope'),
+            'unselected_unresolved_exports': cold.get('unselected_unresolved_exports'),
             'callable_interface_identity': cold.get('entry', {}).get('interface', {}).get('identity'),
             'source_snapshot_identity': cold.get('source_snapshot', {}).get('identity'),
             'dependency_graph_identity': cold.get('dependency_graph', {}).get('identity'),

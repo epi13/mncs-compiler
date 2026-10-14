@@ -27,17 +27,25 @@ current proof.
   variants, and an invalid projection still reports `MNE162`. Evidence is
   `evidence/native-app-readiness-gate-a.json`, committed at
   `772944e5e43b36bc9bd660fec2fec65bfa4ce9da`.
-- **Gate B — partial.** The current Gate A workload has exact cold/warm
-  application-artifact reuse: 0.587 s cold versus 0.020 s unchanged warm,
-  with stable artifact identity. This reuses the complete verified artifact;
-  it does not reuse semantic or SSA facts after a source change. The six-case
-  digest experiment at
-  `evidence/native-app-readiness-digest-incremental-20261014.json` used
-  Compiler `d0296d29a0f732636d32371a55d1d364226a62f0`, Stage-0 binary
-  `06571f…`, and response schema `/2`. Preserve those measurements as
-  historical: changed-function, dependency, invalid-source, and interrupted
-  cases have not yet been repeated against the current `/3` producer and
-  selected workload. No fine-grained compiler facts are claimed as reused.
+- **Gate B — partial.** The current `/3` six-case experiment is
+  `evidence/native-app-readiness-gate-b.json` (SHA-256
+  `dd24098cd89eb6c79cc319c620d0ba2532d757e773411f1613094130031eb148`),
+  produced by Compiler `ed1ed59e6f17a1696a78df4fcd73986052f98421`, Stage-0
+  binary `f44793c79cd47bce005db5d948b4f35509ad24650676bdc8fa61770825800411`,
+  and `mncs.compiler.application-build/3`. Cold build measured 0.467 s wall,
+  0.45 s CPU, and 60.3 MB peak RSS. An unchanged build in a fresh process
+  reused the exact verified artifact in 0.237 s wall / 0.21 s CPU (1.97x wall
+  speedup). Adding and editing an unreferenced module reused the artifact in
+  about 0.020 s while refreshing the full source snapshot identity. A changed
+  function (0.368 s) and a changed imported dependency (0.376 s) each reran
+  whole-application semantic checking, SSA verification, and VM artifact
+  generation; no function or module facts were reused. Invalid source was
+  rejected twice with identical `MNE162` diagnostics and was not published.
+  A `SIGKILL` interruption left no cache entry or temporary artifact; retry
+  stored a complete result and a fresh process then hit it. The older six-case
+  digest record at `evidence/native-app-readiness-digest-incremental-20261014.json`
+  remains historical `/2` evidence. Gate B is partial until changed functions
+  and dependency closures reuse independently verified facts.
 - **Gate C — partial.** The versioned `/3` producer now exposes source and
   dependency identities, selected callable scope, typed interface, canonical
   artifact provenance, capabilities/effects, diagnostics, execution
@@ -66,9 +74,10 @@ invocation.
 
 Next work: obtain the exact Environment scope approval needed to deliver the
 campaign branch to `main`; obtain Language scope before implementing
-cross-module incremental facts; repeat the six Gate B cases on the selected
-`/3` workload; then wire the producer through existing Test, Forge, Monitor,
-Store, and Automation authorities.
+cross-module incremental facts; then make changed-function and dependency
+builds reuse verified module or declaration facts. After that, wire the
+producer through existing Test, Forge, Monitor, Store, and Automation
+authorities.
 
 
 ## Phase 0 — Repository foundation
