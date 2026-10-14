@@ -1,8 +1,508 @@
 {
   "application": {
-    "artifact_identity": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5",
+    "artifact_identity": "sha256:3fa078bccecabaa99f2968b566ac091ee6a326c1cc24a88030f7f11f56a92b6e",
     "artifact_schema": "mncs.vm.artifact/1",
-    "artifact_sha256": "sha256:871b022112c1bc2fc22b35ed3ab318296b01c29b7d1084f45d0e742869517f36",
+    "artifact_sha256": "sha256:9c4b609e12427e742fe4f7f6448cdf8254d5acec0ebef5b7beba8995314dfc10",
+    "callable_interface": {
+      "identity": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
+      "schema_version": "mncs.compiler.callable-interface/1",
+      "signature": {
+        "capabilities": [],
+        "contracts": [],
+        "effects": [],
+        "failure": "isolated",
+        "function_identity": "mncs:0.2:function:tests.native_readiness::run",
+        "inputs": [
+          {
+            "name": "request",
+            "type": "ReadinessRequest"
+          }
+        ],
+        "module": "tests.native_readiness",
+        "name": "run",
+        "outputs": [
+          {
+            "name": "result",
+            "type": "ReadinessOutcome"
+          }
+        ]
+      },
+      "status": "verified",
+      "types": {
+        "finite": [
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.assertions::FailureKind",
+            "name": "FailureKind",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::NoFailure",
+                "name": "NoFailure"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Assertion",
+                "name": "Assertion"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Setup",
+                "name": "Setup"
+              },
+              {
+                "discriminant": 3,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Compile",
+                "name": "Compile"
+              },
+              {
+                "discriminant": 4,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Runtime",
+                "name": "Runtime"
+              },
+              {
+                "discriminant": 5,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Timeout",
+                "name": "Timeout"
+              },
+              {
+                "discriminant": 6,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Unsupported",
+                "name": "Unsupported"
+              },
+              {
+                "discriminant": 7,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::FailureKind::Infrastructure",
+                "name": "Infrastructure"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.assertions::TestClassification",
+            "name": "TestClassification",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestClassification::PASSED",
+                "name": "PASSED"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestClassification::TEST_FAILURE",
+                "name": "TEST_FAILURE"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestClassification::UNSUPPORTED",
+                "name": "UNSUPPORTED"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.assertions::TestStatus",
+            "name": "TestStatus",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestStatus::PASSED",
+                "name": "PASSED"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestStatus::FAILED",
+                "name": "FAILED"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestStatus::SKIPPED",
+                "name": "SKIPPED"
+              },
+              {
+                "discriminant": 3,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::TestStatus::UNSUPPORTED",
+                "name": "UNSUPPORTED"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.assertions::Verdict",
+            "name": "Verdict",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::PASS",
+                "name": "PASS"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::FAIL",
+                "name": "FAIL"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::SKIP",
+                "name": "SKIP"
+              },
+              {
+                "discriminant": 3,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::UNSUPPORTED",
+                "name": "UNSUPPORTED"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.assertions::Verdict",
+            "name": "Verdict",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::PASS",
+                "name": "PASS"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::FAIL",
+                "name": "FAIL"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::SKIP",
+                "name": "SKIP"
+              },
+              {
+                "discriminant": 3,
+                "identity": "mncs:0.2:finite-variant:mncs.test.assertions::Verdict::UNSUPPORTED",
+                "name": "UNSUPPORTED"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.suite::SuiteClassification",
+            "name": "SuiteClassification",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.suite::SuiteClassification::PASSED",
+                "name": "PASSED"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.suite::SuiteClassification::TEST_FAILURE",
+                "name": "TEST_FAILURE"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.suite::SuiteClassification::UNSUPPORTED",
+                "name": "UNSUPPORTED"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:mncs.test.suite::SuiteStatus",
+            "name": "SuiteStatus",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:mncs.test.suite::SuiteStatus::PASSED",
+                "name": "PASSED"
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:mncs.test.suite::SuiteStatus::FAILED",
+                "name": "FAILED"
+              },
+              {
+                "discriminant": 2,
+                "identity": "mncs:0.2:finite-variant:mncs.test.suite::SuiteStatus::UNSUPPORTED",
+                "name": "UNSUPPORTED"
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:tests.native_readiness::ReadinessError",
+            "name": "ReadinessError",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:tests.native_readiness::ReadinessError::InvalidCaseIndex",
+                "name": "InvalidCaseIndex",
+                "payload": [
+                  {
+                    "name": "found",
+                    "type": "u64"
+                  }
+                ]
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:tests.native_readiness::ReadinessError::InvalidTestCount",
+                "name": "InvalidTestCount",
+                "payload": [
+                  {
+                    "name": "expected",
+                    "type": "u64"
+                  },
+                  {
+                    "name": "found",
+                    "type": "u64"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:tests.native_readiness::ReadinessOutcome",
+            "name": "ReadinessOutcome",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:tests.native_readiness::ReadinessOutcome::Completed",
+                "name": "Completed",
+                "payload": [
+                  {
+                    "name": "report",
+                    "type": "ReadinessReport"
+                  }
+                ]
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:tests.native_readiness::ReadinessOutcome::Rejected",
+                "name": "Rejected",
+                "payload": [
+                  {
+                    "name": "error",
+                    "type": "ReadinessError"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "identity": "mncs:0.2:finite-type:tests.native_readiness::ReadinessState",
+            "name": "ReadinessState",
+            "variants": [
+              {
+                "discriminant": 0,
+                "identity": "mncs:0.2:finite-variant:tests.native_readiness::ReadinessState::Ready",
+                "name": "Ready",
+                "payload": [
+                  {
+                    "name": "checks",
+                    "type": "u64"
+                  }
+                ]
+              },
+              {
+                "discriminant": 1,
+                "identity": "mncs:0.2:finite-variant:tests.native_readiness::ReadinessState::Deferred",
+                "name": "Deferred",
+                "payload": [
+                  {
+                    "name": "reason",
+                    "type": "u64"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "records": [
+          {
+            "fields": [
+              {
+                "name": "classification",
+                "type": "TestClassification"
+              },
+              {
+                "name": "failure_kind",
+                "type": "FailureKind"
+              },
+              {
+                "name": "status",
+                "type": "TestStatus"
+              },
+              {
+                "name": "verdict",
+                "type": "Verdict"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:mncs.test.assertions::TestProjection::classification%3ATestClassification%3Bfailure_kind%3AFailureKind%3Bstatus%3ATestStatus%3Bverdict%3AVerdict%3B",
+            "name": "TestProjection"
+          },
+          {
+            "fields": [
+              {
+                "name": "case_index",
+                "type": "u64"
+              },
+              {
+                "name": "seed",
+                "type": "u64"
+              },
+              {
+                "name": "value",
+                "type": "u64"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:mncs.test.generative::PropertyCase::case_index%3Au64%3Bseed%3Au64%3Bvalue%3Au64%3B",
+            "name": "PropertyCase"
+          },
+          {
+            "fields": [
+              {
+                "name": "checksum",
+                "type": "u64"
+              },
+              {
+                "name": "length",
+                "type": "u64"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:mncs.test.snapshot::Witness::checksum%3Au64%3Blength%3Au64%3B",
+            "name": "Witness"
+          },
+          {
+            "fields": [
+              {
+                "name": "classification",
+                "type": "SuiteClassification"
+              },
+              {
+                "name": "status",
+                "type": "SuiteStatus"
+              },
+              {
+                "name": "verdict",
+                "type": "mncs:0.2:finite-type:mncs.test.assertions::Verdict"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:mncs.test.suite::SuiteProjection::classification%3ASuiteClassification%3Bstatus%3ASuiteStatus%3Bverdict%3AVerdict%3B",
+            "name": "SuiteProjection"
+          },
+          {
+            "fields": [
+              {
+                "name": "assertion_count",
+                "type": "u64"
+              },
+              {
+                "name": "assertion_failures",
+                "type": "u64"
+              },
+              {
+                "name": "compile_failures",
+                "type": "u64"
+              },
+              {
+                "name": "failed",
+                "type": "u64"
+              },
+              {
+                "name": "failure_count",
+                "type": "u64"
+              },
+              {
+                "name": "infrastructure_failures",
+                "type": "u64"
+              },
+              {
+                "name": "passed",
+                "type": "u64"
+              },
+              {
+                "name": "runtime_failures",
+                "type": "u64"
+              },
+              {
+                "name": "setup_failures",
+                "type": "u64"
+              },
+              {
+                "name": "skipped",
+                "type": "u64"
+              },
+              {
+                "name": "timeout_failures",
+                "type": "u64"
+              },
+              {
+                "name": "total",
+                "type": "u64"
+              },
+              {
+                "name": "unsupported",
+                "type": "u64"
+              },
+              {
+                "name": "verdict",
+                "type": "mncs:0.2:finite-type:mncs.test.assertions::Verdict"
+              },
+              {
+                "name": "verdict_code",
+                "type": "u64"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:mncs.test.suite::SuiteSummary::assertion_count%3Au64%3Bassertion_failures%3Au64%3Bcompile_failures%3Au64%3Bfailed%3Au64%3Bfailure_count%3Au64%3Binfrastructure_failures%3Au64%3Bpassed%3Au64%3Bruntime_failures%3Au64%3Bsetup_failures%3Au64%3Bskipped%3Au64%3Btimeout_failures%3Au64%3Btotal%3Au64%3Bunsupported%3Au64%3Bverdict%3AVerdict%3Bverdict_code%3Au64%3B",
+            "name": "SuiteSummary"
+          },
+          {
+            "fields": [
+              {
+                "name": "property_case",
+                "type": "mncs:0.2:record-type:mncs.test.generative::PropertyCase::case_index%3Au64%3Bseed%3Au64%3Bvalue%3Au64%3B"
+              },
+              {
+                "name": "state",
+                "type": "ReadinessState"
+              },
+              {
+                "name": "state_value",
+                "type": "u64"
+              },
+              {
+                "name": "suite_projection",
+                "type": "mncs:0.2:record-type:mncs.test.suite::SuiteProjection::classification%3ASuiteClassification%3Bstatus%3ASuiteStatus%3Bverdict%3AVerdict%3B"
+              },
+              {
+                "name": "summary",
+                "type": "mncs:0.2:record-type:mncs.test.suite::SuiteSummary::assertion_count%3Au64%3Bassertion_failures%3Au64%3Bcompile_failures%3Au64%3Bfailed%3Au64%3Bfailure_count%3Au64%3Binfrastructure_failures%3Au64%3Bpassed%3Au64%3Bruntime_failures%3Au64%3Bsetup_failures%3Au64%3Bskipped%3Au64%3Btimeout_failures%3Au64%3Btotal%3Au64%3Bunsupported%3Au64%3Bverdict%3AVerdict%3Bverdict_code%3Au64%3B"
+              },
+              {
+                "name": "test_projection",
+                "type": "mncs:0.2:record-type:mncs.test.assertions::TestProjection::classification%3ATestClassification%3Bfailure_kind%3AFailureKind%3Bstatus%3ATestStatus%3Bverdict%3AVerdict%3B"
+              },
+              {
+                "name": "witness",
+                "type": "mncs:0.2:record-type:mncs.test.snapshot::Witness::checksum%3Au64%3Blength%3Au64%3B"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:tests.native_readiness::ReadinessReport::property_case%3APropertyCase%3Bstate%3AReadinessState%3Bstate_value%3Au64%3Bsuite_projection%3ASuiteProjection%3Bsummary%3ASuiteSummary%3Btest_projection%3ATestProjection%3Bwitness%3AWitness%3B",
+            "name": "ReadinessReport"
+          },
+          {
+            "fields": [
+              {
+                "name": "case_index",
+                "type": "u64"
+              },
+              {
+                "name": "expected_tests",
+                "type": "u64"
+              },
+              {
+                "name": "seed",
+                "type": "u64"
+              }
+            ],
+            "identity": "mncs:0.2:record-type:tests.native_readiness::ReadinessRequest::case_index%3Au64%3Bexpected_tests%3Au64%3Bseed%3Au64%3B",
+            "name": "ReadinessRequest"
+          }
+        ],
+        "status": "verified",
+        "unresolved_references": []
+      }
+    },
+    "contract_schema": "mncs.compiler.application-build/2",
     "contract_status": "unsupported",
     "dependency_graph": {
       "details": {
@@ -80,7 +580,7 @@
         ]
       }
     ],
-    "interface_identity": "363a9a7c98c5600fa67a5c149506503d6814e0760864b69d78221cc622ebcd45",
+    "interface_identity": "12732258e2c29abd961f738b075b19ef2f5ca9cadf4b8fb1323a1812f9fc99d4",
     "module": "tests.native_readiness",
     "name": "mncs-test native readiness suite core",
     "producer": {
@@ -88,7 +588,7 @@
       "probe": {
         "kind": "mncs.stage0-reference-compiler",
         "probe_executable": "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-compiler-stage0-probe",
-        "probe_executable_sha256": "sha256:61bcb2ab34457446b3af92520222947a628094e89d36296a4e6eaf0716058c62"
+        "probe_executable_sha256": "sha256:edbb22072c929a3066b98d31b9e35a58ee179dd35a38dc663a12d4c7fa2bbe42"
       },
       "stage0_toolchain": {
         "backend_configuration": null,
@@ -153,13 +653,13 @@
         "source_id": "mncs.test.suite"
       },
       {
-        "bytes": 1906,
+        "bytes": 2733,
         "module": "root",
-        "sha256": "sha256:d7d4087e5b4129f417a30d76ec4adf4ab5d937b1c169c50ed477d5055f6615b5",
+        "sha256": "sha256:a2f3488e6dbd12d4b0b6bc494e3c0d002f30c71955b6ba04e224ddff544b56ba",
         "source_id": "tests/native_readiness.mncs"
       }
     ],
-    "source_snapshot_identity": "sha256:b50870f054417851a8312a171257872c41d46f1396ed961cec05381827cb2815",
+    "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
     "specialized_callables": [
       {
         "function": "mncs:0.4:ssa:function:0a77e12b4bcf344d164b5155644985dcf872421ed641162e97497304d7c58bd0",
@@ -182,7 +682,7 @@
     "cache_reuse_claimed": true,
     "first_build": {
       "cache": {
-        "key": "sha256:8a529de795b235512a97e7407cace8ab15cda07545c5dc214b84255c16da196e",
+        "key": "sha256:13368950d8c72988b38faae6469358d33c2fe823fe39ddc86042f5e42fd843fb",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -194,20 +694,20 @@
         "status": "miss"
       },
       "metrics": {
-        "cpu_seconds": 0.43,
+        "cpu_seconds": 0.54,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
-        "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 58548224,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 60153856,
         "peak_threads": 1,
-        "request_sequence": 2,
-        "wall_seconds": 0.450393
+        "request_sequence": 1,
+        "wall_seconds": 0.58173
       }
     },
     "generic_specialization_change": {
-      "artifact_identity": "sha256:2e520a80cc5a7db61afb800fd634aad2e2d1ffb73694297cf60fc99d803e979f",
+      "artifact_identity": "sha256:f000c3973cf061591a6858a499a22110375695395adbfd5620bbdd516dbeaf5e",
       "cache": {
-        "key": "sha256:a004ebad8216efc425e9a7324341b55887aa2d03b56d4c94ee296c32afb693c6",
+        "key": "sha256:04699e187b07c6c20bff0325f402d8b63e2c8553b1f10bbfe77763f8bc68a35e",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -219,19 +719,19 @@
         "status": "miss"
       },
       "metrics": {
-        "cpu_seconds": 0.34,
+        "cpu_seconds": 0.36,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 59457536,
+        "peak_rss_bytes": 62308352,
         "peak_threads": 1,
-        "request_sequence": 4,
-        "wall_seconds": 0.347377
+        "request_sequence": 5,
+        "wall_seconds": 0.375093
       }
     },
     "identical_repeat": {
       "cache": {
-        "key": "sha256:8a529de795b235512a97e7407cace8ab15cda07545c5dc214b84255c16da196e",
+        "key": "sha256:13368950d8c72988b38faae6469358d33c2fe823fe39ddc86042f5e42fd843fb",
         "publication": "previously_published",
         "recomputed_units": [],
         "reused_units": [
@@ -245,26 +745,26 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 58548224,
+        "peak_rss_bytes": 60424192,
         "peak_threads": 1,
-        "request_sequence": 3,
-        "wall_seconds": 0.02012
+        "request_sequence": 4,
+        "wall_seconds": 0.019766
       }
     },
-    "identical_repeat_artifact_identity": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5"
+    "identical_repeat_artifact_identity": "sha256:3fa078bccecabaa99f2968b566ac091ee6a326c1cc24a88030f7f11f56a92b6e"
   },
   "canonical_vm": {
-    "artifact_id": "sha256:37bb146c8b722995bc7b06512cf86c634de953dde07f9529a679e25f1ad76dd5",
+    "artifact_id": "sha256:3fa078bccecabaa99f2968b566ac091ee6a326c1cc24a88030f7f11f56a92b6e",
     "metrics": {
-      "cpu_seconds": 0.16,
+      "cpu_seconds": 0.17,
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
       "peak_open_file_descriptors": 4,
-      "peak_rss_bytes": 23044096,
+      "peak_rss_bytes": 27815936,
       "peak_threads": 1,
       "process_count": 1,
       "stderr": "",
-      "wall_seconds": 0.175568
+      "wall_seconds": 0.1774
     },
     "outcome": {
       "kind": "completed"
@@ -297,13 +797,13 @@
         "length": 4
       }
     },
-    "returned_value_sha256": "sha256:b69f5302304fc9bd27419131e83b087a278bb848f2088479c01126ffdf5b7be3",
+    "returned_value_sha256": "sha256:edc795c362e79e6a1991f35c3193bbc7eeebf2a6185d85b2710383a2c65bbcb0",
     "steps": null
   },
   "compiler": {
     "branch": "campaign/native-application-readiness-20261013",
-    "revision": "511ab25ae19b9a149ced027b344cd048900617fd",
-    "stage0_probe_sha256": "sha256:61bcb2ab34457446b3af92520222947a628094e89d36296a4e6eaf0716058c62",
+    "revision": "95fc8e611d3cafaaab51eca64136363e14210647",
+    "stage0_probe_sha256": "sha256:edbb22072c929a3066b98d31b9e35a58ee179dd35a38dc663a12d4c7fa2bbe42",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
     "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
@@ -349,14 +849,14 @@
           "severity": "error",
           "span": {
             "column": 56,
-            "end": 1299,
-            "line": 33,
-            "start": 1286
+            "end": 2045,
+            "line": 53,
+            "start": 2032
           },
           "stage": "elaboration"
         }
       ],
-      "source_snapshot_identity": "sha256:e7e63e3633d7e30a806fc89f895cdd5a27c6dcb3c8e6b2dde2dca46920fbc1ac",
+      "source_snapshot_identity": "sha256:90e16c74a977f3abe791f4ab61af562ecd0b10ea6c557d02788e22e61f367038",
       "status": "rejected"
     },
     "unknown_generic_seed_field": {
@@ -371,20 +871,20 @@
       "status": "unavailable"
     }
   },
-  "observed_at": "2026-10-14T08:37:00.872672+00:00",
+  "observed_at": "2026-10-14T08:57:57.073924+00:00",
   "oracle": {
     "diagnostics": [],
     "kind": "Stage-0 ReferenceCompiler + execute_ssa_module project oracle",
     "linked_functions": 24,
     "metrics": {
-      "cpu_seconds": 0.34,
+      "cpu_seconds": 0.25,
       "peak_cgroup_memory_bytes": null,
-      "peak_child_processes": 1,
-      "peak_open_file_descriptors": 5,
-      "peak_rss_bytes": 54218752,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 3,
+      "peak_rss_bytes": 60293120,
       "peak_threads": 1,
-      "request_sequence": 1,
-      "wall_seconds": 0.381546
+      "request_sequence": 2,
+      "wall_seconds": 0.263633
     },
     "returned_value": {
       "property_case": {
@@ -414,11 +914,175 @@
         "length": 4
       }
     },
-    "returned_value_sha256": "sha256:b69f5302304fc9bd27419131e83b087a278bb848f2088479c01126ffdf5b7be3",
+    "returned_value_sha256": "sha256:edc795c362e79e6a1991f35c3193bbc7eeebf2a6185d85b2710383a2c65bbcb0",
     "ssa_functions": 22,
     "valid": true
   },
   "schema_version": 1,
   "self_consumption_matrix_change": "none; this application does not prove compiler succession",
-  "stage0_probe_diagnostics_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n"
+  "stage0_probe_diagnostics_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n",
+  "typed_failure_results": [
+    {
+      "artifact_identity": "sha256:3fa078bccecabaa99f2968b566ac091ee6a326c1cc24a88030f7f11f56a92b6e",
+      "input": {
+        "record": {
+          "fields": [
+            [
+              "case_index",
+              {
+                "integer": {
+                  "type": {
+                    "bits": 64,
+                    "signed": false
+                  },
+                  "value": 65
+                }
+              }
+            ],
+            [
+              "expected_tests",
+              {
+                "integer": {
+                  "type": {
+                    "bits": 64,
+                    "signed": false
+                  },
+                  "value": 4
+                }
+              }
+            ],
+            [
+              "seed",
+              {
+                "integer": {
+                  "type": {
+                    "bits": 64,
+                    "signed": false
+                  },
+                  "value": 42
+                }
+              }
+            ]
+          ],
+          "name": "ReadinessRequest",
+          "type_identity": "mncs:0.2:record-type:tests.native_readiness::ReadinessRequest::case_index%3Au64%3Bexpected_tests%3Au64%3Bseed%3Au64%3B"
+        }
+      },
+      "oracle_result": {
+        "$p": {
+          "error": {
+            "$p": {
+              "found": 65
+            },
+            "$v": 0
+          }
+        },
+        "$v": 1
+      },
+      "vm_metrics": {
+        "cpu_seconds": 0.17,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 27430912,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.17731
+      },
+      "vm_result": {
+        "$p": {
+          "error": {
+            "$p": {
+              "found": 65
+            },
+            "$v": 0
+          }
+        },
+        "$v": 1
+      }
+    },
+    {
+      "artifact_identity": "sha256:3fa078bccecabaa99f2968b566ac091ee6a326c1cc24a88030f7f11f56a92b6e",
+      "input": {
+        "record": {
+          "fields": [
+            [
+              "case_index",
+              {
+                "integer": {
+                  "type": {
+                    "bits": 64,
+                    "signed": false
+                  },
+                  "value": 7
+                }
+              }
+            ],
+            [
+              "expected_tests",
+              {
+                "integer": {
+                  "type": {
+                    "bits": 64,
+                    "signed": false
+                  },
+                  "value": 3
+                }
+              }
+            ],
+            [
+              "seed",
+              {
+                "integer": {
+                  "type": {
+                    "bits": 64,
+                    "signed": false
+                  },
+                  "value": 42
+                }
+              }
+            ]
+          ],
+          "name": "ReadinessRequest",
+          "type_identity": "mncs:0.2:record-type:tests.native_readiness::ReadinessRequest::case_index%3Au64%3Bexpected_tests%3Au64%3Bseed%3Au64%3B"
+        }
+      },
+      "oracle_result": {
+        "$p": {
+          "error": {
+            "$p": {
+              "expected": 4,
+              "found": 3
+            },
+            "$v": 1
+          }
+        },
+        "$v": 1
+      },
+      "vm_metrics": {
+        "cpu_seconds": 0.16,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 23072768,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.175929
+      },
+      "vm_result": {
+        "$p": {
+          "error": {
+            "$p": {
+              "expected": 4,
+              "found": 3
+            },
+            "$v": 1
+          }
+        },
+        "$v": 1
+      }
+    }
+  ]
 }
