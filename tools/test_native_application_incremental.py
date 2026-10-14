@@ -5,12 +5,12 @@ from __future__ import annotations
 import copy
 import json
 import os
-from pathlib import Path
 import select
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_vm_native_application as app
@@ -389,7 +389,7 @@ fn value() -> (result: u64) { return 1; }'''
             'probe_dispatch_sha256': app.sha((ROOT / 'tools/stage0-probe/src/main.rs').read_bytes()),
             'gate_a_harness_sha256': app.sha((ROOT / 'tools/test_vm_native_application.py').read_bytes()),
             'gate_b_harness_sha256': app.sha(Path(__file__).read_bytes()),
-            'vm_revision': app.git('rev-parse', 'HEAD', cwd=Path('/workspace/mncs-vm')),
+            'vm_revision': app.git('rev-parse', 'HEAD', cwd=app.VM_ROOT),
             'vm_sha256': app.sha(app.VM_BIN.read_bytes()),
             'test_revision': app.git('rev-parse', 'HEAD', cwd=app.TEST_ROOT),
         },

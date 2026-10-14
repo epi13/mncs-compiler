@@ -11,7 +11,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
 import select
 import shutil
 import subprocess
@@ -19,9 +18,31 @@ import tempfile
 import threading
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_ROOT = Path('/workspace/mncs-test')
+
+
+def resolve_workspace_root() -> Path:
+    """Find sibling MNCS checkouts from either a host path or sandbox alias."""
+    candidates: list[Path] = []
+    configured_root = os.environ.get('MNCS_PROJECTS_ROOT')
+    if configured_root:
+        candidates.append(Path(configured_root).expanduser().resolve())
+    candidates.extend(ROOT.parents)
+    for candidate in candidates:
+        if ((candidate / 'mncs-test/native/mncs/test/assertions.mncs').is_file()
+                and (candidate / 'mncs-vm/Cargo.toml').is_file()):
+            return candidate
+    raise FileNotFoundError(
+        'could not find the workspace containing mncs-test and mncs-vm; '
+        'set MNCS_PROJECTS_ROOT to the configured projects directory'
+    )
+
+
+WORKSPACE_ROOT = resolve_workspace_root()
+TEST_ROOT = WORKSPACE_ROOT / 'mncs-test'
+VM_ROOT = WORKSPACE_ROOT / 'mncs-vm'
 VM_BIN = ROOT / '.build/native-app-readiness/mncs-vm'
 PROBE = ROOT / '.build/native-app-readiness/mncs-compiler-stage0-probe'
 EVIDENCE = ROOT / 'evidence/native-app-readiness-gate-a.json'
@@ -650,7 +671,7 @@ def main() -> None:
             'branch': git('branch', '--show-current', cwd=ROOT),
             'stage0_revision': json.loads((ROOT / 'mncs-language.lock.json').read_text())['revision'],
             'stage0_probe_sha256': sha(PROBE.read_bytes()),
-            'vm_revision': git('rev-parse', 'HEAD', cwd=Path('/workspace/mncs-vm')),
+            'vm_revision': git('rev-parse', 'HEAD', cwd=VM_ROOT),
             'vm_sha256': sha(VM_BIN.read_bytes()),
             'test_revision': git('rev-parse', 'HEAD', cwd=TEST_ROOT),
         },
