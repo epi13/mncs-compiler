@@ -201,8 +201,71 @@ pub fn emit_vm_artifact_with_source_map(
     compiler: &ReferenceCompiler,
     program: &Program,
     producer: Option<&str>,
-    mut source_map: Option<mncs_compiler::ExecutionSourceMap>,
+    source_map: Option<mncs_compiler::ExecutionSourceMap>,
 ) -> Result<(serde_json::Value, Option<mncs_compiler::ExecutionSourceMap>), String> {
+    emit_vm_artifact_scoped(compiler, program, producer, source_map, None, None)
+        .map(|(artifact, source_map, _)| (artifact, source_map))
+}
+
+/// Emit a closed application surface consisting of its selected entry and
+/// concrete generic specializations explicitly requested by the build.
+/// Unselected, uninstantiated declarations are returned separately so they
+/// cannot make this entry artifact appear complete by accident.
+pub fn emit_vm_application_artifact_with_producer(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    producer: Option<&str>,
+    entry_module: &str,
+    entry_function: &str,
+    generic_seed_functions: &BTreeSet<(String, String)>,
+) -> Result<(serde_json::Value, Vec<String>), String> {
+    let mut selected_exports =
+        BTreeSet::from([(entry_module.to_owned(), entry_function.to_owned())]);
+    for (generic_module, generic_function) in generic_seed_functions {
+        let generic_identity = mncs_model::function_id(generic_module, generic_function);
+        for record in &program.generic_specializations {
+            if record.generic_function != generic_identity {
+                continue;
+            }
+            if let Some(function) = program.functions.iter().find(|function| {
+                mncs_model::function_id(
+                    function.identity_namespace(&program.module),
+                    &function.name,
+                ) == record.specialization_function
+            }) {
+                selected_exports.insert((
+                    function.identity_namespace(&program.module).to_owned(),
+                    function.name.clone(),
+                ));
+            }
+        }
+    }
+    let (artifact, _, unselected_unresolved) = emit_vm_artifact_scoped(
+        compiler,
+        program,
+        producer,
+        None,
+        Some(&selected_exports),
+        Some(generic_seed_functions),
+    )?;
+    Ok((artifact, unselected_unresolved))
+}
+
+fn emit_vm_artifact_scoped(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    producer: Option<&str>,
+    mut source_map: Option<mncs_compiler::ExecutionSourceMap>,
+    selected_exports: Option<&BTreeSet<(String, String)>>,
+    selected_generic_bases: Option<&BTreeSet<(String, String)>>,
+) -> Result<
+    (
+        serde_json::Value,
+        Option<mncs_compiler::ExecutionSourceMap>,
+        Vec<String>,
+    ),
+    String,
+> {
     let emit: BTreeSet<ArtifactRepresentation> =
         [ArtifactRepresentation::Ssa].into_iter().collect();
     let request = compiler.request_for_program(program, emit, None);
@@ -232,9 +295,18 @@ pub fn emit_vm_artifact_with_source_map(
     let exports: Vec<String> = program
         .functions
         .iter()
+        .filter(|function| {
+            selected_exports.is_none_or(|selected| {
+                selected.contains(&(
+                    function.identity_namespace(&program.module).to_owned(),
+                    function.name.clone(),
+                ))
+            })
+        })
         .map(|function| function.name.clone())
         .collect();
     let mut unsupported: Vec<String> = Vec::new();
+    let mut unselected_unresolved: Vec<String> = Vec::new();
     // Callables resolve per (namespace, name) function, not per bare
     // name: linked programs routinely define one helper name in
     // several modules (segment's `next_token` wraps lexer's), and
@@ -249,6 +321,18 @@ pub fn emit_vm_artifact_with_source_map(
     let mut callables: Vec<CallableEntry> = Vec::with_capacity(program.functions.len());
     for function in &program.functions {
         let namespace = function.identity_namespace(&program.module);
+        let selected = selected_exports.is_none_or(|selected| {
+            selected.contains(&(namespace.to_owned(), function.name.clone()))
+        });
+        if !selected {
+            if resolve_callable(&ssa, namespace, &function.name).is_none() {
+                unselected_unresolved.push(format!(
+                    "export {namespace}::{}: no ssa instance",
+                    function.name
+                ));
+            }
+            continue;
+        }
         match resolve_callable(&ssa, namespace, &function.name) {
             Some(mut entry) => {
                 entry.test_binding = test_bindings
@@ -265,6 +349,19 @@ pub fn emit_vm_artifact_with_source_map(
 
     let mut generic_entrypoints: Vec<GenericEntrypoint> = Vec::new();
     for row in generic_entrypoint_rows(program) {
+        let selected = selected_generic_bases
+            .is_none_or(|selected| selected.contains(&(row.0.clone(), row.1.clone())));
+        if !selected {
+            if resolve_generic_entry(&ssa, &row).is_none() {
+                unselected_unresolved.push(format!(
+                    "generic {}::{}({}): no ssa instance",
+                    row.0,
+                    row.1,
+                    row.2.join(", ")
+                ));
+            }
+            continue;
+        }
         match resolve_generic_entry(&ssa, &row) {
             Some(entry) => generic_entrypoints.push(entry),
             None => unsupported.push(format!(
@@ -395,11 +492,14 @@ pub fn emit_vm_artifact_with_source_map(
         unsupported,
     };
     let mut sealed = artifact;
+    unselected_unresolved.sort();
+    unselected_unresolved.dedup();
     let canonical = serde_json::to_vec(&sealed).expect("artifact serializes");
     sealed.artifact_id = artifact_id_of(&canonical);
     Ok((
         serde_json::to_value(&sealed).expect("sealed artifact serializes"),
         source_map,
+        unselected_unresolved,
     ))
 }
 

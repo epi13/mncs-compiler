@@ -17,7 +17,7 @@ import test_vm_native_application as app
 ROOT = app.ROOT
 PROVIDER = ROOT / "tools/application_build_provider.py"
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/2"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/3"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 
 

@@ -381,8 +381,8 @@ def main() -> None:
         artifact = built.get('artifact', {}).get('value')
         if not isinstance(artifact, dict):
             raise AssertionError('no canonical VM artifact: ' + json.dumps(built, indent=2)[:8000])
-        if built.get('schema_version') != 'mncs.compiler.application-build/2':
-            raise AssertionError('application producer contract did not advance to /2')
+        if built.get('schema_version') != 'mncs.compiler.application-build/3':
+            raise AssertionError('application producer contract did not advance to /3')
         callable_interface = built.get('entry', {}).get('interface')
         if not isinstance(callable_interface, dict):
             raise AssertionError('verified entry is missing its typed callable interface')
@@ -470,14 +470,19 @@ def main() -> None:
         if missing_specializations:
             raise AssertionError('requested generic exports were not emitted: ' + json.dumps({
                 'missing': missing_specializations, 'callables': specialized_callables}, indent=2)[:6000])
-        expected_unresolved = {
+        expected_unselected = {
             'export mncs.test.assertions::equals_bytes: no ssa instance',
             'export mncs.test.suite::summarize: no ssa instance',
         }
-        if built.get('status') != 'unsupported' or set(built.get('unresolved_obligations', [])) != expected_unresolved:
-            raise AssertionError('generic templates must remain explicitly unsupported without a closed type: ' +
+        if (built.get('status') != 'verified'
+                or built.get('unresolved_obligations') != []
+                or set(built.get('unselected_unresolved_exports', [])) != expected_unselected):
+            raise AssertionError('the selected entry scope must be verified while unselected generic templates stay explicit: ' +
                                  json.dumps({'status': built.get('status'),
-                                             'obligations': built.get('unresolved_obligations')}, indent=2))
+                                             'obligations': built.get('unresolved_obligations'),
+                                             'unselected': built.get('unselected_unresolved_exports')}, indent=2))
+        if built.get('callable_scope', {}).get('kind') != 'entry_and_explicit_generic_seeds':
+            raise AssertionError('application response omitted its exact callable scope')
         if built.get('cache', {}).get('status') != 'miss' or built.get('cache', {}).get('publication') != 'stored':
             raise AssertionError('Gate A cold build was not newly verified and published')
         repeated, repeat_metrics = probe.send({'compile_application': request})
@@ -639,6 +644,9 @@ def main() -> None:
             'interface_identity': built.get('artifact', {}).get('interface_identity'),
             'required_capabilities': built.get('artifact', {}).get('required_capabilities'),
             'unresolved_obligations': built.get('unresolved_obligations'),
+            'callable_scope': built.get('callable_scope'),
+            'selected_exports': artifact.get('exports'),
+            'unselected_unresolved_exports': built.get('unselected_unresolved_exports'),
             'generic_seeds': request['generic_seeds'],
             'specialized_callables': [row for row in specialized_callables
                                       if row.get('module') in {'mncs.test.assertions', 'mncs.test.suite'}

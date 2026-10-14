@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static CACHE_NONCE: AtomicU64 = AtomicU64::new(0);
 static PRODUCER_IDENTITY: OnceLock<(String, Value)> = OnceLock::new();
 
-const CONTRACT: &str = "mncs.compiler.application-build/2";
+const CONTRACT: &str = "mncs.compiler.application-build/3";
 const REQUEST: &str = "mncs.compiler.application-build-request/1";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
@@ -92,6 +92,7 @@ fn error_contract(status: &str, code: &str, message: &str) -> Value {
         "artifact": null,
         "diagnostics": [],
         "unresolved_obligations": [],
+        "unselected_unresolved_exports": [],
     })
 }
 
@@ -167,7 +168,7 @@ fn application_cache_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-key/2",
+        "schema_version": "mncs.compiler.application-build-cache-key/3",
         "contract": CONTRACT,
         "source_snapshot_identity": source_identity,
         "root_source_id": root_id,
@@ -184,7 +185,7 @@ fn application_cache_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache/2\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache/3\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -204,7 +205,7 @@ fn application_cache_index_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-index-key/1",
+        "schema_version": "mncs.compiler.application-build-cache-index-key/2",
         "contract": CONTRACT,
         "root_source_id": root_id,
         "root_source_sha256": format!("sha256:{}", mncs_model::sha256_hex(root_source.as_bytes())),
@@ -220,7 +221,7 @@ fn application_cache_index_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache-index/1\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache-index/2\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -290,7 +291,7 @@ fn annotate_cache_with_basis(
         object.insert(
             "cache".to_owned(),
             json!({
-                "schema_version": "mncs.compiler.application-build-cache-observation/2",
+                "schema_version": "mncs.compiler.application-build-cache-observation/3",
                 "key": key,
                 "status": status,
                 "publication": publication,
@@ -313,7 +314,7 @@ fn read_application_cache(
 ) -> Option<Value> {
     let entry: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     if entry.get("schema_version").and_then(Value::as_str)
-        != Some("mncs.compiler.application-build-cache-entry/2")
+        != Some("mncs.compiler.application-build-cache-entry/3")
         || entry.get("key").and_then(Value::as_str) != Some(key)
     {
         return None;
@@ -458,7 +459,7 @@ fn cached_application_matches_dependency_closure(
 fn read_application_cache_index(path: &PathBuf, key: &str) -> Option<String> {
     let entry: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     if entry.get("schema_version").and_then(Value::as_str)
-        != Some("mncs.compiler.application-build-cache-index/1")
+        != Some("mncs.compiler.application-build-cache-index/2")
         || entry.get("key").and_then(Value::as_str) != Some(key)
     {
         return None;
@@ -490,7 +491,7 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
     let response_bytes =
         serde_json::to_vec(response).map_err(|error| format!("encode cached response: {error}"))?;
     let entry = json!({
-        "schema_version": "mncs.compiler.application-build-cache-entry/2",
+        "schema_version": "mncs.compiler.application-build-cache-entry/3",
         "key": key,
         "response_sha256": format!("sha256:{}", mncs_model::sha256_hex(&response_bytes)),
         "response": response,
@@ -541,7 +542,7 @@ fn publish_application_cache_index(
         .ok_or_else(|| "cache index path has no parent".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| format!("create cache index directory: {error}"))?;
     let entry = json!({
-        "schema_version": "mncs.compiler.application-build-cache-index/1",
+        "schema_version": "mncs.compiler.application-build-cache-index/2",
         "key": key,
         "candidate_key": candidate_key,
     });
@@ -899,6 +900,21 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         );
     }
 
+    let generic_seed_functions: BTreeSet<(String, String)> = request
+        .get("generic_seeds")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| {
+                    Some((
+                        row.get("module")?.as_str()?.to_owned(),
+                        row.get("function")?.as_str()?.to_owned(),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     let source_identity = source_snapshot_identity(root_id, root_source, &modules);
     let source_files: Vec<Value> = std::iter::once(json!({
         "module": "root",
@@ -1027,6 +1043,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 "artifact": null,
                 "diagnostics": diagnostics,
                 "unresolved_obligations": [],
+                "unselected_unresolved_exports": [],
             }),
             &cache_key,
             "bypass",
@@ -1046,14 +1063,18 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let graph_bytes = serde_json::to_vec(&graph_value).unwrap_or_default();
     let graph_identity = format!("sha256:{}", mncs_model::sha256_hex(&graph_bytes));
     let producer_reference = format!("stage0-probe:{probe_identity}");
-    let (artifact, emission_error) = match vm_emit::emit_vm_artifact_with_producer(
-        &compiler,
-        program,
-        Some(&producer_reference),
-    ) {
-        Ok(artifact) => (Some(artifact), None),
-        Err(error) => (None, Some(error)),
-    };
+    let (artifact, unselected_unresolved, emission_error) =
+        match vm_emit::emit_vm_application_artifact_with_producer(
+            &compiler,
+            program,
+            Some(&producer_reference),
+            entry_module,
+            entry_function,
+            &generic_seed_functions,
+        ) {
+            Ok((artifact, unselected_unresolved)) => (Some(artifact), unselected_unresolved, None),
+            Err(error) => (None, Vec::new(), Some(error)),
+        };
 
     let Some(artifact) = artifact else {
         return annotate_cache(
@@ -1071,6 +1092,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 "artifact": null,
                 "diagnostics": diagnostics,
                 "unresolved_obligations": [emission_error.unwrap_or_else(|| "artifact emission failed".to_owned())],
+                "unselected_unresolved_exports": unselected_unresolved,
             }),
             &cache_key,
             "bypass",
@@ -1164,6 +1186,14 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "optimization_policy": request.get("optimization_policy").cloned().unwrap_or_else(|| json!("default")),
             "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         },
+        "callable_scope": {
+            "kind": "entry_and_explicit_generic_seeds",
+            "entry": {
+                "module": entry_module,
+                "function": entry_function,
+            },
+            "generic_seed_functions": generic_seed_functions,
+        },
         "artifact": {
             "schema_version": artifact.get("schema_version").cloned().unwrap_or(Value::Null),
             "identity": artifact_identity,
@@ -1194,6 +1224,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         },
         "diagnostics": diagnostics,
         "unresolved_obligations": unresolved,
+        "unselected_unresolved_exports": unselected_unresolved,
     });
     let (cache_status, publication) = match cache_path.as_ref() {
         Some(path) if entry_status == "verified" => {

@@ -33,10 +33,14 @@ text. Type closure is `verified` only when every referenced nominal type
 resolves to exactly one declaration; unresolved or ambiguous references mark
 the interface and entry `unknown`.
 
-Requested generic instances are emitted as concrete callable exports. The
-module-wide response continues to report unspecialized generic templates as
-unsupported when they have no standalone SSA instance; requesting one concrete
-instance does not promote its generic template. An emitted artifact remains
+The artifact callable scope is the selected entry plus generic specializations
+explicitly requested by generic_seeds. The artifact exports only that exact
+set, while internal functions remain in the selected SSA module for calls from
+the entry. Unselected declarations with no SSA instance are listed separately
+as unselected_unresolved_exports; they do not block a different, closed entry
+artifact. A requested entry or specialization without a verified SSA instance
+remains in unresolved_obligations and makes the result unsupported. The
+response names the callable scope explicitly, and the sealed VM artifact remains
 the executable authority.
 
 This is a bounded bootstrap adapter with a content-addressed cache for complete
