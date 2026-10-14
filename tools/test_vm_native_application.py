@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+"""Gate A: compile and run a real multi-module mncs-test application.
+
+The source files are consumed read-only from the selected mncs-test checkout.
+Stage-0's project oracle and the canonical VM execute the same MNCS entry;
+Python only transports requests, compares returned values, and records process
+measurements and provenance.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+from pathlib import Path
+import select
+import shutil
+import subprocess
+import tempfile
+import threading
+import time
+from datetime import datetime, timezone
+
+ROOT = Path(__file__).resolve().parents[1]
+TEST_ROOT = Path('/workspace/mncs-test')
+VM_BIN = ROOT / '.build/native-app-readiness/mncs-vm'
+PROBE = ROOT / '.build/native-app-readiness/mncs-compiler-stage0-probe'
+EVIDENCE = ROOT / 'evidence/native-app-readiness-gate-a.json'
+ARTIFACT_PATH = ROOT / '.build/native-app-readiness/native-test-readiness.vm.json'
+APP_MODULE = 'tests.native_readiness'
+APP_SOURCE_ID = 'tests/native_readiness.mncs'
+MODULE_FILES = {
+    'mncs.test.assertions': TEST_ROOT / 'native/mncs/test/assertions.mncs',
+    'mncs.test.suite': TEST_ROOT / 'native/mncs/test/suite.mncs',
+    'mncs.test.generative': TEST_ROOT / 'native/mncs/test/generative.mncs',
+    'mncs.test.snapshot': TEST_ROOT / 'native/mncs/test/snapshot.mncs',
+}
+
+APP_SOURCE = '''mncs 0.18;
+module tests.native_readiness;
+
+use mncs.test.assertions;
+use mncs.test.suite;
+use mncs.test.generative;
+use mncs.test.snapshot;
+
+enum ReadinessState { Ready { checks: u64 }, Deferred { reason: u64 } }
+
+record ReadinessReport {
+    state: ReadinessState,
+    state_value: u64,
+    summary: SuiteSummary,
+    property_case: PropertyCase,
+    witness: Witness,
+    suite_projection: SuiteProjection,
+    test_projection: TestProjection
+}
+
+fn run() -> (result: ReadinessReport) {
+    let arithmetic: TestResult = from_assertion(equals_i64(42, 19 +% 23, 1001));
+    let generated: PropertyCase = draw_case(42, 7);
+    let property_test: TestResult = from_assertion(equals_i64(58, replay(42, 7, 97) as i64, 1004));
+    let skipped: TestResult = skip(1006);
+    let tests: [TestResult; 3] = [arithmetic, property_test, skipped];
+    let summary: SuiteSummary = summarize<3>(tests);
+    let witness: Witness = bytes([1, 2, 3, 4]);
+    let suite_projection: SuiteProjection = project(summary);
+    let test_projection: TestProjection = project_test(arithmetic);
+    let state: ReadinessState = match summary.verdict {
+        PASS => ReadinessState.Ready { checks: summary.total },
+        FAIL => ReadinessState.Deferred { reason: summary.verdict_code },
+        SKIP => ReadinessState.Ready { checks: summary.total },
+        UNSUPPORTED => ReadinessState.Deferred { reason: summary.verdict_code }
+    };
+    let state_value: u64 = match state {
+        Ready { checks } => checks,
+        Deferred { reason } => reason
+    };
+    return ReadinessReport {
+        state: state,
+        state_value: state_value,
+        summary: summary,
+        property_case: generated,
+        witness: witness,
+        suite_projection: suite_projection,
+        test_projection: test_projection
+    };
+}'''
+
+
+def sha(data: bytes) -> str:
+    return 'sha256:' + hashlib.sha256(data).hexdigest()
+
+
+def git(*args: str, cwd: Path) -> str:
+    return subprocess.run(['git', *args], cwd=cwd, check=True,
+                          capture_output=True, text=True).stdout.strip()
+
+
+def process_sample(pid: int) -> dict:
+    root = Path(f'/proc/{pid}')
+    out = {'rss_bytes': 0, 'rss_high_water_bytes': 0, 'threads': 0,
+           'fd_count': 0, 'child_process_count': 0, 'cpu_seconds': 0.0,
+           'cgroup_memory_current_bytes': None, 'cgroup_memory_peak_bytes': None}
+    try:
+        status = {}
+        for line in (root / 'status').read_text().splitlines():
+            if ':' in line:
+                key, value = line.split(':', 1)
+                status[key] = value.strip()
+        out['rss_bytes'] = int(status.get('VmRSS', '0 kB').split()[0]) * 1024
+        out['rss_high_water_bytes'] = int(status.get('VmHWM', '0 kB').split()[0]) * 1024
+        out['threads'] = int(status.get('Threads', '0'))
+        out['fd_count'] = len(list((root / 'fd').iterdir()))
+        children = (root / 'task' / str(pid) / 'children').read_text().split()
+        out['child_process_count'] = len(children)
+        stat = (root / 'stat').read_text()
+        fields = stat[stat.rfind(')') + 2:].split()
+        ticks = int(fields[11]) + int(fields[12])
+        out['cpu_seconds'] = ticks / os.sysconf('SC_CLK_TCK')
+    except (OSError, ValueError, IndexError):
+        pass
+    for name, key in [('memory.current', 'cgroup_memory_current_bytes'),
+                      ('memory.peak', 'cgroup_memory_peak_bytes')]:
+        try:
+            out[key] = int(Path('/sys/fs/cgroup', name).read_text().strip())
+        except (OSError, ValueError):
+            pass
+    return out
+
+
+def summarize_samples(samples: list[dict], wall_seconds: float, cpu_start: float) -> dict:
+    rows = samples or [{}]
+    cpu_end = max((row.get('cpu_seconds', 0.0) for row in rows), default=cpu_start)
+    cgroup_peaks = [row.get('cgroup_memory_peak_bytes') for row in rows
+                    if row.get('cgroup_memory_peak_bytes') is not None]
+    return {
+        'wall_seconds': round(wall_seconds, 6),
+        'cpu_seconds': round(max(0.0, cpu_end - cpu_start), 6),
+        'peak_rss_bytes': max((row.get('rss_high_water_bytes') or row.get('rss_bytes') or 0
+                               for row in rows), default=0),
+        'peak_cgroup_memory_bytes': max(cgroup_peaks) if cgroup_peaks else None,
+        'peak_open_file_descriptors': max((row.get('fd_count') or 0 for row in rows), default=0),
+        'peak_threads': max((row.get('threads') or 0 for row in rows), default=0),
+        'peak_child_processes': max((row.get('child_process_count') or 0 for row in rows), default=0),
+    }
+
+
+class Probe:
+    def __init__(self, cache_dir: Path | None = None):
+        env = os.environ.copy()
+        env['MNCS_PROBE_MODULES'] = ''
+        env['MNCS_PROBE_EXECUTION_MODULES'] = ''
+        env['MNCS_PROBE_GENERIC_SEEDS'] = '[]'
+        env.pop('MNCS_PROBE_BACKEND', None)
+        env['MNCS_PROBE_CACHE_DIR'] = str(cache_dir or ROOT / '.build/native-app-readiness/probe-cache')
+        env['MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT'] = str(ROOT)
+        self.stderr = tempfile.TemporaryFile(mode='w+t')
+        self.proc = subprocess.Popen([str(PROBE)], cwd=ROOT, env=env,
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                     stderr=self.stderr, text=True, bufsize=1)
+        self.samples: list[dict] = []
+        self.request_count = 0
+
+    def send(self, request: dict, timeout: float = 90.0) -> tuple[dict, dict]:
+        assert self.proc.stdin and self.proc.stdout
+        self.samples = []
+        before = process_sample(self.proc.pid)
+        started = time.monotonic()
+        self.proc.stdin.write(json.dumps(request, separators=(',', ':')) + '\n')
+        self.proc.stdin.flush()
+        deadline = started + timeout
+        line = None
+        while time.monotonic() < deadline:
+            self.samples.append(process_sample(self.proc.pid))
+            ready, _, _ = select.select([self.proc.stdout], [], [], 0.02)
+            if ready:
+                line = self.proc.stdout.readline()
+                break
+            if self.proc.poll() is not None:
+                break
+        wall = time.monotonic() - started
+        if not line:
+            raise RuntimeError(f'Stage-0 probe ended without a response; rc={self.proc.poll()}')
+        self.request_count += 1
+        metrics = summarize_samples(self.samples, wall, before['cpu_seconds'])
+        metrics['request_sequence'] = self.request_count
+        return json.loads(line), metrics
+
+    def close(self):
+        if self.proc.stdin and not self.proc.stdin.closed:
+            self.proc.stdin.close()
+        rc = self.proc.wait(timeout=10)
+        self.stderr.seek(0)
+        tail = self.stderr.read()[-4000:]
+        self.stderr.close()
+        if rc != 0:
+            raise RuntimeError(f'Stage-0 probe exit {rc}: {tail}')
+        return tail
+
+
+def vm_to_wire(value: dict) -> dict:
+    if 'Integer' in value:
+        v = value['Integer']
+        return {'integer': {'type': {'bits': v['bits'], 'signed': v['signed']}, 'value': v['value']}}
+    if 'Boolean' in value:
+        return {'boolean': {'value': value['Boolean']}}
+    if 'Byte' in value:
+        return {'byte': {'value': value['Byte']}}
+    if 'Sequence' in value:
+        return {'sequence': {'values': [vm_to_wire(v) for v in value['Sequence']['elements']]}}
+    if 'Record' in value:
+        return {'record': {'fields': [[k, vm_to_wire(v)] for k, v in value['Record']['fields']]}}
+    if 'Finite' in value:
+        v = value['Finite']
+        return {'finite': {'discriminant': v['discriminant'],
+                           'payload': [[k, vm_to_wire(x)] for k, x in v.get('payload', [])]}}
+    raise AssertionError(f'unrecognized VM value: {value}')
+
+
+def decode_wire(value):
+    if 'record' in value:
+        return {key: decode_wire(item) for key, item in value['record']['fields']}
+    if 'finite' in value:
+        node = value['finite']
+        return {'$v': node['discriminant'],
+                '$p': {key: decode_wire(item) for key, item in node.get('payload', [])}}
+    if 'sequence' in value:
+        return [decode_wire(item) for item in value['sequence']['values']]
+    if 'integer' in value:
+        return value['integer']['value']
+    if 'boolean' in value:
+        return value['boolean']['value']
+    if 'byte' in value:
+        return value['byte']['value']
+    raise AssertionError(f'unrecognized oracle value: {value}')
+
+
+def summarize_report(report: dict) -> dict:
+    summary = report['summary']
+    return {
+        'state': report['state'],
+        'state_value': report['state_value'],
+        'suite': {key: summary[key] for key in
+                  ['verdict_code', 'total', 'passed', 'failed', 'skipped',
+                   'unsupported', 'assertion_count', 'failure_count']},
+        'property_case': {key: report['property_case'][key]
+                          for key in ['seed', 'case_index', 'value']},
+        'witness': report['witness'],
+    }
+
+
+def run_vm(artifact: dict) -> tuple[dict, dict]:
+    ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    ARTIFACT_PATH.write_text(json.dumps(artifact, sort_keys=True, separators=(',', ':')))
+    with tempfile.TemporaryDirectory(prefix='mncs-native-readiness-') as tmp:
+        args = Path(tmp) / 'args.json'
+        type_args = Path(tmp) / 'type-args.json'
+        args.write_text('[]')
+        type_args.write_text('[]')
+        command = [str(VM_BIN), 'run', '--artifact', str(ARTIFACT_PATH),
+                   '--callable', f'{APP_MODULE}::run', '--args', str(args),
+                   '--type-args', str(type_args)]
+        proc = subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, text=True)
+        first = process_sample(proc.pid)
+        samples = [first]
+        def watch():
+            while proc.poll() is None:
+                samples.append(process_sample(proc.pid))
+                time.sleep(0.01)
+        watcher = threading.Thread(target=watch, daemon=True)
+        watcher.start()
+        started = time.monotonic()
+        stdout, stderr = proc.communicate(timeout=45)
+        wall = time.monotonic() - started
+        watcher.join(timeout=1)
+    if proc.returncode != 0:
+        raise AssertionError(f'canonical VM failed ({proc.returncode}): {stderr[-4000:]}')
+    document = json.loads(stdout)
+    measurements = summarize_samples(samples, wall, first['cpu_seconds'])
+    measurements['process_count'] = max((r.get('child_process_count', 0) + 1 for r in samples), default=1)
+    measurements['stderr'] = stderr[-1000:]
+    return document, measurements
+
+
+def main() -> None:
+    if not PROBE.is_file() or not VM_BIN.is_file():
+        raise SystemExit(f'missing pinned probe or VM binary: {PROBE}, {VM_BIN}')
+    modules = {name: path.read_text() for name, path in MODULE_FILES.items()}
+    module_sources = {name: source for name, source in modules.items()}
+    request = {
+        'schema_version': 'mncs.compiler.application-build-request/1',
+        'target': 'mncs-vm-0.1',
+        'root_source_id': APP_SOURCE_ID,
+        'root_source': APP_SOURCE,
+        'entry': {'module': APP_MODULE, 'function': 'run'},
+        'modules': module_sources,
+        'capabilities': [],
+        'verification_policy': 'stage0-semantic-check+canonical-vm-artifact/1',
+    }
+    call = {
+        'schema_version': '0.1',
+        'target': {'module': APP_MODULE, 'function': 'run'},
+        'arguments': [],
+        'type_arguments': [],
+        'step_budget': 2000000,
+    }
+    cache_dir = ROOT / '.build/native-app-readiness/gate-a-cache'
+    cache_entries = cache_dir / 'application-builds'
+    cache_entries.mkdir(parents=True, exist_ok=True)
+    for path in cache_entries.iterdir():
+        if path.is_file() and (path.suffix == '.json' or path.name.endswith('.tmp')):
+            path.unlink()
+    probe = Probe(cache_dir)
+    try:
+        oracle, oracle_metrics = probe.send({'project_oracle': {
+            'root': APP_SOURCE,
+            'modules': module_sources,
+            'calls': [call],
+        }})
+        if not oracle.get('valid'):
+            raise AssertionError(json.dumps(oracle.get('diagnostics'), indent=2))
+        oracle_exec = oracle['executions'][0]
+        if oracle_exec.get('status') != 'returned':
+            raise AssertionError(json.dumps(oracle_exec, indent=2))
+        built, build_metrics = probe.send({'compile_application': request})
+        if built.get('entry', {}).get('status') != 'verified':
+            raise AssertionError('application entry was not verified: ' + json.dumps({
+                'status': built.get('status'), 'entry': built.get('entry'),
+                'obligations': built.get('unresolved_obligations'),
+                'diagnostics': built.get('diagnostics')}, indent=2))
+        artifact = built.get('artifact', {}).get('value')
+        if not isinstance(artifact, dict):
+            raise AssertionError('no canonical VM artifact: ' + json.dumps(built, indent=2)[:8000])
+        if built.get('cache', {}).get('status') != 'miss' or built.get('cache', {}).get('publication') != 'stored':
+            raise AssertionError('Gate A cold build was not newly verified and published')
+        repeated, repeat_metrics = probe.send({'compile_application': request})
+        if repeated.get('cache', {}).get('status') != 'hit':
+            raise AssertionError('Gate A unchanged build did not reuse the exact verified artifact')
+        if repeated.get('artifact', {}).get('identity') != built.get('artifact', {}).get('identity'):
+            raise AssertionError('identical source snapshot changed artifact identity')
+        invalid_request = dict(request)
+        invalid_request['root_source'] = APP_SOURCE.replace('summary.total', 'summary.total_missing', 1)
+        invalid = probe.send({'compile_application': invalid_request})[0]
+        if invalid.get('status') != 'rejected':
+            raise AssertionError('invalid edit reused/accepted a successful compile: ' + json.dumps(invalid, indent=2)[:6000])
+        invalid_codes = [item.get('code') for item in invalid.get('diagnostics', [])]
+        if 'MNE162' not in invalid_codes:
+            raise AssertionError(f'expected precise unknown-field diagnostic MNE162, got {invalid_codes}')
+        unsupported_target = dict(request)
+        unsupported_target['target'] = 'mncs-wasm-1.0'
+        unavailable = probe.send({'compile_application': unsupported_target})[0]
+        if unavailable.get('status') != 'unavailable':
+            raise AssertionError('unsupported target did not fail closed: ' + json.dumps(unavailable, indent=2))
+        probe_stderr = probe.close()
+    except BaseException:
+        try:
+            probe.proc.kill()
+            probe.proc.wait(timeout=5)
+        except Exception:
+            pass
+        raise
+
+    document, vm_metrics = run_vm(artifact)
+    if document.get('outcome') != {'kind': 'completed'}:
+        raise AssertionError('VM did not complete: ' + json.dumps(document.get('outcome'), indent=2))
+    receipt_artifact_id = document.get('record', {}).get('artifact_id')
+    artifact_id = artifact.get('artifact_id')
+    if receipt_artifact_id != artifact_id:
+        raise AssertionError(f'VM receipt artifact identity mismatch: {receipt_artifact_id} != {artifact_id}')
+    actual = [decode_wire(vm_to_wire(value)) for value in document['record']['returned']]
+    expected = [decode_wire(value) for value in oracle_exec['returned']]
+    if actual != expected:
+        raise AssertionError(json.dumps({'actual': actual, 'stage0': expected}, indent=2))
+    report = actual[0]
+    assert report['summary']['total'] == 3, report
+    assert report['summary']['passed'] == 2, report
+    assert report['summary']['skipped'] == 1, report
+    assert report['summary']['verdict_code'] == 0, report
+    assert report['property_case']['seed'] == 42 and report['property_case']['case_index'] == 7, report
+    assert report['witness']['length'] == 4 and report['witness']['checksum'] == 30, report
+    assert report['state_value'] == 3, report
+
+    source_rows = [{'module': name, 'source_id': name, 'sha256': sha(source.encode()),
+                    'bytes': len(source.encode())}
+                   for name, source in sorted(module_sources.items())]
+    source_rows.append({'module': 'root', 'source_id': APP_SOURCE_ID,
+                        'sha256': sha(APP_SOURCE.encode()), 'bytes': len(APP_SOURCE.encode())})
+    evidence = {
+        'schema_version': 1,
+        'kind': 'mncs-native-application-readiness-gate-a',
+        'observed_at': datetime.now(timezone.utc).isoformat(),
+        'compiler': {
+            'revision': git('rev-parse', 'HEAD', cwd=ROOT),
+            'branch': git('branch', '--show-current', cwd=ROOT),
+            'stage0_revision': json.loads((ROOT / 'mncs-language.lock.json').read_text())['revision'],
+            'stage0_probe_sha256': sha(PROBE.read_bytes()),
+            'vm_revision': git('rev-parse', 'HEAD', cwd=Path('/workspace/mncs-vm')),
+            'vm_sha256': sha(VM_BIN.read_bytes()),
+            'test_revision': git('rev-parse', 'HEAD', cwd=TEST_ROOT),
+        },
+        'application': {
+            'name': 'mncs-test native readiness suite core',
+            'module': APP_MODULE,
+            'entry': 'run',
+            'source_snapshot_identity': built.get('source_snapshot', {}).get('identity'),
+            'source_files': source_rows,
+            'dependency_graph': built.get('dependency_graph'),
+            'producer': built.get('producer'),
+            'contract_status': built.get('status'),
+            'entry_status': built.get('entry', {}).get('status'),
+            'execution_compatibility': built.get('execution_target_compatibility'),
+            'artifact_schema': built.get('artifact', {}).get('schema_version'),
+            'artifact_identity': built.get('artifact', {}).get('identity'),
+            'artifact_sha256': sha(json.dumps(artifact, sort_keys=True, separators=(',', ':')).encode()),
+            'interface_identity': built.get('artifact', {}).get('interface_identity'),
+            'required_capabilities': built.get('artifact', {}).get('required_capabilities'),
+            'unresolved_obligations': built.get('unresolved_obligations'),
+        },
+        'oracle': {
+            'kind': 'Stage-0 ReferenceCompiler + execute_ssa_module project oracle',
+            'valid': oracle.get('valid'),
+            'diagnostics': oracle.get('diagnostics'),
+            'linked_functions': len(oracle.get('program', {}).get('functions', [])),
+            'ssa_functions': len(oracle.get('ssa', {}).get('functions', [])),
+            'returned_value': summarize_report(expected[0]),
+            'returned_value_sha256': sha(json.dumps(expected, sort_keys=True, separators=(',', ':')).encode()),
+            'metrics': oracle_metrics,
+        },
+        'canonical_vm': {
+            'outcome': document.get('outcome'),
+            'artifact_id': receipt_artifact_id,
+            'steps': document.get('usage', {}).get('steps'),
+            'returned_value': summarize_report(actual[0]),
+            'returned_value_sha256': sha(json.dumps(actual, sort_keys=True, separators=(',', ':')).encode()),
+            'metrics': vm_metrics,
+        },
+        'build_measurements': {
+            'first_build': {'cache': built.get('cache'), 'metrics': build_metrics},
+            'identical_repeat': {'cache': repeated.get('cache'), 'metrics': repeat_metrics},
+            'identical_repeat_artifact_identity': repeated.get('artifact', {}).get('identity'),
+            'artifact_identity_stable': repeated.get('artifact', {}).get('identity') == built.get('artifact', {}).get('identity'),
+            'cache_reuse_claimed': True,
+        },
+        'negative_cases': {
+            'unknown_field': {
+                'status': invalid.get('status'),
+                'diagnostics': invalid.get('diagnostics'),
+                'source_snapshot_identity': invalid.get('source_snapshot', {}).get('identity'),
+            },
+            'unsupported_target': {'status': unavailable.get('status'), 'error': unavailable.get('error')},
+        },
+        'stage0_probe_diagnostics_tail': probe_stderr[-1500:],
+        'gate_a': 'pass',
+        'self_consumption_matrix_change': 'none; this application does not prove compiler succession',
+    }
+    EVIDENCE.parent.mkdir(parents=True, exist_ok=True)
+    EVIDENCE.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+    shutil.rmtree(cache_dir, ignore_errors=True)
+    print(json.dumps({'gate_a': evidence['gate_a'], 'artifact_identity': built.get('artifact', {}).get('identity'),
+                      'contract_status': built.get('status'), 'entry_status': built.get('entry', {}).get('status'),
+                      'oracle_matches_vm': actual == expected, 'build': build_metrics,
+                      'vm': vm_metrics, 'negative_diagnostic_codes': invalid_codes,
+                      'evidence': str(EVIDENCE.relative_to(ROOT))}, indent=2))
+
+
+if __name__ == '__main__':
+    main()

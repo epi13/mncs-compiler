@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""Cold/warm and invalidation experiments for the native mncs-test application."""
+from __future__ import annotations
+
+import copy
+import json
+import os
+from pathlib import Path
+import select
+import subprocess
+import sys
+import time
+from datetime import datetime, timezone
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import test_vm_native_application as app
+
+ROOT = app.ROOT
+CACHE_DIR = ROOT / '.build/native-app-readiness/gate-b-cache'
+EVIDENCE = ROOT / 'evidence/native-app-readiness-gate-b.json'
+
+
+def clear_cache() -> None:
+    entry_dir = CACHE_DIR / 'application-builds'
+    entry_dir.mkdir(parents=True, exist_ok=True)
+    for path in entry_dir.iterdir():
+        if path.is_file() and (path.suffix == '.json' or path.name.endswith('.tmp')):
+            path.unlink()
+
+
+def request_for(root: str, modules: dict[str, str]) -> dict:
+    return {
+        'schema_version': 'mncs.compiler.application-build-request/1',
+        'target': 'mncs-vm-0.1',
+        'root_source_id': app.APP_SOURCE_ID,
+        'root_source': root,
+        'entry': {'module': app.APP_MODULE, 'function': 'run'},
+        'modules': modules,
+        'capabilities': [],
+        'effect_assumptions': [],
+        'optimization_policy': 'default',
+        'verification_policy': 'stage0-semantic-check+canonical-vm-artifact/1',
+    }
+
+
+def call_request() -> dict:
+    return {
+        'schema_version': '0.1',
+        'target': {'module': app.APP_MODULE, 'function': 'run'},
+        'arguments': [],
+        'type_arguments': [],
+        'step_budget': 2000000,
+    }
+
+
+def compile_one(probe: app.Probe, request: dict) -> tuple[dict, dict]:
+    return probe.send({'compile_application': request})
+
+
+def oracle_one(probe: app.Probe, root: str, modules: dict[str, str]) -> tuple[dict, dict, dict]:
+    response, metrics = probe.send({'project_oracle': {
+        'root': root, 'modules': modules, 'calls': [call_request()]}})
+    if not response.get('valid'):
+        raise AssertionError(json.dumps(response.get('diagnostics'), indent=2))
+    execution = response['executions'][0]
+    if execution.get('status') != 'returned':
+        raise AssertionError(json.dumps(execution, indent=2))
+    return response, execution, metrics
+
+
+def run_and_compare(artifact: dict, execution: dict) -> tuple[dict, dict, list]:
+    document, metrics = app.run_vm(artifact)
+    if document.get('outcome') != {'kind': 'completed'}:
+        raise AssertionError(json.dumps(document.get('outcome'), indent=2))
+    if document.get('record', {}).get('artifact_id') != artifact.get('artifact_id'):
+        raise AssertionError('VM receipt does not bind the exact application artifact')
+    actual = [app.decode_wire(app.vm_to_wire(row))
+              for row in document['record']['returned']]
+    expected = [app.decode_wire(row) for row in execution['returned']]
+    if actual != expected:
+        raise AssertionError(json.dumps({'actual': actual, 'stage0': expected}, indent=2))
+    return document, metrics, actual
+
+
+def compact_result(report: dict) -> dict:
+    summary = report['summary']
+    return {
+        'state': report['state'],
+        'state_value': report['state_value'],
+        'suite': {key: summary[key] for key in
+                  ['verdict_code', 'total', 'passed', 'failed', 'skipped',
+                   'unsupported', 'assertion_count', 'failure_count']},
+        'property_case': {key: report['property_case'][key]
+                          for key in ['seed', 'case_index', 'value']},
+        'witness': report['witness'],
+    }
+
+
+def compact_oracle(execution: dict) -> dict:
+    rows = [app.decode_wire(row) for row in execution['returned']]
+    return compact_result(rows[0])
+
+
+def cache_path(key: str) -> Path:
+    return CACHE_DIR / 'application-builds' / (key.removeprefix('sha256:') + '.json')
+
+
+def interrupt_during_miss(request: dict) -> dict:
+    env = os.environ.copy()
+    env['MNCS_PROBE_MODULES'] = ''
+    env['MNCS_PROBE_EXECUTION_MODULES'] = ''
+    env['MNCS_PROBE_GENERIC_SEEDS'] = '[]'
+    env.pop('MNCS_PROBE_BACKEND', None)
+    env['MNCS_PROBE_CACHE_DIR'] = str(CACHE_DIR)
+    env['MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT'] = str(ROOT)
+    proc = subprocess.Popen([str(app.PROBE)], cwd=ROOT, env=env,
+                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True, bufsize=1)
+    assert proc.stdin and proc.stdout
+    try:
+        proc.stdin.write('{"execution_status":true}\n')
+        proc.stdin.flush()
+        ready, _, _ = select.select([proc.stdout], [], [], 10)
+        if not ready or not proc.stdout.readline():
+            raise RuntimeError('fresh Stage-0 probe did not reach its request loop')
+        proc.stdin.write(json.dumps({'compile_application': request},
+                                    separators=(',', ':')) + '\n')
+        proc.stdin.flush()
+        time.sleep(0.025)
+        ready, _, _ = select.select([proc.stdout], [], [], 0)
+        if ready:
+            response = proc.stdout.readline()
+            proc.wait(timeout=5)
+            return {'interrupted': False, 'response_received': bool(response),
+                    'exit_code': proc.returncode}
+        proc.kill()
+        proc.wait(timeout=5)
+        return {'interrupted': True, 'signal': 'SIGKILL',
+                'response_received': False, 'exit_code': proc.returncode,
+                'delay_after_request_seconds': 0.025}
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+def main() -> None:
+    if not app.PROBE.is_file() or not app.VM_BIN.is_file():
+        raise SystemExit('campaign Stage-0 probe or canonical VM binary is missing')
+    clear_cache()
+    modules = {name: path.read_text() for name, path in app.MODULE_FILES.items()}
+    original_request = request_for(app.APP_SOURCE, modules)
+    tails = []
+
+    cold_probe = app.Probe(CACHE_DIR)
+    try:
+        oracle, oracle_exec, oracle_metrics = oracle_one(
+            cold_probe, app.APP_SOURCE, modules)
+        cold, cold_metrics = compile_one(cold_probe, original_request)
+        tails.append(cold_probe.close())
+    except BaseException:
+        if cold_probe.proc.poll() is None:
+            cold_probe.proc.kill()
+            cold_probe.proc.wait(timeout=5)
+        raise
+    if cold.get('cache', {}).get('status') != 'miss' or cold.get('cache', {}).get('publication') != 'stored':
+        raise AssertionError('cold run was not compiled and atomically published')
+    if cold.get('entry', {}).get('status') != 'verified':
+        raise AssertionError('cold entry was not verified')
+    artifact = cold['artifact']['value']
+
+    # A new process proves the host cache survives session teardown.
+    probe = app.Probe(CACHE_DIR)
+    try:
+        warm, warm_metrics = compile_one(probe, original_request)
+        if warm.get('cache', {}).get('status') != 'hit':
+            raise AssertionError('unchanged build did not hit the persistent artifact cache')
+        if warm['artifact']['identity'] != cold['artifact']['identity']:
+            raise AssertionError('warm reuse changed the artifact identity')
+
+        small_root = app.APP_SOURCE.replace(
+            'equals_i64(42, 19 +% 23', 'equals_i64(43, 19 +% 23', 1)
+        small_request = request_for(small_root, modules)
+        small_oracle, small_exec, small_oracle_metrics = oracle_one(
+            probe, small_root, modules)
+        small, small_metrics = compile_one(probe, small_request)
+        if small.get('cache', {}).get('status') != 'miss':
+            raise AssertionError('a changed function reused the prior artifact')
+        small_artifact = small['artifact']['value']
+
+        dependency_modules = dict(modules)
+        dependency_modules['mncs.test.generative'] = (
+            dependency_modules['mncs.test.generative'].replace(
+                '6364136223846793005', '6364136223846793006', 1))
+        dynamic_root = app.APP_SOURCE.replace(
+            'equals_i64(58, replay(42, 7, 97) as i64',
+            'equals_i64((generated.value % 97) as i64, replay(42, 7, 97) as i64', 1)
+        if dynamic_root == app.APP_SOURCE:
+            raise AssertionError('dependency fixture consumer was not updated')
+        dependency_request = request_for(dynamic_root, dependency_modules)
+        dependency_oracle, dependency_exec, dependency_oracle_metrics = oracle_one(
+            probe, dynamic_root, dependency_modules)
+        dependency, dependency_metrics = compile_one(probe, dependency_request)
+        if dependency.get('cache', {}).get('status') != 'miss':
+            raise AssertionError('changed imported source reused an old artifact')
+        if dependency['dependency_graph']['identity'] == cold['dependency_graph']['identity']:
+            raise AssertionError('changed dependency did not alter the resolved graph identity')
+        dependency_artifact = dependency['artifact']['value']
+
+        invalid_request = request_for(
+            app.APP_SOURCE.replace('summary.total', 'summary.total_missing', 1), modules)
+        invalid, invalid_metrics = compile_one(probe, invalid_request)
+        invalid_repeat, invalid_repeat_metrics = compile_one(probe, invalid_request)
+        invalid_codes = [row.get('code') for row in invalid.get('diagnostics', [])]
+        if invalid.get('status') != 'rejected' or 'MNE162' not in invalid_codes:
+            raise AssertionError('changed invalid source lacked a precise MNE162 diagnostic')
+        if invalid.get('diagnostics') != invalid_repeat.get('diagnostics'):
+            raise AssertionError('repeated invalid build diagnostics were not stable')
+        if invalid.get('cache', {}).get('publication') != 'not_published':
+            raise AssertionError('invalid source entered the success cache')
+
+        unsupported_request = copy.deepcopy(original_request)
+        unsupported_request['target'] = 'mncs-wasm-1.0'
+        unavailable, unavailable_metrics = compile_one(probe, unsupported_request)
+        if unavailable.get('status') != 'unavailable':
+            raise AssertionError('unsupported target was not reported unavailable')
+
+        interrupt_request = copy.deepcopy(original_request)
+        interrupt_request['verification_policy'] = 'interrupted-publication-probe/1'
+        seed, seed_metrics = compile_one(probe, interrupt_request)
+        if seed.get('cache', {}).get('publication') != 'stored':
+            raise AssertionError('could not seed a unique cache key for interruption')
+        interrupt_key = seed['cache']['key']
+        target_entry = cache_path(interrupt_key)
+        target_entry.unlink()
+        tails.append(probe.close())
+    except BaseException:
+        if probe.proc.poll() is None:
+            probe.proc.kill()
+            probe.proc.wait(timeout=5)
+        raise
+
+    interrupted = interrupt_during_miss(interrupt_request)
+    if not interrupted['interrupted']:
+        raise AssertionError('interruption probe completed before cancellation')
+    leftovers = list(target_entry.parent.glob(target_entry.stem + '*'))
+    if target_entry.exists() or leftovers:
+        raise AssertionError(f'interrupted compilation left cache publication: {leftovers}')
+
+    retry_probe = app.Probe(CACHE_DIR)
+    try:
+        retry, retry_metrics = compile_one(retry_probe, interrupt_request)
+        if retry.get('cache', {}).get('status') != 'miss' or retry.get('cache', {}).get('publication') != 'stored':
+            raise AssertionError('post-interruption build did not recompute and publish')
+        tails.append(retry_probe.close())
+    except BaseException:
+        if retry_probe.proc.poll() is None:
+            retry_probe.proc.kill()
+            retry_probe.proc.wait(timeout=5)
+        raise
+    verify_probe = app.Probe(CACHE_DIR)
+    try:
+        retry_warm, retry_warm_metrics = compile_one(verify_probe, interrupt_request)
+        if retry_warm.get('cache', {}).get('status') != 'hit':
+            raise AssertionError('post-interruption artifact did not survive a fresh process')
+        tails.append(verify_probe.close())
+    except BaseException:
+        if verify_probe.proc.poll() is None:
+            verify_probe.proc.kill()
+            verify_probe.proc.wait(timeout=5)
+        raise
+
+    vm_base, vm_base_metrics, base_actual = run_and_compare(artifact, oracle_exec)
+    vm_small, vm_small_metrics, small_actual = run_and_compare(small_artifact, small_exec)
+    vm_dependency, vm_dependency_metrics, dependency_actual = run_and_compare(
+        dependency_artifact, dependency_exec)
+    base_report, small_report, dependency_report = (
+        base_actual[0], small_actual[0], dependency_actual[0])
+    assert base_report['summary']['passed'] == 2 and base_report['summary']['skipped'] == 1
+    assert small_report['summary']['failed'] == 1 and small_report['state_value'] == 1
+    assert dependency_report['summary']['failed'] == 0
+    assert dependency_report['property_case']['value'] != base_report['property_case']['value']
+
+    cache_speedup = cold_metrics['wall_seconds'] / max(warm_metrics['wall_seconds'], 1e-9)
+    source_files = [
+        {'module': name, 'source_id': name, 'sha256': app.sha(source.encode()),
+         'bytes': len(source.encode())}
+        for name, source in sorted(modules.items())
+    ]
+    source_files.append({
+        'module': 'root', 'source_id': app.APP_SOURCE_ID,
+        'sha256': app.sha(app.APP_SOURCE.encode()), 'bytes': len(app.APP_SOURCE.encode()),
+    })
+    evidence = {
+        'schema_version': 1,
+        'kind': 'mncs-native-incremental-build-evidence',
+        'observed_at': datetime.now(timezone.utc).isoformat(),
+        'compiler': {
+            'revision': app.git('rev-parse', 'HEAD', cwd=ROOT),
+            'branch': app.git('branch', '--show-current', cwd=ROOT),
+            'stage0_revision': json.loads((ROOT / 'mncs-language.lock.json').read_text())['revision'],
+            'stage0_probe_sha256': app.sha(app.PROBE.read_bytes()),
+            'application_module_sha256': app.sha((ROOT / 'tools/stage0-probe/src/application.rs').read_bytes()),
+            'probe_dispatch_sha256': app.sha((ROOT / 'tools/stage0-probe/src/main.rs').read_bytes()),
+            'gate_a_harness_sha256': app.sha((ROOT / 'tools/test_vm_native_application.py').read_bytes()),
+            'gate_b_harness_sha256': app.sha(Path(__file__).read_bytes()),
+            'vm_revision': app.git('rev-parse', 'HEAD', cwd=Path('/workspace/mncs-vm')),
+            'vm_sha256': app.sha(app.VM_BIN.read_bytes()),
+            'test_revision': app.git('rev-parse', 'HEAD', cwd=app.TEST_ROOT),
+        },
+        'application': {
+            'module': app.APP_MODULE, 'entry': 'run',
+            'source_snapshot_identity': cold.get('source_snapshot', {}).get('identity'),
+            'dependency_graph_identity': cold.get('dependency_graph', {}).get('identity'),
+            'source_files': source_files,
+            'artifact_identity': cold.get('artifact', {}).get('identity'),
+            'build_assumptions': cold.get('build_assumptions'),
+        },
+        'cache_key_inputs': [
+            'exact root source ID and bytes plus exact imported module IDs and bytes',
+            'Stage-0 toolchain identity and probe executable SHA-256',
+            'compiler contract version, canonical VM backend, selected target, and entry',
+            'requested capabilities and effect assumptions',
+            'optimization and verification policies',
+        ],
+        'experiments': {
+            'cold_build': {'cache': cold.get('cache'), 'metrics': cold_metrics},
+            'warm_unchanged_fresh_process': {
+                'cache': warm.get('cache'), 'artifact_identity': warm.get('artifact', {}).get('identity'),
+                'metrics': warm_metrics, 'wall_speedup': round(cache_speedup, 2),
+                'cpu_speedup': round(cold_metrics['cpu_seconds'] /
+                                     max(warm_metrics['cpu_seconds'], 1e-9), 2),
+            },
+            'small_semantic_edit': {
+                'source_snapshot_identity': small.get('source_snapshot', {}).get('identity'),
+                'cache': small.get('cache'), 'artifact_identity': small.get('artifact', {}).get('identity'),
+                'oracle_valid': small_oracle.get('valid'),
+                'oracle_result': compact_oracle(small_exec), 'vm_result': compact_result(small_actual[0]),
+                'oracle_metrics': small_oracle_metrics, 'compile_metrics': small_metrics,
+                'vm_metrics': vm_small_metrics,
+                'reused_units': small.get('cache', {}).get('reused_units'),
+                'recomputed_units': small.get('cache', {}).get('recomputed_units'),
+                'directly_changed_source': app.APP_SOURCE_ID,
+            },
+            'dependency_change': {
+                'changed_module': 'mncs.test.generative',
+                'source_snapshot_identity': dependency.get('source_snapshot', {}).get('identity'),
+                'cache': dependency.get('cache'),
+                'artifact_identity': dependency.get('artifact', {}).get('identity'),
+                'graph_identity_before': cold.get('dependency_graph', {}).get('identity'),
+                'graph_identity_after': dependency.get('dependency_graph', {}).get('identity'),
+                'oracle_valid': dependency_oracle.get('valid'),
+                'oracle_result': compact_oracle(dependency_exec), 'vm_result': compact_result(dependency_actual[0]),
+                'oracle_metrics': dependency_oracle_metrics,
+                'compile_metrics': dependency_metrics, 'vm_metrics': vm_dependency_metrics,
+                'reused_units': dependency.get('cache', {}).get('reused_units'),
+                'recomputed_units': dependency.get('cache', {}).get('recomputed_units'),
+            },
+            'invalid_source': {
+                'response_status': invalid.get('status'), 'diagnostics': invalid.get('diagnostics'),
+                'repeated_diagnostics_equal': invalid.get('diagnostics') == invalid_repeat.get('diagnostics'),
+                'cache': invalid.get('cache'), 'repeat_cache': invalid_repeat.get('cache'),
+                'metrics': [invalid_metrics, invalid_repeat_metrics],
+            },
+            'unsupported_target': {
+                'response_status': unavailable.get('status'), 'error': unavailable.get('error'),
+                'metrics': unavailable_metrics,
+            },
+            'interrupted_compilation': {
+                'unique_policy_key': interrupt_key, 'seed_cache': seed.get('cache'),
+                'cancelled_process': interrupted, 'entry_after_cancel_exists': target_entry.exists(),
+                'matching_temp_or_entry_paths_after_cancel': [str(p) for p in leftovers],
+                'retry_cache': retry.get('cache'), 'retry_metrics': retry_metrics,
+                'fresh_process_cache': retry_warm.get('cache'),
+                'fresh_process_metrics': retry_warm_metrics,
+            },
+        },
+        'resource_notes': {
+            'cgroup_memory_bytes': 'unknown when the sandbox exposes no usable cgroup memory counter',
+            'process_metrics': 'sampled from /proc for probe and VM processes; wall and CPU use process deltas',
+        },
+        'fine_grained_invalidation': {
+            'status': 'not_yet_implemented',
+            'detail': 'The cache reuses the verified package artifact only for an exact full snapshot. A changed function or dependency safely recomputes the complete application closure; module/function fact reuse is still required to complete Gate B.',
+        },
+        'gate_a': 'pass',
+        'gate_b': 'partial',
+        'self_consumption_matrix_change': 'none; Stage-1/Stage-2 and the self-consumption matrix remain unchanged',
+        'producer_diagnostics_tail': '\n'.join(tails)[-1800:],
+    }
+    EVIDENCE.parent.mkdir(parents=True, exist_ok=True)
+    EVIDENCE.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
+    import shutil
+    shutil.rmtree(CACHE_DIR, ignore_errors=True)
+    print(json.dumps({
+        'gate_a': 'pass', 'gate_b': 'partial',
+        'cold_cache': cold.get('cache', {}).get('status'),
+        'warm_cache': warm.get('cache', {}).get('status'),
+        'small_edit_cache': small.get('cache', {}).get('status'),
+        'dependency_cache': dependency.get('cache', {}).get('status'),
+        'interrupted': interrupted['interrupted'],
+        'retry_cache': retry.get('cache', {}).get('status'),
+        'cold_wall_seconds': cold_metrics['wall_seconds'],
+        'warm_wall_seconds': warm_metrics['wall_seconds'],
+        'wall_speedup': round(cache_speedup, 2),
+        'cold_cpu_seconds': cold_metrics['cpu_seconds'],
+        'warm_cpu_seconds': warm_metrics['cpu_seconds'],
+        'evidence': str(EVIDENCE.relative_to(ROOT)),
+    }, indent=2))
+
+
+if __name__ == '__main__':
+    main()

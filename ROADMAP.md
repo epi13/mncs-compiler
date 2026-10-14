@@ -8,6 +8,46 @@
 
 This roadmap separates compiler succession from compiler research. The project should earn each stage with evidence rather than treating self-hosting alone as completion.
 
+## MNCS Native Application Readiness (2026-10-14)
+
+This milestone tracks dependable native application development separately
+from compiler succession. Current evidence is bound to Compiler source
+`4e4bf038b46b6090900994bce7121dbe5eafd44f`, Stage-0
+`e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, VM
+`1c19a94732c9d24029dd00e2d5af13710f481d02`, and the read-only
+`mncs-test` source revision recorded in the Gate A/B evidence.
+
+- **Gate A — passed for the selected workload.** The application combines
+  `mncs.test.assertions`, `suite`, `generative`, and `snapshot` with a
+  native multi-module driver. Stage-0 project-oracle execution and canonical
+  `mncs.vm.artifact/1` VM execution return the same structured result,
+  including nominal records, generic bounded suite folding, finite payload
+  construction/extraction/matching, and bounded byte views. Exact artifact
+  and producer identities are retained in
+  `evidence/native-app-readiness-gate-a.json`.
+- **Gate B — partial.** An atomic content-addressed cache reuses successful
+  complete application artifacts across fresh probe processes. In the
+  bounded workload the cold miss took about 0.43 s and the warm hit about
+  0.24 s (1.81× wall reduction on the latest run). Changed root and imported sources miss and
+  rebuild; invalid source retains the same `MNE162` diagnostic; a killed
+  build publishes no result and a later retry succeeds. Measurements and
+  cache keys are in `evidence/native-app-readiness-gate-b.json`. The current
+  cache unit is the whole application artifact, so changed-function and
+  changed-dependency builds still recompute the full closure.
+- The application contract correctly distinguishes a verified selected
+  `run` entry from unsupported generic exports elsewhere in the same
+  source closure. The whole-module response remains `unsupported` because
+  `equals_bytes` and the generic `summarize` template have no standalone
+  SSA export; the selected specialized application entry is verified and
+  executable. Do not promote the entire module closure to verified.
+- This workload requires no new language or VM operation and exercises no
+  effectful capability. It does not change the self-consumption matrix,
+  Stage-1/Stage-2 status, or establish conversion readiness for the full
+  `mncs-test` tool. The next compiler frontier is reusable verified module
+  or function units for changed snapshots, followed by a representative
+  Forge execution and a conversion-readiness assessment.
+
+
 ## Phase 0 — Repository foundation
 
 - establish architecture, RFC process, pressure methodology, evidence conventions, and MNCS-first agent contract,

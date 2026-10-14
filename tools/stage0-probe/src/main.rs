@@ -20,6 +20,7 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
+mod application;
 mod provider;
 #[path = "../../vm_emit.rs"]
 mod vm_emit;
@@ -1401,6 +1402,8 @@ fn main() {
             "record_types"
         } else if input.get("project_oracle").is_some() {
             "project_oracle"
+        } else if input.get("compile_application").is_some() {
+            "compile_application"
         } else if input.get("emit_vm_artifact").is_some() {
             "emit_vm_artifact"
         } else if input.get("elaborate").is_some() {
@@ -1507,6 +1510,8 @@ fn main() {
                 "ssa": ssa,
                 "executions": executions,
             })
+        } else if let Some(request) = input.get("compile_application") {
+            application::compile_application(request, toolchain.as_ref())
         } else if let Some(request) = input.get("emit_vm_artifact") {
             // Direct canonical emission: one sealed mncs.vm.artifact/1
             // for an elaborated module, no research payload involved.
