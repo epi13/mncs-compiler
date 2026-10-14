@@ -17,7 +17,7 @@
 //! at live admission (`IdentityMismatch`), never silently; the
 //! cross-repo differential (`tools/test_vm_emit.py`) enforces it.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use mncs_compiler::ReferenceCompiler;
 use mncs_model::{
@@ -273,6 +273,93 @@ pub fn emit_vm_application_artifact_with_producer(
     Ok((artifact, unselected_unresolved, capability_bindings))
 }
 
+/// Project a linked program's verified SSA to the selected application roots
+/// and their transitive compiler-resolved call closure. The originating full
+/// SSA remains the provenance authority; this closed module is revalidated
+/// before it is serialized into an application artifact.
+fn application_ssa_closure(
+    ssa: &SsaModule,
+    program: &Program,
+    selected_exports: &BTreeSet<(String, String)>,
+) -> Result<SsaModule, String> {
+    if selected_exports.is_empty() {
+        return Err("application SSA closure has no selected roots".to_owned());
+    }
+    if !ssa.identity_is_valid() {
+        return Err("application source SSA identity is invalid".to_owned());
+    }
+    if !ssa.proof_relationships.is_empty() {
+        return Err(
+            "application SSA closure cannot project attached proof relationships".to_owned(),
+        );
+    }
+
+    let mut functions_by_identity = BTreeMap::<String, usize>::new();
+    for (index, function) in ssa.functions.iter().enumerate() {
+        for identity in [&function.semantic_identity.0, &function.identity.0] {
+            if let Some(previous) = functions_by_identity.insert(identity.clone(), index) {
+                if previous != index {
+                    return Err(format!(
+                        "duplicate application SSA function identity {identity}"
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut pending = VecDeque::<String>::new();
+    for (module, function) in selected_exports {
+        pending.push_back(mncs_model::function_id(module, function).0);
+    }
+    let mut reachable = BTreeSet::<String>::new();
+    while let Some(identity) = pending.pop_front() {
+        let Some(index) = functions_by_identity.get(&identity).copied() else {
+            return Err(format!(
+                "selected application call target {identity} has no verified SSA function"
+            ));
+        };
+        let function = &ssa.functions[index];
+        let semantic_identity = function.semantic_identity.0.clone();
+        if !reachable.insert(semantic_identity.clone()) {
+            continue;
+        }
+        if function.blocks.is_empty() {
+            return Err(format!(
+                "selected application call target {semantic_identity} has no executable body"
+            ));
+        }
+        for block in &function.blocks {
+            for instruction in &block.instructions {
+                if let SsaInstructionKind::Call { function, .. } = &instruction.kind {
+                    pending.push_back(function.0.clone());
+                }
+            }
+        }
+        for iteration in &function.bounded_iterations {
+            pending.extend(iteration.callees.iter().map(|callee| callee.0.clone()));
+        }
+    }
+
+    let mut projected = ssa.clone();
+    projected
+        .functions
+        .retain(|function| reachable.contains(&function.semantic_identity.0));
+    if projected.functions.len() != reachable.len() {
+        return Err("application SSA closure did not resolve every selected function".to_owned());
+    }
+    let validation = projected.validate_lowering_boundary(program);
+    if !validation.valid {
+        return Err(format!(
+            "projected application SSA failed backend validation: {:?}",
+            validation.errors
+        ));
+    }
+    if !projected.identity_is_valid() {
+        return Err("projected application SSA identity is invalid".to_owned());
+    }
+    Ok(projected)
+}
+
 fn emit_vm_artifact_scoped(
     compiler: &ReferenceCompiler,
     program: &Program,
@@ -305,7 +392,11 @@ fn emit_vm_artifact_scoped(
         "selected ssa identity is valid for {}",
         program.module
     );
-    let capability_bindings = capability_dispatch_bindings(&ssa)?;
+    let execution_ssa = match selected_exports {
+        Some(roots) => application_ssa_closure(&ssa, program, roots)?,
+        None => ssa.clone(),
+    };
+    let capability_bindings = capability_dispatch_bindings(&execution_ssa)?;
     let selected = result
         .artifacts
         .iter()
@@ -414,7 +505,7 @@ fn emit_vm_artifact_scoped(
     });
 
     let mut capability_set = BTreeSet::new();
-    for function in &ssa.functions {
+    for function in &execution_ssa.functions {
         for block in &function.blocks {
             for instruction in &block.instructions {
                 capability_set.extend(
@@ -495,6 +586,12 @@ fn emit_vm_artifact_scoped(
     if let Some(map) = &source_map {
         lowering_refs.push(format!("source-map:{}", map.identity));
     }
+    if selected_exports.is_some() {
+        let closure_fingerprint = execution_ssa
+            .fingerprint()
+            .map_err(|error| format!("projected application SSA fingerprint failed: {error}"))?;
+        lowering_refs.push(format!("application-ssa-closure/1:{closure_fingerprint}"));
+    }
 
     let artifact = VmArtifact {
         schema_version: VM_ARTIFACT_SCHEMA_VERSION.to_owned(),
@@ -512,8 +609,9 @@ fn emit_vm_artifact_scoped(
         callables,
         generic_entrypoints,
         code: CodeSection::MncsSelectedSsa {
-            ssa_schema: ssa.schema_version.clone(),
-            module: mncs_vm_artifact_codec::freeze(&ssa).expect("selected SSA freezes"),
+            ssa_schema: execution_ssa.schema_version.clone(),
+            module: mncs_vm_artifact_codec::freeze(&execution_ssa)
+                .expect("selected application SSA freezes"),
         },
         requirements: ArtifactRequirements {
             capabilities,
@@ -705,5 +803,92 @@ fn resolve_generic_entry(
             "generic {}::{} entry {}::{} is ambiguous across ssa instances",
             row.0, row.1, row.4, row.5
         ),
+    }
+}
+
+#[cfg(test)]
+mod application_closure_tests {
+    use super::{emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer};
+    use mncs_compiler::ReferenceCompiler;
+    use mncs_model::SsaModule;
+    use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
+    use std::collections::BTreeSet;
+
+    #[test]
+    fn application_artifact_contains_only_the_transitive_entry_closure() {
+        let source = r#"
+            mncs 0.18;
+            module closure.sample;
+            fn entry() -> (result: u64) { return helper(); }
+            fn helper() -> (result: u64) { return leaf(); }
+            fn leaf() -> (result: u64) { return 7; }
+            fn unused() -> (result: u64) { return 99; }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-sample",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+
+        let full = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("full canonical VM artifact");
+        let (application, unresolved, _) = emit_vm_application_artifact_with_producer(
+            &compiler,
+            program,
+            None,
+            "closure.sample",
+            "entry",
+            &BTreeSet::new(),
+        )
+        .expect("application entry artifact");
+        assert!(
+            unresolved.is_empty(),
+            "unexpected unselected unresolved exports: {unresolved:?}"
+        );
+
+        let module = application["code"]["mncs-selected-ssa"]["module"].clone();
+        let projected: SsaModule = mncs_vm_artifact_codec::deserialize(module)
+            .expect("decode projected canonical SSA closure");
+        let functions: BTreeSet<String> = projected
+            .functions
+            .iter()
+            .map(|function| function.semantic_identity.0.clone())
+            .collect();
+        assert_eq!(
+            functions,
+            BTreeSet::from([
+                mncs_model::function_id("closure.sample", "entry").0,
+                mncs_model::function_id("closure.sample", "helper").0,
+                mncs_model::function_id("closure.sample", "leaf").0,
+            ])
+        );
+        assert!(
+            projected.validate().valid,
+            "projected SSA diagnostics: {:?}",
+            projected.validate().errors
+        );
+        assert!(application["source"]["lowering_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|row| {
+                row.as_str()
+                    .is_some_and(|value| value.starts_with("application-ssa-closure/1:"))
+            })));
+        let full_bytes = serde_json::to_vec(&full)
+            .expect("serialize full artifact")
+            .len();
+        let application_bytes = serde_json::to_vec(&application)
+            .expect("serialize application artifact")
+            .len();
+        assert!(
+            application_bytes < full_bytes,
+            "entry closure should reduce this artifact: app={application_bytes}, full={full_bytes}"
+        );
     }
 }

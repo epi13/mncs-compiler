@@ -301,6 +301,14 @@ def main() -> None:
             APP_ARTIFACT_BYTES = json.dumps(
                 artifact, sort_keys=True, separators=(',', ':')
             ).encode()
+            application_closure_refs = [
+                ref for ref in artifact.get('source', {}).get('lowering_refs', [])
+                if isinstance(ref, str) and ref.startswith('application-ssa-closure/1:')
+            ]
+            if len(application_closure_refs) != 1:
+                raise AssertionError(
+                    'application artifact must identify exactly one projected SSA closure'
+                )
             ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
             ARTIFACT_PATH.write_bytes(APP_ARTIFACT_BYTES)
             calls = [oracle_call(argument) for argument in arguments]
@@ -449,6 +457,21 @@ def main() -> None:
             'metrics': build_metrics,
             'artifact_identity': artifact_id,
             'artifact_file_sha256': sha(APP_ARTIFACT_BYTES),
+            'artifact_bytes': len(APP_ARTIFACT_BYTES),
+            'application_ssa_provenance': {
+                'full_selected_ssa_identity': artifact.get('source', {}).get('selected_ssa_identity'),
+                'full_selected_ssa_fingerprint': artifact.get('source', {}).get('selected_ssa_fingerprint'),
+                'projected_closure_ref': application_closure_refs[0],
+            },
+            'artifact_size_comparison': {
+                'baseline_artifact_identity': 'sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919',
+                'baseline_compiler_revision': '24dda63ae59e0505969c490604e14348dab1f7d7',
+                'baseline_bytes': 1161949,
+                'current_bytes': len(APP_ARTIFACT_BYTES),
+                'reduction_bytes': 1161949 - len(APP_ARTIFACT_BYTES),
+                'reduction_percent': round((1161949 - len(APP_ARTIFACT_BYTES)) * 100 / 1161949, 4),
+                'comparison': 'same selected mncs-test digest_app source snapshot and mncs-vm-0.1 target; closure projection added to the application emitter',
+            },
             'callable_interface': current_interface,
             'callable_interface_identity': current_interface.get('identity'),
             'capability_dispatch': capability_dispatch,

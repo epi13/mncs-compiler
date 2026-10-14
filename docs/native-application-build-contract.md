@@ -41,7 +41,18 @@ as unselected_unresolved_exports; they do not block a different, closed entry
 artifact. A requested entry or specialization without a verified SSA instance
 remains in unresolved_obligations and makes the result unsupported. The
 response names the callable scope explicitly, and the sealed VM artifact remains
-the executable authority.
+the executable authority. Before serialization, the application emitter now
+projects the full verified SSA module to the selected exports' transitive call
+closure, including bounded-iteration callees. The projected module is validated
+again at the backend boundary and receives an `application-ssa-closure/1:<sha256>`
+reference in artifact source provenance. The original selected-SSA identity and
+fingerprint remain recorded as provenance for the full compiler output; the
+closure reference identifies the exact SSA payload embedded for execution.
+Capability requirements and dispatch mappings are derived from this projected
+closure. Missing call targets, declaration-only targets, invalid identities,
+failed projected-SSA validation, or attached proof relationships reject the
+application artifact instead of dropping information silently. The regular
+non-application VM emitter continues to serialize its full verified module.
 
 This is a bounded bootstrap adapter with a content-addressed cache for complete
 verified application artifacts. An exact snapshot hit reuses its artifact
