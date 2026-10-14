@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 10,
+  "revision": 11,
   "manifest_location": "in-repository",
   "authority": {
     "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
@@ -119,6 +119,54 @@
           "toolchain": {
             "repository": "mncs-compiler",
             "path": ".bootstrap/target/release/mncs-compiler-stage0-probe"
+          },
+          "toolchain_env": "MNCS_COMPILER_PROBE"
+        }
+      },
+      {
+        "contract": "native-application-build",
+        "version": "1",
+        "kind": "compiler-application-build-provider",
+        "stability": "experimental",
+        "effects": [
+          "write"
+        ],
+        "shareable_artifacts": [
+          "native-application-build.json"
+        ],
+        "output_limit_bytes": 16384,
+        "artifact_contract": {
+          "request_schema": "mncs.compiler.application-build-request/1",
+          "response_schema": "mncs.compiler.application-build/1",
+          "result_artifact": "native-application-build.json",
+          "execution_artifact": "mncs.vm.artifact/1",
+          "status_values": [
+            "verified",
+            "unsupported",
+            "unavailable",
+            "unknown",
+            "rejected"
+          ]
+        },
+        "fingerprint_sources": [
+          "tools/application_build_provider.py",
+          "tools/stage0-probe/src/application.rs",
+          "tools/stage0-probe/src/main.rs",
+          "tools/stage0-probe/Cargo.toml",
+          "tools/stage0-probe/Cargo.lock",
+          "tools/vm_emit.rs",
+          "tools/vm-artifact-codec/",
+          "mncs-language.lock.json"
+        ],
+        "invocation": {
+          "kind": "python",
+          "path": "tools/application_build_provider.py",
+          "fixed_argv": [
+            "build"
+          ],
+          "toolchain": {
+            "repository": "mncs-compiler",
+            "path": ".build/native-app-readiness/mncs-compiler-stage0-probe"
           },
           "toolchain_env": "MNCS_COMPILER_PROBE"
         }

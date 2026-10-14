@@ -1,0 +1,117 @@
+{
+  "application": {
+    "artifact_identity": "sha256:42bcc4a3dcba168a3f53689011b9f250f2e7b2eca8a2b9ad3a4fded8cc674932",
+    "dependency_graph_identity": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
+    "entry_status": "verified",
+    "interface_identity": "05bd75d133b3a926bed1037267b607debf3ff1d79bceab0975a1cd18374c5776",
+    "overall_status": "unsupported",
+    "source_snapshot_identity": "sha256:3ef8d2a219a4b080c392aa9ddf4e36e06adcb51eae9e231f72507f4169e15a1f",
+    "stage0_oracle_matches_canonical_vm": true,
+    "unresolved_obligations": [
+      "export mncs.test.assertions::equals_bytes: no ssa instance",
+      "export mncs.test.suite::summarize: no ssa instance"
+    ]
+  },
+  "canonical_store": {
+    "artifact_readback": "not_performed",
+    "control_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
+    "invoke_status": "unavailable",
+    "publication_completed": false,
+    "reason": "Control does not expose this Environment capability",
+    "required_transition": "owner-approved mncs-control-mcp scope and allowlist contract for this single capability"
+  },
+  "compiler": {
+    "base_revision": "3c8e2116a8f6158b452875e1928bf6ce10b4ade4",
+    "branch": "campaign/native-application-readiness-20261013",
+    "manifest_revision": 11,
+    "mncs_test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+    "repository": "mncs-compiler",
+    "stage0_probe_sha256": "sha256:3976f4d6b954f3f163539f15e29ba1900675d735e51515d6a90718f51666bdef",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "tracked_source_identities": {
+      ".mncs/project.json": "sha256:ee9831946e55449eff4d0feb073c4c8a5253127710fe516f9c04a4d3ff294b1f",
+      ".mncs/verification-obligations.json": "sha256:bf829f72075d0a0ffcbe2f6b3fb69454235db33eb23880843c52b8e1d225336b",
+      "ROADMAP.md": "sha256:7e55d54fd675f8fc1b524022ee1c4b9bdd4c5a3e26eedb10c7d9fbf892b071c1",
+      "docs/native-application-build-contract.md": "sha256:55624b852135e3cd26e566f828c632f0ea288c4737b7f5950b262577b61ea41b",
+      "tools/application_build_provider.py": "sha256:d67d7575591df99458aff8a0ced4593d602b2fc2dcb18819293ef4103a3196ef",
+      "tools/stage0-probe/src/application.rs": "sha256:bbd93ede1cdef5937e3e09675bcec86e15aeb44e694ddb0c4a2c8bf0387c2da4",
+      "tools/test_application_build_provider.py": "sha256:ce1d05cfe52c39d110481ad1eaf0e81c9a6dc1018996d06a2b033ae92d02d3b4"
+    },
+    "verification_obligation_inventory_revision": 13,
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "contract": {
+    "canonical_vm_build_cpu_seconds": 0.4,
+    "canonical_vm_build_peak_rss_bytes": 54652928,
+    "canonical_vm_build_wall_seconds": 0.427743,
+    "canonical_vm_execution_cpu_seconds": 0.15,
+    "canonical_vm_execution_peak_rss_bytes": 27656192,
+    "canonical_vm_execution_wall_seconds": 0.166046,
+    "fields_verified": [
+      "source_snapshot",
+      "dependency_graph",
+      "producer",
+      "artifact",
+      "interface_identity",
+      "required_capabilities",
+      "unresolved_obligations",
+      "diagnostics",
+      "execution_target_compatibility",
+      "resource_intent"
+    ],
+    "negative_diagnostics": [
+      "MNE162"
+    ],
+    "provider_response_file": {
+      "byte_count": 945337,
+      "name": "native-application-build.json",
+      "sha256": "ddf7162570159e5dd37df697eb58bf2337cf243bdea51631e4e4d815c315de20"
+    },
+    "provider_test_checks": {
+      "cold_cache_miss": true,
+      "corrupt_store_input_rejected": true,
+      "environment_output_artifact": "native-application-build.json",
+      "fresh_process_warm_hit": true,
+      "invalid_source_precise_rejection": [
+        "MNE162"
+      ],
+      "invalid_success_publication": "not_published",
+      "store_input_artifact_reused": true,
+      "unsupported_request_schema_rejected": true
+    },
+    "provider_test_status": "pass",
+    "provider_test_wall_seconds": {
+      "cold": 0.629022,
+      "invalid": 0.294447,
+      "store_input": 0.320467,
+      "warm": 0.325142
+    },
+    "request_schema": "mncs.compiler.application-build-request/1",
+    "resource_estimates": "unknown and explicitly labeled; runtime measurement is a separate obligation",
+    "response_schema": "mncs.compiler.application-build/1",
+    "status_values": [
+      "verified",
+      "unsupported",
+      "unavailable",
+      "unknown",
+      "rejected"
+    ]
+  },
+  "environment_binding": {
+    "availability": "available",
+    "availability_verification": "substrate_only",
+    "binding_id": "cap_545cdef70a3699c8",
+    "capability": "mncs-compiler:native-application-build",
+    "contract_revision": "1",
+    "shareable_artifact": "native-application-build.json",
+    "toolchain_address": ".build/native-app-readiness/mncs-compiler-stage0-probe",
+    "toolchain_environment": "MNCS_COMPILER_PROBE"
+  },
+  "kind": "mncs-native-application-readiness-gate-c",
+  "milestone": "MNCS Native Application Readiness",
+  "next_frontier": "complete Control-authorized invocation and exact Store readback, then pursue function/module-level verified reuse under separately granted Language scope",
+  "observed_at": "2026-10-14T08:08:36Z",
+  "schema_version": 1,
+  "self_consumption_matrix_change": "none; Stage-1 and Stage-2 remain unproven",
+  "status": "partial"
+}

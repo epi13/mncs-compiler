@@ -11,11 +11,12 @@ This roadmap separates compiler succession from compiler research. The project s
 ## MNCS Native Application Readiness (2026-10-14)
 
 This milestone tracks dependable native application development separately
-from compiler succession. Current evidence is bound to Compiler source
-`4e4bf038b46b6090900994bce7121dbe5eafd44f`, Stage-0
+from compiler succession. Gate A/B acceptance evidence is bound to Compiler
+`3c8e2116a8f6158b452875e1928bf6ce10b4ade4`, Stage-0
 `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, VM
 `1c19a94732c9d24029dd00e2d5af13710f481d02`, and the read-only
-`mncs-test` source revision recorded in the Gate A/B evidence.
+`mncs-test` source revision recorded in the evidence. Gate C provider source
+and its exact working-tree identities are recorded separately.
 
 - **Gate A — passed for the selected workload.** The application combines
   `mncs.test.assertions`, `suite`, `generative`, and `snapshot` with a
@@ -40,12 +41,22 @@ from compiler succession. Current evidence is bound to Compiler source
   `equals_bytes` and the generic `summarize` template have no standalone
   SSA export; the selected specialized application entry is verified and
   executable. Do not promote the entire module closure to verified.
+- **Gate C — partial.** Compiler declares
+  `mncs-compiler:native-application-build` with the versioned request/response,
+  selected Stage-0 identity, canonical artifact provenance, interface,
+  capability obligations, structured diagnostics, target compatibility, and
+  explicit unknown resource estimates. Its focused provider test passes and
+  Environment resolves the exact executable and shareable result binding.
+  Control currently rejects invocation because this capability is absent from
+  its allowlist; canonical Store publication and readback are not yet proven.
+  See `evidence/native-app-readiness-gate-c.json`.
 - This workload requires no new language or VM operation and exercises no
   effectful capability. It does not change the self-consumption matrix,
   Stage-1/Stage-2 status, or establish conversion readiness for the full
-  `mncs-test` tool. The next compiler frontier is reusable verified module
-  or function units for changed snapshots, followed by a representative
-  Forge execution and a conversion-readiness assessment.
+  `mncs-test` tool. The next frontiers are Control-authorized invocation and
+  Store readback, reusable verified module or function units for changed
+  snapshots, then representative Forge execution and conversion-readiness
+  assessment.
 
 
 ## Phase 0 — Repository foundation
