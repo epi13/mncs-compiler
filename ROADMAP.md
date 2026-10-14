@@ -60,6 +60,25 @@ current proof.
   boundaries. No production host implementation is ready to be removed: the
   remaining code still provides OS, compiler/session, service, persistence,
   or explicit compatibility behavior.
+- **Stage-0 front-end module cache — verified, outside Gate B.** The probe
+  cache now binds a module Program to the exact module bytes, generic seeds,
+  Stage-0/compiler identity, and validated source hashes and semantic IDs for
+  every resolved dependency. Evidence is
+  `evidence/native-app-readiness-stage0-module-cache-20261014.json` (SHA-256
+  `8f041a2600817a115ba0a0740e5b46de60eaaa7dc6030338345eb62eb6bce61f`),
+  using compiler candidate base `2611d2f1a0d7348adf670a1ae0fb6d739dcce447`,
+  probe source `d16620da5423d1021ec1e98b85e7d8befa6c6fe89838049e27a68e1c2b1e42d8`,
+  and rebuilt Stage-0 binary `cf037fa1492dbfb6ec0d14426565d0dc1329fecb09f93d5def17597a1a5c20cc`.
+  On the three-module Source → Lexer → Parser chain, cold frontend compilation
+  took 21.17 s and an unchanged fresh-process build took 1.71 s (3/3 hits,
+  about 12.4× wall speedup). A parser byte edit took 11.53 s and recomputed
+  one module; a Source byte edit took 21.70 s and invalidated all three. Timed
+  edits appended comments; a separate semantic dependency edit is covered by a
+  cache-miss unit test. Formatting
+  and all 15 probe tests pass. cgroup memory was unavailable. This cache covers
+  Stage-0 frontend Programs only: no VM artifact or execution was reused, the
+  application provider is unchanged, Gate B remains partial, and the
+  self-consumption matrix does not advance.
 - **Self-consumption is unchanged.** Gate A is not compiler succession.
   `evidence/SELF-HOST-MATRIX.json` remains the authority; Stage-1 and Stage-2
   remain unproven.

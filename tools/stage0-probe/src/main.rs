@@ -190,7 +190,7 @@ fn envelope(text: String) -> SourceEnvelope {
 
 /// Cache key schema. Bump whenever cache read/write logic changes: a
 /// logic change without a bump could otherwise misread old entries.
-const PROBE_CACHE_SCHEMA: &str = "probe-cache-v2";
+const PROBE_CACHE_SCHEMA: &str = "probe-cache-v3";
 const TOOLCHAIN_IDENTITY_SCHEMA: &str = "probe-toolchain/1";
 const UNKNOWN_IDENTITY_PART: &str = "unknown";
 
@@ -228,17 +228,44 @@ struct ToolchainIdentity {
     rustc_version: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct FrontendDependencySource {
+    module: String,
+    source_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct FrontendResolvedModule {
+    requested_module: String,
+    declared_module: String,
+    module_identity: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+struct FrontendCacheMetadata {
+    schema: String,
+    module: String,
+    module_source_sha256: String,
+    dependency_semantic_ids: Vec<String>,
+    dependency_sources: Vec<FrontendDependencySource>,
+    resolved_modules: Vec<FrontendResolvedModule>,
+}
+
 #[derive(serde::Serialize)]
 struct ProbeCacheEntry<'a> {
     identity: &'a ToolchainIdentity,
     program: &'a mncs_model::Program,
     artifact: Option<&'a mncs_model::BackendArtifact>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    frontend: Option<&'a FrontendCacheMetadata>,
 }
 
 #[derive(serde::Deserialize)]
 struct ProbeCacheProgramEntry {
     identity: ToolchainIdentity,
     program: mncs_model::Program,
+    #[serde(default)]
+    frontend: Option<FrontendCacheMetadata>,
 }
 
 #[derive(serde::Deserialize)]
@@ -246,6 +273,8 @@ struct ProbeCacheBackendEntry {
     identity: ToolchainIdentity,
     program: mncs_model::Program,
     artifact: Option<mncs_model::BackendArtifact>,
+    #[serde(default)]
+    frontend: Option<FrontendCacheMetadata>,
 }
 
 /// An artifact whose immutable identity was checked at the cache or compiler
@@ -452,15 +481,165 @@ fn module_seeds_for(module: &str, seeds: &[HostGenericSeedRequest]) -> Vec<HostG
 fn frontend_cache_key_hex(
     toolchain: &ToolchainIdentity,
     module: &str,
-    closure: &[(String, String)],
+    module_source: &str,
     module_seeds: &[HostGenericSeedRequest],
 ) -> String {
     let frontend_identity = frontend_toolchain_identity(toolchain);
     let seed_identity = serde_json::to_string(module_seeds)
         .expect("module-specific specialization seeds serialize");
-    let content_key = cache_key_hex(&frontend_identity, module, closure, &seed_identity);
-    let domain = format!("probe-frontend-program-v1\n{content_key}");
+    let module_source = vec![(module.to_owned(), module_source.to_owned())];
+    let content_key = cache_key_hex(&frontend_identity, module, &module_source, &seed_identity);
+    let domain = format!("probe-frontend-program-v2\n{content_key}");
     mncs_model::sha256_hex(domain.as_bytes())
+}
+
+fn module_source_sha256(source: &str) -> String {
+    format!("sha256:{}", mncs_model::sha256_hex(source.as_bytes()))
+}
+
+fn frontend_cache_metadata(
+    module: &str,
+    module_source: &str,
+    program: &mncs_model::Program,
+    module_resolutions: &[mncs_compiler::ModuleResolution],
+    closure: &[(String, String)],
+) -> Option<FrontendCacheMetadata> {
+    let sources: BTreeMap<&str, &str> = closure
+        .iter()
+        .map(|(name, source)| (name.as_str(), source.as_str()))
+        .collect();
+    if sources.get(module).copied() != Some(module_source) {
+        return None;
+    }
+    let mut dependency_semantic_ids: Vec<String> = program
+        .dependencies
+        .iter()
+        .map(|identity| identity.0.clone())
+        .collect();
+    dependency_semantic_ids.sort();
+    if dependency_semantic_ids
+        .windows(2)
+        .any(|pair| pair[0] == pair[1])
+    {
+        return None;
+    }
+    let dependency_ids: BTreeSet<String> = dependency_semantic_ids.iter().cloned().collect();
+
+    let mut resolved_modules = BTreeMap::<String, FrontendResolvedModule>::new();
+    for resolution in module_resolutions {
+        let module_identity = resolution.module_identity.0.clone();
+        if mncs_model::module_id(&resolution.declared_module).0 != module_identity
+            || !sources.contains_key(resolution.requested_module.as_str())
+        {
+            return None;
+        }
+        let row = FrontendResolvedModule {
+            requested_module: resolution.requested_module.clone(),
+            declared_module: resolution.declared_module.clone(),
+            module_identity,
+        };
+        if resolved_modules
+            .insert(resolution.requested_module.clone(), row.clone())
+            .is_some_and(|previous| previous != row)
+        {
+            return None;
+        }
+    }
+    let resolved_ids: BTreeSet<String> = resolved_modules
+        .values()
+        .map(|resolution| resolution.module_identity.clone())
+        .collect();
+    if resolved_ids != dependency_ids {
+        return None;
+    }
+
+    let mut dependency_sources = Vec::with_capacity(resolved_modules.len());
+    for resolved in resolved_modules.values() {
+        let source = sources.get(resolved.requested_module.as_str()).copied()?;
+        dependency_sources.push(FrontendDependencySource {
+            module: resolved.requested_module.clone(),
+            source_sha256: module_source_sha256(source),
+        });
+    }
+    dependency_sources.sort_by(|left, right| left.module.cmp(&right.module));
+
+    Some(FrontendCacheMetadata {
+        schema: "probe-frontend-cache-metadata/1".to_owned(),
+        module: module.to_owned(),
+        module_source_sha256: module_source_sha256(module_source),
+        dependency_semantic_ids,
+        dependency_sources,
+        resolved_modules: resolved_modules.into_values().collect(),
+    })
+}
+
+fn frontend_cache_matches(
+    metadata: Option<&FrontendCacheMetadata>,
+    module: &str,
+    module_source: &str,
+    program: &mncs_model::Program,
+    closure: &[(String, String)],
+) -> bool {
+    let Some(metadata) = metadata else {
+        return false;
+    };
+    if metadata.schema != "probe-frontend-cache-metadata/1"
+        || metadata.module != module
+        || program.module != module
+        || metadata.module_source_sha256 != module_source_sha256(module_source)
+    {
+        return false;
+    }
+
+    let mut program_ids: Vec<String> = program
+        .dependencies
+        .iter()
+        .map(|identity| identity.0.clone())
+        .collect();
+    program_ids.sort();
+    if program_ids.windows(2).any(|pair| pair[0] == pair[1])
+        || program_ids != metadata.dependency_semantic_ids
+    {
+        return false;
+    }
+
+    let mut current_sources = BTreeMap::<&str, &str>::new();
+    for (name, source) in closure {
+        if current_sources
+            .insert(name.as_str(), source.as_str())
+            .is_some()
+        {
+            return false;
+        }
+    }
+    let mut dependency_names = BTreeSet::new();
+    for source in &metadata.dependency_sources {
+        if !dependency_names.insert(source.module.as_str())
+            || current_sources
+                .get(source.module.as_str())
+                .is_none_or(|current| module_source_sha256(current) != source.source_sha256)
+        {
+            return false;
+        }
+    }
+
+    let mut resolved_names = BTreeSet::new();
+    let mut resolved_ids = BTreeSet::new();
+    for resolved in &metadata.resolved_modules {
+        if !resolved_names.insert(resolved.requested_module.as_str())
+            || mncs_model::module_id(&resolved.declared_module).0 != resolved.module_identity
+            || !resolved_ids.insert(resolved.module_identity.as_str())
+            || !dependency_names.contains(resolved.requested_module.as_str())
+        {
+            return false;
+        }
+    }
+    resolved_names == dependency_names
+        && resolved_ids
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+            == metadata.dependency_semantic_ids
 }
 
 /// Parse one decompressed cache entry. Every failure mode is a safe
@@ -472,7 +651,11 @@ fn parse_cache_entry(
     raw: &[u8],
     expected: &ToolchainIdentity,
     backend_name: Option<&str>,
-) -> Option<(mncs_model::Program, Option<VerifiedBackendArtifact>)> {
+) -> Option<(
+    mncs_model::Program,
+    Option<VerifiedBackendArtifact>,
+    Option<FrontendCacheMetadata>,
+)> {
     parse_cache_entry_reader(raw, expected, backend_name)
 }
 
@@ -480,13 +663,17 @@ fn parse_cache_entry_reader<R: Read>(
     reader: R,
     expected: &ToolchainIdentity,
     backend_name: Option<&str>,
-) -> Option<(mncs_model::Program, Option<VerifiedBackendArtifact>)> {
+) -> Option<(
+    mncs_model::Program,
+    Option<VerifiedBackendArtifact>,
+    Option<FrontendCacheMetadata>,
+)> {
     if backend_name.is_none() {
         let entry: ProbeCacheProgramEntry = serde_json::from_reader(reader).ok()?;
         if &entry.identity != expected {
             return None;
         }
-        return Some((entry.program, None));
+        return Some((entry.program, None, entry.frontend));
     }
     let entry: ProbeCacheBackendEntry = serde_json::from_reader(reader).ok()?;
     if &entry.identity != expected {
@@ -497,10 +684,10 @@ fn parse_cache_entry_reader<R: Read>(
         // whose backend compilation was interrupted. Reuse the Program and
         // compile the backend again; only a non-null artifact is reusable as
         // an executable session.
-        return Some((entry.program, None));
+        return Some((entry.program, None, entry.frontend));
     };
     let artifact = VerifiedBackendArtifact::verify(artifact).ok()?;
-    Some((entry.program, Some(artifact)))
+    Some((entry.program, Some(artifact), entry.frontend))
 }
 
 fn short_hash(value: &str) -> &str {
@@ -664,12 +851,17 @@ fn main() {
         )
     };
     let frontend_cache_key = |module: &str, module_seeds: &[HostGenericSeedRequest]| -> String {
+        let module_source = closure
+            .iter()
+            .find(|(name, _)| name == module)
+            .map(|(_, source)| source.as_str())
+            .expect("every elaborated module belongs to the loaded source closure");
         frontend_cache_key_hex(
             frontend_identity
                 .as_ref()
                 .expect("frontend identity is gathered whenever the cache is enabled"),
             module,
-            &closure,
+            module_source,
             module_seeds,
         )
     };
@@ -682,7 +874,11 @@ fn main() {
                       suffix: &str,
                       identity: &ToolchainIdentity,
                       expected_backend: Option<&str>|
-     -> Option<(mncs_model::Program, Option<VerifiedBackendArtifact>)> {
+     -> Option<(
+        mncs_model::Program,
+        Option<VerifiedBackendArtifact>,
+        Option<FrontendCacheMetadata>,
+    )> {
         let dir = cache_dir.as_ref()?;
         let path = format!("{dir}/{key}{suffix}");
         let started = Instant::now();
@@ -726,7 +922,8 @@ fn main() {
                        suffix: &str,
                        identity: &ToolchainIdentity,
                        program: &mncs_model::Program,
-                       artifact: Option<&mncs_model::BackendArtifact>| {
+                       artifact: Option<&mncs_model::BackendArtifact>,
+                       frontend: Option<&FrontendCacheMetadata>| {
         let Some(dir) = cache_dir.as_ref() else {
             return;
         };
@@ -823,6 +1020,7 @@ fn main() {
                 identity,
                 program,
                 artifact,
+                frontend,
             },
         )
         .map_err(|error| io::Error::new(io::ErrorKind::Other, error))
@@ -920,6 +1118,11 @@ fn main() {
             continue;
         }
         let module_seeds = module_seeds_for(name, &generic_seeds);
+        let module_source = closure
+            .iter()
+            .find(|(source_name, _)| source_name == name)
+            .map(|(_, source)| source.as_str())
+            .expect("every elaborated module belongs to the loaded source closure");
         if cache_dir.is_some() {
             let key = cache_key(name);
             let identity = toolchain
@@ -948,7 +1151,7 @@ fn main() {
                         "usable": cached.is_some()
                     }),
                 );
-                if let Some((program, artifact)) = cached {
+                if let Some((program, artifact, _frontend)) = cached {
                     cache_hits += 1;
                     backend_artifact_cache_hits += u32::from(artifact.is_some());
                     let frontend_key = frontend_cache_key(name, &module_seeds);
@@ -963,6 +1166,7 @@ fn main() {
                             frontend_identity.as_ref().unwrap(),
                             &program,
                             None,
+                            None,
                         );
                     }
                     if let Some(artifact) = artifact {
@@ -973,10 +1177,11 @@ fn main() {
                 }
             }
 
-            // A frontend Program depends on the Stage-0/compiler identity,
-            // resolver source closure, this module, and only this module's
-            // specialization seeds. Backend configuration affects the
-            // executable artifact but cannot affect frontend elaboration.
+            // A frontend Program key binds the Stage-0/compiler identity,
+            // this module's exact source, and its specialization seeds. Its
+            // metadata validates every resolved dependency source before
+            // reuse. Backend configuration affects the executable artifact
+            // but cannot affect frontend elaboration.
             let frontend_key = frontend_cache_key(name, &module_seeds);
             let frontend_identity = frontend_identity.as_ref().unwrap();
             let frontend_started = Instant::now();
@@ -988,22 +1193,41 @@ fn main() {
                 "cache_file_suffix": ".program.json.gz"
             }));
             let mut cached_program =
-                cache_load(&frontend_key, ".program.json.gz", frontend_identity, None);
-            // Read old no-backend Program entries once as a migration path;
-            // successful reads are written under the backend-independent key.
+                cache_load(&frontend_key, ".program.json.gz", frontend_identity, None).and_then(
+                    |(program, artifact, metadata)| {
+                        if artifact.is_some()
+                            || !frontend_cache_matches(
+                                metadata.as_ref(),
+                                name,
+                                module_source,
+                                &program,
+                                &closure,
+                            )
+                        {
+                            None
+                        } else {
+                            Some(program)
+                        }
+                    },
+                );
+            // A legacy full-closure entry remains safe to read once because
+            // its key binds every loaded source. It cannot become a
+            // dependency-scoped hit until a fresh compilation records the
+            // exact resolved module identities.
             if cached_program.is_none() {
                 let legacy_key = cache_key_hex(frontend_identity, name, &closure, &seeds_raw);
-                cached_program = cache_load(&legacy_key, ".json.gz", frontend_identity, None);
-                if cached_program.is_some() {
-                    if let Some((program, _)) = cached_program.as_ref() {
-                        cache_store(
-                            &frontend_key,
-                            ".program.json.gz",
-                            frontend_identity,
-                            program,
-                            None,
-                        );
-                    }
+                if let Some((program, _, _)) =
+                    cache_load(&legacy_key, ".json.gz", frontend_identity, None)
+                {
+                    cache_store(
+                        &frontend_key,
+                        ".program.json.gz",
+                        frontend_identity,
+                        &program,
+                        None,
+                        None,
+                    );
+                    cached_program = Some(program);
                 }
             }
             trace_phase(
@@ -1016,7 +1240,7 @@ fn main() {
                     "usable": cached_program.is_some()
                 }),
             );
-            if let Some((program, _)) = cached_program {
+            if let Some(program) = cached_program {
                 cache_hits += 1;
                 frontend_program_cache_hits += 1;
                 programs.insert(name.clone(), program);
@@ -1058,12 +1282,20 @@ fn main() {
             // a backend-independent identity. An interrupted backend compile
             // or a later backend selection can reuse this exact Program.
             let frontend_key = frontend_cache_key(name, &module_seeds);
+            let frontend_metadata = frontend_cache_metadata(
+                name,
+                module_source,
+                &program,
+                &result.module_resolutions,
+                &closure,
+            );
             cache_store(
                 &frontend_key,
                 ".program.json.gz",
                 frontend_identity.as_ref().unwrap(),
                 &program,
                 None,
+                frontend_metadata.as_ref(),
             );
         }
         programs.insert(name.clone(), program);
@@ -1135,6 +1367,7 @@ fn main() {
                             toolchain.as_ref().unwrap(),
                             program,
                             Some(artifact.artifact()),
+                            None,
                         );
                     }
                     (name.clone(), artifact)
@@ -1862,13 +2095,13 @@ mod tests {
             frontend_cache_key_hex(
                 &cranelift,
                 "mncs.compiler.project.v1",
-                &closure,
+                "decl-bytes",
                 &only_module,
             ),
             frontend_cache_key_hex(
                 &research,
                 "mncs.compiler.project.v1",
-                &closure,
+                "decl-bytes",
                 &with_unrelated,
             ),
             "backend and unrelated module seeds must not invalidate a frontend Program",
@@ -1877,12 +2110,109 @@ mod tests {
             frontend_cache_key_hex(
                 &cranelift,
                 "mncs.compiler.project.v1",
-                &closure,
+                "decl-bytes",
                 &only_module,
             ),
-            frontend_cache_key_hex(&cranelift, "mncs.compiler.project.v1", &closure, &changed,),
+            frontend_cache_key_hex(
+                &cranelift,
+                "mncs.compiler.project.v1",
+                "decl-bytes",
+                &changed,
+            ),
             "the target module's own specialization must invalidate its Program",
         );
+        assert_ne!(
+            frontend_cache_key_hex(
+                &cranelift,
+                "mncs.compiler.project.v1",
+                "decl-bytes",
+                &only_module,
+            ),
+            frontend_cache_key_hex(
+                &cranelift,
+                "mncs.compiler.project.v1",
+                "decl-bytes changed",
+                &only_module,
+            ),
+            "a module source edit must invalidate its own Program",
+        );
+    }
+
+    #[test]
+    fn frontend_program_reuse_tracks_only_resolved_module_sources() {
+        let dep = "mncs 0.18; module cache.dep; fn answer(x: u64) -> (r: u64) { return x; }";
+        let root = "mncs 0.18; module cache.root; use cache.dep as dep; fn run() -> (r: u64) { return dep.answer(42); }";
+        let unused = "mncs 0.18; module cache.unused; fn untouched() -> (r: u64) { return 1; }";
+        let closure = vec![
+            ("cache.dep".to_owned(), dep.to_owned()),
+            ("cache.root".to_owned(), root.to_owned()),
+            ("cache.unused".to_owned(), unused.to_owned()),
+        ];
+        let resolver = Sources(
+            closure
+                .iter()
+                .map(|(name, source)| (name.clone(), envelope(source.clone())))
+                .collect(),
+        );
+        let result = ReferenceCompiler::default().front_end_with_resolver_and_seeds(
+            envelope(root.to_owned()),
+            &resolver,
+            &[],
+        );
+        assert!(
+            result.is_valid(),
+            "application frontend: {:?}",
+            result.diagnostics
+        );
+        let program = result.program.as_ref().expect("valid frontend Program");
+        let metadata = frontend_cache_metadata(
+            "cache.root",
+            root,
+            program,
+            &result.module_resolutions,
+            &closure,
+        )
+        .unwrap_or_else(|| {
+            panic!(
+                "dependency metadata did not close Program dependencies {:?} over resolutions {:?}",
+                program.dependencies, result.module_resolutions
+            )
+        });
+        assert!(frontend_cache_matches(
+            Some(&metadata),
+            "cache.root",
+            root,
+            program,
+            &closure,
+        ));
+        let invalid_root = format!("{root}\nfn broken( -> )");
+        assert!(!frontend_cache_matches(
+            Some(&metadata),
+            "cache.root",
+            &invalid_root,
+            program,
+            &closure,
+        ));
+
+        let mut irrelevant_edit = closure.clone();
+        irrelevant_edit[2].1.push(' ');
+        assert!(frontend_cache_matches(
+            Some(&metadata),
+            "cache.root",
+            root,
+            program,
+            &irrelevant_edit,
+        ));
+
+        let mut dependency_edit = closure.clone();
+        dependency_edit[0].1 = dep.replace("return x;", "return x + 1;");
+        assert!(!frontend_cache_matches(
+            Some(&metadata),
+            "cache.root",
+            root,
+            program,
+            &dependency_edit,
+        ));
     }
 
     #[test]
@@ -1896,9 +2226,10 @@ mod tests {
             "artifact": serde_json::Value::Null,
         }))
         .unwrap();
-        let (loaded, artifact) =
+        let (loaded, artifact, frontend) =
             parse_cache_entry(&entry, &research, None).expect("backend-independent Program hit");
         assert!(artifact.is_none());
+        assert!(frontend.is_none());
         assert_eq!(loaded.module, program.module);
     }
 
@@ -2000,10 +2331,11 @@ mod tests {
             "artifact": serde_json::Value::Null,
         }))
         .unwrap();
-        let (loaded, artifact) =
+        let (loaded, artifact, frontend) =
             parse_cache_entry(&interrupted_backend, &backended, Some("cranelift"))
                 .expect("frontend-only backend cache hit");
         assert!(artifact.is_none());
+        assert!(frontend.is_none());
         assert_eq!(loaded.module, program.module);
     }
 
@@ -2017,8 +2349,9 @@ mod tests {
             "artifact": serde_json::Value::Null,
         }))
         .unwrap();
-        let (loaded, artifact) = parse_cache_entry(&entry, &plain, None).expect("hit");
+        let (loaded, artifact, frontend) = parse_cache_entry(&entry, &plain, None).expect("hit");
         assert!(artifact.is_none());
+        assert!(frontend.is_none());
         assert_eq!(loaded.module, program.module);
         let backended = test_toolchain(Some("cranelift"));
         let frontend_only = serde_json::to_vec(&serde_json::json!({
@@ -2029,7 +2362,7 @@ mod tests {
         .unwrap();
         assert!(
             parse_cache_entry(&frontend_only, &backended, Some("cranelift"))
-                .is_some_and(|(_, artifact)| artifact.is_none())
+                .is_some_and(|(_, artifact, _frontend)| artifact.is_none())
         );
         let backended = test_toolchain(Some("cranelift"));
         let artifact = test_artifact();
@@ -2041,7 +2374,7 @@ mod tests {
         }))
         .unwrap();
         assert!(parse_cache_entry(&entry, &backended, Some("cranelift"))
-            .is_some_and(|(_, artifact)| artifact.is_some()));
+            .is_some_and(|(_, artifact, _frontend)| artifact.is_some()));
     }
 
     #[test]
