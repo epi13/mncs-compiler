@@ -167,7 +167,7 @@ fn application_cache_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-key/1",
+        "schema_version": "mncs.compiler.application-build-cache-key/2",
         "contract": CONTRACT,
         "source_snapshot_identity": source_identity,
         "root_source_id": root_id,
@@ -184,7 +184,43 @@ fn application_cache_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache/1\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache/2\0".to_vec();
+    bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
+    format!("sha256:{}", mncs_model::sha256_hex(&bytes))
+}
+
+fn application_cache_index_key(
+    request: &Value,
+    root_id: &str,
+    root_source: &str,
+    generic_seeds: &[HostGenericSeedRequest],
+    toolchain: Option<&ToolchainIdentity>,
+    probe_identity: &str,
+) -> String {
+    let mut generic_seed_keys: Vec<String> = generic_seeds
+        .iter()
+        .map(HostGenericSeedRequest::seed_key)
+        .collect();
+    generic_seed_keys.sort();
+    generic_seed_keys.dedup();
+    let identity = json!({
+        "schema_version": "mncs.compiler.application-build-cache-index-key/1",
+        "contract": CONTRACT,
+        "root_source_id": root_id,
+        "root_source_sha256": format!("sha256:{}", mncs_model::sha256_hex(root_source.as_bytes())),
+        "generic_seeds": generic_seed_keys,
+        "compiler_semantics": toolchain
+            .and_then(|identity| serde_json::to_value(identity).ok()),
+        "compiler_implementation": probe_identity,
+        "backend": "mncs-vm-direct",
+        "target": request.get("target").cloned().unwrap_or(Value::Null),
+        "capabilities": request.get("capabilities").cloned().unwrap_or_else(|| json!([])),
+        "effect_assumptions": request.get("effect_assumptions").cloned().unwrap_or_else(|| json!([])),
+        "optimization_policy": request.get("optimization_policy").cloned().unwrap_or_else(|| json!("default")),
+        "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
+        "entry": request.get("entry").cloned().unwrap_or(Value::Null),
+    });
+    let mut bytes = b"mncs.compiler.application-build-cache-index/1\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -202,11 +238,51 @@ fn application_cache_path(key: &str) -> Option<PathBuf> {
     )
 }
 
+fn application_cache_index_path(key: &str) -> Option<PathBuf> {
+    let root = std::env::var_os("MNCS_PROBE_CACHE_DIR")?;
+    if root.is_empty() {
+        return None;
+    }
+    let hex = key.strip_prefix("sha256:")?;
+    Some(
+        PathBuf::from(root)
+            .join("application-build-indexes")
+            .join(format!("{hex}.json")),
+    )
+}
+
 fn annotate_cache(
+    response: Value,
+    key: &str,
+    status: &str,
+    publication: &str,
+    reused_units: &[&str],
+    recomputed_units: &[&str],
+) -> Value {
+    let (reuse_basis, reused_from_key) = if status == "hit" {
+        ("exact_source_snapshot", Some(key))
+    } else {
+        ("none", None)
+    };
+    annotate_cache_with_basis(
+        response,
+        key,
+        status,
+        publication,
+        reuse_basis,
+        reused_from_key,
+        reused_units,
+        recomputed_units,
+    )
+}
+
+fn annotate_cache_with_basis(
     mut response: Value,
     key: &str,
     status: &str,
     publication: &str,
+    reuse_basis: &str,
+    reused_from_key: Option<&str>,
     reused_units: &[&str],
     recomputed_units: &[&str],
 ) -> Value {
@@ -214,10 +290,12 @@ fn annotate_cache(
         object.insert(
             "cache".to_owned(),
             json!({
-                "schema_version": "mncs.compiler.application-build-cache-observation/1",
+                "schema_version": "mncs.compiler.application-build-cache-observation/2",
                 "key": key,
                 "status": status,
                 "publication": publication,
+                "reuse_basis": reuse_basis,
+                "reused_from_key": reused_from_key,
                 "reused_units": reused_units,
                 "recomputed_units": recomputed_units,
             }),
@@ -229,13 +307,13 @@ fn annotate_cache(
 fn read_application_cache(
     path: &PathBuf,
     key: &str,
-    source_identity: &str,
+    expected_source_identity: Option<&str>,
     probe_identity: &str,
     toolchain: Option<&ToolchainIdentity>,
 ) -> Option<Value> {
     let entry: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
     if entry.get("schema_version").and_then(Value::as_str)
-        != Some("mncs.compiler.application-build-cache-entry/1")
+        != Some("mncs.compiler.application-build-cache-entry/2")
         || entry.get("key").and_then(Value::as_str) != Some(key)
     {
         return None;
@@ -243,11 +321,12 @@ fn read_application_cache(
     let response = entry.get("response")?.clone();
     let response_bytes = serde_json::to_vec(&response).ok()?;
     let response_digest = format!("sha256:{}", mncs_model::sha256_hex(&response_bytes));
+    let cached_source_identity = response
+        .pointer("/source_snapshot/identity")
+        .and_then(Value::as_str)?;
     if entry.get("response_sha256").and_then(Value::as_str) != Some(response_digest.as_str())
-        || response
-            .pointer("/source_snapshot/identity")
-            .and_then(Value::as_str)
-            != Some(source_identity)
+        || !cached_source_identity.starts_with("sha256:")
+        || expected_source_identity.is_some_and(|expected| expected != cached_source_identity)
         || response
             .pointer("/producer/probe/probe_executable_sha256")
             .and_then(Value::as_str)
@@ -273,6 +352,136 @@ fn read_application_cache(
     Some(response)
 }
 
+fn cached_application_matches_dependency_closure(
+    response: &Value,
+    root_id: &str,
+    root_source: &str,
+    modules: &BTreeMap<String, String>,
+) -> bool {
+    let Some(files) = response
+        .pointer("/source_snapshot/files")
+        .and_then(Value::as_array)
+    else {
+        return false;
+    };
+    let root_hash = format!("sha256:{}", mncs_model::sha256_hex(root_source.as_bytes()));
+    let mut found_root = false;
+    let mut cached_modules = BTreeMap::<String, String>::new();
+    for file in files {
+        let Some(module) = file.get("module").and_then(Value::as_str) else {
+            return false;
+        };
+        let Some(source_id) = file.get("source_id").and_then(Value::as_str) else {
+            return false;
+        };
+        let Some(source_hash) = file.get("sha256").and_then(Value::as_str) else {
+            return false;
+        };
+        if module == "root" {
+            if found_root || source_id != root_id || source_hash != root_hash {
+                return false;
+            }
+            found_root = true;
+        } else if source_id != module
+            || cached_modules
+                .insert(module.to_owned(), source_hash.to_owned())
+                .is_some()
+        {
+            return false;
+        }
+    }
+    if !found_root {
+        return false;
+    }
+
+    let Some(dependencies) = response
+        .pointer("/dependency_graph/details/dependencies")
+        .and_then(Value::as_array)
+    else {
+        return false;
+    };
+    let Some(resolutions) = response
+        .pointer("/dependency_graph/details/resolutions")
+        .and_then(Value::as_array)
+    else {
+        return false;
+    };
+    let declared_dependencies: BTreeSet<String> = dependencies
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::to_owned)
+        .collect();
+    if declared_dependencies.len() != dependencies.len() {
+        return false;
+    }
+    let mut resolved_dependencies = BTreeSet::new();
+    let mut seen_modules = BTreeSet::new();
+    for resolution in resolutions {
+        let Some(requested_module) = resolution.get("requested_module").and_then(Value::as_str)
+        else {
+            return false;
+        };
+        let Some(module_identity) = resolution.get("module_identity").and_then(Value::as_str)
+        else {
+            return false;
+        };
+        if resolution
+            .get("source_identity")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+            || resolution
+                .get("semantic_fingerprint")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+            || !seen_modules.insert(requested_module.to_owned())
+        {
+            return false;
+        }
+        let Some(current_source) = modules.get(requested_module) else {
+            return false;
+        };
+        let Some(cached_hash) = cached_modules.get(requested_module) else {
+            return false;
+        };
+        let current_hash = format!(
+            "sha256:{}",
+            mncs_model::sha256_hex(current_source.as_bytes())
+        );
+        if cached_hash != &current_hash {
+            return false;
+        }
+        resolved_dependencies.insert(module_identity.to_owned());
+    }
+    resolved_dependencies == declared_dependencies
+}
+
+fn read_application_cache_index(path: &PathBuf, key: &str) -> Option<String> {
+    let entry: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    if entry.get("schema_version").and_then(Value::as_str)
+        != Some("mncs.compiler.application-build-cache-index/1")
+        || entry.get("key").and_then(Value::as_str) != Some(key)
+    {
+        return None;
+    }
+    let candidate_key = entry.get("candidate_key").and_then(Value::as_str)?;
+    let hex = candidate_key.strip_prefix("sha256:")?;
+    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(candidate_key.to_owned())
+}
+
+fn rebind_cached_source_snapshot(
+    mut response: Value,
+    source_identity: &str,
+    source_files: &[Value],
+) -> Option<Value> {
+    let snapshot = response.get_mut("source_snapshot")?.as_object_mut()?;
+    snapshot.insert("identity".to_owned(), json!(source_identity));
+    snapshot.insert("files".to_owned(), json!(source_files));
+    Some(response)
+}
+
 fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Result<(), String> {
     let parent = path
         .parent()
@@ -281,7 +490,7 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
     let response_bytes =
         serde_json::to_vec(response).map_err(|error| format!("encode cached response: {error}"))?;
     let entry = json!({
-        "schema_version": "mncs.compiler.application-build-cache-entry/1",
+        "schema_version": "mncs.compiler.application-build-cache-entry/2",
         "key": key,
         "response_sha256": format!("sha256:{}", mncs_model::sha256_hex(&response_bytes)),
         "response": response,
@@ -311,6 +520,56 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
         file.sync_all()
             .map_err(|error| format!("sync temporary cache entry: {error}"))?;
         fs::rename(&temp, path).map_err(|error| format!("publish cache entry: {error}"))?;
+        if let Ok(directory) = OpenOptions::new().read(true).open(parent) {
+            let _ = directory.sync_all();
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temp);
+    }
+    result
+}
+
+fn publish_application_cache_index(
+    path: &PathBuf,
+    key: &str,
+    candidate_key: &str,
+) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| "cache index path has no parent".to_owned())?;
+    fs::create_dir_all(parent).map_err(|error| format!("create cache index directory: {error}"))?;
+    let entry = json!({
+        "schema_version": "mncs.compiler.application-build-cache-index/1",
+        "key": key,
+        "candidate_key": candidate_key,
+    });
+    let encoded =
+        serde_json::to_vec(&entry).map_err(|error| format!("encode cache index: {error}"))?;
+    let nonce = CACHE_NONCE.fetch_add(1, Ordering::Relaxed);
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temp = parent.join(format!(
+        ".{}.{}.{}.{}.tmp",
+        key.trim_start_matches("sha256:"),
+        std::process::id(),
+        now,
+        nonce
+    ));
+    let result = (|| -> Result<(), String> {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temp)
+            .map_err(|error| format!("create temporary cache index: {error}"))?;
+        file.write_all(&encoded)
+            .map_err(|error| format!("write temporary cache index: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("sync temporary cache index: {error}"))?;
+        fs::rename(&temp, path).map_err(|error| format!("publish cache index: {error}"))?;
         if let Ok(directory) = OpenOptions::new().read(true).open(parent) {
             let _ = directory.sync_all();
         }
@@ -579,12 +838,21 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         toolchain,
         &probe_identity,
     );
+    let cache_index_key = application_cache_index_key(
+        request,
+        root_id,
+        root_source,
+        &generic_seeds,
+        toolchain,
+        &probe_identity,
+    );
     let cache_path = application_cache_path(&cache_key);
+    let cache_index_path = application_cache_index_path(&cache_index_key);
     if let Some(path) = cache_path.as_ref() {
         if let Some(response) = read_application_cache(
             path,
             &cache_key,
-            &source_identity,
+            Some(&source_identity),
             &probe_identity,
             toolchain,
         ) {
@@ -596,6 +864,43 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &["verified_application_artifact"],
                 &[],
             );
+        }
+    }
+    if let (Some(index_path), Some(_)) = (cache_index_path.as_ref(), cache_path.as_ref()) {
+        if let Some(candidate_key) = read_application_cache_index(index_path, &cache_index_key) {
+            if let Some(candidate_path) = application_cache_path(&candidate_key) {
+                if let Some(candidate) = read_application_cache(
+                    &candidate_path,
+                    &candidate_key,
+                    None,
+                    &probe_identity,
+                    toolchain,
+                ) {
+                    if cached_application_matches_dependency_closure(
+                        &candidate,
+                        root_id,
+                        root_source,
+                        &modules,
+                    ) {
+                        if let Some(response) = rebind_cached_source_snapshot(
+                            candidate,
+                            &source_identity,
+                            &source_files,
+                        ) {
+                            return annotate_cache_with_basis(
+                                response,
+                                &cache_key,
+                                "hit",
+                                "previously_published",
+                                "verified_dependency_closure",
+                                Some(&candidate_key),
+                                &["verified_application_artifact"],
+                                &["request_source_snapshot_identity"],
+                            );
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -807,7 +1112,16 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let (cache_status, publication) = match cache_path.as_ref() {
         Some(path) if entry_status == "verified" => {
             match publish_application_cache(path, &cache_key, &response) {
-                Ok(()) => ("miss", "stored"),
+                Ok(()) => {
+                    if let Some(index_path) = cache_index_path.as_ref() {
+                        let _ = publish_application_cache_index(
+                            index_path,
+                            &cache_index_key,
+                            &cache_key,
+                        );
+                    }
+                    ("miss", "stored")
+                }
                 Err(_) => ("miss", "write_failed"),
             }
         }

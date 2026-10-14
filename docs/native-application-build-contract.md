@@ -40,8 +40,15 @@ instance does not promote its generic template. An emitted artifact remains
 the executable authority.
 
 This is a bounded bootstrap adapter with a content-addressed cache for complete
-verified application artifacts. It does not yet reuse verified modules or
-functions across changed snapshots, and it makes no claim of Stage-1 or
+verified application artifacts. An exact snapshot hit reuses its artifact
+directly. A second candidate index can reuse a prior artifact when the root
+source and build assumptions match and every module in the prior resolved
+dependency graph has the same source hash. The response still carries a newly
+computed identity and file list for the current full snapshot, so adding or
+editing an unreferenced module does not leave stale input provenance. A changed
+root or imported module rejects that candidate and recomputes the complete
+application closure. This does not yet reuse verified declarations or
+functions within a changed closure, and it makes no claim of Stage-1 or
 Stage-2 succession. The real consumer exercise is
 `python3 tools/test_vm_native_application.py`,
 which reads the selected `mncs-test` checkout without modifying it, requests
@@ -51,8 +58,10 @@ from the Stage-0 oracle with canonical VM execution. The error cases exercise
 finite payload extraction and retain the exact artifact receipt. The test also
 constructs its argument using the callable interface emitted by the compiler.
 `python3 tools/test_native_application_incremental.py`
-also changes one specialization request and checks that the cache key and
-artifact identity change.
+measures cold and warm builds, reuses the artifact across added and edited
+unreferenced modules, checks invalidation for a changed root and imported
+module, and verifies that rejected or interrupted requests do not publish
+successful results.
 
 ## Environment capability
 

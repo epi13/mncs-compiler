@@ -21,11 +21,12 @@ EVIDENCE = ROOT / 'evidence/native-app-readiness-gate-b.json'
 
 
 def clear_cache() -> None:
-    entry_dir = CACHE_DIR / 'application-builds'
-    entry_dir.mkdir(parents=True, exist_ok=True)
-    for path in entry_dir.iterdir():
-        if path.is_file() and (path.suffix == '.json' or path.name.endswith('.tmp')):
-            path.unlink()
+    for directory in ('application-builds', 'application-build-indexes'):
+        entry_dir = CACHE_DIR / directory
+        entry_dir.mkdir(parents=True, exist_ok=True)
+        for path in entry_dir.iterdir():
+            if path.is_file() and (path.suffix == '.json' or path.name.endswith('.tmp')):
+                path.unlink()
 
 
 def request_for(root: str, modules: dict[str, str]) -> dict:
@@ -179,6 +180,40 @@ def main() -> None:
         if warm['artifact']['identity'] != cold['artifact']['identity']:
             raise AssertionError('warm reuse changed the artifact identity')
 
+        # An input module outside the verified dependency graph must not force
+        # a semantic rebuild. Its source still changes the full snapshot
+        # identity returned to consumers.
+        unused_modules = dict(modules)
+        unused_modules['mncs.test.unused'] = '''mncs 0.18;
+module mncs.test.unused;
+fn value() -> (result: u64) { return 1; }'''
+        unused_request = request_for(app.APP_SOURCE, unused_modules)
+        unused_oracle, unused_exec, unused_oracle_metrics = oracle_one(
+            probe, app.APP_SOURCE, unused_modules)
+        unused, unused_metrics = compile_one(probe, unused_request)
+        if (unused.get('cache', {}).get('status') != 'hit'
+                or unused.get('cache', {}).get('reuse_basis') != 'verified_dependency_closure'):
+            raise AssertionError('an unreferenced module addition did not reuse the verified dependency closure')
+        if unused.get('source_snapshot', {}).get('identity') == cold.get('source_snapshot', {}).get('identity'):
+            raise AssertionError('dependency-closure reuse returned the stale full snapshot identity')
+        if unused['artifact']['identity'] != cold['artifact']['identity']:
+            raise AssertionError('unreferenced module addition changed the verified artifact')
+
+        changed_unused_modules = dict(unused_modules)
+        changed_unused_modules['mncs.test.unused'] = changed_unused_modules[
+            'mncs.test.unused'].replace('return 1', 'return 2', 1)
+        changed_unused_request = request_for(app.APP_SOURCE, changed_unused_modules)
+        changed_unused, changed_unused_metrics = compile_one(probe, changed_unused_request)
+        if (changed_unused.get('cache', {}).get('status') != 'hit'
+                or changed_unused.get('cache', {}).get('reuse_basis') != 'verified_dependency_closure'):
+            raise AssertionError('an unreferenced module edit invalidated the verified dependency closure')
+        if changed_unused.get('source_snapshot', {}).get('identity') == unused.get('source_snapshot', {}).get('identity'):
+            raise AssertionError('unreferenced module edit did not produce a new source snapshot identity')
+        if changed_unused['artifact']['identity'] != cold['artifact']['identity']:
+            raise AssertionError('unreferenced module edit changed the verified artifact')
+        _unused_vm, unused_vm_metrics, unused_actual = run_and_compare(
+            unused['artifact']['value'], unused_exec)
+
         small_root = app.APP_SOURCE.replace(
             'equals_i64(42, 19 +% 23', 'equals_i64(43, 19 +% 23', 1)
         small_request = request_for(small_root, modules)
@@ -193,19 +228,16 @@ def main() -> None:
         dependency_modules['mncs.test.generative'] = (
             dependency_modules['mncs.test.generative'].replace(
                 '6364136223846793005', '6364136223846793006', 1))
-        dynamic_root = app.APP_SOURCE.replace(
-            'equals_i64(58, replay(request.seed, request.case_index, 97) as i64',
-            'equals_i64((generated.value % 97) as i64, replay(request.seed, request.case_index, 97) as i64', 1)
-        if dynamic_root == app.APP_SOURCE:
-            raise AssertionError('dependency fixture consumer was not updated')
-        dependency_request = request_for(dynamic_root, dependency_modules)
+        dependency_request = request_for(app.APP_SOURCE, dependency_modules)
         dependency_oracle, dependency_exec, dependency_oracle_metrics = oracle_one(
-            probe, dynamic_root, dependency_modules)
+            probe, app.APP_SOURCE, dependency_modules)
         dependency, dependency_metrics = compile_one(probe, dependency_request)
         if dependency.get('cache', {}).get('status') != 'miss':
             raise AssertionError('changed imported source reused an old artifact')
         if dependency['dependency_graph']['identity'] == cold['dependency_graph']['identity']:
             raise AssertionError('changed dependency did not alter the resolved graph identity')
+        if dependency['artifact']['identity'] == cold['artifact']['identity']:
+            raise AssertionError('changed dependency returned the prior verified artifact')
         dependency_artifact = dependency['artifact']['value']
 
         invalid_request = request_for(
@@ -234,6 +266,9 @@ def main() -> None:
         interrupt_key = seed['cache']['key']
         target_entry = cache_path(interrupt_key)
         target_entry.unlink()
+        index_dir = CACHE_DIR / 'application-build-indexes'
+        for index in index_dir.glob('*.json'):
+            index.unlink()
         tails.append(probe.close())
     except BaseException:
         if probe.proc.poll() is None:
@@ -245,8 +280,10 @@ def main() -> None:
     if not interrupted['interrupted']:
         raise AssertionError('interruption probe completed before cancellation')
     leftovers = list(target_entry.parent.glob(target_entry.stem + '*'))
-    if target_entry.exists() or leftovers:
-        raise AssertionError(f'interrupted compilation left cache publication: {leftovers}')
+    index_leftovers = list((CACHE_DIR / 'application-build-indexes').glob('*.tmp'))
+    entry_after_cancel_exists = target_entry.exists()
+    if entry_after_cancel_exists or leftovers or index_leftovers:
+        raise AssertionError(f'interrupted compilation left cache publication: {leftovers + index_leftovers}')
 
     retry_probe = app.Probe(CACHE_DIR)
     try:
@@ -280,7 +317,8 @@ def main() -> None:
         dependency_actual[0]['$p']['report'])
     assert base_report['summary']['passed'] == 3 and base_report['summary']['skipped'] == 1
     assert small_report['summary']['failed'] == 1 and small_report['state_value'] == 1
-    assert dependency_report['summary']['failed'] == 0
+    assert dependency_report['summary']['failed'] == 1
+    assert dependency_report['summary']['assertion_failures'] == 1
     assert dependency_report['property_case']['value'] != base_report['property_case']['value']
 
     cache_speedup = cold_metrics['wall_seconds'] / max(warm_metrics['wall_seconds'], 1e-9)
@@ -321,12 +359,14 @@ def main() -> None:
             'build_assumptions': cold.get('build_assumptions'),
         },
         'cache_key_inputs': [
-            'exact root source ID and bytes plus exact imported module IDs and bytes',
+            'exact source snapshot identity, including root and every supplied module ID and byte hash',
+            'dependency-closure candidate index binds root source and build assumptions; every resolved module source hash must match before artifact reuse',
             'canonical generic specialization seed identities',
             'Stage-0 toolchain identity and probe executable SHA-256',
             'compiler contract version, canonical VM backend, selected target, and entry',
             'requested capabilities and effect assumptions',
             'optimization and verification policies',
+            'the full source snapshot identity is recomputed when an artifact is reused from an unchanged dependency closure',
         ],
         'experiments': {
             'cold_build': {'cache': cold.get('cache'), 'metrics': cold_metrics},
@@ -335,6 +375,29 @@ def main() -> None:
                 'metrics': warm_metrics, 'wall_speedup': round(cache_speedup, 2),
                 'cpu_speedup': round(cold_metrics['cpu_seconds'] /
                                      max(warm_metrics['cpu_seconds'], 1e-9), 2),
+            },
+            'unreferenced_module_addition_and_edit': {
+                'module_added_and_edited': 'mncs.test.unused',
+                'module_source_sha256_after_addition': app.sha(unused_modules['mncs.test.unused'].encode()),
+                'module_source_sha256_after_edit': app.sha(changed_unused_modules['mncs.test.unused'].encode()),
+                'module_source_bytes_after_addition': len(unused_modules['mncs.test.unused'].encode()),
+                'module_source_bytes_after_edit': len(changed_unused_modules['mncs.test.unused'].encode()),
+                'cache_after_addition': unused.get('cache'),
+                'cache_after_edit': changed_unused.get('cache'),
+                'snapshot_identity_before': cold.get('source_snapshot', {}).get('identity'),
+                'snapshot_identity_after_addition': unused.get('source_snapshot', {}).get('identity'),
+                'snapshot_identity_after_edit': changed_unused.get('source_snapshot', {}).get('identity'),
+                'dependency_graph_identity': unused.get('dependency_graph', {}).get('identity'),
+                'artifact_identity_before': cold.get('artifact', {}).get('identity'),
+                'artifact_identity_after_addition': unused.get('artifact', {}).get('identity'),
+                'artifact_identity_after_edit': changed_unused.get('artifact', {}).get('identity'),
+                'oracle_valid': unused_oracle.get('valid'),
+                'oracle_result': compact_oracle(unused_exec),
+                'vm_result': compact_result(unused_actual[0]),
+                'compile_metrics_after_addition': unused_metrics,
+                'compile_metrics_after_edit': changed_unused_metrics,
+                'oracle_metrics': unused_oracle_metrics,
+                'vm_metrics': unused_vm_metrics,
             },
             'small_semantic_edit': {
                 'source_snapshot_identity': small.get('source_snapshot', {}).get('identity'),
@@ -373,7 +436,7 @@ def main() -> None:
             },
             'interrupted_compilation': {
                 'unique_policy_key': interrupt_key, 'seed_cache': seed.get('cache'),
-                'cancelled_process': interrupted, 'entry_after_cancel_exists': target_entry.exists(),
+                'cancelled_process': interrupted, 'entry_after_cancel_exists': entry_after_cancel_exists,
                 'matching_temp_or_entry_paths_after_cancel': [str(p) for p in leftovers],
                 'retry_cache': retry.get('cache'), 'retry_metrics': retry_metrics,
                 'fresh_process_cache': retry_warm.get('cache'),
@@ -385,8 +448,8 @@ def main() -> None:
             'process_metrics': 'sampled from /proc for probe and VM processes; wall and CPU use process deltas',
         },
         'fine_grained_invalidation': {
-            'status': 'not_yet_implemented',
-            'detail': 'The cache reuses the verified package artifact only for an exact full snapshot. A changed function or dependency safely recomputes the complete application closure; module/function fact reuse is still required to complete Gate B.',
+            'status': 'dependency_closure_reuse_implemented',
+            'detail': 'The cache reuses a verified VM artifact when the root source and build assumptions match and every module in the cached resolved dependency closure has the exact same source hash. An added or edited unreferenced module reuses the artifact while returning a refreshed full source snapshot identity. A changed root function or imported module invalidates and recomputes source checking, SSA verification, and artifact generation; function/module fact reuse is still required to complete Gate B.',
         },
         'gate_a': 'pass',
         'gate_b': 'partial',
@@ -401,6 +464,8 @@ def main() -> None:
         'gate_a': 'pass', 'gate_b': 'partial',
         'cold_cache': cold.get('cache', {}).get('status'),
         'warm_cache': warm.get('cache', {}).get('status'),
+        'unreferenced_module_reuse_basis': unused.get('cache', {}).get('reuse_basis'),
+        'unreferenced_module_edit_reuse_basis': changed_unused.get('cache', {}).get('reuse_basis'),
         'small_edit_cache': small.get('cache', {}).get('status'),
         'dependency_cache': dependency.get('cache', {}).get('status'),
         'interrupted': interrupted['interrupted'],

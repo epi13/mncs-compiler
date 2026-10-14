@@ -364,11 +364,12 @@ def main() -> None:
     }
     call = call_request()
     cache_dir = ROOT / '.build/native-app-readiness/gate-a-cache'
-    cache_entries = cache_dir / 'application-builds'
-    cache_entries.mkdir(parents=True, exist_ok=True)
-    for path in cache_entries.iterdir():
-        if path.is_file() and (path.suffix == '.json' or path.name.endswith('.tmp')):
-            path.unlink()
+    for cache_name in ('application-builds', 'application-build-indexes'):
+        cache_entries = cache_dir / cache_name
+        cache_entries.mkdir(parents=True, exist_ok=True)
+        for path in cache_entries.iterdir():
+            if path.is_file() and (path.suffix == '.json' or path.name.endswith('.tmp')):
+                path.unlink()
     probe = Probe(cache_dir)
     try:
         built, build_metrics = probe.send({'compile_application': request})

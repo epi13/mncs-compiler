@@ -27,16 +27,20 @@ and its exact working-tree identities are recorded separately.
   and producer identities are retained in
   `evidence/native-app-readiness-gate-a.json`.
 - **Gate B — partial.** An atomic content-addressed cache reuses successful
-  complete application artifacts across fresh probe processes. In the
-  expanded bounded workload the cold miss took about 0.45 s and the warm hit
-  about 0.24 s (1.84× wall reduction on the latest run). Changed root and
-  imported sources miss and rebuild; invalid source retains the same `MNE162`
+  complete application artifacts across fresh probe processes and reuses an
+  artifact across added or edited modules outside its resolved dependency
+  closure after checking every imported source hash. The latest cold build
+  took 0.46 s, the unchanged warm hit 0.24 s (1.90× wall reduction), and the
+  changed full snapshot with an unchanged dependency closure about 0.02 s. The
+  returned full snapshot identity is refreshed. A changed root function or
+  imported source misses and recomputes semantic checking, SSA verification,
+  and artifact generation; invalid source retains the same `MNE162`
   diagnostic; a killed build publishes no result and a later retry succeeds.
   Measurements and cache keys are in
   `evidence/native-app-readiness-gate-b.json`. A changed generic specialization
-  request also changes the cache key and artifact identity. The current cache
-  unit is still the whole application artifact, so changed-function and
-  changed-dependency builds recompute the full closure.
+  request also changes the cache key and artifact identity. Verified
+  declaration, function, and changed-module facts are still not reused, so
+  Gate B remains partial.
 - The application request now carries explicit generic specialization seeds.
   Gate A emits and executes `mncs.test.assertions::equals_bytes<4>` and
   `mncs.test.suite::summarize<4>` as concrete callables. The selected `run`
