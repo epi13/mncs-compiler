@@ -6,6 +6,7 @@
 //! the executable authority or implement language semantics here.
 use crate::{vm_emit, ToolchainIdentity};
 use mncs_compiler::{ModuleResolver, ReferenceCompiler};
+use mncs_model::{ExecutionTypeArgument, HostGenericSeedRequest};
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
@@ -24,6 +25,7 @@ const REQUEST: &str = "mncs.compiler.application-build-request/1";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_GENERIC_SEEDS: usize = 256;
 
 struct ApplicationSources(BTreeMap<String, SourceEnvelope>);
 
@@ -93,11 +95,59 @@ fn error_contract(status: &str, code: &str, message: &str) -> Value {
     })
 }
 
+fn has_exact_keys(value: &Value, keys: &[&str]) -> bool {
+    value.as_object().is_some_and(|object| {
+        object.len() == keys.len() && keys.iter().all(|key| object.contains_key(*key))
+    })
+}
+
+fn parse_generic_seed(value: &Value) -> Result<HostGenericSeedRequest, ()> {
+    if !has_exact_keys(value, &["module", "function", "type_arguments"]) {
+        return Err(());
+    }
+    let module = value.get("module").and_then(Value::as_str).ok_or(())?;
+    let function = value.get("function").and_then(Value::as_str).ok_or(())?;
+    let arguments = value
+        .get("type_arguments")
+        .and_then(Value::as_array)
+        .ok_or(())?;
+    let mut type_arguments = Vec::with_capacity(arguments.len());
+    for argument in arguments {
+        let kind = argument.get("kind").and_then(Value::as_str).ok_or(())?;
+        match kind {
+            "nat" if has_exact_keys(argument, &["kind", "value"]) => {
+                let value = argument
+                    .get("value")
+                    .and_then(Value::as_u64)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .ok_or(())?;
+                type_arguments.push(ExecutionTypeArgument::Nat { value });
+            }
+            "type" if has_exact_keys(argument, &["kind", "type"]) => {
+                let ty = argument.get("type").and_then(Value::as_str).ok_or(())?;
+                type_arguments.push(ExecutionTypeArgument::Type { ty: ty.to_owned() });
+            }
+            _ => return Err(()),
+        }
+    }
+    Ok(HostGenericSeedRequest::from_request(
+        module,
+        function,
+        &type_arguments,
+    ))
+}
+
+fn parse_generic_seeds(value: &Value) -> Result<Vec<HostGenericSeedRequest>, ()> {
+    let rows = value.as_array().ok_or(())?;
+    rows.iter().map(parse_generic_seed).collect()
+}
+
 fn application_cache_key(
     request: &Value,
     root_id: &str,
     source_identity: &str,
     modules: &BTreeMap<String, String>,
+    generic_seeds: &[HostGenericSeedRequest],
     toolchain: Option<&ToolchainIdentity>,
     probe_identity: &str,
 ) -> String {
@@ -110,12 +160,19 @@ fn application_cache_key(
             })
         })
         .collect();
+    let mut generic_seed_keys: Vec<String> = generic_seeds
+        .iter()
+        .map(HostGenericSeedRequest::seed_key)
+        .collect();
+    generic_seed_keys.sort();
+    generic_seed_keys.dedup();
     let identity = json!({
         "schema_version": "mncs.compiler.application-build-cache-key/1",
         "contract": CONTRACT,
         "source_snapshot_identity": source_identity,
         "root_source_id": root_id,
         "module_sources": module_sources,
+        "generic_seeds": generic_seed_keys,
         "compiler_semantics": toolchain
             .and_then(|identity| serde_json::to_value(identity).ok()),
         "compiler_implementation": probe_identity,
@@ -283,6 +340,35 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "requested execution target is unavailable",
         );
     }
+    let generic_seeds: Vec<HostGenericSeedRequest> = match request.get("generic_seeds") {
+        None => Vec::new(),
+        Some(value) => {
+            let Some(rows) = value.as_array() else {
+                return error_contract(
+                    "unknown",
+                    "MCA109",
+                    "generic_seeds must be an array of specialization requests",
+                );
+            };
+            if rows.len() > MAX_GENERIC_SEEDS {
+                return error_contract(
+                    "unsupported",
+                    "MCA110",
+                    "generic specialization count exceeds the bounded application input",
+                );
+            }
+            match parse_generic_seeds(value) {
+                Ok(seeds) => seeds,
+                Err(()) => {
+                    return error_contract(
+                        "unknown",
+                        "MCA109",
+                        "generic_seeds contains a malformed specialization request",
+                    )
+                }
+            }
+        }
+    };
     let Some(root_id) = request.get("root_source_id").and_then(Value::as_str) else {
         return error_contract("unknown", "MCA102", "root_source_id is required");
     };
@@ -365,6 +451,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         root_id,
         &source_identity,
         &modules,
+        &generic_seeds,
         toolchain,
         &probe_identity,
     );
@@ -395,7 +482,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             .collect(),
     );
     let compiler = ReferenceCompiler::default();
-    let frontend = compiler.front_end_with_resolver(envelope(root_source), &resolver);
+    let frontend = compiler.front_end_with_resolver_and_seeds(
+        envelope(root_source),
+        &resolver,
+        &generic_seeds,
+    );
     let diagnostics = serde_json::to_value(&frontend.diagnostics).unwrap_or_else(|_| json!([]));
     let resolutions =
         serde_json::to_value(&frontend.module_resolutions).unwrap_or_else(|_| json!([]));
@@ -547,6 +638,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "target": request.get("target").cloned().unwrap_or(Value::Null),
             "capabilities": request.get("capabilities").cloned().unwrap_or_else(|| json!([])),
             "effect_assumptions": request.get("effect_assumptions").cloned().unwrap_or_else(|| json!([])),
+            "generic_seeds": serde_json::to_value(&generic_seeds).unwrap_or_else(|_| json!([])),
             "optimization_policy": request.get("optimization_policy").cloned().unwrap_or_else(|| json!("default")),
             "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         },

@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 13,
+  "revision": 14,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -810,6 +810,7 @@
       "subjects": [
         "mncs.compiler.application-build-request/1",
         "mncs.compiler.application-build/1",
+        "mncs.compiler.application-generic-seed/1",
         "mncs.vm.artifact/1"
       ],
       "invalidation_dependencies": [
@@ -817,6 +818,7 @@
         "tools/application_build_provider.py",
         "tools/test_application_build_provider.py",
         "tools/test_vm_native_application.py",
+        "tools/test_native_application_incremental.py",
         "tools/stage0-probe/src/main.rs",
         "tools/stage0-probe/Cargo.toml",
         "tools/stage0-probe/Cargo.lock",
@@ -835,6 +837,113 @@
         ],
         "working_directory": ".",
         "timeout_seconds": 300,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.native-application-generic-specialization",
+      "title": "Requested generic instances are executable without promoting unresolved templates",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-generic-seed/1",
+        "mncs.compiler.application-build/1",
+        "mncs.vm.artifact/1"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "tools/stage0-probe/src/application.rs",
+        "tools/test_vm_native_application.py",
+        "tools/vm_emit.rs",
+        "mncs-language.lock.json"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_native_application.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_native_application.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.native-application-incremental-cache",
+      "title": "Application cache invalidates safely across edits, failures, and interruption",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build-cache-key/1",
+        "mncs.compiler.application-build-cache-observation/1",
+        "mncs.compiler.application-build/1"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "tools/stage0-probe/src/application.rs",
+        "tools/test_native_application_incremental.py",
+        "tools/test_vm_native_application.py",
+        "mncs-language.lock.json",
+        "tools/vm_emit.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_native_application_incremental.py",
+        "argv": [
+          "python3",
+          "tools/test_native_application_incremental.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 360,
         "effects": [
           "verify"
         ],

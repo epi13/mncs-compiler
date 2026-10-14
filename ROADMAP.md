@@ -28,19 +28,22 @@ and its exact working-tree identities are recorded separately.
   `evidence/native-app-readiness-gate-a.json`.
 - **Gate B — partial.** An atomic content-addressed cache reuses successful
   complete application artifacts across fresh probe processes. In the
-  bounded workload the cold miss took about 0.43 s and the warm hit about
-  0.24 s (1.81× wall reduction on the latest run). Changed root and imported sources miss and
-  rebuild; invalid source retains the same `MNE162` diagnostic; a killed
-  build publishes no result and a later retry succeeds. Measurements and
-  cache keys are in `evidence/native-app-readiness-gate-b.json`. The current
-  cache unit is the whole application artifact, so changed-function and
-  changed-dependency builds still recompute the full closure.
-- The application contract correctly distinguishes a verified selected
-  `run` entry from unsupported generic exports elsewhere in the same
-  source closure. The whole-module response remains `unsupported` because
-  `equals_bytes` and the generic `summarize` template have no standalone
-  SSA export; the selected specialized application entry is verified and
-  executable. Do not promote the entire module closure to verified.
+  expanded bounded workload the cold miss took about 0.45 s and the warm hit
+  about 0.24 s (1.87× wall reduction on the latest run). Changed root and
+  imported sources miss and rebuild; invalid source retains the same `MNE162`
+  diagnostic; a killed build publishes no result and a later retry succeeds.
+  Measurements and cache keys are in
+  `evidence/native-app-readiness-gate-b.json`. A changed generic specialization
+  request also changes the cache key and artifact identity. The current cache
+  unit is still the whole application artifact, so changed-function and
+  changed-dependency builds recompute the full closure.
+- The application request now carries explicit generic specialization seeds.
+  Gate A emits and executes `mncs.test.assertions::equals_bytes<4>` and
+  `mncs.test.suite::summarize<4>` as concrete callables. The selected `run`
+  entry is verified and matches the independent Stage-0 oracle. The
+  module-wide response remains `unsupported` because the generic templates
+  still have no standalone SSA instance; evidence does not promote those
+  unresolved exports.
 - **Gate C — partial.** Compiler declares
   `mncs-compiler:native-application-build` with the versioned request/response,
   selected Stage-0 identity, canonical artifact provenance, interface,

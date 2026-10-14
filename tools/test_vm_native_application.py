@@ -59,9 +59,10 @@ fn run() -> (result: ReadinessReport) {
     let arithmetic: TestResult = from_assertion(equals_i64(42, 19 +% 23, 1001));
     let generated: PropertyCase = draw_case(42, 7);
     let property_test: TestResult = from_assertion(equals_i64(58, replay(42, 7, 97) as i64, 1004));
+    let byte_test: TestResult = from_assertion(equals_bytes<4>([1, 2, 3, 4], [1, 2, 3, 4], 1008));
     let skipped: TestResult = skip(1006);
-    let tests: [TestResult; 3] = [arithmetic, property_test, skipped];
-    let summary: SuiteSummary = summarize<3>(tests);
+    let tests: [TestResult; 4] = [arithmetic, property_test, byte_test, skipped];
+    let summary: SuiteSummary = summarize<4>(tests);
     let witness: Witness = bytes([1, 2, 3, 4]);
     let suite_projection: SuiteProjection = project(summary);
     let test_projection: TestProjection = project_test(arithmetic);
@@ -295,6 +296,12 @@ def main() -> None:
         'root_source': APP_SOURCE,
         'entry': {'module': APP_MODULE, 'function': 'run'},
         'modules': module_sources,
+        'generic_seeds': [
+            {'module': 'mncs.test.assertions', 'function': 'equals_bytes',
+             'type_arguments': [{'kind': 'nat', 'value': 4}]},
+            {'module': 'mncs.test.suite', 'function': 'summarize',
+             'type_arguments': [{'kind': 'nat', 'value': 4}]},
+        ],
         'capabilities': [],
         'verification_policy': 'stage0-semantic-check+canonical-vm-artifact/1',
     }
@@ -332,6 +339,27 @@ def main() -> None:
         artifact = built.get('artifact', {}).get('value')
         if not isinstance(artifact, dict):
             raise AssertionError('no canonical VM artifact: ' + json.dumps(built, indent=2)[:8000])
+        specialized_callables = artifact.get('callables', [])
+        expected_specializations = {
+            ('mncs.test.assertions', 'equals_bytes__spec_'),
+            ('mncs.test.suite', 'summarize__spec_'),
+        }
+        missing_specializations = [
+            f'{module}::{prefix}' for module, prefix in expected_specializations
+            if not any(row.get('module') == module and row.get('name', '').startswith(prefix)
+                       for row in specialized_callables)
+        ]
+        if missing_specializations:
+            raise AssertionError('requested generic exports were not emitted: ' + json.dumps({
+                'missing': missing_specializations, 'callables': specialized_callables}, indent=2)[:6000])
+        expected_unresolved = {
+            'export mncs.test.assertions::equals_bytes: no ssa instance',
+            'export mncs.test.suite::summarize: no ssa instance',
+        }
+        if built.get('status') != 'unsupported' or set(built.get('unresolved_obligations', [])) != expected_unresolved:
+            raise AssertionError('generic templates must remain explicitly unsupported without a closed type: ' +
+                                 json.dumps({'status': built.get('status'),
+                                             'obligations': built.get('unresolved_obligations')}, indent=2))
         if built.get('cache', {}).get('status') != 'miss' or built.get('cache', {}).get('publication') != 'stored':
             raise AssertionError('Gate A cold build was not newly verified and published')
         repeated, repeat_metrics = probe.send({'compile_application': request})
@@ -339,6 +367,16 @@ def main() -> None:
             raise AssertionError('Gate A unchanged build did not reuse the exact verified artifact')
         if repeated.get('artifact', {}).get('identity') != built.get('artifact', {}).get('identity'):
             raise AssertionError('identical source snapshot changed artifact identity')
+        specialization_variant = dict(request)
+        specialization_variant['generic_seeds'] = request['generic_seeds'] + [{
+            'module': 'mncs.test.suite', 'function': 'summarize',
+            'type_arguments': [{'kind': 'nat', 'value': 3}],
+        }]
+        variant, variant_metrics = probe.send({'compile_application': specialization_variant})
+        if variant.get('cache', {}).get('key') == built.get('cache', {}).get('key'):
+            raise AssertionError('generic specialization assumptions were omitted from the cache key')
+        if variant.get('artifact', {}).get('identity') == built.get('artifact', {}).get('identity'):
+            raise AssertionError('a changed generic specialization request reused the prior artifact')
         invalid_request = dict(request)
         invalid_request['root_source'] = APP_SOURCE.replace('summary.total', 'summary.total_missing', 1)
         invalid = probe.send({'compile_application': invalid_request})[0]
@@ -352,6 +390,36 @@ def main() -> None:
         unavailable = probe.send({'compile_application': unsupported_target})[0]
         if unavailable.get('status') != 'unavailable':
             raise AssertionError('unsupported target did not fail closed: ' + json.dumps(unavailable, indent=2))
+        invalid_specialization = dict(request)
+        invalid_specialization['generic_seeds'] = [{
+            'module': 'mncs.test.suite', 'function': 'missing',
+            'type_arguments': [{'kind': 'nat', 'value': 4}],
+        }]
+        bad_specialization = probe.send({'compile_application': invalid_specialization})[0]
+        specialization_codes = [item.get('code') for item in bad_specialization.get('diagnostics', [])]
+        if bad_specialization.get('status') != 'rejected' or 'MNE131' not in specialization_codes:
+            raise AssertionError('invalid generic export request lacked precise MNE131: ' + json.dumps(
+                bad_specialization, indent=2)[:6000])
+        malformed_seeds = dict(request)
+        malformed_seeds['generic_seeds'] = 'not-an-array'
+        malformed_seed_result = probe.send({'compile_application': malformed_seeds})[0]
+        if malformed_seed_result.get('error', {}).get('code') != 'MCA109':
+            raise AssertionError('malformed specialization input was not rejected as MCA109: ' +
+                                 json.dumps(malformed_seed_result, indent=2))
+        extra_seed_field = dict(request)
+        extra_seed_field['generic_seeds'] = [{
+            **request['generic_seeds'][0], 'unrecognized': True,
+        }]
+        extra_seed_result = probe.send({'compile_application': extra_seed_field})[0]
+        if extra_seed_result.get('error', {}).get('code') != 'MCA109':
+            raise AssertionError('unknown specialization field was not rejected as MCA109: ' +
+                                 json.dumps(extra_seed_result, indent=2))
+        over_limit_seeds = dict(request)
+        over_limit_seeds['generic_seeds'] = request['generic_seeds'] * 129
+        over_limit_result = probe.send({'compile_application': over_limit_seeds})[0]
+        if over_limit_result.get('error', {}).get('code') != 'MCA110':
+            raise AssertionError('oversized specialization input was not rejected as MCA110: ' +
+                                 json.dumps(over_limit_result, indent=2))
         probe_stderr = probe.close()
     except BaseException:
         try:
@@ -373,13 +441,13 @@ def main() -> None:
     if actual != expected:
         raise AssertionError(json.dumps({'actual': actual, 'stage0': expected}, indent=2))
     report = actual[0]
-    assert report['summary']['total'] == 3, report
-    assert report['summary']['passed'] == 2, report
+    assert report['summary']['total'] == 4, report
+    assert report['summary']['passed'] == 3, report
     assert report['summary']['skipped'] == 1, report
     assert report['summary']['verdict_code'] == 0, report
     assert report['property_case']['seed'] == 42 and report['property_case']['case_index'] == 7, report
     assert report['witness']['length'] == 4 and report['witness']['checksum'] == 30, report
-    assert report['state_value'] == 3, report
+    assert report['state_value'] == 4, report
 
     source_rows = [{'module': name, 'source_id': name, 'sha256': sha(source.encode()),
                     'bytes': len(source.encode())}
@@ -416,6 +484,10 @@ def main() -> None:
             'interface_identity': built.get('artifact', {}).get('interface_identity'),
             'required_capabilities': built.get('artifact', {}).get('required_capabilities'),
             'unresolved_obligations': built.get('unresolved_obligations'),
+            'generic_seeds': request['generic_seeds'],
+            'specialized_callables': [row for row in specialized_callables
+                                      if row.get('module') in {'mncs.test.assertions', 'mncs.test.suite'}
+                                      and '__spec_' in row.get('name', '')],
         },
         'oracle': {
             'kind': 'Stage-0 ReferenceCompiler + execute_ssa_module project oracle',
@@ -438,6 +510,11 @@ def main() -> None:
         'build_measurements': {
             'first_build': {'cache': built.get('cache'), 'metrics': build_metrics},
             'identical_repeat': {'cache': repeated.get('cache'), 'metrics': repeat_metrics},
+            'generic_specialization_change': {
+                'cache': variant.get('cache'),
+                'artifact_identity': variant.get('artifact', {}).get('identity'),
+                'metrics': variant_metrics,
+            },
             'identical_repeat_artifact_identity': repeated.get('artifact', {}).get('identity'),
             'artifact_identity_stable': repeated.get('artifact', {}).get('identity') == built.get('artifact', {}).get('identity'),
             'cache_reuse_claimed': True,
@@ -449,6 +526,13 @@ def main() -> None:
                 'source_snapshot_identity': invalid.get('source_snapshot', {}).get('identity'),
             },
             'unsupported_target': {'status': unavailable.get('status'), 'error': unavailable.get('error')},
+            'invalid_generic_specialization': {
+                'status': bad_specialization.get('status'),
+                'diagnostics': bad_specialization.get('diagnostics'),
+            },
+            'malformed_generic_seeds': malformed_seed_result.get('error'),
+            'unknown_generic_seed_field': extra_seed_result.get('error'),
+            'generic_seed_count_limit': over_limit_result.get('error'),
         },
         'stage0_probe_diagnostics_tail': probe_stderr[-1500:],
         'gate_a': 'pass',

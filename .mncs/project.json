@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 11,
+  "revision": 12,
   "manifest_location": "in-repository",
   "authority": {
     "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
@@ -138,6 +138,8 @@
         "artifact_contract": {
           "request_schema": "mncs.compiler.application-build-request/1",
           "response_schema": "mncs.compiler.application-build/1",
+          "generic_seed_schema": "mncs.compiler.application-generic-seed/1",
+          "generic_seed_maximum_count": 256,
           "result_artifact": "native-application-build.json",
           "execution_artifact": "mncs.vm.artifact/1",
           "status_values": [
@@ -150,6 +152,9 @@
         },
         "fingerprint_sources": [
           "tools/application_build_provider.py",
+          "tools/test_application_build_provider.py",
+          "tools/test_vm_native_application.py",
+          "tools/test_native_application_incremental.py",
           "tools/stage0-probe/src/application.rs",
           "tools/stage0-probe/src/main.rs",
           "tools/stage0-probe/Cargo.toml",

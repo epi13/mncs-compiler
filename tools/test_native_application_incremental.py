@@ -36,6 +36,12 @@ def request_for(root: str, modules: dict[str, str]) -> dict:
         'root_source': root,
         'entry': {'module': app.APP_MODULE, 'function': 'run'},
         'modules': modules,
+        'generic_seeds': [
+            {'module': 'mncs.test.assertions', 'function': 'equals_bytes',
+             'type_arguments': [{'kind': 'nat', 'value': 4}]},
+            {'module': 'mncs.test.suite', 'function': 'summarize',
+             'type_arguments': [{'kind': 'nat', 'value': 4}]},
+        ],
         'capabilities': [],
         'effect_assumptions': [],
         'optimization_policy': 'default',
@@ -276,7 +282,7 @@ def main() -> None:
         dependency_artifact, dependency_exec)
     base_report, small_report, dependency_report = (
         base_actual[0], small_actual[0], dependency_actual[0])
-    assert base_report['summary']['passed'] == 2 and base_report['summary']['skipped'] == 1
+    assert base_report['summary']['passed'] == 3 and base_report['summary']['skipped'] == 1
     assert small_report['summary']['failed'] == 1 and small_report['state_value'] == 1
     assert dependency_report['summary']['failed'] == 0
     assert dependency_report['property_case']['value'] != base_report['property_case']['value']
@@ -318,6 +324,7 @@ def main() -> None:
         },
         'cache_key_inputs': [
             'exact root source ID and bytes plus exact imported module IDs and bytes',
+            'canonical generic specialization seed identities',
             'Stage-0 toolchain identity and probe executable SHA-256',
             'compiler contract version, canonical VM backend, selected target, and entry',
             'requested capabilities and effect assumptions',
