@@ -27,25 +27,32 @@ current proof.
   variants, and an invalid projection still reports `MNE162`. Evidence is
   `evidence/native-app-readiness-gate-a.json`, committed at
   `772944e5e43b36bc9bd660fec2fec65bfa4ce9da`.
-- **Gate B — partial.** The current `/3` six-case experiment is
-  `evidence/native-app-readiness-gate-b.json` (SHA-256
-  `dd24098cd89eb6c79cc319c620d0ba2532d757e773411f1613094130031eb148`),
-  produced by Compiler `ed1ed59e6f17a1696a78df4fcd73986052f98421`, Stage-0
-  binary `f44793c79cd47bce005db5d948b4f35509ad24650676bdc8fa61770825800411`,
-  and `mncs.compiler.application-build/3`. Cold build measured 0.467 s wall,
-  0.45 s CPU, and 60.3 MB peak RSS. An unchanged build in a fresh process
-  reused the exact verified artifact in 0.237 s wall / 0.21 s CPU (1.97x wall
-  speedup). Adding and editing an unreferenced module reused the artifact in
-  about 0.020 s while refreshing the full source snapshot identity. A changed
-  function (0.368 s) and a changed imported dependency (0.376 s) each reran
-  whole-application semantic checking, SSA verification, and VM artifact
-  generation; no function or module facts were reused. Invalid source was
-  rejected twice with identical `MNE162` diagnostics and was not published.
-  A `SIGKILL` interruption left no cache entry or temporary artifact; retry
-  stored a complete result and a fresh process then hit it. The older six-case
-  digest record at `evidence/native-app-readiness-digest-incremental-20261014.json`
-  remains historical `/2` evidence. Gate B is partial until changed functions
-  and dependency closures reuse independently verified facts.
+- **Gate B — partial.** Current /3 evidence is
+  evidence/native-app-readiness-gate-b.json (SHA-256
+  64f73a78b3d84fb64c06ca69622a39798d42265b8464a216a38296739fa5bd38),
+  produced by Compiler commit 1c44dd24595c3ff13267704bf825d405b2b41acb,
+  Stage-0 revision e8f8a5f8659c71b33cd32c964d4982bec1a9668e, release probe
+  SHA-256 27ff0d2ee436f632e13c35b93db3c4e445a06dd780c2ce5ea73a581e38fbace5,
+  and VM revision 1c19a94732c9d24029dd00e2d5af13710f481d02. For the selected
+  mncs-test application, a cold compile measured 0.462 s wall / 0.44 s CPU
+  and 60.7 MB peak RSS. An unchanged artifact hit in a fresh process measured
+  0.120 s / 0.10 s after a separate 0.121 s process-ready step (3.86× for
+  the build request). Adding and editing an unreferenced module hit the exact
+  verified dependency closure in 0.027 s / 0.025 s. A comment-only edit to
+  imported mncs.test.generative produced new source and graph identities,
+  retained the same semantic identity, reused the exact verified VM artifact
+  after a fresh semantic check, and matched the independent Stage-0 oracle;
+  it took 0.191 s. A changed root function (0.367 s) and a semantic change
+  to the imported dependency (0.381 s) still reran source checking, SSA
+  verification, and VM artifact generation. Invalid source was rejected
+  twice with identical diagnostics and was not published. A SIGKILL
+  interruption left no entry or temporary publication; retry stored a
+  complete result and a fresh process hit it. cgroup memory counters were
+  unavailable. Gate B stays partial until changed functions and dependency
+  semantic facts can reuse independently verified module/declaration work.
+  The older digest record at
+  evidence/native-app-readiness-digest-incremental-20261014.json remains
+  historical /2 evidence.
 - **Gate C — partial.** The versioned `/3` producer now exposes source and
   dependency identities, selected callable scope, typed interface, canonical
   artifact provenance, capabilities/effects, diagnostics, execution
@@ -75,10 +82,12 @@ current proof.
   one module; a Source byte edit took 21.70 s and invalidated all three. Timed
   edits appended comments; a separate semantic dependency edit is covered by a
   cache-miss unit test. Formatting
-  and all 15 probe tests pass. cgroup memory was unavailable. This cache covers
-  Stage-0 frontend Programs only: no VM artifact or execution was reused, the
-  application provider is unchanged, Gate B remains partial, and the
-  self-consumption matrix does not advance.
+  and all 16 probe tests pass. cgroup memory was unavailable. This cache
+  covers Stage-0 frontend Programs only. The application provider now
+  separately reuses a verified VM artifact for source-only dependency edits
+  after a fresh semantic check; it still rebuilds on semantic function or
+  dependency changes. Gate B remains partial and the self-consumption matrix
+  does not advance.
 - **Self-consumption is unchanged.** Gate A is not compiler succession.
   `evidence/SELF-HOST-MATRIX.json` remains the authority; Stage-1 and Stage-2
   remain unproven.
