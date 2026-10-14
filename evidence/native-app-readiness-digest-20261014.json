@@ -1,0 +1,171 @@
+{
+  "schema_version": "mncs.compiler.native-application-readiness-result/1",
+  "milestone": "MNCS Native Application Readiness",
+  "gate_a_status": "partial",
+  "gate_a_assessment": "The digest_app entry is verified and executed from a multi-module Stage-0 artifact through the canonical mncs-vm path. The whole artifact remains unsupported because two uninstantiated generic exports remain unresolved.",
+  "change": {
+    "repository": "mncs-compiler",
+    "base_revision": "292d480ff56156dac17c8e2ad423dde4ace3f252",
+    "path": "tools/stage0-probe/src/application.rs",
+    "description": "Callable interface closure discovery now peels all nested bounded sequence and vector wrappers before resolving a nominal element type. Missing nominal references remain unknown and unresolved.",
+    "stage0_probe_sha256": "sha256:06571f93702fbcaab7dbb2156a45f1029ca0ded2054072239a25401f60881b47",
+    "checks": {
+      "cargo_fmt": "passed",
+      "stage0_probe_unit_tests": "14 passed, 0 failed",
+      "stage0_probe_release_build": "passed"
+    }
+  },
+  "consumer_sources": {
+    "mncs-test": {
+      "revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+      "modules": {
+        "mncs.test.digest": "sha256:fa45534cdebb4de683675bfb70eed15cfa177a5198f036c0e3b7fcab68b91c30",
+        "mncs.test.assertions": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b",
+        "mncs.test.suite": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+      }
+    },
+    "mncs-stdlib": {
+      "revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+      "module": "mncs.std.application.v1",
+      "module_sha256": "sha256:5669f67e921e71c0f54742325f06fddfe3b11692c1fe3d27ee515f8a3fd30c7e"
+    },
+    "mncs-language": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "mncs-vm": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "build": {
+    "request_schema": "mncs.compiler.application-build-request/1",
+    "contract_schema": "mncs.compiler.application-build/2",
+    "backend": "mncs-vm-direct",
+    "target_contract_identity": "mncs:compiler:target-contract:dda292ec5a6fa67f0e972c041b5b60bcb24ff856f8565656b8139d8080be1ce9",
+    "source_snapshot_identity": "sha256:698a8b17d3e94f1d711aac84396e81afffba5bd4d78012801bf9a334507fdf76",
+    "dependency_graph_identity": "sha256:35de1895844f29d860b609792d30771926fe4bb39671bdaf32feb1133932c4c3",
+    "root_module": "mncs.test.digest",
+    "dependencies": [
+      "mncs.std.application.v1",
+      "mncs.test.assertions",
+      "mncs.test.suite"
+    ],
+    "entry": {
+      "module": "mncs.test.digest",
+      "name": "digest_app",
+      "status": "verified",
+      "interface_identity": "sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2",
+      "capabilities": ["test_artifact"],
+      "effects": ["structured_read", "structured_write"],
+      "type_closure_status": "verified",
+      "unresolved_type_references": []
+    },
+    "artifact": {
+      "identity": "sha256:286ffce769c4b6750348778554794a682b50794d85b5456c2d199086484ab08f",
+      "schema": "mncs.vm.artifact/1",
+      "interface_identity": "09117bcf46be0a0a60fe5f54599c105f6f84f6449c93a8fcf05347670150c075",
+      "build_status": "unsupported",
+      "unresolved_obligations": [
+        "export mncs.test.assertions::equals_bytes: no ssa instance",
+        "export mncs.test.suite::summarize: no ssa instance"
+      ],
+      "generic_seeds": [
+        "mncs.test.assertions::equals_bytes<N=64>",
+        "mncs.test.suite::summarize<N=256>"
+      ],
+      "specializations_emitted": [
+        "mncs.test.assertions::equals_bytes__spec_4dd6cbd1",
+        "mncs.test.suite::summarize__spec_9249a81a"
+      ]
+    },
+    "cache_observation": {
+      "schema": "mncs.compiler.application-build-cache-observation/2",
+      "status": "miss",
+      "key": "sha256:84aef88fd2e21f5dedcc71ea9696167bf231fda2a4e9222d490f8506890640a9",
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "publication": "stored"
+    },
+    "cold_build_measurement": {
+      "wall_seconds": 19.417466,
+      "cpu_seconds": 19.505602,
+      "peak_child_rss_bytes": 1116442432,
+      "backend_compilation": "not requested",
+      "modules_reported": 6,
+      "cache_hits": 0,
+      "cache_misses": 6,
+      "cgroup_memory_and_fd_metrics": "not captured"
+    },
+    "warm_unchanged_build": {
+      "wall_seconds": 0.71,
+      "user_cpu_seconds": 0.65,
+      "system_cpu_seconds": 0.12,
+      "peak_rss_bytes": 244559872,
+      "exit_code": 0,
+      "status": "unsupported",
+      "artifact_identity_matches_cold": true,
+      "source_snapshot_identity_matches_cold": true,
+      "dependency_graph_identity_matches_cold": true,
+      "cache_status": "hit",
+      "cache_key": "sha256:84aef88fd2e21f5dedcc71ea9696167bf231fda2a4e9222d490f8506890640a9",
+      "reused_units": ["verified_application_artifact"],
+      "recomputed_units": [],
+      "stage0_module_cache_hits": 6,
+      "stage0_frontend_program_cache_hits": 6,
+      "stage0_cache_misses": 0,
+      "wall_speedup_over_cold": 27.35,
+      "cpu_speedup_over_cold": 25.33,
+      "peak_rss_reduction_ratio": 4.57
+    }
+  },
+  "execution": {
+    "runtime": "mncs-vm/0.1",
+    "status": "completed",
+    "artifact_identity": "sha256:286ffce769c4b6750348778554794a682b50794d85b5456c2d199086484ab08f",
+    "callable_function": "mncs:0.4:ssa:function:094ce440e3f62f0711113dc9d1459a2ecaf2e90f15c7528c81092c53e74b9bdd",
+    "returned_exit_code": 0,
+    "provider_operations": ["structured_read", "structured_write"],
+    "result_matches_independent_oracle": true,
+    "result_summary": {
+      "total": 5,
+      "passed": 1,
+      "failed": 2,
+      "skipped": 1,
+      "unsupported": 1,
+      "assertion_count": 6,
+      "failure_count": 2,
+      "verdict": "FAIL"
+    },
+    "first_failure": {
+      "source": "src/case.assertion",
+      "qualified_name": "case.assertion",
+      "expected": 4,
+      "actual": 5,
+      "assertion_code": 41
+    },
+    "vm_usage": {
+      "steps": 1041,
+      "max_call_depth": 5,
+      "max_memory_cells": 984,
+      "effects": 2
+    },
+    "wall_seconds": 0.003904928,
+    "effects_digest": "sha256:bf971b45aaeba5e16322c8c1f24b367b66fea1e2496dc4889f392c65cd46f331",
+    "generic_specialization_execution": {
+      "callable": "mncs.test.assertions::equals_bytes<N=64>",
+      "status": "completed",
+      "passed": true,
+      "artifact_identity": "sha256:286ffce769c4b6750348778554794a682b50794d85b5456c2d199086484ab08f",
+      "vm_steps": 846,
+      "max_memory_cells": 134
+    }
+  },
+  "self_consumption": {
+    "matrix_updated": false,
+    "stage_1_claimed": false,
+    "stage_2_claimed": false
+  },
+  "next_frontier": [
+    "Measure a single-function semantic edit and an invalid-source edit, checking exact cache invalidation, bounded recomputation, and diagnostic behavior.",
+    "Implement a reusable verified unit below the whole application artifact if the semantic edit still forces the entire six-module closure to rebuild.",
+    "Resolve the generic-template export obligations before claiming complete project-level Gate A."
+  ]
+}

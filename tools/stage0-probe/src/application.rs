@@ -582,25 +582,29 @@ fn publish_application_cache_index(
 }
 
 fn enqueue_interface_type(type_name: &str, pending: &mut BTreeSet<String>) {
-    if let Some(inner) = type_name
-        .strip_prefix('[')
-        .and_then(|value| value.strip_suffix(']'))
-    {
-        if let Some((element, _bound)) = inner.rsplit_once(';') {
-            pending.insert(element.trim().to_owned());
-            return;
+    let mut current = type_name.trim();
+    loop {
+        if let Some(inner) = current
+            .strip_prefix('[')
+            .and_then(|value| value.strip_suffix(']'))
+        {
+            if let Some((element, _bound)) = inner.rsplit_once(';') {
+                current = element.trim();
+                continue;
+            }
         }
-    }
-    if let Some(inner) = type_name
-        .strip_prefix("vec<")
-        .and_then(|value| value.strip_suffix('>'))
-    {
-        if let Some((element, _lanes)) = inner.rsplit_once(',') {
-            pending.insert(element.trim().to_owned());
-            return;
+        if let Some(inner) = current
+            .strip_prefix("vec<")
+            .and_then(|value| value.strip_suffix('>'))
+        {
+            if let Some((element, _lanes)) = inner.rsplit_once(',') {
+                current = element.trim();
+                continue;
+            }
         }
+        pending.insert(current.to_owned());
+        return;
     }
-    pending.insert(type_name.to_owned());
 }
 
 fn is_builtin_interface_type(type_name: &str) -> bool {
@@ -703,6 +707,88 @@ fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -
         "signature": interface["signature"],
         "types": interface["types"],
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::callable_interface;
+    use mncs_compiler::ReferenceCompiler;
+    use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
+    use serde_json::json;
+
+    fn interface_program() -> mncs_model::Program {
+        let source = r#"
+            mncs 0.18;
+            module contract.types;
+
+            record Context {
+                rows: [[byte; up_to 16]; up_to 4],
+                label: [byte; 32]
+            }
+
+            record Output { code: u64 }
+
+            fn entry(context: Context) -> (result: Output) {
+                return Output { code: 0 };
+            }
+        "#;
+        let result = ReferenceCompiler::default().front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "application-interface-test",
+            source,
+        ));
+        assert!(
+            result.is_valid(),
+            "interface test source: {:?}",
+            result.diagnostics
+        );
+        result
+            .program
+            .expect("valid source should produce a Program")
+    }
+
+    #[test]
+    fn callable_interface_resolves_nested_bounded_sequences() {
+        let program = interface_program();
+        let interface = callable_interface(&program, "contract.types", "entry")
+            .expect("entry callable interface");
+
+        assert_eq!(interface["status"], "verified");
+        assert_eq!(interface["types"]["status"], "verified");
+        assert_eq!(interface["types"]["unresolved_references"], json!([]));
+        let records = interface["types"]["records"]
+            .as_array()
+            .expect("record type closure");
+        assert_eq!(records.len(), 2);
+        assert!(records.iter().any(|record| record["name"] == "Context"));
+        assert!(records.iter().any(|record| record["name"] == "Output"));
+    }
+
+    #[test]
+    fn callable_interface_keeps_unknown_nominal_types_unresolved() {
+        let mut program = interface_program();
+        let context = program
+            .record_types
+            .iter_mut()
+            .find(|record| record.name == "Context")
+            .expect("Context record");
+        context
+            .fields
+            .iter_mut()
+            .find(|field| field.name == "rows")
+            .expect("rows field")
+            .field_type = "MissingNominal".to_owned();
+
+        let interface = callable_interface(&program, "contract.types", "entry")
+            .expect("entry callable interface");
+
+        assert_eq!(interface["status"], "unknown");
+        assert_eq!(interface["types"]["status"], "unknown");
+        assert_eq!(
+            interface["types"]["unresolved_references"],
+            json!(["MissingNominal"])
+        );
+    }
 }
 
 /// Compile a bounded module snapshot with the pinned compiler and emit the
