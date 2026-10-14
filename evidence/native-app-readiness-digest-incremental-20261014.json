@@ -1,0 +1,319 @@
+{
+  "schema_version": "mncs.compiler.native-application-readiness-incremental-experiment/1",
+  "milestone": "MNCS Native Application Readiness",
+  "experiment_id": "ev_native_app_digest_incremental_gate_b_20261014",
+  "workload": {
+    "application": "mncs.test.digest::digest_app",
+    "source_repository": "mncs-test",
+    "source_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+    "root_source_id": "mncs-test/native/mncs/test/digest.mncs",
+    "imported_modules": [
+      {
+        "module": "mncs.std.application.v1",
+        "source_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+        "source_sha256": "sha256:5669f67e921e71c0f54742325f06fddfe3b11692c1fe3d27ee515f8a3fd30c7e"
+      },
+      {
+        "module": "mncs.test.assertions",
+        "source_sha256": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b"
+      },
+      {
+        "module": "mncs.test.suite",
+        "source_sha256": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+      }
+    ],
+    "source_revision_note": "The mncs-test checkout was read only. All changed root or imported module bodies below were request-local variants stored under .build/native-app-readiness."
+  },
+  "producers": {
+    "compiler_repository": "mncs-compiler",
+    "compiler_revision": "d0296d29a0f732636d32371a55d1d364226a62f0",
+    "stage0_probe_sha256": "sha256:06571f93702fbcaab7dbb2156a45f1029ca0ded2054072239a25401f60881b47",
+    "language_repository_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "stage0_language_lock_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_repository_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "backend": "mncs-vm-direct",
+    "target": "mncs-vm-0.1",
+    "build_request_schema": "mncs.compiler.application-build-request/1",
+    "build_response_schema": "mncs.compiler.application-build/2",
+    "artifact_schema": "mncs.vm.artifact/1",
+    "vm_execution_harness": {
+      "kind": "temporary Rust integration harness using mncs-vm Session::open and a structured test_artifact provider",
+      "source_path": ".build/native-app-readiness/vm-digest-semantic-edit-runner/src/main.rs",
+      "source_sha256": "98aafe900a9d6768c81b06314d601072bf009b5bdc9a29991330dffbb3c9f0d2",
+      "executable_sha256": "541d46107aea290ced36909d9c6bae7b306b2126069310bdb2d385a7aa116dd3"
+    }
+  },
+  "baseline": {
+    "source_snapshot_identity": "sha256:698a8b17d3e94f1d711aac84396e81afffba5bd4d78012801bf9a334507fdf76",
+    "dependency_graph_identity": "sha256:35de1895844f29d860b609792d30771926fe4bb39671bdaf32feb1133932c4c3",
+    "entry_status": "verified",
+    "entry_interface_identity": "sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2",
+    "callable_function_identity": "mncs:0.4:ssa:function:094ce440e3f62f0711113dc9d1459a2ecaf2e90f15c7528c81092c53e74b9bdd",
+    "application_status": "unsupported",
+    "artifact_identity": "sha256:286ffce769c4b6750348778554794a682b50794d85b5456c2d199086484ab08f",
+    "unresolved_obligations": [
+      "export mncs.test.assertions::equals_bytes: no ssa instance",
+      "export mncs.test.suite::summarize: no ssa instance"
+    ],
+    "cold_build": {
+      "cache_status": "miss",
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "wall_seconds": 19.417466,
+      "cpu_seconds": 19.505602,
+      "peak_child_rss_bytes": 1116442432,
+      "source_module_cache_hits": 0,
+      "source_module_cache_misses": 6
+    },
+    "warm_unchanged_build": {
+      "cache_status": "hit",
+      "reused_units": [
+        "verified_application_artifact"
+      ],
+      "recomputed_units": [],
+      "artifact_identity_matches_cold": true,
+      "wall_seconds": 0.71,
+      "user_cpu_seconds": 0.65,
+      "system_cpu_seconds": 0.12,
+      "peak_rss_bytes": 244559872,
+      "wall_speedup_over_cold": 27.35,
+      "cpu_speedup_over_cold": 25.33,
+      "peak_rss_reduction_ratio": 4.57
+    }
+  },
+  "exact_cold_warm_semantic_edit_snapshot": {
+    "source_snapshot_identity": "sha256:9d018d939494be5b4161de07810630b36a8df37a560ab0701aa8fcdc1f98fe52",
+    "dependency_graph_identity": "sha256:35de1895844f29d860b609792d30771926fe4bb39671bdaf32feb1133932c4c3",
+    "root_source_sha256": "sha256:f4176757ae28f4a9807d8d357454ba575e56a58a2708303c8a68593bfe411636",
+    "changed_function": "mncs.test.digest::clamp_cap",
+    "source_change": "The request-local function cap changed from 32 to 1. Runtime input max_failures changed from 1 to 2; the independent expected result remains the original max_failures=1 result.",
+    "request_sha256": "b960680afaf737bf30b34214f5e75b05041d539a6be054b845d31df89d7e5e90",
+    "runtime_input_sha256": "f476105cd88d307260cf768971de13585724fe71c338f6e006d55977b67d7d23",
+    "artifact_identity": "sha256:7e7a3f64cfad180953ed045b4393254d2c93b5c06bb061fe619be974857c3705",
+    "application_status": "unsupported",
+    "cold_build": {
+      "cache_directory": ".build/native-app-readiness/digest-app-resource-sample-cache",
+      "cache_status": "miss",
+      "publication": "stored",
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "wall_seconds": 19.588127005,
+      "user_cpu_seconds": 19.205823,
+      "system_cpu_seconds": 0.459323,
+      "total_cpu_seconds": 19.665146,
+      "peak_rss_bytes": 1116762112,
+      "peak_processes_in_process_tree": 2,
+      "peak_file_descriptors_in_process_tree": 8,
+      "cgroup_memory_current_and_peak": "unavailable in the protected execution cgroup"
+    },
+    "warm_unchanged_build": {
+      "cache_status": "hit",
+      "reused_units": [
+        "verified_application_artifact"
+      ],
+      "recomputed_units": [],
+      "source_snapshot_identity_matches_cold": true,
+      "artifact_identity_matches_cold": true,
+      "wall_seconds": 0.72,
+      "user_cpu_seconds": 0.65,
+      "system_cpu_seconds": 0.12,
+      "peak_rss_bytes": 244469760,
+      "wall_speedup_over_cold": 27.21,
+      "cpu_speedup_over_cold": 25.54,
+      "peak_rss_reduction_ratio": 4.57
+    },
+    "vm_execution": {
+      "status": "completed",
+      "artifact_identity": "sha256:7e7a3f64cfad180953ed045b4393254d2c93b5c06bb061fe619be974857c3705",
+      "result_matches_independent_baseline_expectation": true,
+      "returned_exit_code": 0,
+      "provider_operations": [
+        "structured_read",
+        "structured_write"
+      ],
+      "result_summary": {
+        "total": 5,
+        "passed": 1,
+        "failed": 2,
+        "skipped": 1,
+        "unsupported": 1,
+        "assertion_count": 6,
+        "failure_count": 2,
+        "verdict": "FAIL"
+      },
+      "resource_usage": {
+        "steps": 1040,
+        "max_call_depth": 5,
+        "max_memory_cells": 984,
+        "effects": 2
+      },
+      "wall_seconds": 0.003733152,
+      "effects_digest": "sha256:26a79670011fc22ddd0fd6d952486bb8c27f5f47d8d5af052c7a8a43b249476e",
+      "expected_result_sha256": "sha256:b7910849d3123d0148bfd2aa80b1c761831a496591d6a19cebd1c3a1094a41ce"
+    }
+  },
+  "semantic_edit_after_warm_baseline": {
+    "source_snapshot_identity": "sha256:9d018d939494be5b4161de07810630b36a8df37a560ab0701aa8fcdc1f98fe52",
+    "dependency_graph_identity": "sha256:35de1895844f29d860b609792d30771926fe4bb39671bdaf32feb1133932c4c3",
+    "artifact_identity": "sha256:7e7a3f64cfad180953ed045b4393254d2c93b5c06bb061fe619be974857c3705",
+    "cache_status": "miss",
+    "recomputed_units": [
+      "source_semantic_check",
+      "ssa_verification",
+      "verified_vm_artifact"
+    ],
+    "reused_application_units": [],
+    "wall_seconds": 1.13,
+    "user_cpu_seconds": 1.03,
+    "system_cpu_seconds": 0.12,
+    "peak_rss_bytes": 270602240,
+    "vm_result_matches_independent_baseline_expectation": true
+  },
+  "dependency_change": {
+    "changed_module": "mncs.test.suite",
+    "changed_module_source_sha256": "sha256:9b69bd07f6ba2bd88e25217bbf88f0de67ba5097bf46a920ed92d352dc177114",
+    "changed_function": "mncs.test.suite::observe",
+    "source_change": "A request-local change altered the total counter increment from +% 1 to +% 2; root source and other dependencies stayed byte-identical.",
+    "request_sha256": "2679d129e47d67b272354ce7fb75b7704e40978f41c860f481b570238aa0c413",
+    "source_snapshot_identity": "sha256:cd5c7689b7a0aed7d755627f96842d0ead31a35c83c5bb749f757ac3649c1483",
+    "dependency_graph_identity": "sha256:94ef6c2f050befefc89bcde31b540909c35894e8daebe29cf0ebe1cdb127705f",
+    "artifact_identity": "sha256:08713e4307a3d10ff1ec08f8c8d783eaa43156b4c0d4441a68081b1495615014",
+    "application_status": "unsupported",
+    "cache_status": "miss",
+    "recomputed_units": [
+      "source_semantic_check",
+      "ssa_verification",
+      "verified_vm_artifact"
+    ],
+    "reused_application_units": [],
+    "wall_seconds": 1.13,
+    "user_cpu_seconds": 1.04,
+    "system_cpu_seconds": 0.13,
+    "peak_rss_bytes": 270888960,
+    "vm_execution": {
+      "status": "completed",
+      "result_matches_independent_expected_result": true,
+      "expected_result_method": "Starting from the unchanged baseline expectation, only summary.total was changed from 5 to 10 because observe now adds two for each of five tests; every other structured field was compared unchanged.",
+      "expected_result_sha256": "sha256:720c028d24e5122e86eac166bb4f98eea554efb4989baba0900f05af8ae839b7",
+      "summary_total": 10,
+      "returned_exit_code": 0,
+      "provider_operations": [
+        "structured_read",
+        "structured_write"
+      ],
+      "steps": 1041,
+      "max_call_depth": 5,
+      "max_memory_cells": 984,
+      "effects": 2,
+      "effects_digest": "sha256:2949b90d4aee0c7199b252cd071ba897e96f30989ebb284c661f6b0370c7c7ea",
+      "wall_seconds": 0.003658828
+    }
+  },
+  "invalid_source": {
+    "request_sha256": "4d5b3c7d057e0b5ab0825a505f63eacf51b5eda8e2d97e7410cc5f7f5d63d554",
+    "source_snapshot_identity": "sha256:41f6bb6f66697edcdcd33b54a488d0dc34144f5b0000b5029c0b0700d4edf5be",
+    "changed_source": "A return keyword in the request-local clamp_cap function was misspelled as retun.",
+    "status": "rejected",
+    "artifact": null,
+    "diagnostic": {
+      "code": "MNP061",
+      "stage": "parsing",
+      "message": "expected let, if, fail, return, or bounded iteration",
+      "severity": "error",
+      "found": "identifier",
+      "line": 182,
+      "column": 9
+    },
+    "cache_status": "bypass",
+    "publication": "not_published",
+    "cache_entry_exists": false,
+    "wall_seconds": 0.69,
+    "user_cpu_seconds": 0.64,
+    "system_cpu_seconds": 0.1,
+    "peak_rss_bytes": 232562688
+  },
+  "interrupted_build": {
+    "request_sha256": "d272abe0d0c3d2cf4e4ec0853532693d1558c0f0f3b97102f95ea6074ef12bf7",
+    "changed_dependency": "mncs.test.suite::observe (+% 1 to +% 3)",
+    "timeout_seconds": 0.05,
+    "timeout_exit_code": 124,
+    "partial_response_bytes": 0,
+    "interrupted_wall_seconds": 0.05,
+    "interrupted_user_cpu_seconds": 0.02,
+    "interrupted_system_cpu_seconds": 0.02,
+    "interrupted_peak_rss_bytes": 55730176,
+    "recovered_source_snapshot_identity": "sha256:0338cfd2f219a525f048752fa004b8a229faafa89d8f325032c1500c6b27f4ea",
+    "recovered_dependency_graph_identity": "sha256:43767ed537c2075932f463a19ba8d55ba99cc47e5151686e6102f27f102047d5",
+    "recovered_artifact_identity": "sha256:82a4c2f3db9b889905ce0f95c36fea0dc4c5132b4a4e89c110cb22602e68fc64",
+    "recovered_build_cache_status": "miss",
+    "recovered_build_publication": "stored",
+    "recovered_recomputed_units": [
+      "source_semantic_check",
+      "ssa_verification",
+      "verified_vm_artifact"
+    ],
+    "recovered_wall_seconds": 1.13,
+    "recovered_user_cpu_seconds": 1.05,
+    "recovered_system_cpu_seconds": 0.13,
+    "recovered_peak_rss_bytes": 270917632,
+    "subsequent_exact_build_cache_status": "hit",
+    "subsequent_recomputed_units": [],
+    "subsequent_wall_seconds": 0.71,
+    "subsequent_user_cpu_seconds": 0.65,
+    "subsequent_system_cpu_seconds": 0.11,
+    "subsequent_peak_rss_bytes": 244727808,
+    "vm_execution": {
+      "status": "completed",
+      "result_matches_independent_expected_result": true,
+      "expected_result_method": "Starting from the unchanged baseline expectation, only summary.total was changed from 5 to 15 because observe adds three for each of five tests; every other structured field was compared unchanged.",
+      "expected_result_sha256": "sha256:aa8c7b133812b5f515e63b4575285988c7766aa42c650d08e7ce42e87b84e36e",
+      "summary_total": 15,
+      "returned_exit_code": 0,
+      "artifact_identity": "sha256:82a4c2f3db9b889905ce0f95c36fea0dc4c5132b4a4e89c110cb22602e68fc64",
+      "steps": 1041,
+      "max_call_depth": 5,
+      "max_memory_cells": 984,
+      "effects": 2,
+      "effects_digest": "sha256:1a5e0c4246d22ca2cef95cec394914debce7f28a1fceffb2966613aee0595427",
+      "wall_seconds": 0.003733646
+    }
+  },
+  "execution_resources": {
+    "cgroup_metrics": "unavailable; the protected project execution environment exposes the shared cgroup root but no readable memory.current or memory.peak values",
+    "file_descriptor_and_process_sample": {
+      "source": "request-local /proc process-tree sampler",
+      "source_snapshot_identity": "sha256:9d018d939494be5b4161de07810630b36a8df37a560ab0701aa8fcdc1f98fe52",
+      "peak_processes": 2,
+      "peak_file_descriptors_total": 8,
+      "peak_file_descriptors_per_process": 8,
+      "scope_note": "Measured for the fresh-cache cold run; counts for the other variants were not sampled."
+    }
+  },
+  "acceptance": {
+    "gate_a_status": "partial",
+    "gate_a_reason": "The selected entry is verified and executes with source-correlated output. The module-wide artifact remains unsupported because the two uninstantiated generic template exports remain unresolved.",
+    "gate_b_status": "partial",
+    "gate_b_reason": "Exact cold/warm artifact reuse is proven, but both a changed entry function and a changed imported function cause source_semantic_check, ssa_verification, and verified_vm_artifact to be recomputed. No app-level verified unit is reused across the changed closure.",
+    "semantic_equivalence": "The entry and both request-local edits completed through the canonical VM and matched their declared expected results. The dependency-edit and interruption expected outputs changed only summary.total as dictated by their source-level counter changes.",
+    "generic_specializations": [
+      "mncs.test.assertions::equals_bytes<N=64> executed successfully in the baseline evidence",
+      "mncs.test.suite::summarize<N=256> emitted but the unspecialized template remains an unresolved module export"
+    ]
+  },
+  "self_consumption": {
+    "matrix_updated": false,
+    "stage_1_claimed": false,
+    "stage_2_claimed": false
+  },
+  "next_frontier": [
+    "Obtain Environment owner-authorized mncs-language project scope and a worktree claim at the currently selected source identity before adding the incremental front-end verified-facts API needed for reuse across changed dependency closures.",
+    "Use that API from the Compiler application-build path, then repeat these cold, warm, changed-function, dependency-change, invalid-source, and interrupted-build experiments and require measured reuse of unaffected verified facts.",
+    "Later request the separate owner-controlled Control scope needed to invoke the compiler application-build provider through canonical Store and extend representative work through existing Forge/Monitor receipts."
+  ]
+}
