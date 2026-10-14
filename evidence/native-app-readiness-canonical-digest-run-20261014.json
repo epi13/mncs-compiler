@@ -1,0 +1,168 @@
+{
+  "application": {
+    "application_identity": "mncs-test.digest",
+    "descriptor": "native-applications/test-digest.json",
+    "descriptor_sha256": "sha256:fc9e699f1ecb77bf8515e56004ecb06195b96d715458cb460f669f54d7deebee",
+    "entry": "digest_app",
+    "imported_sources": [
+      {
+        "module": "mncs.test.assertions",
+        "sha256": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b"
+      },
+      {
+        "module": "mncs.test.suite",
+        "sha256": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+      }
+    ],
+    "interface_identity": "163c7d94048802aefad74c678e16b5bc51b0371eaad89b007f5ae8fbc884b9db",
+    "module": "mncs.test.digest",
+    "repository": "mncs-test",
+    "repository_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+    "root_source": "native/mncs/test/digest.mncs",
+    "root_source_sha256": "sha256:fa45534cdebb4de683675bfb70eed15cfa177a5198f036c0e3b7fcab68b91c30"
+  },
+  "execution": {
+    "argv": [
+      "/workspace/mncs-language/target/debug/mncs",
+      "run-app",
+      "/workspace/mncs-test/native-applications/test-digest.json",
+      "--no-cache",
+      "--grant-structured",
+      "test_artifact",
+      "--step-budget",
+      "1048576",
+      "--",
+      ".build/native-app-readiness/canonical-digest-input.json",
+      ".build/native-app-readiness/canonical-digest-result.json"
+    ],
+    "completed_at": "2026-10-14T10:34:28.776174Z",
+    "cwd": "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "exit_code": 0,
+    "fixture_boundary": "The digest application executed natively; its three input test-result rows and artifact/source labels are structured fixture data, not claims that those tests themselves ran in this invocation.",
+    "request": {
+      "max_failures": 1,
+      "run": {
+        "artifact_identity": "sha256:sample-artifact",
+        "backend": "mncs-vm-0.1",
+        "module_name": "sample.suite",
+        "run_id": "campaign-canonical-run-20261014",
+        "source": "tests/sample.mncs"
+      },
+      "schema_version": "mncs.test-digest-request/1",
+      "tests": [
+        {
+          "actual": 42,
+          "assertion_code": 2001,
+          "assertions": 1,
+          "column": 3,
+          "expected": 43,
+          "failure_kind": "Assertion",
+          "failures": 1,
+          "line": 5,
+          "qualified_name": "suite::failure",
+          "semantic_fingerprint": "sha256:failure",
+          "source": "tests/sample.mncs",
+          "verdict": "FAIL"
+        },
+        {
+          "actual": 1,
+          "assertion_code": 0,
+          "assertions": 2,
+          "column": 3,
+          "expected": 1,
+          "failure_kind": "NoFailure",
+          "failures": 0,
+          "line": 9,
+          "qualified_name": "suite::pass",
+          "semantic_fingerprint": "sha256:pass",
+          "source": "tests/sample.mncs",
+          "verdict": "PASS"
+        },
+        {
+          "actual": 0,
+          "assertion_code": 0,
+          "assertions": 0,
+          "column": 3,
+          "expected": 0,
+          "failure_kind": "NoFailure",
+          "failures": 0,
+          "line": 13,
+          "qualified_name": "suite::skip",
+          "semantic_fingerprint": "sha256:skip",
+          "source": "tests/sample.mncs",
+          "verdict": "SKIP"
+        }
+      ]
+    },
+    "request_sha256": "sha256:b1772d78d947bc00bde4274866b82bc225ec472b5a90b89d81042bdc4f66ea96",
+    "result": {
+      "failure_rows": 1,
+      "failures": [
+        {
+          "actual": 42,
+          "assertion_code": 2001,
+          "column": 3,
+          "expected": 43,
+          "line": 5,
+          "qualified_name": "suite::failure",
+          "semantic_fingerprint": "sha256:failure",
+          "source": "tests/sample.mncs"
+        }
+      ],
+      "failures_omitted": 0,
+      "run": {
+        "artifact_identity": "sha256:sample-artifact",
+        "backend": "mncs-vm-0.1",
+        "module_name": "sample.suite",
+        "run_id": "campaign-canonical-run-20261014",
+        "source": "tests/sample.mncs"
+      },
+      "schema_version": "mncs.test-digest/1",
+      "summary": {
+        "assertion_count": 3,
+        "assertion_failures": 1,
+        "compile_failures": 0,
+        "failed": 1,
+        "failure_count": 1,
+        "infrastructure_failures": 0,
+        "passed": 1,
+        "runtime_failures": 0,
+        "setup_failures": 0,
+        "skipped": 1,
+        "timeout_failures": 0,
+        "total": 3,
+        "unsupported": 0,
+        "verdict": "FAIL",
+        "verdict_code": 1
+      }
+    },
+    "result_sha256": "sha256:344f928207e68f890c67bf473058e07094f3b1904e71f7ffc5fd7549e68f191d",
+    "status": "completed",
+    "step_budget": 1048576,
+    "structured_capability_grant": "test_artifact"
+  },
+  "identity": "ev_native_app_canonical_digest_run_20261014",
+  "kind": "mncs-native-application-canonical-run",
+  "milestone": "MNCS Native Application Readiness",
+  "observed_at": "2026-10-14T10:58:49Z",
+  "producer": {
+    "cache": "disabled",
+    "command": "mncs run-app",
+    "language_repository_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "runner_binary": "/workspace/mncs-language/target/debug/mncs",
+    "runner_binary_sha256": "sha256:02f4da8101c3600b103da2a500b7614fa741109209176f2480660b1d401f5c74",
+    "stdlib_repository_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "vm_repository_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "resource_measurements": {
+    "cgroup_memory": "unavailable",
+    "file_descriptor_and_process_counts": "not sampled",
+    "peak_rss_kib": 84068,
+    "source": "/usr/bin/time -v around the canonical run-app command",
+    "system_cpu_seconds": 0.02,
+    "user_cpu_seconds": 9.97,
+    "wall_seconds": 10.03
+  },
+  "schema_version": 1,
+  "scope": "Proves execution through the supported run-app CLI for this digest entry. It does not prove that run-app consumes Compiler application-build/3, Store/Forge/Monitor integration, or full mncs-test tool parity."
+}

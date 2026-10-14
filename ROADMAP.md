@@ -10,60 +10,65 @@ This roadmap separates compiler succession from compiler research. The project s
 
 ## MNCS Native Application Readiness (2026-10-14)
 
-This milestone tracks dependable native application development separately
-from compiler succession. Gate A/B acceptance evidence is bound to Compiler
-`3c8e2116a8f6158b452875e1928bf6ce10b4ade4`, Stage-0
-`e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, VM
-`1c19a94732c9d24029dd00e2d5af13710f481d02`, and the read-only
-`mncs-test` source revision recorded in the evidence. Gate C provider source
-and its exact working-tree identities are recorded separately.
+This milestone is distinct from compiler succession. Its selected workload is
+`mncs-test`'s native readiness suite, with the digest application as an
+additional real consumer. The current implementation and evidence identities
+are recorded separately so earlier producer revisions are not promoted to
+current proof.
 
-- **Gate A — passed for the selected workload.** The application combines
-  `mncs.test.assertions`, `suite`, `generative`, and `snapshot` with a
-  native multi-module driver. Stage-0 project-oracle execution and canonical
-  `mncs.vm.artifact/1` VM execution return the same structured result,
-  including nominal records, generic bounded suite folding, finite payload
-  construction/extraction/matching, and bounded byte views. Exact artifact
-  and producer identities are retained in
-  `evidence/native-app-readiness-gate-a.json`.
-- **Gate B — partial.** An atomic content-addressed cache reuses successful
-  complete application artifacts across fresh probe processes and reuses an
-  artifact across added or edited modules outside its resolved dependency
-  closure after checking every imported source hash. The latest cold build
-  took 0.46 s, the unchanged warm hit 0.24 s (1.90× wall reduction), and the
-  changed full snapshot with an unchanged dependency closure about 0.02 s. The
-  returned full snapshot identity is refreshed. A changed root function or
-  imported source misses and recomputes semantic checking, SSA verification,
-  and artifact generation; invalid source retains the same `MNE162`
-  diagnostic; a killed build publishes no result and a later retry succeeds.
-  Measurements and cache keys are in
-  `evidence/native-app-readiness-gate-b.json`. A changed generic specialization
-  request also changes the cache key and artifact identity. Verified
-  declaration, function, and changed-module facts are still not reused, so
-  Gate B remains partial.
-- The application request now carries explicit generic specialization seeds.
-  Gate A emits and executes `mncs.test.assertions::equals_bytes<4>` and
-  `mncs.test.suite::summarize<4>` as concrete callables. The selected `run`
-  entry is verified and matches the independent Stage-0 oracle. The
-  module-wide response remains `unsupported` because the generic templates
-  still have no standalone SSA instance; evidence does not promote those
-  unresolved exports.
-- **Gate C — partial.** Compiler declares
-  `mncs-compiler:native-application-build` with the versioned request/response,
-  selected Stage-0 identity, canonical artifact provenance, interface,
-  capability obligations, structured diagnostics, target compatibility, and
-  explicit unknown resource estimates. Its focused provider test passes and
-  Environment resolves the exact executable and shareable result binding.
-  Control currently rejects invocation because this capability is absent from
-  its allowlist; canonical Store publication and readback are not yet proven.
-  See `evidence/native-app-readiness-gate-c.json`.
-- This workload requires no new language or VM operation and exercises no
-  effectful capability. It does not change the self-consumption matrix,
-  Stage-1/Stage-2 status, or establish conversion readiness for the full
-  `mncs-test` tool. The next frontiers are Control-authorized invocation and
-  Store readback, reusable verified module or function units for changed
-  snapshots, then representative Forge execution and conversion-readiness
-  assessment.
+- **Gate A — passed for the selected workload.** Compiler commit
+  `7d1554e5b3cad480ddac1669c9c16b791ff5728a` emits
+  `mncs.compiler.application-build/3` with a callable scope containing the
+  selected entry and explicit generic seeds. The root application and four
+  imported `mncs.test` modules compile to a canonical VM artifact; its exports
+  are exactly `run`, `equals_bytes<4>`, and `summarize<4>`. Unselected generic
+  templates remain explicit in `unselected_unresolved_exports`. The Stage-0
+  project oracle and canonical VM agree on the typed report and typed failure
+  variants, and an invalid projection still reports `MNE162`. Evidence is
+  `evidence/native-app-readiness-gate-a.json`, committed at
+  `772944e5e43b36bc9bd660fec2fec65bfa4ce9da`.
+- **Gate B — partial.** The current Gate A workload has exact cold/warm
+  application-artifact reuse: 0.587 s cold versus 0.020 s unchanged warm,
+  with stable artifact identity. This reuses the complete verified artifact;
+  it does not reuse semantic or SSA facts after a source change. The six-case
+  digest experiment at
+  `evidence/native-app-readiness-digest-incremental-20261014.json` used
+  Compiler `d0296d29a0f732636d32371a55d1d364226a62f0`, Stage-0 binary
+  `06571f…`, and response schema `/2`. Preserve those measurements as
+  historical: changed-function, dependency, invalid-source, and interrupted
+  cases have not yet been repeated against the current `/3` producer and
+  selected workload. No fine-grained compiler facts are claimed as reused.
+- **Gate C — partial.** The versioned `/3` producer now exposes source and
+  dependency identities, selected callable scope, typed interface, canonical
+  artifact provenance, capabilities/effects, diagnostics, execution
+  compatibility, and unresolved obligations. The provider contract test
+  passes cold, warm, and invalid-source cases. End-to-end consumption by Test
+  services, canonical Store publication/readback, and measured Forge/Monitor
+  receipts remain unproven.
+- **Gate D — assessment recorded.**
+  `docs/native-tool-conversion-readiness.md` recommends `mncs-test` as the
+  first conversion target because its test semantics already live in native
+  modules and a real application runs. It classifies remaining host code and
+  boundaries. No production host implementation is ready to be removed: the
+  remaining code still provides OS, compiler/session, service, persistence,
+  or explicit compatibility behavior.
+- **Self-consumption is unchanged.** Gate A is not compiler succession.
+  `evidence/SELF-HOST-MATRIX.json` remains the authority; Stage-1 and Stage-2
+  remain unproven.
+
+The Gate A artifact compile request measured 60.1 MB peak RSS and the VM call
+27.6 MB; cgroup metrics were unavailable. A separate canonical
+`mncs run-app` execution of `mncs.test.digest::digest_app` is recorded in
+`evidence/native-app-readiness-canonical-digest-run-20261014.json` with its
+runner, request, result, and resource identities. Its structured rows are
+fixtures to the digest application, not claims that those tests ran in that
+invocation.
+
+Next work: obtain the exact Environment scope approval needed to deliver the
+campaign branch to `main`; obtain Language scope before implementing
+cross-module incremental facts; repeat the six Gate B cases on the selected
+`/3` workload; then wire the producer through existing Test, Forge, Monitor,
+Store, and Automation authorities.
 
 
 ## Phase 0 — Repository foundation
