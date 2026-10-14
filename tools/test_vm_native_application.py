@@ -470,6 +470,29 @@ def main() -> None:
         if missing_specializations:
             raise AssertionError('requested generic exports were not emitted: ' + json.dumps({
                 'missing': missing_specializations, 'callables': specialized_callables}, indent=2)[:6000])
+        selected_specializations = [
+            row for row in specialized_callables
+            if any(row.get('module') == module and row.get('name', '').startswith(prefix)
+                   for module, prefix in expected_specializations)
+        ]
+        if len(selected_specializations) != len(expected_specializations):
+            raise AssertionError('generic seed scope emitted an unexpected number of specializations: ' +
+                                 json.dumps(selected_specializations, indent=2))
+        expected_callable_pairs = {(APP_MODULE, 'run')} | {
+            (row.get('module'), row.get('name')) for row in selected_specializations
+        }
+        actual_callable_pairs = {
+            (row.get('module'), row.get('name')) for row in specialized_callables
+        }
+        if actual_callable_pairs != expected_callable_pairs:
+            raise AssertionError('artifact callable table escaped the requested scope: ' + json.dumps({
+                'expected': sorted(expected_callable_pairs),
+                'actual': sorted(actual_callable_pairs)}, indent=2))
+        expected_exports = {name for _, name in expected_callable_pairs}
+        if set(artifact.get('exports', [])) != expected_exports:
+            raise AssertionError('artifact export names do not match the selected callable scope: ' +
+                                 json.dumps({'expected': sorted(expected_exports),
+                                             'actual': artifact.get('exports')}, indent=2))
         expected_unselected = {
             'export mncs.test.assertions::equals_bytes: no ssa instance',
             'export mncs.test.suite::summarize: no ssa instance',
@@ -615,7 +638,13 @@ def main() -> None:
     evidence = {
         'schema_version': 1,
         'kind': 'mncs-native-application-readiness-gate-a',
+        'milestone': 'MNCS Native Application Readiness',
+        'gate': 'A',
         'observed_at': datetime.now(timezone.utc).isoformat(),
+        'test_harness': {
+            'path': 'tools/test_vm_native_application.py',
+            'sha256': sha(Path(__file__).read_bytes()),
+        },
         'compiler': {
             'revision': git('rev-parse', 'HEAD', cwd=ROOT),
             'branch': git('branch', '--show-current', cwd=ROOT),
