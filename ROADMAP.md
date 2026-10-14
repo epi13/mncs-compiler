@@ -10,103 +10,107 @@ This roadmap separates compiler succession from compiler research. The project s
 
 ## MNCS Native Application Readiness (2026-10-14)
 
-This milestone is distinct from compiler succession. Its selected workload is
-`mncs-test`'s native readiness suite, with the digest application as an
-additional real consumer. The current implementation and evidence identities
-are recorded separately so earlier producer revisions are not promoted to
-current proof.
+This milestone is separate from compiler succession. `mncs-test` remains the
+first consumer workload. The current selected application uses nominal records,
+finite payloads, bounded sequences, branching and matches, generic
+specializations, typed failures, and explicit host effects.
 
 - **Gate A — passed for the selected workload.** Compiler commit
-  `7d1554e5b3cad480ddac1669c9c16b791ff5728a` emits
-  `mncs.compiler.application-build/3` with a callable scope containing the
-  selected entry and explicit generic seeds. The root application and four
-  imported `mncs.test` modules compile to a canonical VM artifact; its exports
-  are exactly `run`, `equals_bytes<4>`, and `summarize<4>`. Unselected generic
-  templates remain explicit in `unselected_unresolved_exports`. The Stage-0
-  project oracle and canonical VM agree on the typed report and typed failure
-  variants, and an invalid projection still reports `MNE162`. Evidence is
-  `evidence/native-app-readiness-gate-a.json`, committed at
-  `772944e5e43b36bc9bd660fec2fec65bfa4ce9da`.
-- **Gate B — partial.** Current /3 evidence is
-  evidence/native-app-readiness-gate-b.json (SHA-256
-  64f73a78b3d84fb64c06ca69622a39798d42265b8464a216a38296739fa5bd38),
-  produced by Compiler commit 1c44dd24595c3ff13267704bf825d405b2b41acb,
-  Stage-0 revision e8f8a5f8659c71b33cd32c964d4982bec1a9668e, release probe
-  SHA-256 27ff0d2ee436f632e13c35b93db3c4e445a06dd780c2ce5ea73a581e38fbace5,
-  and VM revision 1c19a94732c9d24029dd00e2d5af13710f481d02. For the selected
-  mncs-test application, a cold compile measured 0.462 s wall / 0.44 s CPU
-  and 60.7 MB peak RSS. An unchanged artifact hit in a fresh process measured
-  0.120 s / 0.10 s after a separate 0.121 s process-ready step (3.86× for
-  the build request). Adding and editing an unreferenced module hit the exact
-  verified dependency closure in 0.027 s / 0.025 s. A comment-only edit to
-  imported mncs.test.generative produced new source and graph identities,
-  retained the same semantic identity, reused the exact verified VM artifact
-  after a fresh semantic check, and matched the independent Stage-0 oracle;
-  it took 0.191 s. A changed root function (0.367 s) and a semantic change
-  to the imported dependency (0.381 s) still reran source checking, SSA
-  verification, and VM artifact generation. Invalid source was rejected
-  twice with identical diagnostics and was not published. A SIGKILL
-  interruption left no entry or temporary publication; retry stored a
-  complete result and a fresh process hit it. cgroup memory counters were
-  unavailable. Gate B stays partial until changed functions and dependency
-  semantic facts can reuse independently verified module/declaration work.
-  The older digest record at
-  evidence/native-app-readiness-digest-incremental-20261014.json remains
-  historical /2 evidence.
-- **Gate C — partial.** The versioned `/3` producer now exposes source and
-  dependency identities, selected callable scope, typed interface, canonical
-  artifact provenance, capabilities/effects, diagnostics, execution
-  compatibility, and unresolved obligations. The provider contract test
-  passes cold, warm, and invalid-source cases. End-to-end consumption by Test
-  services, canonical Store publication/readback, and measured Forge/Monitor
-  receipts remain unproven.
+  `24dda63ae59e0505969c490604e14348dab1f7d7` emits
+  `mncs.compiler.application-build/4`. The `mncs-test` readiness application
+  compiles its `run` entry and two explicit generic specializations from a
+  five-module closure; the canonical VM and Stage-0 project oracle agree on
+  the report and typed failures. An invalid record projection returns
+  `MNE162`. Evidence `evidence/native-app-readiness-gate-a.json` has SHA-256
+  `640f7e3d062f9f99c5f575af4baf4642711205a3d1a6cff103303cca145f65bc`.
+  The artifact is `sha256:cff9e5cc4cb47ea19096ec735384263fb87d211d3d7d835173b56bca3e2ea879`.
+  A direct `mncs.test.digest::build_digest` proof checks mixed pass/fail/skip
+  aggregation, failure caps one and zero, omission counts, and all-pass
+  results against Stage-0 and three canonical VM executions. Its `/4` artifact
+  is `sha256:3bd4cc51f4e61ff91131f1d6d65be73615ebaf19ebc66deca75e2a0d7e3ee3df`;
+  evidence `evidence/native-app-readiness-test-digest.json` has SHA-256
+  `3ad5ba0758dfce1c7fed304bc3e91d37ff30b867ce244f144b98304ab025d694`.
+  Cold build measured 0.628 s / 0.590 CPU / 65.0 MiB RSS; Stage-0 measured
+  0.354 s; canonical VM calls measured 0.210–0.212 s.
+  A second proof compiles and executes the effectful
+  `mncs.test.digest::digest_app` from Test and Stdlib sources. Its verified
+  interface accepts `ApplicationContext`, returns `ApplicationExit`, and
+  invokes structured read/write through an admitted `test_artifact` host
+  capability. `/4` dispatch rows bind both calls to the canonical capability
+  identity and alias, with instruction and source-operation identities;
+  the runner independently checks those rows against admitted SSA. Stage-0
+  and VM results agree for all three cases. Missing capability is denied, and
+  a rejected write returns typed exit 3 without publishing output. Artifact
+  `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919`,
+  interface `sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2`,
+  and evidence `evidence/native-app-readiness-test-digest-app.json` (SHA-256
+  `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`).
+  Build measured 0.628 s / 0.590 CPU / 64.9 MiB RSS; VM cases took
+  0.024–0.028 s / 0.010 CPU and 12.2–12.5 MiB RSS. Producer identities are
+  Test `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib
+  `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language
+  `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM
+  `1c19a94732c9d24029dd00e2d5af13710f481d02`, Stage-0
+  `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, and release probe SHA-256
+  `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`.
+  cgroup memory counters were unavailable. These application proofs do not
+  establish compiler succession or full Test command parity.
+- **Gate B — partial.** Current readiness-suite evidence
+  `evidence/native-app-readiness-gate-b.json` has SHA-256
+  `65106578dc52ac9ea89412cde06b7a0578e989d9101e2c4c79d0e67e9f098f03` and
+  pins the same Compiler and probe identities. Cold build measured 0.461 s;
+  an unchanged fresh-process request took 0.120 s after 0.120 s process
+  startup. A source-only dependency edit reused the verified artifact after
+  a fresh semantic check in 0.188 s. A changed root function (0.366 s) and a
+  semantic dependency change (0.379 s) reran source checking, SSA verification,
+  and artifact generation. Invalid source was not published; interruption
+  recovery and unreferenced-module closure reuse passed. cgroup memory was
+  unavailable. The real digest application repeated the six required cases:
+  evidence `evidence/native-app-readiness-test-digest-incremental.json` has
+  SHA-256 `bd85ae27d21b1ae6c1b99ac934d0a61273f52d04b8198727ada931744a59a161`.
+  Cold/warm measured 0.633/0.246 s (2.57×); a changed root function and a
+  changed `mncs.test.suite` dependency took 0.416/0.432 s and recomputed all
+  three obligations. Invalid source retained `MNE162` plus two `MNE102`
+  cascades. A SIGKILL at 28.5 ms left no partial cache publication; retry and
+  fresh-process reuse succeeded. Fine-grained changed-source reuse remains
+  unimplemented.
+- **Gate C — partial.** `/4` includes the versioned
+  `mncs.compiler.capability-dispatch/1` contract with verified mappings from
+  canonical capability identities to the exact VM runtime keys and their
+  function, instruction, operation, and source-operation identities. The
+  Environment-facing provider summary preserves this contract. Its
+  cold/warm/invalid, Store-input-artifact, schema, and corruption cases pass.
+  A native VM runner consumed and checked the contract for `digest_app`.
+  Production Test-service consumption, canonical Store RPC publication and
+  readback, and Forge/Monitor/Automation receipts for this larger workload
+  remain unproven.
 - **Gate D — assessment recorded.**
   `docs/native-tool-conversion-readiness.md` recommends `mncs-test` as the
-  first conversion target because its test semantics already live in native
-  modules and a real application runs. It classifies remaining host code and
-  boundaries. No production host implementation is ready to be removed: the
-  remaining code still provides OS, compiler/session, service, persistence,
-  or explicit compatibility behavior.
-- **Stage-0 front-end module cache — verified, outside Gate B.** The probe
-  cache now binds a module Program to the exact module bytes, generic seeds,
-  Stage-0/compiler identity, and validated source hashes and semantic IDs for
-  every resolved dependency. Evidence is
-  `evidence/native-app-readiness-stage0-module-cache-20261014.json` (SHA-256
-  `8f041a2600817a115ba0a0740e5b46de60eaaa7dc6030338345eb62eb6bce61f`),
-  using compiler candidate base `2611d2f1a0d7348adf670a1ae0fb6d739dcce447`,
-  probe source `d16620da5423d1021ec1e98b85e7d8befa6c6fe89838049e27a68e1c2b1e42d8`,
-  and rebuilt Stage-0 binary `cf037fa1492dbfb6ec0d14426565d0dc1329fecb09f93d5def17597a1a5c20cc`.
-  On the three-module Source → Lexer → Parser chain, cold frontend compilation
-  took 21.17 s and an unchanged fresh-process build took 1.71 s (3/3 hits,
-  about 12.4× wall speedup). A parser byte edit took 11.53 s and recomputed
-  one module; a Source byte edit took 21.70 s and invalidated all three. Timed
-  edits appended comments; a separate semantic dependency edit is covered by a
-  cache-miss unit test. Formatting
-  and all 16 probe tests pass. cgroup memory was unavailable. This cache
-  covers Stage-0 frontend Programs only. The application provider now
-  separately reuses a verified VM artifact for source-only dependency edits
-  after a fresh semantic check; it still rebuilds on semantic function or
-  dependency changes. Gate B remains partial and the self-consumption matrix
-  does not advance.
-- **Self-consumption is unchanged.** Gate A is not compiler succession.
-  `evidence/SELF-HOST-MATRIX.json` remains the authority; Stage-1 and Stage-2
-  remain unproven.
+  first conversion target. The native suite and digest semantics execute,
+  while manifest/OS handling, retained-session orchestration, and service
+  persistence remain host-owned or integration work. No production host code
+  is safe to retire yet.
+- **Compiler Stage-0 module reuse — verified; Gate B still partial.**
+  `evidence/native-app-readiness-stage0-module-cache-20261014.json` remains
+  evidence for exact-input reuse of verified Stage-0 frontend Programs.
+  Application builds also reuse a verified artifact across a source-only
+  dependency edit after a fresh semantic check. Semantic root and dependency
+  edits still rerun whole-application obligations; independently reusable
+  declaration/function proofs are the next compiler-owned frontier.
+- **Self-consumption is unchanged.**
+  `evidence/SELF-HOST-MATRIX.json` remains authoritative. The module
+  succession evidence does not advance; Stage-1 and Stage-2 remain unproven.
 
-The Gate A artifact compile request measured 60.1 MB peak RSS and the VM call
-27.6 MB; cgroup metrics were unavailable. A separate canonical
-`mncs run-app` execution of `mncs.test.digest::digest_app` is recorded in
-`evidence/native-app-readiness-canonical-digest-run-20261014.json` with its
-runner, request, result, and resource identities. Its structured rows are
-fixtures to the digest application, not claims that those tests ran in that
-invocation.
+The earlier constant-return Forge proof remains a regression baseline. The
+expanded digest application currently runs through the canonical VM harness,
+not the larger Forge/Store/Monitor feedback loop.
 
-Next work: obtain the exact Environment scope approval needed to deliver the
-campaign branch to `main`; obtain Language scope before implementing
-cross-module incremental facts; then make changed-function and dependency
-builds reuse verified module or declaration facts. After that, wire the
-producer through existing Test, Forge, Monitor, Store, and Automation
-authorities.
-
+Next work: use `/4` in the canonical `mncs-test` native runner, then prove its
+retained-session and batch path. In parallel, implement exact-input verified
+declaration/function reuse and repeat Gate B; only cross repository ownership
+boundaries after obtaining their exact scopes. Run the representative native
+application through the existing Forge, Monitor, Store, and Automation path
+without creating replacement schedulers or persistence.
 
 ## Phase 0 — Repository foundation
 
