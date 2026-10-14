@@ -58,6 +58,14 @@ def compile_one(probe: app.Probe, request: dict) -> tuple[dict, dict]:
     return probe.send({'compile_application': request})
 
 
+def ready_probe(cache_dir: Path) -> tuple[app.Probe, dict]:
+    probe = app.Probe(cache_dir)
+    response, metrics = probe.send({'execution_status': True})
+    if not isinstance(response, dict) or 'modules' not in response:
+        raise AssertionError('Stage-0 probe did not return its readiness handshake')
+    return probe, metrics
+
+
 def oracle_one(probe: app.Probe, root: str, modules: dict[str, str]) -> tuple[dict, dict, dict]:
     response, metrics = probe.send({'project_oracle': {
         'root': root, 'modules': modules, 'calls': [call_request()]}})
@@ -154,7 +162,7 @@ def main() -> None:
     original_request = request_for(app.APP_SOURCE, modules)
     tails = []
 
-    cold_probe = app.Probe(CACHE_DIR)
+    cold_probe, cold_startup_metrics = ready_probe(CACHE_DIR)
     try:
         oracle, oracle_exec, oracle_metrics = oracle_one(
             cold_probe, app.APP_SOURCE, modules)
@@ -178,7 +186,7 @@ def main() -> None:
     artifact = cold['artifact']['value']
 
     # A new process proves the host cache survives session teardown.
-    probe = app.Probe(CACHE_DIR)
+    probe, warm_startup_metrics = ready_probe(CACHE_DIR)
     try:
         warm, warm_metrics = compile_one(probe, original_request)
         if warm.get('cache', {}).get('status') != 'hit':
@@ -219,6 +227,36 @@ fn value() -> (result: u64) { return 1; }'''
             raise AssertionError('unreferenced module edit changed the verified artifact')
         _unused_vm, unused_vm_metrics, unused_actual = run_and_compare(
             unused['artifact']['value'], unused_exec)
+
+        # A resolved dependency with a source-only edit still receives a new
+        # source snapshot and a fresh semantic check. Its unchanged canonical
+        # semantic identity permits reuse of the already verified VM artifact.
+        semantic_edit_modules = dict(modules)
+        semantic_edit_modules['mncs.test.generative'] += (
+            '\n// source-only edit: preserve the verified module semantics\n')
+        semantic_edit_request = request_for(app.APP_SOURCE, semantic_edit_modules)
+        semantic_edit_oracle, semantic_edit_exec, semantic_edit_oracle_metrics = oracle_one(
+            probe, app.APP_SOURCE, semantic_edit_modules)
+        semantic_edit, semantic_edit_metrics = compile_one(probe, semantic_edit_request)
+        if (semantic_edit.get('cache', {}).get('status') != 'hit'
+                or semantic_edit.get('cache', {}).get('reuse_basis') != 'verified_semantic_identity'):
+            raise AssertionError('source-only dependency edit did not reuse the matching semantic artifact')
+        if semantic_edit.get('cache', {}).get('recomputed_units') != [
+                'source_semantic_check', 'semantic_identity_verification']:
+            raise AssertionError('semantic reuse omitted the work performed for the changed source')
+        if semantic_edit.get('source_snapshot', {}).get('identity') == cold.get(
+                'source_snapshot', {}).get('identity'):
+            raise AssertionError('semantic reuse returned the stale exact source snapshot')
+        if semantic_edit.get('dependency_graph', {}).get('identity') == cold.get(
+                'dependency_graph', {}).get('identity'):
+            raise AssertionError('semantic reuse returned the stale resolved source graph')
+        if semantic_edit.get('dependency_graph', {}).get('semantic_identity') != cold.get(
+                'dependency_graph', {}).get('semantic_identity'):
+            raise AssertionError('source-only dependency edit changed the canonical semantic identity')
+        if semantic_edit['artifact']['identity'] != cold['artifact']['identity']:
+            raise AssertionError('source-only dependency edit changed the reused VM artifact')
+        _semantic_edit_vm, semantic_edit_vm_metrics, semantic_edit_actual = run_and_compare(
+            semantic_edit['artifact']['value'], semantic_edit_exec)
 
         small_root = app.APP_SOURCE.replace(
             'equals_i64(42, 19 +% 23', 'equals_i64(43, 19 +% 23', 1)
@@ -291,7 +329,7 @@ fn value() -> (result: u64) { return 1; }'''
     if entry_after_cancel_exists or leftovers or index_leftovers:
         raise AssertionError(f'interrupted compilation left cache publication: {leftovers + index_leftovers}')
 
-    retry_probe = app.Probe(CACHE_DIR)
+    retry_probe, retry_startup_metrics = ready_probe(CACHE_DIR)
     try:
         retry, retry_metrics = compile_one(retry_probe, interrupt_request)
         if retry.get('cache', {}).get('status') != 'miss' or retry.get('cache', {}).get('publication') != 'stored':
@@ -302,7 +340,7 @@ fn value() -> (result: u64) { return 1; }'''
             retry_probe.proc.kill()
             retry_probe.proc.wait(timeout=5)
         raise
-    verify_probe = app.Probe(CACHE_DIR)
+    verify_probe, verify_startup_metrics = ready_probe(CACHE_DIR)
     try:
         retry_warm, retry_warm_metrics = compile_one(verify_probe, interrupt_request)
         if retry_warm.get('cache', {}).get('status') != 'hit':
@@ -342,6 +380,7 @@ fn value() -> (result: u64) { return 1; }'''
         'kind': 'mncs-native-incremental-build-evidence',
         'observed_at': datetime.now(timezone.utc).isoformat(),
         'compiler': {
+            'build_profile': 'cargo build --release',
             'revision': app.git('rev-parse', 'HEAD', cwd=ROOT),
             'branch': app.git('branch', '--show-current', cwd=ROOT),
             'stage0_revision': json.loads((ROOT / 'mncs-language.lock.json').read_text())['revision'],
@@ -375,12 +414,15 @@ fn value() -> (result: u64) { return 1; }'''
             'requested capabilities and effect assumptions',
             'optimization and verification policies',
             'the full source snapshot identity is recomputed when an artifact is reused from an unchanged dependency closure',
+            'after a fresh source semantic check, the aggregate canonical root and resolved-module semantic identity may reuse the verified VM artifact when exact build assumptions and entry still match',
         ],
         'experiments': {
-            'cold_build': {'cache': cold.get('cache'), 'metrics': cold_metrics},
+            'cold_build': {'cache': cold.get('cache'), 'metrics': cold_metrics,
+                           'process_startup_metrics': cold_startup_metrics},
             'warm_unchanged_fresh_process': {
                 'cache': warm.get('cache'), 'artifact_identity': warm.get('artifact', {}).get('identity'),
-                'metrics': warm_metrics, 'wall_speedup': round(cache_speedup, 2),
+                'metrics': warm_metrics, 'process_startup_metrics': warm_startup_metrics,
+                'wall_speedup': round(cache_speedup, 2),
                 'cpu_speedup': round(cold_metrics['cpu_seconds'] /
                                      max(warm_metrics['cpu_seconds'], 1e-9), 2),
             },
@@ -406,6 +448,28 @@ fn value() -> (result: u64) { return 1; }'''
                 'compile_metrics_after_edit': changed_unused_metrics,
                 'oracle_metrics': unused_oracle_metrics,
                 'vm_metrics': unused_vm_metrics,
+            },
+            'source_only_dependency_edit': {
+                'module': 'mncs.test.generative',
+                'source_sha256_before': app.sha(
+                    modules['mncs.test.generative'].encode()),
+                'source_sha256_after': app.sha(
+                    semantic_edit_modules['mncs.test.generative'].encode()),
+                'source_snapshot_identity_before': cold.get('source_snapshot', {}).get('identity'),
+                'source_snapshot_identity_after': semantic_edit.get('source_snapshot', {}).get('identity'),
+                'dependency_graph_identity_before': cold.get('dependency_graph', {}).get('identity'),
+                'dependency_graph_identity_after': semantic_edit.get('dependency_graph', {}).get('identity'),
+                'semantic_identity_before': cold.get('dependency_graph', {}).get('semantic_identity'),
+                'semantic_identity_after': semantic_edit.get('dependency_graph', {}).get('semantic_identity'),
+                'cache': semantic_edit.get('cache'),
+                'artifact_identity_before': cold['artifact']['identity'],
+                'artifact_identity_after': semantic_edit['artifact']['identity'],
+                'oracle_valid': semantic_edit_oracle.get('valid'),
+                'oracle_result': compact_oracle(semantic_edit_exec),
+                'vm_result': compact_result(semantic_edit_actual[0]),
+                'oracle_metrics': semantic_edit_oracle_metrics,
+                'compile_metrics': semantic_edit_metrics,
+                'vm_metrics': semantic_edit_vm_metrics,
             },
             'small_semantic_edit': {
                 'source_snapshot_identity': small.get('source_snapshot', {}).get('identity'),
@@ -447,8 +511,10 @@ fn value() -> (result: u64) { return 1; }'''
                 'cancelled_process': interrupted, 'entry_after_cancel_exists': entry_after_cancel_exists,
                 'matching_temp_or_entry_paths_after_cancel': [str(p) for p in leftovers],
                 'retry_cache': retry.get('cache'), 'retry_metrics': retry_metrics,
+                'retry_process_startup_metrics': retry_startup_metrics,
                 'fresh_process_cache': retry_warm.get('cache'),
                 'fresh_process_metrics': retry_warm_metrics,
+                'fresh_process_startup_metrics': verify_startup_metrics,
             },
         },
         'resource_notes': {
@@ -456,8 +522,8 @@ fn value() -> (result: u64) { return 1; }'''
             'process_metrics': 'sampled from /proc for probe and VM processes; wall and CPU use process deltas',
         },
         'fine_grained_invalidation': {
-            'status': 'dependency_closure_reuse_implemented',
-            'detail': 'The cache reuses a verified VM artifact when the root source and build assumptions match and every module in the cached resolved dependency closure has the exact same source hash. An added or edited unreferenced module reuses the artifact while returning a refreshed full source snapshot identity. A changed root function or imported module invalidates and recomputes source checking, SSA verification, and artifact generation; function/module fact reuse is still required to complete Gate B.',
+            'status': 'semantic_identity_and_dependency_closure_artifact_reuse_implemented',
+            'detail': (f'Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took {semantic_edit_metrics["wall_seconds"]:.3f} s and reused the artifact, while a semantic dependency change took {dependency_metrics["wall_seconds"]:.3f} s and rebuilt; the reused artifact result matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial.'),
         },
         'gate_a': 'pass',
         'gate_b': 'partial',

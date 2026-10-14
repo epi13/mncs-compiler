@@ -5,8 +5,8 @@
 //! records provenance and obligations; it does not replace the VM artifact as
 //! the executable authority or implement language semantics here.
 use crate::{vm_emit, ToolchainIdentity};
-use mncs_compiler::{ModuleResolver, ReferenceCompiler};
-use mncs_model::{ExecutionTypeArgument, HostGenericSeedRequest};
+use mncs_compiler::{ModuleResolution, ModuleResolver, ReferenceCompiler};
+use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, BTreeSet};
@@ -472,6 +472,78 @@ fn read_application_cache_index(path: &PathBuf, key: &str) -> Option<String> {
     Some(candidate_key.to_owned())
 }
 
+/// Aggregate the compiler's canonical root and imported-module semantic
+/// fingerprints into one identity for safe backend-artifact reuse. Source
+/// identities are deliberately excluded: comment and formatting edits still
+/// require a fresh source check, but they need not force VM lowering when all
+/// verified semantic facts remain identical.
+fn application_semantic_identity(
+    program: &mncs_model::Program,
+    root_semantic_fingerprint: &str,
+    module_resolutions: &[ModuleResolution],
+    generic_seeds: &[HostGenericSeedRequest],
+) -> Option<String> {
+    if root_semantic_fingerprint.is_empty() {
+        return None;
+    }
+
+    let program_dependencies: BTreeSet<String> = program
+        .dependencies
+        .iter()
+        .map(|identity| identity.0.clone())
+        .collect();
+    if program_dependencies.len() != program.dependencies.len() {
+        return None;
+    }
+
+    let mut resolved_modules = BTreeMap::<String, Value>::new();
+    let mut resolved_identities = BTreeSet::<String>::new();
+    for resolution in module_resolutions {
+        let semantic_fingerprint = resolution.semantic_fingerprint.as_deref()?;
+        if semantic_fingerprint.is_empty()
+            || mncs_model::module_id(&resolution.declared_module).0 != resolution.module_identity.0
+        {
+            return None;
+        }
+        let module_identity = resolution.module_identity.0.clone();
+        if !resolved_identities.insert(module_identity.clone()) {
+            return None;
+        }
+        let row = json!({
+            "requested_module": resolution.requested_module,
+            "declared_module": resolution.declared_module,
+            "module_identity": module_identity,
+            "semantic_fingerprint": semantic_fingerprint,
+        });
+        if resolved_modules
+            .insert(resolution.requested_module.clone(), row)
+            .is_some()
+        {
+            return None;
+        }
+    }
+    if !program_dependencies.is_subset(&resolved_identities) {
+        return None;
+    }
+
+    let mut generic_seed_keys: Vec<String> = generic_seeds
+        .iter()
+        .map(HostGenericSeedRequest::seed_key)
+        .collect();
+    generic_seed_keys.sort();
+    generic_seed_keys.dedup();
+    let identity = json!({
+        "schema_version": "mncs.compiler.application-semantic-identity/1",
+        "root_module": program.module,
+        "root_semantic_fingerprint": root_semantic_fingerprint,
+        "resolved_modules": resolved_modules.into_values().collect::<Vec<_>>(),
+        "generic_seed_keys": generic_seed_keys,
+    });
+    let mut bytes = b"mncs.compiler.application-semantic-identity/1\0".to_vec();
+    bytes.extend_from_slice(&serde_json::to_vec(&identity).ok()?);
+    Some(format!("sha256:{}", mncs_model::sha256_hex(&bytes)))
+}
+
 fn rebind_cached_source_snapshot(
     mut response: Value,
     source_identity: &str,
@@ -480,6 +552,31 @@ fn rebind_cached_source_snapshot(
     let snapshot = response.get_mut("source_snapshot")?.as_object_mut()?;
     snapshot.insert("identity".to_owned(), json!(source_identity));
     snapshot.insert("files".to_owned(), json!(source_files));
+    Some(response)
+}
+
+fn rebind_cached_application_response(
+    mut response: Value,
+    source_identity: &str,
+    source_files: &[Value],
+    graph_identity: &str,
+    graph_details: Value,
+    semantic_identity: &str,
+    entry_interface: Value,
+    diagnostics: Value,
+) -> Option<Value> {
+    response = rebind_cached_source_snapshot(response, source_identity, source_files)?;
+    let dependency_graph = response.get_mut("dependency_graph")?.as_object_mut()?;
+    dependency_graph.insert("identity".to_owned(), json!(graph_identity));
+    dependency_graph.insert("details".to_owned(), graph_details);
+    dependency_graph.insert("semantic_identity".to_owned(), json!(semantic_identity));
+    response
+        .get_mut("entry")?
+        .as_object_mut()?
+        .insert("interface".to_owned(), entry_interface);
+    response
+        .as_object_mut()?
+        .insert("diagnostics".to_owned(), diagnostics);
     Some(response)
 }
 
@@ -712,10 +809,12 @@ fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -
 
 #[cfg(test)]
 mod tests {
-    use super::callable_interface;
+    use super::{application_semantic_identity, callable_interface, envelope, ApplicationSources};
     use mncs_compiler::ReferenceCompiler;
+    use mncs_model::ArtifactRepresentation;
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
     use serde_json::json;
+    use std::collections::BTreeMap;
 
     fn interface_program() -> mncs_model::Program {
         let source = r#"
@@ -788,6 +887,69 @@ mod tests {
         assert_eq!(
             interface["types"]["unresolved_references"],
             json!(["MissingNominal"])
+        );
+    }
+
+    #[test]
+    fn application_semantic_identity_ignores_source_identity_but_binds_module_semantics() {
+        let root = r#"
+            mncs 0.18;
+            module semantic.root;
+            use semantic.dep as dep;
+            fn entry() -> (result: u64) { return dep.value(); }
+        "#;
+        let dependency = r#"
+            mncs 0.18;
+            module semantic.dep;
+            fn value() -> (result: u64) { return 7; }
+        "#;
+        let resolver = ApplicationSources(BTreeMap::from([(
+            "semantic.dep".to_owned(),
+            envelope(dependency),
+        )]));
+        let frontend = ReferenceCompiler::default().front_end_with_resolver_and_seeds(
+            envelope(root),
+            &resolver,
+            &[],
+        );
+        assert!(
+            frontend.is_valid(),
+            "semantic identity source: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("valid root Program");
+        let root_fingerprint = &frontend
+            .artifact(ArtifactRepresentation::Semantic)
+            .expect("canonical root semantic artifact")
+            .fingerprint;
+        let baseline = application_semantic_identity(
+            program,
+            root_fingerprint,
+            &frontend.module_resolutions,
+            &[],
+        )
+        .expect("complete semantic identity");
+
+        let mut source_only_change = frontend.module_resolutions.clone();
+        source_only_change[0]
+            .source_identity
+            .push_str(":comment-edit");
+        let source_only_identity =
+            application_semantic_identity(program, root_fingerprint, &source_only_change, &[])
+                .expect("source identity is not a semantic input");
+        assert_eq!(baseline, source_only_identity);
+
+        let mut semantic_change = frontend.module_resolutions.clone();
+        semantic_change[0].semantic_fingerprint = Some("changed-semantic-fingerprint".to_owned());
+        let changed_identity =
+            application_semantic_identity(program, root_fingerprint, &semantic_change, &[])
+                .expect("changed dependency semantic fingerprint");
+        assert_ne!(baseline, changed_identity);
+
+        let mut incomplete = frontend.module_resolutions.clone();
+        incomplete[0].semantic_fingerprint = None;
+        assert!(
+            application_semantic_identity(program, root_fingerprint, &incomplete, &[]).is_none()
         );
     }
 }
@@ -968,6 +1130,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             );
         }
     }
+    let mut semantic_cache_candidate: Option<(Value, String)> = None;
     if let (Some(index_path), Some(_)) = (cache_index_path.as_ref(), cache_path.as_ref()) {
         if let Some(candidate_key) = read_application_cache_index(index_path, &cache_index_key) {
             if let Some(candidate_path) = application_cache_path(&candidate_key) {
@@ -985,7 +1148,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         &modules,
                     ) {
                         if let Some(response) = rebind_cached_source_snapshot(
-                            candidate,
+                            candidate.clone(),
                             &source_identity,
                             &source_files,
                         ) {
@@ -1001,6 +1164,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                             );
                         }
                     }
+                    semantic_cache_candidate = Some((candidate, candidate_key));
                 }
             }
         }
@@ -1054,6 +1218,16 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     };
 
     let entry_interface = callable_interface(program, entry_module, entry_function);
+    let semantic_identity = frontend
+        .artifact(ArtifactRepresentation::Semantic)
+        .and_then(|artifact| {
+            application_semantic_identity(
+                program,
+                &artifact.fingerprint,
+                &frontend.module_resolutions,
+                &generic_seeds,
+            )
+        });
 
     let graph_value = json!({
         "root_module": program.module,
@@ -1062,6 +1236,64 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     });
     let graph_bytes = serde_json::to_vec(&graph_value).unwrap_or_default();
     let graph_identity = format!("sha256:{}", mncs_model::sha256_hex(&graph_bytes));
+    if let (Some((candidate, candidate_key)), Some(semantic_identity), Some(interface)) = (
+        semantic_cache_candidate,
+        semantic_identity.as_deref(),
+        entry_interface.clone(),
+    ) {
+        let current_interface_identity = interface.get("identity").and_then(Value::as_str);
+        let cached_interface_identity = candidate
+            .pointer("/entry/interface/identity")
+            .and_then(Value::as_str);
+        let semantic_match = candidate
+            .pointer("/dependency_graph/semantic_identity")
+            .and_then(Value::as_str)
+            == Some(semantic_identity);
+        if candidate.get("status").and_then(Value::as_str) == Some("verified")
+            && semantic_match
+            && interface.get("status").and_then(Value::as_str) == Some("verified")
+            && current_interface_identity.is_some()
+            && current_interface_identity == cached_interface_identity
+        {
+            if let Some(response) = rebind_cached_application_response(
+                candidate,
+                &source_identity,
+                &source_files,
+                &graph_identity,
+                graph_value.clone(),
+                semantic_identity,
+                interface,
+                diagnostics.clone(),
+            ) {
+                let publication = match cache_path.as_ref() {
+                    Some(path) => match publish_application_cache(path, &cache_key, &response) {
+                        Ok(()) => {
+                            if let Some(index_path) = cache_index_path.as_ref() {
+                                let _ = publish_application_cache_index(
+                                    index_path,
+                                    &cache_index_key,
+                                    &cache_key,
+                                );
+                            }
+                            "stored"
+                        }
+                        Err(_) => "write_failed",
+                    },
+                    None => "not_configured",
+                };
+                return annotate_cache_with_basis(
+                    response,
+                    &cache_key,
+                    "hit",
+                    publication,
+                    "verified_semantic_identity",
+                    Some(&candidate_key),
+                    &["verified_vm_artifact"],
+                    &["source_semantic_check", "semantic_identity_verification"],
+                );
+            }
+        }
+    }
     let producer_reference = format!("stage0-probe:{probe_identity}");
     let (artifact, unselected_unresolved, emission_error) =
         match vm_emit::emit_vm_application_artifact_with_producer(
@@ -1169,6 +1401,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         },
         "dependency_graph": {
             "identity": graph_identity,
+            "semantic_identity": semantic_identity,
             "details": graph_value,
         },
         "producer": {
