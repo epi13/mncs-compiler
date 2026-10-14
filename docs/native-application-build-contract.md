@@ -19,3 +19,30 @@ at most 64 imported modules and 4 MiB of source. The initial real consumer
 exercise is `python3 tools/test_vm_native_application.py`, which reads the
 selected `mncs-test` checkout without modifying it and compares Stage-0 oracle
 results with canonical VM execution.
+
+## Environment capability
+
+The Compiler manifest declares the contract as
+`mncs-compiler:native-application-build`. The provider accepts a request from
+the selected Compiler checkout with `--request-file PATH`, or from a canonical
+Store input artifact with `--request-artifact NAME`. It writes the complete
+response as the shareable `native-application-build.json` invocation artifact
+and keeps stdout bounded; consumers read the full response through the exact
+Environment artifact binding and path. The current Control operation allowlist
+does not expose this capability yet, so canonical Store publication and
+readback remain pending that Control contract change.
+
+The contract keeps build and execution obligations distinct. `verified` on an
+entry means the selected entry has a verified canonical VM artifact; it does
+not imply that every export in the snapshot is supported or that the artifact
+has already executed. `unsupported`, `unavailable`, `unknown`, and `rejected`
+are preserved as structured outcomes. Provider transport errors remain
+invocation errors and do not produce a result artifact.
+
+The manifest-bound regression is
+`python3 tools/test_application_build_provider.py`. It checks a cold build, a
+fresh-process warm hit, Store-input byte/hash validation, the exact canonical
+artifact identity, precise invalid-source diagnostics, and suppression of
+successful cache publication for rejected input. The `mncs-test` consumer
+fixture remains the source and Stage-0 differential oracle for the application
+itself.

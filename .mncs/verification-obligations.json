@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 12,
+  "revision": 13,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -783,6 +783,64 @@
         ],
         "working_directory": ".",
         "timeout_seconds": 900
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.native-application-build-provider",
+      "title": "Environment application-build provider preserves exact compiler result and provenance",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "contract_validation",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build-request/1",
+        "mncs.compiler.application-build/1",
+        "mncs.vm.artifact/1"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        "tools/application_build_provider.py",
+        "tools/test_application_build_provider.py",
+        "tools/test_vm_native_application.py",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock",
+        "tools/vm_emit.rs",
+        "tools/vm-artifact-codec/",
+        "mncs-language.lock.json",
+        "tools/stage0-probe/src/application.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_application_build_provider.py",
+        "argv": [
+          "python3",
+          "tools/test_application_build_provider.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ]
       },
       "evidence_identity": {
         "subject_fields": [
