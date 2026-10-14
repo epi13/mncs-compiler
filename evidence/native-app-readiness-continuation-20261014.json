@@ -1,0 +1,87 @@
+{
+  "schema_version": "mncs.compiler.campaign-continuation/1",
+  "recorded_at": "2026-10-14T14:23:16Z",
+  "campaign": {
+    "identity": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "selected_session_last_known": "ses_164edc158d9b1637",
+    "previous_checkpoint_last_known": "chk_a481758912b43744",
+    "objective": "Mature mncs-compiler for native multi-module applications while advancing evidence-bound self-consumption."
+  },
+  "source_and_delivery": {
+    "checkout": "mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "compiler_implementation_commit": "c70dc851717b623f091d844dab23eab0c810052b",
+    "evidence_commit": "02debda064a1910f21c9eab566c4afa2467e556a",
+    "main_and_origin_main": "02debda064a1910f21c9eab566c4afa2467e556a",
+    "pushed": true,
+    "preserve_untracked": ".bootstrap symlink in candidate worktree; existing untracked worktrees and historical evidence in main checkout."
+  },
+  "ownership": {
+    "compiler_worktree_claim": "Last known active nonexclusive Compiler worktree claim; exact claim ID is not present in this execution. Revalidate through Environment before the next write.",
+    "prior_infrastructure_compiler_and_forge_claims": "Previously verified released.",
+    "canonical_store_readback": "Not revalidated in this execution."
+  },
+  "latest_verified_proof": {
+    "release_probe_sha256": "0c574df5c69330b2bdc753bfe744638304d6c4d7a61b80e899c78c6e6dae6827",
+    "compiler_revision": "c70dc851717b623f091d844dab23eab0c810052b",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "language_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+    "stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "gate_a": {
+      "status": "passed",
+      "artifact_identity": "sha256:874730ef4022ccd9414127a70b4af495a9192d7770f494b0916c6fc3965ac0cd",
+      "exact_stage0_vm_agreement": true,
+      "invalid_source_diagnostic": "MNE162",
+      "build_wall_seconds": 0.602438,
+      "vm_wall_seconds": 0.176158
+    },
+    "effectful_digest_app": {
+      "status": "passed",
+      "artifact_identity": "sha256:da7f6609992c33975c1f02ad71f31bddafe55ca8e524e6cddedc9ac299643a3d",
+      "callable_interface_identity": "sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2",
+      "projected_closure_ref": "application-ssa-closure/1:af06cdda0a89510654e99435b970847eb0fff0ea5e78549b5e0bc1bf957556b6",
+      "artifact_bytes": 1108394,
+      "prior_artifact_bytes": 1161949,
+      "artifact_reduction_bytes": 53555,
+      "artifact_reduction_percent": 4.6091,
+      "build_wall_seconds": 0.838951,
+      "peak_rss_bytes": 65646592,
+      "cgroup_memory_bytes": null,
+      "stage0_vm_cases_agree": 3,
+      "negative_cases": [
+        "missing capability denied",
+        "structured write failure returns typed exit 3"
+      ]
+    },
+    "checks": [
+      "cargo fmt --check",
+      "application_closure_tests: 1 passed",
+      "tools/test_vm_test_digest_app.py: passed",
+      "tools/test_vm_native_application.py: passed",
+      "git diff --check"
+    ],
+    "self_consumption_matrix": "Unchanged; Stage-1 and Stage-2 remain unproven."
+  },
+  "milestone_state": {
+    "gate_a": "passed for selected mncs-test applications",
+    "gate_b": "partial; changed-source builds still rerun whole-application obligations",
+    "gate_c": "partial; production service and Store/Forge feedback consumption remain unproven",
+    "gate_d": "mncs-test remains the recommended first conversion target; no production host code is safe to retire."
+  },
+  "environment_checkpoint": {
+    "status": "pending",
+    "exact_last_error": "session mutation requires the exact session selected by Environment continuation in this execution",
+    "next_required_transition": "Rebind or select the exact active Environment session, then create the campaign checkpoint and read it back from canonical Store before more extended compiler work."
+  },
+  "next_compiler_frontier": "After Environment checkpoint and ownership revalidation, implement a measured, proof-safe reuse unit for a changed function in the existing multi-module digest application. Gate B remains partial; do not claim a compile-time speedup from SSA closure projection.",
+  "startup_lifecycle": {
+    "project_scoped_control": "Available and used for this repository; do not persist credentials.",
+    "previous_infrastructure_compiler_and_forge_claims": "Released per prior authoritative Environment/Control verification.",
+    "compiler_worktree_claim": "Last known active; claim identity and current status must be revalidated through Environment.",
+    "temporary_nonexclusive_claim_acquire_release": "Not independently evidenced in this continuation; verify or repeat before extended compiler work.",
+    "canonical_store_state_readback": "Not revalidated in this execution; verify through canonical Store.",
+    "campaign_checkpoint": "Pending exact Environment session binding."
+  }
+}
