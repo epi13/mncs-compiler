@@ -9,7 +9,7 @@ use mncs_compiler::{ModuleResolver, ReferenceCompiler};
 use mncs_model::{ExecutionTypeArgument, HostGenericSeedRequest};
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static CACHE_NONCE: AtomicU64 = AtomicU64::new(0);
 static PRODUCER_IDENTITY: OnceLock<(String, Value)> = OnceLock::new();
 
-const CONTRACT: &str = "mncs.compiler.application-build/1";
+const CONTRACT: &str = "mncs.compiler.application-build/2";
 const REQUEST: &str = "mncs.compiler.application-build-request/1";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
@@ -322,6 +322,130 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
     result
 }
 
+fn enqueue_interface_type(type_name: &str, pending: &mut BTreeSet<String>) {
+    if let Some(inner) = type_name
+        .strip_prefix('[')
+        .and_then(|value| value.strip_suffix(']'))
+    {
+        if let Some((element, _bound)) = inner.rsplit_once(';') {
+            pending.insert(element.trim().to_owned());
+            return;
+        }
+    }
+    if let Some(inner) = type_name
+        .strip_prefix("vec<")
+        .and_then(|value| value.strip_suffix('>'))
+    {
+        if let Some((element, _lanes)) = inner.rsplit_once(',') {
+            pending.insert(element.trim().to_owned());
+            return;
+        }
+    }
+    pending.insert(type_name.to_owned());
+}
+
+fn is_builtin_interface_type(type_name: &str) -> bool {
+    if matches!(type_name, "bool" | "byte" | "unit" | "never")
+        || type_name
+            .strip_prefix("mask<")
+            .and_then(|value| value.strip_suffix('>'))
+            .is_some_and(|lanes| lanes.parse::<u32>().is_ok())
+    {
+        return true;
+    }
+    ["i", "u", "f"].iter().any(|prefix| {
+        type_name.strip_prefix(prefix).is_some_and(|width| {
+            !width.is_empty() && width.chars().all(|character| character.is_ascii_digit())
+        })
+    })
+}
+
+fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -> Option<Value> {
+    let function = program.functions.iter().find(|function| {
+        function.name == name && function.identity_namespace(&program.module) == module
+    })?;
+    let identity = mncs_model::function_id(module, name).0;
+    let mut needed_types = BTreeSet::new();
+    for value in function.inputs.iter().chain(function.outputs.iter()) {
+        enqueue_interface_type(&value.value_type, &mut needed_types);
+    }
+    let mut visited_types = BTreeSet::new();
+    let mut unresolved_types = BTreeSet::new();
+    let mut record_types = Vec::new();
+    let mut finite_types = Vec::new();
+    while let Some(type_name) = needed_types.iter().next().cloned() {
+        needed_types.remove(&type_name);
+        if !visited_types.insert(type_name.clone()) {
+            continue;
+        }
+        let matching_records: Vec<_> = program
+            .record_types
+            .iter()
+            .filter(|record| record.name == type_name || record.identity.as_str() == type_name)
+            .collect();
+        let matching_finite: Vec<_> = program
+            .finite_types
+            .iter()
+            .filter(|finite| finite.name == type_name || finite.identity.as_str() == type_name)
+            .collect();
+        if matching_records.len() + matching_finite.len() > 1 {
+            unresolved_types.insert(format!("ambiguous type reference: {type_name}"));
+        }
+        for record in matching_records {
+            for field in &record.fields {
+                enqueue_interface_type(&field.field_type, &mut needed_types);
+            }
+            record_types.push(record);
+        }
+        for finite in matching_finite {
+            for variant in &finite.variants {
+                for field in &variant.payload {
+                    enqueue_interface_type(&field.field_type, &mut needed_types);
+                }
+            }
+            finite_types.push(finite);
+        }
+        if !record_types
+            .iter()
+            .any(|record| record.name == type_name || record.identity.as_str() == type_name)
+            && !finite_types
+                .iter()
+                .any(|finite| finite.name == type_name || finite.identity.as_str() == type_name)
+            && !is_builtin_interface_type(&type_name)
+        {
+            unresolved_types.insert(type_name);
+        }
+    }
+    record_types.sort_by(|left, right| left.identity.0.cmp(&right.identity.0));
+    finite_types.sort_by(|left, right| left.identity.0.cmp(&right.identity.0));
+    let signature = json!({
+        "function_identity": identity,
+        "module": module,
+        "name": name,
+        "inputs": function.inputs,
+        "outputs": function.outputs,
+        "contracts": function.contracts,
+        "effects": function.effects,
+        "capabilities": function.capabilities,
+        "failure": function.failure,
+    });
+    let types = json!({
+        "status": if unresolved_types.is_empty() { "verified" } else { "unknown" },
+        "unresolved_references": unresolved_types,
+        "records": record_types,
+        "finite": finite_types,
+    });
+    let interface = json!({ "signature": signature, "types": types });
+    let signature_bytes = serde_json::to_vec(&interface).ok()?;
+    Some(json!({
+        "schema_version": "mncs.compiler.callable-interface/1",
+        "status": interface["types"]["status"],
+        "identity": format!("sha256:{}", mncs_model::sha256_hex(&signature_bytes)),
+        "signature": interface["signature"],
+        "types": interface["types"],
+    }))
+}
+
 /// Compile a bounded module snapshot with the pinned compiler and emit the
 /// existing canonical VM artifact format. Inputs are explicit and immutable;
 /// source identities are derived from exact bytes, never paths or timestamps.
@@ -521,6 +645,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         );
     };
 
+    let entry_interface = callable_interface(program, entry_module, entry_function);
+
     let graph_value = json!({
         "root_module": program.module,
         "dependencies": program.dependencies,
@@ -601,16 +727,21 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             entry_module, entry_function
         )));
     }
-    let status = if !unresolved.is_empty() {
+    let interface_verified = entry_interface
+        .as_ref()
+        .and_then(|interface| interface.get("status"))
+        .and_then(Value::as_str)
+        == Some("verified");
+    let entry_status = if !entry_available {
         "unsupported"
-    } else if toolchain.is_none() || probe_identity == "unknown" {
+    } else if toolchain.is_none() || probe_identity == "unknown" || !interface_verified {
         "unknown"
     } else {
         "verified"
     };
-    let entry_status = if !entry_available {
+    let status = if !unresolved.is_empty() {
         "unsupported"
-    } else if toolchain.is_none() || probe_identity == "unknown" {
+    } else if entry_status == "unknown" {
         "unknown"
     } else {
         "verified"
@@ -656,6 +787,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "module": entry_module,
             "function": entry_function,
             "status": entry_status,
+            "interface": entry_interface,
         },
         "execution_target_compatibility": {
             "target": VM_TARGET,

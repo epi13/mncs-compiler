@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 14,
+  "revision": 15,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -809,7 +809,8 @@
       "scope": "repository_canonical",
       "subjects": [
         "mncs.compiler.application-build-request/1",
-        "mncs.compiler.application-build/1",
+        "mncs.compiler.application-build/2",
+        "mncs.compiler.callable-interface/1",
         "mncs.compiler.application-generic-seed/1",
         "mncs.vm.artifact/1"
       ],
@@ -862,14 +863,15 @@
     },
     {
       "identity": "mncs-compiler.native-application-generic-specialization",
-      "title": "Requested generic instances are executable without promoting unresolved templates",
+      "title": "Structured application calls and generic instances execute without promoting unresolved templates",
       "guarantee_domain": "native_application_execution",
       "evidence_role": "differential_oracle",
       "lifecycle": "permanent",
       "scope": "repository_canonical",
       "subjects": [
         "mncs.compiler.application-generic-seed/1",
-        "mncs.compiler.application-build/1",
+        "mncs.compiler.application-build/2",
+        "mncs.compiler.callable-interface/1",
         "mncs.vm.artifact/1"
       ],
       "invalidation_dependencies": [
@@ -923,7 +925,8 @@
       "subjects": [
         "mncs.compiler.application-build-cache-key/1",
         "mncs.compiler.application-build-cache-observation/1",
-        "mncs.compiler.application-build/1"
+        "mncs.compiler.application-build/2",
+        "mncs.compiler.callable-interface/1"
       ],
       "invalidation_dependencies": [
         ".mncs/project.json",

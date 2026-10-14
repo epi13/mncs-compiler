@@ -50,13 +50,7 @@ def request_for(root: str, modules: dict[str, str]) -> dict:
 
 
 def call_request() -> dict:
-    return {
-        'schema_version': '0.1',
-        'target': {'module': app.APP_MODULE, 'function': 'run'},
-        'arguments': [],
-        'type_arguments': [],
-        'step_budget': 2000000,
-    }
+    return app.call_request()
 
 
 def compile_one(probe: app.Probe, request: dict) -> tuple[dict, dict]:
@@ -75,7 +69,7 @@ def oracle_one(probe: app.Probe, root: str, modules: dict[str, str]) -> tuple[di
 
 
 def run_and_compare(artifact: dict, execution: dict) -> tuple[dict, dict, list]:
-    document, metrics = app.run_vm(artifact)
+    document, metrics = app.run_vm(artifact, call_request()['arguments'])
     if document.get('outcome') != {'kind': 'completed'}:
         raise AssertionError(json.dumps(document.get('outcome'), indent=2))
     if document.get('record', {}).get('artifact_id') != artifact.get('artifact_id'):
@@ -89,6 +83,7 @@ def run_and_compare(artifact: dict, execution: dict) -> tuple[dict, dict, list]:
 
 
 def compact_result(report: dict) -> dict:
+    report = report['$p']['report']
     summary = report['summary']
     return {
         'state': report['state'],
@@ -199,8 +194,8 @@ def main() -> None:
             dependency_modules['mncs.test.generative'].replace(
                 '6364136223846793005', '6364136223846793006', 1))
         dynamic_root = app.APP_SOURCE.replace(
-            'equals_i64(58, replay(42, 7, 97) as i64',
-            'equals_i64((generated.value % 97) as i64, replay(42, 7, 97) as i64', 1)
+            'equals_i64(58, replay(request.seed, request.case_index, 97) as i64',
+            'equals_i64((generated.value % 97) as i64, replay(request.seed, request.case_index, 97) as i64', 1)
         if dynamic_root == app.APP_SOURCE:
             raise AssertionError('dependency fixture consumer was not updated')
         dependency_request = request_for(dynamic_root, dependency_modules)
@@ -281,7 +276,8 @@ def main() -> None:
     vm_dependency, vm_dependency_metrics, dependency_actual = run_and_compare(
         dependency_artifact, dependency_exec)
     base_report, small_report, dependency_report = (
-        base_actual[0], small_actual[0], dependency_actual[0])
+        base_actual[0]['$p']['report'], small_actual[0]['$p']['report'],
+        dependency_actual[0]['$p']['report'])
     assert base_report['summary']['passed'] == 3 and base_report['summary']['skipped'] == 1
     assert small_report['summary']['failed'] == 1 and small_report['state_value'] == 1
     assert dependency_report['summary']['failed'] == 0
@@ -316,6 +312,8 @@ def main() -> None:
         },
         'application': {
             'module': app.APP_MODULE, 'entry': 'run',
+            'contract_schema': cold.get('schema_version'),
+            'callable_interface_identity': cold.get('entry', {}).get('interface', {}).get('identity'),
             'source_snapshot_identity': cold.get('source_snapshot', {}).get('identity'),
             'dependency_graph_identity': cold.get('dependency_graph', {}).get('identity'),
             'source_files': source_files,

@@ -19,11 +19,20 @@ with the pinned Stage-0 compiler, then asks the compiler-owned canonical VM
 emitter for the existing `mncs.vm.artifact/1` format. Specialization identities
 are normalized, sorted, and included in the persistent application cache key.
 
-The response records framed source-snapshot identity, source hashes, resolved
-dependency identity, Stage-0 and producer identities, artifact and interface
-identities, required capabilities, unresolved obligations, structured source
-diagnostics, target compatibility, and explicit unknown resource estimates.
-The selected entry has its own `verified`, `unsupported`, or `unknown` status.
+`mncs.compiler.application-build/2` records framed source-snapshot identity,
+source hashes, resolved dependency identity, Stage-0 and producer identities,
+artifact and module interface identities, required capabilities, unresolved
+obligations, structured source diagnostics, target compatibility, and explicit
+unknown resource estimates. The selected entry has its own `verified`,
+`unsupported`, or `unknown` status and a `mncs.compiler.callable-interface/1`
+value. That callable interface carries the semantic function identity, typed
+inputs and outputs, contracts, effects, capabilities, failure mode, and the
+referenced record and finite type definitions. Consumers can construct
+structured calls from these identities without inferring the ABI from source
+text. Type closure is `verified` only when every referenced nominal type
+resolves to exactly one declaration; unresolved or ambiguous references mark
+the interface and entry `unknown`.
+
 Requested generic instances are emitted as concrete callable exports. The
 module-wide response continues to report unspecialized generic templates as
 unsupported when they have no standalone SSA instance; requesting one concrete
@@ -36,8 +45,12 @@ functions across changed snapshots, and it makes no claim of Stage-1 or
 Stage-2 succession. The real consumer exercise is
 `python3 tools/test_vm_native_application.py`,
 which reads the selected `mncs-test` checkout without modifying it, requests
-`equals_bytes<4>` and `summarize<4>`, and compares Stage-0 oracle results with
-canonical VM execution. `python3 tools/test_native_application_incremental.py`
+`equals_bytes<4>` and `summarize<4>`, accepts a typed `ReadinessRequest`, returns
+a `ReadinessOutcome`, and compares both successful and typed rejection results
+from the Stage-0 oracle with canonical VM execution. The error cases exercise
+finite payload extraction and retain the exact artifact receipt. The test also
+constructs its argument using the callable interface emitted by the compiler.
+`python3 tools/test_native_application_incremental.py`
 also changes one specialization request and checks that the cache key and
 artifact identity change.
 

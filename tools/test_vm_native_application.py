@@ -44,6 +44,11 @@ use mncs.test.generative;
 use mncs.test.snapshot;
 
 enum ReadinessState { Ready { checks: u64 }, Deferred { reason: u64 } }
+enum ReadinessError {
+    InvalidCaseIndex { found: u64 },
+    InvalidTestCount { expected: u64, found: u64 }
+}
+record ReadinessRequest { seed: u64, case_index: u64, expected_tests: u64 }
 
 record ReadinessReport {
     state: ReadinessState,
@@ -55,10 +60,25 @@ record ReadinessReport {
     test_projection: TestProjection
 }
 
-fn run() -> (result: ReadinessReport) {
+enum ReadinessOutcome {
+    Completed { report: ReadinessReport },
+    Rejected { error: ReadinessError }
+}
+
+fn run(request: ReadinessRequest) -> (result: ReadinessOutcome) {
+    if request.case_index > 64 {
+        return ReadinessOutcome.Rejected {
+            error: ReadinessError.InvalidCaseIndex { found: request.case_index }
+        };
+    }
+    if request.expected_tests != 4 {
+        return ReadinessOutcome.Rejected {
+            error: ReadinessError.InvalidTestCount { expected: 4, found: request.expected_tests }
+        };
+    }
     let arithmetic: TestResult = from_assertion(equals_i64(42, 19 +% 23, 1001));
-    let generated: PropertyCase = draw_case(42, 7);
-    let property_test: TestResult = from_assertion(equals_i64(58, replay(42, 7, 97) as i64, 1004));
+    let generated: PropertyCase = draw_case(request.seed, request.case_index);
+    let property_test: TestResult = from_assertion(equals_i64(58, replay(request.seed, request.case_index, 97) as i64, 1004));
     let byte_test: TestResult = from_assertion(equals_bytes<4>([1, 2, 3, 4], [1, 2, 3, 4], 1008));
     let skipped: TestResult = skip(1006);
     let tests: [TestResult; 4] = [arithmetic, property_test, byte_test, skipped];
@@ -76,7 +96,7 @@ fn run() -> (result: ReadinessReport) {
         Ready { checks } => checks,
         Deferred { reason } => reason
     };
-    return ReadinessReport {
+    let report: ReadinessReport = ReadinessReport {
         state: state,
         state_value: state_value,
         summary: summary,
@@ -85,6 +105,7 @@ fn run() -> (result: ReadinessReport) {
         suite_projection: suite_projection,
         test_projection: test_projection
     };
+    return ReadinessOutcome.Completed { report: report };
 }'''
 
 
@@ -236,7 +257,8 @@ def decode_wire(value):
     raise AssertionError(f'unrecognized oracle value: {value}')
 
 
-def summarize_report(report: dict) -> dict:
+def summarize_report(outcome: dict) -> dict:
+    report = outcome['$p']['report']
     summary = report['summary']
     return {
         'state': report['state'],
@@ -250,13 +272,48 @@ def summarize_report(report: dict) -> dict:
     }
 
 
-def run_vm(artifact: dict) -> tuple[dict, dict]:
+def readiness_request(seed: int, case_index: int, expected_tests: int,
+                      identity: str | None = None) -> dict:
+    if identity is None:
+        identity = ('mncs:0.2:record-type:tests.native_readiness::ReadinessRequest::'
+                    'case_index%3Au64%3Bexpected_tests%3Au64%3Bseed%3Au64%3B')
+    return {'record': {
+        'type_identity': identity,
+        'name': 'ReadinessRequest',
+        'fields': [
+            ['case_index', {'integer': {'type': {'bits': 64, 'signed': False}, 'value': case_index}}],
+            ['expected_tests', {'integer': {'type': {'bits': 64, 'signed': False}, 'value': expected_tests}}],
+            ['seed', {'integer': {'type': {'bits': 64, 'signed': False}, 'value': seed}}],
+        ],
+    }}
+
+
+def call_request(arguments: list[dict] | None = None) -> dict:
+    return {
+        'schema_version': '0.1',
+        'target': {'module': APP_MODULE, 'function': 'run'},
+        'arguments': arguments if arguments is not None else [readiness_request(42, 7, 4)],
+        'type_arguments': [],
+        'step_budget': 2000000,
+    }
+
+
+def variant_discriminant(interface: dict, type_name: str, variant_name: str) -> int:
+    finite = next(row for row in interface['types']['finite']
+                  if row.get('name') == type_name)
+    variant = next(row for row in finite['variants']
+                   if row.get('name') == variant_name)
+    return variant['discriminant']
+
+
+def run_vm(artifact: dict, arguments: list[dict] | None = None) -> tuple[dict, dict]:
     ARTIFACT_PATH.parent.mkdir(parents=True, exist_ok=True)
     ARTIFACT_PATH.write_text(json.dumps(artifact, sort_keys=True, separators=(',', ':')))
     with tempfile.TemporaryDirectory(prefix='mncs-native-readiness-') as tmp:
         args = Path(tmp) / 'args.json'
         type_args = Path(tmp) / 'type-args.json'
-        args.write_text('[]')
+        args.write_text(json.dumps(arguments if arguments is not None else
+                                    [readiness_request(42, 7, 4)], separators=(',', ':')))
         type_args.write_text('[]')
         command = [str(VM_BIN), 'run', '--artifact', str(ARTIFACT_PATH),
                    '--callable', f'{APP_MODULE}::run', '--args', str(args),
@@ -305,13 +362,7 @@ def main() -> None:
         'capabilities': [],
         'verification_policy': 'stage0-semantic-check+canonical-vm-artifact/1',
     }
-    call = {
-        'schema_version': '0.1',
-        'target': {'module': APP_MODULE, 'function': 'run'},
-        'arguments': [],
-        'type_arguments': [],
-        'step_budget': 2000000,
-    }
+    call = call_request()
     cache_dir = ROOT / '.build/native-app-readiness/gate-a-cache'
     cache_entries = cache_dir / 'application-builds'
     cache_entries.mkdir(parents=True, exist_ok=True)
@@ -320,6 +371,67 @@ def main() -> None:
             path.unlink()
     probe = Probe(cache_dir)
     try:
+        built, build_metrics = probe.send({'compile_application': request})
+        if built.get('entry', {}).get('status') != 'verified':
+            raise AssertionError('application entry was not verified: ' + json.dumps({
+                'status': built.get('status'), 'entry': built.get('entry'),
+                'obligations': built.get('unresolved_obligations'),
+                'diagnostics': built.get('diagnostics')}, indent=2))
+        artifact = built.get('artifact', {}).get('value')
+        if not isinstance(artifact, dict):
+            raise AssertionError('no canonical VM artifact: ' + json.dumps(built, indent=2)[:8000])
+        if built.get('schema_version') != 'mncs.compiler.application-build/2':
+            raise AssertionError('application producer contract did not advance to /2')
+        callable_interface = built.get('entry', {}).get('interface')
+        if not isinstance(callable_interface, dict):
+            raise AssertionError('verified entry is missing its typed callable interface')
+        if (callable_interface.get('status') != 'verified'
+                or callable_interface.get('types', {}).get('status') != 'verified'
+                or callable_interface.get('types', {}).get('unresolved_references') != []):
+            raise AssertionError('callable interface has unresolved type references')
+        request_type = next((row for row in callable_interface.get('types', {}).get('records', [])
+                             if row.get('name') == 'ReadinessRequest'), None)
+        if request_type is None:
+            raise AssertionError('callable interface omitted the structured request record')
+        referenced_record_names = {
+            row.get('name') for row in callable_interface['types'].get('records', [])
+        }
+        if not {
+                'ReadinessRequest', 'ReadinessReport', 'PropertyCase',
+                'SuiteSummary', 'SuiteProjection', 'TestProjection', 'Witness',
+        }.issubset(referenced_record_names):
+            raise AssertionError('callable interface omitted a referenced imported record definition')
+        referenced_finite_names = {
+            row.get('name') for row in callable_interface['types'].get('finite', [])
+        }
+        if not {
+                'ReadinessOutcome', 'ReadinessError', 'ReadinessState',
+                'Verdict', 'SuiteClassification', 'SuiteStatus',
+                'TestClassification', 'TestStatus', 'FailureKind',
+        }.issubset(referenced_finite_names):
+            raise AssertionError('callable interface omitted a referenced imported finite type')
+        request_identity = request_type.get('identity', {}).get('0') if isinstance(request_type.get('identity'), dict) else request_type.get('identity')
+        if not isinstance(request_identity, str):
+            raise AssertionError('request record has no semantic identity')
+        interface_signature = callable_interface.get('signature', {})
+        if interface_signature.get('function_identity') != (
+                f'mncs:0.2:function:{APP_MODULE}::run'):
+            raise AssertionError('callable interface changed the selected function identity')
+        if interface_signature.get('inputs') != [
+                {'name': 'request', 'type': 'ReadinessRequest'}]:
+            raise AssertionError('callable interface does not describe the structured request')
+        if interface_signature.get('outputs') != [
+                {'name': 'result', 'type': 'ReadinessOutcome'}]:
+            raise AssertionError('callable interface does not describe the typed result')
+        interface_digest_input = json.dumps({
+            'signature': callable_interface['signature'],
+            'types': callable_interface['types'],
+        }, sort_keys=True, separators=(',', ':')).encode()
+        if callable_interface['identity'] != sha(interface_digest_input):
+            raise AssertionError('callable interface identity does not bind its exact signature and types')
+        call = call_request([readiness_request(42, 7, 4, request_identity)])
+        if call['arguments'][0]['record']['type_identity'] != request_identity:
+            raise AssertionError('invocation argument does not bind the producer interface identity')
         oracle, oracle_metrics = probe.send({'project_oracle': {
             'root': APP_SOURCE,
             'modules': module_sources,
@@ -330,15 +442,20 @@ def main() -> None:
         oracle_exec = oracle['executions'][0]
         if oracle_exec.get('status') != 'returned':
             raise AssertionError(json.dumps(oracle_exec, indent=2))
-        built, build_metrics = probe.send({'compile_application': request})
-        if built.get('entry', {}).get('status') != 'verified':
-            raise AssertionError('application entry was not verified: ' + json.dumps({
-                'status': built.get('status'), 'entry': built.get('entry'),
-                'obligations': built.get('unresolved_obligations'),
-                'diagnostics': built.get('diagnostics')}, indent=2))
-        artifact = built.get('artifact', {}).get('value')
-        if not isinstance(artifact, dict):
-            raise AssertionError('no canonical VM artifact: ' + json.dumps(built, indent=2)[:8000])
+        failure_calls = [
+            call_request([readiness_request(42, 65, 4, request_identity)]),
+            call_request([readiness_request(42, 7, 3, request_identity)]),
+        ]
+        failure_oracle, failure_oracle_metrics = probe.send({'project_oracle': {
+            'root': APP_SOURCE,
+            'modules': module_sources,
+            'calls': failure_calls,
+        }})
+        if not failure_oracle.get('valid'):
+            raise AssertionError(json.dumps(failure_oracle.get('diagnostics'), indent=2))
+        failure_oracle_execs = failure_oracle['executions']
+        if any(row.get('status') != 'returned' for row in failure_oracle_execs):
+            raise AssertionError(json.dumps(failure_oracle_execs, indent=2))
         specialized_callables = artifact.get('callables', [])
         expected_specializations = {
             ('mncs.test.assertions', 'equals_bytes__spec_'),
@@ -429,7 +546,7 @@ def main() -> None:
             pass
         raise
 
-    document, vm_metrics = run_vm(artifact)
+    document, vm_metrics = run_vm(artifact, call['arguments'])
     if document.get('outcome') != {'kind': 'completed'}:
         raise AssertionError('VM did not complete: ' + json.dumps(document.get('outcome'), indent=2))
     receipt_artifact_id = document.get('record', {}).get('artifact_id')
@@ -440,7 +557,10 @@ def main() -> None:
     expected = [decode_wire(value) for value in oracle_exec['returned']]
     if actual != expected:
         raise AssertionError(json.dumps({'actual': actual, 'stage0': expected}, indent=2))
-    report = actual[0]
+    outcome = actual[0]
+    if outcome['$v'] != variant_discriminant(callable_interface, 'ReadinessOutcome', 'Completed'):
+        raise AssertionError('valid structured input did not produce Completed')
+    report = outcome['$p']['report']
     assert report['summary']['total'] == 4, report
     assert report['summary']['passed'] == 3, report
     assert report['summary']['skipped'] == 1, report
@@ -448,6 +568,38 @@ def main() -> None:
     assert report['property_case']['seed'] == 42 and report['property_case']['case_index'] == 7, report
     assert report['witness']['length'] == 4 and report['witness']['checksum'] == 30, report
     assert report['state_value'] == 4, report
+
+    typed_failure_results = []
+    for index, call_case in enumerate(failure_calls):
+        expected_failure = decode_wire(failure_oracle_execs[index]['returned'][0])
+        failure_document, failure_vm_metrics = run_vm(artifact, call_case['arguments'])
+        if failure_document.get('outcome') != {'kind': 'completed'}:
+            raise AssertionError('typed application failure did not return through the VM')
+        if failure_document.get('record', {}).get('artifact_id') != artifact_id:
+            raise AssertionError('typed failure receipt does not bind the exact artifact')
+        failure_actual = decode_wire(vm_to_wire(failure_document['record']['returned'][0]))
+        if failure_actual != expected_failure:
+            raise AssertionError(json.dumps({'actual': failure_actual,
+                                             'stage0': expected_failure}, indent=2))
+        if failure_actual['$v'] != variant_discriminant(
+                callable_interface, 'ReadinessOutcome', 'Rejected'):
+            raise AssertionError('invalid structured input did not produce Rejected')
+        error = failure_actual['$p']['error']
+        expected_error = ('InvalidCaseIndex' if index == 0 else 'InvalidTestCount')
+        if error['$v'] != variant_discriminant(
+                callable_interface, 'ReadinessError', expected_error):
+            raise AssertionError('typed error did not preserve its declared finite variant')
+        expected_payload = ({'found': 65} if index == 0
+                            else {'expected': 4, 'found': 3})
+        if error['$p'] != expected_payload:
+            raise AssertionError('typed error payload does not preserve the rejected request value')
+        typed_failure_results.append({
+            'input': call_case['arguments'][0],
+            'oracle_result': expected_failure,
+            'vm_result': failure_actual,
+            'artifact_identity': failure_document['record']['artifact_id'],
+            'vm_metrics': failure_vm_metrics,
+        })
 
     source_rows = [{'module': name, 'source_id': name, 'sha256': sha(source.encode()),
                     'bytes': len(source.encode())}
@@ -471,12 +623,14 @@ def main() -> None:
             'name': 'mncs-test native readiness suite core',
             'module': APP_MODULE,
             'entry': 'run',
+            'contract_schema': built.get('schema_version'),
             'source_snapshot_identity': built.get('source_snapshot', {}).get('identity'),
             'source_files': source_rows,
             'dependency_graph': built.get('dependency_graph'),
             'producer': built.get('producer'),
             'contract_status': built.get('status'),
             'entry_status': built.get('entry', {}).get('status'),
+            'callable_interface': callable_interface,
             'execution_compatibility': built.get('execution_target_compatibility'),
             'artifact_schema': built.get('artifact', {}).get('schema_version'),
             'artifact_identity': built.get('artifact', {}).get('identity'),
@@ -519,6 +673,7 @@ def main() -> None:
             'artifact_identity_stable': repeated.get('artifact', {}).get('identity') == built.get('artifact', {}).get('identity'),
             'cache_reuse_claimed': True,
         },
+        'typed_failure_results': typed_failure_results,
         'negative_cases': {
             'unknown_field': {
                 'status': invalid.get('status'),

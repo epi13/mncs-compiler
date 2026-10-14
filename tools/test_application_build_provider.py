@@ -17,7 +17,7 @@ import test_vm_native_application as app
 ROOT = app.ROOT
 PROVIDER = ROOT / "tools/application_build_provider.py"
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/1"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/2"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 
 
@@ -143,7 +143,7 @@ def main() -> None:
                 "interface_identity", "required_capabilities",
                 "unresolved_obligations", "value",
             },
-            "entry": {"module", "function", "status"},
+            "entry": {"module", "function", "status", "interface"},
             "execution_target_compatibility": {
                 "target", "status", "compatible", "execution_status",
             },
@@ -166,6 +166,24 @@ def main() -> None:
             raise AssertionError("application response does not expose canonical VM artifact schema")
         if not isinstance(artifact.get("interface_identity"), str) or not artifact["interface_identity"]:
             raise AssertionError("application response has no callable interface identity")
+        callable_interface = cold_response["entry"]["interface"]
+        if (
+            not isinstance(callable_interface, dict)
+            or callable_interface.get("schema_version") != "mncs.compiler.callable-interface/1"
+            or callable_interface.get("status") != "verified"
+            or not isinstance(callable_interface.get("identity"), str)
+            or not isinstance(callable_interface.get("signature"), dict)
+            or not isinstance(callable_interface.get("types"), dict)
+            or callable_interface["types"].get("status") != "verified"
+            or callable_interface["types"].get("unresolved_references") != []
+        ):
+            raise AssertionError("application response has no versioned typed callable interface")
+        request_types = [
+            row for row in callable_interface["types"].get("records", [])
+            if row.get("name") == "ReadinessRequest"
+        ]
+        if len(request_types) != 1 or not request_types[0].get("identity"):
+            raise AssertionError("callable interface does not expose the structured input identity")
         if cold.get("status") != "stored" or cold.get("build_status") != cold_response.get("status"):
             raise AssertionError("Environment summary does not distinguish storage from build status")
         if cold.get("source_snapshot_identity") != cold_response["source_snapshot"].get("identity"):
