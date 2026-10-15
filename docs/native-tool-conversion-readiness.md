@@ -21,7 +21,22 @@ verified application closure. The latest evidence files are
 `evidence/native-app-readiness-gate-a.json` (SHA-256
 `95c9bb93efc579aa832ebba55c6e50c1570c7332b204baa97e70b4af57eb81dc`) and
 `evidence/native-app-readiness-gate-b.json` (SHA-256
-`084bf6c39d6d6bdac12907ed3317c06168db6f9d62eedd004033590f8e643fb5`).
+`2586d3e271487d3d4a5e39e609529219b2cfa8e79fdfe95f64eaac11c5b96b74`).
+
+The Gate B workload was rerun after the integration work. Its exact-source
+fresh-process build measured 0.475 s cold and 0.122 s warm (3.88× for this
+workload). A new cache-isolation case copied the same Stage-0 compiler and
+appended bytes so its executable identity changed. The altered producer used a
+distinct cache key, missed, recomputed source checking, SSA verification, and
+the VM artifact, then matched the independent Stage-0 result after canonical
+VM execution. The variant build measured 0.498 s / 0.45 CPU s. Compiler probe
+identity changed from `sha256:a19061ac544f56530700501f22b144b535dbd68e9fe5f84d958bd9a38bf05e6a`
+to `sha256:d538a2e000b045d80ff05b81fd98470b215ee25a747832dc4fd98b4c5a4b197f`;
+the cache key changed from `sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9`
+to `sha256:589f2568e377ef4b48099406953b2f7e8fa689d8605a785312d01541fa9ab931`.
+The measured VM executable was built from the pinned `mncs-vm` checkout at
+`1c19a94732c9d24029dd00e2d5af13710f481d02` (debug profile, SHA-256
+`1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583`).
 
 Gate C now passes for the selected native application workloads. The real
 `mncs.test.digest::build_digest` entry was built from its four-module source
@@ -42,7 +57,11 @@ bounded response projection now allows the base64 form of a 1 MiB Store result.
 Focused Environment, Forge, and Control tests passed. The observed Forge
 envelope for this workload peaked at 20,045,824 cgroup bytes, used one
 concurrent task, and reported no resource-limit events; that measurement is
-specific to this invocation.
+specific to this invocation. The current live capability projection reports a
+120-second provider timeout for both Compiler build and Forge application
+execution bindings, matching their manifests. Forge's measured-work envelope
+for this call is tighter at 45 seconds. The previously reported null timeout
+is not present in the current bindings.
 
 This proves the selected native application invocation contract. It does not
 yet prove the full production `mncs test` command, its retained-session/batch
@@ -62,7 +81,7 @@ A second application, `mncs.test.digest::digest_app`, exercises typed applicatio
 
 The effectful artifact is `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919`; interface is `sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2`. Evidence is `evidence/native-app-readiness-test-digest-app.json` (SHA-256 `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`). The build took 0.628 s / 0.590 CPU / 64.9 MiB peak RSS; the Stage-0 project oracle took 0.354 s; canonical VM calls took 0.024–0.028 s / 0.010 CPU / 12.2–12.5 MiB. cgroup memory counters were unavailable.
 
-Gate B remains partial. Current readiness-suite evidence `evidence/native-app-readiness-gate-b.json` (SHA-256 `65106578dc52ac9ea89412cde06b7a0578e989d9101e2c4c79d0e67e9f098f03`) records cold 0.461 s, unchanged warm 0.120 s after 0.120 s process startup, and source-only dependency reuse in 0.188 s after fresh semantic checking. A changed root function took 0.366 s and a semantic dependency change 0.379 s; both recomputed source checking, SSA verification, and artifact generation. The digest-specific rerun, `evidence/native-app-readiness-test-digest-incremental.json` (SHA-256 `bd85ae27d21b1ae6c1b99ac934d0a61273f52d04b8198727ada931744a59a161`), measured cold/warm 0.633/0.246 s (2.57×), but a root semantic edit and Suite dependency edit took 0.416/0.432 s and rebuilt all three obligations. Invalid source diagnostics were stable and not published. A SIGKILL at 28.5 ms left no partial publication; retry and fresh-process reuse passed. cgroup memory remained unavailable.
+Gate B remains partial. Current readiness-suite evidence `evidence/native-app-readiness-gate-b.json` (SHA-256 `2586d3e271487d3d4a5e39e609529219b2cfa8e79fdfe95f64eaac11c5b96b74`) records cold 0.475 s, unchanged warm 0.122 s, and source-only dependency reuse in 0.183 s after fresh semantic checking. A changed root function took 0.371 s and a semantic dependency change 0.384 s; both recomputed source checking, SSA verification, and artifact generation. The digest-specific rerun, `evidence/native-app-readiness-test-digest-incremental.json` (SHA-256 `bd85ae27d21b1ae6c1b99ac934d0a61273f52d04b8198727ada931744a59a161`), measured cold/warm 0.633/0.246 s (2.57×), but a root semantic edit and Suite dependency edit took 0.416/0.432 s and rebuilt all three obligations. Invalid source diagnostics were stable and not published. A SIGKILL at 28.5 ms left no partial publication; retry and fresh-process reuse passed. cgroup memory remained unavailable.
 
 The `/4` producer exposes source snapshot and dependency graph identities,
 selected callable interface, artifact provenance, build assumptions, structured

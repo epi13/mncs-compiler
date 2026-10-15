@@ -1,6 +1,6 @@
 {
   "application": {
-    "artifact_identity": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
+    "artifact_identity": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
     "build_assumptions": {
       "backend": "mncs-vm-direct",
       "capabilities": [],
@@ -104,22 +104,32 @@
   ],
   "compiler": {
     "application_module_sha256": "sha256:86e49331326b3e0a7d4c73b48fa408948b19b5fe36c80943c2f907c0de3a5205",
-    "branch": "campaign/native-application-readiness-20261013",
+    "branch": "campaign/native-app-gatec-build-20261014",
     "build_profile": "cargo build --release",
-    "gate_a_harness_sha256": "sha256:8ea2ba07fdacebbfc5f5398054592ae884b3f3a5f641596799c4a64210c9d8e3",
-    "gate_b_harness_sha256": "sha256:5f8ea9f6c1360def62d0d7a42e45ba0e3d7eceb47133bcb392f527ebb9e757cb",
+    "change_scope": "Only the Gate B regression harness and its configurable compiler/VM executable bindings changed; stage0-probe compiler implementation source was unchanged.",
+    "gate_a_harness_sha256": "sha256:0f7ee9deb1354b0f77d36a8cf616aa14fad9fa5a06788d02ea4e9ac7d107bd5e",
+    "gate_b_harness_sha256": "sha256:a44eb7e864dee1581977a14d3eb921945a6a36ff5b67ad1889aaa3129642d937",
     "probe_dispatch_sha256": "sha256:d16620da5423d1021ec1e98b85e7d8befa6c6fe89838049e27a68e1c2b1e42d8",
-    "revision": "6b38798dc5ff247445d3a032bf9b47f1d05e1005",
-    "stage0_probe_sha256": "sha256:0c574df5c69330b2bdc753bfe744638304d6c4d7a61b80e899c78c6e6dae6827",
+    "revision": "933916d7935c5c6c1ed2aa42ce56e9ebf89ab819",
+    "stage0_probe_sha256": "sha256:a19061ac544f56530700501f22b144b535dbd68e9fe5f84d958bd9a38bf05e6a",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "tracked_changes_at_measurement": [
+      "tools/test_native_application_incremental.py",
+      "tools/test_vm_native_application.py"
+    ],
+    "vm_build_profile": "cargo build (debug)",
     "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
-    "vm_sha256": "sha256:2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+    "vm_sha256": "sha256:1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_worktree_clean": true,
+    "vm_worktree_head": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "worktree_dirty_at_measurement": true,
+    "worktree_head_at_measurement": "933916d7935c5c6c1ed2aa42ce56e9ebf89ab819"
   },
   "experiments": {
     "cold_build": {
       "cache": {
-        "key": "sha256:ee6745c12a342ce7323d8d7383e653ff2097b7548cdfba917bb7f1e10c6c462e",
+        "key": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -137,26 +147,26 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 59764736,
+        "peak_rss_bytes": 59490304,
         "peak_threads": 1,
         "request_sequence": 3,
-        "wall_seconds": 0.471521
+        "wall_seconds": 0.474956
       },
       "process_startup_metrics": {
-        "cpu_seconds": 0.0,
+        "cpu_seconds": 0.01,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 2220032,
+        "peak_rss_bytes": 18292736,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.01047
+        "wall_seconds": 0.039513
       }
     },
     "dependency_change": {
-      "artifact_identity": "sha256:1110bfe5444cfca51e4cf0802c3e9c91740f167d40c777483521bf365c5aa09b",
+      "artifact_identity": "sha256:94a13a2844e1402e6d9a59b6870daa650a4790be5759ada243515f13bae9dbcf",
       "cache": {
-        "key": "sha256:2a2b9a14412652d97349aef9d9629365af4f45cd7d56e281f1e3458fe1761148",
+        "key": "sha256:25caf893c20bd26c49643384bfd50c7d89279a5aff29acdee0a0c2d56dced897",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -174,11 +184,11 @@
         "cpu_seconds": 0.36,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
-        "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 59768832,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 59752448,
         "peak_threads": 1,
         "request_sequence": 11,
-        "wall_seconds": 0.38488
+        "wall_seconds": 0.384235
       },
       "graph_identity_after": "sha256:e7c00147214a1e1ea37ba1b92f57e8ae6838cd90c591acb7ce61df7bc33f1e3a",
       "graph_identity_before": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
@@ -187,10 +197,10 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 59764736,
+        "peak_rss_bytes": 59752448,
         "peak_threads": 1,
         "request_sequence": 10,
-        "wall_seconds": 0.260451
+        "wall_seconds": 0.257505
       },
       "oracle_result": {
         "property_case": {
@@ -233,11 +243,11 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 23007232,
+        "peak_rss_bytes": 22908928,
         "peak_threads": 1,
         "process_count": 1,
         "stderr": "",
-        "wall_seconds": 0.174727
+        "wall_seconds": 0.173604
       },
       "vm_result": {
         "property_case": {
@@ -268,6 +278,125 @@
         }
       }
     },
+    "different_compiler_executable_identity": {
+      "artifact_identity_original": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
+      "artifact_identity_variant": "sha256:9840ad745313b99d910b6152a39ecb11352cd3d62ba9c8100c63c7f170bf73db",
+      "cache_key_changed": true,
+      "cache_key_original": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
+      "cache_key_variant": "sha256:589f2568e377ef4b48099406953b2f7e8fa689d8605a785312d01541fa9ab931",
+      "cache_status": "miss",
+      "compile_metrics": {
+        "cpu_seconds": 0.45,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 59973632,
+        "peak_threads": 1,
+        "request_sequence": 3,
+        "wall_seconds": 0.498242
+      },
+      "compiler_probe_identity_changed": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 30416896,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.286826
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "original_probe_sha256": "sha256:a19061ac544f56530700501f22b144b535dbd68e9fe5f84d958bd9a38bf05e6a",
+      "process_startup_metrics": {
+        "cpu_seconds": 0.03,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 18513920,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.095582
+      },
+      "producer_stderr_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n",
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "reused_units": [],
+      "scope": "Same source, request, toolchain, target, and code with a byte-distinct copy of the compiler probe; the changed executable SHA must force a fresh full build.",
+      "semantic_match": true,
+      "variant_probe_sha256": "sha256:d538a2e000b045d80ff05b81fd98470b215ee25a747832dc4fd98b4c5a4b197f",
+      "vm_metrics": {
+        "cpu_seconds": 0.16,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 27746304,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.178791
+      },
+      "vm_profile": "debug; bound to the clean mncs-vm checkout revision recorded in compiler.vm_worktree_head",
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
     "interrupted_compilation": {
       "cancelled_process": {
         "delay_after_request_seconds": 0.025,
@@ -278,11 +407,11 @@
       },
       "entry_after_cancel_exists": false,
       "fresh_process_cache": {
-        "key": "sha256:192c6970272e00e8786c10e177247e9bf3e00ed3e7abe205aa32815009aa59d8",
+        "key": "sha256:f4d9a83e26bad978541d9e730a3084f1ce312a1e73d77f45787e5935b2ec3437",
         "publication": "previously_published",
         "recomputed_units": [],
         "reuse_basis": "exact_source_snapshot",
-        "reused_from_key": "sha256:192c6970272e00e8786c10e177247e9bf3e00ed3e7abe205aa32815009aa59d8",
+        "reused_from_key": "sha256:f4d9a83e26bad978541d9e730a3084f1ce312a1e73d77f45787e5935b2ec3437",
         "reused_units": [
           "verified_application_artifact"
         ],
@@ -290,28 +419,28 @@
         "status": "hit"
       },
       "fresh_process_metrics": {
-        "cpu_seconds": 0.09,
+        "cpu_seconds": 0.12,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 30932992,
+        "peak_rss_bytes": 37171200,
         "peak_threads": 1,
         "request_sequence": 2,
-        "wall_seconds": 0.124131
+        "wall_seconds": 0.123341
       },
       "fresh_process_startup_metrics": {
-        "cpu_seconds": 0.0,
+        "cpu_seconds": 0.01,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 2154496,
+        "peak_rss_bytes": 18423808,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.010393
+        "wall_seconds": 0.03973
       },
       "matching_temp_or_entry_paths_after_cancel": [],
       "retry_cache": {
-        "key": "sha256:192c6970272e00e8786c10e177247e9bf3e00ed3e7abe205aa32815009aa59d8",
+        "key": "sha256:f4d9a83e26bad978541d9e730a3084f1ce312a1e73d77f45787e5935b2ec3437",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -328,24 +457,24 @@
         "cpu_seconds": 0.45,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
-        "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 59441152,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 51462144,
         "peak_threads": 1,
         "request_sequence": 2,
-        "wall_seconds": 0.480722
+        "wall_seconds": 0.468527
       },
       "retry_process_startup_metrics": {
-        "cpu_seconds": 0.0,
+        "cpu_seconds": 0.02,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 1998848,
+        "peak_rss_bytes": 18493440,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.010223
+        "wall_seconds": 0.040902
       },
       "seed_cache": {
-        "key": "sha256:192c6970272e00e8786c10e177247e9bf3e00ed3e7abe205aa32815009aa59d8",
+        "key": "sha256:f4d9a83e26bad978541d9e730a3084f1ce312a1e73d77f45787e5935b2ec3437",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -358,11 +487,11 @@
         "schema_version": "mncs.compiler.application-build-cache-observation/3",
         "status": "miss"
       },
-      "unique_policy_key": "sha256:192c6970272e00e8786c10e177247e9bf3e00ed3e7abe205aa32815009aa59d8"
+      "unique_policy_key": "sha256:f4d9a83e26bad978541d9e730a3084f1ce312a1e73d77f45787e5935b2ec3437"
     },
     "invalid_source": {
       "cache": {
-        "key": "sha256:9d1acaad958343bbbabd616ab1252a484ff45710515991dfd5f6f9a10d846f4d",
+        "key": "sha256:d0071d344a081c4a0d14fc71ab6ebaa2fe5275dbaaf63a57868e30f0f2c6e2c7",
         "publication": "not_published",
         "recomputed_units": [
           "source_semantic_check"
@@ -395,24 +524,24 @@
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 3,
-          "peak_rss_bytes": 59777024,
+          "peak_rss_bytes": 59764736,
           "peak_threads": 1,
           "request_sequence": 12,
-          "wall_seconds": 0.027053
+          "wall_seconds": 0.027529
         },
         {
-          "cpu_seconds": 0.02,
+          "cpu_seconds": 0.01,
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 3,
-          "peak_rss_bytes": 59777024,
+          "peak_rss_bytes": 59764736,
           "peak_threads": 1,
           "request_sequence": 13,
-          "wall_seconds": 0.026498
+          "wall_seconds": 0.026978
         }
       ],
       "repeat_cache": {
-        "key": "sha256:9d1acaad958343bbbabd616ab1252a484ff45710515991dfd5f6f9a10d846f4d",
+        "key": "sha256:d0071d344a081c4a0d14fc71ab6ebaa2fe5275dbaaf63a57868e30f0f2c6e2c7",
         "publication": "not_published",
         "recomputed_units": [
           "source_semantic_check"
@@ -427,9 +556,9 @@
       "response_status": "rejected"
     },
     "small_semantic_edit": {
-      "artifact_identity": "sha256:1211737300a92a90064d3df09939cf2f82c0eff87e0c370fd7ffb4f8e539c352",
+      "artifact_identity": "sha256:9f182dc9a7db7441a86380ad83df510fd596fb795265662018d075b2a281f213",
       "cache": {
-        "key": "sha256:cc5cbe678114d1453e7be39ebd7374838ce25a5e4575c7dd4e46aff50165860e",
+        "key": "sha256:310bc6704ac00e4b442c87c12e08b36eb81660d308b3e74b75a0b11dbd050799",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
@@ -443,14 +572,14 @@
         "status": "miss"
       },
       "compile_metrics": {
-        "cpu_seconds": 0.36,
+        "cpu_seconds": 0.35,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 59764736,
+        "peak_rss_bytes": 59723776,
         "peak_threads": 1,
         "request_sequence": 9,
-        "wall_seconds": 0.370483
+        "wall_seconds": 0.371133
       },
       "directly_changed_source": "tests/native_readiness.mncs",
       "oracle_metrics": {
@@ -458,10 +587,10 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 44929024,
+        "peak_rss_bytes": 44933120,
         "peak_threads": 1,
         "request_sequence": 8,
-        "wall_seconds": 0.260888
+        "wall_seconds": 0.261024
       },
       "oracle_result": {
         "property_case": {
@@ -500,15 +629,15 @@
       "reused_units": [],
       "source_snapshot_identity": "sha256:82d9c996239775f2a2aa5a926068172b065bdee0ea779c673c49267a02234b67",
       "vm_metrics": {
-        "cpu_seconds": 0.17,
+        "cpu_seconds": 0.16,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
-        "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 27885568,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 22966272,
         "peak_threads": 1,
         "process_count": 1,
         "stderr": "",
-        "wall_seconds": 0.176347
+        "wall_seconds": 0.176779
       },
       "vm_result": {
         "property_case": {
@@ -540,17 +669,17 @@
       }
     },
     "source_only_dependency_edit": {
-      "artifact_identity_after": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
-      "artifact_identity_before": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
+      "artifact_identity_after": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
+      "artifact_identity_before": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
       "cache": {
-        "key": "sha256:510237b5b5947546e35b829f7f78903abdb11399aa429a41ef829afbeec318fd",
+        "key": "sha256:98bf92d34b609bf75551cbaa76347a759efb493f24fbbab09c1c39806d9722aa",
         "publication": "stored",
         "recomputed_units": [
           "source_semantic_check",
           "semantic_identity_verification"
         ],
         "reuse_basis": "verified_semantic_identity",
-        "reused_from_key": "sha256:ee6745c12a342ce7323d8d7383e653ff2097b7548cdfba917bb7f1e10c6c462e",
+        "reused_from_key": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
         "reused_units": [
           "verified_vm_artifact"
         ],
@@ -558,14 +687,14 @@
         "status": "hit"
       },
       "compile_metrics": {
-        "cpu_seconds": 0.17,
+        "cpu_seconds": 0.16,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 44929024,
+        "peak_rss_bytes": 43126784,
         "peak_threads": 1,
         "request_sequence": 7,
-        "wall_seconds": 0.189118
+        "wall_seconds": 0.183429
       },
       "dependency_graph_identity_after": "sha256:386f27b29e25d04508ce64a5793bda2e002005fc24b54f0f090afceefa89d2ea",
       "dependency_graph_identity_before": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
@@ -575,10 +704,10 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 42074112,
+        "peak_rss_bytes": 42033152,
         "peak_threads": 1,
         "request_sequence": 6,
-        "wall_seconds": 0.257295
+        "wall_seconds": 0.265274
       },
       "oracle_result": {
         "property_case": {
@@ -616,15 +745,15 @@
       "source_snapshot_identity_after": "sha256:3d9a45dc3eb60bbd4568d8401e64bb3f8cfa8c7bcd5b5027e82be37135c04a49",
       "source_snapshot_identity_before": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
       "vm_metrics": {
-        "cpu_seconds": 0.15,
+        "cpu_seconds": 0.16,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
-        "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 23003136,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 27316224,
         "peak_threads": 1,
         "process_count": 1,
         "stderr": "",
-        "wall_seconds": 0.174411
+        "wall_seconds": 0.178484
       },
       "vm_result": {
         "property_case": {
@@ -656,17 +785,17 @@
       }
     },
     "unreferenced_module_addition_and_edit": {
-      "artifact_identity_after_addition": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
-      "artifact_identity_after_edit": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
-      "artifact_identity_before": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
+      "artifact_identity_after_addition": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
+      "artifact_identity_after_edit": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
+      "artifact_identity_before": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
       "cache_after_addition": {
-        "key": "sha256:a4237252cfb43504c978f95bf7c6035a21f948aa00197b2da144325b7e8f659f",
+        "key": "sha256:fa88e098d3755c4ccbfeb17a002b15bcecf83be386c870f375592fddb719f263",
         "publication": "previously_published",
         "recomputed_units": [
           "request_source_snapshot_identity"
         ],
         "reuse_basis": "verified_dependency_closure",
-        "reused_from_key": "sha256:ee6745c12a342ce7323d8d7383e653ff2097b7548cdfba917bb7f1e10c6c462e",
+        "reused_from_key": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
         "reused_units": [
           "verified_application_artifact"
         ],
@@ -674,13 +803,13 @@
         "status": "hit"
       },
       "cache_after_edit": {
-        "key": "sha256:13014c42a6b3504605be38135cc24ef78592d62fc6792c6109a91074a8290f6f",
+        "key": "sha256:957e38c747a4fe45ba1a78a9ebaf1f2013d1fc3e9dde4578e56e94f941f0f42c",
         "publication": "previously_published",
         "recomputed_units": [
           "request_source_snapshot_identity"
         ],
         "reuse_basis": "verified_dependency_closure",
-        "reused_from_key": "sha256:ee6745c12a342ce7323d8d7383e653ff2097b7548cdfba917bb7f1e10c6c462e",
+        "reused_from_key": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
         "reused_units": [
           "verified_application_artifact"
         ],
@@ -692,20 +821,20 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 42074112,
+        "peak_rss_bytes": 42033152,
         "peak_threads": 1,
         "request_sequence": 4,
-        "wall_seconds": 0.025481
+        "wall_seconds": 0.024852
       },
       "compile_metrics_after_edit": {
-        "cpu_seconds": 0.03,
+        "cpu_seconds": 0.02,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 42074112,
+        "peak_rss_bytes": 42033152,
         "peak_threads": 1,
         "request_sequence": 5,
-        "wall_seconds": 0.024914
+        "wall_seconds": 0.025278
       },
       "dependency_graph_identity": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
       "module_added_and_edited": "mncs.test.unused",
@@ -714,14 +843,14 @@
       "module_source_sha256_after_addition": "sha256:4defb7646bd1439490d763ce2d15c8916b909771de92026cc425f7f737ca805c",
       "module_source_sha256_after_edit": "sha256:3cfa55941e0c1bfcb9c58237ee31ca502646d0ff5f95ae389298d424e4c601d8",
       "oracle_metrics": {
-        "cpu_seconds": 0.24,
+        "cpu_seconds": 0.25,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 40910848,
+        "peak_rss_bytes": 41013248,
         "peak_threads": 1,
         "request_sequence": 3,
-        "wall_seconds": 0.258614
+        "wall_seconds": 0.271696
       },
       "oracle_result": {
         "property_case": {
@@ -756,15 +885,15 @@
       "snapshot_identity_after_edit": "sha256:b4f422eaa30cf80b36532712af955261cbeb2e81841483fe0f4b78108a8ab998",
       "snapshot_identity_before": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
       "vm_metrics": {
-        "cpu_seconds": 0.17,
+        "cpu_seconds": 0.15,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 27648000,
+        "peak_rss_bytes": 22896640,
         "peak_threads": 1,
         "process_count": 1,
         "stderr": "",
-        "wall_seconds": 0.178019
+        "wall_seconds": 0.175723
       },
       "vm_result": {
         "property_case": {
@@ -805,60 +934,60 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 59777024,
+        "peak_rss_bytes": 59764736,
         "peak_threads": 1,
         "request_sequence": 14,
-        "wall_seconds": 0.000244
+        "wall_seconds": 0.000252
       },
       "response_status": "unavailable"
     },
     "warm_unchanged_fresh_process": {
-      "artifact_identity": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
+      "artifact_identity": "sha256:71ed9801dd07e5ba841fa39d86e43543cefb903fb1d2e111d6851755e898d53e",
       "cache": {
-        "key": "sha256:ee6745c12a342ce7323d8d7383e653ff2097b7548cdfba917bb7f1e10c6c462e",
+        "key": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
         "publication": "previously_published",
         "recomputed_units": [],
         "reuse_basis": "exact_source_snapshot",
-        "reused_from_key": "sha256:ee6745c12a342ce7323d8d7383e653ff2097b7548cdfba917bb7f1e10c6c462e",
+        "reused_from_key": "sha256:e69ce62e4d62f66aa92d12422fc21110496164c305e1e7e8c1d3ca5da751c7f9",
         "reused_units": [
           "verified_application_artifact"
         ],
         "schema_version": "mncs.compiler.application-build-cache-observation/3",
         "status": "hit"
       },
-      "cpu_speedup": 4.18,
+      "cpu_speedup": 4.6,
       "metrics": {
-        "cpu_seconds": 0.11,
+        "cpu_seconds": 0.1,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 37224448,
+        "peak_rss_bytes": 34164736,
         "peak_threads": 1,
         "request_sequence": 2,
-        "wall_seconds": 0.12292
+        "wall_seconds": 0.122256
       },
       "process_startup_metrics": {
-        "cpu_seconds": 0.0,
+        "cpu_seconds": 0.01,
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 3,
-        "peak_rss_bytes": 2150400,
+        "peak_rss_bytes": 18591744,
         "peak_threads": 1,
         "request_sequence": 1,
-        "wall_seconds": 0.010992
+        "wall_seconds": 0.039607
       },
-      "wall_speedup": 3.84
+      "wall_speedup": 3.88
     }
   },
   "fine_grained_invalidation": {
-    "detail": "Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took 0.189 s and reused the artifact, while a semantic dependency change took 0.385 s and rebuilt; the reused artifact result matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial.",
+    "detail": "Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took 0.183 s and reused the artifact, while a semantic dependency change took 0.384 s and rebuilt; the reused artifact result matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial. A byte-distinct compiler-probe executable changed the cache key, forced a miss and recomputed source checking, SSA verification, and the VM artifact; the newly built artifact produced a result equal to the independent Stage-0 oracle.",
     "status": "semantic_identity_and_dependency_closure_artifact_reuse_implemented"
   },
   "gate_a": "pass",
   "gate_b": "partial",
   "kind": "mncs-native-incremental-build-evidence",
-  "observed_at": "2026-10-15T02:38:33.436775+00:00",
-  "producer_diagnostics_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=unknown/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=unknown/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=unknown/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=unknown/e8f8a5f8659c\n",
+  "observed_at": "2026-10-15T06:29:24Z",
+  "producer_diagnostics_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n",
   "resource_notes": {
     "cgroup_memory_bytes": "unknown when the sandbox exposes no usable cgroup memory counter",
     "process_metrics": "sampled from /proc for probe and VM processes; wall and CPU use process deltas"

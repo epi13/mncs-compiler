@@ -43,8 +43,11 @@ def resolve_workspace_root() -> Path:
 WORKSPACE_ROOT = resolve_workspace_root()
 TEST_ROOT = WORKSPACE_ROOT / 'mncs-test'
 VM_ROOT = WORKSPACE_ROOT / 'mncs-vm'
-VM_BIN = ROOT / '.build/native-app-readiness/mncs-vm'
-PROBE = ROOT / '.build/native-app-readiness/mncs-compiler-stage0-probe'
+VM_BIN = Path(os.environ.get(
+    'MNCS_NATIVE_APP_VM_BIN', str(ROOT / '.build/native-app-readiness/mncs-vm')))
+PROBE = Path(os.environ.get(
+    'MNCS_NATIVE_APP_PROBE_BIN',
+    str(ROOT / '.build/native-app-readiness/mncs-compiler-stage0-probe')))
 EVIDENCE = ROOT / 'evidence/native-app-readiness-gate-a.json'
 ARTIFACT_PATH = ROOT / '.build/native-app-readiness/native-test-readiness.vm.json'
 APP_MODULE = 'tests.native_readiness'
@@ -189,7 +192,7 @@ def summarize_samples(samples: list[dict], wall_seconds: float, cpu_start: float
 
 
 class Probe:
-    def __init__(self, cache_dir: Path | None = None):
+    def __init__(self, cache_dir: Path | None = None, executable: Path | None = None):
         env = os.environ.copy()
         env['MNCS_PROBE_MODULES'] = ''
         env['MNCS_PROBE_EXECUTION_MODULES'] = ''
@@ -197,8 +200,9 @@ class Probe:
         env.pop('MNCS_PROBE_BACKEND', None)
         env['MNCS_PROBE_CACHE_DIR'] = str(cache_dir or ROOT / '.build/native-app-readiness/probe-cache')
         env['MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT'] = str(ROOT)
+        self.executable = executable or PROBE
         self.stderr = tempfile.TemporaryFile(mode='w+t')
-        self.proc = subprocess.Popen([str(PROBE)], cwd=ROOT, env=env,
+        self.proc = subprocess.Popen([str(self.executable)], cwd=ROOT, env=env,
                                      stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=self.stderr, text=True, bufsize=1)
         self.samples: list[dict] = []

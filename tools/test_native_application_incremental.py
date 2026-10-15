@@ -5,9 +5,11 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 import select
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -58,8 +60,8 @@ def compile_one(probe: app.Probe, request: dict) -> tuple[dict, dict]:
     return probe.send({'compile_application': request})
 
 
-def ready_probe(cache_dir: Path) -> tuple[app.Probe, dict]:
-    probe = app.Probe(cache_dir)
+def ready_probe(cache_dir: Path, executable: Path | None = None) -> tuple[app.Probe, dict]:
+    probe = app.Probe(cache_dir, executable=executable)
     response, metrics = probe.send({'execution_status': True})
     if not isinstance(response, dict) or 'modules' not in response:
         raise AssertionError('Stage-0 probe did not return its readiness handshake')
@@ -193,6 +195,66 @@ def main() -> None:
             raise AssertionError('unchanged build did not hit the persistent artifact cache')
         if warm['artifact']['identity'] != cold['artifact']['identity']:
             raise AssertionError('warm reuse changed the artifact identity')
+
+        # A byte-distinct compiler executable is a different producer even
+        # when it contains the same code. Sharing a cache directory must not
+        # let it reuse a result admitted under the old compiler identity.
+        with tempfile.TemporaryDirectory(prefix='native-app-probe-identity-') as raw_dir:
+            variant_probe_path = Path(raw_dir) / 'mncs-compiler-stage0-probe'
+            shutil.copy2(app.PROBE, variant_probe_path)
+            with variant_probe_path.open('ab') as variant_file:
+                variant_file.write(b'\0compiler-identity-cache-isolation')
+            variant_probe, variant_startup_metrics = ready_probe(
+                CACHE_DIR, executable=variant_probe_path)
+            try:
+                variant_oracle, variant_exec, variant_oracle_metrics = oracle_one(
+                    variant_probe, app.APP_SOURCE, modules)
+                variant_build, variant_build_metrics = compile_one(
+                    variant_probe, original_request)
+                if (variant_build.get('cache', {}).get('status') != 'miss'
+                        or variant_build.get('cache', {}).get('reused_units') != []
+                        or variant_build.get('cache', {}).get('recomputed_units') != [
+                            'source_semantic_check', 'ssa_verification',
+                            'verified_vm_artifact']):
+                    raise AssertionError(
+                        'different compiler executable identity reused a prior application build')
+                original_probe_identity = cold.get('producer', {}).get('probe', {}).get(
+                    'probe_executable_sha256')
+                variant_probe_identity = variant_build.get('producer', {}).get('probe', {}).get(
+                    'probe_executable_sha256')
+                if (not original_probe_identity or not variant_probe_identity
+                        or original_probe_identity == variant_probe_identity):
+                    raise AssertionError('compiler identity isolation fixture did not change probe identity')
+                _variant_vm, variant_vm_metrics, variant_actual = run_and_compare(
+                    variant_build['artifact']['value'], variant_exec)
+                if compact_oracle(variant_exec) != compact_result(variant_actual[0]):
+                    raise AssertionError('identity-isolated build changed application semantics')
+                variant_probe_tail = variant_probe.close()
+            except BaseException:
+                if variant_probe.proc.poll() is None:
+                    variant_probe.proc.kill()
+                    variant_probe.proc.wait(timeout=5)
+                raise
+            different_compiler_identity = {
+                'original_probe_sha256': original_probe_identity,
+                'variant_probe_sha256': variant_probe_identity,
+                'cache_key_original': cold.get('cache', {}).get('key'),
+                'cache_key_variant': variant_build.get('cache', {}).get('key'),
+                'cache_status': variant_build.get('cache', {}).get('status'),
+                'reused_units': variant_build.get('cache', {}).get('reused_units'),
+                'recomputed_units': variant_build.get('cache', {}).get('recomputed_units'),
+                'artifact_identity_original': cold['artifact']['identity'],
+                'artifact_identity_variant': variant_build['artifact']['identity'],
+                'oracle_valid': variant_oracle.get('valid'),
+                'oracle_result': compact_oracle(variant_exec),
+                'vm_result': compact_result(variant_actual[0]),
+                'semantic_match': compact_oracle(variant_exec) == compact_result(variant_actual[0]),
+                'oracle_metrics': variant_oracle_metrics,
+                'compile_metrics': variant_build_metrics,
+                'vm_metrics': variant_vm_metrics,
+                'process_startup_metrics': variant_startup_metrics,
+                'producer_stderr_tail': variant_probe_tail[-1200:],
+            }
 
         # An input module outside the verified dependency graph must not force
         # a semantic rebuild. Its source still changes the full snapshot
@@ -426,6 +488,7 @@ fn value() -> (result: u64) { return 1; }'''
                 'cpu_speedup': round(cold_metrics['cpu_seconds'] /
                                      max(warm_metrics['cpu_seconds'], 1e-9), 2),
             },
+            'different_compiler_executable_identity': different_compiler_identity,
             'unreferenced_module_addition_and_edit': {
                 'module_added_and_edited': 'mncs.test.unused',
                 'module_source_sha256_after_addition': app.sha(unused_modules['mncs.test.unused'].encode()),
@@ -532,7 +595,6 @@ fn value() -> (result: u64) { return 1; }'''
     }
     EVIDENCE.parent.mkdir(parents=True, exist_ok=True)
     EVIDENCE.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
-    import shutil
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
     print(json.dumps({
         'gate_a': 'pass', 'gate_b': 'partial',
