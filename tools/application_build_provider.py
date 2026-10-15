@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 
@@ -119,6 +120,42 @@ def request_artifact_bytes(name: str) -> bytes:
     ):
         raise ProviderError("Environment input-artifact bytes do not match Store provenance")
     return content
+
+
+def clear_previous_response() -> None:
+    """Remove a restored prior result before a new build can fail.
+
+    Environment restores the previous capability artifact bundle before each
+    invocation. Keeping its last successful build file when the new request
+    fails would let a failed invocation appear to have produced that success.
+    The private artifact directory is provider-owned for this process; refuse
+    non-regular entries and unlink the old result without following it.
+    """
+    raw_directory = os.environ.get(OUTPUT_ARTIFACT_DIR_ENV, "")
+    if not raw_directory:
+        return
+    directory = Path(raw_directory)
+    if directory.is_symlink():
+        raise ProviderError("Environment output-artifact directory is invalid")
+    try:
+        directory = directory.resolve(strict=True)
+    except OSError as error:
+        raise ProviderError("Environment output-artifact directory is unavailable") from error
+    if not directory.is_dir():
+        raise ProviderError("Environment output-artifact target is not a directory")
+    output = directory / "native-application-build.json"
+    try:
+        mode = output.lstat().st_mode
+    except FileNotFoundError:
+        return
+    except OSError as error:
+        raise ProviderError("Environment prior application-build result is unavailable") from error
+    if not stat.S_ISREG(mode):
+        raise ProviderError("Environment prior application-build result is not a regular file")
+    try:
+        output.unlink()
+    except OSError as error:
+        raise ProviderError("Environment prior application-build result could not be cleared") from error
 
 
 def selected_probe() -> Path:
@@ -301,6 +338,7 @@ def main(argv: list[str] | None = None) -> int:
     build.add_argument("--timeout-seconds", type=float, default=120.0)
     args = parser.parse_args(argv)
     try:
+        clear_previous_response()
         raw = (
             request_file_bytes(args.request_file)
             if args.request_file is not None

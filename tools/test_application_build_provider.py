@@ -304,6 +304,9 @@ def main() -> None:
         corrupt_manifest["artifacts"][0]["sha256"] = "0" * 64
         corrupt_output_dir = base / "corrupt-output"
         corrupt_output_dir.mkdir()
+        (corrupt_output_dir / "native-application-build.json").write_bytes(
+            (cold_dir / "native-application-build.json").read_bytes()
+        )
         corrupt_environment = os.environ.copy()
         corrupt_environment["MNCS_COMPILER_PROBE"] = str(app.PROBE)
         corrupt_environment["MNCS_ENV_SESSION_ARTIFACT_DIR"] = str(corrupt_output_dir)
@@ -324,7 +327,9 @@ def main() -> None:
             check=False,
         )
         if corrupt.returncode == 0 or list(corrupt_output_dir.iterdir()):
-            raise AssertionError("corrupt Store input was accepted or published")
+            raise AssertionError(
+                "corrupt Store input was accepted or a prior successful result survived"
+            )
 
         schema_output_dir = base / "wrong-schema-output"
         schema_output_dir.mkdir()
