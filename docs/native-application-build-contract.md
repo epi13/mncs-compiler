@@ -19,7 +19,7 @@ with the pinned Stage-0 compiler, then asks the compiler-owned canonical VM
 emitter for the existing `mncs.vm.artifact/1` format. Specialization identities
 are normalized, sorted, and included in the persistent application cache key.
 
-`mncs.compiler.application-build/2` records framed source-snapshot identity,
+`mncs.compiler.application-build/4` records framed source-snapshot identity,
 source hashes, resolved dependency identity, Stage-0 and producer identities,
 artifact and module interface identities, required capabilities, unresolved
 obligations, structured source diagnostics, target compatibility, and explicit

@@ -4,11 +4,35 @@
 **Candidate tool:** `mncs-test`
 **Current recommendation:** Start with the native-first digest and verify path. Keep the production host orchestration until the native command proves full parity.
 
+## Post-reboot continuation (2026-10-14)
+
+The host journal records an orderly reboot initiated through `systemd-logind` at
+17:13:40 AKDT. The request's caller and reason are unknown; no OOM, panic,
+watchdog reset, package transaction, or hardware fault was recorded. Current
+host resources are healthy. The existing native-readiness campaign resumed in
+the same session and worktree, and Control transferred its worktree claim from
+version 3 to version 4 after boot-aware owner recovery. Full observations and
+limits are recorded in `evidence/post-reboot-recovery-20261014.json`.
+
+After recovery, Gate A's multi-module Stage-0/VM check and Gate B's incremental
+cache suite passed. The warm exact-artifact path measured 0.123 s versus 0.472 s
+cold (3.84×). Gate B remains partial because semantic edits still rebuild the
+verified application closure. The latest evidence files are
+`evidence/native-app-readiness-gate-a.json` (SHA-256
+`95c9bb93efc579aa832ebba55c6e50c1570c7332b204baa97e70b4af57eb81dc`) and
+`evidence/native-app-readiness-gate-b.json` (SHA-256
+`084bf6c39d6d6bdac12907ed3317c06168db6f9d62eedd004033590f8e643fb5`).
+
+Gate C remains partial. The version-4 provider regression passes, but this run
+did not publish and read back a native application result through canonical
+Store or Forge. The Language-owned verified-facts API needed for finer-grained
+semantic reuse is also outside this campaign's write authority.
+
 ## Evidence boundary
 
 This assessment uses the read-only `mncs-test` checkout at `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM `1c19a94732c9d24029dd00e2d5af13710f481d02`, and Compiler producer commit `24dda63ae59e0505969c490604e14348dab1f7d7`. The Stage-0 reference revision is `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, release probe SHA-256 `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`; the VM binary SHA-256 is `2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5`.
 
-The readiness application compiles the `run` entry and two explicit generic specializations from a five-module Test source closure. Its typed report, nominal records, finite payloads, bounded sequences, matches, and typed failures agree between Stage-0 and the canonical VM. An invalid field projection reports `MNE162`. Current evidence is `evidence/native-app-readiness-gate-a.json` (SHA-256 `640f7e3d062f9f99c5f575af4baf4642711205a3d1a6cff103303cca145f65bc`); artifact identity is `sha256:cff9e5cc4cb47ea19096ec735384263fb87d211d3d7d835173b56bca3e2ea879`.
+The readiness application compiles the `run` entry and two explicit generic specializations from a five-module Test source closure. Its typed report, nominal records, finite payloads, bounded sequences, matches, and typed failures agree between Stage-0 and the canonical VM. An invalid field projection reports `MNE162`. The initial Gate A evidence used artifact identity `sha256:cff9e5cc4cb47ea19096ec735384263fb87d211d3d7d835173b56bca3e2ea879`; the post-reboot rerun and current artifact identity are in the continuation above.
 
 The real `mncs.test.digest::build_digest` function compiles under application-build/4 from its Digest, Assertions, Suite, and Stdlib application sources. Stage-0 and three canonical VM calls agree on pass/fail/skip aggregation, failure caps, omitted-failure counts, and all-pass results. Artifact identity is `sha256:3bd4cc51f4e61ff91131f1d6d65be73615ebaf19ebc66deca75e2a0d7e3ee3df`; callable interface is `sha256:3c08227564c44096355994ec3689e817d710ca5848581880dc278d5cd7e434f9`. Evidence is `evidence/native-app-readiness-test-digest.json` (SHA-256 `3ad5ba0758dfce1c7fed304bc3e91d37ff30b867ce244f144b98304ab025d694`). Cold build measured 0.628 s / 0.590 CPU / 65.0 MiB peak RSS; Stage-0 took 0.354 s; VM calls took 0.210–0.212 s at about 28 MiB. These are bounded application measurements, not full `mncs-test` performance.
 

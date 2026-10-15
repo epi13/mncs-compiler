@@ -1,0 +1,137 @@
+{
+  "kind": "mncs-autonomous-development-post-reboot-acceptance",
+  "schema_version": 1,
+  "observed_at": "2026-10-15T02:41:24Z",
+  "reboot": {
+    "previous_boot_id": "0392c1b394a94473bb88a8a8a083261d",
+    "previous_boot_started_akdt": "2026-10-13T17:05:40-08:00",
+    "reboot_request_akdt": "2026-10-14T17:13:40.726199-08:00",
+    "current_boot_id": "15a4bc9870d540cc8d6ba75198db7b27",
+    "current_boot_started_akdt": "2026-10-14T17:14:44-08:00",
+    "previous_boot_last_orderly_shutdown_record_akdt": "2026-10-14T17:14:26.657776-08:00",
+    "mechanism": "systemd-logind recorded an explicit reboot request, followed by orderly systemd service shutdown and filesystem unmounts.",
+    "requesting_caller": "unknown; the surviving journal does not identify the D-Bus caller or reason",
+    "confidence": {
+      "orderly_logind_initiated_reboot": "high",
+      "underlying_request_cause": "low"
+    },
+    "other_hypotheses": {
+      "kernel_panic_or_watchdog_reset": "no supporting record; the watchdog stop warning occurred during orderly shutdown",
+      "oom_or_systemd_oomd": "no prior-boot kernel OOM or systemd-oomd event found",
+      "thermal_or_hardware_fault": "no prior-boot thermal, machine-check, storage, or GPU fault found; historical temperature telemetry unavailable",
+      "package_update": "no package transaction near the reboot; prior and current boots used the same kernel",
+      "ups_event": "no UPS monitor or surviving UPS event log was configured, so this cannot be ruled out from UPS records"
+    },
+    "resource_context": {
+      "user_slice_recorded_peak": "about 25.2 GiB cgroup-accounted memory",
+      "interpretation": "peak accounting is not process RSS and does not establish memory exhaustion or explain the reboot",
+      "previous_boot_swap_peak": "about 61.2 MiB"
+    },
+    "last_development_operation": "unknown; the previous boot has no surviving MNCS process/job history that identifies an in-flight command",
+    "latest_pre_reboot_campaign_checkpoint": {
+      "identity": "chk_1dd33ff37ce38f3c",
+      "sequence": 29,
+      "recorded_at_akdt": "2026-10-14T17:09:37-08:00"
+    }
+  },
+  "current_host_health": {
+    "observed_at_akdt": "2026-10-14T18:38:51-08:00",
+    "memory_total_bytes": 33411579904,
+    "memory_available_bytes": 25857212416,
+    "swap_total_bytes": 8589930496,
+    "swap_used_bytes": 0,
+    "load_average_1m": 0.94,
+    "home_filesystem_free": "67 GiB of 236 GiB",
+    "cpu_package_temperature_c": 44,
+    "failed_systemd_units": 0,
+    "compiler_or_vm_build_processes": 0,
+    "open_file_limit": 524288,
+    "health_assessment": "safe for bounded development work"
+  },
+  "campaign_recovery": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "resumed_session_lifecycle": "active",
+    "authorized_writable_repository": "mncs-compiler",
+    "worktree": "mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "claim_id": "claim:mncs-compiler:worktree:4ad8d3d284c5",
+    "previous_claim_identity": "clm_f68e1d8ed71e5116",
+    "previous_claim_version": 3,
+    "recovered_claim_identity": "clm_e4da8b12a64fa4b7",
+    "recovered_claim_version": 4,
+    "new_owner_consumer": "local-agent",
+    "scope_preserved": "same non-exclusive Compiler worktree",
+    "recovery_result": "Control's boot-aware ownership path proved the previous owner abandoned and transferred the existing claim to the fresh owner; the Environment session and checkout were preserved",
+    "obsolete_owner_generation": "superseded by claim version 4",
+    "preserved_untracked_state": [
+      "compiler worktree .bootstrap.control-workspace-link",
+      "Compiler main checkout .worktrees/ and its three untracked campaign evidence files"
+    ]
+  },
+  "verification_after_recovery": {
+    "environment_provider": {
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.native-application-build-provider",
+      "status": "pass",
+      "returncode": 0,
+      "response_schema": "mncs.compiler.application-build/4",
+      "resource_envelope": {
+        "verification_capability_timeout_seconds": 300,
+        "project_manifest_provider_timeout_seconds": 120,
+        "provider_probe_subprocess_default_timeout_seconds": 120,
+        "current_persisted_native_build_binding_timeout_seconds": null,
+        "binding_note": "After same-session resume, the current capability view still reported a null invocation timeout. The provider subprocess has its own 120-second timeout and Environment uses 120 seconds when a binding has no timeout. Canonical provider invocation was not available to exercise this binding."
+      },
+      "checks": [
+        "cold miss and fresh-process warm reuse",
+        "precise invalid-source rejection",
+        "invalid success is not published",
+        "valid Store input-artifact reuse and corrupt input rejection",
+        "unsupported request schema rejection"
+      ],
+      "limitation": "provider regression is not a canonical Store publication/readback or Forge invocation receipt"
+    },
+    "native_application_execution": {
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.native-application-generic-specialization",
+      "status": "pass",
+      "returncode": 0,
+      "gate_a": "pass",
+      "artifact_identity": "sha256:e1e71c7006640b03a798ea977c436f5e4f9fe5e2852e903d63ba31a70feb266f",
+      "stage0_matches_canonical_vm": true,
+      "typed_negative_diagnostic": "MNE162",
+      "build_wall_seconds": 0.480609,
+      "build_peak_rss_bytes": 59543552,
+      "vm_wall_seconds": 0.177355,
+      "vm_peak_rss_bytes": 27844608,
+      "cgroup_memory_counter": "unavailable in the execution sandbox",
+      "evidence_path": "evidence/native-app-readiness-gate-a.json",
+      "evidence_sha256": "95c9bb93efc579aa832ebba55c6e50c1570c7332b204baa97e70b4af57eb81dc"
+    },
+    "incremental_application_build": {
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.native-application-incremental-cache",
+      "status": "pass",
+      "returncode": 0,
+      "gate_b": "partial",
+      "cold_wall_seconds": 0.471521,
+      "warm_wall_seconds": 0.12292,
+      "cold_to_warm_speedup": 3.84,
+      "unreferenced_module_and_comment_edits": "reused only under verified dependency closure",
+      "semantic_root_and_dependency_edits": "invalidated the cache",
+      "isolated_interruption_and_retry_case": "passed; retry began with a cache miss",
+      "evidence_path": "evidence/native-app-readiness-gate-b.json",
+      "evidence_sha256": "084bf6c39d6d6bdac12907ed3317c06168db6f9d62eedd004033590f8e643fb5"
+    },
+    "control_prior_boot_pid_reuse_regression": {
+      "repository_revision": "501a0bb94e167df641fd0e48bd3d4519e2bced90",
+      "test": "tests/test_environment_rpc.py::test_audit_identity_from_prior_host_boot_cannot_keep_a_reused_pid_live",
+      "command": ".venv/bin/python -m pytest tests/test_environment_rpc.py -k audit_identity_from_prior_host_boot_cannot_keep_a_reused_pid_live -q",
+      "result": "passed"
+    }
+  },
+  "remaining_frontiers": {
+    "gate_b": "verified declaration/function reuse within a changed semantic closure still requires the Language-owned facts API and matching repository authority",
+    "gate_c": "canonical native-application invocation and result-artifact readback remain unproven; the public Environment tool does not expose invoke, and Forge's one 30-second health probe timed out",
+    "succession": "Stage-1 and Stage-2 remain unproven",
+    "cause_diagnosis": "the reboot caller and motivation remain unknown because surviving logs do not record them"
+  }
+}
