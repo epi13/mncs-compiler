@@ -14,6 +14,10 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_vm_native_application as app
 
+configured_probe = os.environ.get("MNCS_COMPILER_PROBE")
+if configured_probe:
+    app.PROBE = Path(configured_probe).expanduser().resolve()
+
 ROOT = app.ROOT
 PROVIDER = ROOT / "tools/application_build_provider.py"
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
@@ -127,6 +131,23 @@ def main() -> None:
             output_dir=cold_dir,
             cache_dir=cache_dir,
         )
+        invocation_summary_bytes = (
+            json.dumps(cold, ensure_ascii=False, sort_keys=True,
+                       separators=(",", ":")).encode("utf-8") + b"\n"
+        )
+        if len(invocation_summary_bytes) > 8192:
+            raise AssertionError(
+                "provider stdout summary exceeds the Environment's per-stream capture bound"
+            )
+        summary_interface = cold.get("entry", {}).get("interface", {})
+        if not isinstance(summary_interface, dict) or "types" in summary_interface:
+            raise AssertionError(
+                "provider stdout must keep the full typed closure in its shareable artifact"
+            )
+        if summary_interface.get("identity") != cold_response.get("entry", {}).get(
+            "interface", {}
+        ).get("identity"):
+            raise AssertionError("provider stdout omitted the exact callable interface identity")
         artifact = cold_response.get("artifact", {})
         if cold_response.get("entry", {}).get("status") != "verified":
             raise AssertionError("native application entry is not verified")
@@ -203,8 +224,14 @@ def main() -> None:
             raise AssertionError("Environment summary changed dependency identity")
         if cold.get("artifact_identity") != artifact.get("identity"):
             raise AssertionError("Environment summary changed artifact identity")
-        if cold.get("capability_dispatch") != capability_dispatch:
-            raise AssertionError("Environment summary changed compiler capability dispatch")
+        summary_dispatch = cold.get("capability_dispatch", {})
+        if (
+            summary_dispatch.get("status") != capability_dispatch.get("status")
+            or summary_dispatch.get("binding_count") != len(capability_dispatch["bindings"])
+            or summary_dispatch.get("unresolved_obligation_count")
+            != len(capability_dispatch["unresolved_obligations"])
+        ):
+            raise AssertionError("Environment summary changed compiler capability dispatch facts")
         if cold_response.get("cache", {}).get("status") != "miss":
             raise AssertionError("first provider build did not compile the request")
 

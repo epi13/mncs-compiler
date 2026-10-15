@@ -240,12 +240,39 @@ def publish_response(response: dict) -> str | None:
 
 
 def summary(response: dict, output_name: str | None) -> dict:
+    raw_entry = response.get("entry")
+    entry: dict | None = None
+    if isinstance(raw_entry, dict):
+        entry = {
+            key: raw_entry[key]
+            for key in ("module", "function", "status")
+            if key in raw_entry
+        }
+        raw_interface = raw_entry.get("interface")
+        if isinstance(raw_interface, dict):
+            entry["interface"] = {
+                key: raw_interface[key]
+                for key in ("identity", "status", "signature")
+                if key in raw_interface
+            }
+    raw_dispatch = response.get("capability_dispatch")
+    dispatch: dict | None = None
+    if isinstance(raw_dispatch, dict):
+        bindings = raw_dispatch.get("bindings", [])
+        obligations = raw_dispatch.get("unresolved_obligations", [])
+        dispatch = {
+            "status": raw_dispatch.get("status"),
+            "binding_count": len(bindings) if isinstance(bindings, list) else None,
+            "unresolved_obligation_count": (
+                len(obligations) if isinstance(obligations, list) else None
+            ),
+        }
     return {
         "schema_version": INVOCATION_SCHEMA,
         "response_schema": RESPONSE_SCHEMA,
         "status": "stored" if output_name else "available",
         "build_status": response.get("status"),
-        "entry": response.get("entry"),
+        "entry": entry,
         "source_snapshot_identity": (
             response.get("source_snapshot", {}).get("identity")
             if isinstance(response.get("source_snapshot"), dict) else None
@@ -258,7 +285,7 @@ def summary(response: dict, output_name: str | None) -> dict:
             response.get("artifact", {}).get("identity")
             if isinstance(response.get("artifact"), dict) else None
         ),
-        "capability_dispatch": response.get("capability_dispatch"),
+        "capability_dispatch": dispatch,
         "result_file": output_name,
     }
 
