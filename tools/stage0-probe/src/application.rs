@@ -294,11 +294,69 @@ fn annotate_cache_with_basis(
     reused_units: &[&str],
     recomputed_units: &[&str],
 ) -> Value {
+    let artifact_present = response.pointer("/artifact/value").is_some();
+    let verifier_identity = response
+        .pointer("/producer/probe/probe_executable_sha256")
+        .cloned()
+        .unwrap_or(Value::Null);
     if let Some(object) = response.as_object_mut() {
+        let frontend_invoked = recomputed_units.contains(&"source_semantic_check");
+        let source_stage = if frontend_invoked {
+            "recomputed_by_full_frontend"
+        } else {
+            "not_run"
+        };
+        let dependency_closure = if frontend_invoked {
+            "recomputed_by_full_frontend"
+        } else if reuse_basis == "verified_dependency_closure" {
+            "reused_verified_dependency_closure"
+        } else {
+            "not_run"
+        };
+        let ssa_verification = if reused_units.contains(&"verified_vm_artifact") {
+            "reused_verified_vm_artifact"
+        } else if recomputed_units.contains(&"ssa_verification") {
+            "recomputed"
+        } else if recomputed_units.contains(&"verified_vm_artifact") {
+            "attempted"
+        } else {
+            "not_run"
+        };
+        let backend_artifact = if reused_units.contains(&"verified_application_artifact")
+            || reused_units.contains(&"verified_vm_artifact")
+        {
+            "reused"
+        } else if artifact_present && recomputed_units.contains(&"verified_vm_artifact") {
+            "generated"
+        } else {
+            "not_generated"
+        };
+        let semantic_reverification_reason = if reuse_basis == "exact_source_snapshot" {
+            "exact_source_snapshot_cache_hit"
+        } else if reuse_basis == "verified_dependency_closure" {
+            "source_change_outside_resolved_dependency_closure"
+        } else if frontend_invoked && reuse_basis == "verified_application_executable_closure" {
+            "source_snapshot_changed; full_frontend_required_before_artifact_reuse"
+        } else if frontend_invoked {
+            "no_reusable_language_verified_fact_set_selected"
+        } else {
+            "semantic_frontend_not_reached"
+        };
+        let artifact_decision_reason = if backend_artifact == "reused" {
+            if reuse_basis == "verified_application_executable_closure" {
+                "executable_closure_and_interfaces_match_after_full_frontend"
+            } else {
+                "verified_cached_application_artifact"
+            }
+        } else if backend_artifact == "generated" {
+            "no_compatible_verified_vm_artifact_reused"
+        } else {
+            "frontend_or_artifact_emission_did_not_produce_an_artifact"
+        };
         object.insert(
             "cache".to_owned(),
             json!({
-                "schema_version": "mncs.compiler.application-build-cache-observation/3",
+                "schema_version": "mncs.compiler.application-build-cache-observation/4",
                 "key": key,
                 "status": status,
                 "publication": publication,
@@ -306,9 +364,51 @@ fn annotate_cache_with_basis(
                 "reused_from_key": reused_from_key,
                 "reused_units": reused_units,
                 "recomputed_units": recomputed_units,
+                "verification_work": {
+                    "schema_version": "mncs.compiler.application-build-verification-work/1",
+                    "verification_engine_identity": verifier_identity,
+                    "source_parsing": source_stage,
+                    "declaration_resolution": source_stage,
+                    "signature_verification": source_stage,
+                    "function_body_verification": source_stage,
+                    "semantic_dependency_closure": dependency_closure,
+                    "ssa_verification": ssa_verification,
+                    "backend_artifact": backend_artifact,
+                    "front_end_invocations": u8::from(frontend_invoked),
+                    "front_end_outcome": if frontend_invoked { "not_recorded" } else { "not_run" },
+                    "resolved_module_count": null,
+                    "program_function_count": null,
+                    "reused_semantic_facts": [],
+                    "semantic_reverification_reason": semantic_reverification_reason,
+                    "artifact_decision_reason": artifact_decision_reason,
+                },
             }),
         );
     }
+    response
+}
+
+fn annotate_frontend_work(
+    mut response: Value,
+    resolved_module_count: usize,
+    program_function_count: Option<usize>,
+    frontend_outcome: &str,
+) -> Value {
+    let Some(work) = response
+        .pointer_mut("/cache/verification_work")
+        .and_then(Value::as_object_mut)
+    else {
+        return response;
+    };
+    work.insert(
+        "resolved_module_count".to_owned(),
+        json!(resolved_module_count),
+    );
+    work.insert(
+        "program_function_count".to_owned(),
+        program_function_count.map_or(Value::Null, |count| json!(count)),
+    );
+    work.insert("front_end_outcome".to_owned(), json!(frontend_outcome));
     response
 }
 
@@ -1446,11 +1546,16 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         &resolver,
         &generic_seeds,
     );
+    let resolved_module_count = frontend.module_resolutions.len().saturating_add(1);
+    let program_function_count = frontend
+        .program
+        .as_ref()
+        .map(|program| program.functions.len());
     let diagnostics = serde_json::to_value(&frontend.diagnostics).unwrap_or_else(|_| json!([]));
     let resolutions =
         serde_json::to_value(&frontend.module_resolutions).unwrap_or_else(|_| json!([]));
     let Some(program) = frontend.program.as_ref().filter(|_| frontend.is_valid()) else {
-        return annotate_cache(
+        let response = annotate_cache(
             json!({
                 "schema_version": CONTRACT,
                 "status": "rejected",
@@ -1484,6 +1589,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "not_published",
             &[],
             &["source_semantic_check"],
+        );
+        return annotate_frontend_work(
+            response,
+            resolved_module_count,
+            program_function_count,
+            "rejected",
         );
     };
 
@@ -1571,7 +1682,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                     },
                     None => "not_configured",
                 };
-                return annotate_cache_with_basis(
+                let response = annotate_cache_with_basis(
                     response,
                     &cache_key,
                     "hit",
@@ -1583,6 +1694,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         "source_semantic_check",
                         "application_executable_closure_verification",
                     ],
+                );
+                return annotate_frontend_work(
+                    response,
+                    resolved_module_count,
+                    program_function_count,
+                    "verified",
                 );
             }
         }
@@ -1608,7 +1725,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
 
     let Some(artifact) = artifact else {
         let obligation = emission_error.unwrap_or_else(|| "artifact emission failed".to_owned());
-        return annotate_cache(
+        let response = annotate_cache(
             json!({
                 "schema_version": CONTRACT,
                 "status": "unsupported",
@@ -1636,6 +1753,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "not_published",
             &[],
             &["verified_vm_artifact"],
+        );
+        return annotate_frontend_work(
+            response,
+            resolved_module_count,
+            program_function_count,
+            "verified",
         );
     };
 
@@ -1791,7 +1914,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         Some(_) => ("bypass", "not_published"),
         None => ("disabled", "not_configured"),
     };
-    annotate_cache(
+    let response = annotate_cache(
         response,
         &cache_key,
         cache_status,
@@ -1802,5 +1925,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "ssa_verification",
             "verified_vm_artifact",
         ],
+    );
+    annotate_frontend_work(
+        response,
+        resolved_module_count,
+        program_function_count,
+        "verified",
     )
 }

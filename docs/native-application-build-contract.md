@@ -76,7 +76,38 @@ constructs its argument using the callable interface emitted by the compiler.
 measures cold and warm builds, reuses the artifact across added and edited
 unreferenced modules, checks invalidation for a changed root and imported
 module, and verifies that rejected or interrupted requests do not publish
-successful results.
+successful results. Its cache observation is now
+`mncs.compiler.application-build-cache-observation/4`; the nested
+`mncs.compiler.application-build-verification-work/1` reports whether the
+full Language frontend ran, counts resolved modules and verified program
+functions when available, and separates dependency-closure, SSA, and backend
+artifact work. A cache hit skips these stages; it does not claim that separate
+Language fact objects were reused. Changed dependency snapshots currently
+report one full frontend invocation and an empty `reused_semantic_facts` list,
+even when a compatible executable artifact is reused after verification.
+This is the measured baseline for integrating a Language-owned fact cache.
+
+## Language incremental-fact handoff
+
+The first Language-owned slice should let the Compiler submit a fresh source
+snapshot and the previous verified-fact-set identity to the Language
+frontend. The response must still contain the complete current program and
+diagnostics, while identifying which function-body facts were reused,
+reverified, or invalidated. A reusable function fact must bind a stable
+function identity, body-content identity, callable signature identity,
+Language verifier and policy identity, resolved call and nominal-type
+dependencies, generic specializations, and effect/capability assumptions.
+Source spans remain fresh snapshot metadata and are not part of semantic fact
+identity. Each invalidation must name the changed dependency or assumption;
+source names, timestamps, and a matching body fingerprint alone never prove
+that verification occurred. Invalid input returns fresh diagnostics and
+cannot publish a successful fact set. Fact publication is atomic, and
+interrupted verification leaves the prior set usable but publishes no partial
+success. This keeps parsing/resolution policy in Language while giving
+application builds exact revalidation counts. The existing
+`verification_work.reused_semantic_facts` field is reserved for these
+Language-issued identities; it intentionally remains empty until that
+interface is implemented and consumed.
 
 ## Environment capability
 
@@ -86,9 +117,13 @@ the selected Compiler checkout with `--request-file PATH`, or from a canonical
 Store input artifact with `--request-artifact NAME`. It writes the complete
 response as the shareable `native-application-build.json` invocation artifact
 and keeps stdout bounded; consumers read the full response through the exact
-Environment artifact binding and path. The current Control operation allowlist
-does not expose this capability yet, so canonical Store publication and
-readback remain pending that Control contract change.
+Environment artifact binding and path. The selected real `mncs-test` digest
+workload has already passed the integrated Compiler to Forge to canonical VM
+to Environment to Store route with fresh-process artifact readback; its exact
+identities and limits are recorded in
+`evidence/native-app-readiness-gate-c.json`. That proof used the pure
+`build_digest` entry. The effectful `digest_app` capability path remains a
+separate, unproven integration milestone.
 
 The contract keeps build and execution obligations distinct. `verified` on an
 entry means the selected entry has a verified canonical VM artifact; it does

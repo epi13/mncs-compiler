@@ -93,6 +93,45 @@ def run_and_compare(artifact: dict, execution: dict) -> tuple[dict, dict, list]:
     return document, metrics, actual
 
 
+def require_verification_work(
+    label: str,
+    build: dict,
+    *,
+    frontend_invocations: int,
+    dependency_closure: str,
+    ssa_verification: str,
+    backend_artifact: str,
+) -> dict:
+    cache = build.get('cache', {})
+    work = cache.get('verification_work', {})
+    if (cache.get('schema_version') != 'mncs.compiler.application-build-cache-observation/4'
+            or work.get('schema_version') != 'mncs.compiler.application-build-verification-work/1'):
+        raise AssertionError(f'{label} omitted the versioned verification-work observation')
+    if work.get('front_end_invocations') != frontend_invocations:
+        raise AssertionError(f'{label} frontend invocation count is inaccurate: {work}')
+    expected_stage = 'recomputed_by_full_frontend' if frontend_invocations else 'not_run'
+    for stage in ('source_parsing', 'declaration_resolution', 'signature_verification',
+                  'function_body_verification'):
+        if work.get(stage) != expected_stage:
+            raise AssertionError(f'{label} has an unexpected {stage} state: {work}')
+    if (work.get('semantic_dependency_closure') != dependency_closure
+            or work.get('ssa_verification') != ssa_verification
+            or work.get('backend_artifact') != backend_artifact
+            or work.get('reused_semantic_facts') != []):
+        raise AssertionError(f'{label} reports inaccurate reuse or backend work: {work}')
+    if frontend_invocations:
+        if type(work.get('resolved_module_count')) is not int or work['resolved_module_count'] < 1:
+            raise AssertionError(f'{label} omitted resolved module work count: {work}')
+        if build.get('status') == 'rejected':
+            if work.get('front_end_outcome') != 'rejected':
+                raise AssertionError(f'{label} lost its fresh frontend rejection: {work}')
+        elif (work.get('front_end_outcome') != 'verified'
+              or type(work.get('program_function_count')) is not int
+              or work['program_function_count'] < 1):
+            raise AssertionError(f'{label} omitted verified frontend work counts: {work}')
+    return work
+
+
 def compact_result(report: dict) -> dict:
     report = report['$p']['report']
     summary = report['summary']
@@ -178,7 +217,7 @@ def main() -> None:
     if cold.get('cache', {}).get('status') != 'miss' or cold.get('cache', {}).get('publication') != 'stored':
         raise AssertionError('cold run was not compiled and atomically published')
     if cold.get('schema_version') != 'mncs.compiler.application-build/4':
-        raise AssertionError('incremental experiment did not use the current /3 producer')
+        raise AssertionError('incremental experiment did not use application-build/4')
     if cold.get('status') != 'verified' or cold.get('entry', {}).get('status') != 'verified':
         raise AssertionError('cold selected application scope was not verified')
     if cold.get('unresolved_obligations') != []:
@@ -593,6 +632,56 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
     assert dependency_report['summary']['assertion_failures'] == 1
     assert dependency_report['property_case']['value'] != base_report['property_case']['value']
 
+    cold_work = require_verification_work(
+        'cold build', cold, frontend_invocations=1,
+        dependency_closure='recomputed_by_full_frontend',
+        ssa_verification='recomputed', backend_artifact='generated',
+    )
+    require_verification_work(
+        'warm exact-snapshot build', warm, frontend_invocations=0,
+        dependency_closure='not_run', ssa_verification='not_run',
+        backend_artifact='reused',
+    )
+    for label, result in (('unreferenced module addition', unused),
+                          ('unreferenced module edit', changed_unused)):
+        require_verification_work(
+            label, result, frontend_invocations=0,
+            dependency_closure='reused_verified_dependency_closure',
+            ssa_verification='not_run', backend_artifact='reused',
+        )
+    for label, result in (('comment-only dependency edit', semantic_edit),
+                          ('unreachable function body edit', unrelated_function_build)):
+        require_verification_work(
+            label, result, frontend_invocations=1,
+            dependency_closure='recomputed_by_full_frontend',
+            ssa_verification='reused_verified_vm_artifact', backend_artifact='reused',
+        )
+    for label, result in (
+        ('reachable root body edit', small),
+        ('reachable dependency edit', dependency),
+        ('unrelated exported signature edit', unrelated_signature_build),
+        ('imported nominal interface edit', interface_build),
+        ('imported call and closure change', closure_build),
+        ('compiler identity change', variant_build),
+        ('interrupted build retry', retry),
+    ):
+        require_verification_work(
+            label, result, frontend_invocations=1,
+            dependency_closure='recomputed_by_full_frontend',
+            ssa_verification='recomputed', backend_artifact='generated',
+        )
+    for label, result in (('invalid source', invalid), ('repeated invalid source', invalid_repeat)):
+        require_verification_work(
+            label, result, frontend_invocations=1,
+            dependency_closure='recomputed_by_full_frontend',
+            ssa_verification='not_run', backend_artifact='not_generated',
+        )
+    retry_warm_work = require_verification_work(
+        'fresh-process retry cache readback', retry_warm, frontend_invocations=0,
+        dependency_closure='not_run', ssa_verification='not_run',
+        backend_artifact='reused',
+    )
+
     cache_speedup = cold_metrics['wall_seconds'] / max(warm_metrics['wall_seconds'], 1e-9)
     source_files = [
         {'module': name, 'source_id': name, 'sha256': app.sha(source.encode()),
@@ -849,6 +938,19 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
             'cgroup_memory_bytes': 'unknown when the sandbox exposes no usable cgroup memory counter',
             'process_metrics': 'sampled from /proc for probe and VM processes; wall and CPU use process deltas',
         },
+        'verification_work_observation': {
+            'schema_version': 'mncs.compiler.application-build-verification-work/1',
+            'cold_build': cold_work,
+            'warm_exact_snapshot': warm.get('cache', {}).get('verification_work'),
+            'source_only_dependency_edit': semantic_edit.get('cache', {}).get('verification_work'),
+            'unreachable_function_body_edit': unrelated_function_build.get(
+                'cache', {}).get('verification_work'),
+            'reachable_dependency_edit': dependency.get('cache', {}).get('verification_work'),
+            'invalid_source': invalid.get('cache', {}).get('verification_work'),
+            'fresh_process_readback': retry_warm_work,
+            'changed_snapshot_semantic_facts_reused': [],
+            'interpretation': 'A changed resolved module still invokes the full frontend. The observation proves when this occurs and separates safe SSA/backend artifact reuse; it does not provide per-function Language fact reuse.',
+        },
         'fine_grained_invalidation': {
             'status': 'semantic_identity_and_dependency_closure_artifact_reuse_implemented',
             'detail': (f'Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took {semantic_edit_metrics["wall_seconds"]:.3f} s and reused the artifact, while a semantic dependency change took {dependency_metrics["wall_seconds"]:.3f} s and rebuilt. Changing exported PropertyCase.generation:u64 changed the semantic and callable interface identities and forced full recomputation in {interface_metrics["wall_seconds"]:.3f} s; the resulting VM output matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial.'),
@@ -880,6 +982,11 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         'wall_speedup': round(cache_speedup, 2),
         'cold_cpu_seconds': cold_metrics['cpu_seconds'],
         'warm_cpu_seconds': warm_metrics['cpu_seconds'],
+        'cold_frontend_invocations': cold_work['front_end_invocations'],
+        'cold_resolved_modules': cold_work['resolved_module_count'],
+        'cold_program_functions': cold_work['program_function_count'],
+        'changed_snapshot_frontend_invocations': small['cache']['verification_work']['front_end_invocations'],
+        'changed_snapshot_semantic_facts_reused': small['cache']['verification_work']['reused_semantic_facts'],
         'evidence': str(EVIDENCE.relative_to(ROOT)),
     }, indent=2))
 
