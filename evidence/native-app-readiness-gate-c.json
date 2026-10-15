@@ -1,180 +1,378 @@
 {
-  "application": {
-    "artifact_identity": "sha256:93a673c46770246ee2502de4ab93ea659d17e8dd7f30e32e5e7deaaeb349f9b2",
-    "callable_interface": {
-      "finite_type_count": 10,
-      "identity": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
-      "record_type_count": 7,
-      "schema_version": "mncs.compiler.callable-interface/1",
-      "status": "verified",
-      "type_closure_status": "verified",
-      "unresolved_type_references": []
-    },
-    "contract_schema": "mncs.compiler.application-build/2",
-    "dependency_graph_identity": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
-    "entry_status": "verified",
-    "interface_identity": "12732258e2c29abd961f738b075b19ef2f5ca9cadf4b8fb1323a1812f9fc99d4",
-    "overall_status": "unsupported",
-    "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
-    "stage0_oracle_matches_canonical_vm": true,
-    "typed_failure_result_count": 2,
-    "unresolved_obligations": [
-      "export mncs.test.assertions::equals_bytes: no ssa instance",
-      "export mncs.test.suite::summarize: no ssa instance"
-    ]
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "gate_a": {
+    "evidence": "multi-module native readiness workload and mncs.test.digest closure were built and executed in canonical VM; exact current identities are recorded above.",
+    "status": "passed"
   },
-  "canonical_store": {
-    "campaign_checkpoint_state_readback": {
-      "checkpoint_id": "chk_a88de1bfe7b84f79",
-      "recorded_at": "2026-10-14T09:05:20Z",
-      "session_id": "ses_164edc158d9b1637",
-      "status": "confirmed"
-    },
-    "capability_reconcile": {
-      "control_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
-      "operation": "reconcile",
-      "status": "unavailable"
-    },
-    "provider_invoke_status": "unavailable",
-    "provider_result_artifact_readback": "not_performed",
-    "publication_completed": false,
-    "reason": "Control does not expose the native-application-build Environment operation; the bound capability metadata also remains at response schema /1.",
-    "required_transition": "owner-authorized Control operation contract/allowlist update and Environment capability reconciliation"
+  "gate_b": {
+    "evidence": "semantic application artifact reuse remains; fine-grained verified-facts reuse still requires a Language-owned interface and Language repository authority.",
+    "status": "partial"
   },
-  "compiler": {
-    "base_revision": "b03d628b43d375ee40439a8cf58336877cc5265b",
-    "branch": "campaign/native-application-readiness-20261013",
-    "implementation_revision": "b1ef977071cd7390f059f3facedd8430d588586f",
-    "manifest_revision": 13,
-    "mncs_test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
-    "repository": "mncs-compiler",
-    "stage0_probe_sha256": "sha256:ca4a079d1ca5df8f149336fe416ea31ff4ad758a2301d117d00e6812b97550dd",
-    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
-    "tracked_source_identities": {
-      ".mncs/project.json": "sha256:67b4bc90046180da3859b010c8575eb84ac227ff849f3c736bd450a6ebba4697",
-      ".mncs/verification-obligations.json": "sha256:0fad7fc2b3d71800b8ebfa3041968f51a4411147c7e617fe553af91e645c30bf",
-      "ROADMAP.md": "sha256:312ff4b2e94809c2e24a26d0bc7db73e1fe0a386155459fe5ca5c4e4cdc4529d",
-      "docs/native-application-build-contract.md": "sha256:afd36675d36d8ab0a38135cb1a1cf939e3687def1607ab2dcff4737a6bbde288",
-      "tools/application_build_provider.py": "sha256:8a285c44ba8394a272818867eff82d2b4301e72303326506d6fdba2e7834ce22",
-      "tools/stage0-probe/src/application.rs": "sha256:c64e08b60cb85026144a38f67f3bc72edad3c53e5ed6a3a113cd6224a064dbcf",
-      "tools/test_application_build_provider.py": "sha256:77fccfaad790e99aed5e5a89c215d7b51c36137899f1bcf840e19aeed723b6ed",
-      "tools/test_native_application_incremental.py": "sha256:d0316e151bad200eb0311ef73d2205888162b9895ae9d392eba22f330c4c86d5",
-      "tools/test_vm_native_application.py": "sha256:1b396200ea42b9f1bb72976cd0a7bc37622e21fd2b751307aba2daf6239fb518"
-    },
-    "verification_obligation_inventory_revision": 15,
-    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  "gate_session_id": "ses_3d9102d7ed4704cd",
+  "gate_status": {
+    "gate_a": "passed_for_verified_multi_module_native_application_build_and_canonical_vm_workloads",
+    "gate_b": "partial; application semantic artifact reuse is verified, finer-grained Language-owned verified-facts reuse remains unimplemented",
+    "gate_c": "passed_for_native_readiness_and_mncs_test_digest_workloads_through_forge_and_canonical_store",
+    "stage_1": "unproven",
+    "stage_2": "unproven"
   },
-  "contract": {
-    "cache_observation_schema": "mncs.compiler.application-build-cache-observation/2",
-    "callable_interface_schema": "mncs.compiler.callable-interface/1",
-    "canonical_vm_build_metrics": {
-      "cpu_seconds": 0.55,
-      "peak_cgroup_memory_bytes": null,
-      "peak_child_processes": 0,
-      "peak_open_file_descriptors": 7,
-      "peak_rss_bytes": 60198912,
-      "peak_threads": 1,
-      "request_sequence": 1,
-      "wall_seconds": 0.64315
-    },
-    "canonical_vm_execution_metrics": {
-      "cpu_seconds": 0.17,
-      "peak_cgroup_memory_bytes": null,
-      "peak_child_processes": 0,
-      "peak_open_file_descriptors": 4,
-      "peak_rss_bytes": 27631616,
-      "peak_threads": 1,
-      "process_count": 1,
-      "stderr": "",
-      "wall_seconds": 0.179271
-    },
-    "fields_verified": [
-      "artifact",
-      "cache reuse provenance and recomputation units",
-      "callable_interface_identity",
-      "dependency-closed verified artifact reuse with refreshed full source snapshot identity",
-      "dependency_graph",
-      "effects_and_failure_mode",
-      "execution_target_compatibility",
-      "explicit_unknown_resource_estimates",
-      "module_interface_identity",
-      "producer",
-      "referenced_nominal_type_closure",
-      "required_capabilities",
-      "source_snapshot",
-      "structured_diagnostics",
-      "typed_inputs_and_outputs",
-      "unresolved_obligations"
-    ],
-    "negative_diagnostics": [
-      "MCA109",
-      "MCA110",
-      "MNE131",
-      "MNE162"
-    ],
-    "provider_response_file": {
-      "byte_count": 1032692,
-      "name": "native-application-build.json",
-      "sha256": "6b4c329775945801418bb6c7ba80132cce8d2f7747637fadb65d7f51240ceece"
-    },
-    "provider_test_application": {
-      "artifact_identity": "sha256:49395d30beaa7dc0ceaeb543d98c66ea6d77cea18ef92929a215f6f54e74f3f8",
+  "historical_pre_integration_record": {
+    "application": {
+      "artifact_identity": "sha256:93a673c46770246ee2502de4ab93ea659d17e8dd7f30e32e5e7deaaeb349f9b2",
+      "callable_interface": {
+        "finite_type_count": 10,
+        "identity": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
+        "record_type_count": 7,
+        "schema_version": "mncs.compiler.callable-interface/1",
+        "status": "verified",
+        "type_closure_status": "verified",
+        "unresolved_type_references": []
+      },
+      "contract_schema": "mncs.compiler.application-build/2",
+      "dependency_graph_identity": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
       "entry_status": "verified",
+      "interface_identity": "12732258e2c29abd961f738b075b19ef2f5ca9cadf4b8fb1323a1812f9fc99d4",
       "overall_status": "unsupported",
       "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
-      "stage0_probe_sha256": "sha256:ca4a079d1ca5df8f149336fe416ea31ff4ad758a2301d117d00e6812b97550dd"
+      "stage0_oracle_matches_canonical_vm": true,
+      "typed_failure_result_count": 2,
+      "unresolved_obligations": [
+        "export mncs.test.assertions::equals_bytes: no ssa instance",
+        "export mncs.test.suite::summarize: no ssa instance"
+      ]
     },
-    "provider_test_checks": {
-      "cold_cache_miss": true,
-      "corrupt_store_input_rejected": true,
-      "environment_output_artifact": "native-application-build.json",
-      "fresh_process_warm_hit": true,
-      "invalid_source_precise_rejection": [
+    "canonical_store": {
+      "campaign_checkpoint_state_readback": {
+        "checkpoint_id": "chk_a88de1bfe7b84f79",
+        "recorded_at": "2026-10-14T09:05:20Z",
+        "session_id": "ses_164edc158d9b1637",
+        "status": "confirmed"
+      },
+      "capability_reconcile": {
+        "control_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
+        "operation": "reconcile",
+        "status": "unavailable"
+      },
+      "provider_invoke_status": "unavailable",
+      "provider_result_artifact_readback": "not_performed",
+      "publication_completed": false,
+      "reason": "Control does not expose the native-application-build Environment operation; the bound capability metadata also remains at response schema /1.",
+      "required_transition": "owner-authorized Control operation contract/allowlist update and Environment capability reconciliation"
+    },
+    "compiler": {
+      "base_revision": "b03d628b43d375ee40439a8cf58336877cc5265b",
+      "branch": "campaign/native-application-readiness-20261013",
+      "implementation_revision": "b1ef977071cd7390f059f3facedd8430d588586f",
+      "manifest_revision": 13,
+      "mncs_test_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+      "repository": "mncs-compiler",
+      "stage0_probe_sha256": "sha256:ca4a079d1ca5df8f149336fe416ea31ff4ad758a2301d117d00e6812b97550dd",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "tracked_source_identities": {
+        ".mncs/project.json": "sha256:67b4bc90046180da3859b010c8575eb84ac227ff849f3c736bd450a6ebba4697",
+        ".mncs/verification-obligations.json": "sha256:0fad7fc2b3d71800b8ebfa3041968f51a4411147c7e617fe553af91e645c30bf",
+        "ROADMAP.md": "sha256:312ff4b2e94809c2e24a26d0bc7db73e1fe0a386155459fe5ca5c4e4cdc4529d",
+        "docs/native-application-build-contract.md": "sha256:afd36675d36d8ab0a38135cb1a1cf939e3687def1607ab2dcff4737a6bbde288",
+        "tools/application_build_provider.py": "sha256:8a285c44ba8394a272818867eff82d2b4301e72303326506d6fdba2e7834ce22",
+        "tools/stage0-probe/src/application.rs": "sha256:c64e08b60cb85026144a38f67f3bc72edad3c53e5ed6a3a113cd6224a064dbcf",
+        "tools/test_application_build_provider.py": "sha256:77fccfaad790e99aed5e5a89c215d7b51c36137899f1bcf840e19aeed723b6ed",
+        "tools/test_native_application_incremental.py": "sha256:d0316e151bad200eb0311ef73d2205888162b9895ae9d392eba22f330c4c86d5",
+        "tools/test_vm_native_application.py": "sha256:1b396200ea42b9f1bb72976cd0a7bc37622e21fd2b751307aba2daf6239fb518"
+      },
+      "verification_obligation_inventory_revision": 15,
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+    },
+    "contract": {
+      "cache_observation_schema": "mncs.compiler.application-build-cache-observation/2",
+      "callable_interface_schema": "mncs.compiler.callable-interface/1",
+      "canonical_vm_build_metrics": {
+        "cpu_seconds": 0.55,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 7,
+        "peak_rss_bytes": 60198912,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.64315
+      },
+      "canonical_vm_execution_metrics": {
+        "cpu_seconds": 0.17,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 27631616,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.179271
+      },
+      "fields_verified": [
+        "artifact",
+        "cache reuse provenance and recomputation units",
+        "callable_interface_identity",
+        "dependency-closed verified artifact reuse with refreshed full source snapshot identity",
+        "dependency_graph",
+        "effects_and_failure_mode",
+        "execution_target_compatibility",
+        "explicit_unknown_resource_estimates",
+        "module_interface_identity",
+        "producer",
+        "referenced_nominal_type_closure",
+        "required_capabilities",
+        "source_snapshot",
+        "structured_diagnostics",
+        "typed_inputs_and_outputs",
+        "unresolved_obligations"
+      ],
+      "negative_diagnostics": [
+        "MCA109",
+        "MCA110",
+        "MNE131",
         "MNE162"
       ],
-      "invalid_success_publication": "not_published",
-      "store_input_artifact_reused": true,
-      "unsupported_request_schema_rejected": true
+      "provider_response_file": {
+        "byte_count": 1032692,
+        "name": "native-application-build.json",
+        "sha256": "6b4c329775945801418bb6c7ba80132cce8d2f7747637fadb65d7f51240ceece"
+      },
+      "provider_test_application": {
+        "artifact_identity": "sha256:49395d30beaa7dc0ceaeb543d98c66ea6d77cea18ef92929a215f6f54e74f3f8",
+        "entry_status": "verified",
+        "overall_status": "unsupported",
+        "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
+        "stage0_probe_sha256": "sha256:ca4a079d1ca5df8f149336fe416ea31ff4ad758a2301d117d00e6812b97550dd"
+      },
+      "provider_test_checks": {
+        "cold_cache_miss": true,
+        "corrupt_store_input_rejected": true,
+        "environment_output_artifact": "native-application-build.json",
+        "fresh_process_warm_hit": true,
+        "invalid_source_precise_rejection": [
+          "MNE162"
+        ],
+        "invalid_success_publication": "not_published",
+        "store_input_artifact_reused": true,
+        "unsupported_request_schema_rejected": true
+      },
+      "provider_test_status": "pass",
+      "provider_test_store_input_scope": "The provider test validated a generated input-artifact manifest fixture; this was not a read from canonical Store.",
+      "provider_test_wall_seconds": {
+        "cold": 0.668598,
+        "invalid": 0.302305,
+        "store_input": 0.333427,
+        "warm": 0.328289
+      },
+      "request_schema": "mncs.compiler.application-build-request/1",
+      "resource_estimates": "unknown and explicitly labeled; runtime measurement is separate",
+      "response_schema": "mncs.compiler.application-build/2",
+      "status_values": [
+        "verified",
+        "unsupported",
+        "unavailable",
+        "unknown",
+        "rejected"
+      ]
     },
-    "provider_test_status": "pass",
-    "provider_test_store_input_scope": "The provider test validated a generated input-artifact manifest fixture; this was not a read from canonical Store.",
-    "provider_test_wall_seconds": {
-      "cold": 0.668598,
-      "invalid": 0.302305,
-      "store_input": 0.333427,
-      "warm": 0.328289
+    "environment_binding": {
+      "availability": "available",
+      "availability_verification": "substrate_only",
+      "binding_contract_revision": "1",
+      "binding_id": "cap_545cdef70a3699c8",
+      "bound_response_schema": "mncs.compiler.application-build/1",
+      "capability": "mncs-compiler:native-application-build",
+      "compiler_manifest_contract_version": "2",
+      "control_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
+      "manifest_binding_mismatch": true,
+      "provider_root": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "reconcile_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
+      "reconcile_status": "unavailable",
+      "shareable_artifact": "native-application-build.json"
     },
-    "request_schema": "mncs.compiler.application-build-request/1",
-    "resource_estimates": "unknown and explicitly labeled; runtime measurement is separate",
-    "response_schema": "mncs.compiler.application-build/2",
-    "status_values": [
-      "verified",
-      "unsupported",
-      "unavailable",
-      "unknown",
-      "rejected"
-    ]
+    "kind": "mncs-native-application-readiness-gate-c",
+    "milestone": "MNCS Native Application Readiness",
+    "next_frontier": "Implement verified module/function fact reuse only after the Language owner-authorized API scope is available; obtain Control-authorized provider invocation and canonical result artifact readback; continue the representative Forge execution path.",
+    "observed_at": "2026-10-14T09:17:38.753793+00:00",
+    "schema_version": 1,
+    "self_consumption_matrix_change": "none; Stage-1 and Stage-2 remain unproven",
+    "status": "partial"
   },
-  "environment_binding": {
-    "availability": "available",
-    "availability_verification": "substrate_only",
-    "binding_contract_revision": "1",
-    "binding_id": "cap_545cdef70a3699c8",
-    "bound_response_schema": "mncs.compiler.application-build/1",
-    "capability": "mncs-compiler:native-application-build",
-    "compiler_manifest_contract_version": "2",
-    "control_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
-    "manifest_binding_mismatch": true,
-    "provider_root": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
-    "reconcile_error": "ENVIRONMENT_OPERATION_UNAVAILABLE",
-    "reconcile_status": "unavailable",
-    "shareable_artifact": "native-application-build.json"
+  "integrated_execution": {
+    "additional_result_cases": [
+      {
+        "failed": 0,
+        "fresh_process_readback": true,
+        "input": "ReadinessRequest(case=7, expected_tests=4, seed=42)",
+        "outcome": "Completed",
+        "passed": 3,
+        "result_sha256": "362d13383cce20d1b2fe25dc076329983c73efb53509e30d99533aa01398d7f9",
+        "skipped": 1,
+        "store_reference": "mncs-store:ses_3d9102d7ed4704cd:capability-invocation-artifacts:b092bbd6c6d5c8b0cc5fd2fa2150d8d9eb392fd0e9852bbd276e9782d6021740",
+        "summary": "PASS",
+        "total": 4,
+        "unsupported": 0,
+        "workload": "native readiness application"
+      },
+      {
+        "error": "InvalidTestCount(expected=4, found=3)",
+        "fresh_process_readback": true,
+        "input": "ReadinessRequest(case=7, expected_tests=3, seed=42)",
+        "outcome": "Rejected",
+        "result_sha256": "adecee4a8fa39c2c2845b00c8485852bf5da26d6ca1752cdfd7a3b515b7afeb1",
+        "store_reference": "mncs-store:ses_3d9102d7ed4704cd:capability-invocation-artifacts:1462115b177a16e5f687e2db81624d1862c8970a834aea635117f30d8b387bf8",
+        "workload": "native readiness application typed rejection"
+      }
+    ],
+    "boundary": "Application semantics ran in the canonical VM. Host-side Environment and Forge components performed authorized invocation, process control, provider dispatch, artifact publication, and resource measurement.",
+    "chain": [
+      "mncs-test source modules",
+      "Compiler application-build/4",
+      "identity-bound executable artifact",
+      "Environment invocation",
+      "Forge admission and measurement",
+      "canonical VM execution",
+      "typed application result",
+      "Environment artifact publication",
+      "canonical Store",
+      "fresh-process artifact_read"
+    ],
+    "compiler_build": {
+      "artifact_bytes": 1071468,
+      "artifact_identity": "sha256:745914f65bf3aa29efccea50f8925459ceb7198d5142effaa59d1f1341c4085b",
+      "artifact_sha256": "5ad764c2f606ae1d3005d2b31a6e8c02f6fe2ab5014716c38169aff1fcee65ff",
+      "build_binding_id": "cap_7523d8bba5efca66",
+      "build_store_reference": "mncs-store:ses_3d9102d7ed4704cd:capability-invocation-artifacts:97ad6784b6d279fda658753df934c5a679499d45bc4ffc493c98858cd9ae5fcb",
+      "compiler_probe_sha256": "a19061ac544f56530700501f22b144b535dbd68e9fe5f84d958bd9a38bf05e6a",
+      "compiler_revision": "78af040600c01494c0301bdd6d56398ba0b9dd4a",
+      "dependency_graph_identity": "sha256:35de1895844f29d860b609792d30771926fe4bb39671bdaf32feb1133932c4c3",
+      "entry_status": "verified",
+      "interface_identity": "sha256:3c08227564c44096355994ec3689e817d710ca5848581880dc278d5cd7e434f9",
+      "producer_identity": "sha256:69ecbee246ceb1f056ed0f9d6eb50ac0e2d47a607b1fcc11c63d74307a6bda42",
+      "response_schema": "mncs.compiler.application-build/4",
+      "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f",
+      "status": "verified"
+    },
+    "failed_execution_safety": {
+      "false_success_published": false,
+      "latest_failed_invocation_does_not_fall_back_to_prior_success_test": "SessionTests.test_artifact_read_does_not_fall_back_after_latest_failed_invocation (passed)",
+      "observed_provider_failure": "Forge rejected the 1,071,468-byte build artifact while its old input limit was 1 MiB; Environment returned failed status and published an explicit failure artifact, not successful execution evidence.",
+      "process_interruption_injected": false,
+      "scope": "Observed a real provider failure and verified failed-artifact/no-fallback behavior with the Environment regression test; no Forge process kill was injected."
+    },
+    "forge": {
+      "binding_id": "cap_07ea8bcfb58ff902",
+      "call_identity": "sha256:ad9317ee41589af8504587aaaba777214c5afc48b9198fcbc0fd1929fd58ca32",
+      "capability": "mncs-forge:native-application-execution",
+      "exit_code": 0,
+      "measurement": {
+        "concurrency": 1,
+        "cpu_microseconds": 407748,
+        "forge_wall_seconds": 0.468075,
+        "memory_high_bytes": 268435456,
+        "memory_max_bytes": 536870912,
+        "peak_cgroup_memory_bytes": 20045824,
+        "peak_processes": 2,
+        "resource_limit_events": {
+          "high": 0,
+          "max": 0,
+          "oom": 0,
+          "oom_kill": 0,
+          "process_limit": 0
+        },
+        "runtime_limit_seconds": 45,
+        "swap_max_bytes": 0,
+        "task_max": 64
+      },
+      "measurement_scope": "one selected invocation; not a general performance guarantee",
+      "outcome": "completed",
+      "runtime_identity": "sha256:6c1fbb04378721881788fb2ff08dbb08e819767d89e4d8f6ab02663c6859a7bf",
+      "runtime_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+    },
+    "gate_c_assessment": "The selected real mncs-test operation completed the canonical Compiler \u2192 Forge \u2192 VM \u2192 Environment \u2192 Store path and fresh-process readback. This proves that workload and this published contract path; it does not prove the full production mncs-test command, Monitor correlation, Automation eligibility, nor every failed or interrupted execution path.",
+    "service_fixes": {
+      "control_tool_result_limit_bytes": 2097152,
+      "environment_per_input_limit_bytes": 2097152,
+      "forge_build_input_limit_bytes": 2097152,
+      "mncs_control": "8d6526f8bb249801f733d519c396551941aedf9b",
+      "mncs_environment": "1c4fdd82ea4c0768a7f53fe1e16d74a020f5216a",
+      "mncs_forge": "3f2f295917e96a5b18512b120f0f94ed3221ba1b"
+    },
+    "source_identities": {
+      "assertions": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b",
+      "digest": "sha256:fa45534cdebb4de683675bfb70eed15cfa177a5198f036c0e3b7fcab68b91c30",
+      "stdlib_application": "sha256:5669f67e921e71c0f54742325f06fddfe3b11692c1fe3d27ee515f8a3fd30c7e",
+      "suite": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+    },
+    "store": {
+      "fresh_process_readback": true,
+      "published_bundle_reference": "mncs-store:ses_3d9102d7ed4704cd:capability-invocation-artifacts:6f8e8b212c3cf283de92ab621b503669c31956a697f2775b636369122c0e394f",
+      "readback_interface": "normal authenticated LocalEnvironmentMCP continuation and artifact_read; no presentation override",
+      "receipt_bytes": 7752,
+      "receipt_identity": "80e1e44e31289663f62e5b106dd2a03bc48a1605e9558ee18d4388267f2e6724",
+      "receipt_path": "forge-execution-receipt.json",
+      "receipt_sha256": "2c810a892974700b709cad2e9bc7ee79d49b51dc63d4e7650009c219a988deee",
+      "result_bytes": 55747,
+      "result_path": "native-application-execution.json",
+      "result_sha256": "c8c80774f83f361041bd5804b8bcb3be6c70b21c6571aa85392af0820c4feef6"
+    },
+    "typed_result": {
+      "assertion_count": 3,
+      "failed": 2,
+      "failure_count": 2,
+      "failure_retention_cap": 1,
+      "failures_omitted": 1,
+      "first_failure": {
+        "actual": 41,
+        "assertion_code": 2101,
+        "column": 3,
+        "expected": 42,
+        "line": 12,
+        "name": "first-failure",
+        "source": "digest-contract"
+      },
+      "passed": 1,
+      "skipped": 1,
+      "summary_verdict": "FAIL",
+      "total": 4,
+      "unsupported": 0
+    },
+    "workload": {
+      "entry": {
+        "function": "build_digest",
+        "module": "mncs.test.digest"
+      },
+      "repository": "mncs-test",
+      "revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+      "typed_input": "DigestRequest(max_failures=1) with four PASS/FAIL/FAIL/SKIP rows"
+    }
   },
   "kind": "mncs-native-application-readiness-gate-c",
   "milestone": "MNCS Native Application Readiness",
-  "next_frontier": "Implement verified module/function fact reuse only after the Language owner-authorized API scope is available; obtain Control-authorized provider invocation and canonical result artifact readback; continue the representative Forge execution path.",
-  "observed_at": "2026-10-14T09:17:38.753793+00:00",
-  "schema_version": 1,
+  "next_frontier": "Continue toward the production mncs-test retained-session and batch workflow, then deepen Compiler-owned incremental reuse; Language-owned verified-facts work still needs the Language repository authority.",
+  "observed_at": "2026-10-15T06:20:15Z",
+  "remaining": [
+    "Exercise the ordinary full mncs-test command and its retained-session/batch workflow against the integrated native application contract.",
+    "Add a bounded Forge process-interruption/failure publication integration test if the existing failure contract tests do not cover the service boundary sufficiently.",
+    "Continue Compiler-owned incremental reuse and invalidate exact dependent facts; obtain Language scope before changing Language-owned verification contracts.",
+    "Advance one larger native tooling operation and self-consumption module with exact Stage evidence."
+  ],
+  "schema_version": 2,
   "self_consumption_matrix_change": "none; Stage-1 and Stage-2 remain unproven",
-  "status": "partial"
+  "status": "selected_native_test_workloads_integrated; broader_native_tooling_readiness_remains_partial",
+  "verification": {
+    "compiler_application_build_contract_4_regression": "passed in the resumed Compiler campaign",
+    "control_focused_tests": {
+      "passed": 4,
+      "scope": "artifact readback response bound"
+    },
+    "cross_process_canonical_store_readback": "passed for result and Forge receipt",
+    "environment_focused_tests": {
+      "passed": 5,
+      "scope": "authorized Store input transfer, bounded >1 MiB artifact, latest failed input rejection, no stale-success read fallback"
+    },
+    "forge_focused_tests": {
+      "passed": 8,
+      "scope": "native application execution and bounded resource fallback"
+    },
+    "integrated_application_execution": "passed"
+  }
 }

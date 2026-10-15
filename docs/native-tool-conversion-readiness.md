@@ -23,10 +23,32 @@ verified application closure. The latest evidence files are
 `evidence/native-app-readiness-gate-b.json` (SHA-256
 `084bf6c39d6d6bdac12907ed3317c06168db6f9d62eedd004033590f8e643fb5`).
 
-Gate C remains partial. The version-4 provider regression passes, but this run
-did not publish and read back a native application result through canonical
-Store or Forge. The Language-owned verified-facts API needed for finer-grained
-semantic reuse is also outside this campaign's write authority.
+Gate C now passes for the selected native application workloads. The real
+`mncs.test.digest::build_digest` entry was built from its four-module source
+closure, admitted by Forge, executed in the canonical VM, and published with
+its Forge receipt through Environment to canonical Store. A fresh process read
+both artifacts back through the normal authenticated `artifact_read` surface.
+The mixed PASS/FAIL/SKIP input produced the expected structured `FAIL` digest,
+including a one-row failure cap and the omitted-failure count. A separate
+readiness application call returned both a passing summary and a typed
+`InvalidTestCount` rejection. Exact source, compiler, VM, Store, and resource
+identities are in `evidence/native-app-readiness-gate-c.json` and
+`evidence/provider-input-artifact-capacity-20261014.json`.
+
+The 1,071,468-byte compiler artifact exposed matching 1 MiB limits in the
+Environment transfer path and Forge provider. Both were raised to a bounded
+2 MiB input limit (the Environment aggregate limit remains 4 MiB), and Control's
+bounded response projection now allows the base64 form of a 1 MiB Store result.
+Focused Environment, Forge, and Control tests passed. The observed Forge
+envelope for this workload peaked at 20,045,824 cgroup bytes, used one
+concurrent task, and reported no resource-limit events; that measurement is
+specific to this invocation.
+
+This proves the selected native application invocation contract. It does not
+yet prove the full production `mncs test` command, its retained-session/batch
+workflow, Monitor correlation, or Automation eligibility. The Language-owned
+verified-facts API needed for finer-grained semantic reuse remains outside
+this Compiler campaign's write authority.
 
 ## Evidence boundary
 
@@ -42,7 +64,20 @@ The effectful artifact is `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831e
 
 Gate B remains partial. Current readiness-suite evidence `evidence/native-app-readiness-gate-b.json` (SHA-256 `65106578dc52ac9ea89412cde06b7a0578e989d9101e2c4c79d0e67e9f098f03`) records cold 0.461 s, unchanged warm 0.120 s after 0.120 s process startup, and source-only dependency reuse in 0.188 s after fresh semantic checking. A changed root function took 0.366 s and a semantic dependency change 0.379 s; both recomputed source checking, SSA verification, and artifact generation. The digest-specific rerun, `evidence/native-app-readiness-test-digest-incremental.json` (SHA-256 `bd85ae27d21b1ae6c1b99ac934d0a61273f52d04b8198727ada931744a59a161`), measured cold/warm 0.633/0.246 s (2.57×), but a root semantic edit and Suite dependency edit took 0.416/0.432 s and rebuilt all three obligations. Invalid source diagnostics were stable and not published. A SIGKILL at 28.5 ms left no partial publication; retry and fresh-process reuse passed. cgroup memory remained unavailable.
 
-Gate C is partial. The `/4` producer now exposes source snapshot and dependency graph identities, selected callable interface, artifact provenance, build assumptions, structured diagnostics and obligations, target compatibility, resource intent, and verified capability-dispatch bindings. The Environment-facing provider returns the same dispatch contract in its invocation summary. `tools/test_application_build_provider.py` passes cold, fresh-process warm, invalid-source, unsupported-schema, Store-input-artifact reuse, and corrupt-input cases. This is a compiler-provider contract test; it does not yet prove production Test-service consumption, canonical Store RPC publication/readback, or Forge/Monitor/Automation receipts for the larger application.
+The `/4` producer exposes source snapshot and dependency graph identities,
+selected callable interface, artifact provenance, build assumptions, structured
+diagnostics and obligations, target compatibility, resource intent, and verified
+capability-dispatch bindings. The Environment-facing provider returns the same
+dispatch contract in its invocation summary. The integrated `build_digest`
+call now exercises the actual Store-backed Compiler → Forge → canonical VM
+route, with fresh-process result and receipt readback. A pre-fix oversized
+artifact was explicitly rejected as a failed invocation; it was not represented
+as a successful result. Existing Environment coverage also verifies that a
+latest failed invocation cannot fall back to an earlier successful artifact.
+`tools/test_application_build_provider.py` continues to cover cold,
+fresh-process warm, invalid-source, unsupported-schema, Store-input-artifact
+reuse, and corrupt-input cases. Production `mncs test` retained-session/batch
+consumption, Monitor correlation, and Automation eligibility remain unproven.
 
 ## Conversion classification
 
@@ -54,18 +89,18 @@ Gate C is partial. The `/4` producer now exposes source snapshot and dependency 
 | Compiler admission, generic inventory resolution, retained sessions, and batch callable execution | **Requires compiler/backend execution work** | Current proof selects and executes a callable application artifact. It does not prove the canonical Test runner's compile-once retained-session path, generic inventory resolution across a full corpus, or batch receipts. |
 | General JSON/TOML decoding and typed service argument/result schemas | **Requires a concrete Language/Stdlib/runtime capability** | The harness supplied a typed `ApplicationContext`; the native app itself did not parse JSON/TOML or discover files. The tested `test_artifact` operation is a bounded provider contract, not a general service transport layer. |
 | Process start, argument/environment transport, timeout, stdout/stderr capture, and temporary request/result files | **Intentionally retained operating-system mechanism** | `tools/mncs_test_native.py::run_native_app` uses `subprocess.run`, temporary files, OS timeout, and schema validation. These remain approved host-provider responsibilities until a bounded process capability has measured parity. |
-| Store persistence, Forge admission, Monitor correlation, and Automation eligibility | **Requires compiler/backend and service integration work** | The compiler contract has source, artifact, capability, and resource evidence, but this workload has not gone through the canonical Store RPC and Forge/Monitor/Automation loop. Reuse the existing service owners and infrastructure. |
+| Store persistence, Forge admission, Monitor correlation, and Automation eligibility | **Partially integrated** | The selected native `build_digest` workload now runs through Forge and canonical Store, with fresh-process readback of the app result and Forge receipt. Monitor correlation, Automation eligibility, and the full production `mncs test` service loop remain unproven. Reuse the existing service owners and infrastructure. |
 
 ## What can be retired now
 
-No production host implementation is safe to remove from this evidence. The native modules own and execute the policy semantics, but the complete command still relies on host manifest processing, compiler/session integration, process execution, external-result handling, and service persistence. Keep those bridges until the canonical command passes full parity and its remaining caller population is known.
+No production host implementation is safe to remove from this evidence. The native modules own and execute the digest policy semantics, and one real digest application now runs through Forge and Store, but the complete command still relies on host manifest processing, compiler/session integration, process execution, external-result handling, and service persistence. Keep those bridges until the canonical command passes full parity and its remaining caller population is known.
 
 ## Prioritized next steps
 
-1. Feed application-build/4 directly into the canonical `mncs-test` native runner and prove its retained-session and batch path with the existing provider receipt checks.
+1. Feed application-build/4 into the production `mncs-test` native runner and prove its retained-session and batch path with the existing provider receipt checks; the current integrated call invokes the selected application through Environment but does not yet prove that full command workflow.
 2. Implement exact-input verified declaration/function reuse for the real multi-module application. Bind reuse to source/module identities, compiler and backend versions, effect assumptions, and verification policy; rerun cold, warm, edits, invalid source, and interruption cases.
-3. Run the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the constant-return integration proof as the regression baseline.
+3. Run the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
 4. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
 5. Retire host policy or compatibility code one behavior at a time only after full native-command parity proves it unnecessary.
 
-Gate A passes for the selected multi-module applications. Gate B remains partial, Gate C has a versioned and tested producer contract without production service integration, and Gate D is a concrete conversion assessment rather than a claim that the complete tool is ready to replace.
+Gate A passes for the selected multi-module applications. Gate B remains partial. Gate C passes for the selected native readiness and `mncs.test.digest::build_digest` workloads through Forge and canonical Store, while the full production Test command and Monitor/Automation path remain open. Gate D is a concrete conversion assessment rather than a claim that the complete tool is ready to replace.
