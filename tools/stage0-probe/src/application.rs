@@ -551,6 +551,199 @@ fn application_semantic_identity(
     Some(format!("sha256:{}", mncs_model::sha256_hex(&bytes)))
 }
 
+fn collect_nominal_type_identities(
+    ty: &mncs_model::BodyType,
+    identities: &mut BTreeSet<mncs_model::SemanticId>,
+) {
+    match ty {
+        mncs_model::BodyType::Record { identity, .. }
+        | mncs_model::BodyType::Finite { identity, .. } => {
+            identities.insert(identity.clone());
+        }
+        mncs_model::BodyType::Sequence { element, .. }
+        | mncs_model::BodyType::Vector { element, .. } => {
+            collect_nominal_type_identities(element, identities);
+        }
+        _ => {}
+    }
+}
+
+/// Fingerprint the verified function and nominal-type facts that can affect
+/// the selected application entry or an explicit generic seed. The frontend
+/// still verifies the complete source snapshot before this value is used;
+/// this identity only decides whether the canonical VM artifact can be
+/// reused without repeating closure emission and verification.
+fn application_executable_closure_identity(
+    program: &mncs_model::Program,
+    entry_module: &str,
+    entry_function: &str,
+    generic_seeds: &[HostGenericSeedRequest],
+) -> Option<String> {
+    let semantic_facts = program.semantic_identities();
+    let mut functions_by_identity = BTreeMap::new();
+    for function in &program.functions {
+        let identity =
+            mncs_model::function_id(function.identity_namespace(&program.module), &function.name);
+        if functions_by_identity
+            .insert(identity.0.clone(), function)
+            .is_some()
+        {
+            return None;
+        }
+    }
+
+    let mut callable_roots = BTreeSet::new();
+    callable_roots.insert(mncs_model::function_id(entry_module, entry_function).0);
+    let mut generic_seed_keys = generic_seeds
+        .iter()
+        .map(HostGenericSeedRequest::seed_key)
+        .collect::<Vec<_>>();
+    generic_seed_keys.sort();
+    generic_seed_keys.dedup();
+    for seed in generic_seeds {
+        callable_roots.insert(mncs_model::function_id(&seed.module, &seed.function).0);
+    }
+
+    let mut pending = callable_roots.clone();
+    let mut function_facts = BTreeMap::<String, String>::new();
+    let mut nominal_types = BTreeSet::<mncs_model::SemanticId>::new();
+    while let Some(identity) = pending.pop_first() {
+        if function_facts.contains_key(&identity) {
+            continue;
+        }
+        let function = functions_by_identity.get(&identity)?;
+        let semantic_id = mncs_model::SemanticId(identity.clone());
+        let fingerprint = semantic_facts.fingerprint(&semantic_id)?.to_owned();
+        function_facts.insert(identity.clone(), fingerprint);
+
+        for value in function.inputs.iter().chain(&function.outputs) {
+            collect_nominal_type_identities(
+                &mncs_model::BodyType::from_program(program, &value.value_type),
+                &mut nominal_types,
+            );
+        }
+
+        let body = function.body.as_ref()?;
+        for parameter in &body.parameters {
+            collect_nominal_type_identities(&parameter.ty, &mut nominal_types);
+        }
+        for iteration in &body.bounded_iterations {
+            collect_nominal_type_identities(&iteration.state_type, &mut nominal_types);
+            for callee in &iteration.callees {
+                pending.insert(callee.0.clone());
+            }
+        }
+        for block in &body.blocks {
+            for parameter in &block.parameters {
+                collect_nominal_type_identities(&parameter.ty, &mut nominal_types);
+            }
+            for operation in &block.operations {
+                for result in &operation.results {
+                    collect_nominal_type_identities(&result.ty, &mut nominal_types);
+                }
+                match &operation.kind {
+                    mncs_model::BodyOperationKind::Call { function, .. } => {
+                        pending.insert(function.0.clone());
+                    }
+                    mncs_model::BodyOperationKind::FiniteConstruct { type_identity, .. }
+                    | mncs_model::BodyOperationKind::FiniteIsVariant { type_identity, .. }
+                    | mncs_model::BodyOperationKind::FinitePayloadProject {
+                        type_identity, ..
+                    }
+                    | mncs_model::BodyOperationKind::RecordConstruct { type_identity, .. }
+                    | mncs_model::BodyOperationKind::RecordProject { type_identity, .. } => {
+                        nominal_types.insert(type_identity.clone());
+                    }
+                    _ => {}
+                }
+            }
+        }
+        for specialization in &program.generic_specializations {
+            if specialization.generic_function.0 == identity {
+                pending.insert(specialization.specialization_function.0.clone());
+            }
+        }
+    }
+
+    // A host specialization argument can resolve through declarations that
+    // are not present in the generic function's concrete body types. Bind all
+    // nominal declarations when explicit seeds are present; this is
+    // deliberately conservative until the Language facts API exposes the
+    // resolved type arguments directly.
+    if !generic_seeds.is_empty() {
+        nominal_types.extend(
+            program
+                .record_types
+                .iter()
+                .map(|record| record.identity.clone()),
+        );
+        nominal_types.extend(
+            program
+                .finite_types
+                .iter()
+                .map(|finite| finite.identity.clone()),
+        );
+    }
+
+    let mut type_facts = BTreeMap::<String, String>::new();
+    while let Some(identity) = nominal_types.pop_first() {
+        if type_facts.contains_key(identity.as_str()) {
+            continue;
+        }
+        let fingerprint = semantic_facts.fingerprint(&identity)?.to_owned();
+        if let Some(record) = program
+            .record_types
+            .iter()
+            .find(|row| row.identity == identity)
+        {
+            for field in &record.fields {
+                collect_nominal_type_identities(
+                    &mncs_model::BodyType::from_program(program, &field.field_type),
+                    &mut nominal_types,
+                );
+            }
+        } else if let Some(finite) = program
+            .finite_types
+            .iter()
+            .find(|row| row.identity == identity)
+        {
+            for variant in &finite.variants {
+                for field in &variant.payload {
+                    collect_nominal_type_identities(
+                        &mncs_model::BodyType::from_program(program, &field.field_type),
+                        &mut nominal_types,
+                    );
+                }
+            }
+        } else {
+            return None;
+        }
+        type_facts.insert(identity.0, fingerprint);
+    }
+
+    let selected_functions = function_facts.keys().cloned().collect::<BTreeSet<_>>();
+    let specializations = program
+        .generic_specializations
+        .iter()
+        .filter(|row| selected_functions.contains(&row.generic_function.0))
+        .map(serde_json::to_value)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    let identity = json!({
+        "schema_version": "mncs.compiler.application-executable-closure-identity/1",
+        "root_module": program.module,
+        "callable_roots": callable_roots,
+        "generic_seed_keys": generic_seed_keys,
+        "function_semantic_facts": function_facts,
+        "nominal_type_semantic_facts": type_facts,
+        "generic_specializations": specializations,
+        "program_assumptions": program.assumptions,
+    });
+    let mut bytes = b"mncs.compiler.application-executable-closure-identity/1\0".to_vec();
+    bytes.extend_from_slice(&serde_json::to_vec(&identity).ok()?);
+    Some(format!("sha256:{}", mncs_model::sha256_hex(&bytes)))
+}
+
 fn rebind_cached_source_snapshot(
     mut response: Value,
     source_identity: &str,
@@ -569,6 +762,7 @@ fn rebind_cached_application_response(
     graph_identity: &str,
     graph_details: Value,
     semantic_identity: &str,
+    executable_closure_identity: &str,
     entry_interface: Value,
     diagnostics: Value,
 ) -> Option<Value> {
@@ -577,6 +771,10 @@ fn rebind_cached_application_response(
     dependency_graph.insert("identity".to_owned(), json!(graph_identity));
     dependency_graph.insert("details".to_owned(), graph_details);
     dependency_graph.insert("semantic_identity".to_owned(), json!(semantic_identity));
+    dependency_graph.insert(
+        "application_executable_closure_identity".to_owned(),
+        json!(executable_closure_identity),
+    );
     response
         .get_mut("entry")?
         .as_object_mut()?
@@ -816,7 +1014,10 @@ fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -
 
 #[cfg(test)]
 mod tests {
-    use super::{application_semantic_identity, callable_interface, envelope, ApplicationSources};
+    use super::{
+        application_executable_closure_identity, application_semantic_identity, callable_interface,
+        envelope, ApplicationSources,
+    };
     use mncs_compiler::ReferenceCompiler;
     use mncs_model::ArtifactRepresentation;
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
@@ -958,6 +1159,62 @@ mod tests {
         assert!(
             application_semantic_identity(program, root_fingerprint, &incomplete, &[]).is_none()
         );
+    }
+
+    #[test]
+    fn executable_closure_identity_reuses_unreachable_body_edits_only() {
+        let root = r#"
+            mncs 0.18;
+            module semantic.root;
+            use semantic.dep as dep;
+            fn entry() -> (result: u64) { return dep.value(); }
+        "#;
+        let dependency = r#"
+            mncs 0.18;
+            module semantic.dep;
+            fn value() -> (result: u64) { return 7; }
+            fn shrink(input: u64) -> (result: u64) { return input / 2; }
+        "#;
+        let compile_facts = |dependency_source: &str| {
+            let resolver = ApplicationSources(BTreeMap::from([(
+                "semantic.dep".to_owned(),
+                envelope(dependency_source),
+            )]));
+            let frontend = ReferenceCompiler::default().front_end_with_resolver_and_seeds(
+                envelope(root),
+                &resolver,
+                &[],
+            );
+            assert!(
+                frontend.is_valid(),
+                "closure identity source: {:?}",
+                frontend.diagnostics
+            );
+            let program = frontend.program.as_ref().expect("valid root Program");
+            let closure_identity =
+                application_executable_closure_identity(program, "semantic.root", "entry", &[])
+                    .expect("verified executable closure identity");
+            let full_semantic_identity = application_semantic_identity(
+                program,
+                &frontend
+                    .artifact(ArtifactRepresentation::Semantic)
+                    .expect("canonical root semantic artifact")
+                    .fingerprint,
+                &frontend.module_resolutions,
+                &[],
+            )
+            .expect("complete source semantic identity");
+            (closure_identity, full_semantic_identity)
+        };
+
+        let baseline = compile_facts(dependency);
+        let unrelated_function_edit =
+            compile_facts(&dependency.replace("return input / 2", "return input / 3"));
+        assert_ne!(baseline.1, unrelated_function_edit.1);
+        assert_eq!(baseline.0, unrelated_function_edit.0);
+
+        let reachable_function_edit = compile_facts(&dependency.replace("return 7", "return 8"));
+        assert_ne!(baseline.0, reachable_function_edit.0);
     }
 }
 
@@ -1241,6 +1498,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &generic_seeds,
             )
         });
+    let executable_closure_identity = application_executable_closure_identity(
+        program,
+        entry_module,
+        entry_function,
+        &generic_seeds,
+    );
 
     let graph_value = json!({
         "root_module": program.module,
@@ -1249,24 +1512,37 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     });
     let graph_bytes = serde_json::to_vec(&graph_value).unwrap_or_default();
     let graph_identity = format!("sha256:{}", mncs_model::sha256_hex(&graph_bytes));
-    if let (Some((candidate, candidate_key)), Some(semantic_identity), Some(interface)) = (
+    if let (
+        Some((candidate, candidate_key)),
+        Some(semantic_identity),
+        Some(executable_closure_identity),
+        Some(interface),
+    ) = (
         semantic_cache_candidate,
         semantic_identity.as_deref(),
+        executable_closure_identity.as_deref(),
         entry_interface.clone(),
     ) {
         let current_interface_identity = interface.get("identity").and_then(Value::as_str);
         let cached_interface_identity = candidate
             .pointer("/entry/interface/identity")
             .and_then(Value::as_str);
-        let semantic_match = candidate
-            .pointer("/dependency_graph/semantic_identity")
+        let executable_closure_match = candidate
+            .pointer("/dependency_graph/application_executable_closure_identity")
             .and_then(Value::as_str)
-            == Some(semantic_identity);
+            == Some(executable_closure_identity);
+        let current_artifact_interface_identity =
+            mncs_codegen::language_owned_interface_identity(program);
+        let cached_artifact_interface_identity = candidate
+            .pointer("/artifact/value/source/interface_identity")
+            .and_then(Value::as_str);
         if candidate.get("status").and_then(Value::as_str) == Some("verified")
-            && semantic_match
+            && executable_closure_match
             && interface.get("status").and_then(Value::as_str) == Some("verified")
             && current_interface_identity.is_some()
             && current_interface_identity == cached_interface_identity
+            && cached_artifact_interface_identity
+                == Some(current_artifact_interface_identity.as_str())
         {
             if let Some(response) = rebind_cached_application_response(
                 candidate,
@@ -1275,6 +1551,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &graph_identity,
                 graph_value.clone(),
                 semantic_identity,
+                executable_closure_identity,
                 interface,
                 diagnostics.clone(),
             ) {
@@ -1299,10 +1576,13 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                     &cache_key,
                     "hit",
                     publication,
-                    "verified_semantic_identity",
+                    "verified_application_executable_closure",
                     Some(&candidate_key),
                     &["verified_vm_artifact"],
-                    &["source_semantic_check", "semantic_identity_verification"],
+                    &[
+                        "source_semantic_check",
+                        "application_executable_closure_verification",
+                    ],
                 );
             }
         }
@@ -1433,6 +1713,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         "dependency_graph": {
             "identity": graph_identity,
             "semantic_identity": semantic_identity,
+            "application_executable_closure_identity": executable_closure_identity,
             "details": graph_value,
         },
         "producer": {

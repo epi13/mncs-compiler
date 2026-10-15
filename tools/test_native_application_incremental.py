@@ -301,11 +301,12 @@ fn value() -> (result: u64) { return 1; }'''
             probe, app.APP_SOURCE, semantic_edit_modules)
         semantic_edit, semantic_edit_metrics = compile_one(probe, semantic_edit_request)
         if (semantic_edit.get('cache', {}).get('status') != 'hit'
-                or semantic_edit.get('cache', {}).get('reuse_basis') != 'verified_semantic_identity'):
+                or semantic_edit.get('cache', {}).get('reuse_basis')
+                != 'verified_application_executable_closure'):
             raise AssertionError('source-only dependency edit did not reuse the matching semantic artifact')
         if semantic_edit.get('cache', {}).get('recomputed_units') != [
-                'source_semantic_check', 'semantic_identity_verification']:
-            raise AssertionError('semantic reuse omitted the work performed for the changed source')
+                'source_semantic_check', 'application_executable_closure_verification']:
+            raise AssertionError('executable-closure reuse omitted the changed-source verification work')
         if semantic_edit.get('source_snapshot', {}).get('identity') == cold.get(
                 'source_snapshot', {}).get('identity'):
             raise AssertionError('semantic reuse returned the stale exact source snapshot')
@@ -319,6 +320,78 @@ fn value() -> (result: u64) { return 1; }'''
             raise AssertionError('source-only dependency edit changed the reused VM artifact')
         _semantic_edit_vm, semantic_edit_vm_metrics, semantic_edit_actual = run_and_compare(
             semantic_edit['artifact']['value'], semantic_edit_exec)
+
+        # A semantic edit to an uncalled function in an otherwise reachable
+        # imported module must keep the full semantic identity fresh without
+        # rebuilding the selected executable closure.
+        unrelated_function_modules = dict(modules)
+        generative_source = unrelated_function_modules['mncs.test.generative']
+        old_shrink = 'fn shrink(value: u64) -> (result: u64) {\n    return value / 2;\n}'
+        new_shrink = 'fn shrink(value: u64) -> (result: u64) {\n    return value / 3;\n}'
+        if generative_source.count(old_shrink) != 1:
+            raise AssertionError('unreachable function invalidation fixture no longer matches source')
+        unrelated_function_modules['mncs.test.generative'] = generative_source.replace(
+            old_shrink, new_shrink, 1)
+        unrelated_function_request = request_for(app.APP_SOURCE, unrelated_function_modules)
+        unrelated_function_oracle, unrelated_function_exec, unrelated_function_oracle_metrics = oracle_one(
+            probe, app.APP_SOURCE, unrelated_function_modules)
+        unrelated_function_build, unrelated_function_metrics = compile_one(
+            probe, unrelated_function_request)
+        if (unrelated_function_build.get('status') != 'verified'
+                or unrelated_function_build.get('cache', {}).get('status') != 'hit'
+                or unrelated_function_build.get('cache', {}).get('reuse_basis')
+                != 'verified_application_executable_closure'
+                or unrelated_function_build.get('cache', {}).get('recomputed_units') != [
+                    'source_semantic_check', 'application_executable_closure_verification']
+                or unrelated_function_build.get('dependency_graph', {}).get('semantic_identity')
+                == cold.get('dependency_graph', {}).get('semantic_identity')
+                or unrelated_function_build.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity')
+                != cold.get('dependency_graph', {}).get('application_executable_closure_identity')
+                or unrelated_function_build.get('artifact', {}).get('identity')
+                != cold.get('artifact', {}).get('identity')):
+            raise AssertionError('unreachable function edit did not reuse only the verified executable closure')
+        _unrelated_vm, unrelated_function_vm_metrics, unrelated_function_actual = run_and_compare(
+            unrelated_function_build['artifact']['value'], unrelated_function_exec)
+        if compact_oracle(unrelated_function_exec) != compact_result(unrelated_function_actual[0]):
+            raise AssertionError('unreachable function cache reuse changed application semantics')
+
+        # The executable closure remains the same after an unrelated exported
+        # signature edit, but the artifact also advertises the whole program
+        # interface. That broader artifact contract must force regeneration.
+        unrelated_signature_modules = dict(modules)
+        generative_source = unrelated_signature_modules['mncs.test.generative']
+        old_signature = 'fn shrink(value: u64) -> (result: u64) {\n    return value / 2;\n}'
+        new_signature = 'fn shrink(value: u32) -> (result: u32) {\n    return value / 2;\n}'
+        if generative_source.count(old_signature) != 1:
+            raise AssertionError('unrelated exported signature fixture no longer matches source')
+        unrelated_signature_modules['mncs.test.generative'] = generative_source.replace(
+            old_signature, new_signature, 1)
+        unrelated_signature_request = request_for(app.APP_SOURCE, unrelated_signature_modules)
+        unrelated_signature_oracle, unrelated_signature_exec, unrelated_signature_oracle_metrics = oracle_one(
+            probe, app.APP_SOURCE, unrelated_signature_modules)
+        unrelated_signature_build, unrelated_signature_metrics = compile_one(
+            probe, unrelated_signature_request)
+        if (unrelated_signature_build.get('status') != 'verified'
+                or unrelated_signature_build.get('cache', {}).get('status') != 'miss'
+                or unrelated_signature_build.get('cache', {}).get('recomputed_units') != [
+                    'source_semantic_check', 'ssa_verification', 'verified_vm_artifact']
+                or unrelated_signature_build.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity')
+                != cold.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity')
+                or unrelated_signature_build.get('entry', {}).get('interface', {}).get(
+                    'identity')
+                != cold.get('entry', {}).get('interface', {}).get('identity')
+                or unrelated_signature_build.get('artifact', {}).get('interface_identity')
+                == cold.get('artifact', {}).get('interface_identity')
+                or unrelated_signature_build.get('artifact', {}).get('identity')
+                == cold.get('artifact', {}).get('identity')):
+            raise AssertionError('unrelated exported signature did not refresh whole-program artifact provenance')
+        _unrelated_signature_vm, unrelated_signature_vm_metrics, unrelated_signature_actual = run_and_compare(
+            unrelated_signature_build['artifact']['value'], unrelated_signature_exec)
+        if compact_oracle(unrelated_signature_exec) != compact_result(unrelated_signature_actual[0]):
+            raise AssertionError('interface-refreshed application differs from the independent oracle')
 
         small_root = app.APP_SOURCE.replace(
             'equals_i64(42, 19 +% 23', 'equals_i64(43, 19 +% 23', 1)
@@ -345,6 +418,99 @@ fn value() -> (result: u64) { return 1; }'''
         if dependency['artifact']['identity'] == cold['artifact']['identity']:
             raise AssertionError('changed dependency returned the prior verified artifact')
         dependency_artifact = dependency['artifact']['value']
+
+        # Changing an imported nominal record's exported shape must invalidate
+        # the dependent application interface and artifact. The application
+        # consumes PropertyCase through its typed return closure, so the
+        # updated constructor remains a valid independent oracle workload.
+        interface_modules = dict(modules)
+        generative_source = interface_modules['mncs.test.generative']
+        old_record = '''record PropertyCase {
+    seed: u64,
+    case_index: u64,
+    value: u64
+}'''
+        new_record = '''record PropertyCase {
+    seed: u64,
+    case_index: u64,
+    value: u64,
+    generation: u64
+}'''
+        old_constructor = 'PropertyCase { seed: seed, case_index: case_index, value: drawn }'
+        new_constructor = (
+            'PropertyCase { seed: seed, case_index: case_index, value: drawn, '
+            'generation: seed }'
+        )
+        if generative_source.count(old_record) != 1 or generative_source.count(old_constructor) != 1:
+            raise AssertionError('nominal interface invalidation fixture no longer matches source')
+        interface_modules['mncs.test.generative'] = (
+            generative_source.replace(old_record, new_record, 1)
+            .replace(old_constructor, new_constructor, 1)
+        )
+        interface_request = request_for(app.APP_SOURCE, interface_modules)
+        interface_oracle, interface_exec, interface_oracle_metrics = oracle_one(
+            probe, app.APP_SOURCE, interface_modules)
+        interface_build, interface_metrics = compile_one(probe, interface_request)
+        if (interface_build.get('status') != 'verified'
+                or interface_build.get('cache', {}).get('status') != 'miss'
+                or interface_build.get('cache', {}).get('reused_units') != []
+                or interface_build.get('cache', {}).get('recomputed_units') != [
+                    'source_semantic_check', 'ssa_verification', 'verified_vm_artifact']):
+            raise AssertionError('exported nominal interface change reused dependent application work')
+        interface_before = cold.get('entry', {}).get('interface', {}).get('identity')
+        interface_after = interface_build.get('entry', {}).get('interface', {}).get('identity')
+        semantic_before = cold.get('dependency_graph', {}).get('semantic_identity')
+        semantic_after = interface_build.get('dependency_graph', {}).get('semantic_identity')
+        if (not interface_before or not interface_after or interface_before == interface_after
+                or not semantic_before or semantic_before == semantic_after
+                or interface_build.get('artifact', {}).get('identity') == cold['artifact']['identity']):
+            raise AssertionError('exported nominal interface change left its dependent identity unchanged')
+        _interface_vm, interface_vm_metrics, interface_actual = run_and_compare(
+            interface_build['artifact']['value'], interface_exec)
+        if compact_oracle(interface_exec) != compact_result(interface_actual[0]):
+            raise AssertionError('interface-invalidated application differs from the independent oracle')
+
+        # Adding a real import and cross-module call changes the executable
+        # closure. Rebuild the graph and artifact, then compare its behavior
+        # to the independent project oracle.
+        closure_modules = dict(modules)
+        closure_modules['mncs.test.readiness_marker'] = '''mncs 0.18;
+module mncs.test.readiness_marker;
+fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
+        closure_source = app.APP_SOURCE.replace(
+            'use mncs.test.snapshot;',
+            'use mncs.test.snapshot;\nuse mncs.test.readiness_marker;',
+            1,
+        ).replace(
+            'state_value: state_value,',
+            'state_value: readiness_marker(state_value),',
+            1,
+        )
+        if closure_source == app.APP_SOURCE or 'readiness_marker(state_value)' not in closure_source:
+            raise AssertionError('module-closure fixture did not add its import and call')
+        closure_request = request_for(closure_source, closure_modules)
+        closure_oracle, closure_exec, closure_oracle_metrics = oracle_one(
+            probe, closure_source, closure_modules)
+        closure_build, closure_metrics = compile_one(probe, closure_request)
+        if (closure_build.get('status') != 'verified'
+                or closure_build.get('cache', {}).get('status') != 'miss'
+                or closure_build.get('cache', {}).get('reused_units') != []
+                or closure_build.get('cache', {}).get('recomputed_units') != [
+                    'source_semantic_check', 'ssa_verification', 'verified_vm_artifact']):
+            raise AssertionError('imported executable closure change reused stale build work')
+        closure_resolutions = closure_build.get(
+            'dependency_graph', {}).get('details', {}).get('resolutions', [])
+        if (not any(row.get('requested_module') == 'mncs.test.readiness_marker'
+                    for row in closure_resolutions)
+                or closure_build.get('dependency_graph', {}).get('identity')
+                == cold.get('dependency_graph', {}).get('identity')
+                or closure_build.get('artifact', {}).get('identity')
+                == cold.get('artifact', {}).get('identity')):
+            raise AssertionError('import change did not reconstruct dependency and artifact identities')
+        _closure_vm, closure_vm_metrics, closure_actual = run_and_compare(
+            closure_build['artifact']['value'], closure_exec)
+        if compact_oracle(closure_exec) != compact_result(closure_actual[0]):
+            raise AssertionError('changed module closure differs from the independent oracle')
 
         invalid_request = request_for(
             app.APP_SOURCE.replace('summary.total', 'summary.total_missing', 1), modules)
@@ -437,6 +603,7 @@ fn value() -> (result: u64) { return 1; }'''
         'module': 'root', 'source_id': app.APP_SOURCE_ID,
         'sha256': app.sha(app.APP_SOURCE.encode()), 'bytes': len(app.APP_SOURCE.encode()),
     })
+    worktree_changes = app.git('status', '--short', cwd=ROOT).splitlines()
     evidence = {
         'schema_version': 1,
         'kind': 'mncs-native-incremental-build-evidence',
@@ -445,6 +612,9 @@ fn value() -> (result: u64) { return 1; }'''
             'build_profile': 'cargo build --release',
             'revision': app.git('rev-parse', 'HEAD', cwd=ROOT),
             'branch': app.git('branch', '--show-current', cwd=ROOT),
+            'worktree_head_at_measurement': app.git('rev-parse', 'HEAD', cwd=ROOT),
+            'worktree_changes_at_measurement': worktree_changes,
+            'worktree_dirty_at_measurement': bool(worktree_changes),
             'stage0_revision': json.loads((ROOT / 'mncs-language.lock.json').read_text())['revision'],
             'stage0_probe_sha256': app.sha(app.PROBE.read_bytes()),
             'application_module_sha256': app.sha((ROOT / 'tools/stage0-probe/src/application.rs').read_bytes()),
@@ -452,6 +622,8 @@ fn value() -> (result: u64) { return 1; }'''
             'gate_a_harness_sha256': app.sha((ROOT / 'tools/test_vm_native_application.py').read_bytes()),
             'gate_b_harness_sha256': app.sha(Path(__file__).read_bytes()),
             'vm_revision': app.git('rev-parse', 'HEAD', cwd=app.VM_ROOT),
+            'vm_build_profile': os.environ.get('MNCS_NATIVE_APP_VM_PROFILE', 'unspecified'),
+            'vm_binary_path': str(app.VM_BIN),
             'vm_sha256': app.sha(app.VM_BIN.read_bytes()),
             'test_revision': app.git('rev-parse', 'HEAD', cwd=app.TEST_ROOT),
         },
@@ -534,6 +706,62 @@ fn value() -> (result: u64) { return 1; }'''
                 'compile_metrics': semantic_edit_metrics,
                 'vm_metrics': semantic_edit_vm_metrics,
             },
+            'unreachable_function_edit': {
+                'changed_module': 'mncs.test.generative',
+                'changed_function': 'shrink',
+                'source_sha256_before': app.sha(modules['mncs.test.generative'].encode()),
+                'source_sha256_after': app.sha(
+                    unrelated_function_modules['mncs.test.generative'].encode()),
+                'full_semantic_identity_before': cold.get('dependency_graph', {}).get('semantic_identity'),
+                'full_semantic_identity_after': unrelated_function_build.get(
+                    'dependency_graph', {}).get('semantic_identity'),
+                'executable_closure_identity_before': cold.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity'),
+                'executable_closure_identity_after': unrelated_function_build.get(
+                    'dependency_graph', {}).get('application_executable_closure_identity'),
+                'cache': unrelated_function_build.get('cache'),
+                'artifact_identity_before': cold.get('artifact', {}).get('identity'),
+                'artifact_identity_after': unrelated_function_build.get('artifact', {}).get('identity'),
+                'oracle_valid': unrelated_function_oracle.get('valid'),
+                'oracle_result': compact_oracle(unrelated_function_exec),
+                'vm_result': compact_result(unrelated_function_actual[0]),
+                'oracle_matches_vm': compact_oracle(unrelated_function_exec)
+                == compact_result(unrelated_function_actual[0]),
+                'oracle_metrics': unrelated_function_oracle_metrics,
+                'compile_metrics': unrelated_function_metrics,
+                'vm_metrics': unrelated_function_vm_metrics,
+            },
+            'unrelated_exported_signature_change': {
+                'changed_module': 'mncs.test.generative',
+                'changed_function': 'shrink',
+                'source_sha256_before': app.sha(modules['mncs.test.generative'].encode()),
+                'source_sha256_after': app.sha(
+                    unrelated_signature_modules['mncs.test.generative'].encode()),
+                'executable_closure_identity_before': cold.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity'),
+                'executable_closure_identity_after': unrelated_signature_build.get(
+                    'dependency_graph', {}).get('application_executable_closure_identity'),
+                'entry_interface_identity_before': cold.get('entry', {}).get(
+                    'interface', {}).get('identity'),
+                'entry_interface_identity_after': unrelated_signature_build.get(
+                    'entry', {}).get('interface', {}).get('identity'),
+                'artifact_interface_identity_before': cold.get('artifact', {}).get(
+                    'interface_identity'),
+                'artifact_interface_identity_after': unrelated_signature_build.get(
+                    'artifact', {}).get('interface_identity'),
+                'cache': unrelated_signature_build.get('cache'),
+                'artifact_identity_before': cold.get('artifact', {}).get('identity'),
+                'artifact_identity_after': unrelated_signature_build.get(
+                    'artifact', {}).get('identity'),
+                'oracle_valid': unrelated_signature_oracle.get('valid'),
+                'oracle_result': compact_oracle(unrelated_signature_exec),
+                'vm_result': compact_result(unrelated_signature_actual[0]),
+                'oracle_matches_vm': compact_oracle(unrelated_signature_exec)
+                == compact_result(unrelated_signature_actual[0]),
+                'oracle_metrics': unrelated_signature_oracle_metrics,
+                'compile_metrics': unrelated_signature_metrics,
+                'vm_metrics': unrelated_signature_vm_metrics,
+            },
             'small_semantic_edit': {
                 'source_snapshot_identity': small.get('source_snapshot', {}).get('identity'),
                 'cache': small.get('cache'), 'artifact_identity': small.get('artifact', {}).get('identity'),
@@ -558,6 +786,43 @@ fn value() -> (result: u64) { return 1; }'''
                 'compile_metrics': dependency_metrics, 'vm_metrics': vm_dependency_metrics,
                 'reused_units': dependency.get('cache', {}).get('reused_units'),
                 'recomputed_units': dependency.get('cache', {}).get('recomputed_units'),
+            },
+            'exported_nominal_interface_change': {
+                'changed_module': 'mncs.test.generative',
+                'changed_exported_record': 'PropertyCase.generation: u64',
+                'source_sha256_before': app.sha(modules['mncs.test.generative'].encode()),
+                'source_sha256_after': app.sha(interface_modules['mncs.test.generative'].encode()),
+                'interface_identity_before': interface_before,
+                'interface_identity_after': interface_after,
+                'semantic_identity_before': semantic_before,
+                'semantic_identity_after': semantic_after,
+                'cache': interface_build.get('cache'),
+                'artifact_identity_before': cold['artifact']['identity'],
+                'artifact_identity_after': interface_build['artifact']['identity'],
+                'oracle_valid': interface_oracle.get('valid'),
+                'oracle_result': compact_oracle(interface_exec),
+                'vm_result': compact_result(interface_actual[0]),
+                'oracle_matches_vm': compact_oracle(interface_exec) == compact_result(interface_actual[0]),
+                'oracle_metrics': interface_oracle_metrics,
+                'compile_metrics': interface_metrics,
+                'vm_metrics': interface_vm_metrics,
+            },
+            'imported_module_closure_change': {
+                'added_module': 'mncs.test.readiness_marker',
+                'added_cross_module_call': 'readiness_marker(state_value)',
+                'dependency_graph_identity_before': cold.get('dependency_graph', {}).get('identity'),
+                'dependency_graph_identity_after': closure_build.get('dependency_graph', {}).get('identity'),
+                'dependency_resolutions_after': closure_resolutions,
+                'cache': closure_build.get('cache'),
+                'artifact_identity_before': cold.get('artifact', {}).get('identity'),
+                'artifact_identity_after': closure_build.get('artifact', {}).get('identity'),
+                'oracle_valid': closure_oracle.get('valid'),
+                'oracle_result': compact_oracle(closure_exec),
+                'vm_result': compact_result(closure_actual[0]),
+                'oracle_matches_vm': compact_oracle(closure_exec) == compact_result(closure_actual[0]),
+                'oracle_metrics': closure_oracle_metrics,
+                'compile_metrics': closure_metrics,
+                'vm_metrics': closure_vm_metrics,
             },
             'invalid_source': {
                 'response_status': invalid.get('status'), 'diagnostics': invalid.get('diagnostics'),
@@ -586,7 +851,7 @@ fn value() -> (result: u64) { return 1; }'''
         },
         'fine_grained_invalidation': {
             'status': 'semantic_identity_and_dependency_closure_artifact_reuse_implemented',
-            'detail': (f'Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took {semantic_edit_metrics["wall_seconds"]:.3f} s and reused the artifact, while a semantic dependency change took {dependency_metrics["wall_seconds"]:.3f} s and rebuilt; the reused artifact result matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial.'),
+            'detail': (f'Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took {semantic_edit_metrics["wall_seconds"]:.3f} s and reused the artifact, while a semantic dependency change took {dependency_metrics["wall_seconds"]:.3f} s and rebuilt. Changing exported PropertyCase.generation:u64 changed the semantic and callable interface identities and forced full recomputation in {interface_metrics["wall_seconds"]:.3f} s; the resulting VM output matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial.'),
         },
         'gate_a': 'pass',
         'gate_b': 'partial',
@@ -604,6 +869,10 @@ fn value() -> (result: u64) { return 1; }'''
         'unreferenced_module_edit_reuse_basis': changed_unused.get('cache', {}).get('reuse_basis'),
         'small_edit_cache': small.get('cache', {}).get('status'),
         'dependency_cache': dependency.get('cache', {}).get('status'),
+        'exported_interface_cache': interface_build.get('cache', {}).get('status'),
+        'exported_interface_identity_changed': interface_before != interface_after,
+        'unreachable_function_cache': unrelated_function_build.get('cache', {}).get('status'),
+        'unrelated_signature_cache': unrelated_signature_build.get('cache', {}).get('status'),
         'interrupted': interrupted['interrupted'],
         'retry_cache': retry.get('cache', {}).get('status'),
         'cold_wall_seconds': cold_metrics['wall_seconds'],

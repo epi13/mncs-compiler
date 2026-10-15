@@ -15,13 +15,13 @@ version 3 to version 4 after boot-aware owner recovery. Full observations and
 limits are recorded in `evidence/post-reboot-recovery-20261014.json`.
 
 After recovery, Gate A's multi-module Stage-0/VM check and Gate B's incremental
-cache suite passed. The warm exact-artifact path measured 0.123 s versus 0.472 s
-cold (3.84×). Gate B remains partial because semantic edits still rebuild the
-verified application closure. The latest evidence files are
+cache suite passed. The initial warm exact-artifact path measured 0.123 s versus
+0.472 s cold (3.84×). The current Gate B status and finer-grained executable
+closure reuse result are recorded below. The latest evidence files are
 `evidence/native-app-readiness-gate-a.json` (SHA-256
 `95c9bb93efc579aa832ebba55c6e50c1570c7332b204baa97e70b4af57eb81dc`) and
 `evidence/native-app-readiness-gate-b.json` (SHA-256
-`2586d3e271487d3d4a5e39e609529219b2cfa8e79fdfe95f64eaac11c5b96b74`).
+`0cb8a4e7a1ff4129d71c59321bdf23e069dba6d6af6978b715ff33549a766ce4`).
 
 The Gate B workload was rerun after the integration work. Its exact-source
 fresh-process build measured 0.475 s cold and 0.122 s warm (3.88× for this
@@ -81,7 +81,26 @@ A second application, `mncs.test.digest::digest_app`, exercises typed applicatio
 
 The effectful artifact is `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919`; interface is `sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2`. Evidence is `evidence/native-app-readiness-test-digest-app.json` (SHA-256 `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`). The build took 0.628 s / 0.590 CPU / 64.9 MiB peak RSS; the Stage-0 project oracle took 0.354 s; canonical VM calls took 0.024–0.028 s / 0.010 CPU / 12.2–12.5 MiB. cgroup memory counters were unavailable.
 
-Gate B remains partial. Current readiness-suite evidence `evidence/native-app-readiness-gate-b.json` (SHA-256 `2586d3e271487d3d4a5e39e609529219b2cfa8e79fdfe95f64eaac11c5b96b74`) records cold 0.475 s, unchanged warm 0.122 s, and source-only dependency reuse in 0.183 s after fresh semantic checking. A changed root function took 0.371 s and a semantic dependency change 0.384 s; both recomputed source checking, SSA verification, and artifact generation. The digest-specific rerun, `evidence/native-app-readiness-test-digest-incremental.json` (SHA-256 `bd85ae27d21b1ae6c1b99ac934d0a61273f52d04b8198727ada931744a59a161`), measured cold/warm 0.633/0.246 s (2.57×), but a root semantic edit and Suite dependency edit took 0.416/0.432 s and rebuilt all three obligations. Invalid source diagnostics were stable and not published. A SIGKILL at 28.5 ms left no partial publication; retry and fresh-process reuse passed. cgroup memory remained unavailable.
+Gate B remains partial. The latest readiness-suite evidence
+`evidence/native-app-readiness-gate-b.json` (SHA-256
+`0cb8a4e7a1ff4129d71c59321bdf23e069dba6d6af6978b715ff33549a766ce4`)
+records a 0.528 s cold build and 0.125 s warm fresh-process hit (4.24× for
+this workload). A comment-only imported-module edit reused the artifact after
+fresh source checking in 0.222 s. A semantic edit to uncalled
+`mncs.test.generative::shrink` changed the full semantic identity but preserved
+the selected application closure; the verified artifact was reused after
+closure verification in 0.220 s, and canonical VM output matched the independent
+Stage-0 oracle. Changing that uncalled function's exported signature preserved
+the selected closure and entry interface but changed the whole-program artifact
+interface, so the build correctly missed and regenerated the artifact in
+0.442 s. A changed reachable function, exported nominal record, and added
+imported call also missed and rebuilt, with canonical VM results matching the
+oracle. Invalid source kept its stable `MNE162` diagnostic and was not
+published. A SIGKILL at 25 ms left no partial cache entry; retry and fresh-
+process reuse passed. Probe peak RSS was about 57 MiB; the VM peak was about
+27 MiB. cgroup memory counters were unavailable. Gate B is still partial
+because every changed snapshot receives a fresh whole-program semantic check;
+Language-owned verified-fact reuse and selective recomputation remain open.
 
 The `/4` producer exposes source snapshot and dependency graph identities,
 selected callable interface, artifact provenance, build assumptions, structured
@@ -117,7 +136,7 @@ No production host implementation is safe to remove from this evidence. The nati
 ## Prioritized next steps
 
 1. Feed application-build/4 into the production `mncs-test` native runner and prove its retained-session and batch path with the existing provider receipt checks; the current integrated call invokes the selected application through Environment but does not yet prove that full command workflow.
-2. Implement exact-input verified declaration/function reuse for the real multi-module application. Bind reuse to source/module identities, compiler and backend versions, effect assumptions, and verification policy; rerun cold, warm, edits, invalid source, and interruption cases.
+2. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
 3. Run the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
 4. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
 5. Retire host policy or compatibility code one behavior at a time only after full native-command parity proves it unnecessary.
