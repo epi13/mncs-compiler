@@ -1,0 +1,481 @@
+{
+  "application": {
+    "artifact_identity": "sha256:c9502c389be7885b8f29f4e1f50c90124060edeb99d73acf26230bb65930c191",
+    "dependency_graph_identity": "sha256:7c279b0d558f091dc728c9b49b729f65cb6989d5232fa0b9e1b59fb2b8504d52",
+    "entry_status": "verified",
+    "overall_status": "verified",
+    "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c"
+  },
+  "checks": {
+    "cold_cache_miss": true,
+    "corrupt_store_input_rejected": true,
+    "digest_app_capability_dispatch_verified": true,
+    "digest_app_fresh_process_warm_hit": true,
+    "digest_app_provider_verified": true,
+    "environment_output_artifact": "native-application-build.json",
+    "fresh_process_warm_hit": true,
+    "invalid_source_precise_rejection": [
+      "MNE162"
+    ],
+    "invalid_success_publication": "not_published",
+    "provider_multi_callable_build_verified": true,
+    "provider_multi_callable_vm_batch_completed": true,
+    "store_input_artifact_reused": true,
+    "unsupported_request_schema_rejected": true
+  },
+  "created_at": "2026-10-16T19:03:58.999433Z",
+  "effectful_application": {
+    "artifact_identity": "sha256:739b1dad0ef65f440c56735c773d1469e0b3b1495dc1ed960876bec49cbcb803",
+    "capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+    "capability_operations": [
+      "structured_read",
+      "structured_write"
+    ],
+    "compiler_metrics": null,
+    "compiler_metrics_available": false,
+    "dependency_graph_identity": "sha256:35de1895844f29d860b609792d30771926fe4bb39671bdaf32feb1133932c4c3",
+    "entry_status": "verified",
+    "function": "digest_app",
+    "module": "mncs.test.digest",
+    "overall_status": "verified",
+    "response_file": {
+      "byte_count": 1119430,
+      "name": "native-application-build.json",
+      "sha256": "279c6161cc8ff04e1415a8f3f2069edb0335727e4babf343a80d064b51b940c0"
+    },
+    "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f"
+  },
+  "kind": "mncs-native-application-build-provider-test",
+  "limitations": [
+    "This invokes the local canonical VM but does not exercise Forge, the live Environment provider route, or canonical Store execution.",
+    "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
+    "A warm application artifact cache hit is not Language verified-fact reuse."
+  ],
+  "multi_callable_application": {
+    "artifact_callable_set": [
+      {
+        "function": "decrement",
+        "module": "tests.native_batch"
+      },
+      {
+        "function": "increment",
+        "module": "tests.native_batch"
+      }
+    ],
+    "artifact_identity": "sha256:3568e2cd14aef8ebee313b6e9aebb0a7385e9130b9f00f67724d398a625eec11",
+    "callable_roots": [
+      {
+        "function": "decrement",
+        "interface_identity": "sha256:025d9c47175e9885977796cb391d102d53a301861e1ba2b5a3e47bcabee155aa",
+        "module": "tests.native_batch",
+        "status": "verified"
+      },
+      {
+        "function": "increment",
+        "interface_identity": "sha256:c4833c083880629f309f91cfd40ad6675b0faf2b53335c760d83467317cd4d09",
+        "module": "tests.native_batch",
+        "status": "verified"
+      }
+    ],
+    "canonical_vm_peak_rss_kib": 20872,
+    "canonical_vm_results": [
+      {
+        "id": "increment-41",
+        "outcome": {
+          "kind": "completed"
+        },
+        "record": {
+          "admitted_capabilities": [],
+          "artifact_id": "sha256:3568e2cd14aef8ebee313b6e9aebb0a7385e9130b9f00f67724d398a625eec11",
+          "callable_function": "mncs:0.4:ssa:function:14a0ce04d7881818fb649f3265cdee00f99a599e3add28ac94364a3017d110b7",
+          "callable_name": "tests.native_batch::increment",
+          "effects": [],
+          "effects_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "outcome": {
+            "kind": "completed"
+          },
+          "resource_limits": [
+            {
+              "dimension": "call_depth",
+              "limit": 1024
+            },
+            {
+              "dimension": "effects",
+              "limit": 1024
+            },
+            {
+              "dimension": "iterations",
+              "limit": 1000000
+            },
+            {
+              "dimension": "memory_cells",
+              "limit": 10000000
+            },
+            {
+              "dimension": "steps",
+              "limit": 10000
+            }
+          ],
+          "return_digest": "sha256:19125dfd5c8de190a7d5e2fcbf06bd4650dabdcd50057d964a7f1c8fdcf401db",
+          "returned": [
+            {
+              "Integer": {
+                "bits": 64,
+                "signed": false,
+                "value": 42
+              }
+            }
+          ],
+          "runtime_id": "mncs-vm-runtime:sha256:3568e2cd14aef8ebee313b6e9aebb0a7385e9130b9f00f67724d398a625eec11",
+          "schema_version": "mncs.vm.execution-record/1",
+          "usage": {
+            "call_depth": 0,
+            "effects": 0,
+            "max_call_depth": 2,
+            "max_memory_cells": 2,
+            "memory_cells": 0,
+            "steps": 6
+          }
+        }
+      },
+      {
+        "id": "decrement-43",
+        "outcome": {
+          "kind": "completed"
+        },
+        "record": {
+          "admitted_capabilities": [],
+          "artifact_id": "sha256:3568e2cd14aef8ebee313b6e9aebb0a7385e9130b9f00f67724d398a625eec11",
+          "callable_function": "mncs:0.4:ssa:function:527aa2c8188d31fb40825000d4c3e17fddbbbdde5091bde377018acc08467c1d",
+          "callable_name": "tests.native_batch::decrement",
+          "effects": [],
+          "effects_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "outcome": {
+            "kind": "completed"
+          },
+          "resource_limits": [
+            {
+              "dimension": "call_depth",
+              "limit": 1024
+            },
+            {
+              "dimension": "effects",
+              "limit": 1024
+            },
+            {
+              "dimension": "iterations",
+              "limit": 1000000
+            },
+            {
+              "dimension": "memory_cells",
+              "limit": 10000000
+            },
+            {
+              "dimension": "steps",
+              "limit": 10000
+            }
+          ],
+          "return_digest": "sha256:19125dfd5c8de190a7d5e2fcbf06bd4650dabdcd50057d964a7f1c8fdcf401db",
+          "returned": [
+            {
+              "Integer": {
+                "bits": 64,
+                "signed": false,
+                "value": 42
+              }
+            }
+          ],
+          "runtime_id": "mncs-vm-runtime:sha256:3568e2cd14aef8ebee313b6e9aebb0a7385e9130b9f00f67724d398a625eec11",
+          "schema_version": "mncs.vm.execution-record/1",
+          "usage": {
+            "call_depth": 0,
+            "effects": 0,
+            "max_call_depth": 1,
+            "max_memory_cells": 1,
+            "memory_cells": 1,
+            "steps": 3
+          }
+        }
+      }
+    ],
+    "canonical_vm_wall_seconds": 0.007594,
+    "large_selection_summary": {
+      "detail_in_result_artifact": true,
+      "root_count": 256,
+      "summary_bytes": 556
+    },
+    "provider_metrics": {
+      "cpu_seconds": 0.11,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 10,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 34615296,
+      "peak_threads": 2,
+      "wall_seconds": 0.290796
+    },
+    "provider_wall_seconds": 0.290796,
+    "request_schema": "mncs.compiler.application-build-request/2",
+    "response_schema": "mncs.compiler.application-build/5",
+    "source_snapshot_identity": "sha256:bd1f62011283ed5e395c0517afcd7c1915126e08ed9f50e4ff1561ebeb575b5d",
+    "verification_work": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "program_function_count": 4,
+      "resolved_module_count": 1,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    }
+  },
+  "process_tree_metrics": {
+    "cold": {
+      "cpu_seconds": 0.53,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 9,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 80957440,
+      "peak_threads": 2,
+      "wall_seconds": 0.654824
+    },
+    "digest_app_cold": {
+      "cpu_seconds": 0.57,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 9,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 86814720,
+      "peak_threads": 2,
+      "wall_seconds": 0.701756
+    },
+    "digest_app_warm": {
+      "cpu_seconds": 0.14,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 9,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 46841856,
+      "peak_threads": 2,
+      "wall_seconds": 0.244507
+    },
+    "invalid": {
+      "cpu_seconds": 0.11,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 9,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 32690176,
+      "peak_threads": 2,
+      "wall_seconds": 0.193014
+    },
+    "method": "sampled /proc process tree at 10 ms intervals",
+    "multi_callable_provider": {
+      "cpu_seconds": 0.11,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 10,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 34615296,
+      "peak_threads": 2,
+      "wall_seconds": 0.290796
+    },
+    "store_input": {
+      "cpu_seconds": 0.12,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 9,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 46870528,
+      "peak_threads": 2,
+      "wall_seconds": 0.244181
+    },
+    "warm": {
+      "cpu_seconds": 0.15,
+      "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 9,
+      "peak_process_count": 2,
+      "peak_rss_bytes": 42651648,
+      "peak_threads": 2,
+      "wall_seconds": 0.241596
+    }
+  },
+  "producer": {
+    "compiler_revision": "1795f1806a05d40d846695eb0fef4d7965476903",
+    "mncs_stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "mncs_test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "probe_build": {
+      "binary_sha256": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7",
+      "built_from_selected_checkout": true,
+      "target_directory": ".build/native-app-readiness/stage0-target"
+    },
+    "probe_sha256": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7",
+    "provider_test_sha256": "59cd757230d662d49443171abf8a9d0c825390231aa7a069c14eebd3f4b4eb08",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "request_schema": "mncs.compiler.application-build-request/1",
+  "response_file": {
+    "byte_count": 1011722,
+    "name": "native-application-build.json",
+    "sha256": "c7f2184e26bdad6f28199877f1057fe13090118dfa77d3b5c56f10ef6f7dc76e"
+  },
+  "response_schema": "mncs.compiler.application-build/4",
+  "schema_version": 1,
+  "status": "pass",
+  "verification_work_observation": {
+    "cold": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "program_function_count": 24,
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    },
+    "digest_app_cold": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "program_function_count": 30,
+      "resolved_module_count": 4,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    },
+    "digest_app_warm_exact_snapshot": {
+      "artifact_decision_reason": "verified_cached_application_artifact",
+      "backend_artifact": "reused",
+      "declaration_resolution": "not_run",
+      "front_end_invocations": 0,
+      "front_end_outcome": "not_run",
+      "function_body_verification": "not_run",
+      "program_function_count": null,
+      "resolved_module_count": null,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "not_run",
+      "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+      "signature_verification": "not_run",
+      "source_parsing": "not_run",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    },
+    "invalid_source": {
+      "artifact_decision_reason": "frontend_or_artifact_emission_did_not_produce_an_artifact",
+      "backend_artifact": "not_generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "rejected",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "program_function_count": null,
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    },
+    "multi_callable_provider_build": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "program_function_count": 4,
+      "resolved_module_count": 1,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    },
+    "store_input_exact_snapshot": {
+      "artifact_decision_reason": "verified_cached_application_artifact",
+      "backend_artifact": "reused",
+      "declaration_resolution": "not_run",
+      "front_end_invocations": 0,
+      "front_end_outcome": "not_run",
+      "function_body_verification": "not_run",
+      "program_function_count": null,
+      "resolved_module_count": null,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "not_run",
+      "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+      "signature_verification": "not_run",
+      "source_parsing": "not_run",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    },
+    "warm_exact_snapshot": {
+      "artifact_decision_reason": "verified_cached_application_artifact",
+      "backend_artifact": "reused",
+      "declaration_resolution": "not_run",
+      "front_end_invocations": 0,
+      "front_end_outcome": "not_run",
+      "function_body_verification": "not_run",
+      "program_function_count": null,
+      "resolved_module_count": null,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "not_run",
+      "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+      "signature_verification": "not_run",
+      "source_parsing": "not_run",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:3e93bbf4c54accd00f21b43897d503d4c49784423340f5e86ee31c03ea9edfd7"
+    }
+  },
+  "wall_seconds": {
+    "cold": 0.654824,
+    "digest_app_cold": 0.701756,
+    "digest_app_warm": 0.244507,
+    "invalid": 0.193014,
+    "multi_callable_provider": 0.290796,
+    "multi_callable_vm_batch": 0.007594,
+    "store_input": 0.244181,
+    "warm": 0.241596
+  }
+}

@@ -165,3 +165,11 @@ publication for rejected input, and local VM execution of the two selected
 callables. This local adapter test is not evidence of live Environment or
 canonical Store execution. The `mncs-test` consumer fixture remains the source
 and Stage-0 differential oracle for the application itself.
+
+The probe keeps exact executable SHA-256 as its producer identity. It now hashes
+the executable in 64 KiB streaming chunks, and optimizes `sha2` in the debug
+profile used by the Stage-0 development probe. This avoids loading the full
+binary into memory and prevents an unoptimized digest from dominating fresh
+process cache hits; it does not change application-build/5 or cache identity
+semantics. The workload-specific measurement is recorded in
+`evidence/native-app-readiness-probe-cache-identity-20261016.json`.

@@ -1,0 +1,379 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.probe-identity-cache-performance",
+  "compiler_revision": "1795f1806a05d40d846695eb0fef4d7965476903",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "probe_sha256": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1",
+  "producer_identity_match_verified": true,
+  "unchanged_application_contract": "mncs.compiler.application-build/5",
+  "source_hashes": {
+    "tools/stage0-probe/Cargo.toml": "sha256:b2692627916ee8b7f85adef554e1e2da6fa7a4be41824e0a276c4fc034bf3e0c",
+    "tools/stage0-probe/src/application.rs": "sha256:d60ab7c5d39c76880991814530564a26e71545e4c4457e6faf64570cd65e7bb1"
+  },
+  "before": {
+    "compiler_revision": "59a291e631bbeebf8f7010c9fbd4b5d543c6153c",
+    "warm_hit_wall_seconds": 4.3459,
+    "application_cache_identity_ms": 4129.6,
+    "request_execution_ms": 4295.0,
+    "peak_rss_kib": 126328,
+    "frontend_invocations": 0,
+    "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f",
+    "basis": "pre-change exact digest application cache-hit profile with phase telemetry enabled"
+  },
+  "after": {
+    "compiler_revision": "1795f1806a05d40d846695eb0fef4d7965476903",
+    "warm_hit_wall_seconds": 0.581266,
+    "warm_hit_cpu_seconds": 0.54,
+    "warm_hit_peak_rss_bytes": 50409472,
+    "application_cache_identity_ms": 419.810563,
+    "application_cache_identity_mean_ms": 421.156,
+    "exact_cache_lookup_ms": 100.02283800000001,
+    "frontend_invocations": 0,
+    "probe_executable_sha256": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1",
+    "response_probe_sha256": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1",
+    "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f",
+    "cache_status": "hit",
+    "semantic_facts_reused": 0
+  },
+  "comparison": {
+    "warm_hit_speedup": 7.48,
+    "identity_stage_speedup": 9.84,
+    "peak_rss_reduction_percent": 61.0,
+    "method": "Hash the executable in 64 KiB streaming chunks using SHA-256 optimized in the Stage-0 probe dev profile."
+  },
+  "validation": {
+    "cargo_build_locked": "passed",
+    "digest_multi_callable_batch_test": "passed",
+    "provider_regression": "passed",
+    "fresh_process_exact_cache_hit": "passed",
+    "reachable_dependency_edit_invalidation": "passed",
+    "same_process_vm_batch_calls": 5,
+    "retained_vm_session_calls": 7,
+    "retained_vm_failure_isolation": true,
+    "retained_vm_low_fuel_recovery": true,
+    "provider_invalid_source_rejection": "MNE162",
+    "provider_invalid_success_publication": "not_published",
+    "provider_corrupt_store_input_rejected": true,
+    "cgroup_memory_measurement": "unavailable"
+  },
+  "digest_batch_run": {
+    "schema_version": 1,
+    "kind": "mncs.compiler.native-test-digest-multi-callable-batch",
+    "compiler_revision": "1795f1806a05d40d846695eb0fef4d7965476903",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "probe_sha256": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1",
+    "canonical_vm_sha256": "sha256:1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "test_harness_sha256": "sha256:d595c9a72c31f8e5becceb7b4757848bf911637f8d9d347d5b7c2ee1d4736bc2",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "test_repository_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "stdlib_repository_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "fixture_source_revision": "f9575e09ec3481c0ded52bb9e3ec72940725aff6",
+    "source_hashes": {
+      "mncs.std.application.v1": "sha256:5669f67e921e71c0f54742325f06fddfe3b11692c1fe3d27ee515f8a3fd30c7e",
+      "mncs.test.assertions": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b",
+      "mncs.test.digest": "sha256:fa45534cdebb4de683675bfb70eed15cfa177a5198f036c0e3b7fcab68b91c30",
+      "mncs.test.suite": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+    },
+    "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f",
+    "request_schema": "mncs.compiler.application-build-request/2",
+    "response_schema": "mncs.compiler.application-build/5",
+    "artifact_identity": "sha256:e6824a12cb5208e4b55a6838cf7c5b92f446c6de60e8a2c863a2a11e3ee5802e",
+    "artifact_bytes": 1160570,
+    "selected_callables": [
+      "mncs.test.digest::build_digest",
+      "mncs.test.digest::request_schema",
+      "mncs.test.digest::result_schema"
+    ],
+    "callable_interfaces": [
+      {
+        "module": "mncs.test.digest",
+        "function": "build_digest",
+        "status": "verified",
+        "interface_identity": "sha256:3c08227564c44096355994ec3689e817d710ca5848581880dc278d5cd7e434f9"
+      },
+      {
+        "module": "mncs.test.digest",
+        "function": "request_schema",
+        "status": "verified",
+        "interface_identity": "sha256:552417eafe90ca66ca3ef434f2b57bc68e744097f2069cda5552539abc37cae9"
+      },
+      {
+        "module": "mncs.test.digest",
+        "function": "result_schema",
+        "status": "verified",
+        "interface_identity": "sha256:f28ac9dfc8818d6fbf987f615be480217a1b7baf649573ceba05ed2de847f7ab"
+      }
+    ],
+    "cold_verification_work": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "program_function_count": 30,
+      "resolved_module_count": 4,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/1",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1"
+    },
+    "fresh_process_reuse": {
+      "status": "hit",
+      "front_end_invocations": 0,
+      "artifact_identity": "sha256:e6824a12cb5208e4b55a6838cf7c5b92f446c6de60e8a2c863a2a11e3ee5802e",
+      "verification_work": {
+        "artifact_decision_reason": "verified_cached_application_artifact",
+        "backend_artifact": "reused",
+        "declaration_resolution": "not_run",
+        "front_end_invocations": 0,
+        "front_end_outcome": "not_run",
+        "function_body_verification": "not_run",
+        "program_function_count": null,
+        "resolved_module_count": null,
+        "reused_semantic_facts": [],
+        "schema_version": "mncs.compiler.application-build-verification-work/1",
+        "semantic_dependency_closure": "not_run",
+        "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+        "signature_verification": "not_run",
+        "source_parsing": "not_run",
+        "ssa_verification": "not_run",
+        "verification_engine_identity": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1"
+      }
+    },
+    "comment_edit_executable_closure_reuse": {
+      "status": "hit",
+      "reuse_basis": "verified_application_executable_closure",
+      "source_snapshot_identity": "sha256:707e647fbac8ff42266589429f127449aab2190a32dccd97ed8c3b1f885257ec",
+      "artifact_identity": "sha256:e6824a12cb5208e4b55a6838cf7c5b92f446c6de60e8a2c863a2a11e3ee5802e",
+      "verification_work": {
+        "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+        "backend_artifact": "reused",
+        "declaration_resolution": "recomputed_by_full_frontend",
+        "front_end_invocations": 1,
+        "front_end_outcome": "verified",
+        "function_body_verification": "recomputed_by_full_frontend",
+        "program_function_count": 30,
+        "resolved_module_count": 4,
+        "reused_semantic_facts": [],
+        "schema_version": "mncs.compiler.application-build-verification-work/1",
+        "semantic_dependency_closure": "recomputed_by_full_frontend",
+        "semantic_reverification_reason": "source_snapshot_changed; full_frontend_required_before_artifact_reuse",
+        "signature_verification": "recomputed_by_full_frontend",
+        "source_parsing": "recomputed_by_full_frontend",
+        "ssa_verification": "reused_verified_vm_artifact",
+        "verification_engine_identity": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1"
+      },
+      "measurement": {
+        "wall_seconds": 2.206348,
+        "cpu_seconds": 2.16,
+        "peak_rss_bytes": 62152704,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 5,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "selected_callable_interface_identities": [
+        "sha256:3c08227564c44096355994ec3689e817d710ca5848581880dc278d5cd7e434f9",
+        "sha256:552417eafe90ca66ca3ef434f2b57bc68e744097f2069cda5552539abc37cae9",
+        "sha256:f28ac9dfc8818d6fbf987f615be480217a1b7baf649573ceba05ed2de847f7ab"
+      ],
+      "changed_module_sha256": "sha256:81a20e58b0046c1b36ed84200f700afe9487a13f74446ce2c3e998010bc0415e"
+    },
+    "reachable_dependency_edit_invalidation": {
+      "edited_function": "mncs.test.suite::empty",
+      "semantics_preserving_expression": "total: 0 +% 0",
+      "status": "miss",
+      "reuse_basis": "none",
+      "artifact_identity": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+      "verification_work": {
+        "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+        "backend_artifact": "generated",
+        "declaration_resolution": "recomputed_by_full_frontend",
+        "front_end_invocations": 1,
+        "front_end_outcome": "verified",
+        "function_body_verification": "recomputed_by_full_frontend",
+        "program_function_count": 30,
+        "resolved_module_count": 4,
+        "reused_semantic_facts": [],
+        "schema_version": "mncs.compiler.application-build-verification-work/1",
+        "semantic_dependency_closure": "recomputed_by_full_frontend",
+        "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+        "signature_verification": "recomputed_by_full_frontend",
+        "source_parsing": "recomputed_by_full_frontend",
+        "ssa_verification": "recomputed",
+        "verification_engine_identity": "sha256:bbc38672a1fdcbcfd1883fa56c29e1ca80528e03028fc74d92e35ae5830d9ef1"
+      },
+      "measurement": {
+        "wall_seconds": 4.164705,
+        "cpu_seconds": 3.89,
+        "peak_rss_bytes": 76218368,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 6,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "fresh_process_reuse": {
+        "status": "hit",
+        "front_end_invocations": 0,
+        "artifact_identity": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+        "measurement": {
+          "wall_seconds": 0.598582,
+          "cpu_seconds": 0.56,
+          "peak_rss_bytes": 50647040,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 5,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 1
+        }
+      }
+    },
+    "oracle_fixture": {
+      "kind": "Gate A: real mncs-test digest function agrees between Stage-0 and canonical VM",
+      "exact_stage0_canonical_vm_agreement": true,
+      "digest_cases": 3
+    },
+    "batch": {
+      "call_count": 5,
+      "artifact_identity": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+      "summary": {
+        "call_depth_max": 4,
+        "calls": 5,
+        "effects_total": 0,
+        "memory_cells_max": 1116,
+        "outcomes": {
+          "completed": 5
+        },
+        "steps_max": 780,
+        "steps_total": 1983
+      },
+      "measurement": {
+        "wall_seconds": 0.196187,
+        "user_cpu_seconds": 0.19,
+        "system_cpu_seconds": 0.0,
+        "cpu_seconds": 0.19,
+        "peak_rss_kib": 27080,
+        "calls": 5,
+        "call_ids": [
+          "digest-case-0",
+          "digest-case-1",
+          "digest-case-2",
+          "request-schema",
+          "result-schema"
+        ]
+      },
+      "normalized_result_sha256": [
+        "sha256:04f4d3c97a81173787bc619f1215af1eb856a0a73693718755254760a413198b",
+        "sha256:e310c18b9d66af3eb2e1e53053fb7012623adb5bcec4c0b8f7c1c060a0ad2b5a",
+        "sha256:272e74fafe21053fbbc731b51a20f4526483ed006dfcf723b7f900094d98170f",
+        "sha256:e2f6ffcd0274e35e68f6cd9ad11c860d111332c771f017a3ea4213a317065018",
+        "sha256:848f1ece32c0dd2eeb7b7554c1973305deac44473bc0f4f712ff2f38e9a3e892"
+      ]
+    },
+    "retained_vm_session": {
+      "ready_artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+      "process_count": 1,
+      "call_count": 7,
+      "call_ids": [
+        "digest-budget-exhaustion",
+        "digest-invalid-typed-input",
+        "digest-case-0",
+        "digest-case-1",
+        "digest-case-2",
+        "request-schema",
+        "result-schema"
+      ],
+      "wall_seconds": 0.217512,
+      "user_cpu_seconds": 0.2,
+      "system_cpu_seconds": 0.0,
+      "cpu_seconds": 0.2,
+      "peak_rss_kib": 27416,
+      "low_fuel_recovery_in_same_session": true,
+      "typed_failure_rejected_without_poisoning_following_calls": true,
+      "results": [
+        {
+          "id": "digest-budget-exhaustion",
+          "outcome": "budget_exhausted",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 2,
+          "returned_sha256": null
+        },
+        {
+          "id": "digest-invalid-typed-input",
+          "outcome": "invalid_request",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 0,
+          "returned_sha256": null
+        },
+        {
+          "id": "digest-case-0",
+          "outcome": "completed",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 780,
+          "returned_sha256": "sha256:04f4d3c97a81173787bc619f1215af1eb856a0a73693718755254760a413198b"
+        },
+        {
+          "id": "digest-case-1",
+          "outcome": "completed",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 768,
+          "returned_sha256": "sha256:e310c18b9d66af3eb2e1e53053fb7012623adb5bcec4c0b8f7c1c060a0ad2b5a"
+        },
+        {
+          "id": "digest-case-2",
+          "outcome": "completed",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 387,
+          "returned_sha256": "sha256:272e74fafe21053fbbc731b51a20f4526483ed006dfcf723b7f900094d98170f"
+        },
+        {
+          "id": "request-schema",
+          "outcome": "completed",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 28,
+          "returned_sha256": "sha256:e2f6ffcd0274e35e68f6cd9ad11c860d111332c771f017a3ea4213a317065018"
+        },
+        {
+          "id": "result-schema",
+          "outcome": "completed",
+          "artifact_id": "sha256:05e4c552cf7eae1777345d2b3d8dd63b6a9bbc1a71def202ec570a853cabd5f9",
+          "steps": 20,
+          "returned_sha256": "sha256:848f1ece32c0dd2eeb7b7554c1973305deac44473bc0f4f712ff2f38e9a3e892"
+        }
+      ]
+    },
+    "measurements": {
+      "cold_build": {
+        "wall_seconds": 3.787217,
+        "cpu_seconds": 3.72,
+        "peak_rss_bytes": 76976128,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 5,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "fresh_process_hit": {
+        "wall_seconds": 0.581266,
+        "cpu_seconds": 0.54,
+        "peak_rss_bytes": 50409472,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 5,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      }
+    },
+    "language_verified_facts_reused": 0,
+    "multi_callable_verified_vm_artifact_reused_after_full_frontend": true,
+    "scope": "The real mncs.test.digest source was compiled into one multi-callable application-build/5 artifact. An imported comment edit reran the full frontend and reused the selected verified VM closure while rebinding all three current callable interfaces. A semantics-preserving edit to reachable mncs.test.suite::empty invalidated the closure and regenerated the artifact. Three Stage-0-backed build_digest inputs and both schema callables then ran in one bounded canonical VM batch and one retained VM session; the retained session recovered from a low-fuel interruption and rejected typed input before completing the same oracle-backed callable set in that process. This does not reuse Language verified facts and does not establish Forge/Environment/Store execution or full mncs-test conversion."
+  },
+  "scope": "This reduces fresh-process cache identity overhead while preserving exact executable SHA-256 producer identity and the /5 cache contract. It does not implement Language verified-fact reuse: the observed reuse count remains zero. Measurements are specific to the selected multi-module digest application and this host."
+}

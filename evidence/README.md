@@ -268,3 +268,17 @@ This establishes a pure native Test workflow slice. It does not establish
 [cursor-carry candidate record](self-host-global-segment-canonical-vm-cursor-carry-candidate-20261016.json)
 retains a correctness-passing lexer experiment that was reverted after its
 matched 1,000,000-step profile showed more `next_token_global` work.
+
+## Probe producer identity cache cost (2026-10-16)
+
+The [probe cache identity report](native-app-readiness-probe-cache-identity-20261016.json)
+records a focused Stage-0 change that preserves exact executable SHA-256
+identity while hashing in bounded 64 KiB chunks with an optimized SHA-256
+dependency. On the same multi-callable digest snapshot, the fresh-process exact
+cache hit fell from 4.346 to 0.581 seconds, identity generation fell from
+4.130 to 0.420 seconds, and sampled peak RSS fell from 123 MiB to 48 MiB. The
+application-build/5 contract and artifact identity checks remained intact. The
+[provider regression record](native-app-readiness-provider-digest-cache-identity-20261016.json)
+also retains the post-change invalid-input, Store-input validation, and local
+VM adapter checks. These host-specific measurements do not represent Language
+verified-fact reuse or the live Forge/Environment/Store effectful route.
