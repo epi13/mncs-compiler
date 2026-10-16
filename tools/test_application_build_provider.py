@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -17,6 +19,7 @@ import test_vm_native_application as app
 import test_vm_test_digest_app as digest_app
 
 configured_probe = os.environ.get("MNCS_COMPILER_PROBE")
+configured_native_probe = os.environ.get("MNCS_NATIVE_APP_PROBE_BIN")
 if configured_probe:
     app.PROBE = Path(configured_probe).expanduser().resolve()
 
@@ -51,6 +54,200 @@ def write_json(path: Path, value: object) -> bytes:
     return content
 
 
+def _proc_row(pid: int) -> dict | None:
+    root = Path("/proc") / str(pid)
+    try:
+        stat = (root / "stat").read_text()
+        fields = stat[stat.rfind(")") + 2 :].split()
+        return {
+            "pid": pid,
+            "ppid": int(fields[1]),
+            "cpu_ticks": int(fields[11]) + int(fields[12]),
+        }
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def sample_process_tree(root_pid: int) -> dict:
+    """Sample one provider invocation and its live descendants from /proc."""
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return {
+            "cpu_seconds": None,
+            "rss_bytes": None,
+            "threads": None,
+            "fd_count": None,
+            "child_process_count": None,
+            "process_count": None,
+        }
+    rows = {}
+    children: dict[int, list[int]] = {}
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        row = _proc_row(int(entry.name))
+        if row is None:
+            continue
+        rows[row["pid"]] = row
+        children.setdefault(row["ppid"], []).append(row["pid"])
+
+    selected = []
+    pending = [root_pid]
+    seen = set()
+    while pending:
+        pid = pending.pop()
+        if pid in seen:
+            continue
+        seen.add(pid)
+        row = rows.get(pid)
+        if row is None:
+            continue
+        selected.append(row)
+        pending.extend(children.get(pid, []))
+    if not selected:
+        return {
+            "cpu_seconds": 0.0,
+            "rss_bytes": 0,
+            "threads": 0,
+            "fd_count": 0,
+            "child_process_count": 0,
+            "process_count": 0,
+        }
+    ticks_per_second = os.sysconf("SC_CLK_TCK")
+    for row in selected:
+        root = proc / str(row["pid"])
+        try:
+            status = {}
+            for line in (root / "status").read_text().splitlines():
+                if ":" in line:
+                    key, value = line.split(":", 1)
+                    status[key] = value.strip()
+            row["rss_bytes"] = int(status.get("VmRSS", "0 kB").split()[0]) * 1024
+            row["threads"] = int(status.get("Threads", "0"))
+            row["fd_count"] = len(list((root / "fd").iterdir()))
+        except (OSError, ValueError, IndexError):
+            row["rss_bytes"] = 0
+            row["threads"] = 0
+            row["fd_count"] = 0
+    return {
+        "cpu_seconds": sum(row["cpu_ticks"] for row in selected) / ticks_per_second,
+        "rss_bytes": sum(row["rss_bytes"] for row in selected),
+        "threads": sum(row["threads"] for row in selected),
+        "fd_count": sum(row["fd_count"] for row in selected),
+        "child_process_count": len(selected) - 1,
+        "process_count": len(selected),
+    }
+
+
+def summarize_process_tree(samples: list[dict], wall_seconds: float) -> dict:
+    available = [row for row in samples if row.get("cpu_seconds") is not None]
+    if not available:
+        return {
+            "wall_seconds": round(wall_seconds, 6),
+            "cpu_seconds": None,
+            "peak_rss_bytes": None,
+            "peak_cgroup_memory_bytes": None,
+            "peak_open_file_descriptors": None,
+            "peak_threads": None,
+            "peak_child_processes": None,
+            "peak_process_count": None,
+            "method": "unavailable",
+        }
+    return {
+        "wall_seconds": round(wall_seconds, 6),
+        "cpu_seconds": round(
+            max(0.0, max(row["cpu_seconds"] for row in available)
+                - available[0]["cpu_seconds"]),
+            6,
+        ),
+        "peak_rss_bytes": max(row["rss_bytes"] for row in available),
+        "peak_cgroup_memory_bytes": None,
+        "peak_open_file_descriptors": max(row["fd_count"] for row in available),
+        "peak_threads": max(row["threads"] for row in available),
+        "peak_child_processes": max(row["child_process_count"] for row in available),
+        "peak_process_count": max(row["process_count"] for row in available),
+        "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable",
+    }
+
+
+def verification_work(response: dict, *, label: str, frontend_invocations: int) -> dict:
+    cache = response.get("cache", {})
+    work = cache.get("verification_work", {})
+    if (
+        cache.get("schema_version")
+        != "mncs.compiler.application-build-cache-observation/4"
+        or work.get("schema_version")
+        != "mncs.compiler.application-build-verification-work/1"
+    ):
+        raise AssertionError(
+            f"{label} omitted versioned verification-work telemetry: cache={cache}"
+        )
+    if work.get("front_end_invocations") != frontend_invocations:
+        raise AssertionError(f"{label} frontend invocation count is inaccurate: {work}")
+    expected_stage = "recomputed_by_full_frontend" if frontend_invocations else "not_run"
+    for stage in (
+        "source_parsing",
+        "declaration_resolution",
+        "signature_verification",
+        "function_body_verification",
+    ):
+        if work.get(stage) != expected_stage:
+            raise AssertionError(f"{label} has unexpected {stage} work: {work}")
+    if frontend_invocations and (
+        type(work.get("resolved_module_count")) is not int
+        or work["resolved_module_count"] < 1
+    ):
+        raise AssertionError(f"{label} omitted resolved-module work: {work}")
+    return work
+
+
+def ensure_current_probe() -> dict:
+    if configured_probe or configured_native_probe:
+        if not app.PROBE.is_file():
+            raise SystemExit("selected MNCS_COMPILER_PROBE does not exist")
+        return {
+            "built_from_selected_checkout": False,
+            "selected_binary_sha256": app.sha(app.PROBE.read_bytes()),
+        }
+    target_dir = ROOT / ".build/native-app-readiness/stage0-target"
+    completed = subprocess.run(
+        [
+            "cargo", "build", "--offline", "--release",
+            "--manifest-path", "tools/stage0-probe/Cargo.toml",
+            "--target-dir", str(target_dir),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    if completed.returncode:
+        raise RuntimeError(
+            "current Stage-0 compiler probe build failed: "
+            + completed.stderr[-5000:]
+        )
+    built_probe = target_dir / "release/mncs-compiler-stage0-probe"
+    if not built_probe.is_file():
+        raise RuntimeError("current Stage-0 build did not produce its probe executable")
+    app.PROBE.parent.mkdir(parents=True, exist_ok=True)
+    if built_probe.resolve() != app.PROBE.resolve():
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{app.PROBE.name}.", dir=app.PROBE.parent, delete=False
+        ) as temporary_file:
+            temporary_probe = Path(temporary_file.name)
+        try:
+            shutil.copy2(built_probe, temporary_probe)
+            os.replace(temporary_probe, app.PROBE)
+        finally:
+            temporary_probe.unlink(missing_ok=True)
+    return {
+        "built_from_selected_checkout": True,
+        "target_directory": target_dir.relative_to(ROOT).as_posix(),
+        "binary_sha256": app.sha(app.PROBE.read_bytes()),
+    }
+
+
 def invoke(
     args: list[str],
     *,
@@ -58,7 +255,7 @@ def invoke(
     cache_dir: Path,
     input_dir: Path | None = None,
     input_manifest: dict | None = None,
-) -> tuple[dict, dict, float]:
+) -> tuple[dict, dict, float, dict]:
     environment = os.environ.copy()
     environment["MNCS_COMPILER_PROBE"] = str(app.PROBE)
     environment["MNCS_ENV_SESSION_ARTIFACT_DIR"] = str(output_dir)
@@ -70,38 +267,65 @@ def invoke(
             input_manifest, sort_keys=True, separators=(",", ":")
         )
     started = time.monotonic()
-    completed = subprocess.run(
+    completed = subprocess.Popen(
         [sys.executable, str(PROVIDER), "build", *args],
         cwd=ROOT,
         env=environment,
-        capture_output=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=180,
-        check=False,
+        start_new_session=(os.name == "posix"),
     )
+    samples = []
+    while completed.poll() is None:
+        if time.monotonic() - started > 180:
+            if os.name == "posix":
+                try:
+                    os.killpg(completed.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    stdout, stderr = completed.communicate(timeout=2)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(completed.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    stdout, stderr = completed.communicate()
+            else:
+                completed.kill()
+                stdout, stderr = completed.communicate()
+            raise TimeoutError(
+                f"provider build exceeded 180 seconds: {stderr[-2000:]}"
+            )
+        samples.append(sample_process_tree(completed.pid))
+        time.sleep(0.01)
+    stdout, stderr = completed.communicate(timeout=5)
     elapsed = time.monotonic() - started
+    metrics = summarize_process_tree(samples, elapsed)
     if completed.returncode != 0:
         raise AssertionError(
             json.dumps(
                 {
                     "returncode": completed.returncode,
-                    "stdout": completed.stdout[-1000:],
-                    "stderr": completed.stderr[-2000:],
+                    "stdout": stdout[-1000:],
+                    "stderr": stderr[-2000:],
                 },
                 indent=2,
             )
         )
-    summary = json.loads(completed.stdout)
+    summary = json.loads(stdout)
     if summary.get("schema_version") != INVOCATION_SCHEMA:
         raise AssertionError("Environment invocation summary schema is missing")
     result_path = output_dir / "native-application-build.json"
     response = json.loads(result_path.read_text())
     if response.get("schema_version") != RESPONSE_SCHEMA:
         raise AssertionError("stored application build response schema is wrong")
-    return summary, response, elapsed
+    return summary, response, elapsed, metrics
 
 
 def main() -> None:
+    probe_build = ensure_current_probe()
     if not app.PROBE.is_file():
         raise SystemExit("campaign Stage-0 compiler probe is missing")
     modules = {name: path.read_text() for name, path in app.MODULE_FILES.items()}
@@ -126,13 +350,16 @@ def main() -> None:
 
         cold_dir = base / "cold-output"
         cold_dir.mkdir()
-        cold, cold_response, cold_elapsed = invoke(
+        cold, cold_response, cold_elapsed, cold_metrics = invoke(
             [
                 "--request-file", request_path.relative_to(ROOT).as_posix(),
                 "--cache-dir", cache_arg,
             ],
             output_dir=cold_dir,
             cache_dir=cache_dir,
+        )
+        cold_work = verification_work(
+            cold_response, label="cold application build", frontend_invocations=1
         )
         invocation_summary_bytes = (
             json.dumps(cold, ensure_ascii=False, sort_keys=True,
@@ -240,7 +467,7 @@ def main() -> None:
 
         warm_dir = base / "warm-output"
         warm_dir.mkdir()
-        warm, warm_response, warm_elapsed = invoke(
+        warm, warm_response, warm_elapsed, warm_metrics = invoke(
             [
                 "--request-file", request_path.relative_to(ROOT).as_posix(),
                 "--cache-dir", cache_arg,
@@ -250,6 +477,9 @@ def main() -> None:
         )
         if warm_response.get("cache", {}).get("status") != "hit":
             raise AssertionError("fresh provider process did not reuse the exact cached build")
+        warm_work = verification_work(
+            warm_response, label="warm exact-snapshot build", frontend_invocations=0
+        )
         if warm_response.get("artifact", {}).get("identity") != artifact.get("identity"):
             raise AssertionError("warm provider build changed the canonical artifact identity")
 
@@ -266,13 +496,16 @@ def main() -> None:
         digest_cache_arg = digest_cache_dir.relative_to(ROOT).as_posix()
         digest_cold_dir = base / "digest-cold-output"
         digest_cold_dir.mkdir()
-        digest_cold, digest_response, digest_cold_elapsed = invoke(
+        digest_cold, digest_response, digest_cold_elapsed, digest_cold_metrics = invoke(
             [
                 "--request-file", digest_request_path.relative_to(ROOT).as_posix(),
                 "--cache-dir", digest_cache_arg,
             ],
             output_dir=digest_cold_dir,
             cache_dir=digest_cache_dir,
+        )
+        digest_cold_work = verification_work(
+            digest_response, label="digest_app cold build", frontend_invocations=1
         )
         digest_artifact = digest_response.get("artifact", {})
         digest_dispatch = digest_response.get("capability_dispatch", {})
@@ -351,13 +584,17 @@ def main() -> None:
 
         digest_warm_dir = base / "digest-warm-output"
         digest_warm_dir.mkdir()
-        digest_warm, digest_warm_response, digest_warm_elapsed = invoke(
+        digest_warm, digest_warm_response, digest_warm_elapsed, digest_warm_metrics = invoke(
             [
                 "--request-file", digest_request_path.relative_to(ROOT).as_posix(),
                 "--cache-dir", digest_cache_arg,
             ],
             output_dir=digest_warm_dir,
             cache_dir=digest_cache_dir,
+        )
+        digest_warm_work = verification_work(
+            digest_warm_response, label="digest_app warm exact-snapshot build",
+            frontend_invocations=0,
         )
         if (
             digest_response.get("cache", {}).get("status") != "miss"
@@ -372,6 +609,18 @@ def main() -> None:
             raise AssertionError(
                 "fresh provider process did not preserve digest_app artifact and dispatch identities"
             )
+        for label, metrics in (
+            ("native application cold build", cold_metrics),
+            ("digest_app cold build", digest_cold_metrics),
+        ):
+            if (
+                metrics.get("cpu_seconds") is None
+                or metrics["cpu_seconds"] <= 0
+                or metrics.get("peak_rss_bytes") is None
+                or metrics["peak_rss_bytes"] <= 0
+                or metrics.get("peak_process_count", 0) < 1
+            ):
+                raise AssertionError(f"{label} process-tree resource metrics are incomplete")
 
         store_input_dir = base / "store-input"
         store_input_dir.mkdir()
@@ -390,12 +639,16 @@ def main() -> None:
         }
         store_output_dir = base / "store-input-output"
         store_output_dir.mkdir()
-        store_input, store_response, store_elapsed = invoke(
+        store_input, store_response, store_elapsed, store_metrics = invoke(
             ["--request-artifact", "request", "--cache-dir", cache_arg],
             output_dir=store_output_dir,
             cache_dir=cache_dir,
             input_dir=store_input_dir,
             input_manifest=input_manifest,
+        )
+        store_input_work = verification_work(
+            store_response, label="Store-input exact-snapshot build",
+            frontend_invocations=0,
         )
         if store_response.get("cache", {}).get("status") != "hit":
             raise AssertionError("named Store input did not resolve to the exact cached build")
@@ -404,13 +657,16 @@ def main() -> None:
 
         invalid_dir = base / "invalid-output"
         invalid_dir.mkdir()
-        invalid, invalid_response, invalid_elapsed = invoke(
+        invalid, invalid_response, invalid_elapsed, invalid_metrics = invoke(
             [
                 "--request-file", bad_path.relative_to(ROOT).as_posix(),
                 "--cache-dir", cache_arg,
             ],
             output_dir=invalid_dir,
             cache_dir=cache_dir,
+        )
+        invalid_work = verification_work(
+            invalid_response, label="invalid-source build", frontend_invocations=1
         )
         diagnostic_codes = [
             row.get("code") for row in invalid_response.get("diagnostics", [])
@@ -490,6 +746,9 @@ def main() -> None:
                 "compiler_revision": subprocess.check_output(
                     ["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True
                 ).strip(),
+                "provider_test_sha256": hashlib.sha256(
+                    Path(__file__).read_bytes()
+                ).hexdigest(),
                 "mncs_test_revision": digest_app.git(
                     digest_app.TEST_ROOT, "rev-parse", "HEAD"
                 ),
@@ -497,6 +756,7 @@ def main() -> None:
                     digest_app.STDLIB_ROOT, "rev-parse", "HEAD"
                 ),
                 "probe_sha256": app.sha(app.PROBE.read_bytes()),
+                "probe_build": probe_build,
                 "stage0_revision": json.loads(
                     (ROOT / "mncs-language.lock.json").read_text()
                 )["revision"],
@@ -545,7 +805,7 @@ def main() -> None:
             },
             "limitations": [
                 "This verifies application-build output and capability identities; it does not invoke Forge, Environment, or canonical Store execution.",
-                "The provider invocation exposes no compiler CPU or peak-memory measurements; wall time is measured by this test harness.",
+                "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
                 "A warm application artifact cache hit is not Language verified-fact reuse.",
             ],
             "checks": {
@@ -565,6 +825,14 @@ def main() -> None:
                 "unsupported_request_schema_rejected": schema_check.returncode != 0,
                 "environment_output_artifact": cold.get("result_file"),
             },
+            "verification_work_observation": {
+                "cold": cold_work,
+                "warm_exact_snapshot": warm_work,
+                "store_input_exact_snapshot": store_input_work,
+                "invalid_source": invalid_work,
+                "digest_app_cold": digest_cold_work,
+                "digest_app_warm_exact_snapshot": digest_warm_work,
+            },
             "wall_seconds": {
                 "cold": round(cold_elapsed, 6),
                 "warm": round(warm_elapsed, 6),
@@ -572,6 +840,15 @@ def main() -> None:
                 "invalid": round(invalid_elapsed, 6),
                 "digest_app_cold": round(digest_cold_elapsed, 6),
                 "digest_app_warm": round(digest_warm_elapsed, 6),
+            },
+            "process_tree_metrics": {
+                "method": "sampled /proc process tree at 10 ms intervals",
+                "cold": cold_metrics,
+                "warm": warm_metrics,
+                "store_input": store_metrics,
+                "invalid": invalid_metrics,
+                "digest_app_cold": digest_cold_metrics,
+                "digest_app_warm": digest_warm_metrics,
             },
         }
         DIGEST_EVIDENCE_PATH.write_text(
