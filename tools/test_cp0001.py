@@ -1342,7 +1342,14 @@ def tier_d(probe, kinds_inv, stats):
         matrix.append(row)
     stats["matrix"] = matrix
     try:
-        pipeline_anchor(stats, project_probe, project_identities)
+        if D_PHASE == "full":
+            pipeline_anchor(stats, project_probe, project_identities)
+            stats["pipeline_anchor_status"] = "run"
+        else:
+            # A lexical-only slice must not start a hidden synthetic project
+            # compilation after its selected source has finished. Keep this
+            # explicit in the report so omitted pipeline work stays unknown.
+            stats["pipeline_anchor_status"] = "not_run_lexical_phase"
     finally:
         if project_probe is not None:
             stats["pipeline_requests"] = project_probe.count
