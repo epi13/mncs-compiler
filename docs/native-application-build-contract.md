@@ -173,3 +173,9 @@ binary into memory and prevents an unoptimized digest from dominating fresh
 process cache hits; it does not change application-build/5 or cache identity
 semantics. The workload-specific measurement is recorded in
 `evidence/native-app-readiness-probe-cache-identity-20261016.json`.
+
+Cache entry validation hashes the exact stored response bytes before decoding
+that response into the current result. It no longer clones and re-serializes a
+large response to verify `application-build-cache-entry/3`. A mismatched
+response digest remains a cache miss and triggers source verification; the
+digest batch includes a tampered-entry recovery case.

@@ -22,6 +22,14 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 static CACHE_NONCE: AtomicU64 = AtomicU64::new(0);
 static PRODUCER_IDENTITY: OnceLock<(String, Value)> = OnceLock::new();
 
+#[derive(serde::Deserialize)]
+struct ApplicationCacheEntry<'a> {
+    schema_version: &'a str,
+    key: &'a str,
+    response_sha256: &'a str,
+    response: &'a serde_json::value::RawValue,
+}
+
 const CONTRACT_V1: &str = "mncs.compiler.application-build/4";
 const CONTRACT_V2: &str = "mncs.compiler.application-build/5";
 const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
@@ -449,38 +457,37 @@ fn read_application_cache(
         json!({"cache_bytes": bytes.len()}),
     );
     let decode_started = Instant::now();
-    let entry: Value = serde_json::from_slice(&bytes).ok()?;
+    let entry: ApplicationCacheEntry<'_> = serde_json::from_slice(&bytes).ok()?;
     crate::trace_phase(
         "application_cache_entry_decode",
         decode_started,
         json!({"cache_bytes": bytes.len()}),
     );
-    if entry.get("schema_version").and_then(Value::as_str)
-        != Some("mncs.compiler.application-build-cache-entry/3")
-        || entry.get("key").and_then(Value::as_str) != Some(key)
-    {
+    if entry.schema_version != "mncs.compiler.application-build-cache-entry/3" || entry.key != key {
         return None;
     }
-    let clone_started = Instant::now();
-    let response = entry.get("response")?.clone();
+    let response_raw = entry.response.get();
+    let digest_started = Instant::now();
+    let response_digest = format!("sha256:{}", mncs_model::sha256_hex(response_raw.as_bytes()));
     crate::trace_phase(
-        "application_cache_response_clone",
-        clone_started,
-        json!({"response_sha256": entry.get("response_sha256").and_then(Value::as_str)}),
+        "application_cache_response_hash",
+        digest_started,
+        json!({"response_bytes": response_raw.len()}),
     );
-    let encode_started = Instant::now();
-    let response_bytes = serde_json::to_vec(&response).ok()?;
+    if entry.response_sha256 != response_digest {
+        return None;
+    }
+    let response_decode_started = Instant::now();
+    let response: Value = serde_json::from_str(response_raw).ok()?;
     crate::trace_phase(
-        "application_cache_response_encode",
-        encode_started,
-        json!({"response_bytes": response_bytes.len()}),
+        "application_cache_response_decode",
+        response_decode_started,
+        json!({"response_bytes": response_raw.len()}),
     );
-    let response_digest = format!("sha256:{}", mncs_model::sha256_hex(&response_bytes));
     let cached_source_identity = response
         .pointer("/source_snapshot/identity")
         .and_then(Value::as_str)?;
-    if entry.get("response_sha256").and_then(Value::as_str) != Some(response_digest.as_str())
-        || !cached_source_identity.starts_with("sha256:")
+    if !cached_source_identity.starts_with("sha256:")
         || expected_source_identity.is_some_and(|expected| expected != cached_source_identity)
         || response
             .pointer("/producer/probe/probe_executable_sha256")

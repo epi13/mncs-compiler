@@ -559,6 +559,49 @@ def main() -> None:
     ):
         raise AssertionError("fresh-process reuse failed after reachable dependency invalidation")
 
+    dependency_snapshot = dependency_build.get("source_snapshot", {}).get("identity")
+    corrupted_entries = []
+    for cache_path in (CACHE_DIR / "application-builds").glob("*.json"):
+        cache_entry = json.loads(cache_path.read_text(encoding="utf-8"))
+        response = cache_entry.get("response", {})
+        if response.get("source_snapshot", {}).get("identity") == dependency_snapshot:
+            corrupted_entries.append((cache_path, cache_entry))
+    if len(corrupted_entries) != 1:
+        raise AssertionError(
+            "could not select the unique exact application cache entry for corruption testing"
+        )
+    corrupted_cache_path, corrupted_cache_entry = corrupted_entries[0]
+    corrupted_cache_entry["response"]["artifact"]["identity"] = "sha256:" + "0" * 64
+    corrupted_cache_path.write_text(
+        json.dumps(corrupted_cache_entry, sort_keys=True, separators=(",", ":")) + "\n",
+        encoding="utf-8",
+    )
+    corrupted_probe = digest_app.support.Probe(CACHE_DIR, executable=PROBE)
+    try:
+        corruption_recovery, corruption_recovery_metrics = corrupted_probe.send(
+            {"compile_application": build_request(root_source, suite_modules)},
+            timeout=180,
+        )
+        corrupted_probe.close()
+    except BaseException:
+        if corrupted_probe.proc.poll() is None:
+            corrupted_probe.proc.kill()
+            corrupted_probe.proc.wait(timeout=5)
+        raise
+    corruption_work = corruption_recovery.get("cache", {}).get(
+        "verification_work", {}
+    )
+    if (
+        corruption_recovery.get("status") != "verified"
+        or corruption_recovery.get("cache", {}).get("status") != "miss"
+        or corruption_work.get("front_end_invocations") != 1
+        or corruption_recovery.get("artifact", {}).get("identity")
+        != dependency_build.get("artifact", {}).get("identity")
+    ):
+        raise AssertionError(
+            "tampered cache response was not rejected and rebuilt from the verified source"
+        )
+
     vm_result, vm_metrics, normalized_results = vm_batch(
         dependency_build.get("artifact", {}).get("value"),
         fixture["execution"]["inputs"],
@@ -635,6 +678,17 @@ def main() -> None:
                 "measurement": dependency_exact_metrics,
             },
         },
+        "tampered_cache_rejection": {
+            "response_field_changed_without_updating_digest": "artifact.identity",
+            "cache_status": corruption_recovery.get("cache", {}).get("status"),
+            "front_end_invocations": corruption_work.get("front_end_invocations"),
+            "artifact_identity": corruption_recovery.get("artifact", {}).get("identity"),
+            "artifact_matches_verified_rebuild": (
+                corruption_recovery.get("artifact", {}).get("identity")
+                == dependency_build.get("artifact", {}).get("identity")
+            ),
+            "measurement": corruption_recovery_metrics,
+        },
         "oracle_fixture": {
             "kind": fixture["kind"] if "kind" in fixture else fixture["objective"],
             "exact_stage0_canonical_vm_agreement": fixture["execution"]["exact_result_agreement"],
@@ -664,8 +718,9 @@ def main() -> None:
             "Three Stage-0-backed build_digest inputs and both schema callables then ran in one bounded "
             "canonical VM batch and one retained VM session; the retained session recovered from a "
             "low-fuel interruption and rejected typed input before completing the same oracle-backed "
-            "callable set in that process. This does not reuse Language verified facts and does not "
-            "establish Forge/Environment/Store execution or full mncs-test conversion."
+            "callable set in that process. A cache response with an altered artifact identity and stale "
+            "digest was rejected and recomputed from source. This does not reuse Language verified facts "
+            "and does not establish Forge/Environment/Store execution or full mncs-test conversion."
         ),
     }
     EVIDENCE_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
