@@ -15,7 +15,8 @@ fn letter(c: u64) -> (result: bool) {
 // Identifier continuation bytes combine letters, underscore, and digits in
 // one predicate so each scanned byte avoids separate letter/digit calls.
 fn word_char(c: u64) -> (result: bool) {
-    return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95;
+    let folded: u64 = c | 32;
+    return (c >= 48 && c <= 57) || (folded >= 97 && folded <= 122) || c == 95;
 }
 // Source text reaches the reference parser as UTF-8. A rejected non-ASCII
 // scalar therefore occupies its full encoded width in the shared byte-span
@@ -225,7 +226,8 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     // Starting-byte classes are disjoint. Keep their predicates in this
     // dispatch frame to avoid one classifier call and numeric result checks
     // for every token start.
-    let word: bool = (a >= 65 && a <= 90) || (a >= 97 && a <= 122) || a == 95;
+    let folded_a: u64 = a | 32;
+    let word: bool = (folded_a >= 97 && folded_a <= 122) || a == 95;
     let number: bool = a >= 48 && a <= 57;
     let ws: bool = a == 32 || (a >= 9 && a <= 13);
     if line || block || word || number || ws {
@@ -652,24 +654,28 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                     },
                     _ => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
                 };
+                let folded_b0: u64 = window.b0 | 32;
+                let folded_b1: u64 = window.b1 | 32;
+                let folded_b2: u64 = window.b2 | 32;
+                let folded_b3: u64 = window.b3 | 32;
                 // Word scanning is the common chunk path. Keep the sequential
                 // stop checks local without asking the native declaration
                 // parser to consume boolean match patterns.
                 let advanced: Scan = match select(word, 1, 0) {
                     0 => scan_chunk_window(total, window, inner, line, block, word, number, ws),
-                    _ => match select((window.b0 >= 48 && window.b0 <= 57) || (window.b0 >= 65 && window.b0 <= 90) || (window.b0 >= 97 && window.b0 <= 122) || window.b0 == 95, 1, 0) {
+                    _ => match select((window.b0 >= 48 && window.b0 <= 57) || (folded_b0 >= 97 && folded_b0 <= 122) || window.b0 == 95, 1, 0) {
                         0 => Scan { ..inner, done: true },
                         _ => match select(inner.end + 1 >= total, 1, 0) {
                             1 => Scan { ..inner, end: inner.end + 1 },
-                            _ => match select((window.b1 >= 48 && window.b1 <= 57) || (window.b1 >= 65 && window.b1 <= 90) || (window.b1 >= 97 && window.b1 <= 122) || window.b1 == 95, 1, 0) {
+                            _ => match select((window.b1 >= 48 && window.b1 <= 57) || (folded_b1 >= 97 && folded_b1 <= 122) || window.b1 == 95, 1, 0) {
                                 0 => Scan { ..inner, end: inner.end + 1, done: true },
                                 _ => match select(inner.end + 2 >= total, 1, 0) {
                                     1 => Scan { ..inner, end: inner.end + 2 },
-                                    _ => match select((window.b2 >= 48 && window.b2 <= 57) || (window.b2 >= 65 && window.b2 <= 90) || (window.b2 >= 97 && window.b2 <= 122) || window.b2 == 95, 1, 0) {
+                                    _ => match select((window.b2 >= 48 && window.b2 <= 57) || (folded_b2 >= 97 && folded_b2 <= 122) || window.b2 == 95, 1, 0) {
                                         0 => Scan { ..inner, end: inner.end + 2, done: true },
                                         _ => match select(inner.end + 3 >= total, 1, 0) {
                                             1 => Scan { ..inner, end: inner.end + 3 },
-                                            _ => match select((window.b3 >= 48 && window.b3 <= 57) || (window.b3 >= 65 && window.b3 <= 90) || (window.b3 >= 97 && window.b3 <= 122) || window.b3 == 95, 1, 0) {
+                                            _ => match select((window.b3 >= 48 && window.b3 <= 57) || (folded_b3 >= 97 && folded_b3 <= 122) || window.b3 == 95, 1, 0) {
                                                 0 => Scan { ..inner, end: inner.end + 3, done: true },
                                                 _ => Scan { ..inner, end: inner.end + 4 }
                                             }
