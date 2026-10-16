@@ -2858,7 +2858,10 @@ fn fields_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     if comma.diagnostic == 0 && comma.kind == 64 {
         return FieldsParse { cursor: comma.end, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list }, done: false };
     }
-    return FieldsParse { cursor: ftype.cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list }, done: false };
+    // The lookahead is also the next step's first token. Finish now when it
+    // cannot begin another field, avoiding a duplicate significant-token scan.
+    let more_fields: bool = comma.diagnostic == 0 && comma.kind != closer && (comma.kind == 4 || (name_mode == 1 && comma.kind == 25) || (name_mode == 2 && comma.kind == 34 && profile_013));
+    return FieldsParse { cursor: ftype.cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list }, done: !(more_fields) };
 }
 // Element spellings nest at most two levels: a flat type, or one nested
 // sequence with a flat element. A third level fails explicitly at the
@@ -3023,7 +3026,9 @@ fn variants_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
     if comma.diagnostic == 0 && comma.kind == 64 {
         return VariantsState { cursor: comma.end, ok: true, err_start: 0, err_end: 0, list: VariantList.VCons { head: variant, tail: st.list }, done: false };
     }
-    return VariantsState { cursor: payload.cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VCons { head: variant, tail: st.list }, done: false };
+    // As with fields, the lookahead is the next step's first token. A non-name
+    // token is already the terminal delimiter/error for the variant list.
+    return VariantsState { cursor: payload.cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VCons { head: variant, tail: st.list }, done: comma.diagnostic != 0 || comma.kind != 4 };
 }
 fn parse_variant_payload<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, profile_013: bool) -> (result: FieldsParse) {
     let token: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, cursor);
