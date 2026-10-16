@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.decl-up-to-bound-inline-page-prefix-frontier",
+  "observed_at": "2026-10-16T20:27:43.484094Z",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "commit": "431627df78c6cb72961692deff2b23bfa5e14c1c",
+    "baseline_commit": "e9fa579e423401491474be53c229f4ecb9d07a62",
+    "source_file": "src/compiler/decl.mncs",
+    "changed_function": "mncs.compiler.decl.v1::is_up_to_bound",
+    "source_sha256": "sha256:4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+    "test_harness": "tools/test_vm_decl_up_to_window.py",
+    "test_harness_sha256": "sha256:74982d1228a9d1b65adec8abc3a15f74210e5a57cf43ede659d0ffed24e3de11"
+  },
+  "workload": {
+    "kind": "selected declaration parser and bound-prefix workload",
+    "helper_cases": 31,
+    "parser_cases": 7,
+    "page_strides_for_helper": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "helper_offsets": "every start offset within each page stride 1 through 7",
+    "parser_cases_detail": "six real sequence declarations split across strides 2 through 7 and one exact-Nat identifier prefix lookalike",
+    "source_inputs_from_stage0_oracle": 7,
+    "direct_helper_expected_results": "31 fixed byte-string and span cases",
+    "canonical_vm_calls_bytes": 56269,
+    "canonical_vm_results_bytes": 116841,
+    "cgroup_memory_measurement": null,
+    "cpu_seconds_measurement": null,
+    "probe_rss_sampled_during_run_kib": 1728228,
+    "probe_rss_sampling_method": "one ps snapshot during the candidate run; cgroup memory is unavailable"
+  },
+  "correctness": {
+    "status": "passed",
+    "case_count_per_executor": 38,
+    "executors": [
+      "reference_interpreter",
+      "Cranelift",
+      "canonical_mncs_vm"
+    ],
+    "stage0_parser_oracle_cases": 7,
+    "page_boundary_coverage": true,
+    "exact_nat_prefix_lookalike_remains_non_viewed": true,
+    "fresh_canonical_vm_artifact_identity": "sha256:bbb29f2d0df15148c570be4d545c809d384af49219a72a1420c2385f6a8cc60b",
+    "canonical_vm_batch_peak_rss_kib": 358044,
+    "invalid_or_malformed_global_reads_retain_fallback": true
+  },
+  "performance": {
+    "comparison_method": "same harness, warm probe program caches, same Stage-0 probe and canonical VM binary",
+    "reference_steps_baseline": {
+      "helper": 5665,
+      "parse": 436894,
+      "total": 442559
+    },
+    "reference_steps_candidate": {
+      "helper": 5645,
+      "parse": 436736,
+      "total": 442381
+    },
+    "reference_total_step_change_percent": -0.04022,
+    "canonical_vm_wall_seconds_baseline": 10.533789,
+    "canonical_vm_wall_seconds_candidate": 10.537214,
+    "canonical_vm_wall_change_percent": 0.03251,
+    "canonical_vm_peak_rss_kib_baseline": 357284,
+    "canonical_vm_peak_rss_kib_candidate": 358044,
+    "cranelift_wall_seconds_baseline": 14.412637,
+    "cranelift_wall_seconds_candidate": 14.470456,
+    "cranelift_wall_change_percent": 0.40117,
+    "whole_harness_wall_seconds_baseline": 82.86908,
+    "whole_harness_wall_seconds_candidate": 82.737867,
+    "whole_harness_wall_change_percent": -0.15834,
+    "interpretation": "Interpreter steps fall slightly; canonical VM and Cranelift wall time and VM peak RSS are effectively unchanged. No material end-to-end speedup is claimed."
+  },
+  "compiler_frontier": {
+    "status": "passed_selected_decl_parser_frontier",
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "full_decl_module_verified": false,
+    "scope": "Inline same-page prefix reads are checked against the global fallback at page boundaries. The selected parser results agree across Stage-0 syntax facts, the reference interpreter, Cranelift, and one fresh canonical VM artifact."
+  },
+  "claim_boundary": "This is a small, measured declaration-parser improvement and boundary regression test. It does not establish whole-module self-consumption, Language-owned verified-fact reuse, or Stage-1/Stage-2 succession."
+}

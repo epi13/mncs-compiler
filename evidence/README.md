@@ -358,3 +358,19 @@ warm, digest cold, digest warm, and multi-callable provider timings were
 0.61, 0.23, 0.68, 0.24, and 0.19 seconds; the VM batch took 7.5 ms. This uses
 the local provider and VM adapter, not Forge, the live Environment provider,
 or canonical Store execution.
+
+## Declaration bound-prefix page fast path (2026-10-16)
+
+The [declaration prefix report](self-host-decl-up-to-window-inline-fast-path-20261016.json)
+records a same-page fast path in `decl.is_up_to_bound`, with the prior global
+reads retained for page edges and malformed views. Thirty-one direct helper
+cases cover every prefix start offset for strides 1 through 7; seven actual
+sequence declarations exercise split prefixes and an exact-Nat identifier
+lookalike. Stage-0 parser facts, the reference interpreter, Cranelift, and one
+fresh canonical VM artifact agree across all 38 cases.
+
+Reference steps fell from 442,559 to 442,381 across the selected cases. The
+canonical VM batch stayed at about 10.5 seconds and 358 MiB peak RSS, and warm
+Cranelift time stayed near 14.4 seconds. This is a small interpreter-step
+reduction with no material end-to-end speedup; full declaration-module proof,
+Language verified-fact reuse, Stage-1, and Stage-2 remain unproven.
