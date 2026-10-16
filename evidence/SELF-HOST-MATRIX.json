@@ -65,6 +65,23 @@
           "evidence_artifact": "evidence/self-host-parser-header-canonical-vm-20261016.json",
           "evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
           "scope": "Selected callable frontier only; full parser-module canonical VM verification remains not proven."
+        },
+        "selected_global_canonical_vm_frontier": {
+          "status": "passed",
+          "target_module": "mncs.compiler.kernel.v1",
+          "target_function": "parse_header_global",
+          "cases": 88,
+          "page_strides": [
+            1,
+            7,
+            64,
+            1024
+          ],
+          "artifact_identity": "sha256:aa3a5e53cf48265f37e4f2875d43199c81e2821f89db4abc48799706071c550d",
+          "semantic_digest_sha256": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+          "evidence_artifact": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+          "evidence_sha256": "77102b68672a4a638917857da52338e4b0ad2b9280ad97581096d5472de87c95",
+          "scope": "Selected global-header parser callable only; full parser-module canonical VM verification remains not proven."
         }
       }
     },
@@ -941,6 +958,49 @@
       "evidence_artifact": "evidence/self-host-parser-header-canonical-vm-20261016.json",
       "evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
       "evidence_scope": "The current kernel.parse_header callable executes parser.header for all 18 frontend header fixtures and an extended 65-byte input. Stage-0 structural and diagnostic checks, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected helper frontier, not full parser-module verification or Stage-1/Stage-2 succession.",
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    },
+    {
+      "kind": "parser-header-global-canonical-vm-current-source",
+      "status": "passed",
+      "observed_at": "2026-10-16T09:40:50.381374Z",
+      "compiler_head": "c158af57ceea7b04db5f6e3e3bfde2a074ca72ae",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "target_module": "mncs.compiler.kernel.v1",
+      "target_function": "parse_header_global",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "kernel",
+        "segment"
+      ],
+      "module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "c158af57ceea7b04db5f6e3e3bfde2a074ca72ae",
+      "cases": 88,
+      "executor_case_counts": {
+        "reference_interpreter": 88,
+        "cranelift": 88,
+        "canonical_vm": 88
+      },
+      "semantic_digest_sha256": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+      "artifact_identity": "sha256:aa3a5e53cf48265f37e4f2875d43199c81e2821f89db4abc48799706071c550d",
+      "whole_frontier_seconds": 32.408069,
+      "child_cpu_seconds": 31.864043,
+      "child_peak_rss_kib": 1111760,
+      "canonical_vm_batch_wall_seconds": 2.61058,
+      "canonical_vm_peak_rss_kib": 62872,
+      "evidence_artifact": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+      "evidence_sha256": "77102b68672a4a638917857da52338e4b0ad2b9280ad97581096d5472de87c95",
+      "evidence_scope": "The current kernel.parse_header_global callable executes parser.header_global over all frontend header fixtures, a 65-byte page split, a 20-segment header, a non-ASCII scalar split across pages, and the documented 64-step fuel boundary. Strides 1, 7, 64, and 1024 agree across Stage-0 checked bounded parser results, the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a selected helper frontier, not full parser-module verification or succession.",
       "stage1_claimed": false,
       "stage2_claimed": false
     }
@@ -4274,33 +4334,43 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-16T09:29:22.023306Z",
+  "evidence_updated_at": "2026-10-16T09:40:50.381374Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
-    "observed_at": "2026-10-16T09:29:22.023306Z",
-    "compiler_head": "2df704927537706c84de636915af19f164b97264",
-    "completed_frontier": "parser-header-canonical-vm-19-cases",
-    "completed_frontier_evidence": "evidence/self-host-parser-header-canonical-vm-20261016.json",
-    "completed_frontier_evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
+    "observed_at": "2026-10-16T09:40:50.381374Z",
+    "compiler_head": "c158af57ceea7b04db5f6e3e3bfde2a074ca72ae",
+    "completed_frontier": "parser-header-global-canonical-vm-page-boundaries-88-cases",
+    "completed_frontier_evidence": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+    "completed_frontier_evidence_sha256": "77102b68672a4a638917857da52338e4b0ad2b9280ad97581096d5472de87c95",
     "previous_frontier_update": {
-      "observed_at": "2026-10-16T08:35:33.450878Z",
-      "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
-      "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
-      "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+      "observed_at": "2026-10-16T09:29:22.023306Z",
+      "compiler_head": "2df704927537706c84de636915af19f164b97264",
+      "completed_frontier": "parser-header-canonical-vm-19-cases",
+      "completed_frontier_evidence": "evidence/self-host-parser-header-canonical-vm-20261016.json",
+      "completed_frontier_evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
       "previous_frontier_update": {
-        "observed_at": "2026-10-16T06:55:47Z",
-        "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
-        "completed_frontier": "decl-parse-canonical-vm-five-cases",
-        "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
-        "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
-        "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+        "observed_at": "2026-10-16T08:35:33.450878Z",
+        "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
+        "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
+        "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+        "previous_frontier_update": {
+          "observed_at": "2026-10-16T06:55:47Z",
+          "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+          "completed_frontier": "decl-parse-canonical-vm-five-cases",
+          "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
+          "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
+          "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+        },
+        "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+        "stage1_claimed": false,
+        "stage2_claimed": false
       },
-      "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+      "next_frontier": "Extend the selected header workload through parser.header_global across logical-page boundaries, then add another independently checked parser execution slice. Keep Stage-1 and Stage-2 unproven.",
       "stage1_claimed": false,
       "stage2_claimed": false
     },
-    "next_frontier": "Extend the selected header workload through parser.header_global across logical-page boundaries, then add another independently checked parser execution slice. Keep Stage-1 and Stage-2 unproven.",
+    "next_frontier": "Add one independently checked parser token or declaration execution slice through the canonical VM with exact Stage-0 parity; keep succession unproven.",
     "stage1_claimed": false,
     "stage2_claimed": false
   }
