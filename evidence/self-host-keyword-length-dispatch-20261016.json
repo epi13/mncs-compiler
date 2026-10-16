@@ -1,0 +1,158 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-profile/1",
+  "kind": "keyword-length-dispatch-bounded-flow-prefix",
+  "observed_at": "2026-10-16T11:16:12Z",
+  "claim_boundary": "The selected six-module reference-interpreter profile executes a one-million-step prefix and remains incomplete in decl.parse_unit_mode. The keyword classifier itself used fewer VM steps after the change, but whole-run timing did not establish a speedup. No full Flow result, Language fact reuse, or succession is claimed.",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "tested_base_head": "eeae61e3734bd860afd2b2155bcfdd43a94b49a0",
+    "candidate_worktree_dirty": true,
+    "baseline_lexer_source_sha256": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
+    "candidate_lexer_source_sha256": "3bef8a5bbf0ac56b03811101e9c36215f4099fa5468be862c065d84ebe4562aa",
+    "baseline_selected_source_identity_sha256": "dcd22b65c369135aab12520ee8488ea552dfc347e9778cb75c418ab4383cda58",
+    "candidate_selected_source_identity_sha256": "94e9349f1066668882e3d9da7959f8563d2bd2832c2ca3dc4aeb02022c18bfb7"
+  },
+  "toolchain": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "profile_harness": "tools/measure_compiler_probe.py",
+    "profile_harness_sha256": "2d031245a44c40d3c9c3554e20211540320370b91d9b162a92b9bc697d74b914"
+  },
+  "profile_command": [
+    "python tools/measure_compiler_probe.py",
+    "--backend",
+    "reference_interpreter",
+    "--modules",
+    "source",
+    "lexer",
+    "parser",
+    "segment",
+    "decl",
+    "flow",
+    "--target-last",
+    "--skip-stage0-oracle",
+    "--step-budget",
+    "1000000",
+    "--runtime-profile",
+    "--timeout-seconds",
+    "180",
+    "--sample-seconds",
+    "1",
+    "--max-probe-rss-mib",
+    "4096"
+  ],
+  "comparison": {
+    "baseline": {
+      "label": "decl-parse-unit-mode-after-inline-first-address-20261016",
+      "status": "budget_exhausted",
+      "profiled_steps": 1000000,
+      "target_function": "mncs.compiler.decl.v1::parse_unit_mode",
+      "target_function_frame_steps_at_stop": 937230,
+      "whole_measurement_wall_seconds": 143.237,
+      "probe_child_cpu_seconds": 140.21,
+      "probe_child_peak_rss_kib": 1858792,
+      "keyword_classifier_calls": 383,
+      "keyword_classifier_steps": 45563,
+      "next_token_global_calls": 1751,
+      "next_token_global_steps": 517514
+    },
+    "candidate": {
+      "label": "20261016T111221Z",
+      "status": "budget_exhausted",
+      "profiled_steps": 1000000,
+      "target_function": "mncs.compiler.decl.v1::parse_unit_mode",
+      "target_function_frame_steps_at_stop": 929139,
+      "whole_measurement_wall_seconds": 145.248,
+      "probe_child_cpu_seconds": 141.48,
+      "probe_child_peak_rss_kib": 1858988,
+      "sampled_rss_limit_mib": 4096,
+      "sampled_rss_limit_triggered": false,
+      "cgroup_oom_kill_delta": 0,
+      "keyword_classifier_calls": 386,
+      "keyword_classifier_steps": 37043,
+      "next_token_global_calls": 1772,
+      "next_token_global_steps": 521788
+    },
+    "observed_delta": {
+      "keyword_classifier_steps": -8520,
+      "keyword_classifier_steps_percent": -18.7,
+      "whole_measurement_wall_seconds": 2.011,
+      "probe_child_cpu_seconds": 1.27,
+      "probe_child_peak_rss_kib": 196,
+      "target_function_frame_steps_at_stop": -8091,
+      "repeat_count_per_candidate": 1
+    },
+    "interpretation": "Across these two runs, the keyword classifier performed 8,520 fewer VM steps over nearly equal call counts. Whole-run wall and CPU timings were slightly slower and target progress differed, so this does not establish an overall speedup. Treat the classifier step reduction as workload-specific execution evidence; aggregate timing remains inconclusive."
+  },
+  "verification": {
+    "keyword_dispatch": {
+      "status": "passed",
+      "harness": "tools/test_global_keyword_dispatch.py",
+      "keywords": 30,
+      "near_misses": 60,
+      "page_boundary_starts": 30,
+      "source_bytes": 31188,
+      "token_count": 180,
+      "stage0_token_count": 180,
+      "native_steps": 1479063,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true
+    },
+    "global_scan_modes": {
+      "status": "passed",
+      "harness": "tools/test_global_scan_modes.py",
+      "source_bytes": 5250,
+      "page_size": 1024,
+      "token_count": 11,
+      "stage0_token_count": 11,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true
+    },
+    "global_segment_canonical_vm_frontier": {
+      "status": "passed",
+      "harness": "tools/test_vm_global_segment_frontier.py",
+      "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+      "evidence_sha256": "27a929d01eeae4fa98317432264a2e275a7c38d361acd15785f0bda487764a37",
+      "cases": 1208,
+      "page_strides": [
+        1,
+        7,
+        64,
+        256
+      ],
+      "executors": [
+        "reference_interpreter",
+        "cranelift",
+        "canonical_vm"
+      ],
+      "semantic_digest_sha256": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+    },
+    "parser_header_global_canonical_vm_frontier": {
+      "status": "passed",
+      "harness": "tools/test_vm_parser_global_frontier.py",
+      "evidence_artifact": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+      "evidence_sha256": "cc1ed9ef54f3116693be1a24742680c56733dbc87f2d9b39107a41993f98e493",
+      "cases": 88,
+      "candidate_lexer_source_sha256": "3bef8a5bbf0ac56b03811101e9c36215f4099fa5468be862c065d84ebe4562aa",
+      "semantic_digest_sha256": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9"
+    },
+    "decl_parse_unit_canonical_vm_frontier": {
+      "status": "passed",
+      "harness": "tools/test_vm_stage1_frontier.py",
+      "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+      "evidence_sha256": "accd14a73268dadf4dc480867fb53fc8bd44114951bf0a7bda6e789a499acee5",
+      "cases": 32,
+      "candidate_lexer_source_sha256": "3bef8a5bbf0ac56b03811101e9c36215f4099fa5468be862c065d84ebe4562aa",
+      "valid_cases": 19,
+      "invalid_cases": 13,
+      "semantic_digest_sha256": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0"
+    }
+  },
+  "limits": {
+    "language_verified_facts_reused": 0,
+    "full_flow_verified": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
