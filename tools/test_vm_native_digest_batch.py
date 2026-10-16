@@ -47,6 +47,21 @@ def sha(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def cpu_times(stderr: str) -> dict:
+    measurements = {}
+    for label, field in (("User time (seconds)", "user_cpu_seconds"),
+                         ("System time (seconds)", "system_cpu_seconds")):
+        match = re.search(rf"^{re.escape(label)}: ([0-9]+(?:\.[0-9]+)?)$",
+                          stderr, re.MULTILINE)
+        measurements[field] = float(match.group(1)) if match else None
+    user = measurements["user_cpu_seconds"]
+    system = measurements["system_cpu_seconds"]
+    measurements["cpu_seconds"] = (
+        round(user + system, 6) if user is not None and system is not None else None
+    )
+    return measurements
+
+
 def value_differences(actual: object, expected: object, path: str = "$") -> list[dict]:
     if type(actual) is not type(expected):
         return [{"path": path, "actual": actual, "expected": expected}]
@@ -153,6 +168,7 @@ def vm_batch(
         peak_rss = re.search(
             r"Maximum resident set size \(kbytes\): (\d+)", process.stderr
         )
+        cpu = cpu_times(process.stderr)
         document = json.loads(output_path.read_text())
 
     rows = document.get("results", [])
@@ -199,6 +215,7 @@ def vm_batch(
         raise AssertionError(f"digest schema callables returned unexpected bytes: {normalized[-2:]}")
     return document, {
         "wall_seconds": round(wall, 6),
+        **cpu,
         "peak_rss_kib": int(peak_rss.group(1)) if peak_rss else None,
         "calls": len(calls),
         "call_ids": [row["id"] for row in calls],
@@ -335,12 +352,14 @@ def vm_retained_session(
         stderr_file.close()
 
     peak_rss = re.search(r"Maximum resident set size \(kbytes\): (\d+)", stderr)
+    cpu = cpu_times(stderr)
     return {
         "ready_artifact_id": ready.get("artifact_id"),
         "process_count": 1,
         "call_count": len(responses),
         "call_ids": [row["id"] for row in responses],
         "wall_seconds": round(wall, 6),
+        **cpu,
         "peak_rss_kib": int(peak_rss.group(1)) if peak_rss else None,
         "low_fuel_recovery_in_same_session": (
             responses[0]["outcome"] == "budget_exhausted"
