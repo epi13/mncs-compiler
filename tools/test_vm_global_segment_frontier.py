@@ -248,12 +248,55 @@ def main() -> None:
                 "expected": {"kind": 4, "start": 0, "end": 2, "diagnostic": 0},
             },
         ]
+        long_trivia_cases = [
+            {
+                "id": "line-comment-eight-byte-window-exact-eof",
+                "function": "next_token",
+                "args": [byte_sequence(b"//" + b"x" * 8192), integer(0)],
+                "expected": {"kind": 2, "start": 0, "end": 8194, "diagnostic": 0},
+            },
+            {
+                "id": "line-comment-eight-byte-window-overlong",
+                "function": "next_token",
+                "args": [byte_sequence(b"//" + b"x" * 8193), integer(0)],
+                "expected": {"kind": 2, "start": 0, "end": 8194, "diagnostic": 6},
+            },
+            {
+                "id": "line-comment-eight-byte-window-newline",
+                "function": "next_token",
+                "args": [byte_sequence(b"//" + b"x" * 8190 + b"\n" + b"x"), integer(0)],
+                "expected": {"kind": 2, "start": 0, "end": 8192, "diagnostic": 0},
+            },
+            {
+                "id": "whitespace-scan-limit-exact-eof",
+                "function": "next_token",
+                "args": [byte_sequence(b" " * 8193), integer(0)],
+                "expected": {"kind": 1, "start": 0, "end": 8193, "diagnostic": 0},
+            },
+            {
+                "id": "whitespace-scan-limit-overlong",
+                "function": "next_token",
+                "args": [byte_sequence(b" " * 8194), integer(0)],
+                "expected": {"kind": 1, "start": 0, "end": 8193, "diagnostic": 6},
+            },
+            {
+                "id": "whitespace-scan-limit-offset-overlong",
+                "function": "next_token",
+                "args": [byte_sequence(b"!" + b" " * 8194 + b"x"), integer(1)],
+                "expected": {"kind": 1, "start": 1, "end": 8194, "diagnostic": 6},
+            },
+        ]
         expanded_cases.append((word_boundary_cases[0], 64))
         expanded_cases.append((word_boundary_cases[1], 64))
         expanded_cases.append((word_boundary_cases[2], 64))
         expanded_cases.append((word_boundary_cases[3], 64))
         expanded_cases.append((word_boundary_cases[4], 64))
         expanded_cases.append((word_boundary_cases[5], 2))
+        expanded_cases.extend((case, 64) for case in long_trivia_cases)
+        # Stride 16 forces page-edge fallback for the line-comment extension
+        # and whitespace boundary within the 1024-page type bound.
+        expanded_cases.append((long_trivia_cases[1], 16))
+        expanded_cases.append((long_trivia_cases[5], 16))
         case_grid = [make_vm_case(case, stride)
                      for case, stride in expanded_cases]
 
