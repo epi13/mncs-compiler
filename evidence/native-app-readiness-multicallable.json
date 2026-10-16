@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.native-application-multi-callable-proof",
+  "compiler_head": "70f3b5f36d974fae2938efc6f5a5b8e84f9e0639",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "probe_sha256": "sha256:d7d67c74870231e724dc5cb05fcd8c5db35e1aaef97febc6d6d626141679d045",
+  "canonical_vm_sha256": "sha256:1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+  "source_snapshot_identity": "sha256:bd1f62011283ed5e395c0517afcd7c1915126e08ed9f50e4ff1561ebeb575b5d",
+  "request_schema": "mncs.compiler.application-build-request/2",
+  "response_schema": "mncs.compiler.application-build/5",
+  "artifact_identity": "sha256:67de7df87658546ed07688884f1b795f02f7fe5adc1ca571150041177c4d6a55",
+  "selected_callables": [
+    {
+      "function": "decrement",
+      "interface": {
+        "identity": "sha256:025d9c47175e9885977796cb391d102d53a301861e1ba2b5a3e47bcabee155aa",
+        "schema_version": "mncs.compiler.callable-interface/1",
+        "signature": {
+          "capabilities": [],
+          "contracts": [],
+          "effects": [],
+          "failure": "isolated",
+          "function_identity": "mncs:0.2:function:tests.native_batch::decrement",
+          "inputs": [
+            {
+              "name": "value",
+              "type": "u64"
+            }
+          ],
+          "module": "tests.native_batch",
+          "name": "decrement",
+          "outputs": [
+            {
+              "name": "result",
+              "type": "u64"
+            }
+          ]
+        },
+        "status": "verified",
+        "types": {
+          "finite": [],
+          "records": [],
+          "status": "verified",
+          "unresolved_references": []
+        }
+      },
+      "module": "tests.native_batch",
+      "status": "verified"
+    },
+    {
+      "function": "increment",
+      "interface": {
+        "identity": "sha256:c4833c083880629f309f91cfd40ad6675b0faf2b53335c760d83467317cd4d09",
+        "schema_version": "mncs.compiler.callable-interface/1",
+        "signature": {
+          "capabilities": [],
+          "contracts": [],
+          "effects": [],
+          "failure": "isolated",
+          "function_identity": "mncs:0.2:function:tests.native_batch::increment",
+          "inputs": [
+            {
+              "name": "value",
+              "type": "u64"
+            }
+          ],
+          "module": "tests.native_batch",
+          "name": "increment",
+          "outputs": [
+            {
+              "name": "result",
+              "type": "u64"
+            }
+          ]
+        },
+        "status": "verified",
+        "types": {
+          "finite": [],
+          "records": [],
+          "status": "verified",
+          "unresolved_references": []
+        }
+      },
+      "module": "tests.native_batch",
+      "status": "verified"
+    }
+  ],
+  "fresh_process_reuse": {
+    "status": "hit",
+    "frontend_invocations": 0,
+    "artifact_identity": "sha256:67de7df87658546ed07688884f1b795f02f7fe5adc1ca571150041177c4d6a55"
+  },
+  "subset_cache_isolation": {
+    "status": "miss",
+    "artifact_callables": [
+      "increment"
+    ]
+  },
+  "negative_cases": {
+    "duplicate_callable_identity": "MCA112",
+    "invalid_source_status": "rejected",
+    "invalid_source_publication": "not_published",
+    "missing_callable_status": "unsupported"
+  },
+  "vm_results": [
+    {
+      "id": "increment-41",
+      "outcome": {
+        "kind": "completed"
+      },
+      "record": {
+        "admitted_capabilities": [],
+        "artifact_id": "sha256:67de7df87658546ed07688884f1b795f02f7fe5adc1ca571150041177c4d6a55",
+        "callable_function": "mncs:0.4:ssa:function:14a0ce04d7881818fb649f3265cdee00f99a599e3add28ac94364a3017d110b7",
+        "callable_name": "tests.native_batch::increment",
+        "effects": [],
+        "effects_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "outcome": {
+          "kind": "completed"
+        },
+        "resource_limits": [
+          {
+            "dimension": "call_depth",
+            "limit": 1024
+          },
+          {
+            "dimension": "effects",
+            "limit": 1024
+          },
+          {
+            "dimension": "iterations",
+            "limit": 1000000
+          },
+          {
+            "dimension": "memory_cells",
+            "limit": 10000000
+          },
+          {
+            "dimension": "steps",
+            "limit": 10000
+          }
+        ],
+        "return_digest": "sha256:19125dfd5c8de190a7d5e2fcbf06bd4650dabdcd50057d964a7f1c8fdcf401db",
+        "returned": [
+          {
+            "Integer": {
+              "bits": 64,
+              "signed": false,
+              "value": 42
+            }
+          }
+        ],
+        "runtime_id": "mncs-vm-runtime:sha256:67de7df87658546ed07688884f1b795f02f7fe5adc1ca571150041177c4d6a55",
+        "schema_version": "mncs.vm.execution-record/1",
+        "usage": {
+          "call_depth": 0,
+          "effects": 0,
+          "max_call_depth": 2,
+          "max_memory_cells": 2,
+          "memory_cells": 0,
+          "steps": 6
+        }
+      }
+    },
+    {
+      "id": "decrement-43",
+      "outcome": {
+        "kind": "completed"
+      },
+      "record": {
+        "admitted_capabilities": [],
+        "artifact_id": "sha256:67de7df87658546ed07688884f1b795f02f7fe5adc1ca571150041177c4d6a55",
+        "callable_function": "mncs:0.4:ssa:function:527aa2c8188d31fb40825000d4c3e17fddbbbdde5091bde377018acc08467c1d",
+        "callable_name": "tests.native_batch::decrement",
+        "effects": [],
+        "effects_digest": "sha256:4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "outcome": {
+          "kind": "completed"
+        },
+        "resource_limits": [
+          {
+            "dimension": "call_depth",
+            "limit": 1024
+          },
+          {
+            "dimension": "effects",
+            "limit": 1024
+          },
+          {
+            "dimension": "iterations",
+            "limit": 1000000
+          },
+          {
+            "dimension": "memory_cells",
+            "limit": 10000000
+          },
+          {
+            "dimension": "steps",
+            "limit": 10000
+          }
+        ],
+        "return_digest": "sha256:19125dfd5c8de190a7d5e2fcbf06bd4650dabdcd50057d964a7f1c8fdcf401db",
+        "returned": [
+          {
+            "Integer": {
+              "bits": 64,
+              "signed": false,
+              "value": 42
+            }
+          }
+        ],
+        "runtime_id": "mncs-vm-runtime:sha256:67de7df87658546ed07688884f1b795f02f7fe5adc1ca571150041177c4d6a55",
+        "schema_version": "mncs.vm.execution-record/1",
+        "usage": {
+          "call_depth": 0,
+          "effects": 0,
+          "max_call_depth": 1,
+          "max_memory_cells": 1,
+          "memory_cells": 1,
+          "steps": 3
+        }
+      }
+    }
+  ],
+  "measurements": {
+    "cold_build": {
+      "wall_seconds": 4.29822,
+      "cpu_seconds": 4.26,
+      "peak_rss_bytes": 129081344,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "fresh_process_hit": {
+      "wall_seconds": 4.171329,
+      "cpu_seconds": 4.14,
+      "peak_rss_bytes": 128929792,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "subset_build": {
+      "wall_seconds": 4.258045,
+      "cpu_seconds": 4.22,
+      "peak_rss_bytes": 128995328,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "canonical_vm_batch_wall_seconds": 0.007269,
+    "canonical_vm_batch_peak_rss_kib": 20708
+  },
+  "language_fact_reuse": 0,
+  "scope": "Two selected MNCS functions were emitted in one canonical VM artifact and called in one admitted batch. This proves the compiler contract slice only; it is not Forge, Environment, Store, or production mncs-test workflow evidence."
+}
