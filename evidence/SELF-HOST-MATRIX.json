@@ -143,7 +143,37 @@
         "ssa_instruction_count": 198,
         "current_source_sha256": "5dd9af033b398a4eaea998c4ef73aa95c6f72a50d532320a04821420427f1e89",
         "signature_facts_suite": "tools/test_decl.py",
-        "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7"
+        "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
+        "selected_ascii_global_four_byte_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "target_module": "mncs.compiler.source.v1",
+          "target_function": "ascii_global",
+          "candidate_source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+          "performance_evidence": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+          "performance_evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b",
+          "canonical_vm_evidence": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+          "canonical_vm_evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b",
+          "canonical_vm_cases": 4,
+          "page_strides": [
+            1024
+          ],
+          "baseline_reference_interpreter_steps": {
+            "ascii-64k": 787662,
+            "ascii-256k": 3150606,
+            "nonascii-last-256k": 3150606,
+            "nonascii-first-256k": 15381
+          },
+          "candidate_reference_interpreter_steps": {
+            "ascii-64k": 740174,
+            "ascii-256k": 2960654,
+            "nonascii-last-256k": 2960628,
+            "nonascii-first-256k": 3114
+          },
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "source.ascii_global and its bounded source.ascii helper inspect four bytes per MNCS loop transition and return immediately at the first non-ASCII byte. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact on 64 KiB and 256 KiB cases. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
+        }
       }
     },
     "lexer": {
@@ -607,7 +637,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Continue Compiler-owned native application and tooling work while the Language write grant is unavailable; integrate Language-owned verified facts once that scope is provisioned.",
+  "next_frontier": "Continue Compiler-owned application and native Test workflow work; begin Language-owned verified-fact reuse when its owner-managed writable grant is established.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -6013,77 +6043,309 @@
     }
   },
   "current_campaign_frontier_update": {
-    "observed_at": "2026-10-16T18:11:57.731136Z",
-    "compiler_head": "1cd4233f90dd4f390f10ecf4f895930e415846af",
-    "tested_source_revision": "1cd4233f90dd4f390f10ecf4f895930e415846af",
-    "commit_containing_measured_source": "1cd4233f90dd4f390f10ecf4f895930e415846af",
-    "candidate_lexer_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387",
-    "completed_frontier": "significant-global-trivia-limit-cleanup",
-    "performance_evidence": "evidence/self-host-significant-global-trivia-profile-20261016.json",
-    "performance_evidence_sha256": "8d8340902cc847385e7723b5fdc0d263f8836dec08861125896f71c27c7184c3",
-    "canonical_vm_frontier_evidence": "evidence/self-host-global-segment-significant-trivia-limit-20261016.json",
-    "canonical_vm_frontier_evidence_sha256": "4b7d90fa10852059dc3582b4e4115eaed8fd914020806ebbbc0e1cafbf858483",
+    "observed_at": "2026-10-16T18:32:49Z",
+    "compiler_head": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+    "tested_source_revision": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+    "commit_containing_measured_source": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+    "candidate_source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+    "completed_frontier": "source-ascii-global-four-byte-scan",
+    "performance_evidence": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+    "performance_evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b",
+    "canonical_vm_frontier_evidence": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+    "canonical_vm_frontier_evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b",
     "canonical_vm_frontier": {
       "status": "passed",
-      "target_module": "mncs.compiler.segment.v1",
-      "target_functions": [
-        "next_token_global",
-        "significant_global"
-      ],
-      "cases": 1210,
+      "target_module": "mncs.compiler.source.v1",
+      "target_function": "ascii_global",
+      "cases": 4,
       "page_strides": [
-        1,
-        7,
-        64,
-        256
+        1024
       ],
       "executor_case_counts": {
-        "reference_interpreter": 1210,
-        "cranelift": 1210,
-        "canonical_vm": 1210
+        "reference_interpreter": 4,
+        "cranelift": 4,
+        "canonical_vm": 4
       },
-      "semantic_digest_sha256": "98db4d9b5b5edd787e70f1a15f65b8eadcf7cec2d29e2e740eef30011b25a9d2",
-      "evidence_artifact": "evidence/self-host-global-segment-significant-trivia-limit-20261016.json",
-      "evidence_sha256": "4b7d90fa10852059dc3582b4e4115eaed8fd914020806ebbbc0e1cafbf858483",
-      "candidate_lexer_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387"
+      "results": [
+        {
+          "id": "ascii-64k",
+          "value": true,
+          "steps": 937682
+        },
+        {
+          "id": "ascii-256k",
+          "value": true,
+          "steps": 3750674
+        },
+        {
+          "id": "nonascii-last-256k",
+          "value": false,
+          "steps": 3750639
+        },
+        {
+          "id": "nonascii-first-256k",
+          "value": false,
+          "steps": 4149
+        }
+      ],
+      "artifact_identity": "sha256:97796412c8750b4253d7c5f02bd5117c3988c41072a31563df3a4dff0883b1b4",
+      "evidence_artifact": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+      "evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b"
+    },
+    "parser_dependency_revalidation": {
+      "status": "passed",
+      "target_module": "mncs.compiler.kernel.v1",
+      "target_function": "parse_header_global",
+      "cases": 88,
+      "artifact_identity": "sha256:ccc45c2fe15270d464d8fcf2760f42ed37257e93baedfc5ee078e069d763a8cc",
+      "semantic_digests": {
+        "reference_interpreter": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+        "cranelift": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+        "canonical_vm": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9"
+      },
+      "evidence_artifact": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+      "evidence_sha256": "102ea9f2a7b7629c7aa8f5524089157eff9877bcf3f2afb238848e7f3cf24485"
     },
     "profile_summary": {
-      "baseline_mean_wall_seconds": 43.103,
-      "candidate_mean_wall_seconds": 43.105,
-      "wall_change_percent": 0.005,
-      "baseline_mean_probe_cpu_seconds": 40.605,
-      "candidate_mean_probe_cpu_seconds": 40.61,
-      "probe_cpu_change_percent": 0.012,
-      "baseline_mean_next_token_global_exclusive_seconds": 12.863893,
-      "candidate_mean_next_token_global_exclusive_seconds": 12.894046,
-      "next_token_global_exclusive_change_percent": 0.234,
-      "baseline_mean_significant_global_exclusive_seconds": 6.194158,
-      "candidate_mean_significant_global_exclusive_seconds": 6.188885,
-      "significant_global_exclusive_change_percent": -0.085,
-      "baseline_mean_is_trivia_cont_calls": 1627,
-      "candidate_mean_is_trivia_cont_calls": 1622,
-      "interpretation": "The removed predicate is infrequent on this workload. Wall and CPU differences are within measurement noise; no speedup is claimed."
+      "reference_interpreter_steps_baseline": {
+        "ascii-64k": 787662,
+        "ascii-256k": 3150606,
+        "nonascii-last-256k": 3150606,
+        "nonascii-first-256k": 15381
+      },
+      "reference_interpreter_steps_candidate": {
+        "ascii-64k": 740174,
+        "ascii-256k": 2960654,
+        "nonascii-last-256k": 2960628,
+        "nonascii-first-256k": 3114
+      },
+      "step_change_percent": {
+        "ascii-64k": -6.03,
+        "ascii-256k": -6.03,
+        "nonascii-last-256k": -6.03,
+        "nonascii-first-256k": -79.75
+      },
+      "reference_interpreter_wall_seconds_baseline": {
+        "ascii-64k": 4.7782,
+        "ascii-256k": 8.7025,
+        "nonascii-last-256k": 8.6136,
+        "nonascii-first-256k": 0.4533
+      },
+      "reference_interpreter_wall_seconds_candidate": {
+        "ascii-64k": 4.430541,
+        "ascii-256k": 7.790731,
+        "nonascii-last-256k": 7.692517,
+        "nonascii-first-256k": 0.367124
+      },
+      "wall_change_percent": {
+        "ascii-64k": -7.28,
+        "ascii-256k": -10.48,
+        "nonascii-last-256k": -10.69,
+        "nonascii-first-256k": -19.01
+      },
+      "interpretation": "Measured change on the selected page workloads. The single-run timings are workload observations, not a general speed guarantee."
     },
-    "stage0_segment_suite": {
-      "status": "passed_twice",
-      "suite": "tools/test_segment.py",
-      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
-      "requests_per_run": 6564,
-      "texts_per_run": 43,
-      "tokens_compared_per_run": 3161,
-      "result_sha256": "e1bb03923d1fac892e0848c8d72865b6fd6e84cca84c320b99060048fec12ca5",
-      "execution_mode": "retained_cranelift"
-    },
-    "frontier_status": {
-      "lexer_correctness": "passed_stage0_and_1210_case_canonical_vm_frontier",
-      "six_module_project_result": "incomplete_at_1000000_steps",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "source_ascii_frontier": {
+      "status": "passed_reference_cranelift_and_canonical_vm",
       "language_verified_facts_reused": 0,
-      "full_lexer_verification": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "scope": "source.ascii_global and its bounded source.ascii helper inspect four bytes per MNCS loop transition and return immediately at the first non-ASCII byte. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact on 64 KiB and 256 KiB cases. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
+    },
+    "next_frontier": "Continue Compiler-owned application and native Test workflow work; begin Language-owned verified-fact reuse when its owner-managed writable grant is established.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "campaign_frontier_history": [
+    {
+      "observed_at": "2026-10-16T18:11:57.731136Z",
+      "compiler_head": "1cd4233f90dd4f390f10ecf4f895930e415846af",
+      "tested_source_revision": "1cd4233f90dd4f390f10ecf4f895930e415846af",
+      "commit_containing_measured_source": "1cd4233f90dd4f390f10ecf4f895930e415846af",
+      "candidate_lexer_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387",
+      "completed_frontier": "significant-global-trivia-limit-cleanup",
+      "performance_evidence": "evidence/self-host-significant-global-trivia-profile-20261016.json",
+      "performance_evidence_sha256": "8d8340902cc847385e7723b5fdc0d263f8836dec08861125896f71c27c7184c3",
+      "canonical_vm_frontier_evidence": "evidence/self-host-global-segment-significant-trivia-limit-20261016.json",
+      "canonical_vm_frontier_evidence_sha256": "4b7d90fa10852059dc3582b4e4115eaed8fd914020806ebbbc0e1cafbf858483",
+      "canonical_vm_frontier": {
+        "status": "passed",
+        "target_module": "mncs.compiler.segment.v1",
+        "target_functions": [
+          "next_token_global",
+          "significant_global"
+        ],
+        "cases": 1210,
+        "page_strides": [
+          1,
+          7,
+          64,
+          256
+        ],
+        "executor_case_counts": {
+          "reference_interpreter": 1210,
+          "cranelift": 1210,
+          "canonical_vm": 1210
+        },
+        "semantic_digest_sha256": "98db4d9b5b5edd787e70f1a15f65b8eadcf7cec2d29e2e740eef30011b25a9d2",
+        "evidence_artifact": "evidence/self-host-global-segment-significant-trivia-limit-20261016.json",
+        "evidence_sha256": "4b7d90fa10852059dc3582b4e4115eaed8fd914020806ebbbc0e1cafbf858483",
+        "candidate_lexer_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387"
+      },
+      "profile_summary": {
+        "baseline_mean_wall_seconds": 43.103,
+        "candidate_mean_wall_seconds": 43.105,
+        "wall_change_percent": 0.005,
+        "baseline_mean_probe_cpu_seconds": 40.605,
+        "candidate_mean_probe_cpu_seconds": 40.61,
+        "probe_cpu_change_percent": 0.012,
+        "baseline_mean_next_token_global_exclusive_seconds": 12.863893,
+        "candidate_mean_next_token_global_exclusive_seconds": 12.894046,
+        "next_token_global_exclusive_change_percent": 0.234,
+        "baseline_mean_significant_global_exclusive_seconds": 6.194158,
+        "candidate_mean_significant_global_exclusive_seconds": 6.188885,
+        "significant_global_exclusive_change_percent": -0.085,
+        "baseline_mean_is_trivia_cont_calls": 1627,
+        "candidate_mean_is_trivia_cont_calls": 1622,
+        "interpretation": "The removed predicate is infrequent on this workload. Wall and CPU differences are within measurement noise; no speedup is claimed."
+      },
+      "stage0_segment_suite": {
+        "status": "passed_twice",
+        "suite": "tools/test_segment.py",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "requests_per_run": 6564,
+        "texts_per_run": 43,
+        "tokens_compared_per_run": 3161,
+        "result_sha256": "e1bb03923d1fac892e0848c8d72865b6fd6e84cca84c320b99060048fec12ca5",
+        "execution_mode": "retained_cranelift"
+      },
+      "frontier_status": {
+        "lexer_correctness": "passed_stage0_and_1210_case_canonical_vm_frontier",
+        "six_module_project_result": "incomplete_at_1000000_steps",
+        "language_verified_facts_reused": 0,
+        "full_lexer_verification": false,
+        "stage1_claimed": false,
+        "stage2_claimed": false
+      },
+      "next_frontier": "Continue Compiler-owned native application and tooling work while the Language write grant is unavailable; integrate Language-owned verified facts once that scope is provisioned.",
       "stage1_claimed": false,
       "stage2_claimed": false
     },
-    "next_frontier": "Continue Compiler-owned native application and tooling work while the Language write grant is unavailable; integrate Language-owned verified facts once that scope is provisioned.",
-    "stage1_claimed": false,
-    "stage2_claimed": false
-  }
+    {
+      "observed_at": "2026-10-16T18:32:49Z",
+      "compiler_head": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+      "tested_source_revision": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+      "commit_containing_measured_source": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+      "candidate_source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+      "completed_frontier": "source-ascii-global-four-byte-scan",
+      "performance_evidence": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+      "performance_evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b",
+      "canonical_vm_frontier_evidence": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+      "canonical_vm_frontier_evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b",
+      "canonical_vm_frontier": {
+        "status": "passed",
+        "target_module": "mncs.compiler.source.v1",
+        "target_function": "ascii_global",
+        "cases": 4,
+        "page_strides": [
+          1024
+        ],
+        "executor_case_counts": {
+          "reference_interpreter": 4,
+          "cranelift": 4,
+          "canonical_vm": 4
+        },
+        "results": [
+          {
+            "id": "ascii-64k",
+            "value": true,
+            "steps": 937682
+          },
+          {
+            "id": "ascii-256k",
+            "value": true,
+            "steps": 3750674
+          },
+          {
+            "id": "nonascii-last-256k",
+            "value": false,
+            "steps": 3750639
+          },
+          {
+            "id": "nonascii-first-256k",
+            "value": false,
+            "steps": 4149
+          }
+        ],
+        "artifact_identity": "sha256:97796412c8750b4253d7c5f02bd5117c3988c41072a31563df3a4dff0883b1b4",
+        "evidence_artifact": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+        "evidence_sha256": "a29bb31e5b83340ccb15bbf21010a43e2b9e001f5492eca28070fcfa5e38b92b"
+      },
+      "parser_dependency_revalidation": {
+        "status": "passed",
+        "target_module": "mncs.compiler.kernel.v1",
+        "target_function": "parse_header_global",
+        "cases": 88,
+        "artifact_identity": "sha256:ccc45c2fe15270d464d8fcf2760f42ed37257e93baedfc5ee078e069d763a8cc",
+        "semantic_digests": {
+          "reference_interpreter": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+          "cranelift": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+          "canonical_vm": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9"
+        },
+        "evidence_artifact": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+        "evidence_sha256": "102ea9f2a7b7629c7aa8f5524089157eff9877bcf3f2afb238848e7f3cf24485"
+      },
+      "profile_summary": {
+        "reference_interpreter_steps_baseline": {
+          "ascii-64k": 787662,
+          "ascii-256k": 3150606,
+          "nonascii-last-256k": 3150606,
+          "nonascii-first-256k": 15381
+        },
+        "reference_interpreter_steps_candidate": {
+          "ascii-64k": 740174,
+          "ascii-256k": 2960654,
+          "nonascii-last-256k": 2960628,
+          "nonascii-first-256k": 3114
+        },
+        "step_change_percent": {
+          "ascii-64k": -6.03,
+          "ascii-256k": -6.03,
+          "nonascii-last-256k": -6.03,
+          "nonascii-first-256k": -79.75
+        },
+        "reference_interpreter_wall_seconds_baseline": {
+          "ascii-64k": 4.7782,
+          "ascii-256k": 8.7025,
+          "nonascii-last-256k": 8.6136,
+          "nonascii-first-256k": 0.4533
+        },
+        "reference_interpreter_wall_seconds_candidate": {
+          "ascii-64k": 4.430541,
+          "ascii-256k": 7.790731,
+          "nonascii-last-256k": 7.692517,
+          "nonascii-first-256k": 0.367124
+        },
+        "wall_change_percent": {
+          "ascii-64k": -7.28,
+          "ascii-256k": -10.48,
+          "nonascii-last-256k": -10.69,
+          "nonascii-first-256k": -19.01
+        },
+        "interpretation": "Measured change on the selected page workloads. The single-run timings are workload observations, not a general speed guarantee."
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "source_ascii_frontier": {
+        "status": "passed_reference_cranelift_and_canonical_vm",
+        "language_verified_facts_reused": 0,
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "scope": "source.ascii_global and its bounded source.ascii helper inspect four bytes per MNCS loop transition and return immediately at the first non-ASCII byte. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact on 64 KiB and 256 KiB cases. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
+      },
+      "next_frontier": "Continue Compiler-owned application and native Test workflow work; begin Language-owned verified-fact reuse when its owner-managed writable grant is established.",
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    }
+  ]
 }

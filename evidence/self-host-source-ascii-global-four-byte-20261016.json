@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.source-ascii-global-four-byte-frontier",
+  "compiler_revision_tested": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+  "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+  "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+  "vm_revision": "29fca9c945dd90c1857d9e86c78bb7c844cbe879",
+  "source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+  "test_harness_sha256": "a01189769909e2bbf2671d934bd859203c1e764e050309f773659d5551ca08f2",
+  "target": {
+    "module": "mncs.compiler.source.v1",
+    "function": "ascii_global",
+    "generic_arguments": [
+      1024,
+      1024
+    ]
+  },
+  "stride": 1024,
+  "page_count_by_case": {
+    "ascii-64k": 64,
+    "ascii-256k": 256,
+    "nonascii-last-256k": 256,
+    "nonascii-first-256k": 256
+  },
+  "reference_interpreter": [
+    {
+      "id": "ascii-64k",
+      "value": true,
+      "steps": 740174,
+      "wall_seconds": 4.430541
+    },
+    {
+      "id": "ascii-256k",
+      "value": true,
+      "steps": 2960654,
+      "wall_seconds": 7.790731
+    },
+    {
+      "id": "nonascii-last-256k",
+      "value": false,
+      "steps": 2960628,
+      "wall_seconds": 7.692517
+    },
+    {
+      "id": "nonascii-first-256k",
+      "value": false,
+      "steps": 3114,
+      "wall_seconds": 0.367124
+    }
+  ],
+  "cranelift": [
+    {
+      "id": "ascii-64k",
+      "value": true,
+      "reported_steps": 1,
+      "step_counter_note": "Cranelift request counter; not comparable to reference interpreter fuel",
+      "wall_seconds": 2.658133
+    },
+    {
+      "id": "ascii-256k",
+      "value": true,
+      "reported_steps": 1,
+      "step_counter_note": "Cranelift request counter; not comparable to reference interpreter fuel",
+      "wall_seconds": 0.449061
+    },
+    {
+      "id": "nonascii-last-256k",
+      "value": false,
+      "reported_steps": 1,
+      "step_counter_note": "Cranelift request counter; not comparable to reference interpreter fuel",
+      "wall_seconds": 0.390308
+    },
+    {
+      "id": "nonascii-first-256k",
+      "value": false,
+      "reported_steps": 1,
+      "step_counter_note": "Cranelift request counter; not comparable to reference interpreter fuel",
+      "wall_seconds": 0.38481
+    }
+  ],
+  "canonical_vm": {
+    "artifact_identity": "sha256:97796412c8750b4253d7c5f02bd5117c3988c41072a31563df3a4dff0883b1b4",
+    "results": [
+      {
+        "id": "ascii-64k",
+        "value": true,
+        "steps": 937682
+      },
+      {
+        "id": "ascii-256k",
+        "value": true,
+        "steps": 3750674
+      },
+      {
+        "id": "nonascii-last-256k",
+        "value": false,
+        "steps": 3750639
+      },
+      {
+        "id": "nonascii-first-256k",
+        "value": false,
+        "steps": 4149
+      }
+    ],
+    "wall_seconds": 11.380325,
+    "peak_rss_kib": 294276,
+    "calls_file_bytes": 21324225,
+    "results_file_bytes": 4706
+  },
+  "resource_observation": {
+    "reference_and_cranelift_child_cpu_seconds": 34.094884,
+    "python_harness_peak_rss_kib": 439500,
+    "cgroup_memory": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    }
+  },
+  "baseline_before_change": {
+    "source_sha256": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+    "backend": "reference_interpreter",
+    "observations": [
+      {
+        "id": "ascii-64k",
+        "steps": 787662,
+        "wall_seconds": 4.7782
+      },
+      {
+        "id": "ascii-256k",
+        "steps": 3150606,
+        "wall_seconds": 8.7025
+      },
+      {
+        "id": "nonascii-last-256k",
+        "steps": 3150606,
+        "wall_seconds": 8.6136
+      },
+      {
+        "id": "nonascii-first-256k",
+        "steps": 15381,
+        "wall_seconds": 0.4533
+      }
+    ],
+    "measurement_note": "One pre-change sample used the same CP-0001 Probe and 1024-byte page requests before editing source.mncs in this session. Wall times are workload observations, not a general performance guarantee."
+  },
+  "language_verified_facts_reused": 0,
+  "scope": "source.ascii_global and its bounded source.ascii helper inspect four bytes per MNCS loop transition and return immediately at the first non-ASCII byte. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact on 64 KiB and 256 KiB cases. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
+}
