@@ -605,18 +605,22 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                     if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner, initial_page, initial_address); }
                     return token_from_nonword_scan(start, inner, line, block, ws);
                 }
-                let address: source.GlobalPageAddress = source.global_page_address(stride, total, inner.end);
+                // The loop guard established stride > 0 and inner.end < total;
+                // compute the two page coordinates directly instead of
+                // re-entering the total address helper for every scan window.
+                let page_index: u64 = inner.end / stride;
+                let page_intra: u64 = inner.end % stride;
                 // A scan can only enter this loop after the first byte was
                 // resolved from a non-empty page table. Clamp an impossible
                 // later page index to page zero; the scalar match preserves
                 // the guarded access and global fallback.
-                let page_exists: bool = address.page < pages.len;
-                let selected_page: u64 = select(page_exists, address.page, 0);
+                let page_exists: bool = page_index < pages.len;
+                let selected_page: u64 = select(page_exists, page_index, 0);
                 let page: [byte; up_to N] = pages[selected_page];
                 let window: source.ByteWindow4 = match select(page_exists, 1, 0) {
-                    1 => match select(address.intra < page.len, 1, 0) {
-                        1 => match select(total - inner.end >= 4 && stride - address.intra >= 4 && page.len - address.intra >= 4, 1, 0) {
-                            1 => source.ByteWindow4 { b0: page[address.intra + 0] as u64, b1: page[address.intra + 1] as u64, b2: page[address.intra + 2] as u64, b3: page[address.intra + 3] as u64 },
+                    1 => match select(page_intra < page.len, 1, 0) {
+                        1 => match select(total - inner.end >= 4 && stride - page_intra >= 4 && page.len - page_intra >= 4, 1, 0) {
+                            1 => source.ByteWindow4 { b0: page[page_intra + 0] as u64, b1: page[page_intra + 1] as u64, b2: page[page_intra + 2] as u64, b3: page[page_intra + 3] as u64 },
                             _ => source.byte_window4_global<P, N>(pages, stride, total, inner.end)
                         },
                         _ => source.byte_window4_global<P, N>(pages, stride, total, inner.end)

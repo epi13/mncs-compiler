@@ -1,0 +1,79 @@
+{
+  "cross_executor_frontier": {
+    "baseline_canonical_vm_batch_wall_seconds": 5.109221,
+    "baseline_canonical_vm_steps": 2271409,
+    "baseline_reference_steps": 1840549,
+    "candidate_canonical_vm_batch_wall_seconds": 4.88356,
+    "candidate_canonical_vm_steps": 2153545,
+    "candidate_child_cpu_seconds": 27.607219,
+    "candidate_child_peak_rss_kib": 1111896,
+    "candidate_reference_steps": 1740805,
+    "cases": 1208,
+    "cgroup_memory": null,
+    "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+    "evidence_sha256": "7df66b93081ecb20fb948de742998badbd670e06a31ae4150dc815aa3cc5d5b2",
+    "page_strides": [
+      1,
+      7,
+      64,
+      256
+    ],
+    "semantic_digest_sha256": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+  },
+  "identity": {
+    "baseline_lexer_sha256": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+    "candidate_lexer_sha256": "2426e2b3dbf1199bb67390ba70ffe4f523a18b3e38cb03682b4ae7bdf31d0cfe",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_parent_revision": "f5398ec17ad3164e090cac8844acd32b48636a07",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "implementation": {
+    "change": "After the global scan loop establishes stride > 0 and cursor < total, compute page and in-page offset directly instead of calling source.global_page_address for each four-byte scan window.",
+    "path": "src/compiler/lexer.mncs"
+  },
+  "interpretation": "Interpreter step counts fell by 5\u20136% across the tested frontiers. The 84 KB workload wall samples are effectively tied; complete frontier wall time and CPU increased because those totals include emission, oracle work, and process startup. No general wall-time speedup is claimed.",
+  "kind": "mncs-compiler-global-cursor-page-arithmetic-inlining",
+  "limitations": [
+    "The long input is a synthetic lexer workload, not a production compile benchmark.",
+    "Per-workload RSS and cgroup memory were unavailable for the targeted request.",
+    "Compiler Language verification-fact reuse remains absent; this change only reduces lexer cursor work.",
+    "Full segment/lexer canonical VM module verification and compiler succession remain unproven."
+  ],
+  "long_workload": {
+    "baseline": {
+      "median_wall_seconds": 15.115309,
+      "reference_interpreter_steps": 791338,
+      "request_wall_seconds": [
+        15.446423,
+        15.094844,
+        15.115309
+      ]
+    },
+    "candidate": {
+      "median_wall_seconds": 15.02554,
+      "reference_interpreter_steps": 742994,
+      "request_wall_seconds": [
+        15.205531,
+        14.845549
+      ],
+      "semantic_digest_sha256": "40bfd2fac4721d00b46ffa40006997f5efbd8babf5884f42f858af3f58ba2717",
+      "semantic_match": "All 1,024 returned (kind,start,end,diagnostic) rows matched the Stage-0 oracle."
+    },
+    "function": "mncs.compiler.segment.v1::lex_batch_from",
+    "page_count": 83,
+    "page_stride": 1024,
+    "relative_change": {
+      "median_wall_time_percent": -0.594,
+      "reference_interpreter_steps_percent": -6.109
+    },
+    "returned_tokens": 1024,
+    "source_bytes": 84000,
+    "source_records": 1500,
+    "stage0_oracle_tokens": 12000,
+    "step_budget": 8000000
+  },
+  "observed_at": "2026-10-16T10:20:49.181014Z",
+  "schema_version": "mncs.compiler.optimization-measurement/1",
+  "status": "measured"
+}
