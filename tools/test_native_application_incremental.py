@@ -619,6 +619,52 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
             verify_probe.proc.wait(timeout=5)
         raise
 
+    # Run the changed generic after cache scenarios that rely on the original
+    # executable index. Publishing a different selected closure can update the
+    # index candidate used by later requests, even though each build remains
+    # correct for its own source snapshot.
+    generic_specialization_modules = dict(modules)
+    suite_source = generic_specialization_modules['mncs.test.suite']
+    old_fold = 'next summary = observe(summary, tests[i]);'
+    new_fold = 'next summary = observe(summary, tests[tests.len - i - 1]);'
+    if suite_source.count(old_fold) != 1:
+        raise AssertionError('generic specialization invalidation fixture no longer matches source')
+    generic_specialization_modules['mncs.test.suite'] = suite_source.replace(
+        old_fold, new_fold, 1)
+    generic_specialization_request = request_for(
+        app.APP_SOURCE, generic_specialization_modules)
+    generic_probe, generic_startup_metrics = ready_probe(CACHE_DIR)
+    try:
+        generic_specialization_oracle, generic_specialization_exec, generic_specialization_oracle_metrics = oracle_one(
+            generic_probe, app.APP_SOURCE, generic_specialization_modules)
+        generic_specialization_build, generic_specialization_metrics = compile_one(
+            generic_probe, generic_specialization_request)
+        if (generic_specialization_build.get('status') != 'verified'
+                or generic_specialization_build.get('cache', {}).get('status') != 'miss'
+                or generic_specialization_build.get('cache', {}).get('reused_units') != []
+                or generic_specialization_build.get('cache', {}).get('recomputed_units') != [
+                    'source_semantic_check', 'ssa_verification', 'verified_vm_artifact']):
+            raise AssertionError('edited imported generic specialization reused stale build work')
+        if (generic_specialization_build.get('dependency_graph', {}).get('semantic_identity')
+                == cold.get('dependency_graph', {}).get('semantic_identity')
+                or generic_specialization_build.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity')
+                == cold.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity')
+                or generic_specialization_build.get('artifact', {}).get('identity')
+                == cold.get('artifact', {}).get('identity')):
+            raise AssertionError('generic specialization edit left semantic or artifact identity unchanged')
+        _generic_specialization_vm, generic_specialization_vm_metrics, generic_specialization_actual = run_and_compare(
+            generic_specialization_build['artifact']['value'], generic_specialization_exec)
+        if compact_oracle(generic_specialization_exec) != compact_result(generic_specialization_actual[0]):
+            raise AssertionError('generic specialization edit differs from the independent oracle')
+        tails.append(generic_probe.close())
+    except BaseException:
+        if generic_probe.proc.poll() is None:
+            generic_probe.proc.kill()
+            generic_probe.proc.wait(timeout=5)
+        raise
+
     vm_base, vm_base_metrics, base_actual = run_and_compare(artifact, oracle_exec)
     vm_small, vm_small_metrics, small_actual = run_and_compare(small_artifact, small_exec)
     vm_dependency, vm_dependency_metrics, dependency_actual = run_and_compare(
@@ -659,6 +705,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
     for label, result in (
         ('reachable root body edit', small),
         ('reachable dependency edit', dependency),
+        ('generic specialization edit', generic_specialization_build),
         ('unrelated exported signature edit', unrelated_signature_build),
         ('imported nominal interface edit', interface_build),
         ('imported call and closure change', closure_build),
@@ -794,6 +841,35 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
                 'oracle_metrics': semantic_edit_oracle_metrics,
                 'compile_metrics': semantic_edit_metrics,
                 'vm_metrics': semantic_edit_vm_metrics,
+            },
+            'generic_specialization_edit': {
+                'changed_module': 'mncs.test.suite',
+                'changed_generic_function': 'summarize<N=4>',
+                'changed_body': 'reverse the bounded TestResult fold order',
+                'source_sha256_before': app.sha(modules['mncs.test.suite'].encode()),
+                'source_sha256_after': app.sha(
+                    generic_specialization_modules['mncs.test.suite'].encode()),
+                'generic_seeds': generic_specialization_request.get('generic_seeds'),
+                'semantic_identity_before': cold.get('dependency_graph', {}).get('semantic_identity'),
+                'semantic_identity_after': generic_specialization_build.get(
+                    'dependency_graph', {}).get('semantic_identity'),
+                'executable_closure_identity_before': cold.get('dependency_graph', {}).get(
+                    'application_executable_closure_identity'),
+                'executable_closure_identity_after': generic_specialization_build.get(
+                    'dependency_graph', {}).get('application_executable_closure_identity'),
+                'cache': generic_specialization_build.get('cache'),
+                'artifact_identity_before': cold.get('artifact', {}).get('identity'),
+                'artifact_identity_after': generic_specialization_build.get(
+                    'artifact', {}).get('identity'),
+                'oracle_valid': generic_specialization_oracle.get('valid'),
+                'oracle_result': compact_oracle(generic_specialization_exec),
+                'vm_result': compact_result(generic_specialization_actual[0]),
+                'oracle_matches_vm': compact_oracle(generic_specialization_exec)
+                == compact_result(generic_specialization_actual[0]),
+                'oracle_metrics': generic_specialization_oracle_metrics,
+                'compile_metrics': generic_specialization_metrics,
+                'vm_metrics': generic_specialization_vm_metrics,
+                'process_startup_metrics': generic_startup_metrics,
             },
             'unreachable_function_edit': {
                 'changed_module': 'mncs.test.generative',
@@ -943,6 +1019,8 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
             'cold_build': cold_work,
             'warm_exact_snapshot': warm.get('cache', {}).get('verification_work'),
             'source_only_dependency_edit': semantic_edit.get('cache', {}).get('verification_work'),
+            'generic_specialization_edit': generic_specialization_build.get(
+                'cache', {}).get('verification_work'),
             'unreachable_function_body_edit': unrelated_function_build.get(
                 'cache', {}).get('verification_work'),
             'reachable_dependency_edit': dependency.get('cache', {}).get('verification_work'),
@@ -972,6 +1050,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         'small_edit_cache': small.get('cache', {}).get('status'),
         'dependency_cache': dependency.get('cache', {}).get('status'),
         'exported_interface_cache': interface_build.get('cache', {}).get('status'),
+        'generic_specialization_cache': generic_specialization_build.get('cache', {}).get('status'),
         'exported_interface_identity_changed': interface_before != interface_after,
         'unreachable_function_cache': unrelated_function_build.get('cache', {}).get('status'),
         'unrelated_signature_cache': unrelated_signature_build.get('cache', {}).get('status'),
