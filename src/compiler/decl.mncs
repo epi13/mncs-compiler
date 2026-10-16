@@ -2786,6 +2786,22 @@ fn parse_seq_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
 // identifier starting with those bytes has a non-space sixth byte.
 fn is_up_to_bound<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
     if end - start < 6 { return false; }
+    // Common `up_to` bounds stay in one page. Read that prefix directly from
+    // the already-selected page; retain the total global reader at page edges
+    // and for malformed views.
+    if stride > 0 && start < total {
+        let page: u64 = start / stride;
+        let intra: u64 = start % stride;
+        if page < pages.len {
+            let view: [byte; up_to N] = pages[page];
+            if intra < view.len && total - start >= 4 && stride - intra >= 4 && view.len - intra >= 4 {
+                if view[intra + 0] as u64 != 117 || view[intra + 1] as u64 != 112 || view[intra + 2] as u64 != 95 || view[intra + 3] as u64 != 116 { return false; }
+                if segment.byte_at_global<P, N>(pages, stride, total, start + 4) != 111 { return false; }
+                if !(lexer.space(segment.byte_at_global<P, N>(pages, stride, total, start + 5))) { return false; }
+                return true;
+            }
+        }
+    }
     if segment.byte_at_global<P, N>(pages, stride, total, start) != 117 { return false; }
     if segment.byte_at_global<P, N>(pages, stride, total, start + 1) != 112 { return false; }
     if segment.byte_at_global<P, N>(pages, stride, total, start + 2) != 95 { return false; }
