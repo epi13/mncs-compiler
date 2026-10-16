@@ -380,8 +380,9 @@ fn hash_optional_file(path: &std::path::Path) -> String {
 }
 
 /// Exact digest of the provisioned Stage-0 tree: every file's relative
-/// path and bytes, sorted, excluding build outputs (`target/`). Any
-/// semantic change in the linked tree changes the key.
+/// path and bytes, sorted, excluding the Cargo build output directories
+/// (`target/` and `target-verification/`). Any semantic change in the
+/// linked tree changes the key.
 fn hash_tree(root: &std::path::Path) -> String {
     fn visit(
         dir: &std::path::Path,
@@ -395,7 +396,10 @@ fn hash_tree(root: &std::path::Path) -> String {
         let mut entries: Vec<_> = entries.filter_map(|entry| entry.ok()).collect();
         entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
         for entry in entries {
-            if entry.file_name() == "target" {
+            if matches!(
+                entry.file_name().to_str(),
+                Some("target" | "target-verification")
+            ) {
                 continue;
             }
             let path = entry.path();
@@ -2399,6 +2403,15 @@ mod tests {
             vec![7u8; 1024],
         )
         .unwrap();
+        std::fs::create_dir_all(bootstrap.join("target-verification").join("release")).unwrap();
+        std::fs::write(
+            bootstrap
+                .join("target-verification")
+                .join("release")
+                .join("big"),
+            vec![7u8; 1024],
+        )
+        .unwrap();
         let first = gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
         assert_eq!(first.lock_revision, "rev-1");
         assert_eq!(first.lock_source_profile, "0.18");
@@ -2410,8 +2423,19 @@ mod tests {
             vec![8u8; 2048],
         )
         .unwrap();
+        std::fs::write(
+            bootstrap
+                .join("target-verification")
+                .join("release")
+                .join("big"),
+            vec![8u8; 2048],
+        )
+        .unwrap();
         let second = gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
-        assert_eq!(first.bootstrap_tree_sha256, second.bootstrap_tree_sha256);
+        assert_eq!(
+            first.bootstrap_tree_sha256, second.bootstrap_tree_sha256,
+            "Cargo build outputs must not affect the bootstrap source identity"
+        );
         // A source change does.
         std::fs::write(bootstrap.join("crates").join("a.rs"), "fn a() { 1 }").unwrap();
         let third = gather_toolchain_identity(None, &root.join("lock.json"), &bootstrap);
