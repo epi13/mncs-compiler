@@ -155,6 +155,18 @@ Language verified facts. Environment returned the passing verification result
 without a separate Store artifact; this does not establish Forge execution of
 `digest_app` or full `mncs-test` conversion.
 
+## Current declaration parser frontier (2026-10-16)
+
+The [current `decl.parse_unit` frontier](self-host-decl-parse-expanded-canonical-vm-current-8817cdb-20261016.json)
+covers 37 selected hand-picked and production declaration cases: 19 valid and
+18 invalid, including five missing-field-separator regressions. Stage-0
+diagnostics and structure, the reference interpreter, Cranelift, and a fresh
+canonical VM artifact agree on the same semantic digest. The run took 124.797
+seconds wall time and 122.875 child CPU seconds; child peak RSS was 1,977,932
+KiB and canonical VM peak RSS was 362,076 KiB. Cgroup readings were unavailable.
+This is a function frontier, not full declaration-module or succession
+evidence; it reused zero Language verified facts.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:
