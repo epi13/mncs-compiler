@@ -12,6 +12,11 @@ fn digit(c: u64) -> (result: bool) { return c >= 48 && c <= 57; }
 fn letter(c: u64) -> (result: bool) {
     return (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95;
 }
+// Identifier continuation bytes combine letters, underscore, and digits in
+// one predicate so each scanned byte avoids separate letter/digit calls.
+fn word_char(c: u64) -> (result: bool) {
+    return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95;
+}
 // Source text reaches the reference parser as UTF-8. A rejected non-ASCII
 // scalar therefore occupies its full encoded width in the shared byte-span
 // vocabulary, even though the MNCS token grammar is ASCII-only.
@@ -251,7 +256,7 @@ fn scan_step<N: Nat>(text: [byte; up_to N], st: Scan, line: bool, block: bool, w
         return Scan { ..st, end: st.end + select(advance, 1, 0), done: !advance };
     }
     if word {
-        let advance: bool = letter(a) || digit(a);
+        let advance: bool = word_char(a);
         return Scan { ..st, end: st.end + select(advance, 1, 0), done: !advance };
     }
     if ws {
@@ -516,19 +521,19 @@ fn scan_chunk_window(total: u64, window: source.ByteWindow4, st: Scan, line: boo
         return Scan { ..st, end: end3 + 1 };
     }
     if word {
-        if !(letter(a0) || digit(a0)) { return Scan { ..st, done: true }; }
+        if !(word_char(a0)) { return Scan { ..st, done: true }; }
         let end1: u64 = st.end + 1;
         if end1 >= total { return Scan { ..st, end: end1 }; }
         let a1: u64 = window.b1;
-        if !(letter(a1) || digit(a1)) { return Scan { ..st, end: end1, done: true }; }
+        if !(word_char(a1)) { return Scan { ..st, end: end1, done: true }; }
         let end2: u64 = st.end + 2;
         if end2 >= total { return Scan { ..st, end: end2 }; }
         let a2: u64 = window.b2;
-        if !(letter(a2) || digit(a2)) { return Scan { ..st, end: end2, done: true }; }
+        if !(word_char(a2)) { return Scan { ..st, end: end2, done: true }; }
         let end3: u64 = st.end + 3;
         if end3 >= total { return Scan { ..st, end: end3 }; }
         let a3: u64 = window.b3;
-        if !(letter(a3) || digit(a3)) { return Scan { ..st, end: end3, done: true }; }
+        if !(word_char(a3)) { return Scan { ..st, end: end3, done: true }; }
         return Scan { ..st, end: end3 + 1 };
     }
     if ws {
@@ -646,19 +651,19 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 // parser to consume boolean match patterns.
                 let advanced: Scan = match select(word, 1, 0) {
                     0 => scan_chunk_window(total, window, inner, line, block, word, number, ws),
-                    _ => match select(letter(window.b0) || digit(window.b0), 1, 0) {
+                    _ => match select(word_char(window.b0), 1, 0) {
                         0 => Scan { ..inner, done: true },
                         _ => match select(inner.end + 1 >= total, 1, 0) {
                             1 => Scan { ..inner, end: inner.end + 1 },
-                            _ => match select(letter(window.b1) || digit(window.b1), 1, 0) {
+                            _ => match select(word_char(window.b1), 1, 0) {
                                 0 => Scan { ..inner, end: inner.end + 1, done: true },
                                 _ => match select(inner.end + 2 >= total, 1, 0) {
                                     1 => Scan { ..inner, end: inner.end + 2 },
-                                    _ => match select(letter(window.b2) || digit(window.b2), 1, 0) {
+                                    _ => match select(word_char(window.b2), 1, 0) {
                                         0 => Scan { ..inner, end: inner.end + 2, done: true },
                                         _ => match select(inner.end + 3 >= total, 1, 0) {
                                             1 => Scan { ..inner, end: inner.end + 3 },
-                                            _ => match select(letter(window.b3) || digit(window.b3), 1, 0) {
+                                            _ => match select(word_char(window.b3), 1, 0) {
                                                 0 => Scan { ..inner, end: inner.end + 3, done: true },
                                                 _ => Scan { ..inner, end: inner.end + 4 }
                                             }
