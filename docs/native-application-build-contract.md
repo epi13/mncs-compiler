@@ -31,14 +31,19 @@ top-level `entry` field names the first canonical callable for clients that
 need one primary target. A selected callable without an admitted executable
 body makes the full request unsupported.
 
-The `/5` path currently reuses only exact source snapshots from its persistent
-artifact cache. Changed snapshots run the full Language frontend and rebuild
-the selected SSA closure; the cache does not claim Language verified-fact
-reuse. The Environment provider accepts request `/1` with response `/4` and
-request `/2` with response `/5`; its bounded stdout summary preserves each
-selected callable identity when it fits the 12 KiB bound. For large selections
-it reports the root count and points to the shareable result artifact, which
-retains the complete typed interfaces. The focused direct compiler proof is
+An exact `/5` source-snapshot hit skips the frontend. A changed snapshot always
+runs the full Language frontend; if the selected executable closure and
+callable interfaces still match a verified artifact, the Compiler reuses that
+VM artifact, otherwise it rebuilds the selected SSA closure and artifact. This
+does not reuse Language-owned verified facts. The
+`tools/test_vm_native_digest_unreachable_body_reuse.py` workload verifies that
+an uncalled imported body edit takes the full-frontend path while preserving
+the digest executable artifact. The Environment provider accepts request `/1`
+with response `/4` and request `/2` with response `/5`; its bounded stdout
+summary preserves each selected callable identity when it fits the 12 KiB
+bound. For large selections it reports the root count and points to the
+shareable result artifact, which retains the complete typed interfaces. The
+focused direct compiler proof is
 `python3 tools/test_vm_native_application_batch.py`; the provider regression
 also sends `/2` through the adapter and calls both exports in one canonical VM
 batch.
@@ -135,9 +140,10 @@ interface is implemented and consumed.
 
 ## Environment capability
 
-The Compiler manifest declares the contract as
-`mncs-compiler:native-application-build` and records the supported request and
-response schema pairs. The provider accepts a request from the selected
+The Compiler manifest declares revision 5 of the contract as
+`mncs-compiler:native-application-build`, advertises request `/2` and response
+`/5` as current, and retains request `/1` and response `/4` as a supported
+compatibility pair. The provider accepts a request from the selected
 Compiler checkout with `--request-file PATH`, or from a canonical Store input
 artifact with `--request-artifact NAME`. It writes the complete response as
 the shareable `native-application-build.json` invocation artifact and keeps
@@ -158,13 +164,14 @@ are preserved as structured outcomes. Provider transport errors remain
 invocation errors and do not produce a result artifact.
 
 The provider regression is `python3 tools/test_application_build_provider.py`.
-It checks a cold build, a fresh-process warm hit, Store-input byte/hash
-validation, both request/response schema pairs, the exact canonical artifact
-identity, precise invalid-source diagnostics, suppression of successful cache
-publication for rejected input, and local VM execution of the two selected
-callables. This local adapter test is not evidence of live Environment or
-canonical Store execution. The `mncs-test` consumer fixture remains the source
-and Stage-0 differential oracle for the application itself.
+It checks the manifest revision and both compatible request/response pairs, a
+cold build, a fresh-process warm hit, Store-input byte/hash
+validation, the exact canonical artifact identity, precise invalid-source
+diagnostics, suppression of successful cache publication for rejected input,
+and local VM execution of the two selected callables. This local adapter test
+is not evidence of live Environment or canonical Store execution. The
+`mncs-test` consumer fixture remains the source and Stage-0 differential oracle
+for the application itself.
 
 The probe keeps exact executable SHA-256 as its producer identity. It now hashes
 the executable in 64 KiB streaming chunks, and optimizes `sha2` in the debug

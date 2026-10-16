@@ -35,6 +35,41 @@ INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 DIGEST_EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-provider-digest.json"
 
 
+def validate_environment_contract_descriptor() -> None:
+    """Keep Environment's advertised revision aligned with the wire contract."""
+    manifest = json.loads((ROOT / ".mncs/project.json").read_text(encoding="utf-8"))
+    contracts = [
+        row for row in manifest.get("contracts", {}).get("provides", [])
+        if isinstance(row, dict) and row.get("contract") == "native-application-build"
+    ]
+    if len(contracts) != 1:
+        raise AssertionError("project manifest must declare one native application-build contract")
+    contract = contracts[0]
+    artifact = contract.get("artifact_contract", {})
+    expected_pairs = {
+        (REQUEST_SCHEMA, RESPONSE_SCHEMA),
+        (MULTI_REQUEST_SCHEMA, MULTI_RESPONSE_SCHEMA),
+    }
+    actual_pairs = {
+        (row.get("request_schema"), row.get("response_schema"))
+        for row in artifact.get("supported_request_response_pairs", [])
+        if isinstance(row, dict)
+    }
+    if contract.get("version") != "5":
+        raise AssertionError("Environment capability revision must match application-build/5")
+    if (artifact.get("request_schema"), artifact.get("response_schema")) != (
+        MULTI_REQUEST_SCHEMA, MULTI_RESPONSE_SCHEMA
+    ):
+        raise AssertionError("Environment must advertise application-build/5 as its current contract")
+    if actual_pairs != expected_pairs:
+        raise AssertionError("Environment descriptor must retain both /4 and /5 request-response pairs")
+    if provider.RESPONSE_SCHEMA_BY_REQUEST != {
+        REQUEST_SCHEMA: RESPONSE_SCHEMA,
+        MULTI_REQUEST_SCHEMA: MULTI_RESPONSE_SCHEMA,
+    }:
+        raise AssertionError("Environment descriptor no longer matches provider schema support")
+
+
 def request_for(root: str, modules: dict[str, str]) -> dict:
     return {
         "schema_version": REQUEST_SCHEMA,
@@ -331,6 +366,7 @@ def invoke(
 
 
 def main() -> None:
+    validate_environment_contract_descriptor()
     large_summary_response = {
         "schema_version": MULTI_RESPONSE_SCHEMA,
         "status": "verified",
