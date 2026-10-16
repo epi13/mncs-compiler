@@ -575,6 +575,23 @@ fn scan_chunk_window(total: u64, window: source.ByteWindow4, st: Scan, line: boo
     return Scan { ..st, done: true };
 }
 
+// Continue a word after the caller has proved its four-byte head is entirely
+// identifier text. Keeping this tail scan separate avoids extra page reads
+// and character checks for the many short tokens in compiler source files.
+fn scan_word_tail_window(total: u64, window: source.ByteWindow4, st: Scan) -> (result: Scan) {
+    if !word_char(window.b0) { return Scan { ..st, done: true }; }
+    let end1: u64 = st.end + 1;
+    if end1 >= total { return Scan { ..st, end: end1 }; }
+    if !word_char(window.b1) { return Scan { ..st, end: end1, done: true }; }
+    let end2: u64 = st.end + 2;
+    if end2 >= total { return Scan { ..st, end: end2 }; }
+    if !word_char(window.b2) { return Scan { ..st, end: end2, done: true }; }
+    let end3: u64 = st.end + 3;
+    if end3 >= total { return Scan { ..st, end: end3 }; }
+    if !word_char(window.b3) { return Scan { ..st, end: end3, done: true }; }
+    return Scan { ..st, end: end3 + 1 };
+}
+
 fn scan_chunk_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, line: bool, block: bool, word: bool, number: bool, ws: bool) -> (result: Scan) {
     if st.done || st.end >= total { return st; }
     let window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, st.end);
@@ -686,17 +703,38 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                         }
                     }
                 };
-                if advanced.done || advanced.end >= total {
-                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, advanced, initial_page, initial_page_intra); }
-                    return token_from_nonword_scan(start, advanced, line, block, ws);
+                // Only fetch and scan a second four-byte window after the
+                // first window proved to contain four continuing word bytes.
+                // Short identifiers keep the original one-window path.
+                let word_continues: bool = word && !advanced.done && advanced.end - inner.end == 4 && advanced.end < total;
+                let word_tail: source.ByteWindow4 = match select(word_continues, 1, 0) {
+                    0 => source.ByteWindow4 { b0: 256, b1: 256, b2: 256, b3: 256 },
+                    _ => match select(page_exists, 1, 0) {
+                        1 => match select(page_intra < page.len, 1, 0) {
+                            1 => match select(total - advanced.end >= 4 && stride - page_intra >= 8 && page.len - page_intra >= 8, 1, 0) {
+                                1 => source.ByteWindow4 { b0: page[page_intra + 4] as u64, b1: page[page_intra + 5] as u64, b2: page[page_intra + 6] as u64, b3: page[page_intra + 7] as u64 },
+                                _ => source.byte_window4_global<P, N>(pages, stride, total, advanced.end)
+                            },
+                            _ => source.byte_window4_global<P, N>(pages, stride, total, advanced.end)
+                        },
+                        _ => source.byte_window4_global<P, N>(pages, stride, total, advanced.end)
+                    }
+                };
+                let extended: Scan = match select(word_continues, 1, 0) {
+                    0 => advanced,
+                    _ => scan_word_tail_window(total, word_tail, advanced)
+                };
+                if extended.done || extended.end >= total {
+                    if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, extended, initial_page, initial_page_intra); }
+                    return token_from_nonword_scan(start, extended, line, block, ws);
                 }
-                let delta: u64 = advanced.end - inner.end;
-                let next_scan: Scan = match select(stride >= 4 && inner.page_intra <= 18446744073709551615 - delta, 1, 0) {
+                let delta: u64 = extended.end - inner.end;
+                let next_scan: Scan = match select((stride >= 8 || (delta <= 4 && stride >= 4)) && inner.page_intra <= 18446744073709551615 - delta, 1, 0) {
                     1 => match select(inner.page_intra + delta >= stride, 1, 0) {
-                        1 => Scan { ..advanced, page_index: inner.page_index + 1, page_intra: inner.page_intra + delta - stride },
-                        _ => Scan { ..advanced, page_index: inner.page_index, page_intra: inner.page_intra + delta }
+                        1 => Scan { ..extended, page_index: inner.page_index + 1, page_intra: inner.page_intra + delta - stride },
+                        _ => Scan { ..extended, page_index: inner.page_index, page_intra: inner.page_intra + delta }
                     },
-                    _ => Scan { ..advanced, page_index: advanced.end / stride, page_intra: advanced.end % stride }
+                    _ => Scan { ..extended, page_index: extended.end / stride, page_intra: extended.end % stride }
                 };
                 next inner = next_scan;
             }
@@ -704,13 +742,14 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner, initial_page, initial_page_intra); }
                 return token_from_nonword_scan(start, inner, line, block, ws);
             }
-            // Line, word, and whitespace chunks consume four bytes per
-            // window, so their 8192-transition budget is two passes.
-            if pass == 1 && (line || word || ws) {
-                if line || ws {
-                    return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: inner.end, diagnostic: 6 };
-                }
+            // Long words consume up to eight bytes per inner iteration and
+            // reach their 8192-transition bound in one pass. Line and
+            // whitespace chunks still consume four bytes per window.
+            if pass == 0 && word {
                 return Token { kind: 7, start: start, end: inner.end, diagnostic: 5 };
+            }
+            if pass == 1 && (line || ws) {
+                return Token { kind: select(ws, 1, select(line, 2, 3)), start: start, end: inner.end, diagnostic: 6 };
             }
             // Number and block-comment chunks consume at most two bytes per
             // window and keep all four bounded passes (8192 transitions).

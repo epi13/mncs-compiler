@@ -106,27 +106,31 @@ def make_request(case: dict, stride: int) -> dict:
     cursor = case["args"][1]["integer"]["value"]
     base_function = case["function"]
     global_function = f"{base_function}_global"
+    actual_stride = case.get("stride_override", stride)
     return {
         "schema_version": "0.1",
         "target": {"module": MODULE, "function": global_function},
-        "arguments": [pages_wire(data, stride), integer(stride),
-                      integer(len(data)), integer(cursor)],
+        "arguments": [case["pages_wire"] if "pages_wire" in case
+                      else pages_wire(data, actual_stride),
+                      integer(actual_stride),
+                      integer(case.get("logical_total", len(data))), integer(cursor)],
         "type_arguments": [nat_arg(PAGE_BOUND), nat_arg(STRIDE_BOUND)],
         "step_budget": STEP_BUDGET,
     }
 
 
 def make_vm_case(case: dict, stride: int) -> dict:
-    request = make_request(case, stride)
+    actual_stride = case.get("stride_override", stride)
+    request = make_request(case, actual_stride)
     return {
-        "id": f"{case['id']}@stride-{stride}",
+        "id": f"{case['id']}@stride-{actual_stride}",
         "function": request["target"]["function"],
         "args": request["arguments"],
         "type_args": request["type_arguments"],
         "step_budget": request["step_budget"],
         "expected": case["expected"],
         "source_id": case["id"],
-        "stride": stride,
+        "stride": actual_stride,
         "source_bytes": len(data_from_wire(case["args"][0])),
         "source_sha256": hashlib.sha256(data_from_wire(case["args"][0])).hexdigest(),
     }
@@ -203,6 +207,53 @@ def main() -> None:
         # A 64-byte stride keeps this multi-page limit case within the
         # generated global function's 1024-page type bound.
         expanded_cases.extend((case, 64) for case in trivia_boundary_cases)
+        word_boundary_cases = [
+            {
+                "id": "identifier-eight-byte-window-delimiter",
+                "function": "next_token",
+                "args": [byte_sequence(b"x" * 8192 + b"!"), integer(0)],
+                "expected": {"kind": 4, "start": 0, "end": 8192, "diagnostic": 0},
+            },
+            {
+                "id": "identifier-eight-byte-window-overlong",
+                "function": "next_token",
+                "args": [byte_sequence(b"x" * 8193 + b"!"), integer(0)],
+                "expected": {"kind": 7, "start": 0, "end": 8193, "diagnostic": 5},
+            },
+            {
+                "id": "identifier-eight-byte-window-exact-eof",
+                "function": "next_token",
+                "args": [byte_sequence(b"x" * 8193), integer(0)],
+                "expected": {"kind": 4, "start": 0, "end": 8193, "diagnostic": 0},
+            },
+            {
+                "id": "identifier-eight-byte-window-offset-delimiter",
+                "function": "next_token",
+                "args": [byte_sequence(b"!" + b"x" * 8192 + b"!"), integer(1)],
+                "expected": {"kind": 4, "start": 1, "end": 8193, "diagnostic": 0},
+            },
+            {
+                "id": "identifier-eight-byte-window-offset-overlong",
+                "function": "next_token",
+                "args": [byte_sequence(b"!" + b"x" * 9216 + b"!"), integer(1)],
+                "expected": {"kind": 7, "start": 1, "end": 8194, "diagnostic": 5},
+            },
+            {
+                "id": "identifier-eight-byte-window-missing-page",
+                "function": "next_token",
+                "args": [byte_sequence(b"ab"), integer(0)],
+                "pages_wire": {"sequence": {"values": [byte_sequence(b"ab")]}},
+                "stride_override": 2,
+                "logical_total": 4,
+                "expected": {"kind": 4, "start": 0, "end": 2, "diagnostic": 0},
+            },
+        ]
+        expanded_cases.append((word_boundary_cases[0], 64))
+        expanded_cases.append((word_boundary_cases[1], 64))
+        expanded_cases.append((word_boundary_cases[2], 64))
+        expanded_cases.append((word_boundary_cases[3], 64))
+        expanded_cases.append((word_boundary_cases[4], 64))
+        expanded_cases.append((word_boundary_cases[5], 2))
         case_grid = [make_vm_case(case, stride)
                      for case, stride in expanded_cases]
 
@@ -339,7 +390,7 @@ def main() -> None:
     }
     per_stride_case_counts = {
         str(stride): sum(case["stride"] == stride for case in case_grid)
-        for stride in STRIDES
+        for stride in sorted({case["stride"] for case in case_grid})
     }
     report = {
         "schema_version": 1,
@@ -359,7 +410,7 @@ def main() -> None:
         "input_count": len(input_hashes),
         "input_sha256": input_hashes,
         "base_stage0_cases": len(base_cases),
-        "page_strides": list(STRIDES),
+        "page_strides": sorted({case["stride"] for case in case_grid}),
         "case_count": len(case_grid),
         "per_function_case_counts": per_function_case_counts,
         "per_stride_case_counts": per_stride_case_counts,
@@ -398,7 +449,9 @@ def main() -> None:
             "existing Stage-0-backed segment corpus preserve token kinds, spans, and "
             "diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, "
             "reference interpreter, Cranelift, and one fresh canonical VM artifact agree. "
-            "This is a selected cursor frontier, not full segment/lexer module verification."
+            "Additional identifier window-boundary, overlong, nonzero-cursor, and malformed "
+            "page-table cases have explicit expected tokens. This is a selected cursor frontier, "
+            "not full segment/lexer module verification."
         ),
         "stage1_claimed": False,
         "stage2_claimed": False,
