@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Three-executor regression for the current bounded-slice frontier.
+"""Three-executor differential for the bounded decl::parse_unit frontier.
 
-The test emits a fresh canonical VM artifact from the current source through
-the pinned Stage-0 probe. A previously emitted artifact can predate the
-compiler changes under test and is not suitable for this frontier witness.
+The test emits one fresh canonical VM artifact from the current compiler
+sources, then runs a small valid/invalid declaration corpus through that
+artifact, the pinned reference interpreter, and Cranelift. Stage-0 supplies
+the independent parse oracle for each source.
 """
 import hashlib
 import json
+import os
 from pathlib import Path
-import sys
+import subprocess
 import tempfile
 import time
 
@@ -16,68 +18,154 @@ import test_vm_decl as decl
 from test_vm_segment import run_batch, vm_to_wire
 
 
-def main():
-    text = ('mncs 0.18; module t; '
-            'fn f(x: u64, a: u64, b: u64) -> (r: u64) { '
-            'return x[a + 1..b + 2]; }')
+CASES = [
+    ('bounded-slice-postfix',
+     'mncs 0.18; module t; fn f(x: u64, a: u64, b: u64) -> (r: u64) '
+     '{ return x[a + 1..b + 2]; }', 'pos'),
+    ('nested-if-parent-close',
+     'mncs 0.18; module t; fn f(a: u64, b: u64) -> (r: u64) '
+     '{ if a == 1 { if b == 1 { return 2; } } return 0; }', 'pos'),
+    ('generic-signature-and-call',
+     'mncs 0.18; module t; fn g<N: Nat>(x: u64) -> (r: u64) { return x; } '
+     'fn f(x: u64) -> (r: u64) { return g<4>(x); }', 'pos'),
+    ('record-update',
+     'mncs 0.18; module t; record R { x: u64, y: u64 } '
+     'fn f(v: R) -> (r: u64) { let w: R = R { ..v, x: 2 }; return w.x; }', 'pos'),
+    ('first-error-span',
+     'mncs 0.18; module t; fn f() -> (r: u64) { return 1 + ; }', 'neg'),
+]
+
+
+def request_for(text):
     data = text.encode()
-    pages = [data[i:i + decl.STRIDE_BOUND] for i in range(0, len(data), decl.STRIDE_BOUND)]
-    args = [decl.pages_value(pages), decl.integer(decl.STRIDE_BOUND), decl.integer(len(data))]
-    request = {'schema_version': '0.1', 'target': {'module': decl.MODULE, 'function': 'parse_unit'},
-               'arguments': args, 'type_arguments': decl.TYPE_ARGS,
-               'step_budget': decl.test_decl.EXECUTION_STEP_BUDGET}
-    case = {'id': 'stage1:nested-if-parent-close', 'function': 'parse_unit', 'args': args,
-            'type_args': decl.TYPE_ARGS, 'step_budget': request['step_budget']}
-    values, times, steps = {}, {}, {}
-    reference = decl.Probe(backend='reference_interpreter', cache_dir=Path('.build/probe-cache'))
-    t = time.monotonic()
-    result = reference.send(request)
-    times['reference_interpreter'] = time.monotonic() - t
-    assert result['status'] == 'returned', result
-    values['reference_interpreter'] = decl.decode(result['returned'][0])
-    steps['reference_interpreter'] = result['steps']
-    oracle = reference.send({'oracle': data.decode()})
-    assert not oracle['diagnostics'], oracle['diagnostics']
+    assert len(data) <= decl.STRIDE_BOUND, (len(data), decl.STRIDE_BOUND)
+    args = [decl.pages_value([data]), decl.integer(decl.STRIDE_BOUND),
+            decl.integer(len(data))]
+    return data, {
+        'schema_version': '0.1',
+        'target': {'module': decl.MODULE, 'function': 'parse_unit'},
+        'arguments': args,
+        'type_arguments': decl.TYPE_ARGS,
+        'step_budget': decl.test_decl.EXECUTION_STEP_BUDGET,
+    }
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
+
+
+def main():
+    cases = []
+    source_identity = []
+    reference = decl.Probe(backend='reference_interpreter',
+                           cache_dir=Path('.build/probe-cache'))
+    reference_values, reference_times, reference_steps = [], [], []
+    t0 = time.monotonic()
+    for case_id, text, kind in CASES:
+        data, request = request_for(text)
+        oracle_result = reference.send({'oracle': text})
+        oracle = oracle_result
+        case = {'id': f'decl.parse_unit:{case_id}', 'function': 'parse_unit',
+                'args': request['arguments'], 'type_args': decl.TYPE_ARGS,
+                'step_budget': request['step_budget']}
+        t = time.monotonic()
+        result = reference.send(request)
+        reference_times.append(time.monotonic() - t)
+        assert result['status'] == 'returned', (case_id, result)
+        value = decl.decode(result['returned'][0])
+        if kind == 'pos':
+            assert not oracle['diagnostics'], (case_id, oracle['diagnostics'])
+            decl.test_decl.check_pos_parse(value, oracle, data, text)
+        else:
+            decl.test_decl.check_neg_parse(value, oracle, text)
+        reference_values.append(value)
+        reference_steps.append(result['steps'])
+        cases.append(case)
+        source_identity.append({'id': case['id'], 'kind': kind,
+                                'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
+
     emitted = reference.send({'emit_vm_artifact': {'module': decl.MODULE}})
     artifact = emitted['artifact']
     assert artifact['schema_version'] == 'mncs.vm.artifact/1'
+    reference_wall = time.monotonic() - t0
     reference.close()
 
     cranelift = decl.Probe(backend='cranelift', cache_dir=Path('.build/probe-cache'))
-    t = time.monotonic()
-    result = cranelift.send(request)
-    times['cranelift'] = time.monotonic() - t
-    assert result['status'] == 'returned', result
-    values['cranelift'] = decl.decode(result['returned'][0])
-    steps['cranelift'] = result['steps']
+    cranelift_values, cranelift_times, cranelift_steps = [], [], []
+    for (case_id, text, _), case in zip(CASES, cases):
+        _, request = request_for(text)
+        t = time.monotonic()
+        result = cranelift.send(request)
+        cranelift_times.append(time.monotonic() - t)
+        assert result['status'] == 'returned', (case_id, result)
+        value = decl.decode(result['returned'][0])
+        assert value == reference_values[len(cranelift_values)], case_id
+        cranelift_values.append(value)
+        cranelift_steps.append(result['steps'])
     cranelift.close()
-    with tempfile.TemporaryDirectory(prefix='mncs-vm-stage1-') as directory:
-        artifact_path = Path(directory) / 'decl-current.json'
+
+    with tempfile.TemporaryDirectory(prefix='mncs-vm-decl-frontier-') as directory:
+        directory = Path(directory)
+        artifact_path = directory / 'decl-current.json'
         artifact_path.write_text(json.dumps(artifact, sort_keys=True) + '\n')
-        document, wall, rss, _, _ = run_batch(artifact_path, [case], Path(directory), module=decl.MODULE)
-    result = document['results'][0]
-    assert result['outcome'] == {'kind': 'completed'}, result['outcome']
-    values['vm'] = decl.decode(vm_to_wire(result['record']['returned'][0]))
-    steps['vm'] = result['record']['usage']['steps']
-    times['vm_batch'] = wall
-    assert values['vm'] == values['reference_interpreter'] == values['cranelift'], {
-        'vm_ok': values['vm'].get('ok'),
-        'reference_ok': values['reference_interpreter'].get('ok'),
-        'cranelift_ok': values['cranelift'].get('ok'),
-        'artifact_id': artifact['artifact_id'],
+        document, vm_wall, vm_rss_kb, calls_bytes, results_bytes = run_batch(
+            artifact_path, cases, directory, module=decl.MODULE)
+
+    vm_values, vm_steps = [], []
+    for index, (case_id, text, kind) in enumerate(CASES):
+        result = document['results'][index]
+        assert result['id'] == cases[index]['id'], result
+        assert result['outcome'] == {'kind': 'completed'}, (case_id, result['outcome'])
+        value = decl.decode(vm_to_wire(result['record']['returned'][0]))
+        assert value == reference_values[index] == cranelift_values[index], case_id
+        vm_values.append(value)
+        vm_steps.append(result['record']['usage']['steps'])
+    # Positive and negative results above were independently checked against
+    # Stage-0 before the artifact was emitted. The shared result equality then
+    # carries those checks to both native executors.
+    semantic_digests = {
+        'reference_interpreter': digest(reference_values),
+        'cranelift': digest(cranelift_values),
+        'canonical_vm': digest(vm_values),
     }
-    got = values['vm']
-    assert got['ok'], 'current parser rejected the bounded slice witness'
+    assert len(set(semantic_digests.values())) == 1, semantic_digests
+    probe_path = Path(decl.PROBE)
     report = {
-        'stage0_revision': decl.stage0_revision(), 'source': 'inline:bounded-slice-postfix', 'source_bytes': len(data),
-        'source_sha256': hashlib.sha256(data).hexdigest(), 'request_step_budget': request['step_budget'],
+        'schema_version': 1,
+        'kind': 'mncs-compiler-decl-parse-canonical-vm-frontier',
+        'stage0_revision': decl.stage0_revision(),
+        'compiler_revision_before_delivery': subprocess.check_output(
+            ['git', 'rev-parse', 'HEAD'], text=True).strip(),
+        'probe_sha256': hashlib.sha256(probe_path.read_bytes()).hexdigest(),
+        'language_source_sha256': hashlib.sha256(
+            (Path('src/compiler/decl.mncs').read_bytes())).hexdigest(),
         'artifact_id': artifact['artifact_id'],
-        'vm_outcome': result['outcome'], 'vm_peak_rss_kb': rss, 'steps': steps,
-        'wall_seconds': times, 'native_parse_ok': got['ok'],
-        'semantic_digests': {k: hashlib.sha256(json.dumps(v, sort_keys=True).encode()).hexdigest()
-                             for k, v in values.items()},
-        'new_vm_envelope_blocker': False,
-        'scope': 'bounded-slice postfix AST: Stage-0, reference, freshly emitted canonical VM, and Cranelift agree',
+        'cases': source_identity,
+        'executor_case_counts': {
+            'reference_interpreter': len(reference_values),
+            'cranelift': len(cranelift_values),
+            'canonical_vm': len(vm_values),
+        },
+        'semantic_digests': semantic_digests,
+        'steps': {
+            'reference_interpreter': reference_steps,
+            'cranelift': cranelift_steps,
+            'canonical_vm': vm_steps,
+        },
+        'timing_seconds': {
+            'reference_interpreter_cases': reference_times,
+            'reference_interpreter_total_including_oracles_and_emit': reference_wall,
+            'cranelift_cases': cranelift_times,
+            'canonical_vm_batch': vm_wall,
+        },
+        'canonical_vm_peak_rss_kb': vm_rss_kb,
+        'canonical_vm_batch_bytes': {'calls': calls_bytes, 'results': results_bytes},
+        'scope': ('Five decl.parse_unit cases (four valid constructs and one fresh syntax error) '
+                  'agree across Stage-0 structural/diagnostic checks, the reference interpreter, '
+                  'Cranelift, and a freshly emitted canonical VM artifact. This is a function '
+                  'frontier only; it is not full decl-module or succession evidence.'),
+        'stage1_claimed': False,
+        'stage2_claimed': False,
     }
     report_path = Path('.build/vm-efficiency/stage1-frontier.json')
     report_path.parent.mkdir(parents=True, exist_ok=True)
