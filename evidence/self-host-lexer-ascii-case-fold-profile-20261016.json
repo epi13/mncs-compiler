@@ -1,0 +1,210 @@
+{
+  "schema_version": "mncs.compiler.self-host-ascii-case-fold-measurement/1",
+  "kind": "mncs-compiler-self-host-lexer-ascii-letter-fold-frontier",
+  "observed_at": "2026-10-16T17:33:33.738104Z",
+  "status": "passed_with_bounded_frontier",
+  "compiler": {
+    "head": "e94711bc4310af772945d81cd095154db502ddc4",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "module": "mncs.compiler.lexer.v1",
+    "source_file": "src/compiler/lexer.mncs",
+    "candidate_source_sha256": "5d94bd82a7c5ab60d338a2744146c96039804abe15da4aad75e7a661245283d1",
+    "baseline_source_sha256": "b3e712ad453ecc5170850b6bcf82465360a10ac73ffce982df878674f0326c7b",
+    "commit_containing_candidate_source": "e94711bc4310af772945d81cd095154db502ddc4"
+  },
+  "implementation_scope": {
+    "change": "Fold ASCII uppercase letters with byte | 32 before the lowercase range check; keep digit and underscore checks separate. Apply the same classification in bounded token starts, global token starts, and four-byte global word continuation.",
+    "semantic_identity_system_changed": false,
+    "language_verified_facts_reused": 0
+  },
+  "correctness": {
+    "stage0_segment_differential": {
+      "status": "passed",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "identical_runs": 2,
+      "requests_per_run": 6564,
+      "texts_per_run": 43,
+      "tokens_compared_per_run": 3161,
+      "result_sha256": "e1bb03923d1fac892e0848c8d72865b6fd6e84cca84c320b99060048fec12ca5",
+      "execution_mode": "retained_cranelift"
+    },
+    "canonical_vm_global_segment": {
+      "status": "passed",
+      "evidence": "evidence/self-host-global-segment-ascii-fold-canonical-vm-20261016.json",
+      "evidence_sha256": "96d96a2ce6fee4490e90a9884055b9670f26e0b172315c8e1428603c12b52c59",
+      "cases": 1208,
+      "executor_case_counts": {
+        "reference_interpreter": 1208,
+        "cranelift": 1208,
+        "canonical_vm": 1208
+      },
+      "semantic_digests": {
+        "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+        "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+        "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+      },
+      "page_strides": [
+        1,
+        7,
+        64,
+        256
+      ]
+    }
+  },
+  "performance": {
+    "workload": {
+      "backend": "reference_interpreter",
+      "modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "target": "decl.parse_unit_mode through compile_project_target",
+      "step_budget": 1000000,
+      "runtime_profile_enabled": true,
+      "stage0_oracle_skipped": true,
+      "result": "budget_exhausted; incomplete project frontier"
+    },
+    "same_revision_comparison": {
+      "baseline_revision": "5bcef5c530d0325d52a361708997d90b144fe585",
+      "candidate_revision": "e94711bc4310af772945d81cd095154db502ddc4",
+      "baseline_warm": {
+        "label": "ascii-baseline-current-2",
+        "artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-baseline-current-2-source-lexer-parser-segment-decl-flow-measurement.json",
+        "artifact_sha256": "e556a36785d0be3efa076cfc73e07fcf97248facf17c82e27dcb1705753e5ba9",
+        "classification": "RESOURCE_EXHAUSTED",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "wall_seconds": 44.104,
+        "probe_cpu_seconds": 41.57,
+        "probe_peak_hwm_kib": 1761436,
+        "global_lexer_calls": 1665,
+        "global_lexer_steps": 673672,
+        "global_lexer_exclusive_seconds": 13.488283017,
+        "program_cache_decode_hit": true,
+        "memory_cap_triggered": false,
+        "oom_kill_delta": 0
+      },
+      "candidate_warm": [
+        {
+          "label": "ascii-fold-global-2",
+          "artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-fold-global-2-source-lexer-parser-segment-decl-flow-measurement.json",
+          "artifact_sha256": "4ac54eb0ce73cfebc34d332c2dae3c59e7fd263e0935bc206efcfbff878bcfd2",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "wall_seconds": 43.104,
+          "probe_cpu_seconds": 40.62,
+          "probe_peak_hwm_kib": 1761860,
+          "global_lexer_calls": 1623,
+          "global_lexer_steps": 679078,
+          "global_lexer_exclusive_seconds": 12.859177953,
+          "program_cache_decode_hit": true,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0
+        },
+        {
+          "label": "ascii-fold-global-4",
+          "artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-fold-global-4-source-lexer-parser-segment-decl-flow-measurement.json",
+          "artifact_sha256": "3dd3f0b261370de8b4d19398f0ebf633a9a6d971c062f1243f953dce659acfd3",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "wall_seconds": 43.102,
+          "probe_cpu_seconds": 40.589999999999996,
+          "probe_peak_hwm_kib": 1761936,
+          "global_lexer_calls": 1623,
+          "global_lexer_steps": 679078,
+          "global_lexer_exclusive_seconds": 12.868608934,
+          "program_cache_decode_hit": true,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0
+        }
+      ],
+      "summary": {
+        "baseline_wall_seconds": 44.104,
+        "candidate_mean_wall_seconds": 43.103,
+        "wall_change_percent": -2.27,
+        "baseline_probe_cpu_seconds": 41.57,
+        "candidate_mean_probe_cpu_seconds": 40.605,
+        "probe_cpu_change_percent": -2.321,
+        "baseline_global_lexer_exclusive_seconds": 13.488283,
+        "candidate_mean_global_lexer_exclusive_seconds": 12.863893,
+        "global_lexer_exclusive_change_percent": -4.629,
+        "baseline_global_lexer_calls_and_steps": [
+          1665,
+          673672
+        ],
+        "candidate_mean_global_lexer_calls": 1623,
+        "candidate_global_lexer_steps": [
+          679078
+        ],
+        "baseline_probe_peak_hwm_kib": 1761436,
+        "candidate_mean_probe_peak_hwm_kib": 1761898
+      }
+    },
+    "cold_cache_runs": {
+      "baseline": {
+        "label": "ascii-baseline-current-1",
+        "artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-baseline-current-1-source-lexer-parser-segment-decl-flow-measurement.json",
+        "artifact_sha256": "b86f034165bf72a2041ab7b314762271d752d8b7696eb1a579f6ffad6f6a7195",
+        "classification": "RESOURCE_EXHAUSTED",
+        "operation_outcome": "RESOURCE_EXHAUSTED",
+        "wall_seconds": 110.187,
+        "probe_cpu_seconds": 107.03999999999999,
+        "probe_peak_hwm_kib": 1848224,
+        "global_lexer_calls": 1665,
+        "global_lexer_steps": 673672,
+        "global_lexer_exclusive_seconds": 19.832430679,
+        "program_cache_decode_hit": false,
+        "memory_cap_triggered": false,
+        "oom_kill_delta": 0
+      },
+      "candidates": [
+        {
+          "label": "ascii-fold-global-1",
+          "artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-fold-global-1-source-lexer-parser-segment-decl-flow-measurement.json",
+          "artifact_sha256": "0ede8dae9cb8735ac8e3321c54a3a640e755458e71a5eba02b6a89df7e52abac",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "wall_seconds": 108.191,
+          "probe_cpu_seconds": 105.22,
+          "probe_peak_hwm_kib": 1847472,
+          "global_lexer_calls": 1623,
+          "global_lexer_steps": 679078,
+          "global_lexer_exclusive_seconds": 19.44637209,
+          "program_cache_decode_hit": false,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0
+        },
+        {
+          "label": "ascii-fold-global-3",
+          "artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-fold-global-3-source-lexer-parser-segment-decl-flow-measurement.json",
+          "artifact_sha256": "9fb63cbc38d1224272d9751c4f7ec656429c1de45b7360a02cabdc46c14ad728",
+          "classification": "RESOURCE_EXHAUSTED",
+          "operation_outcome": "RESOURCE_EXHAUSTED",
+          "wall_seconds": 109.187,
+          "probe_cpu_seconds": 106.2,
+          "probe_peak_hwm_kib": 1847256,
+          "global_lexer_calls": 1623,
+          "global_lexer_steps": 679078,
+          "global_lexer_exclusive_seconds": 19.68311424,
+          "program_cache_decode_hit": false,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0
+        }
+      ],
+      "interpretation": "The baseline and candidate cold passes were both about 109-110 seconds because they rebuild the current program cache. Warm timings are compared separately."
+    },
+    "resource_note": "Process HWM was sampled by PID. The 4 GiB orderly RSS cap was not triggered and cgroup oom_kill delta was zero; cgroup measurements are not interpreted as zero usage."
+  },
+  "claim_boundary": {
+    "reused_language_verified_facts": 0,
+    "full_six_module_project_result": false,
+    "full_lexer_module_verification": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "Selected Stage-0 lexical differential, global segment canonical VM frontier, and a bounded six-module performance profile only."
+  }
+}

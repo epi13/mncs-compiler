@@ -1,0 +1,202 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "global-segment-canonical-vm-current-source",
+  "observed_at": "2026-10-16T17:32:56.097974Z",
+  "status": "passed",
+  "claim_boundary": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected cursor frontier, not full segment/lexer module verification.",
+  "compiler": {
+    "tested_source_revision": "e94711bc4310af772945d81cd095154db502ddc4",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "5d94bd82a7c5ab60d338a2744146c96039804abe15da4aad75e7a661245283d1",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.segment.v1",
+    "target_functions": [
+      "next_token_global",
+      "significant_global"
+    ],
+    "test_harness": "tools/test_vm_global_segment_frontier.py",
+    "test_harness_sha256": "8f07bb00fa6e5cb70abc19bf5b92d8da4acb317dcac2d5131971784483033be1"
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "vm_revision": "e94711bc4310af772945d81cd095154db502ddc4"
+  },
+  "verification": {
+    "executor_case_counts": {
+      "reference_interpreter": 1208,
+      "cranelift": 1208,
+      "canonical_vm": 1208
+    },
+    "semantic_digests": {
+      "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+    },
+    "stage0_checks": "all generated token kinds, spans, diagnostics, and significant-token outcomes passed",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "timing_seconds": {
+      "stage0_oracle_and_reference": 13.605498,
+      "direct_vm_emission": 1.593179,
+      "cranelift_execution": 1.221546,
+      "canonical_vm_batch": 5.332578,
+      "whole_frontier": 28.610909
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 26.354007,
+      "child_peak_rss_kib": 1112064,
+      "canonical_vm_peak_rss_kib": 140012,
+      "canonical_vm_calls_bytes": 10884256,
+      "canonical_vm_results_bytes": 1821609,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    }
+  },
+  "raw_test_report": {
+    "schema_version": 1,
+    "kind": "mncs-compiler-global-segment-canonical-vm-frontier",
+    "compiler_revision_tested": "e94711bc4310af772945d81cd095154db502ddc4",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "reference_backend": "reference_interpreter",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "5d94bd82a7c5ab60d338a2744146c96039804abe15da4aad75e7a661245283d1",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.segment.v1",
+    "target_functions": [
+      "next_token_global",
+      "significant_global"
+    ],
+    "test_harness_sha256": "8f07bb00fa6e5cb70abc19bf5b92d8da4acb317dcac2d5131971784483033be1",
+    "artifact_identity": "sha256:5b21625537c15dd7541fdee6d701b0b46d766b379e15bdd3a0380e344c2cbde0",
+    "specializations": [
+      [
+        "1024",
+        "1024"
+      ],
+      [
+        "1024",
+        "1024"
+      ]
+    ],
+    "input_count": 10,
+    "input_sha256": [
+      "20780ee1a4906c003c9380ab220813481ba54ecfe021cf4be8e3cd2181c7fb82",
+      "25b4a2fb004af37784095a82d9f32dda05482865fc2b7afed8eaeecdb9e8199a",
+      "7bbdf876bf822f5a1c2ae78c18e448068c9142e314df9cd9369e522e77449a78",
+      "85e62acd750c4eb56b7b6a1d66dca5bfaac5f062608a1a893410d0288936c09a",
+      "9e6208ddd2cc30eba15cb2137bba398d921e3cf2e18fa38267d84e35b3c03d3b",
+      "a09c7e3d27e403f04fa7d08844899aad3751f2c6f11ca42c5cd58ed3c662f6c9",
+      "a3c074f0e3d24a880253b5201ba2e67b1cabf69c246fdeb98d351b2109da00af",
+      "a9713caffa6294114e928a5683a30b27db3f98da13af4924085bb491a76aed5a",
+      "d166576d6ab9daa0aae694ee0b27f9cfda339eee568f62b2b86ce13c1139e670",
+      "e51418fa04efd75f2700c8293cf7a0c50ed7e9ccd003d61b1259a6c2c4fdaf19"
+    ],
+    "base_stage0_cases": 302,
+    "page_strides": [
+      1,
+      7,
+      64,
+      256
+    ],
+    "case_count": 1208,
+    "per_function_case_counts": {
+      "next_token": 764,
+      "significant": 444
+    },
+    "per_stride_case_counts": {
+      "1": 302,
+      "7": 302,
+      "64": 302,
+      "256": 302
+    },
+    "executor_case_counts": {
+      "reference_interpreter": 1208,
+      "cranelift": 1208,
+      "canonical_vm": 1208
+    },
+    "semantic_digests": {
+      "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+    },
+    "stage0_generated_token_count": 181,
+    "timing_seconds": {
+      "stage0_oracle_and_reference": 13.605498,
+      "direct_vm_emission": 1.593179,
+      "cranelift_execution": 1.221546,
+      "canonical_vm_batch": 5.332578,
+      "whole_frontier": 28.610909
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 26.354007,
+      "child_peak_rss_kib": 1112064,
+      "canonical_vm_peak_rss_kib": 140012,
+      "canonical_vm_calls_bytes": 10884256,
+      "canonical_vm_results_bytes": 1821609,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    },
+    "scope": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected cursor frontier, not full segment/lexer module verification.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "step_summaries": {
+    "reference_interpreter": {
+      "count": 1208,
+      "total": 1943941,
+      "maximum": 45100
+    },
+    "cranelift": {
+      "count": 1208,
+      "total": 1208,
+      "maximum": 1
+    },
+    "canonical_vm": {
+      "count": 1208,
+      "total": 2364883,
+      "maximum": 55970
+    }
+  }
+}
