@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 19,
+  "revision": 20,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1141,6 +1141,65 @@
         ],
         "ephemeral_roots": [
           ".build"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.native-test-digest-suite-specialization",
+      "title": "Real MNCS Test digest and generic suite reduction verify, batch, cache, and execute under the canonical VM",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build-request/2",
+        "mncs.compiler.application-build/5",
+        "mncs.compiler.application-generic-seed/1",
+        "mncs.vm.artifact/1",
+        "mncs.compiler.native-test-digest-multi-callable-batch/1"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "tools/stage0-probe/src/application.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock",
+        "tools/test_vm_native_digest_batch.py",
+        "tools/test_vm_test_digest_app.py",
+        "tools/test_vm_native_application.py",
+        "tools/vm_emit.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_native_digest_batch.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_native_digest_batch.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
         ]
       },
       "evidence_identity": {
