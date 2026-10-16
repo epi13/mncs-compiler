@@ -53,7 +53,19 @@
         "ssa_instruction_count": 290,
         "current_source_sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
         "signature_facts_suite": "tools/test_decl.py",
-        "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7"
+        "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
+        "selected_canonical_vm_frontier": {
+          "status": "passed",
+          "target_module": "mncs.compiler.kernel.v1",
+          "target_function": "parse_header",
+          "dependency_function": "mncs.compiler.parser.v1::header",
+          "cases": 19,
+          "artifact_identity": "sha256:ae01eef4da9be20a1588c2d0d0d74b40ed48a59855c66b8edb57f7f51c98fd68",
+          "semantic_digest_sha256": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f",
+          "evidence_artifact": "evidence/self-host-parser-header-canonical-vm-20261016.json",
+          "evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
+          "scope": "Selected callable frontier only; full parser-module canonical VM verification remains not proven."
+        }
       }
     },
     "source": {
@@ -886,6 +898,49 @@
       "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
       "evidence_sha256": "34949d5b05c97b26ff9b76450188375c71ed132d99d0749a66c8afa198221b2b",
       "evidence_scope": "32 decl.parse_unit cases from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence.",
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    },
+    {
+      "kind": "parser-header-canonical-vm-current-source",
+      "status": "passed",
+      "observed_at": "2026-10-16T09:29:22.023306Z",
+      "compiler_head": "2df704927537706c84de636915af19f164b97264",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "target_module": "mncs.compiler.kernel.v1",
+      "target_function": "parse_header",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "kernel",
+        "segment"
+      ],
+      "module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "2df704927537706c84de636915af19f164b97264",
+      "cases": 19,
+      "executor_case_counts": {
+        "reference_interpreter": 19,
+        "cranelift": 19,
+        "canonical_vm": 19
+      },
+      "semantic_digest_sha256": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f",
+      "artifact_identity": "sha256:ae01eef4da9be20a1588c2d0d0d74b40ed48a59855c66b8edb57f7f51c98fd68",
+      "whole_frontier_seconds": 11.479502,
+      "child_cpu_seconds": 11.141866,
+      "child_peak_rss_kib": 1111672,
+      "canonical_vm_batch_wall_seconds": 1.315602,
+      "canonical_vm_peak_rss_kib": 61216,
+      "evidence_artifact": "evidence/self-host-parser-header-canonical-vm-20261016.json",
+      "evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
+      "evidence_scope": "The current kernel.parse_header callable executes parser.header for all 18 frontend header fixtures and an extended 65-byte input. Stage-0 structural and diagnostic checks, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected helper frontier, not full parser-module verification or Stage-1/Stage-2 succession.",
       "stage1_claimed": false,
       "stage2_claimed": false
     }
@@ -4219,23 +4274,33 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-16T08:35:33.450878Z",
+  "evidence_updated_at": "2026-10-16T09:29:22.023306Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
-    "observed_at": "2026-10-16T08:35:33.450878Z",
-    "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
-    "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
-    "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+    "observed_at": "2026-10-16T09:29:22.023306Z",
+    "compiler_head": "2df704927537706c84de636915af19f164b97264",
+    "completed_frontier": "parser-header-canonical-vm-19-cases",
+    "completed_frontier_evidence": "evidence/self-host-parser-header-canonical-vm-20261016.json",
+    "completed_frontier_evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
     "previous_frontier_update": {
-      "observed_at": "2026-10-16T06:55:47Z",
-      "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
-      "completed_frontier": "decl-parse-canonical-vm-five-cases",
-      "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
-      "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
-      "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+      "observed_at": "2026-10-16T08:35:33.450878Z",
+      "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
+      "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
+      "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+      "previous_frontier_update": {
+        "observed_at": "2026-10-16T06:55:47Z",
+        "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+        "completed_frontier": "decl-parse-canonical-vm-five-cases",
+        "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
+        "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
+        "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+      },
+      "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+      "stage1_claimed": false,
+      "stage2_claimed": false
     },
-    "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+    "next_frontier": "Extend the selected header workload through parser.header_global across logical-page boundaries, then add another independently checked parser execution slice. Keep Stage-1 and Stage-2 unproven.",
     "stage1_claimed": false,
     "stage2_claimed": false
   }

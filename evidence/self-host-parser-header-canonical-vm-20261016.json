@@ -1,0 +1,353 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "parser-header-canonical-vm-current-source",
+  "observed_at": "2026-10-16T09:29:22.023306Z",
+  "status": "passed",
+  "claim_boundary": "The current kernel.parse_header callable executes parser.header for all 18 frontend header fixtures and an extended 65-byte input. Stage-0 structural and diagnostic checks, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected helper frontier, not full parser-module verification or Stage-1/Stage-2 succession.",
+  "compiler": {
+    "tested_source_revision": "2df704927537706c84de636915af19f164b97264",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "kernel",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.kernel.v1",
+    "target_function": "parse_header",
+    "test_harness": "tools/test_vm_parser_frontier.py",
+    "test_harness_sha256": "e9aca579d258a5d63eeeb8c24dcfcdb4b6526ec5cde99933b852cf7a1f14fc79"
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "vm_revision": "2df704927537706c84de636915af19f164b97264"
+  },
+  "verification": {
+    "executor_case_counts": {
+      "reference_interpreter": 19,
+      "cranelift": 19,
+      "canonical_vm": 19
+    },
+    "semantic_digests": {
+      "reference_interpreter": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f",
+      "cranelift": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f",
+      "canonical_vm": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f"
+    },
+    "stage0_checks": "all fixture diagnostic and span assertions passed",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "timing_seconds": {
+      "stage0_oracles_and_reference_execution": 1.088186,
+      "direct_vm_emission": 1.824038,
+      "cranelift_execution": 0.006032,
+      "canonical_vm_batch": 1.315602,
+      "whole_frontier": 11.479502
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 11.141866,
+      "child_peak_rss_kib": 1111672,
+      "canonical_vm_peak_rss_kib": 61216,
+      "canonical_vm_calls_bytes": 35588,
+      "canonical_vm_results_bytes": 36458,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    }
+  },
+  "raw_test_report": {
+    "schema_version": 1,
+    "kind": "mncs-compiler-parser-header-canonical-vm-frontier",
+    "compiler_revision_tested": "2df704927537706c84de636915af19f164b97264",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "kernel",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.kernel.v1",
+    "target_function": "parse_header",
+    "test_harness_sha256": "e9aca579d258a5d63eeeb8c24dcfcdb4b6526ec5cde99933b852cf7a1f14fc79",
+    "artifact_identity": "sha256:ae01eef4da9be20a1588c2d0d0d74b40ed48a59855c66b8edb57f7f51c98fd68",
+    "specializations": [
+      [
+        "64"
+      ],
+      [
+        "65"
+      ]
+    ],
+    "cases": [
+      {
+        "id": "frontend-header-00",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "cb5eb14d788978198079eae0673904e5a2da6b90c31e011d815de996c9b777e7",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-01",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "827e5ead6747c78acefae8e4e20eaf08e28aa222d61098f150451c26d75cd9da",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-02",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "86561ec6374e000684e24abb5ae92e32554dd16ef7383f616331e303a7017e3c",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-03",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "8ad3399013a5ef9de42e5266043339f5e0e1d46a1a9a1cc27d8a148c898acffe",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-04",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "028ed69a31c4ec15a49991ee831bde71c69e2efdfcefb8e5bfd9a2d93cd00964",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-05",
+        "expected_code": 2,
+        "bytes": 64,
+        "sha256": "ce4153b0147c2a863ed4298ee0676bc879fc77a12abe1f49b2b055df1069523e",
+        "stage0_diagnostics": 7
+      },
+      {
+        "id": "frontend-header-06",
+        "expected_code": 2,
+        "bytes": 64,
+        "sha256": "57f6eb2185f67778c02ab129ee3766bbd05f681ea32fe3885cbbbc5b7f9150f2",
+        "stage0_diagnostics": 4
+      },
+      {
+        "id": "frontend-header-07",
+        "expected_code": 3,
+        "bytes": 64,
+        "sha256": "4a72a29980c3985b9cf8146cb5f576ba4fcae989e97a300638c560f65a8542a2",
+        "stage0_diagnostics": 7
+      },
+      {
+        "id": "frontend-header-08",
+        "expected_code": 4,
+        "bytes": 64,
+        "sha256": "ec26302ef571f5abf7a068cbb89d54f16e373b59fd6ea2d2f2affc4f7915c8b0",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-09",
+        "expected_code": 5,
+        "bytes": 64,
+        "sha256": "311159dab4f89064fd23857c40ca8be41eff9ddb293c7ab917de641d9de12a82",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-10",
+        "expected_code": 6,
+        "bytes": 64,
+        "sha256": "75c9b36bfed0738ce33fe078e478f9b4b5627355bc361e45cef52f570030a212",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-11",
+        "expected_code": 6,
+        "bytes": 64,
+        "sha256": "700a22c1e932ad4c41177c9bffac75e32f31a0592dda6ff3edc64a916d054ebc",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-12",
+        "expected_code": 6,
+        "bytes": 64,
+        "sha256": "ca41207ea803374a9cf520038d3fd9a1e08b4c56e39976c89433b66896a69a65",
+        "stage0_diagnostics": 13
+      },
+      {
+        "id": "frontend-header-13",
+        "expected_code": 7,
+        "bytes": 64,
+        "sha256": "c2cf2242c8feddb5be1b9a4a0053f906d76d49b71ec1183bf6e3cc16b2772edf",
+        "stage0_diagnostics": 3
+      },
+      {
+        "id": "frontend-header-14",
+        "expected_code": 7,
+        "bytes": 64,
+        "sha256": "6f80c6fe62a1a4605036461fe92c27ecc9a02140d0ea17b675ae80e7fb29d683",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-15",
+        "expected_code": 1,
+        "bytes": 64,
+        "sha256": "5403c4e0b6917d8a8e98a58474be71da4adff288d12ccd0fc725cacf2cd8a99a",
+        "stage0_diagnostics": 3
+      },
+      {
+        "id": "frontend-header-16",
+        "expected_code": 1,
+        "bytes": 64,
+        "sha256": "bd3c99fd5f33bbe4d585086f69e3affd42047ede3dd16f7892f560529cc6856b",
+        "stage0_diagnostics": 5
+      },
+      {
+        "id": "frontend-header-17",
+        "expected_code": 8,
+        "bytes": 64,
+        "sha256": "85eae12f4f6af3956b4c37c3be36dbe49a50cf35414f95a0aaeaba4e5d7641dd",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "extended-header-65-byte-bound",
+        "expected_code": 0,
+        "bytes": 65,
+        "sha256": "b3afc55f15dfc2b27a3f8611bf37183336359ee7caa319f67a5d248661dcf426",
+        "stage0_diagnostics": 1
+      }
+    ],
+    "case_count": 19,
+    "executor_case_counts": {
+      "reference_interpreter": 19,
+      "cranelift": 19,
+      "canonical_vm": 19
+    },
+    "semantic_digests": {
+      "reference_interpreter": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f",
+      "cranelift": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f",
+      "canonical_vm": "d88deda76c836779d31a2efa97e03fb8f12213052ef826cb2efdf5b73bd5c80f"
+    },
+    "steps": {
+      "reference_interpreter": [
+        6149,
+        4979,
+        8048,
+        5191,
+        5287,
+        5736,
+        2531,
+        2916,
+        4164,
+        3999,
+        4825,
+        5324,
+        4960,
+        5482,
+        7712,
+        8019,
+        4809,
+        801,
+        5163
+      ],
+      "cranelift": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "canonical_vm": [
+        7490,
+        6077,
+        9851,
+        6337,
+        6455,
+        7258,
+        3056,
+        3538,
+        5063,
+        4877,
+        5882,
+        6498,
+        6035,
+        6697,
+        9607,
+        9876,
+        5862,
+        935,
+        6299
+      ]
+    },
+    "timing_seconds": {
+      "stage0_oracles_and_reference_execution": 1.088186,
+      "direct_vm_emission": 1.824038,
+      "cranelift_execution": 0.006032,
+      "canonical_vm_batch": 1.315602,
+      "whole_frontier": 11.479502
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 11.141866,
+      "child_peak_rss_kib": 1111672,
+      "canonical_vm_peak_rss_kib": 61216,
+      "canonical_vm_calls_bytes": 35588,
+      "canonical_vm_results_bytes": 36458,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    },
+    "scope": "The current kernel.parse_header callable executes parser.header for all 18 frontend header fixtures and an extended 65-byte input. Stage-0 structural and diagnostic checks, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected helper frontier, not full parser-module verification or Stage-1/Stage-2 succession.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
