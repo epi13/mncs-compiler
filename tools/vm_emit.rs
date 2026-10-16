@@ -241,8 +241,36 @@ pub fn emit_vm_application_artifact_with_producer(
     ),
     String,
 > {
-    let mut selected_exports =
-        BTreeSet::from([(entry_module.to_owned(), entry_function.to_owned())]);
+    let callable_roots = BTreeSet::from([(entry_module.to_owned(), entry_function.to_owned())]);
+    emit_vm_application_artifact_for_callables_with_producer(
+        compiler,
+        program,
+        producer,
+        &callable_roots,
+        generic_seed_functions,
+    )
+}
+
+/// Emit one canonical VM artifact for a selected set of non-generic
+/// callables plus any explicitly requested generic specializations.
+pub fn emit_vm_application_artifact_for_callables_with_producer(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    producer: Option<&str>,
+    callable_roots: &BTreeSet<(String, String)>,
+    generic_seed_functions: &BTreeSet<(String, String)>,
+) -> Result<
+    (
+        serde_json::Value,
+        Vec<String>,
+        Vec<CapabilityDispatchBinding>,
+    ),
+    String,
+> {
+    if callable_roots.is_empty() {
+        return Err("application callable set has no selected roots".to_owned());
+    }
+    let mut selected_exports = callable_roots.clone();
     for (generic_module, generic_function) in generic_seed_functions {
         let generic_identity = mncs_model::function_id(generic_module, generic_function);
         for record in &program.generic_specializations {
@@ -808,7 +836,10 @@ fn resolve_generic_entry(
 
 #[cfg(test)]
 mod application_closure_tests {
-    use super::{emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer};
+    use super::{
+        emit_vm_application_artifact_for_callables_with_producer,
+        emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer,
+    };
     use mncs_compiler::ReferenceCompiler;
     use mncs_model::SsaModule;
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
@@ -890,5 +921,73 @@ mod application_closure_tests {
             application_bytes < full_bytes,
             "entry closure should reduce this artifact: app={application_bytes}, full={full_bytes}"
         );
+    }
+
+    #[test]
+    fn application_artifact_contains_each_selected_callable_closure() {
+        let source = r#"
+            mncs 0.18;
+            module closure.batch;
+            fn first() -> (result: u64) { return helper(); }
+            fn helper() -> (result: u64) { return 7; }
+            fn second() -> (result: u64) { return 5; }
+            fn unused() -> (result: u64) { return 99; }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-batch-sample",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let roots = BTreeSet::from([
+            ("closure.batch".to_owned(), "first".to_owned()),
+            ("closure.batch".to_owned(), "second".to_owned()),
+        ]);
+        let (artifact, unresolved, _) = emit_vm_application_artifact_for_callables_with_producer(
+            &compiler,
+            program,
+            None,
+            &roots,
+            &BTreeSet::new(),
+        )
+        .expect("selected callable set artifact");
+        assert!(
+            unresolved.is_empty(),
+            "unexpected unresolved exports: {unresolved:?}"
+        );
+
+        let module = artifact["code"]["mncs-selected-ssa"]["module"].clone();
+        let projected: SsaModule = mncs_vm_artifact_codec::deserialize(module)
+            .expect("decode projected canonical SSA closure");
+        let functions: BTreeSet<String> = projected
+            .functions
+            .iter()
+            .map(|function| function.semantic_identity.0.clone())
+            .collect();
+        assert_eq!(
+            functions,
+            BTreeSet::from([
+                mncs_model::function_id("closure.batch", "first").0,
+                mncs_model::function_id("closure.batch", "helper").0,
+                mncs_model::function_id("closure.batch", "second").0,
+            ])
+        );
+        let callables: BTreeSet<String> = artifact["callables"]
+            .as_array()
+            .expect("selected callables")
+            .iter()
+            .map(|row| row["name"].as_str().expect("callable name").to_owned())
+            .collect();
+        assert_eq!(
+            callables,
+            BTreeSet::from(["first".to_owned(), "second".to_owned()])
+        );
+        assert!(projected.validate().valid);
     }
 }

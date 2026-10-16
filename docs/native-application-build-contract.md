@@ -19,6 +19,25 @@ with the pinned Stage-0 compiler, then asks the compiler-owned canonical VM
 emitter for the existing `mncs.vm.artifact/1` format. Specialization identities
 are normalized, sorted, and included in the persistent application cache key.
 
+The versioned multi-callable request
+`mncs.compiler.application-build-request/2` selects between 1 and 256
+non-generic callables with a `callable_roots` array of exact `{module,
+function}` identities. Duplicate identities and empty selections are rejected.
+The response is `mncs.compiler.application-build/5`; it reports a typed
+interface and verification status for every selected callable in canonical
+identity order. Its artifact exports those callables and their transitive
+verified call closure, plus any explicit generic specializations. The
+top-level `entry` field names the first canonical callable for clients that
+need one primary target. A selected callable without an admitted executable
+body makes the full request unsupported.
+
+The `/5` path currently reuses only exact source snapshots from its persistent
+artifact cache. Changed snapshots run the full Language frontend and rebuild
+the selected SSA closure; the cache does not claim Language verified-fact
+reuse. The manifest-bound provider remains on request `/1` and response `/4`
+until its Environment binding is advanced. The focused direct compiler proof
+is `python3 tools/test_vm_native_application_batch.py`.
+
 `mncs.compiler.application-build/4` records framed source-snapshot identity,
 source hashes, resolved dependency identity, Stage-0 and producer identities,
 artifact and module interface identities, required capabilities, unresolved

@@ -20,13 +20,16 @@ use std::time::{SystemTime, UNIX_EPOCH};
 static CACHE_NONCE: AtomicU64 = AtomicU64::new(0);
 static PRODUCER_IDENTITY: OnceLock<(String, Value)> = OnceLock::new();
 
-const CONTRACT: &str = "mncs.compiler.application-build/4";
+const CONTRACT_V1: &str = "mncs.compiler.application-build/4";
+const CONTRACT_V2: &str = "mncs.compiler.application-build/5";
 const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
-const REQUEST: &str = "mncs.compiler.application-build-request/1";
+const REQUEST_V1: &str = "mncs.compiler.application-build-request/1";
+const REQUEST_V2: &str = "mncs.compiler.application-build-request/2";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_GENERIC_SEEDS: usize = 256;
+const MAX_CALLABLE_ROOTS: usize = 256;
 
 struct ApplicationSources(BTreeMap<String, SourceEnvelope>);
 
@@ -85,9 +88,9 @@ fn producer_identity() -> (String, Value) {
         .clone()
 }
 
-fn error_contract(status: &str, code: &str, message: &str) -> Value {
+fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Value {
     json!({
-        "schema_version": CONTRACT,
+        "schema_version": contract,
         "status": status,
         "error": { "code": code, "message": message },
         "artifact": null,
@@ -152,10 +155,12 @@ fn parse_generic_seeds(value: &Value) -> Result<Vec<HostGenericSeedRequest>, ()>
 
 fn application_cache_key(
     request: &Value,
+    contract: &str,
     root_id: &str,
     source_identity: &str,
     modules: &BTreeMap<String, String>,
     generic_seeds: &[HostGenericSeedRequest],
+    callable_roots: &[(String, String)],
     toolchain: Option<&ToolchainIdentity>,
     probe_identity: &str,
 ) -> String {
@@ -175,12 +180,13 @@ fn application_cache_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-key/3",
-        "contract": CONTRACT,
+        "schema_version": "mncs.compiler.application-build-cache-key/4",
+        "contract": contract,
         "source_snapshot_identity": source_identity,
         "root_source_id": root_id,
         "module_sources": module_sources,
         "generic_seeds": generic_seed_keys,
+        "callable_roots": callable_roots,
         "compiler_semantics": toolchain
             .and_then(|identity| serde_json::to_value(identity).ok()),
         "compiler_implementation": probe_identity,
@@ -192,16 +198,18 @@ fn application_cache_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache/3\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache/4\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
 
 fn application_cache_index_key(
     request: &Value,
+    contract: &str,
     root_id: &str,
     root_source: &str,
     generic_seeds: &[HostGenericSeedRequest],
+    callable_roots: &[(String, String)],
     toolchain: Option<&ToolchainIdentity>,
     probe_identity: &str,
 ) -> String {
@@ -212,11 +220,12 @@ fn application_cache_index_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-index-key/2",
-        "contract": CONTRACT,
+        "schema_version": "mncs.compiler.application-build-cache-index-key/3",
+        "contract": contract,
         "root_source_id": root_id,
         "root_source_sha256": format!("sha256:{}", mncs_model::sha256_hex(root_source.as_bytes())),
         "generic_seeds": generic_seed_keys,
+        "callable_roots": callable_roots,
         "compiler_semantics": toolchain
             .and_then(|identity| serde_json::to_value(identity).ok()),
         "compiler_implementation": probe_identity,
@@ -228,7 +237,7 @@ fn application_cache_index_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache-index/2\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache-index/3\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -675,10 +684,12 @@ fn collect_nominal_type_identities(
 /// reused without repeating closure emission and verification.
 fn application_executable_closure_identity(
     program: &mncs_model::Program,
-    entry_module: &str,
-    entry_function: &str,
+    callable_roots: &[(String, String)],
     generic_seeds: &[HostGenericSeedRequest],
 ) -> Option<String> {
+    if callable_roots.is_empty() {
+        return None;
+    }
     let semantic_facts = program.semantic_identities();
     let mut functions_by_identity = BTreeMap::new();
     for function in &program.functions {
@@ -692,8 +703,10 @@ fn application_executable_closure_identity(
         }
     }
 
-    let mut callable_roots = BTreeSet::new();
-    callable_roots.insert(mncs_model::function_id(entry_module, entry_function).0);
+    let mut callable_roots = callable_roots
+        .iter()
+        .map(|(module, function)| mncs_model::function_id(module, function).0)
+        .collect::<BTreeSet<_>>();
     let mut generic_seed_keys = generic_seeds
         .iter()
         .map(HostGenericSeedRequest::seed_key)
@@ -1291,9 +1304,12 @@ mod tests {
                 frontend.diagnostics
             );
             let program = frontend.program.as_ref().expect("valid root Program");
-            let closure_identity =
-                application_executable_closure_identity(program, "semantic.root", "entry", &[])
-                    .expect("verified executable closure identity");
+            let closure_identity = application_executable_closure_identity(
+                program,
+                &[("semantic.root".to_owned(), "entry".to_owned())],
+                &[],
+            )
+            .expect("verified executable closure identity");
             let full_semantic_identity = application_semantic_identity(
                 program,
                 &frontend
@@ -1316,21 +1332,63 @@ mod tests {
         let reachable_function_edit = compile_facts(&dependency.replace("return 7", "return 8"));
         assert_ne!(baseline.0, reachable_function_edit.0);
     }
+
+    #[test]
+    fn executable_closure_identity_binds_every_selected_callable() {
+        let source = |second_value| {
+            format!(
+                "mncs 0.18; module semantic.roots; \
+                 fn first() -> (result: u64) {{ return 1; }} \
+                 fn second() -> (result: u64) {{ return {second_value}; }}"
+            )
+        };
+        let closure_identity = |source: &str, roots: &[(String, String)]| {
+            let frontend = ReferenceCompiler::default().front_end(envelope(source));
+            assert!(
+                frontend.is_valid(),
+                "callable roots source: {:?}",
+                frontend.diagnostics
+            );
+            application_executable_closure_identity(
+                frontend.program.as_ref().expect("valid root Program"),
+                roots,
+                &[],
+            )
+            .expect("verified callable closure identity")
+        };
+        let both_roots = vec![
+            ("semantic.roots".to_owned(), "first".to_owned()),
+            ("semantic.roots".to_owned(), "second".to_owned()),
+        ];
+        let first_only = vec![("semantic.roots".to_owned(), "first".to_owned())];
+        let baseline = closure_identity(&source(2), &both_roots);
+        let changed_second = closure_identity(&source(3), &both_roots);
+        let unaffected_first = closure_identity(&source(3), &first_only);
+        assert_ne!(baseline, changed_second);
+        assert_eq!(closure_identity(&source(2), &first_only), unaffected_first);
+    }
 }
 
 /// Compile a bounded module snapshot with the pinned compiler and emit the
 /// existing canonical VM artifact format. Inputs are explicit and immutable;
 /// source identities are derived from exact bytes, never paths or timestamps.
 pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainIdentity>) -> Value {
-    if request.get("schema_version").and_then(Value::as_str) != Some(REQUEST) {
-        return error_contract(
-            "unknown",
-            "MCA100",
-            "unsupported application build request schema",
-        );
-    }
+    let (contract, multiple_callables) = match request.get("schema_version").and_then(Value::as_str)
+    {
+        Some(REQUEST_V1) => (CONTRACT_V1, false),
+        Some(REQUEST_V2) => (CONTRACT_V2, true),
+        _ => {
+            return error_contract(
+                CONTRACT_V1,
+                "unknown",
+                "MCA100",
+                "unsupported application build request schema",
+            )
+        }
+    };
     if request.get("target").and_then(Value::as_str) != Some(VM_TARGET) {
         return error_contract(
+            contract,
             "unavailable",
             "MCA101",
             "requested execution target is unavailable",
@@ -1341,6 +1399,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         Some(value) => {
             let Some(rows) = value.as_array() else {
                 return error_contract(
+                    contract,
                     "unknown",
                     "MCA109",
                     "generic_seeds must be an array of specialization requests",
@@ -1348,6 +1407,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             };
             if rows.len() > MAX_GENERIC_SEEDS {
                 return error_contract(
+                    contract,
                     "unsupported",
                     "MCA110",
                     "generic specialization count exceeds the bounded application input",
@@ -1357,6 +1417,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 Ok(seeds) => seeds,
                 Err(()) => {
                     return error_contract(
+                        contract,
                         "unknown",
                         "MCA109",
                         "generic_seeds contains a malformed specialization request",
@@ -1366,34 +1427,114 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         }
     };
     let Some(root_id) = request.get("root_source_id").and_then(Value::as_str) else {
-        return error_contract("unknown", "MCA102", "root_source_id is required");
+        return error_contract(contract, "unknown", "MCA102", "root_source_id is required");
     };
     let Some(root_source) = request.get("root_source").and_then(Value::as_str) else {
-        return error_contract("unknown", "MCA103", "root_source is required");
+        return error_contract(contract, "unknown", "MCA103", "root_source is required");
     };
-    let Some(entry) = request.get("entry").and_then(Value::as_object) else {
-        return error_contract(
-            "unknown",
-            "MCA104",
-            "entry module and function are required",
-        );
+    let callable_roots = if multiple_callables {
+        if request.get("entry").is_some() {
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA104",
+                "version 2 requests use callable_roots instead of entry",
+            );
+        }
+        let Some(rows) = request.get("callable_roots").and_then(Value::as_array) else {
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA104",
+                "callable_roots must be an array of module and function identities",
+            );
+        };
+        if rows.is_empty() || rows.len() > MAX_CALLABLE_ROOTS {
+            return error_contract(
+                contract,
+                "unsupported",
+                "MCA111",
+                "callable root count is outside the bounded application input",
+            );
+        }
+        let mut roots = BTreeSet::new();
+        for row in rows {
+            if !has_exact_keys(row, &["module", "function"]) {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA104",
+                    "each callable root must contain only module and function",
+                );
+            }
+            let Some(module) = row.get("module").and_then(Value::as_str) else {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA104",
+                    "each callable root requires a module identity",
+                );
+            };
+            let Some(function) = row.get("function").and_then(Value::as_str) else {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA104",
+                    "each callable root requires a function name",
+                );
+            };
+            if module.is_empty() || function.is_empty() {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA104",
+                    "callable root module and function must be non-empty",
+                );
+            }
+            if !roots.insert((module.to_owned(), function.to_owned())) {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA112",
+                    "callable_roots contains a duplicate identity",
+                );
+            }
+        }
+        roots.into_iter().collect::<Vec<_>>()
+    } else {
+        let Some(entry) = request.get("entry").and_then(Value::as_object) else {
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA104",
+                "entry module and function are required",
+            );
+        };
+        let Some(module) = entry.get("module").and_then(Value::as_str) else {
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA104",
+                "entry module and function are required",
+            );
+        };
+        let Some(function) = entry.get("function").and_then(Value::as_str) else {
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA104",
+                "entry module and function are required",
+            );
+        };
+        vec![(module.to_owned(), function.to_owned())]
     };
-    let Some(entry_module) = entry.get("module").and_then(Value::as_str) else {
-        return error_contract(
-            "unknown",
-            "MCA104",
-            "entry module and function are required",
-        );
-    };
-    let Some(entry_function) = entry.get("function").and_then(Value::as_str) else {
-        return error_contract(
-            "unknown",
-            "MCA104",
-            "entry module and function are required",
-        );
-    };
+    let (entry_module, entry_function) = callable_roots
+        .first()
+        .cloned()
+        .expect("validated callable roots are non-empty");
     let Some(raw_modules) = request.get("modules").and_then(Value::as_object) else {
         return error_contract(
+            contract,
             "unknown",
             "MCA105",
             "modules must be a module-to-source object",
@@ -1401,6 +1542,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     };
     if raw_modules.len() > MAX_MODULES {
         return error_contract(
+            contract,
             "unsupported",
             "MCA106",
             "module count exceeds the bounded application input",
@@ -1411,7 +1553,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let mut total_bytes = root_source.len();
     for (module, value) in raw_modules {
         let Some(source) = value.as_str() else {
-            return error_contract("unknown", "MCA107", "module source values must be strings");
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA107",
+                "module source values must be strings",
+            );
         };
         total_bytes = total_bytes
             .saturating_add(module.len())
@@ -1420,6 +1567,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     }
     if total_bytes > MAX_SOURCE_BYTES {
         return error_contract(
+            contract,
             "unsupported",
             "MCA108",
             "source snapshot exceeds the bounded application input",
@@ -1459,23 +1607,34 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let (probe_identity, probe_details) = producer_identity();
     let cache_key = application_cache_key(
         request,
+        contract,
         root_id,
         &source_identity,
         &modules,
         &generic_seeds,
+        &callable_roots,
         toolchain,
         &probe_identity,
     );
     let cache_index_key = application_cache_index_key(
         request,
+        contract,
         root_id,
         root_source,
         &generic_seeds,
+        &callable_roots,
         toolchain,
         &probe_identity,
     );
     let cache_path = application_cache_path(&cache_key);
-    let cache_index_path = application_cache_index_path(&cache_index_key);
+    // The first multi-callable contract deliberately admits only exact
+    // snapshot cache hits. Semantic-closure reuse will be enabled once the
+    // Language fact set can bind every selected callable interface.
+    let cache_index_path = if multiple_callables {
+        None
+    } else {
+        application_cache_index_path(&cache_index_key)
+    };
     if let Some(path) = cache_path.as_ref() {
         if let Some(response) = read_application_cache(
             path,
@@ -1555,35 +1714,51 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let resolutions =
         serde_json::to_value(&frontend.module_resolutions).unwrap_or_else(|_| json!([]));
     let Some(program) = frontend.program.as_ref().filter(|_| frontend.is_valid()) else {
-        let response = annotate_cache(
-            json!({
-                "schema_version": CONTRACT,
-                "status": "rejected",
-                "source_snapshot": {
-                    "identity": source_identity,
-                    "files": source_files,
-                },
-                "dependency_graph": {
-                    "identity": Value::Null,
-                    "resolutions": resolutions,
-                },
-                "producer": {
-                    "stage0_toolchain": toolchain
-                        .and_then(|identity| serde_json::to_value(identity).ok()),
-                    "probe": probe_details,
-                },
-                "entry": { "module": entry_module, "function": entry_function },
-                "artifact": null,
-                "capability_dispatch": {
-                    "schema_version": CAPABILITY_DISPATCH_SCHEMA,
-                    "status": "unknown",
-                    "bindings": [],
-                    "unresolved_obligations": [],
-                },
-                "diagnostics": diagnostics,
+        let mut rejected_response = json!({
+            "schema_version": contract,
+            "status": "rejected",
+            "source_snapshot": {
+                "identity": source_identity,
+                "files": source_files,
+            },
+            "dependency_graph": {
+                "identity": Value::Null,
+                "resolutions": resolutions,
+            },
+            "producer": {
+                "stage0_toolchain": toolchain
+                    .and_then(|identity| serde_json::to_value(identity).ok()),
+                "probe": probe_details,
+            },
+            "entry": { "module": entry_module, "function": entry_function },
+            "artifact": null,
+            "capability_dispatch": {
+                "schema_version": CAPABILITY_DISPATCH_SCHEMA,
+                "status": "unknown",
+                "bindings": [],
                 "unresolved_obligations": [],
-                "unselected_unresolved_exports": [],
-            }),
+            },
+            "diagnostics": diagnostics,
+            "unresolved_obligations": [],
+            "unselected_unresolved_exports": [],
+        });
+        if multiple_callables {
+            rejected_response
+                .as_object_mut()
+                .expect("response object")
+                .insert(
+                    "callable_roots".to_owned(),
+                    json!(callable_roots
+                        .iter()
+                        .map(|(module, function)| json!({
+                            "module": module,
+                            "function": function,
+                        }))
+                        .collect::<Vec<_>>()),
+                );
+        }
+        let response = annotate_cache(
+            rejected_response,
             &cache_key,
             "bypass",
             "not_published",
@@ -1598,7 +1773,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         );
     };
 
-    let entry_interface = callable_interface(program, entry_module, entry_function);
+    let callable_interfaces = callable_roots
+        .iter()
+        .map(|(module, function)| callable_interface(program, module, function))
+        .collect::<Vec<_>>();
+    let entry_interface = callable_interfaces.first().cloned().flatten();
     let semantic_identity = frontend
         .artifact(ArtifactRepresentation::Semantic)
         .and_then(|artifact| {
@@ -1609,12 +1788,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &generic_seeds,
             )
         });
-    let executable_closure_identity = application_executable_closure_identity(
-        program,
-        entry_module,
-        entry_function,
-        &generic_seeds,
-    );
+    let executable_closure_identity =
+        application_executable_closure_identity(program, &callable_roots, &generic_seeds);
 
     let graph_value = json!({
         "root_module": program.module,
@@ -1705,49 +1880,76 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         }
     }
     let producer_reference = format!("stage0-probe:{probe_identity}");
-    let (artifact, unselected_unresolved, capability_bindings, emission_error) =
-        match vm_emit::emit_vm_application_artifact_with_producer(
+    let callable_root_set = callable_roots.iter().cloned().collect::<BTreeSet<_>>();
+    let emission = if multiple_callables {
+        vm_emit::emit_vm_application_artifact_for_callables_with_producer(
             &compiler,
             program,
             Some(&producer_reference),
-            entry_module,
-            entry_function,
+            &callable_root_set,
             &generic_seed_functions,
-        ) {
-            Ok((artifact, unselected_unresolved, capability_bindings)) => (
-                Some(artifact),
-                unselected_unresolved,
-                capability_bindings,
-                None,
-            ),
-            Err(error) => (None, Vec::new(), Vec::new(), Some(error)),
-        };
+        )
+    } else {
+        vm_emit::emit_vm_application_artifact_with_producer(
+            &compiler,
+            program,
+            Some(&producer_reference),
+            &entry_module,
+            &entry_function,
+            &generic_seed_functions,
+        )
+    };
+    let (artifact, unselected_unresolved, capability_bindings, emission_error) = match emission {
+        Ok((artifact, unselected_unresolved, capability_bindings)) => (
+            Some(artifact),
+            unselected_unresolved,
+            capability_bindings,
+            None,
+        ),
+        Err(error) => (None, Vec::new(), Vec::new(), Some(error)),
+    };
 
     let Some(artifact) = artifact else {
         let obligation = emission_error.unwrap_or_else(|| "artifact emission failed".to_owned());
-        let response = annotate_cache(
-            json!({
-                "schema_version": CONTRACT,
+        let mut unsupported_response = json!({
+            "schema_version": contract,
+            "status": "unsupported",
+            "source_snapshot": { "identity": source_identity, "files": source_files },
+            "dependency_graph": { "identity": graph_identity, "details": graph_value },
+            "producer": {
+                "stage0_toolchain": toolchain
+                    .and_then(|identity| serde_json::to_value(identity).ok()),
+                "probe": probe_details,
+            },
+            "entry": { "module": entry_module, "function": entry_function },
+            "artifact": null,
+            "capability_dispatch": {
+                "schema_version": CAPABILITY_DISPATCH_SCHEMA,
                 "status": "unsupported",
-                "source_snapshot": { "identity": source_identity, "files": source_files },
-                "dependency_graph": { "identity": graph_identity, "details": graph_value },
-                "producer": {
-                    "stage0_toolchain": toolchain
-                        .and_then(|identity| serde_json::to_value(identity).ok()),
-                    "probe": probe_details,
-                },
-                "entry": { "module": entry_module, "function": entry_function },
-                "artifact": null,
-                "capability_dispatch": {
-                    "schema_version": CAPABILITY_DISPATCH_SCHEMA,
-                    "status": "unsupported",
-                    "bindings": [],
-                    "unresolved_obligations": [obligation],
-                },
-                "diagnostics": diagnostics,
+                "bindings": [],
                 "unresolved_obligations": [obligation],
-                "unselected_unresolved_exports": unselected_unresolved,
-            }),
+            },
+            "diagnostics": diagnostics,
+            "unresolved_obligations": [obligation],
+            "unselected_unresolved_exports": unselected_unresolved,
+        });
+        if multiple_callables {
+            unsupported_response
+                .as_object_mut()
+                .expect("response object")
+                .insert(
+                    "callable_roots".to_owned(),
+                    json!(callable_roots
+                        .iter()
+                        .map(|(module, function)| json!({
+                            "module": module,
+                            "function": function,
+                        }))
+                        .collect::<Vec<_>>()),
+                );
+        }
+        let response = annotate_cache(
+            unsupported_response,
             &cache_key,
             "bypass",
             "not_published",
@@ -1767,15 +1969,22 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
-    let entry_available = artifact
+    let artifact_callables = artifact
         .get("callables")
         .and_then(Value::as_array)
-        .is_some_and(|rows| {
-            rows.iter().any(|row| {
-                row.get("module").and_then(Value::as_str) == Some(entry_module)
-                    && row.get("name").and_then(Value::as_str) == Some(entry_function)
+        .cloned()
+        .unwrap_or_default();
+    let callable_availability = callable_roots
+        .iter()
+        .map(|(module, function)| {
+            artifact_callables.iter().any(|row| {
+                row.get("module").and_then(Value::as_str) == Some(module)
+                    && row.get("name").and_then(Value::as_str) == Some(function)
             })
-        });
+        })
+        .collect::<Vec<_>>();
+    let entry_available = callable_availability.first().copied().unwrap_or(false);
+    let all_callables_available = callable_availability.iter().all(|available| *available);
     let target = artifact
         .pointer("/source/target")
         .cloned()
@@ -1794,17 +2003,26 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         .cloned()
         .unwrap_or(Value::Null);
     let mut unresolved = raw_unsupported;
-    if !entry_available {
-        unresolved.push(json!(format!(
-            "entry {}::{} has no admitted callable",
-            entry_module, entry_function
-        )));
+    for ((module, function), available) in callable_roots.iter().zip(&callable_availability) {
+        if !available {
+            unresolved.push(json!(format!(
+                "selected callable {}::{} has no admitted callable",
+                module, function
+            )));
+        }
     }
     let interface_verified = entry_interface
         .as_ref()
         .and_then(|interface| interface.get("status"))
         .and_then(Value::as_str)
         == Some("verified");
+    let all_interfaces_verified = callable_interfaces.iter().all(|interface| {
+        interface
+            .as_ref()
+            .and_then(|value| value.get("status"))
+            .and_then(Value::as_str)
+            == Some("verified")
+    });
     let entry_status = if !entry_available {
         "unsupported"
     } else if toolchain.is_none() || probe_identity == "unknown" || !interface_verified {
@@ -1812,12 +2030,65 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     } else {
         "verified"
     };
-    let status = if !unresolved.is_empty() {
+    let status = if !unresolved.is_empty() || !all_callables_available {
         "unsupported"
-    } else if entry_status == "unknown" {
+    } else if toolchain.is_none()
+        || probe_identity == "unknown"
+        || !all_interfaces_verified
+        || entry_status == "unknown"
+    {
         "unknown"
     } else {
         "verified"
+    };
+
+    let callable_entries = callable_roots
+        .iter()
+        .zip(&callable_interfaces)
+        .zip(&callable_availability)
+        .map(|(((module, function), interface), available)| {
+            let status = if !available {
+                "unsupported"
+            } else if toolchain.is_none()
+                || probe_identity == "unknown"
+                || interface
+                    .as_ref()
+                    .and_then(|value| value.get("status"))
+                    .and_then(Value::as_str)
+                    != Some("verified")
+            {
+                "unknown"
+            } else {
+                "verified"
+            };
+            json!({
+                "module": module,
+                "function": function,
+                "status": status,
+                "interface": interface,
+            })
+        })
+        .collect::<Vec<_>>();
+    let callable_scope = if multiple_callables {
+        json!({
+            "kind": "selected_callable_roots_and_explicit_generic_seeds",
+            "callable_roots": callable_entries.clone(),
+            "generic_seed_functions": generic_seed_functions,
+        })
+    } else {
+        json!({
+            "kind": "entry_and_explicit_generic_seeds",
+            "entry": {
+                "module": entry_module,
+                "function": entry_function,
+            },
+            "generic_seed_functions": generic_seed_functions,
+        })
+    };
+    let compatibility_status = if multiple_callables {
+        status
+    } else {
+        entry_status
     };
 
     let capability_dispatch = json!({
@@ -1826,8 +2097,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         "bindings": capability_bindings,
         "unresolved_obligations": [],
     });
-    let response = json!({
-        "schema_version": CONTRACT,
+    let mut response = json!({
+        "schema_version": contract,
         "status": status,
         "source_snapshot": {
             "identity": source_identity,
@@ -1854,14 +2125,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "optimization_policy": request.get("optimization_policy").cloned().unwrap_or_else(|| json!("default")),
             "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         },
-        "callable_scope": {
-            "kind": "entry_and_explicit_generic_seeds",
-            "entry": {
-                "module": entry_module,
-                "function": entry_function,
-            },
-            "generic_seed_functions": generic_seed_functions,
-        },
+        "callable_scope": callable_scope,
         "artifact": {
             "schema_version": artifact.get("schema_version").cloned().unwrap_or(Value::Null),
             "identity": artifact_identity,
@@ -1881,8 +2145,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         },
         "execution_target_compatibility": {
             "target": VM_TARGET,
-            "status": entry_status,
-            "compatible": entry_status == "verified",
+            "status": compatibility_status,
+            "compatible": compatibility_status == "verified",
             "execution_status": "not_run",
         },
         "resource_intent": {
@@ -1895,8 +2159,14 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         "unresolved_obligations": unresolved,
         "unselected_unresolved_exports": unselected_unresolved,
     });
+    if multiple_callables {
+        response
+            .as_object_mut()
+            .expect("response object")
+            .insert("entries".to_owned(), json!(callable_entries));
+    }
     let (cache_status, publication) = match cache_path.as_ref() {
-        Some(path) if entry_status == "verified" => {
+        Some(path) if status == "verified" => {
             match publish_application_cache(path, &cache_key, &response) {
                 Ok(()) => {
                     if let Some(index_path) = cache_index_path.as_ref() {
