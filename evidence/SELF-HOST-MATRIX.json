@@ -4131,16 +4131,56 @@
       "push_status": "PUSHED_TO_origin/main",
       "push_observation": "Git confirmed 45eb4f4..bd4a0cf main -> main",
       "delivery_state": "IMPLEMENTATION_COMMIT_PUSHED_TO_origin_main; identity follow-up is recorded in this evidence update"
+    },
+    "decl_parse_canonical_vm_frontier_campaign_20261016": {
+      "observed_at": "2026-10-16T06:55:47Z",
+      "tested_candidate_git_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+      "implementation_commit": "60917dd16da73f03f7174d4c182dcda3bdf89361",
+      "tested_candidate_branch": "campaign/native-application-readiness-20261013",
+      "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "test_harness": "tools/test_vm_stage1_frontier.py",
+      "test_harness_sha256": "c63a91d99c21238b11a34fd62e1928906f38fb4f737789e866f7d5326c4fadc8",
+      "decl_source_sha256": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "probe_sha256": "b213b6abb121169f3383ad056352550c1ccb3de8bfaa7d467f6d008c6bb40dcc",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl"
+      ],
+      "function": "mncs.compiler.decl.v1::parse_unit<1024,1024>",
+      "cases": 5,
+      "valid_constructs": [
+        "bounded slice postfix",
+        "nested if parent close",
+        "generic signature and call",
+        "record update"
+      ],
+      "negative_case": "fresh first-error span for malformed expression",
+      "stage0_structural_and_diagnostic_checks_passed": true,
+      "reference_cranelift_vm_semantic_digest": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0",
+      "canonical_vm_batch_wall_seconds": 9.94838744799199,
+      "canonical_vm_peak_rss_kib": 355056,
+      "evidence_artifact": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
+      "evidence_artifact_sha256": "92dd910f86be20864ab27efcbaf165c23fb621a3ac03a5a71f47cf0af9feed2b",
+      "language_facts_reused": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-16T06:43:13Z",
+  "evidence_updated_at": "2026-10-16T06:55:47Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
-    "observed_at": "2026-10-16T06:43:13Z",
-    "compiler_head": "de05ba755a4d5cb4d623a28ee563e42430e00c3f",
-    "completed_frontier": "segment-canonical-vm-current-main",
-    "next_frontier": "Expand the bounded decl::parse_unit canonical-VM differential beyond its current single postfix case, retaining the source/lexer/parser/segment closure and Stage-0/Cranelift parity. Keep this function frontier distinct from full decl-module verification and succession.",
-    "next_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-20261016.json"
+    "observed_at": "2026-10-16T06:55:47Z",
+    "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+    "completed_frontier": "decl-parse-canonical-vm-five-cases",
+    "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
+    "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
+    "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
   }
 }

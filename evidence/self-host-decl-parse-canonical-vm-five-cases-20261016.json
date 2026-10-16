@@ -1,0 +1,244 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "decl-parse-canonical-vm-five-cases",
+  "observed_at": "2026-10-16T06:55:47Z",
+  "claim_boundary": "Five bounded mncs.compiler.decl.v1::parse_unit inputs were checked against the pinned Stage-0 parser oracle and agreed across the reference interpreter, Cranelift, and a freshly emitted canonical VM artifact. This advances one function frontier only; it does not establish full decl-module verification, Language verified-fact reuse, Stage-1, or Stage-2.",
+  "compiler": {
+    "tested_source_revision": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+    "implementation_commit": "60917dd16da73f03f7174d4c182dcda3bdf89361",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "worktree_dirty": true,
+    "retained_dirty_paths": [
+      "evidence/native-app-readiness-gate-a.json",
+      ".bootstrap.control-workspace-link"
+    ],
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl"
+    ],
+    "decl_source_sha256": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516",
+    "test_harness": "tools/test_vm_stage1_frontier.py",
+    "test_harness_sha256": "c63a91d99c21238b11a34fd62e1928906f38fb4f737789e866f7d5326c4fadc8"
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "b213b6abb121169f3383ad056352550c1ccb3de8bfaa7d467f6d008c6bb40dcc",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_repository": "/home/epi13/Documents/Projects/mncs-vm/target",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "workload": {
+    "module": "mncs.compiler.decl.v1",
+    "function": "parse_unit",
+    "fresh_artifact_id": "sha256:3dfb8367f10d1c101b01cf4aa6f952467facd49418c4696a6d897d7abe5c850f",
+    "cases": [
+      {
+        "id": "decl.parse_unit:bounded-slice-postfix",
+        "kind": "pos",
+        "bytes": 89,
+        "sha256": "1fea3f544fa959f42733c735a377140a4d45071a70dddd996bede46aad2c25cb"
+      },
+      {
+        "id": "decl.parse_unit:nested-if-parent-close",
+        "kind": "pos",
+        "bytes": 105,
+        "sha256": "645ef41decb9a5dcb81cb9bd73eef1736c6895ffc67472d64a084cd49db33ee8"
+      },
+      {
+        "id": "decl.parse_unit:generic-signature-and-call",
+        "kind": "pos",
+        "bytes": 112,
+        "sha256": "96103848b18071a7713037771f07de0c0817d03b11220169fa2a6bbaf02400d9"
+      },
+      {
+        "id": "decl.parse_unit:record-update",
+        "kind": "pos",
+        "bytes": 115,
+        "sha256": "9084fe257be0101d844ba56678e9753dfbde16455e4430727edf14a4b0111cbf"
+      },
+      {
+        "id": "decl.parse_unit:first-error-span",
+        "kind": "neg",
+        "bytes": 56,
+        "sha256": "51238d1ee324fc5b29e0a9f843b29322e8cd4e809551a97fe33d2967c50afe65"
+      }
+    ],
+    "executor_case_counts": {
+      "reference_interpreter": 5,
+      "cranelift": 5,
+      "canonical_vm": 5
+    },
+    "semantic_digests": {
+      "reference_interpreter": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0",
+      "cranelift": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0",
+      "canonical_vm": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0"
+    },
+    "steps": {
+      "reference_interpreter": [
+        51463,
+        58065,
+        66189,
+        55970,
+        22472
+      ],
+      "cranelift": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "canonical_vm": [
+        62124,
+        70211,
+        81198,
+        67548,
+        27128
+      ]
+    },
+    "timing_seconds": {
+      "reference_interpreter_cases": [
+        6.332838432004792,
+        2.7512117819860578,
+        3.8044049620075384,
+        2.7115144220006187,
+        1.1038800069945864
+      ],
+      "reference_interpreter_total_including_oracles_and_emit": 59.46147703099996,
+      "cranelift_cases": [
+        59.992213371995604,
+        0.00156612200953532,
+        0.0015297750069294125,
+        0.0015441650029970333,
+        0.0010513680026633665
+      ],
+      "canonical_vm_batch": 9.94838744799199
+    },
+    "canonical_vm_peak_rss_kb": 355056,
+    "canonical_vm_batch_bytes": {
+      "calls": 14475,
+      "results": 57571
+    }
+  },
+  "measurements": {
+    "semantic_digest_match": true,
+    "stage0_structural_and_diagnostic_checks": "passed for all five cases",
+    "canonical_vm_batch_wall_seconds": 9.94838744799199,
+    "canonical_vm_peak_rss_kib": 355056,
+    "pre_run_host_memory": {
+      "total_gib": 31,
+      "available_gib": 23
+    },
+    "cgroup_memory": "unavailable; /sys/fs/cgroup/memory.current and memory.max were absent",
+    "language_verified_facts_reused": false,
+    "language_verified_fact_reuse_measured": false
+  },
+  "raw_test_report": {
+    "schema_version": 1,
+    "kind": "mncs-compiler-decl-parse-canonical-vm-frontier",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "compiler_revision_before_delivery": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+    "probe_sha256": "b213b6abb121169f3383ad056352550c1ccb3de8bfaa7d467f6d008c6bb40dcc",
+    "language_source_sha256": "e046174b476823f85fd0c8f5350d37c3cc390b7ff50ee49ecc95ef4a7339c516",
+    "artifact_id": "sha256:3dfb8367f10d1c101b01cf4aa6f952467facd49418c4696a6d897d7abe5c850f",
+    "cases": [
+      {
+        "id": "decl.parse_unit:bounded-slice-postfix",
+        "kind": "pos",
+        "bytes": 89,
+        "sha256": "1fea3f544fa959f42733c735a377140a4d45071a70dddd996bede46aad2c25cb"
+      },
+      {
+        "id": "decl.parse_unit:nested-if-parent-close",
+        "kind": "pos",
+        "bytes": 105,
+        "sha256": "645ef41decb9a5dcb81cb9bd73eef1736c6895ffc67472d64a084cd49db33ee8"
+      },
+      {
+        "id": "decl.parse_unit:generic-signature-and-call",
+        "kind": "pos",
+        "bytes": 112,
+        "sha256": "96103848b18071a7713037771f07de0c0817d03b11220169fa2a6bbaf02400d9"
+      },
+      {
+        "id": "decl.parse_unit:record-update",
+        "kind": "pos",
+        "bytes": 115,
+        "sha256": "9084fe257be0101d844ba56678e9753dfbde16455e4430727edf14a4b0111cbf"
+      },
+      {
+        "id": "decl.parse_unit:first-error-span",
+        "kind": "neg",
+        "bytes": 56,
+        "sha256": "51238d1ee324fc5b29e0a9f843b29322e8cd4e809551a97fe33d2967c50afe65"
+      }
+    ],
+    "executor_case_counts": {
+      "reference_interpreter": 5,
+      "cranelift": 5,
+      "canonical_vm": 5
+    },
+    "semantic_digests": {
+      "reference_interpreter": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0",
+      "cranelift": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0",
+      "canonical_vm": "5515a5cb41fd93045e18713e72197bfe5a50c52e098f321a349cf1a25b7942d0"
+    },
+    "steps": {
+      "reference_interpreter": [
+        51463,
+        58065,
+        66189,
+        55970,
+        22472
+      ],
+      "cranelift": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "canonical_vm": [
+        62124,
+        70211,
+        81198,
+        67548,
+        27128
+      ]
+    },
+    "timing_seconds": {
+      "reference_interpreter_cases": [
+        6.332838432004792,
+        2.7512117819860578,
+        3.8044049620075384,
+        2.7115144220006187,
+        1.1038800069945864
+      ],
+      "reference_interpreter_total_including_oracles_and_emit": 59.46147703099996,
+      "cranelift_cases": [
+        59.992213371995604,
+        0.00156612200953532,
+        0.0015297750069294125,
+        0.0015441650029970333,
+        0.0010513680026633665
+      ],
+      "canonical_vm_batch": 9.94838744799199
+    },
+    "canonical_vm_peak_rss_kb": 355056,
+    "canonical_vm_batch_bytes": {
+      "calls": 14475,
+      "results": 57571
+    },
+    "scope": "Five decl.parse_unit cases (four valid constructs and one fresh syntax error) agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and a freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "stage1_claimed": false,
+  "stage2_claimed": false
+}
