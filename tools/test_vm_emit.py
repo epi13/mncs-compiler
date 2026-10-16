@@ -21,7 +21,43 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 BOOTSTRAP_TARGET = Path(os.environ.get("MNCS_BOOTSTRAP_TARGET_DIR", ROOT / ".bootstrap" / "target"))
 PROBE = Path(os.environ.get("MNCS_PROBE_BIN", BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe"))
-VM_REPO = ROOT.parent / "mncs-vm"
+
+
+def resolve_vm_repo():
+    """Find the registered VM checkout from a root or nested compiler worktree."""
+    candidates = []
+    explicit_vm = os.environ.get("MNCS_VM_ROOT")
+    if explicit_vm:
+        candidates.append(Path(explicit_vm).expanduser())
+    projects_root = os.environ.get("MNCS_PROJECTS_ROOT")
+    if projects_root:
+        candidates.append(Path(projects_root).expanduser() / "mncs-vm")
+    candidates.extend(parent / "mncs-vm" for parent in ROOT.parents)
+
+    seen = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not (resolved / "Cargo.toml").is_file():
+            continue
+        try:
+            top_level = Path(subprocess.check_output(
+                ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+                text=True, stderr=subprocess.DEVNULL,
+            ).strip()).resolve()
+        except (OSError, subprocess.CalledProcessError):
+            continue
+        if top_level == resolved:
+            return resolved
+    raise SystemExit(
+        "registered mncs-vm checkout missing; set MNCS_VM_ROOT or "
+        "MNCS_PROJECTS_ROOT to the selected workspace"
+    )
+
+
+VM_REPO = resolve_vm_repo()
 VM_BIN = Path(os.environ.get("MNCS_VM_BIN", VM_REPO / "target" / "debug" / "mncs-vm"))
 os.chdir(ROOT)
 
