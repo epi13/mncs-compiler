@@ -1,0 +1,183 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.self-consumption-lexer-word-char-profile",
+  "observed_at": "2026-10-16T12:05:13.759559+00:00",
+  "status": "passed_with_bounded_frontier",
+  "compiler": {
+    "tested_source_revision": "26ddca18be07355882d48aea000653352357fc2f",
+    "tested_source_branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "26ddca18be07355882d48aea000653352357fc2f",
+    "profile_runner_git_head_before_source_commit": "dedb6a98aa1e3d5308fc3629eeb3c3e68da3ca0d",
+    "profile_runner_worktree_was_dirty": true,
+    "source_bundle_identity": {
+      "kind": "sha256 of selected compiler module ids and source bytes",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "sha256": "90d6073d69664e80fb2515d16fe2fbfc0f8c3cd200c26d8799483e0d47db3c28",
+      "module_source_sha256": {
+        "decl": "e6be69c854bc0a41edbf11eccf820b1ee54d667c1ae75c331eb8a2116c6ad71b",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "lexer": "0f4d0637f2972a7a2d91d765d86d8428a19bc6106299e13738c2f79c4f318b28",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1"
+      },
+      "committed_source_match_verified": true
+    },
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "source_change": "Add word_char and use it for identifier continuation in scan_step, scan_chunk_window, and next_token_global; preserve letter as the identifier-start predicate."
+  },
+  "verification": {
+    "scanner_modes": {
+      "status": "passed",
+      "suite": "tools/test_global_scan_modes.py",
+      "source_bytes": 5250,
+      "source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+      "native_steps": 262703,
+      "native_token_count": 11,
+      "stage0_token_count": 11,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true,
+      "page_boundary_cases": [
+        "word at offset 1023",
+        "number at offset 2046",
+        "nested block opener at offset 3071",
+        "block closer at offset 4095",
+        "line comment at offset 5118 with newline after page edge"
+      ]
+    },
+    "keyword_dispatch": {
+      "status": "passed",
+      "suite": "tools/test_global_keyword_dispatch.py",
+      "source_bytes": 31188,
+      "keywords": 30,
+      "near_misses": 60,
+      "page_boundary_starts": 30,
+      "tokens": 180,
+      "native_steps": 1477338,
+      "stage0_token_count": 180,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true
+    },
+    "canonical_vm_frontier": {
+      "status": "passed",
+      "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+      "evidence_sha256": "a2a7607f712c38cd94bb673e6936742bc268bb5d9dd707592104b8c44b80a54f",
+      "artifact_identity": "sha256:543b083f8f28eddbf032ea6cb1e6ea1c27af6a89009506c87907f841ca70edb2",
+      "case_count": 1208,
+      "executor_case_counts": {
+        "reference_interpreter": 1208,
+        "cranelift": 1208,
+        "canonical_vm": 1208
+      },
+      "semantic_digests": {
+        "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+        "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+        "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+      }
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "performance": {
+    "workload": {
+      "modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "target_module": "mncs.compiler.project.v1",
+      "target_function": "compile_project_target",
+      "step_budget": 1000000,
+      "backend": "reference_interpreter"
+    },
+    "baseline": {
+      "label": "decl-lookahead-terminal",
+      "git_head": "a309c97bacf1c3ed8ed30918583396d4932fda7c",
+      "source_bundle_sha256": "4696af4fee223a23c7bf1fe181b2c4fd51006071b9bca34db93c06abc6a4cf4d",
+      "profiled_steps": 1000000,
+      "profiled_elapsed_ns": 78363500782,
+      "runner_wall_seconds": 142.232,
+      "child_cpu_seconds": 138.94000000000003,
+      "child_peak_rss_kib": 1843904,
+      "next_token_global": {
+        "calls": 1849,
+        "steps": 543162,
+        "exclusive_ns": 48437445354,
+        "inclusive_ns": 54918840360
+      },
+      "scan_chunk_window": {
+        "calls": 2631,
+        "steps": 102276,
+        "exclusive_ns": 3237188319
+      },
+      "letter": {
+        "calls": 4235,
+        "steps": 63525,
+        "exclusive_ns": 344020889
+      },
+      "digit": {
+        "calls": 4243,
+        "steps": 25458,
+        "exclusive_ns": 165830272
+      }
+    },
+    "candidate": {
+      "label": "lexer-word-char-classifier",
+      "source_bundle_sha256": "90d6073d69664e80fb2515d16fe2fbfc0f8c3cd200c26d8799483e0d47db3c28",
+      "profiled_steps": 1000000,
+      "profiled_elapsed_ns": 72310780094,
+      "runner_wall_seconds": 136.223,
+      "child_cpu_seconds": 133.10000000000002,
+      "child_peak_rss_kib": 1807220,
+      "next_token_global": {
+        "calls": 1870,
+        "steps": 539697,
+        "exclusive_ns": 42079231807,
+        "inclusive_ns": 48634118116
+      },
+      "scan_chunk_window": {
+        "calls": 2641,
+        "steps": 102456,
+        "exclusive_ns": 3274843458
+      },
+      "word_char": {
+        "calls": 2402,
+        "steps": 50442,
+        "exclusive_ns": 267932267
+      },
+      "measurement_classification": "RESOURCE_EXHAUSTED",
+      "native_profile_status": "budget_exhausted",
+      "sampled_rss_limit_mib": 4096,
+      "sampled_rss_limit_triggered": false,
+      "cgroup_oom_kill_delta": 0
+    },
+    "observed_deltas": {
+      "identifier_helper_calls_before": 8478,
+      "identifier_helper_calls_after": 2402,
+      "identifier_helper_steps_before": 88983,
+      "identifier_helper_steps_after": 50442,
+      "identifier_helper_step_reduction_percent": 43.31,
+      "profile_elapsed_reduction_percent": 7.72,
+      "runner_wall_reduction_percent": 4.22,
+      "child_cpu_reduction_percent": 4.2,
+      "child_peak_rss_reduction_kib": 36684
+    },
+    "interpretation": "One bounded profile per source identity. Helper and instrumented VM-step counts are direct observations; whole-profile and process wall/CPU/RSS differences are single-run workload measurements, not general performance guarantees."
+  },
+  "frontier_boundary": {
+    "result": "The six-module compile_project_target probe remains budget_exhausted at 1,000,000 steps; no complete project result was returned.",
+    "stage1_or_stage2_succession_proven": false,
+    "next_work": "Profile the remaining next_token_global and scan_chunk_window work after this classifier reduction, while continuing to pursue the Language-owned verification-fact contract when legitimate Language scope is available."
+  }
+}
