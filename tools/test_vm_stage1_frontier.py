@@ -53,9 +53,9 @@ CASES.extend(
     for index in (2, 5, 7, 13, 14, 18, 21, 28, 37, 44, 52, 54)
 )
 CASES.extend(
-    (f"missing-field-separator-{index - (len(decl.test_decl.NEG) - 2)}",
+    (f"missing-field-separator-{index - (len(decl.test_decl.NEG) - 5)}",
      decl.test_decl.NEG[index], "neg")
-    for index in range(len(decl.test_decl.NEG) - 2, len(decl.test_decl.NEG))
+    for index in range(len(decl.test_decl.NEG) - 5, len(decl.test_decl.NEG))
 )
 
 
@@ -310,7 +310,10 @@ def main():
         },
         'raw_test_report': report,
     }
-    evidence_path = ROOT / 'evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json'
+    evidence_path = ROOT / os.environ.get(
+        'MNCS_VM_FRONTIER_EVIDENCE_PATH',
+        'evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json',
+    )
     evidence_path.write_text(json.dumps(evidence, indent=2) + '\n')
     report['evidence_artifact'] = evidence_path.relative_to(ROOT).as_posix()
     print(json.dumps(report, indent=2))
