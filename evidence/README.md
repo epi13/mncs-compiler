@@ -177,6 +177,16 @@ See [bounded frontend contracts and reproduction](FRONTEND.md),
 [qualified Stage-0 compilation results](compile-results.json). These establish a bounded
 ASCII lexer/header slice, not self-hosting or backend parity.
 
+## Current source scanner evidence (2026-10-16)
+
+The [eight-byte source ASCII frontier](self-host-source-ascii-global-eight-byte-20261016.json)
+checks 39 inputs across the reference interpreter, Cranelift, and canonical VM,
+including every tail length from 0 through 17 and every non-ASCII position in a
+two-page input. The 256 KiB scan used 14.18% fewer reference interpreter steps
+than the preceding four-byte frontier. This is selected callable evidence;
+Language verified facts remain unreused and the full source module is not proven
+on this candidate.
+
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)
