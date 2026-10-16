@@ -532,9 +532,12 @@ fn expr_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tot
 // Keep the version-gated prefix token handling in this shared non-match
 // micro-step so arm expressions have the same grammar as ordinary ones.
 fn expr_step_without_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprState, tok: lexer.Token) -> (result: ExprState) {
-    // The lexer preserves `!` as a one-byte `not` token across profiles;
-    // declaration bodies accept prefix negation only after the Profile 0.13 gate.
-    if st.expect_operand && st.profile_013 && tok.kind == 40 && tok.diagnostic == 0 && tok.end == tok.start + 1 && source.byte_at_global<P, N>(pages, stride, total, tok.start) == 33 { return prefix_not(st, tok); }
+    // CP-0022 keeps the version-neutral scanner contract: standalone `!`
+    // remains an unknown one-byte token (kind 7, diagnostic 2). Declaration
+    // expressions reinterpret only that exact token as prefix negation after
+    // the Profile 0.13 gate. Other unknown tokens still take the normal error
+    // path, and older profiles continue to reject `!`.
+    if st.expect_operand && st.profile_013 && tok.kind == 7 && tok.diagnostic == 2 && tok.end == tok.start + 1 && source.byte_at_global<P, N>(pages, stride, total, tok.start) == 33 { return prefix_not(st, tok); }
     return expr_step_base<P, N>(pages, stride, total, st);
 }
 fn expr_step_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprState) -> (result: ExprState) {
