@@ -342,5 +342,19 @@ session after the manifest update. Environment now reports capability revision
 5 with request `/2` and response `/5` as current while retaining request `/1`
 and response `/4`. The focused manifest/provider agreement check passed. This
 validates Environment's advertised contract metadata and compatibility pair;
-it does not establish a new application invocation or the effectful
-Forge/Environment/Store route.
+it does not establish an invocation through the live Environment provider or
+the effectful Forge/Environment/Store route.
+
+## Application provider regression under contract revision 5 (2026-10-16)
+
+The [provider regression report](native-app-readiness-provider-contract-v5-20261016.json)
+reruns the local provider after the Environment descriptor update. Both request
+and response pairs remain supported. The digest application compiles with
+verified capability dispatch, reaches an exact fresh-process cache hit, and
+reports zero Language verified facts. Invalid source returns `MNE162` without
+publishing success; corrupt Store-input bytes are rejected. The selected
+multi-callable artifact runs both exports in one canonical VM batch. Cold,
+warm, digest cold, digest warm, and multi-callable provider timings were
+0.61, 0.23, 0.68, 0.24, and 0.19 seconds; the VM batch took 7.5 ms. This uses
+the local provider and VM adapter, not Forge, the live Environment provider,
+or canonical Store execution.
