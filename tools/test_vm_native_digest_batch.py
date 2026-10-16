@@ -51,7 +51,7 @@ def cpu_times(stderr: str) -> dict:
     measurements = {}
     for label, field in (("User time (seconds)", "user_cpu_seconds"),
                          ("System time (seconds)", "system_cpu_seconds")):
-        match = re.search(rf"^{re.escape(label)}: ([0-9]+(?:\.[0-9]+)?)$",
+        match = re.search(rf"^\s*{re.escape(label)}: ([0-9]+(?:\.[0-9]+)?)$",
                           stderr, re.MULTILINE)
         measurements[field] = float(match.group(1)) if match else None
     user = measurements["user_cpu_seconds"]
