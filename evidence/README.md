@@ -192,6 +192,15 @@ than the preceding four-byte frontier. This is selected callable evidence;
 Language verified facts remain unreused and the full source module is not proven
 on this candidate.
 
+The [sixteen-byte source ASCII frontier](self-host-source-ascii-global-sixteen-byte-20261016.json)
+extends that callable to 71 inputs, covering tail lengths 0 through 33 and each
+non-ASCII position in a 33-byte source split across stride-9 pages. Reference
+interpreter and canonical VM step counts fell about 7.9% on full 64 KiB and
+256 KiB scans relative to the eight-byte version. Single-run reference and
+Cranelift wall times for the large scans were about 2% to 3% higher, so this
+record does not claim a wall-time speedup. The full source module remains
+unproven; Language verified facts remain unreused.
+
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)

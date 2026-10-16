@@ -29,7 +29,8 @@ STRIDE = 1024
 PAGE_BOUND = 1024
 SOURCE_BOUND = 1024
 STEP_BUDGET = 8_000_000
-EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-eight-byte-20261016.json"
+EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-sixteen-byte-20261016.json"
+PREVIOUS_EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-eight-byte-20261016.json"
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
@@ -57,10 +58,10 @@ def inputs() -> list[dict]:
     samples.extend(
         {"id": f"ascii-tail-{size}", "raw": b"a" * size,
          "expected": True, "stride": PAGE_BOUND}
-        for size in range(18)
+        for size in range(34)
     )
-    for offset in range(17):
-        raw = bytearray(b"a" * 17)
+    for offset in range(33):
+        raw = bytearray(b"a" * 33)
         raw[offset] = 0xFF
         samples.append({
             "id": f"nonascii-offset-{offset}-strided-9",
@@ -179,9 +180,31 @@ def main() -> None:
         after_children.ru_utime - before_children.ru_utime
         + after_children.ru_stime - before_children.ru_stime
     )
+    previous_report = json.loads(PREVIOUS_EVIDENCE.read_text(encoding="utf-8"))
+    previous_reference = {
+        row["id"]: row for row in previous_report["reference_interpreter"]
+    }
+    current_reference = {
+        row["id"]: row for row in results["reference_interpreter"]
+    }
+    performance_comparison = {}
+    for case_id in ("ascii-64k", "ascii-256k", "nonascii-last-256k",
+                    "nonascii-first-256k"):
+        previous = previous_reference[case_id]
+        current = current_reference[case_id]
+        performance_comparison[case_id] = {
+            "previous_eight_byte_steps": previous["steps"],
+            "current_sixteen_byte_steps": current["steps"],
+            "step_change_percent": round(
+                (current["steps"] / previous["steps"] - 1) * 100, 2),
+            "previous_eight_byte_wall_seconds": previous["wall_seconds"],
+            "current_sixteen_byte_wall_seconds": current["wall_seconds"],
+            "wall_change_percent": round(
+                (current["wall_seconds"] / previous["wall_seconds"] - 1) * 100, 2),
+        }
     report = {
         "schema_version": 1,
-        "kind": "mncs.compiler.source-ascii-global-eight-byte-frontier",
+        "kind": "mncs.compiler.source-ascii-global-sixteen-byte-frontier",
         "compiler_revision_tested": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
@@ -219,21 +242,19 @@ def main() -> None:
             "python_harness_peak_rss_kib": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss,
             "cgroup_memory": memory,
         },
-        "baseline_before_change": {
-            "source_sha256": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "previous_eight_byte_frontier": {
+            "evidence_artifact": str(PREVIOUS_EVIDENCE.relative_to(ROOT)),
+            "source_sha256": previous_report["source_sha256"],
             "backend": "reference_interpreter",
-            "observations": [
-                {"id": "ascii-64k", "steps": 787662, "wall_seconds": 4.7782},
-                {"id": "ascii-256k", "steps": 3150606, "wall_seconds": 8.7025},
-                {"id": "nonascii-last-256k", "steps": 3150606, "wall_seconds": 8.6136},
-                {"id": "nonascii-first-256k", "steps": 15381, "wall_seconds": 0.4533},
-            ],
+            "observations": [previous_reference[case_id] for case_id in
+                             ("ascii-64k", "ascii-256k",
+                              "nonascii-last-256k", "nonascii-first-256k")],
             "measurement_note": (
-                "One pre-change sample used the same CP-0001 Probe and 1024-byte page requests "
-                "before editing source.mncs in this session. Wall times are workload observations, "
-                "not a general performance guarantee."
+                "The previous frontier used the same CP-0001 probe and page requests. "
+                "Wall times are workload observations, not a general performance guarantee."
             ),
         },
+        "performance_comparison_vs_previous_eight_byte_frontier": performance_comparison,
         "language_verified_facts_reused": 0,
         "previous_four_byte_frontier": {
             "source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
@@ -246,10 +267,10 @@ def main() -> None:
             },
         },
         "scope": (
-            "source.ascii_global and its bounded source.ascii helper inspect eight bytes per MNCS "
+            "source.ascii_global and its bounded source.ascii helper inspect sixteen bytes per MNCS "
             "loop transition and return immediately at the first non-ASCII byte. ASCII tails "
-            "from zero through seventeen bytes and every non-ASCII position in a two-page "
-            "seventeen-byte view are checked alongside 64 KiB and 256 KiB cases. The selected "
+            "from zero through thirty-three bytes and every non-ASCII position in a four-page "
+            "thirty-three-byte view are checked alongside 64 KiB and 256 KiB cases. The selected "
             "source callable agrees across the reference interpreter, Cranelift, and one fresh "
             "canonical VM artifact. This is a bounded source-scanner frontier, not full "
             "source-module verification or compiler succession."
@@ -261,6 +282,7 @@ def main() -> None:
         "reference": results["reference_interpreter"],
         "cranelift": results["cranelift"],
         "canonical_vm": report["canonical_vm"],
+        "performance_comparison_vs_previous_eight_byte_frontier": performance_comparison,
         "resource_observation": report["resource_observation"],
     }, indent=2))
 

@@ -15,14 +15,14 @@ fn ascii<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
     return ascii_view<N>(source);
 }
 
-// Check eight bytes per interpreter transition. The bounded source views used
+// Check sixteen bytes per interpreter transition. The bounded source views used
 // by the compiler are often long, so a byte-at-a-time loop made ASCII
 // admission consume one MNCS step for every byte before parsing could start.
 fn ascii_view<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
-    let groups: u64 = source.len / 8;
+    let groups: u64 = source.len / 16;
     iterate group over source[0..groups] carrying valid: bool = true {
         if !valid { return false; }
-        let base: u64 = group * 8;
+        let base: u64 = group * 16;
         if source[base + 0] as u64 >= 128 { return false; }
         if source[base + 1] as u64 >= 128 { return false; }
         if source[base + 2] as u64 >= 128 { return false; }
@@ -31,9 +31,17 @@ fn ascii_view<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
         if source[base + 5] as u64 >= 128 { return false; }
         if source[base + 6] as u64 >= 128 { return false; }
         if source[base + 7] as u64 >= 128 { return false; }
+        if source[base + 8] as u64 >= 128 { return false; }
+        if source[base + 9] as u64 >= 128 { return false; }
+        if source[base + 10] as u64 >= 128 { return false; }
+        if source[base + 11] as u64 >= 128 { return false; }
+        if source[base + 12] as u64 >= 128 { return false; }
+        if source[base + 13] as u64 >= 128 { return false; }
+        if source[base + 14] as u64 >= 128 { return false; }
+        if source[base + 15] as u64 >= 128 { return false; }
         next valid = true;
     }
-    let tail: u64 = groups * 8;
+    let tail: u64 = groups * 16;
     if tail < source.len {
         if source[tail] as u64 >= 128 { return false; }
     }
@@ -54,6 +62,30 @@ fn ascii_view<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
     }
     if tail + 6 < source.len {
         if source[tail + 6] as u64 >= 128 { return false; }
+    }
+    if tail + 7 < source.len {
+        if source[tail + 7] as u64 >= 128 { return false; }
+    }
+    if tail + 8 < source.len {
+        if source[tail + 8] as u64 >= 128 { return false; }
+    }
+    if tail + 9 < source.len {
+        if source[tail + 9] as u64 >= 128 { return false; }
+    }
+    if tail + 10 < source.len {
+        if source[tail + 10] as u64 >= 128 { return false; }
+    }
+    if tail + 11 < source.len {
+        if source[tail + 11] as u64 >= 128 { return false; }
+    }
+    if tail + 12 < source.len {
+        if source[tail + 12] as u64 >= 128 { return false; }
+    }
+    if tail + 13 < source.len {
+        if source[tail + 13] as u64 >= 128 { return false; }
+    }
+    if tail + 14 < source.len {
+        if source[tail + 14] as u64 >= 128 { return false; }
     }
     return true;
 }

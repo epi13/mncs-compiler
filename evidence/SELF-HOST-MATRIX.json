@@ -166,7 +166,7 @@
         "ssa_verified_function_count": 20,
         "ssa_value_count": 693,
         "ssa_instruction_count": 198,
-        "current_source_sha256": "bad7625a6b41cb3a53104b2342b4efbe923b7efd179421baffaa61cfeab58865",
+        "current_source_sha256": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_ascii_global_four_byte_frontier": {
@@ -198,6 +198,57 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "source.ascii_global and its bounded source.ascii helper inspect four bytes per MNCS loop transition and return immediately at the first non-ASCII byte. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact on 64 KiB and 256 KiB cases. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
+        },
+        "selected_ascii_global_sixteen_byte_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "target_module": "mncs.compiler.source.v1",
+          "target_function": "ascii_global",
+          "candidate_source_sha256": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
+          "evidence_artifact": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json",
+          "evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6",
+          "canonical_vm_cases": 71,
+          "artifact_identity": "sha256:a8f01718662d4989f9e65909aaed6b4c5739f1b81e51231d3354045e9b229f1a",
+          "page_strides": [
+            9,
+            1024
+          ],
+          "reference_interpreter_steps_candidate": {
+            "ascii-64k": 585038,
+            "ascii-256k": 2340110,
+            "nonascii-last-256k": 2340012,
+            "nonascii-first-256k": 3114
+          },
+          "reference_interpreter_wall_seconds_candidate": {
+            "ascii-64k": 4.44139,
+            "ascii-256k": 6.772228,
+            "nonascii-last-256k": 6.723344,
+            "nonascii-first-256k": 0.361787
+          },
+          "performance_summary": {
+            "reference_interpreter_step_change_percent": {
+              "ascii-64k": -7.9,
+              "ascii-256k": -7.9,
+              "nonascii-last-256k": -7.9,
+              "nonascii-first-256k": 0.0
+            },
+            "reference_interpreter_wall_change_percent": {
+              "ascii-64k": 2.73,
+              "ascii-256k": 2.61,
+              "nonascii-last-256k": 1.99,
+              "nonascii-first-256k": -1.31
+            },
+            "canonical_vm_step_change_percent": {
+              "ascii-64k": -8.19,
+              "ascii-256k": -8.19,
+              "nonascii-last-256k": -8.19,
+              "nonascii-first-256k": 0.0
+            },
+            "interpretation": "Reference interpreter and canonical VM step counts fell about 7.9% on full 64 KiB and 256 KiB scans. Single-run reference and Cranelift wall times for the large scans were about 2% to 3% higher, so no wall-time speedup is claimed."
+          },
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "source.ascii_global and its bounded source.ascii helper inspect sixteen bytes per MNCS loop transition and return immediately at the first non-ASCII byte. ASCII tails from zero through thirty-three bytes and every non-ASCII position in a four-page thirty-three-byte view are checked alongside 64 KiB and 256 KiB cases. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
         },
         "selected_ascii_global_eight_byte_frontier": {
           "status": "passed_with_bounded_frontier",
@@ -704,7 +755,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Implement Language-owned verified-fact reuse under a provisioned narrow Language scope; continue native Test and compiler self-consumption work in Compiler meanwhile.",
+  "next_frontier": "Implement Language-owned verified-fact reuse once a narrow Language worktree grant is present; continue Compiler-only targeted self-consumption and native Test work in the meantime.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -1933,6 +1984,87 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "next_frontier": "Implement Language-owned verified-fact reuse under a provisioned narrow Language scope; continue native Test and compiler self-consumption work in Compiler meanwhile."
+    },
+    {
+      "kind": "source-ascii-global-sixteen-byte-canonical-vm-current-source",
+      "status": "passed_and_measured",
+      "observed_at": "2026-10-16T23:16:47Z",
+      "compiler_head": "32349a719d0ca5c1d216c3648573e0453d79fab3",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "working_tree_dirty_at_test": true,
+      "target_module": "mncs.compiler.source.v1",
+      "target_functions": [
+        "ascii_global"
+      ],
+      "selected_modules": [
+        "source"
+      ],
+      "module_source_sha256": {
+        "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "32349a719d0ca5c1d216c3648573e0453d79fab3",
+      "cases": 71,
+      "input_count": 71,
+      "page_strides": [
+        9,
+        1024
+      ],
+      "per_stride_case_counts": {
+        "9": 33,
+        "1024": 38
+      },
+      "executor_case_counts": {
+        "reference_interpreter": 71,
+        "cranelift": 71,
+        "canonical_vm": 71
+      },
+      "artifact_identity": "sha256:a8f01718662d4989f9e65909aaed6b4c5739f1b81e51231d3354045e9b229f1a",
+      "evidence_artifact": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json",
+      "evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6",
+      "performance_evidence": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json",
+      "performance_evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6",
+      "performance_summary": {
+        "reference_interpreter_step_change_percent": {
+          "ascii-64k": -7.9,
+          "ascii-256k": -7.9,
+          "nonascii-last-256k": -7.9,
+          "nonascii-first-256k": 0.0
+        },
+        "reference_interpreter_wall_change_percent": {
+          "ascii-64k": 2.73,
+          "ascii-256k": 2.61,
+          "nonascii-last-256k": 1.99,
+          "nonascii-first-256k": -1.31
+        },
+        "canonical_vm_step_change_percent": {
+          "ascii-64k": -8.19,
+          "ascii-256k": -8.19,
+          "nonascii-last-256k": -8.19,
+          "nonascii-first-256k": 0.0
+        },
+        "interpretation": "Reference interpreter and canonical VM step counts fell about 7.9% on full 64 KiB and 256 KiB scans. Single-run reference and Cranelift wall times for the large scans were about 2% to 3% higher, so no wall-time speedup is claimed."
+      },
+      "evidence_scope": "source.ascii_global and its bounded source.ascii helper inspect sixteen bytes per MNCS loop transition and return immediately at the first non-ASCII byte. ASCII tails from zero through thirty-three bytes and every non-ASCII position in a four-page thirty-three-byte view are checked alongside 64 KiB and 256 KiB cases. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a bounded source-scanner frontier, not full source-module verification or compiler succession.",
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    },
+    {
+      "kind": "cp0001-parser-full-project-pipeline-attempt",
+      "status": "unknown_timed_out",
+      "observed_at": "2026-10-16T23:16:47Z",
+      "compiler_head": "32349a719d0ca5c1d216c3648573e0453d79fab3",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "tier": "D",
+      "d_phase": "full",
+      "milestone": "parser",
+      "terminal_job_id": "term-d9b594ce9584d7cc76a9fce8",
+      "timeout_seconds": 120,
+      "exit_code": -15,
+      "result": "No verdict was produced; the harness emitted only probe-startup output, so the stage at timeout is unknown.",
+      "resource_measurements": "unavailable",
+      "retry_policy": "Do not repeat the unchanged full-project attempt; select a smaller executable dependency closure."
     }
   ],
   "whole_module_parse_snapshot": {
@@ -5693,7 +5825,7 @@
       "delivery_status": "implementation committed on campaign branch; merge and publish require Environment escalation"
     }
   },
-  "evidence_updated_at": "2026-10-16T22:04:45Z",
+  "evidence_updated_at": "2026-10-16T23:16:47Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -6347,104 +6479,7 @@
       }
     }
   },
-  "current_campaign_frontier_update": {
-    "kind": "source-ascii-global-eight-byte-canonical-vm-current-source",
-    "status": "passed",
-    "observed_at": "2026-10-16T22:04:45Z",
-    "compiler_head": "6596101e5ab9fee1ca383dfe81eeafe44421c2dd",
-    "compiler_branch": "campaign/native-application-readiness-20261013",
-    "target_module": "mncs.compiler.source.v1",
-    "target_functions": [
-      "ascii_global"
-    ],
-    "selected_modules": [
-      "source"
-    ],
-    "module_source_sha256": {
-      "source": "bad7625a6b41cb3a53104b2342b4efbe923b7efd179421baffaa61cfeab58865"
-    },
-    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
-    "vm_revision": "6596101e5ab9fee1ca383dfe81eeafe44421c2dd",
-    "cases": 39,
-    "input_count": 39,
-    "page_strides": [
-      9,
-      1024
-    ],
-    "per_stride_case_counts": {
-      "9": 17,
-      "1024": 22
-    },
-    "executor_case_counts": {
-      "reference_interpreter": 39,
-      "cranelift": 39,
-      "canonical_vm": 39
-    },
-    "artifact_identity": "sha256:e76ae81a06064ad0b8f02a1d7c4e6be58acb702a9d08b12bfdf5080bf050466a",
-    "evidence_artifact": "evidence/self-host-source-ascii-global-eight-byte-20261016.json",
-    "evidence_sha256": "9e96e187c5d5626f91f0d8b49e5aa891175c8a32ca1e90609a41b02a4cbf9b6d",
-    "performance_evidence": "evidence/self-host-source-ascii-global-eight-byte-20261016.json",
-    "performance_evidence_sha256": "9e96e187c5d5626f91f0d8b49e5aa891175c8a32ca1e90609a41b02a4cbf9b6d",
-    "performance_summary": {
-      "reference_interpreter_steps_previous_four_byte": {
-        "ascii-64k": 740174,
-        "ascii-256k": 2960654,
-        "nonascii-last-256k": 2960628,
-        "nonascii-first-256k": 3114
-      },
-      "reference_interpreter_steps_candidate": {
-        "ascii-64k": 635214,
-        "ascii-256k": 2540814,
-        "nonascii-last-256k": 2540764,
-        "nonascii-first-256k": 3114
-      },
-      "reference_step_change_percent": {
-        "ascii-64k": -14.18,
-        "ascii-256k": -14.18,
-        "nonascii-last-256k": -14.18,
-        "nonascii-first-256k": 0.0
-      },
-      "reference_interpreter_wall_seconds_previous_four_byte": {
-        "ascii-64k": 4.430541,
-        "ascii-256k": 7.790731,
-        "nonascii-last-256k": 7.692517,
-        "nonascii-first-256k": 0.367124
-      },
-      "reference_interpreter_wall_seconds_candidate": {
-        "ascii-64k": 4.323362,
-        "ascii-256k": 6.600266,
-        "nonascii-last-256k": 6.591984,
-        "nonascii-first-256k": 0.366573
-      },
-      "canonical_vm_steps_previous_four_byte": {
-        "ascii-64k": 937682,
-        "ascii-256k": 3750674,
-        "nonascii-last-256k": 3750639,
-        "nonascii-first-256k": 4149
-      },
-      "canonical_vm_steps_candidate": {
-        "ascii-64k": 800466,
-        "ascii-256k": 3201810,
-        "nonascii-last-256k": 3201743,
-        "nonascii-first-256k": 4149
-      },
-      "canonical_vm_wall_seconds_previous_four_byte": 11.380325,
-      "canonical_vm_wall_seconds_candidate": 10.729769,
-      "canonical_vm_peak_rss_kib": 294956,
-      "harness_peak_rss_kib": 428128,
-      "cgroup_memory": {
-        "memory.current": null,
-        "memory.max": null,
-        "memory.peak": null
-      },
-      "interpretation": "Reference interpreter steps fell about 14.18% on full 64 KiB and 256 KiB scans. Single-run wall times are workload observations, not a general speed guarantee."
-    },
-    "evidence_scope": "source.ascii_global and its bounded source.ascii helper inspect eight bytes per MNCS loop transition and return immediately at the first non-ASCII byte. ASCII tails from zero through seventeen bytes and every non-ASCII position in a two-page seventeen-byte view are checked alongside 64 KiB and 256 KiB cases. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a bounded source-scanner frontier, not full source-module verification or compiler succession.",
-    "language_verified_facts_reused": 0,
-    "stage1_claimed": false,
-    "stage2_claimed": false,
-    "next_frontier": "Implement Language-owned verified-fact reuse under a provisioned narrow Language scope; continue native Test and compiler self-consumption work in Compiler meanwhile."
-  },
+  "current_campaign_frontier_update": {"kind": "source-ascii-global-sixteen-byte-canonical-vm-current-source", "status": "passed_and_measured", "observed_at": "2026-10-16T23:16:47Z", "compiler_head": "32349a719d0ca5c1d216c3648573e0453d79fab3", "compiler_branch": "campaign/native-application-readiness-20261013", "working_tree_dirty_at_test": true, "target_module": "mncs.compiler.source.v1", "target_functions": ["ascii_global"], "selected_modules": ["source"], "module_source_sha256": {"source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1"}, "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e", "vm_revision": "32349a719d0ca5c1d216c3648573e0453d79fab3", "cases": 71, "input_count": 71, "page_strides": [9, 1024], "per_stride_case_counts": {"9": 33, "1024": 38}, "executor_case_counts": {"reference_interpreter": 71, "cranelift": 71, "canonical_vm": 71}, "artifact_identity": "sha256:a8f01718662d4989f9e65909aaed6b4c5739f1b81e51231d3354045e9b229f1a", "evidence_artifact": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json", "evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6", "performance_evidence": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json", "performance_evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6", "performance_summary": {"reference_interpreter_step_change_percent": {"ascii-64k": -7.9, "ascii-256k": -7.9, "nonascii-last-256k": -7.9, "nonascii-first-256k": 0.0}, "reference_interpreter_wall_change_percent": {"ascii-64k": 2.73, "ascii-256k": 2.61, "nonascii-last-256k": 1.99, "nonascii-first-256k": -1.31}, "canonical_vm_step_change_percent": {"ascii-64k": -8.19, "ascii-256k": -8.19, "nonascii-last-256k": -8.19, "nonascii-first-256k": 0.0}, "interpretation": "Reference interpreter and canonical VM step counts fell about 7.9% on full 64 KiB and 256 KiB scans. Single-run reference and Cranelift wall times for the large scans were about 2% to 3% higher, so no wall-time speedup is claimed."}, "evidence_scope": "source.ascii_global and its bounded source.ascii helper inspect sixteen bytes per MNCS loop transition and return immediately at the first non-ASCII byte. ASCII tails from zero through thirty-three bytes and every non-ASCII position in a four-page thirty-three-byte view are checked alongside 64 KiB and 256 KiB cases. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a bounded source-scanner frontier, not full source-module verification or compiler succession.", "language_verified_facts_reused": 0, "stage1_claimed": false, "stage2_claimed": false, "next_frontier": "Implement Language-owned verified-fact reuse once a narrow Language worktree grant is present; continue Compiler-only targeted self-consumption and native Test work in the meantime.", "additional_observation": {"kind": "cp0001-parser-full-project-pipeline-attempt", "status": "unknown_timed_out", "observed_at": "2026-10-16T23:16:47Z", "compiler_head": "32349a719d0ca5c1d216c3648573e0453d79fab3", "compiler_branch": "campaign/native-application-readiness-20261013", "tier": "D", "d_phase": "full", "milestone": "parser", "terminal_job_id": "term-d9b594ce9584d7cc76a9fce8", "timeout_seconds": 120, "exit_code": -15, "result": "No verdict was produced; the harness emitted only probe-startup output, so the stage at timeout is unknown.", "resource_measurements": "unavailable", "retry_policy": "Do not repeat the unchanged full-project attempt; select a smaller executable dependency closure."}},
   "campaign_frontier_history": [
     {
       "observed_at": "2026-10-16T18:11:57.731136Z",
@@ -6840,6 +6875,88 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "next_frontier": "Implement Language-owned verified-fact reuse under a provisioned narrow Language scope; continue native Test and compiler self-consumption work in Compiler meanwhile."
+    },
+    {
+      "kind": "source-ascii-global-sixteen-byte-canonical-vm-current-source",
+      "status": "passed_and_measured",
+      "observed_at": "2026-10-16T23:16:47Z",
+      "compiler_head": "32349a719d0ca5c1d216c3648573e0453d79fab3",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "working_tree_dirty_at_test": true,
+      "target_module": "mncs.compiler.source.v1",
+      "target_functions": [
+        "ascii_global"
+      ],
+      "selected_modules": [
+        "source"
+      ],
+      "module_source_sha256": {
+        "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "32349a719d0ca5c1d216c3648573e0453d79fab3",
+      "cases": 71,
+      "input_count": 71,
+      "page_strides": [
+        9,
+        1024
+      ],
+      "per_stride_case_counts": {
+        "9": 33,
+        "1024": 38
+      },
+      "executor_case_counts": {
+        "reference_interpreter": 71,
+        "cranelift": 71,
+        "canonical_vm": 71
+      },
+      "artifact_identity": "sha256:a8f01718662d4989f9e65909aaed6b4c5739f1b81e51231d3354045e9b229f1a",
+      "evidence_artifact": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json",
+      "evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6",
+      "performance_evidence": "evidence/self-host-source-ascii-global-sixteen-byte-20261016.json",
+      "performance_evidence_sha256": "65c40598ea199283e29f892efb900f6d3d495cced3edc2ab120853ccde6954e6",
+      "performance_summary": {
+        "reference_interpreter_step_change_percent": {
+          "ascii-64k": -7.9,
+          "ascii-256k": -7.9,
+          "nonascii-last-256k": -7.9,
+          "nonascii-first-256k": 0.0
+        },
+        "reference_interpreter_wall_change_percent": {
+          "ascii-64k": 2.73,
+          "ascii-256k": 2.61,
+          "nonascii-last-256k": 1.99,
+          "nonascii-first-256k": -1.31
+        },
+        "canonical_vm_step_change_percent": {
+          "ascii-64k": -8.19,
+          "ascii-256k": -8.19,
+          "nonascii-last-256k": -8.19,
+          "nonascii-first-256k": 0.0
+        },
+        "interpretation": "Reference interpreter and canonical VM step counts fell about 7.9% on full 64 KiB and 256 KiB scans. Single-run reference and Cranelift wall times for the large scans were about 2% to 3% higher, so no wall-time speedup is claimed."
+      },
+      "evidence_scope": "source.ascii_global and its bounded source.ascii helper inspect sixteen bytes per MNCS loop transition and return immediately at the first non-ASCII byte. ASCII tails from zero through thirty-three bytes and every non-ASCII position in a four-page thirty-three-byte view are checked alongside 64 KiB and 256 KiB cases. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a bounded source-scanner frontier, not full source-module verification or compiler succession.",
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "next_frontier": "Implement Language-owned verified-fact reuse once a narrow Language worktree grant is present; continue Compiler-only targeted self-consumption and native Test work in the meantime.",
+      "additional_observation": {
+        "kind": "cp0001-parser-full-project-pipeline-attempt",
+        "status": "unknown_timed_out",
+        "observed_at": "2026-10-16T23:16:47Z",
+        "compiler_head": "32349a719d0ca5c1d216c3648573e0453d79fab3",
+        "compiler_branch": "campaign/native-application-readiness-20261013",
+        "tier": "D",
+        "d_phase": "full",
+        "milestone": "parser",
+        "terminal_job_id": "term-d9b594ce9584d7cc76a9fce8",
+        "timeout_seconds": 120,
+        "exit_code": -15,
+        "result": "No verdict was produced; the harness emitted only probe-startup output, so the stage at timeout is unknown.",
+        "resource_measurements": "unavailable",
+        "retry_policy": "Do not repeat the unchanged full-project attempt; select a smaller executable dependency closure."
+      }
     }
   ]
 }
