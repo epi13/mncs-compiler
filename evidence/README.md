@@ -269,6 +269,18 @@ This establishes a pure native Test workflow slice. It does not establish
 retains a correctness-passing lexer experiment that was reverted after its
 matched 1,000,000-step profile showed more `next_token_global` work.
 
+## Digest application interface and specialization invalidation (2026-10-16)
+
+The [digest invalidation report](native-app-readiness-digest-interface-invalidation-20261016.json)
+extends the real `mncs-test` application-build workload in two ways. Changing
+the imported `suite.empty` signature reverified the frontend, regenerated the
+backend artifact, and preserved all pinned digest VM results. Editing the
+selected `assertions.equals_bytes<4>` body also reverified and regenerated its
+specialization; original and edited canonical VM calls both matched Stage-0.
+Fresh processes then reused each exact rebuilt artifact with zero frontend
+invocations. These checks establish safe artifact invalidation and reuse;
+they do not establish Language-owned verified-fact reuse, which remains zero.
+
 ## Native segment token batch frontier (2026-10-16)
 
 The [segment batch report](self-host-segment-batch-canonical-vm-20261016.json)
