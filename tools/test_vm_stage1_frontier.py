@@ -52,6 +52,11 @@ CASES.extend(
     (f"decl-suite-neg-{index:02d}", decl.test_decl.NEG[index], "neg")
     for index in (2, 5, 7, 13, 14, 18, 21, 28, 37, 44, 52, 54)
 )
+CASES.extend(
+    (f"missing-field-separator-{index - (len(decl.test_decl.NEG) - 2)}",
+     decl.test_decl.NEG[index], "neg")
+    for index in range(len(decl.test_decl.NEG) - 2, len(decl.test_decl.NEG))
+)
 
 
 def request_for(text):

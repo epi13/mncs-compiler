@@ -623,6 +623,12 @@ VARIANT_BOUNDARY_NEG = (
 )
 POS.append(VARIANT_BOUNDARY_POS)
 NEG.append(VARIANT_BOUNDARY_NEG)
+NEG.extend([
+    # Function parameters and nominal record fields require commas between
+    # adjacent names; keep both caller paths on the Stage-0 first-error span.
+    'mncs 0.18; module t; fn f(a: u64 b: u64) -> (r: u64) { return a; }',
+    'mncs 0.18; module t; record R { a: u64 b: u64 } fn f() -> (r: u64) { return 0; }',
+])
 
 # Self-ingestion: real compiler modules the native parser must consume
 # whole, with oracle agreement on declaration facts.

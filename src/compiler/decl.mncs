@@ -2851,10 +2851,14 @@ fn fields_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     if comma.diagnostic == 0 && comma.kind == 64 {
         return FieldsParse { cursor: comma.end, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list }, done: false };
     }
-    // The lookahead is also the next step's first token. Finish now when it
-    // cannot begin another field, avoiding a duplicate significant-token scan.
-    let more_fields: bool = comma.diagnostic == 0 && comma.kind != closer && (comma.kind == 4 || (name_mode == 1 && comma.kind == 25) || (name_mode == 2 && comma.kind == 34 && profile_013));
-    return FieldsParse { cursor: ftype.cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list }, done: !(more_fields) };
+    // A name-shaped lookahead without a comma is the missing-separator
+    // diagnostic. Do not reinterpret adjacent fields as a valid list: the
+    // Stage-0 grammar requires a comma before another field.
+    let missing_separator: bool = comma.diagnostic == 0 && comma.kind != closer && (comma.kind == 4 || (name_mode == 1 && comma.kind == 25) || (name_mode == 2 && comma.kind == 34 && profile_013));
+    if missing_separator {
+        return FieldsParse { cursor: st.cursor, ok: false, err_start: comma.start, err_end: comma.end, list: st.list, done: true };
+    }
+    return FieldsParse { cursor: ftype.cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FCons { head: field, tail: st.list }, done: true };
 }
 // Element spellings nest at most two levels: a flat type, or one nested
 // sequence with a flat element. A third level fails explicitly at the
