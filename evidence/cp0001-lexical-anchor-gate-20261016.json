@@ -1,0 +1,188 @@
+{
+  "captured_at": "2026-10-16T23:01:46Z",
+  "defect": {
+    "conflict": "D_PHASE=lexical documentation and per-row metadata said semantic and project pipeline work were not run, while the hidden anchors still compiled projects.",
+    "correction": "The lexical phase now skips pipeline_anchor and explicitly records that status. The default full phase retains its existing anchor calls.",
+    "prior_behavior": "tier_d unconditionally called pipeline_anchor after a lexical-only milestone. With no selected project probe, pipeline_anchor created a full probe and ran synthetic-1024 and synthetic-2049 project compilations."
+  },
+  "evidence_identity": "ev_cp0001_lex_anchor_gate_20261016",
+  "implementation": {
+    "branch": "campaign/native-application-readiness-20261013",
+    "change": "Run synthetic pipeline anchors only in D_PHASE=full. Bounded lexical mode records pipeline_anchor_status=not_run_lexical_phase.",
+    "changed_path": "tools/test_cp0001.py",
+    "changed_path_sha256": "18ca9502bd7ee68a5d0845f75c6df77dbe50558b7f1875ef51a3c3b0ee61fa63",
+    "commit": "4f5efc002a5c652fb5434202ad49643c688b23f0",
+    "compiler_semantics_changed": false,
+    "repository": "mncs-compiler"
+  },
+  "limitations": [
+    "These are bounded lexical self-source checks, not full native compiler builds of the parser, lexer, or flow modules.",
+    "Parser, proof, CFG, and verified SSA stages were not run in this lexical phase and remain unknown here.",
+    "The known CP-0022 `not` token divergence remains explicit for lexer and flow; no other lexical divergence was observed.",
+    "This evidence does not claim Language verified-fact reuse, Forge-routed application execution, Stage-1/Stage-2 succession, or complete CP-0001 Tier D success.",
+    "Tier A, Tier B, and Tier C were not run as part of these selected Tier D jobs; the previous ABC result remains separate."
+  ],
+  "resource_measurements": {
+    "cgroup_peak_memory_bytes": null,
+    "cpu_seconds": null,
+    "note": "The terminal job contract returned wall time and process status but no per-job CPU or peak-memory measurements; missing values remain unknown.",
+    "peak_rss_bytes": null
+  },
+  "schema_version": "mncs.compiler.cp0001-lexical-phase-evidence/1",
+  "validation": {
+    "backend": "cranelift",
+    "git_diff_check": "passed",
+    "python_compile": "passed",
+    "retained_sessions": 3,
+    "runner": "MNCS Control terminal, project-scoped bwrap sandbox, network disabled",
+    "runs": [
+      {
+        "job_id": "term-0fee6dddc1988ad7781407b8",
+        "lexical_result": {
+          "classified_cp0022_gaps": 0,
+          "stage0_exact": true,
+          "transport": true
+        },
+        "milestone": "parser",
+        "native_pipeline": "not_run",
+        "pages": [
+          992,
+          24,
+          6
+        ],
+        "pipeline_anchor_status": "not_run_lexical_phase",
+        "probe_requests": 30,
+        "result_sha256": "a6e5c9be6d2bb631e9bdcc15840f260e44ac291fbafe0131753dedb183a71f37",
+        "semantic_oracle": "not_run",
+        "source": {
+          "bytes": 5950,
+          "path": "src/compiler/parser.mncs",
+          "sha256": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc"
+        },
+        "stages": {
+          "cfg": null,
+          "lex": true,
+          "parse": null,
+          "proof": null,
+          "transport": true,
+          "verified_ssa": null
+        },
+        "stride_invariant": true,
+        "strides": [
+          6,
+          256,
+          1024
+        ],
+        "terminal_wall_seconds": 5.834,
+        "tokens_compared": 7227,
+        "tokens_per_stride": 2409
+      },
+      {
+        "content_fingerprint_by_stride": {
+          "1024": 18164070709463547267,
+          "256": 18164070709463547267,
+          "52": 18164070709463547267
+        },
+        "job_id": "term-20a714239002e68287ea46ce",
+        "lexical_result": {
+          "classified_cp0022_gaps": 26,
+          "exact_modulo_classified_gaps": true,
+          "first_gap_span": [
+            12860,
+            12861
+          ],
+          "stage0_exact": false,
+          "transport": true
+        },
+        "milestone": "lexer",
+        "native_pipeline": "not_run",
+        "pages": [
+          1013,
+          206,
+          52
+        ],
+        "pipeline_anchor_status": "not_run_lexical_phase",
+        "probe_requests": 84,
+        "result_sha256": "19a6d2cc5be21a196781aee66b4c58004341317dc0937782b0faaf8e04b6f9ee",
+        "script_elapsed_seconds": 14.731,
+        "semantic_oracle": "not_run",
+        "source": {
+          "bytes": 52652,
+          "path": "src/compiler/lexer.mncs",
+          "sha256": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215"
+        },
+        "stages": {
+          "cfg": null,
+          "lex": false,
+          "parse": null,
+          "proof": null,
+          "transport": true,
+          "verified_ssa": null
+        },
+        "stride_invariant": true,
+        "strides": [
+          52,
+          256,
+          1024
+        ],
+        "terminal_wall_seconds": 14.85,
+        "tokens_compared": 62130,
+        "tokens_per_stride": 20710
+      },
+      {
+        "content_fingerprint_by_stride": {
+          "1024": 13383375431632181670,
+          "256": 13383375431632181670,
+          "34": 13383375431632181670
+        },
+        "job_id": "term-adf888deffe1e6e3b360454c",
+        "lexical_result": {
+          "classified_cp0022_gaps": 8,
+          "exact_modulo_classified_gaps": true,
+          "first_gap_span": [
+            8071,
+            8072
+          ],
+          "stage0_exact": false,
+          "transport": true
+        },
+        "milestone": "flow",
+        "native_pipeline": "not_run",
+        "pages": [
+          998,
+          133,
+          34
+        ],
+        "pipeline_anchor_status": "not_run_lexical_phase",
+        "probe_requests": 60,
+        "result_sha256": "133f01b5559f64256a90cb8fdd5413ac895bbb2eaae971992fe5e24a762a6df1",
+        "script_elapsed_seconds": 9.848,
+        "semantic_oracle": "not_run",
+        "source": {
+          "bytes": 33922,
+          "path": "src/compiler/flow.mncs",
+          "sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        },
+        "stages": {
+          "cfg": null,
+          "lex": false,
+          "parse": null,
+          "proof": null,
+          "transport": true,
+          "verified_ssa": null
+        },
+        "stride_invariant": true,
+        "strides": [
+          34,
+          256,
+          1024
+        ],
+        "terminal_wall_seconds": 10.01,
+        "tokens_compared": 38583,
+        "tokens_per_stride": 12861
+      }
+    ],
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "timeout_seconds": 120
+  }
+}
