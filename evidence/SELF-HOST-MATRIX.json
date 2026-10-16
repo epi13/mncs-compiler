@@ -742,6 +742,34 @@
       },
       "evidence_artifact": "evidence/campaign-20261009-flow-resource-profile.json",
       "scope_note": "Adds resource/phase evidence only. Does not change the module stage matrix, establish an executable artifact, or claim Stage-1/Stage-2."
+    },
+    {
+      "kind": "segment-canonical-vm-current-source-differential",
+      "status": "passed",
+      "observed_at": "2026-10-16T02:32:21+00:00",
+      "compiler_head": "dc605f6b55ce3db646738331a6ef47ae44740cc5",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "target_module": "src/compiler/segment.mncs",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "segment"
+      ],
+      "module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "cases": 6564,
+      "tokens_compared": 3161,
+      "canonical_vm_completed_calls": 6564,
+      "artifact_identity": "sha256:edeb35bf701ac8581c2b748e2222600031b9bbfcd47ae757f889b1532887d361",
+      "semantic_digest_sha256": "af5475db88b112558f59210ab3d03d773fd04156e46242616d18501ddf30387e",
+      "evidence_artifact": "evidence/self-host-segment-canonical-vm-20261016.json",
+      "evidence_sha256": "0e922101d5ded7696f64c01286aa66fd124b57f72e57bb7cf5aca2f218bee189",
+      "evidence_scope": "Exact current compiler source segment/lexer helper workload through direct canonical VM artifact; Stage-0 reference and Cranelift semantic digests agree. This is not whole compiler succession."
     }
   ],
   "whole_module_parse_snapshot": {
@@ -3266,7 +3294,14 @@
       "flow_target": {
         "operation": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
         "backend": "reference_interpreter",
-        "selected_modules": ["source", "lexer", "parser", "segment", "decl", "flow"],
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
         "step_budget": 500000,
         "baseline_pages_for_six_selected_modules": 900,
         "experimental_pages_for_six_selected_modules": 901,
@@ -3323,7 +3358,11 @@
       "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
       "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
       "focused_semantic_validation": {
-        "cp0001_tiers": ["A", "B", "C"],
+        "cp0001_tiers": [
+          "A",
+          "B",
+          "C"
+        ],
         "result": "PASS",
         "stage0_project_oracle": "valid for selected source/lexer/parser modules; 54 linked functions, 19 SSA functions",
         "canonical_vm_or_full_module_native_proof": "not established by the focused differentials"
@@ -3347,7 +3386,10 @@
         "target_status": "budget_exhausted",
         "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
         "cgroup_oom_event_delta": 0,
-        "selected_compiler_module_pages_baseline_candidate": [900, 901],
+        "selected_compiler_module_pages_baseline_candidate": [
+          900,
+          901
+        ],
         "historical_flow_closure_pages": 894
       },
       "cranelift_native_proof_attempt": {
@@ -3402,7 +3444,11 @@
       "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
       "stage0_probe_sha256": "67e69202d012f57d6ef7dc5293b811d60055102974f747f40a9aebe1ad126af9",
       "focused_semantic_validation": {
-        "cp0001_tiers": ["A", "B", "C"],
+        "cp0001_tiers": [
+          "A",
+          "B",
+          "C"
+        ],
         "backend": "cranelift",
         "classification": "SUCCESS",
         "probe_requests": 1963,
@@ -3445,8 +3491,14 @@
         "baseline_mean_peak_rss_kib": 1753022,
         "candidate_mean_peak_rss_kib": 1751872,
         "peak_rss_change_kib": -1150,
-        "peak_fds_baseline_candidate": [5, 5],
-        "step_status_baseline_candidate": ["budget_exhausted", "budget_exhausted"],
+        "peak_fds_baseline_candidate": [
+          5,
+          5
+        ],
+        "step_status_baseline_candidate": [
+          "budget_exhausted",
+          "budget_exhausted"
+        ],
         "reported_steps_each_run": 1000000,
         "cgroup_oom_kill_delta_all_runs": 0,
         "rss_cap_mib": 1900,
@@ -3459,8 +3511,11 @@
         "keyword_mean_exclusive_ms_baseline": 6940.279,
         "keyword_mean_exclusive_ms_candidate": 365.86,
         "keyword_exclusive_reduction_percent": 94.728,
-        "keyword_profile_steps_baseline_candidate": [40394, 45279],
-      "next_token_global_mean_exclusive_ms_candidate": 39840.472
+        "keyword_profile_steps_baseline_candidate": [
+          40394,
+          45279
+        ],
+        "next_token_global_mean_exclusive_ms_candidate": 39840.472
       },
       "candidate_program_cache_preparation": {
         "classification": "SUCCESS",
@@ -3814,7 +3869,10 @@
         ]
       },
       "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
-      "phase_instrumentation_evidence": {"path": "evidence/campaign-20261010-flow-execution-phase-telemetry.json", "sha256": "8bcaa2752c0525a50e8641433a5d5530436fa5f1d0b2ae0bc6814cf81b910a93"},
+      "phase_instrumentation_evidence": {
+        "path": "evidence/campaign-20261010-flow-execution-phase-telemetry.json",
+        "sha256": "8bcaa2752c0525a50e8641433a5d5530436fa5f1d0b2ae0bc6814cf81b910a93"
+      },
       "flow_target_observation": {
         "backend": "reference_interpreter",
         "step_budget": 1000000,
@@ -4004,7 +4062,7 @@
       "delivery_state": "IMPLEMENTATION_COMMIT_PUSHED_TO_origin_main; identity follow-up is recorded in this evidence update"
     }
   },
-  "evidence_updated_at": "2026-10-10T15:53:22Z",
+  "evidence_updated_at": "2026-10-16T02:32:21+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity."
 }

@@ -37,7 +37,8 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import backend_policy
 import test_segment
-from test_segment import (SOURCE_BOUND, blob, decode, integer, nat_arg)
+from test_segment import (SOURCE_BOUND, blob, decode, integer, nat_arg,
+                          utf8_scalar_end)
 import test_vm_emit
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -171,7 +172,8 @@ def gen_cases(probe, texts, smoke):
         case('ascii', [blob(data)], False)
         first_bad = next(index for index, byte in enumerate(data) if byte >= 128)
         case('next_token', [blob(data), integer(first_bad)],
-             {'kind': 7, 'start': first_bad, 'end': first_bad + 1, 'diagnostic': 3})
+             {'kind': 7, 'start': first_bad,
+              'end': utf8_scalar_end(data, first_bad), 'diagnostic': 3})
         case('span_valid', [blob(data), integer(0), integer(len(data))], True)
     return cases, n_tokens
 
