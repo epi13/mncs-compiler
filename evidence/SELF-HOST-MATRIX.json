@@ -163,9 +163,28 @@
         "ssa_verified_function_count": 22,
         "ssa_value_count": 6257,
         "ssa_instruction_count": 2897,
-        "current_source_sha256": "2426e2b3dbf1199bb67390ba70ffe4f523a18b3e38cb03682b4ae7bdf31d0cfe",
+        "current_source_sha256": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7"
+      },
+      "selected_global_page_address_inline_frontier": {
+        "status": "passed",
+        "target_module": "mncs.compiler.segment.v1",
+        "target_functions": [
+          "next_token_global",
+          "significant_global"
+        ],
+        "cases": null,
+        "page_strides": [
+          1,
+          7,
+          64,
+          256
+        ],
+        "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+        "evidence_sha256": "c0c508d5d40d968447620d839b66f24ec9f321fdf3e976d8edb4d6a6916c2c23",
+        "candidate_lexer_source_sha256": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
+        "scope": "Selected token and significant-token cases preserve kinds, spans, diagnostics, and canonical VM behavior across Stage-0 expectations, the reference interpreter, Cranelift, and a fresh canonical VM. This is a lexer/segment frontier, not full lexer-module verification or succession."
       }
     },
     "kernel": {
@@ -311,7 +330,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "The global token cursor and parser-header frontiers pass Stage-0, reference interpreter, Cranelift, and fresh canonical VM checks. Inlining guarded global page arithmetic reduced interpreter steps by about 5\u20136% on the tested workloads; the 84 KB synthetic batch wall time was essentially unchanged and no general speedup is claimed. Next rerun the bounded decl::parse_unit_mode flow profile with this source before choosing the next lexer or declaration optimization.",
+  "next_frontier": "The current bounded Flow profile remains limited by next_token_global and significant_global while parse_unit_mode is incomplete at the 1,000,000-step budget. Profile the remaining lexer/declaration token path before choosing another optimization; require Stage-0, reference, Cranelift, and canonical VM parity. Keep full Flow and Stage-1/Stage-2 succession unproven.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -4433,62 +4452,88 @@
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
-    "observed_at": "2026-10-16T10:21:27.043364Z",
-    "compiler_head": "f5398ec17ad3164e090cac8844acd32b48636a07",
-    "completed_frontier": "global-segment-canonical-vm-page-arithmetic-inlined",
+    "observed_at": "2026-10-16T10:38:22.689820+00:00",
+    "compiler_head": "37cc7d8e41938a94cb1708c82d1ae8dee1b9d7d1",
+    "candidate_lexer_source_sha256": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
+    "completed_frontier": "next-token-global-inline-guarded-first-page-coordinates",
     "completed_frontier_evidence": "evidence/self-host-global-segment-canonical-vm-20261016.json",
-    "completed_frontier_evidence_sha256": "7df66b93081ecb20fb948de742998badbd670e06a31ae4150dc815aa3cc5d5b2",
-    "performance_evidence": "evidence/self-host-global-cursor-address-arithmetic-20261016.json",
-    "performance_evidence_sha256": "bb373841145d59369977ae1fea179b8fc6273ab351a017201fcaa1692c0ad80b",
+    "completed_frontier_evidence_sha256": "c0c508d5d40d968447620d839b66f24ec9f321fdf3e976d8edb4d6a6916c2c23",
+    "declaration_parse_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+    "declaration_parse_evidence_sha256": "e0c3b51205d3a4084c30032fc7661226d23e1fae5ea2d4665ba95d4c82c3059e",
+    "parser_header_evidence": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+    "parser_header_evidence_sha256": "2a228fac290175c6a7a0daaf86deacf8e69eda8e567954f532d893db3bfce73f",
+    "performance_evidence": "evidence/self-host-global-page-address-inline-profile-20261016.json",
+    "performance_evidence_sha256": "e030f10a979542fa5a176d26e0e08a16454aa5bef491c9aa73931117e1d66694",
+    "profile_summary": {
+      "budget": 1000000,
+      "target_status": "budget_exhausted",
+      "global_page_address_calls_before": 1674,
+      "global_page_address_calls_after": 1,
+      "target_wall_before_seconds": 91.686807752,
+      "target_wall_after_seconds": 88.855186255,
+      "facts_reused": 0
+    },
+    "next_frontier": "The current bounded Flow profile remains limited by next_token_global and significant_global while parse_unit_mode is incomplete at the 1,000,000-step budget. Profile the remaining lexer/declaration token path before choosing another optimization; require Stage-0, reference, Cranelift, and canonical VM parity. Keep full Flow and Stage-1/Stage-2 succession unproven.",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
     "previous_frontier_update": {
-      "observed_at": "2026-10-16T09:52:53.987607Z",
-      "compiler_head": "c3f5a6cbcfaa1f07fd00ed86e048cc4dc1e23e61",
-      "completed_frontier": "global-segment-token-cursors-canonical-vm-1208-cases",
+      "observed_at": "2026-10-16T10:21:27.043364Z",
+      "compiler_head": "f5398ec17ad3164e090cac8844acd32b48636a07",
+      "completed_frontier": "global-segment-canonical-vm-page-arithmetic-inlined",
       "completed_frontier_evidence": "evidence/self-host-global-segment-canonical-vm-20261016.json",
-      "completed_frontier_evidence_sha256": "82a4ac280a3a77a06d00a2df417b6f7787efa787b59447b13030109d6454c093",
+      "completed_frontier_evidence_sha256": "7df66b93081ecb20fb948de742998badbd670e06a31ae4150dc815aa3cc5d5b2",
+      "performance_evidence": "evidence/self-host-global-cursor-address-arithmetic-20261016.json",
+      "performance_evidence_sha256": "bb373841145d59369977ae1fea179b8fc6273ab351a017201fcaa1692c0ad80b",
       "previous_frontier_update": {
-        "observed_at": "2026-10-16T09:40:50.381374Z",
-        "compiler_head": "c158af57ceea7b04db5f6e3e3bfde2a074ca72ae",
-        "completed_frontier": "parser-header-global-canonical-vm-page-boundaries-88-cases",
-        "completed_frontier_evidence": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
-        "completed_frontier_evidence_sha256": "77102b68672a4a638917857da52338e4b0ad2b9280ad97581096d5472de87c95",
+        "observed_at": "2026-10-16T09:52:53.987607Z",
+        "compiler_head": "c3f5a6cbcfaa1f07fd00ed86e048cc4dc1e23e61",
+        "completed_frontier": "global-segment-token-cursors-canonical-vm-1208-cases",
+        "completed_frontier_evidence": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+        "completed_frontier_evidence_sha256": "82a4ac280a3a77a06d00a2df417b6f7787efa787b59447b13030109d6454c093",
         "previous_frontier_update": {
-          "observed_at": "2026-10-16T09:29:22.023306Z",
-          "compiler_head": "2df704927537706c84de636915af19f164b97264",
-          "completed_frontier": "parser-header-canonical-vm-19-cases",
-          "completed_frontier_evidence": "evidence/self-host-parser-header-canonical-vm-20261016.json",
-          "completed_frontier_evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
+          "observed_at": "2026-10-16T09:40:50.381374Z",
+          "compiler_head": "c158af57ceea7b04db5f6e3e3bfde2a074ca72ae",
+          "completed_frontier": "parser-header-global-canonical-vm-page-boundaries-88-cases",
+          "completed_frontier_evidence": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+          "completed_frontier_evidence_sha256": "77102b68672a4a638917857da52338e4b0ad2b9280ad97581096d5472de87c95",
           "previous_frontier_update": {
-            "observed_at": "2026-10-16T08:35:33.450878Z",
-            "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
-            "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
-            "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+            "observed_at": "2026-10-16T09:29:22.023306Z",
+            "compiler_head": "2df704927537706c84de636915af19f164b97264",
+            "completed_frontier": "parser-header-canonical-vm-19-cases",
+            "completed_frontier_evidence": "evidence/self-host-parser-header-canonical-vm-20261016.json",
+            "completed_frontier_evidence_sha256": "67f741d5f2922e335b6f5e32db231a1e5ca3fb26d94580b451745b0792766cc4",
             "previous_frontier_update": {
-              "observed_at": "2026-10-16T06:55:47Z",
-              "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
-              "completed_frontier": "decl-parse-canonical-vm-five-cases",
-              "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
-              "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
-              "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+              "observed_at": "2026-10-16T08:35:33.450878Z",
+              "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
+              "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
+              "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+              "previous_frontier_update": {
+                "observed_at": "2026-10-16T06:55:47Z",
+                "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+                "completed_frontier": "decl-parse-canonical-vm-five-cases",
+                "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
+                "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
+                "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+              },
+              "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+              "stage1_claimed": false,
+              "stage2_claimed": false
             },
-            "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+            "next_frontier": "Extend the selected header workload through parser.header_global across logical-page boundaries, then add another independently checked parser execution slice. Keep Stage-1 and Stage-2 unproven.",
             "stage1_claimed": false,
             "stage2_claimed": false
           },
-          "next_frontier": "Extend the selected header workload through parser.header_global across logical-page boundaries, then add another independently checked parser execution slice. Keep Stage-1 and Stage-2 unproven.",
+          "next_frontier": "Add one independently checked parser token or declaration execution slice through the canonical VM with exact Stage-0 parity; keep succession unproven.",
           "stage1_claimed": false,
           "stage2_claimed": false
         },
-        "next_frontier": "Add one independently checked parser token or declaration execution slice through the canonical VM with exact Stage-0 parity; keep succession unproven.",
+        "next_frontier": "Carry the verified global token cursor through one bounded parser callable or declaration slice; keep full-module and succession claims unproven.",
         "stage1_claimed": false,
         "stage2_claimed": false
       },
-      "next_frontier": "Carry the verified global token cursor through one bounded parser callable or declaration slice; keep full-module and succession claims unproven.",
+      "next_frontier": "Rerun the bounded decl::parse_unit_mode flow profile against current lexer source; inspect remaining token-window and significant-token cost before selecting another optimization. Keep Stage-1 and Stage-2 unproven.",
       "stage1_claimed": false,
       "stage2_claimed": false
-    },
-    "next_frontier": "Rerun the bounded decl::parse_unit_mode flow profile against current lexer source; inspect remaining token-window and significant-token cost before selecting another optimization. Keep Stage-1 and Stage-2 unproven.",
-    "stage1_claimed": false,
-    "stage2_claimed": false
+    }
   }
 }

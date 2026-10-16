@@ -1,0 +1,418 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-profile/1",
+  "kind": "bounded-flow-parse-unit-mode-global-page-address-inline",
+  "observed_at": "2026-10-16T10:38:22.689820+00:00",
+  "status": "profiled-bounded-prefix; semantic result incomplete by step budget",
+  "claim_boundary": "Both profiles executed the same six-module Flow target for the same 1,000,000 reference-interpreter step budget. The target remained incomplete at decl::parse_unit_mode; Stage-0 oracle was skipped. The profile is workload evidence and does not establish complete Flow verification or compiler succession. One global_page_address call remains in the selected runtime profile after the repeated next_token_global call site is inlined.",
+  "compiler": {
+    "tested_commit_before_candidate": "37cc7d8e41938a94cb1708c82d1ae8dee1b9d7d1",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "8501213a86634661a0a9d7200257831e1aec042a67840313518121c89d54f145",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+    },
+    "baseline_combined_source_identity_sha256": "2dc3190cbc233fe8a945050709f45067bf923c3170d96cf3ab9cd6bb3ac4997c",
+    "candidate_combined_source_identity_sha256": "dcd22b65c369135aab12520ee8488ea552dfc347e9778cb75c418ab4383cda58",
+    "candidate_lexer_sha256": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1"
+  },
+  "toolchain": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "profile_harness": "tools/measure_compiler_probe.py",
+    "profile_harness_sha256": "2d031245a44c40d3c9c3554e20211540320370b91d9b162a92b9bc697d74b914",
+    "target_probe_harness": "tools/probe_compiler_module_frontier.py",
+    "target_probe_harness_sha256": "b636ef205c35f0587ad929df6432c38adbe0343f688e03f12d8e812e47ffb006"
+  },
+  "profile_command": [
+    "python tools/measure_compiler_probe.py",
+    "--backend",
+    "reference_interpreter",
+    "--modules",
+    "source",
+    "lexer",
+    "parser",
+    "segment",
+    "decl",
+    "flow",
+    "--target-last",
+    "--skip-stage0-oracle",
+    "--step-budget",
+    "1000000",
+    "--runtime-profile",
+    "--timeout-seconds",
+    "180",
+    "--sample-seconds",
+    "1",
+    "--max-probe-rss-mib",
+    "4096"
+  ],
+  "comparison": {
+    "baseline": {
+      "label": "decl-parse-unit-mode-after-global-cursor-20261016",
+      "compiler_source_identity_sha256": "2dc3190cbc233fe8a945050709f45067bf923c3170d96cf3ab9cd6bb3ac4997c",
+      "target": {
+        "module": "mncs.compiler.project.v1",
+        "function": "compile_project_target",
+        "root_source_module": "flow",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "target_input_modules": [
+          "decl",
+          "flow",
+          "lexer",
+          "parser",
+          "segment",
+          "source"
+        ],
+        "reference_steps": 1000000,
+        "step_budget": 1000000,
+        "status": "budget_exhausted",
+        "native_failure": {
+          "identity": null,
+          "reason": "execution step budget exhausted"
+        },
+        "stage0_oracle_skipped": true,
+        "input_total_page_count_at_stride_1024": 903
+      },
+      "timing": {
+        "whole_measurement_wall_seconds": 146.243,
+        "probe_child_cpu_seconds": 143.03,
+        "probe_child_user_cpu_seconds": 142.03,
+        "probe_child_system_cpu_seconds": 1.0,
+        "retained_session_admission_seconds": 53.257179071,
+        "target_transport_and_execution_seconds": 91.686807752
+      },
+      "resources": {
+        "probe_child_peak_rss_kib": 1842904,
+        "host_memory_available_before_bytes": 25375121408,
+        "host_memory_available_after_bytes": 25308381184,
+        "cgroup_measurement": {
+          "memory_events": {
+            "oom_kill": 0,
+            "oom_group_kill": 0,
+            "high": 0,
+            "max": 0,
+            "low": 0,
+            "sock_throttled": 0,
+            "oom": 0
+          },
+          "cpu_stat": {
+            "nr_periods": 0,
+            "core_sched.force_idle_usec": 0,
+            "nr_throttled": 0,
+            "burst_usec": 0,
+            "system_usec": 1686370,
+            "nice_usec": 0,
+            "usage_usec": 152134171,
+            "user_usec": 150447800,
+            "nr_bursts": 0,
+            "throttled_usec": 0
+          },
+          "memory_pressure_total_usec": {
+            "full": 0,
+            "some": 0
+          }
+        },
+        "rss_limit_mib": 4096,
+        "rss_limit_triggered": false,
+        "oom_kill_increment": 0
+      },
+      "profiled_steps": 1000000,
+      "step_count_matches_result": true,
+      "profile_elapsed_seconds": 82.242464553,
+      "hot_functions": {
+        "next_token_global": {
+          "calls": 1673,
+          "steps": 514461,
+          "exclusive_ns": 49380244850,
+          "inclusive_ns": 55516177472
+        },
+        "significant_global": {
+          "calls": 910,
+          "steps": 10844,
+          "exclusive_ns": 10129846603,
+          "inclusive_ns": 65839218454
+        },
+        "scan_chunk_window": {
+          "calls": 2577,
+          "steps": 101358,
+          "exclusive_ns": 3050648699,
+          "inclusive_ns": 3087355209
+        },
+        "token_from_word_scan_global": {
+          "calls": 364,
+          "steps": 10556,
+          "exclusive_ns": 1190534973,
+          "inclusive_ns": 1716298889
+        },
+        "source_global_page_address": {
+          "calls": 1674,
+          "steps": 18414,
+          "exclusive_ns": 147444610,
+          "inclusive_ns": 147444610
+        }
+      },
+      "parse_unit_mode_progress_samples": [
+        {
+          "block": "b18",
+          "frame_steps": 363188,
+          "call_depth": 5,
+          "elapsed_ns": 18371991814
+        },
+        {
+          "block": "b18",
+          "frame_steps": 703403,
+          "call_depth": 5,
+          "elapsed_ns": 51695988840
+        },
+        {
+          "block": "b18",
+          "frame_steps": 969833,
+          "call_depth": 5,
+          "elapsed_ns": 79242534672
+        }
+      ],
+      "runtime_profile": {
+        "schema_version": "mncs.language.body-runtime-profile/1",
+        "program_identity": "mncs:0.2:program:mncs.compiler.project.v1",
+        "program_fingerprint": "20c321aa4a2c0999e09dad52652ac56ef69e365e10944af9c835ee4a9b9cd1df",
+        "status": "budget_exhausted",
+        "step_count_matches_result": true,
+        "profiled_steps": 1000000
+      }
+    },
+    "candidate": {
+      "label": "decl-parse-unit-mode-after-inline-first-address-20261016",
+      "compiler_source_identity_sha256": "dcd22b65c369135aab12520ee8488ea552dfc347e9778cb75c418ab4383cda58",
+      "target": {
+        "module": "mncs.compiler.project.v1",
+        "function": "compile_project_target",
+        "root_source_module": "flow",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "target_input_modules": [
+          "decl",
+          "flow",
+          "lexer",
+          "parser",
+          "segment",
+          "source"
+        ],
+        "reference_steps": 1000000,
+        "step_budget": 1000000,
+        "status": "budget_exhausted",
+        "native_failure": {
+          "identity": null,
+          "reason": "execution step budget exhausted"
+        },
+        "stage0_oracle_skipped": true,
+        "input_total_page_count_at_stride_1024": 903
+      },
+      "timing": {
+        "whole_measurement_wall_seconds": 143.237,
+        "probe_child_cpu_seconds": 140.20999999999998,
+        "probe_child_user_cpu_seconds": 139.14,
+        "probe_child_system_cpu_seconds": 1.07,
+        "retained_session_admission_seconds": 53.320242177,
+        "target_transport_and_execution_seconds": 88.855186255
+      },
+      "resources": {
+        "probe_child_peak_rss_kib": 1858792,
+        "host_memory_available_before_bytes": 25308360704,
+        "host_memory_available_after_bytes": 25330102272,
+        "cgroup_measurement": {
+          "memory_events": {
+            "low": 0,
+            "oom_kill": 0,
+            "sock_throttled": 0,
+            "oom": 0,
+            "oom_group_kill": 0,
+            "high": 0,
+            "max": 0
+          },
+          "cpu_stat": {
+            "core_sched.force_idle_usec": 0,
+            "nice_usec": 0,
+            "nr_bursts": 0,
+            "user_usec": 147282775,
+            "burst_usec": 0,
+            "system_usec": 1740755,
+            "nr_throttled": 0,
+            "nr_periods": 0,
+            "usage_usec": 149023531,
+            "throttled_usec": 0
+          },
+          "memory_pressure_total_usec": {
+            "some": 0,
+            "full": 0
+          }
+        },
+        "rss_limit_mib": 4096,
+        "rss_limit_triggered": false,
+        "oom_kill_increment": 0
+      },
+      "profiled_steps": 1000000,
+      "step_count_matches_result": true,
+      "profile_elapsed_seconds": 79.409525973,
+      "hot_functions": {
+        "next_token_global": {
+          "calls": 1751,
+          "steps": 517514,
+          "exclusive_ns": 45332656844,
+          "inclusive_ns": 51538220864
+        },
+        "significant_global": {
+          "calls": 961,
+          "steps": 11257,
+          "exclusive_ns": 10569559089,
+          "inclusive_ns": 62311350470
+        },
+        "scan_chunk_window": {
+          "calls": 2604,
+          "steps": 101817,
+          "exclusive_ns": 3146252909,
+          "inclusive_ns": 3184131181
+        },
+        "token_from_word_scan_global": {
+          "calls": 384,
+          "steps": 8834,
+          "exclusive_ns": 1228981348,
+          "inclusive_ns": 1778550322
+        },
+        "source_global_page_address": {
+          "calls": 1,
+          "steps": 11,
+          "exclusive_ns": 79260,
+          "inclusive_ns": 79260
+        }
+      },
+      "parse_unit_mode_progress_samples": [
+        {
+          "block": "b18",
+          "frame_steps": 356560,
+          "call_depth": 5,
+          "elapsed_ns": 17253442763
+        },
+        {
+          "block": "b18",
+          "frame_steps": 682989,
+          "call_depth": 5,
+          "elapsed_ns": 48338397028
+        },
+        {
+          "block": "b18",
+          "frame_steps": 937230,
+          "call_depth": 5,
+          "elapsed_ns": 73381951803
+        }
+      ],
+      "runtime_profile": {
+        "schema_version": "mncs.language.body-runtime-profile/1",
+        "program_identity": "mncs:0.2:program:mncs.compiler.project.v1",
+        "program_fingerprint": "2c64b534a8bfd529f8226b4bc22e93a667787430b1f11f9852beb2dd0de4bdd6",
+        "status": "budget_exhausted",
+        "step_count_matches_result": true,
+        "profiled_steps": 1000000
+      }
+    },
+    "observed_delta": {
+      "global_page_address_calls": -1673,
+      "global_page_address_steps": -18403,
+      "whole_measurement_wall_seconds": -3.0060000000000002,
+      "probe_child_cpu_seconds": -2.8200000000000216,
+      "target_transport_and_execution_seconds": -2.8316214970000004,
+      "probe_child_peak_rss_kib": 15888,
+      "repeat_count_per_candidate": 1,
+      "interpretation": "One run per source. The observed time reduction is directional, workload-specific, and not a general guarantee."
+    }
+  },
+  "verification": {
+    "bounded_global_scan_modes": {
+      "status": "passed",
+      "harness": "tools/test_global_scan_modes.py",
+      "source_bytes": 5250,
+      "page_size": 1024,
+      "boundary_cases": [
+        "word at offset 1023",
+        "number at offset 2046",
+        "nested block opener at offset 3071",
+        "block closer at offset 4095",
+        "line-comment newline after page edge at offset 5118"
+      ],
+      "canonical_backend_steps": 262739,
+      "token_count": 11,
+      "stage0_token_count": 11,
+      "token_spans_and_eof_match": true
+    },
+    "global_segment_frontier": {
+      "status": "passed",
+      "harness": "tools/test_vm_global_segment_frontier.py",
+      "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+      "evidence_sha256": "c0c508d5d40d968447620d839b66f24ec9f321fdf3e976d8edb4d6a6916c2c23",
+      "case_count": null,
+      "semantic_digests": null,
+      "module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+      },
+      "canonical_vm_peak_rss_kib": null,
+      "whole_frontier_seconds": null
+    },
+    "parser_header_frontier": {
+      "status": "passed",
+      "harness": null,
+      "evidence_artifact": "evidence/self-host-parser-header-global-canonical-vm-20261016.json",
+      "evidence_sha256": "2a228fac290175c6a7a0daaf86deacf8e69eda8e567954f532d893db3bfce73f",
+      "case_count": null,
+      "semantic_digest_sha256": null,
+      "module_source_sha256": null,
+      "canonical_vm_peak_rss_kib": null,
+      "whole_frontier_seconds": null
+    },
+    "declaration_parse_frontier": {
+      "status": "passed",
+      "harness": "tools/test_vm_stage1_frontier.py",
+      "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+      "evidence_sha256": "e0c3b51205d3a4084c30032fc7661226d23e1fae5ea2d4665ba95d4c82c3059e",
+      "case_count": 32,
+      "semantic_digests": {
+        "reference_interpreter": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+        "cranelift": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+        "canonical_vm": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0"
+      },
+      "module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "0a0f34cfad5507a8f2a9e583efba15b91fdebde236ad2cc3430aaa0dab11d2f1",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "8501213a86634661a0a9d7200257831e1aec042a67840313518121c89d54f145"
+      },
+      "canonical_vm_peak_rss_kib": 354828,
+      "whole_frontier_seconds": 146.796107
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "next_frontier": "Profile the remaining lexer/declaration token path before selecting another optimization; keep complete Flow verification and Stage-1/Stage-2 succession unproven."
+}
