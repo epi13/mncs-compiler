@@ -180,7 +180,7 @@ fn application_cache_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-key/4",
+        "schema_version": "mncs.compiler.application-build-cache-key/5",
         "contract": contract,
         "source_snapshot_identity": source_identity,
         "root_source_id": root_id,
@@ -198,7 +198,7 @@ fn application_cache_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache/4\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache/5\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -220,7 +220,7 @@ fn application_cache_index_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-index-key/3",
+        "schema_version": "mncs.compiler.application-build-cache-index-key/4",
         "contract": contract,
         "root_source_id": root_id,
         "root_source_sha256": format!("sha256:{}", mncs_model::sha256_hex(root_source.as_bytes())),
@@ -237,7 +237,7 @@ fn application_cache_index_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache-index/3\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache-index/4\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -778,24 +778,22 @@ fn application_executable_closure_identity(
         }
     }
 
-    // A host specialization argument can resolve through declarations that
-    // are not present in the generic function's concrete body types. Bind all
-    // nominal declarations when explicit seeds are present; this is
-    // deliberately conservative until the Language facts API exposes the
-    // resolved type arguments directly.
-    if !generic_seeds.is_empty() {
-        nominal_types.extend(
-            program
-                .record_types
-                .iter()
-                .map(|record| record.identity.clone()),
-        );
-        nominal_types.extend(
-            program
-                .finite_types
-                .iter()
-                .map(|finite| finite.identity.clone()),
-        );
+    // Specialization records already contain Language-resolved argument
+    // identities. Include those exact nominal dependencies: host-selected
+    // types may not occur in the generic body's source-level types, while
+    // binding every nominal declaration would invalidate an executable
+    // artifact after an unrelated type edit.
+    let selected_functions = function_facts.keys().cloned().collect::<BTreeSet<_>>();
+    for specialization in program
+        .generic_specializations
+        .iter()
+        .filter(|row| selected_functions.contains(&row.generic_function.0))
+    {
+        for argument in &specialization.args {
+            if let mncs_model::GenericArg::Type { ty } = argument {
+                collect_nominal_type_identities(ty, &mut nominal_types);
+            }
+        }
     }
 
     let mut type_facts = BTreeMap::<String, String>::new();
@@ -834,7 +832,6 @@ fn application_executable_closure_identity(
         type_facts.insert(identity.0, fingerprint);
     }
 
-    let selected_functions = function_facts.keys().cloned().collect::<BTreeSet<_>>();
     let specializations = program
         .generic_specializations
         .iter()
@@ -843,7 +840,7 @@ fn application_executable_closure_identity(
         .collect::<Result<Vec<_>, _>>()
         .ok()?;
     let identity = json!({
-        "schema_version": "mncs.compiler.application-executable-closure-identity/1",
+        "schema_version": "mncs.compiler.application-executable-closure-identity/2",
         "root_module": program.module,
         "callable_roots": callable_roots,
         "generic_seed_keys": generic_seed_keys,
@@ -852,7 +849,7 @@ fn application_executable_closure_identity(
         "generic_specializations": specializations,
         "program_assumptions": program.assumptions,
     });
-    let mut bytes = b"mncs.compiler.application-executable-closure-identity/1\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-executable-closure-identity/2\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).ok()?);
     Some(format!("sha256:{}", mncs_model::sha256_hex(&bytes)))
 }
@@ -1246,7 +1243,7 @@ mod tests {
         envelope, ApplicationSources,
     };
     use mncs_compiler::ReferenceCompiler;
-    use mncs_model::ArtifactRepresentation;
+    use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
     use serde_json::json;
     use std::collections::BTreeMap;
@@ -1480,6 +1477,46 @@ mod tests {
         let unaffected_first = closure_identity(&source(3), &first_only);
         assert_ne!(baseline, changed_second);
         assert_eq!(closure_identity(&source(2), &first_only), unaffected_first);
+    }
+
+    #[test]
+    fn executable_closure_identity_tracks_selected_generic_type_arguments_only() {
+        let compile = |used_fields: &str, unrelated_fields: &str| {
+            let source = format!(
+                "mncs 0.18; module semantic.generic; \
+                 record Used {{ {used_fields} }} \
+                 record Unused {{ {unrelated_fields} }} \
+                 fn identity<T>(value: T) -> (result: T) {{ return value; }}"
+            );
+            let seed = HostGenericSeedRequest::from_request(
+                "semantic.generic",
+                "identity",
+                &[ExecutionTypeArgument::Type {
+                    ty: "Used".to_owned(),
+                }],
+            );
+            let seeds = [seed];
+            let frontend =
+                ReferenceCompiler::default().front_end_with_seeds(envelope(&source), &seeds);
+            assert!(
+                frontend.is_valid(),
+                "generic closure source: {:?}",
+                frontend.diagnostics
+            );
+            application_executable_closure_identity(
+                frontend.program.as_ref().expect("valid generic Program"),
+                &[("semantic.generic".to_owned(), "identity".to_owned())],
+                &seeds,
+            )
+            .expect("verified generic executable closure identity")
+        };
+
+        let baseline = compile("value: u64", "left: u64");
+        let unrelated_type_edit = compile("value: u64", "left: u64, right: u64");
+        assert_eq!(baseline, unrelated_type_edit);
+
+        let selected_type_edit = compile("value: u64, next: u64", "left: u64");
+        assert_ne!(baseline, selected_type_edit);
     }
 }
 
