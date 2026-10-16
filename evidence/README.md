@@ -167,6 +167,24 @@ KiB and canonical VM peak RSS was 362,076 KiB. Cgroup readings were unavailable.
 This is a function frontier, not full declaration-module or succession
 evidence; it reused zero Language verified facts.
 
+## Current declaration checker frontier (2026-10-16)
+
+The [current `decl.check_unit` frontier](self-host-decl-check-unit-canonical-vm-20261016.json)
+runs all nine focused declaration-check cases through the pinned reference
+interpreter, Cranelift, and one fresh canonical VM artifact. The cases cover
+successful structural IR checks, duplicate function names, unresolved calls,
+generic signatures, and iterate/index/cast/slice bodies. All three executors
+returned the same digest, `0abe0e3e…e59cc`. The canonical VM batch took 12.35
+seconds and peaked at 362,656 KiB; the complete run took 136.04 seconds and
+134.41 child CPU seconds. Host memory was sampled; cgroup readings were
+unavailable.
+
+This advances the native self-consumption frontier from parsing into
+declaration resolution and structural IR verification. `check_unit` parses
+each complete source unit and does not perform full type checking. It reused
+zero Language-owned verified facts; full declaration-module verification and
+Stage-1/Stage-2 succession remain unproven.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:
