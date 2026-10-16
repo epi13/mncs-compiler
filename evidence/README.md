@@ -282,3 +282,17 @@ application-build/5 contract and artifact identity checks remained intact. The
 also retains the post-change invalid-input, Store-input validation, and local
 VM adapter checks. These host-specific measurements do not represent Language
 verified-fact reuse or the live Forge/Environment/Store effectful route.
+
+## Raw application-cache response verification (2026-10-16)
+
+The [cache response validation report](native-app-readiness-probe-cache-response-validation-20261016.json)
+records the next warm-hit improvement. For the same digest snapshot, exact
+cache lookup fell from 100.0 ms to 53.6 ms, warm-hit wall time fell from 0.581
+to 0.550 seconds, and sampled peak RSS fell from 48 MiB to 34 MiB. The reader
+hashes the exact stored response bytes and deserializes the response once,
+without changing cache-entry/3. A tampered artifact identity with a stale
+response digest was rejected and rebuilt through the full frontend. The
+[provider regression record](native-app-readiness-provider-digest-raw-response-20261016.json)
+passed invalid-source, corrupt Store-input, and local VM adapter checks. This
+still reuses zero Language verified facts and does not establish live
+Forge/Environment/Store execution.
