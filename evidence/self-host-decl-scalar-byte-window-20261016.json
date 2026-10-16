@@ -1,0 +1,160 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.self-host-decl-scalar-byte-window-profile",
+  "observed_at": "2026-10-16T13:27:03Z",
+  "compiler_revision_before_candidate": "a9d025501435f17d4a764595578e82ded09ce68e",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "implementation": {
+    "path": "src/compiler/decl.mncs",
+    "function": "scalar_kind",
+    "baseline_source_sha256": "e6be69c854bc0a41edbf11eccf820b1ee54d667c1ae75c331eb8a2116c6ad71b",
+    "candidate_source_sha256": "aa811c65e5fc5dfe6af3e3afccf2899a8c6f0c47e45b3f53083cc3b7bb5cac16",
+    "change": "For 3- and 4-byte scalar spellings, read one source.ByteWindow4 and classify its fields instead of repeating segment.byte_at_global for each character. The window helper preserves page-crossing behavior.",
+    "retained": true
+  },
+  "toolchain": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "canonical_vm_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "test_harness_sha256": "f626efc8eb3824a3961953f6894ee59476e7bd187834e015dd33f13b1e03ad50"
+  },
+  "semantic_checks": {
+    "decl_smoke": {
+      "command": "MNCS_VM_BIN=/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm python tools/test_vm_decl.py --smoke",
+      "status": "passed",
+      "case_count": 4,
+      "artifact_identity": "sha256:766585047808b77076fb50267f5e153323001e3c00154ad2cd84fe09d4d1be10",
+      "artifact_bytes": 66156868,
+      "semantic_digest": "7dddd9c9e71dd7d81d01dd816570da421c3acac2d9b50389453764123fdc6807",
+      "reference_vm_cranelift_digests_equal": true,
+      "vm_calls_completed": 4,
+      "vm_steps_total": 549685,
+      "wall_seconds": 126.242,
+      "children_peak_rss_kib": 2491752,
+      "result_sha256": "33a26b983e3d29560512c9d846aa07cc9a5c5ea942d01c6498e7a8b8e2cda40d"
+    },
+    "all_scalar_widths": {
+      "status": "passed",
+      "source_types": [
+        "u64",
+        "i64",
+        "bool",
+        "byte"
+      ],
+      "verification": "Stage-0 oracle and reference-interpreter parse_unit result matched canonical VM batch result",
+      "semantic_digest": "2bf87c0dfb568db996a97700ecd591498f16bdfc1b8c98eacfd6cf771fb31213",
+      "artifact_identity": "sha256:766585047808b77076fb50267f5e153323001e3c00154ad2cd84fe09d4d1be10",
+      "canonical_vm_batch_wall_seconds": 9.638249,
+      "canonical_vm_batch_peak_rss_kib": 355292
+    },
+    "cross_page_scalar": {
+      "status": "passed",
+      "source_type": "u64",
+      "type_start_offset": 1022,
+      "type_bytes_cross_page": true,
+      "logical_page_count": 2,
+      "verification": "Stage-0 oracle and reference-interpreter parse_unit result matched canonical VM batch result",
+      "semantic_digest": "e9228c5054193a44b567840156757a49e0a599f9cd2066baf57ffc3eace0848d",
+      "artifact_identity": "sha256:766585047808b77076fb50267f5e153323001e3c00154ad2cd84fe09d4d1be10",
+      "canonical_vm_batch_wall_seconds": 9.688636,
+      "canonical_vm_batch_peak_rss_kib": 354972
+    }
+  },
+  "matched_profile": {
+    "command": "python tools/measure_compiler_probe.py --backend reference_interpreter --modules source lexer parser segment decl flow --step-budget 1000000 --runtime-profile --skip-stage0-oracle --timeout-seconds 180",
+    "target": "mncs.compiler.project.v1::compile_project",
+    "profiled_steps_per_run": 1000000,
+    "cache_state": "Both compared runs had warm, usable frontend program-cache entries. The first candidate run missed those entries after the source fingerprint changed and is recorded only as a cold-cache observation.",
+    "baseline": {
+      "label": "decl-scalar-window-baseline-180s",
+      "compiler_source_set_sha256": "1e794c21c6a72e564ea4ce380bfbc1f5f45cfa7aeef90687c74cf21bc7295573",
+      "classification": "RESOURCE_EXHAUSTED",
+      "failure": "mncs.compiler.lexer.v1::is_trivia_cont",
+      "wall_seconds": 60.66,
+      "profiled_target_elapsed_seconds": 47.416226,
+      "sampled_probe_peak_rss_kib": 1994596,
+      "measurement_sha256": "57090e73ec46acf6e24eff34d125b70d096074f9fff64d609bad1bb065fecb17"
+    },
+    "candidate_warm": {
+      "label": "decl-scalar-window-candidate-warm-180s",
+      "compiler_source_set_sha256": "5c144f221d67f9e82f17668826b003b6dbeeacdcc8c4ee5d126651674a2a1d2d",
+      "classification": "RESOURCE_EXHAUSTED",
+      "failure": "mncs.compiler.lexer.v1::next_token_global",
+      "wall_seconds": 58.655,
+      "profiled_target_elapsed_seconds": 45.756272,
+      "sampled_probe_peak_rss_kib": 1993948,
+      "measurement_sha256": "60be45693dc28c5102b3b12d360ccf1120de8f0d31db56df79b3ff667fbdf6c8"
+    },
+    "candidate_cold_cache_observation": {
+      "wall_seconds": 160.834,
+      "sampled_probe_peak_rss_kib": 1941408,
+      "frontend_program_cache_entries_reused": 0,
+      "measurement_sha256": "662f0e0fb252832ba6aa23ed10c1fc25f8baa0568652fe171efb80fda184315c",
+      "excluded_from_warm_timing_comparison": true
+    },
+    "function_metrics": {
+      "decl.scalar_kind": {
+        "baseline": {
+          "calls": 150,
+          "steps": 3956,
+          "exclusive_ns": 1137576733
+        },
+        "candidate": {
+          "calls": 151,
+          "steps": 3581,
+          "exclusive_ns": 399711337
+        },
+        "exclusive_time_reduction_percent": 64.86,
+        "function_step_reduction_percent": 9.48
+      },
+      "segment.byte_at_global": {
+        "baseline": {
+          "calls": 402,
+          "steps": 804,
+          "exclusive_ns": 1287579632
+        },
+        "candidate": {
+          "calls": 2,
+          "steps": 4,
+          "exclusive_ns": 6617594
+        },
+        "call_reduction_percent": 99.5,
+        "exclusive_time_reduction_percent": 99.49
+      },
+      "source.byte_window4_global": {
+        "baseline": {
+          "calls": 14,
+          "steps": 588,
+          "exclusive_ns": 150041913
+        },
+        "candidate": {
+          "calls": 127,
+          "steps": 6118,
+          "exclusive_ns": 198151791
+        }
+      },
+      "lexer.next_token_global": {
+        "baseline": {
+          "calls": 1847,
+          "steps": 542777,
+          "exclusive_ns": 25384670527
+        },
+        "candidate": {
+          "calls": 1859,
+          "steps": 544768,
+          "exclusive_ns": 25678074788
+        }
+      }
+    },
+    "interpretation": "The scalar classifier and global byte-access helpers consume materially less measured wall time in the candidate; warm whole-run timing improved by about 3.3% in this single paired workload. The source window helper performs more executor steps, total profile steps remain capped at 1,000,000, and the six-module target still stops in lexer code. This is a local compiler self-consumption optimization, not a completed Flow or succession frontier.",
+    "resource_note": "Both warm profiles had zero cgroup OOM/high-event deltas. RSS is reported as sampled process RSS, not as zero or an exact peak."
+  },
+  "limitations": {
+    "language_verified_facts_reused": 0,
+    "full_six_module_frontier_completed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "full_decl_corpus_run": false,
+    "forge_effectful_digest_app_route_completed": false
+  }
+}

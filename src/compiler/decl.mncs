@@ -2719,17 +2719,20 @@ fn parse_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
 }
 
 fn scalar_kind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: u64) {
-    if end - start == 3 {
-        if segment.byte_at_global<P, N>(pages, stride, total, start) == 117 && segment.byte_at_global<P, N>(pages, stride, total, start + 1) == 54 && segment.byte_at_global<P, N>(pages, stride, total, start + 2) == 52 { return 1; }
-    }
-    if end - start == 3 {
-        if segment.byte_at_global<P, N>(pages, stride, total, start) == 105 && segment.byte_at_global<P, N>(pages, stride, total, start + 1) == 54 && segment.byte_at_global<P, N>(pages, stride, total, start + 2) == 52 { return 2; }
-    }
-    if end - start == 4 {
-        if segment.byte_at_global<P, N>(pages, stride, total, start) == 98 && segment.byte_at_global<P, N>(pages, stride, total, start + 1) == 111 && segment.byte_at_global<P, N>(pages, stride, total, start + 2) == 111 && segment.byte_at_global<P, N>(pages, stride, total, start + 3) == 108 { return 3; }
-    }
-    if end - start == 4 {
-        if segment.byte_at_global<P, N>(pages, stride, total, start) == 98 && segment.byte_at_global<P, N>(pages, stride, total, start + 1) == 121 && segment.byte_at_global<P, N>(pages, stride, total, start + 2) == 116 && segment.byte_at_global<P, N>(pages, stride, total, start + 3) == 101 { return 4; }
+    let width: u64 = end - start;
+    // Scalar spellings are only three or four bytes. Read their common
+    // same-page window once instead of repeating global page arithmetic for
+    // each character; the source helper preserves cross-page total behavior.
+    if width == 3 || width == 4 {
+        let window: source.ByteWindow4 = source.byte_window4_global<P, N>(pages, stride, total, start);
+        if width == 3 {
+            if window.b0 == 117 && window.b1 == 54 && window.b2 == 52 { return 1; }
+            if window.b0 == 105 && window.b1 == 54 && window.b2 == 52 { return 2; }
+        }
+        if width == 4 {
+            if window.b0 == 98 && window.b1 == 111 && window.b2 == 111 && window.b3 == 108 { return 3; }
+            if window.b0 == 98 && window.b1 == 121 && window.b2 == 116 && window.b3 == 101 { return 4; }
+        }
     }
     return 5;
 }
