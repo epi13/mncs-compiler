@@ -736,11 +736,14 @@ fn significant_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     if !(is_trivia_cont(first)) { return first; }
     let second: Token = next_token_global<P, N>(pages, stride, total, first.end);
     if !(is_trivia_cont(second)) { return second; }
-    iterate i up_to 1024 carrying token: Token = second {
+    // Keep the prior 2049-token inspection bound using legal 1024-step
+    // chunks, without checking the second token again at the first loop head.
+    let third: Token = next_token_global<P, N>(pages, stride, total, second.end);
+    iterate i up_to 1024 carrying token: Token = third {
         if !(is_trivia_cont(token)) { return token; }
         next token = next_token_global<P, N>(pages, stride, total, token.end);
     }
-    iterate i up_to 1024 carrying token2: Token = token {
+    iterate i up_to 1023 carrying token2: Token = token {
         if !(is_trivia_cont(token2)) { return token2; }
         next token2 = next_token_global<P, N>(pages, stride, total, token2.end);
     }

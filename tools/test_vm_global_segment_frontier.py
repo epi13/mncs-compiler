@@ -172,14 +172,43 @@ def main() -> None:
                       if case["function"] in ("next_token", "significant")]
         if not base_cases:
             raise AssertionError("Stage-0 segment corpus generated no token cases")
+        trivia_boundary_cases = []
+        token_kinds = json.loads((ROOT / "src/compiler/token-kinds.json").read_text())
+        kind_ids = {value: int(key) for key, value in token_kinds.items()}
+        for trivia_count in (2049, 2050):
+            raw = b"/**/" * trivia_count + b"x"
+            oracle = reference.send({"oracle": raw.decode("ascii")})["lexical"]
+            expected_token = oracle["tokens"][min(trivia_count, 2049)]
+            span = expected_token["span"]
+            diagnostics = {
+                (item["span"]["start"], item["span"]["end"]): item["code"]
+                for item in oracle["diagnostics"]
+            }
+            code = diagnostics.get((span["start"], span["end"]))
+            expected = {
+                "kind": kind_ids[expected_token["kind"]],
+                "start": span["start"],
+                "end": span["end"],
+                "diagnostic": {"MNL001": 1, "MNL002": 2}.get(code, 0),
+            }
+            trivia_boundary_cases.append({
+                "id": f"significant-global-trivia-limit-{trivia_count}",
+                "function": "significant",
+                "args": [byte_sequence(raw), integer(0)],
+                "expected": expected,
+                "step_budget": STEP_BUDGET,
+            })
+        expanded_cases = [(case, stride)
+                          for case in base_cases for stride in STRIDES]
+        # A 64-byte stride keeps this multi-page limit case within the
+        # generated global function's 1024-page type bound.
+        expanded_cases.extend((case, 64) for case in trivia_boundary_cases)
         case_grid = [make_vm_case(case, stride)
-                     for case in base_cases for stride in STRIDES]
+                     for case, stride in expanded_cases]
 
         t0 = time.monotonic()
         reference_values, reference_steps = [], []
-        for case, vm_case in zip(
-            [item for item in base_cases for _ in STRIDES], case_grid
-        ):
+        for (case, _stride), vm_case in zip(expanded_cases, case_grid):
             result = reference.send({
                 "schema_version": "0.1",
                 "target": {"module": MODULE, "function": vm_case["function"]},
@@ -220,7 +249,7 @@ def main() -> None:
         if status.get("backend") != "cranelift":
             raise AssertionError(f"probe did not select Cranelift: {status}")
         t0 = time.monotonic()
-        repeated_cases = [item for item in base_cases for _ in STRIDES]
+        repeated_cases = [case for case, _stride in expanded_cases]
         for case, vm_case, expected in zip(repeated_cases, case_grid, reference_values):
             result = cranelift.send({
                 "schema_version": "0.1",
