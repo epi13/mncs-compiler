@@ -111,6 +111,39 @@ Language verification facts or advance the compiler self-consumption matrix.
 The authenticated Forge/Environment/Store route for `digest_app` remains the
 next integration target.
 
+## Multi-callable executable-closure reuse (2026-10-16)
+
+Compiler commit `f36bf6f` enables the existing verified executable-closure
+cache for application-build/5 multi-callable requests. The cache index locates
+a previously verified candidate; every changed source snapshot still runs the
+full Language frontend. The artifact is reused only when the selected
+executable closure, each selected callable interface, and the
+Language-owned whole-program artifact interface all match. Reused responses
+carry the current source snapshot, graph, diagnostics, and all selected
+callable interfaces.
+
+On the real four-module `mncs.test.digest` callable set, the 9.22 s cold build
+produced a 1,160,570-byte artifact with 123.6 MiB peak RSS. Adding a comment to imported
+`mncs.test.assertions` changed the source snapshot; the full frontend still
+checked all 30 functions across four resolved modules, then reused the same
+artifact and refreshed all three callable interface rows in 6.74 s / 6.69 CPU s
+with 123.3 MiB peak RSS. A
+semantics-preserving edit to reachable `mncs.test.suite::empty` changed
+`total: 0` to `total: 0 +% 0`; the executable closure changed, so the Compiler
+regenerated the artifact in 9.36 s / 9.31 CPU s with 123.3 MiB peak RSS. Its
+five canonical VM calls matched the
+pinned Stage-0 results. A fresh process then reused that new exact snapshot
+without a frontend invocation in 4.40 s. The VM batch took 0.192 s, peaked at
+27,080 KiB RSS, and used 1,983 total steps.
+
+These measurements are specific to this workload. The changed-snapshot path
+still performs complete semantic verification, and
+`language_verified_facts_reused` remains zero. This advances multi-callable
+artifact maintenance; it does not complete Language-owned fact reuse or the
+Forge/Environment/Store `digest_app` route. Evidence is
+`evidence/native-app-readiness-digest-multi-callable-reuse-20261016.json`,
+SHA-256 `05cd710cae196905fca285c3843ee73f67df1556697e27510e3386db56d69b37`.
+
 ## Evidence boundary
 
 This assessment uses the read-only `mncs-test` checkout at `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM `1c19a94732c9d24029dd00e2d5af13710f481d02`, and Compiler producer commit `24dda63ae59e0505969c490604e14348dab1f7d7`. The Stage-0 reference revision is `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, release probe SHA-256 `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`; the VM binary SHA-256 is `2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5`.
