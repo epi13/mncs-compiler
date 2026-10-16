@@ -1,0 +1,126 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-profile/1",
+  "kind": "decl-field-name-classification-step-profile",
+  "observed_at": "2026-10-16T14:32:41Z",
+  "status": "measured",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "source_revision_tested": "ae6838ff0837553db27bff588bd6ff136a95b8a7",
+    "commit_containing_measured_source": "37bb58a797c26d2dfc79a931d61903678824a8bd",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "baseline_decl_source_sha256": "aa811c65e5fc5dfe6af3e3afccf2899a8c6f0c47e45b3f53083cc3b7bb5cac16",
+    "candidate_decl_source_sha256": "43e6b77186c688618afe65376bef26d817df3a0ca3370b1293ca5e98fedec36e",
+    "baseline_source_bundle_sha256": "0562fac33352922d516485d7afbf965a859bf06d3c4d1560ba2fee83e6e4430c",
+    "candidate_source_bundle_sha256": "e6092bdaf89b9f1786272a54ffca66c36f5001cc728f28de0482ba71b5dde08f"
+  },
+  "workload": {
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project",
+    "backend": "reference_interpreter",
+    "step_budget": 1000000,
+    "cache_state": "warm; baseline and candidate program caches were prepared separately",
+    "both_runs": "execution started and reached the one-million-step budget without a complete project result"
+  },
+  "comparison": {
+    "fields_step": {
+      "baseline": {
+        "calls": 1163,
+        "steps": 21777,
+        "exclusive_ns": 1562436782
+      },
+      "candidate": {
+        "calls": 1164,
+        "steps": 19976,
+        "exclusive_ns": 1420740421
+      },
+      "steps_reduced": 1801,
+      "steps_reduction_percent": 8.27,
+      "exclusive_time_reduced_ns": 141696361,
+      "exclusive_time_reduction_percent": 9.07
+    },
+    "parse_fields": {
+      "baseline": {
+        "calls": 34,
+        "steps": 10449,
+        "exclusive_ns": 719510188
+      },
+      "candidate": {
+        "calls": 34,
+        "steps": 10463,
+        "exclusive_ns": 723637151
+      }
+    },
+    "removed_helper": {
+      "function": "is_value_name",
+      "baseline": {
+        "calls": 157,
+        "steps": 942
+      },
+      "candidate": "absent"
+    },
+    "whole_workload": {
+      "wall_seconds_baseline": 54.149,
+      "wall_seconds_candidate": 54.145,
+      "wall_delta_seconds": -0.004,
+      "interpretation": "overall wall time is effectively unchanged; no whole-workload speedup is claimed",
+      "native_status_baseline": "budget_exhausted",
+      "native_status_candidate": "budget_exhausted",
+      "steps_baseline": 1000000,
+      "steps_candidate": 1000000
+    }
+  },
+  "resource_observations": {
+    "baseline": {
+      "probe_max_sampled_rss_kib": 1994004,
+      "probe_max_observed_hwm_kib": 2003796,
+      "probe_last_cpu_seconds": 51.69,
+      "probe_last_cpu_user_seconds": 50.9,
+      "probe_last_cpu_system_seconds": 0.79
+    },
+    "candidate": {
+      "probe_max_sampled_rss_kib": 1993248,
+      "probe_max_observed_hwm_kib": 2003080,
+      "probe_last_cpu_seconds": 51.61,
+      "probe_last_cpu_user_seconds": 50.75,
+      "probe_last_cpu_system_seconds": 0.86
+    },
+    "host_available_bytes_before": {
+      "baseline": 25024634880,
+      "candidate": 25120428032
+    },
+    "cgroup_attribution": "ambient cgroup includes possible sibling processes; not used to attribute this workload"
+  },
+  "correctness_evidence": {
+    "artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+    "artifact_sha256": "8be258933393b4f5414c2afe4f8e512f073ae977a69803ae66d969e64bd4963a",
+    "tested_source_revision": "ae6838ff0837553db27bff588bd6ff136a95b8a7",
+    "decl_source_sha256": "43e6b77186c688618afe65376bef26d817df3a0ca3370b1293ca5e98fedec36e",
+    "cases": 32,
+    "valid_cases": 19,
+    "invalid_cases": 13,
+    "executor_case_counts": {
+      "reference_interpreter": 32,
+      "cranelift": 32,
+      "canonical_vm": 32
+    },
+    "semantic_digests": {
+      "reference_interpreter": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "cranelift": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "canonical_vm": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0"
+    },
+    "artifact_identity": "sha256:384ed3dd4ac0959b5a6e7b78fede541d8790d2611f8448ea1c776eaf30ae0453",
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "32 decl.parse_unit cases from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence."
+  },
+  "claim_boundary": "One function-level same-HEAD profile and a 32-case parser differential. The six-module project workload remains incomplete at the one-million-step budget; no Language fact reuse, complete-project verification, Stage-1, or Stage-2 claim is made."
+}
