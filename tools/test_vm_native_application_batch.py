@@ -213,7 +213,13 @@ def main() -> None:
         "schema_version": 1,
         "kind": "mncs.compiler.native-application-multi-callable-proof",
         "compiler_head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "compiler_branch": subprocess.check_output(
+            ["git", "branch", "--show-current"], cwd=ROOT, text=True
+        ).strip(),
         "probe_sha256": app.sha(PROBE.read_bytes()),
+        "canonical_vm_sha256": app.sha(VM_BIN.read_bytes()),
+        "stage0_revision": json.loads((ROOT / "mncs-language.lock.json").read_text())["revision"],
+        "source_snapshot_identity": built.get("source_snapshot", {}).get("identity"),
         "request_schema": "mncs.compiler.application-build-request/2",
         "response_schema": built["schema_version"],
         "artifact_identity": built["artifact"]["identity"],
