@@ -1283,6 +1283,34 @@
       "evidence_scope": "32 decl.parse_unit cases from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence.",
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    {
+      "kind": "lexer-nonword-scan-specialization-experiment",
+      "status": "rejected-performance",
+      "observed_at": "2026-10-16T14:45:51Z",
+      "baseline_compiler_revision": "ae6838ff0837553db27bff588bd6ff136a95b8a7",
+      "candidate_compiler_revision": "3fbb29080c4d59e8f6a1f9ea2f47a0a98a8dc8c4",
+      "baseline_lexer_source_sha256": "e1c1d5e40e4c59b10d5981bba72a59528a7b45190b887042a63f51526de33b88",
+      "candidate_lexer_source_sha256": "d55b2428951cb479c5cf56ad6e2b566226ef66ef805e36f0fcf6b050b634ba1f",
+      "profile_evidence": "evidence/self-host-lexer-nonword-specialization-rejection-20261016.json",
+      "profile_evidence_sha256": "76ceb33f061c70e62d37a802b3b00d57176d152cb466af8f65df2519740e9ac0",
+      "correctness_evidence": "evidence/self-host-decl-parse-candidate-lexer-nonword-rejection-20261016.json",
+      "correctness_evidence_sha256": "2abedae4b5ead9acf046308390152abd409a2f21e073aa4a48c35ae0c8b1b4f8",
+      "target": "mncs.compiler.project.v1::compile_project",
+      "step_budget": 1000000,
+      "baseline_wall_seconds": 54.145,
+      "candidate_wall_seconds": [
+        54.648,
+        55.657
+      ],
+      "scan_local_steps_before_after": [
+        102660,
+        101221
+      ],
+      "whole_workload_result": "candidate was slower in both warm repetitions; candidate rejected and source restored",
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false
     }
   ],
   "whole_module_parse_snapshot": {
@@ -4895,9 +4923,23 @@
       "language_verified_facts_reused": 0,
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    "native_application_readiness_20261013_lexer_nonword_specialization_rejection_20261016": {
+      "status": "rejected-performance",
+      "baseline_lexer_source_sha256": "e1c1d5e40e4c59b10d5981bba72a59528a7b45190b887042a63f51526de33b88",
+      "candidate_lexer_source_sha256": "d55b2428951cb479c5cf56ad6e2b566226ef66ef805e36f0fcf6b050b634ba1f",
+      "evidence": "evidence/self-host-lexer-nonword-specialization-rejection-20261016.json",
+      "evidence_sha256": "76ceb33f061c70e62d37a802b3b00d57176d152cb466af8f65df2519740e9ac0",
+      "correctness_evidence": "evidence/self-host-decl-parse-candidate-lexer-nonword-rejection-20261016.json",
+      "correctness_evidence_sha256": "2abedae4b5ead9acf046308390152abd409a2f21e073aa4a48c35ae0c8b1b4f8",
+      "candidate_wall_seconds": [
+        54.648,
+        55.657
+      ],
+      "source_restored": true
     }
   },
-  "evidence_updated_at": "2026-10-16T14:32:41Z",
+  "evidence_updated_at": "2026-10-16T14:45:51Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
@@ -4933,7 +4975,7 @@
       "stage2_claimed": false
     },
     "native_test_workflow_evidence": "evidence/native-app-readiness-digest-multi-callable-reuse-20261016.json",
-    "next_frontier": "Continue reducing the measured lexer token-window cost without weakening correctness or increasing the step budget; resume Language-owned verified-fact implementation when its owner-managed worktree grant is available. Keep complete-project, Stage-1, and Stage-2 claims unproven.",
+    "next_frontier": "Continue profiling the lexer token-window path using a different candidate; do not repeat the nonword scanner split (it reduced local steps but slowed both warm whole-workload runs). Resume Language-owned verified-fact implementation when its owner-managed worktree grant is available. Keep complete-project, Stage-1, and Stage-2 claims unproven.",
     "stage1_claimed": false,
     "stage2_claimed": false,
     "previous_frontier_update": {
@@ -5228,6 +5270,13 @@
         }
       },
       "canonical_vm_frontier_evidence_sha256": "1d2b07a7e9862ed93dfa5de21903949ebadf414135de67d09e8e5a5b324244e5"
+    },
+    "rejected_followup_experiment": {
+      "evidence": "evidence/self-host-lexer-nonword-specialization-rejection-20261016.json",
+      "evidence_sha256": "76ceb33f061c70e62d37a802b3b00d57176d152cb466af8f65df2519740e9ac0",
+      "candidate_lexer_source_sha256": "d55b2428951cb479c5cf56ad6e2b566226ef66ef805e36f0fcf6b050b634ba1f",
+      "status": "rejected-performance",
+      "source_restored": true
     }
   }
 }

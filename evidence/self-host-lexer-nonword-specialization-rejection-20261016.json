@@ -1,0 +1,114 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-experiment/1",
+  "kind": "lexer-nonword-scan-specialization",
+  "observed_at": "2026-10-16T14:45:51Z",
+  "status": "rejected-performance",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "baseline_revision": "ae6838ff0837553db27bff588bd6ff136a95b8a7",
+    "candidate_revision": "3fbb29080c4d59e8f6a1f9ea2f47a0a98a8dc8c4",
+    "candidate_source_sha256": "d55b2428951cb479c5cf56ad6e2b566226ef66ef805e36f0fcf6b050b634ba1f",
+    "baseline_source_sha256": "e1c1d5e40e4c59b10d5981bba72a59528a7b45190b887042a63f51526de33b88",
+    "baseline_source_bundle_sha256": "e6092bdaf89b9f1786272a54ffca66c36f5001cc728f28de0482ba71b5dde08f",
+    "candidate_source_bundle_sha256": "c46bea5de5d8de18a81bcfaf7bc5d8b26a35b49eafc6f8ee8d46deef4cef1728",
+    "candidate_change": "Split word scanning into a separate function and routed the nonword hot path around the word-mode branch."
+  },
+  "correctness": {
+    "targeted_test": "tools/test_global_scan_modes.py",
+    "status": "passed",
+    "page_boundary_cases": [
+      "word",
+      "number",
+      "nested block comment",
+      "line comment"
+    ],
+    "frontier_evidence": "evidence/self-host-decl-parse-candidate-lexer-nonword-rejection-20261016.json",
+    "frontier_evidence_sha256": "2abedae4b5ead9acf046308390152abd409a2f21e073aa4a48c35ae0c8b1b4f8",
+    "frontier_cases": 32,
+    "valid_cases": 19,
+    "invalid_cases": 13,
+    "executor_case_counts": {
+      "reference_interpreter": 32,
+      "cranelift": 32,
+      "canonical_vm": 32
+    },
+    "semantic_digests": {
+      "reference_interpreter": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "cranelift": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "canonical_vm": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0"
+    },
+    "candidate_lexer_source_sha256": "d55b2428951cb479c5cf56ad6e2b566226ef66ef805e36f0fcf6b050b634ba1f",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "performance": {
+    "backend": "reference_interpreter",
+    "modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "target": "mncs.compiler.project.v1::compile_project",
+    "step_budget": 1000000,
+    "cache_state": "warm; candidate program cache prepared before two candidate runs",
+    "all_runs_budget_exhausted": true,
+    "baseline": {
+      "wall_seconds": 54.145,
+      "cpu_seconds": 51.61,
+      "peak_rss_kib": 2003080,
+      "native_steps": 1000000,
+      "scan_chunk_window": {
+        "calls": 2653,
+        "steps": 102660,
+        "exclusive_ns": 2941797841
+      },
+      "next_token_global": {
+        "calls": 1914,
+        "steps": 594981,
+        "exclusive_ns": 20694136082
+      }
+    },
+    "candidate_runs": [
+      {
+        "wall_seconds": 54.648,
+        "cpu_seconds": 52.27,
+        "peak_rss_kib": 2003952,
+        "native_steps": 1000000,
+        "scan_chunk_nonword_window": {
+          "calls": 2654,
+          "steps": 101221,
+          "exclusive_ns": 3033367895
+        },
+        "next_token_global": {
+          "calls": 1918,
+          "steps": 595842,
+          "exclusive_ns": 20803206431
+        }
+      },
+      {
+        "wall_seconds": 55.657,
+        "cpu_seconds": 53.22,
+        "peak_rss_kib": 2004112,
+        "native_steps": 1000000,
+        "scan_chunk_nonword_window": {
+          "calls": 2654,
+          "steps": 101221,
+          "exclusive_ns": 3116905141
+        },
+        "next_token_global": {
+          "calls": 1918,
+          "steps": 595842,
+          "exclusive_ns": 21311552652
+        }
+      }
+    ],
+    "local_scan_step_reduction_percent": 1.4,
+    "decision": "Candidate used fewer local scanner steps, but both warm repetitions were slower overall and had higher CPU. The general scanner exclusive time also increased; reject this candidate and do not claim a workload improvement.",
+    "cgroup_attribution": "not available as attributable process memory; per-process RSS and CPU are sampled by PID"
+  },
+  "claim_boundary": "This is a rejected optimization experiment. It passed scanner correctness cases but made the measured six-module workload slower; the source was restored. The full compiler project remains incomplete at the 1M-step budget."
+}
