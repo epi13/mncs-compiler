@@ -6,7 +6,7 @@ use mncs.compiler.source.v1 as source;
 // diagnostic: 0 none, 1 MNL001, 2 MNL002, 3 unsupported non-ASCII,
 // 4 invalid cursor. EOF is kind 0 and has an empty span.
 record Token { kind: u64, start: u64, end: u64, diagnostic: u64 }
-record Scan { end: u64, depth: u64, dotted: bool, done: bool }
+record Scan { end: u64, depth: u64, dotted: bool, done: bool, page_index: u64, page_intra: u64 }
 
 fn digit(c: u64) -> (result: bool) { return c >= 48 && c <= 57; }
 fn letter(c: u64) -> (result: bool) {
@@ -229,7 +229,7 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     let number: bool = a >= 48 && a <= 57;
     let ws: bool = a == 32 || (a >= 9 && a <= 13);
     if line || block || word || number || ws {
-        let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
+        let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false, page_index: 0, page_intra: 0 };
         iterate i over text[start..text.len] carrying st: Scan = seed {
             let advanced: Scan = scan_step<N>(text, st, line, block, word, number, ws);
             if advanced.done || advanced.end >= text.len {
@@ -619,7 +619,7 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     let number: bool = a >= 48 && a <= 57;
     let ws: bool = a == 32 || (a >= 9 && a <= 13);
     if line || block || word || number || ws {
-        let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
+        let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false, page_index: (start + select(line || block, 2, 1)) / stride, page_intra: (start + select(line || block, 2, 1)) % stride };
         // Keep each scan window in the current page when it fits. Passing the
         // entire page table to byte_window4_global for every chunk made frame
         // setup scale with the number of source pages; only page-edge and
@@ -633,8 +633,8 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 // The loop guard established stride > 0 and inner.end < total;
                 // compute the two page coordinates directly instead of
                 // re-entering the total address helper for every scan window.
-                let page_index: u64 = inner.end / stride;
-                let page_intra: u64 = inner.end % stride;
+                let page_index: u64 = inner.page_index;
+                let page_intra: u64 = inner.page_intra;
                 // A scan can only enter this loop after the first byte was
                 // resolved from a non-empty page table. Clamp an impossible
                 // later page index to page zero; the scalar match preserves
@@ -684,7 +684,15 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                     if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, advanced, initial_page, initial_page_intra); }
                     return token_from_nonword_scan(start, advanced, line, block, ws);
                 }
-                next inner = advanced;
+                let delta: u64 = advanced.end - inner.end;
+                let next_scan: Scan = match select(stride >= 4 && inner.page_intra <= 18446744073709551615 - delta, 1, 0) {
+                    1 => match select(inner.page_intra + delta >= stride, 1, 0) {
+                        1 => Scan { ..advanced, page_index: inner.page_index + 1, page_intra: inner.page_intra + delta - stride },
+                        _ => Scan { ..advanced, page_index: inner.page_index, page_intra: inner.page_intra + delta }
+                    },
+                    _ => Scan { ..advanced, page_index: advanced.end / stride, page_intra: advanced.end % stride }
+                };
+                next inner = next_scan;
             }
             if inner.done || inner.end >= total {
                 if word { return token_from_word_scan_global<P, N>(pages, stride, total, start, inner, initial_page, initial_page_intra); }
