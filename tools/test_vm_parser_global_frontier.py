@@ -32,7 +32,10 @@ PAGE_BOUND = 1024
 STRIDES = (1, 7, 64, 1024)
 STEP_BUDGET = 8_000_000
 OUT = ROOT / ".build" / "vm-parser-header-global-frontier.json"
-EVIDENCE = ROOT / "evidence" / "self-host-parser-header-global-canonical-vm-20261016.json"
+EVIDENCE = Path(os.environ.get(
+    "MNCS_VM_PARSER_GLOBAL_EVIDENCE",
+    ROOT / "evidence" / "self-host-parser-header-global-canonical-vm-20261016.json",
+))
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
@@ -443,6 +446,7 @@ def main() -> None:
             "test_harness": "tools/test_vm_parser_global_frontier.py",
             "test_harness_sha256": harness_sha,
         },
+        "evidence_artifact": str(EVIDENCE),
         "toolchains": {
             "stage0_probe": str(test_vm_emit.PROBE),
             "stage0_probe_sha256": stage0_probe_sha,
