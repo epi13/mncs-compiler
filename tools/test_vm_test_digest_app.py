@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def sibling_repository(name: str) -> Path:
-    override = os.environ.get(f'MNCS_{name.replace("-", "_").upper()}_ROOT')
+    short_name = name.removeprefix('mncs-').replace('-', '_').upper()
+    override = os.environ.get(f'MNCS_{short_name}_ROOT')
     candidates = ([Path(override)] if override else [])
     candidates.extend([Path('/workspace') / name, *(parent / name for parent in ROOT.parents)])
     seen = set()
