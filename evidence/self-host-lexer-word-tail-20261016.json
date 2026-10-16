@@ -1,0 +1,100 @@
+{
+  "bounded_real_application_profile": {
+    "backend": "reference_interpreter",
+    "baseline": {
+      "candidate_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387",
+      "checkout_head_at_measurement": "2793ce637e73234c83c481f77883632a08ec84e8",
+      "classification": "RESOURCE_EXHAUSTED",
+      "next_token_global_calls": 1623,
+      "next_token_global_steps": 679188,
+      "sampled_child_peak_rss_kib": 1849824,
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "wall_seconds": 108.341
+    },
+    "candidate": {
+      "cgroup_oom_event_delta": 0,
+      "classification": "RESOURCE_EXHAUSTED",
+      "lexer_source_sha256": "7e274db387adc0e38b2408137e2603698a8c70e5bc0d234c2cb571e7c14e1879",
+      "next_token_global_calls": 1415,
+      "next_token_global_steps": 691959,
+      "sampled_child_peak_rss_kib": 1853524,
+      "sampled_rss_stop_limit_mib": 4096,
+      "sampled_rss_stop_triggered": false,
+      "scan_word_tail_window_calls": 158,
+      "scan_word_tail_window_steps": 5486,
+      "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+      "source_revision": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1",
+      "wall_seconds": 107.838
+    },
+    "interpretation": "Whole-profile wall time differs by less than one percent and is treated as measurement noise. The candidate records more next_token_global interpreter steps at the fixed global budget, so no general compiler throughput improvement is claimed. The measured benefit is limited to the fixed long-identifier input.",
+    "source_identity_note": "The candidate profile ran before the implementation commit was created, with the same lexer source bytes later committed as ee3611f8be5cd99856c0dde53e3071a48fa8e5d1; the exact source SHA-256 is recorded above.",
+    "stage0_oracle_skipped": true,
+    "step_budget": 1000000,
+    "workload": "compile_project_target over source, lexer, parser, segment, decl, and flow"
+  },
+  "canonical_vm_frontier": {
+    "artifact_identity": "sha256:fa20c9f90f5639faf755913184f905d2f8697c2b07c57807362e80970d3f7be3",
+    "case_count": 1216,
+    "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-20261016.json",
+    "evidence_sha256": "9e45d3dfa3f0add99fbd172f7152f658e525004cc338fb12eb887f5e3cde964c",
+    "executor_case_counts": {
+      "canonical_vm": 1216,
+      "cranelift": 1216,
+      "reference_interpreter": 1216
+    },
+    "fresh_vm_process": true,
+    "page_strides": [
+      1,
+      2,
+      7,
+      64,
+      256
+    ],
+    "semantic_digest_sha256": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "claim_boundary": "The global lexer consumes long identifier continuations by two adjacent four-byte windows when the first window proves continuation. The selected canonical VM frontier validates token kinds, spans, overlong diagnostics, page fallback, and executor agreement; this does not establish full lexer module verification or a general compiler speedup.",
+  "compiler": {
+    "branch": "campaign/native-application-readiness-20261013",
+    "function": "next_token_global",
+    "implementation_commit": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1",
+    "module": "mncs.compiler.lexer.v1",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "source_sha256": "7e274db387adc0e38b2408137e2603698a8c70e5bc0d234c2cb571e7c14e1879",
+    "tested_source_revision": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1"
+  },
+  "full_lexer_module_verified": false,
+  "kind": "lexer-word-eight-byte-tail-canonical-vm-frontier",
+  "language_verified_facts_reused": 0,
+  "observed_at": "2026-10-16T21:11:06.412538Z",
+  "schema_version": "mncs.compiler.lexer-word-tail-frontier/1",
+  "stage1_claimed": false,
+  "stage2_claimed": false,
+  "status": "passed",
+  "targeted_long_identifier_measurement": {
+    "backend": "reference_interpreter",
+    "baseline": {
+      "lexer_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387",
+      "reference_steps": 592376,
+      "source_revision": "2793ce637e73234c83c481f77883632a08ec84e8"
+    },
+    "candidate": {
+      "canonical_vm_steps": 594823,
+      "lexer_source_sha256": "7e274db387adc0e38b2408137e2603698a8c70e5bc0d234c2cb571e7c14e1879",
+      "reference_steps": 513491,
+      "source_revision": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1"
+    },
+    "expected_token": {
+      "diagnostic": 0,
+      "end": 8192,
+      "kind": 4,
+      "start": 0
+    },
+    "input": "8192 ASCII x bytes followed by !",
+    "input_bytes": 8193,
+    "logical_page_stride": 64,
+    "measurement_method": "The baseline probe loaded the committed four-byte lexer source at the baseline SHA; the candidate probe used the candidate source bytes later committed as the implementation. Both ran the same request, generic bounds, backend, and step budget.",
+    "reference_step_change_percent": -13.32
+  }
+}

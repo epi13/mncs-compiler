@@ -1,11 +1,11 @@
 {
   "schema_version": "mncs.compiler.self-consumption-frontier/1",
   "kind": "global-segment-canonical-vm-current-source",
-  "observed_at": "2026-10-16T12:17:41.819501Z",
+  "observed_at": "2026-10-16T21:10:37.896211Z",
   "status": "passed",
-  "claim_boundary": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected cursor frontier, not full segment/lexer module verification.",
+  "claim_boundary": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. Additional identifier window-boundary, overlong, nonzero-cursor, and malformed page-table cases have explicit expected tokens. This is a selected cursor frontier, not full segment/lexer module verification.",
   "compiler": {
-    "tested_source_revision": "373da2964149a63801b09a8dd2c63444261e0bf7",
+    "tested_source_revision": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1",
     "branch": "campaign/native-application-readiness-20261013",
     "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
     "selected_modules": [
@@ -14,8 +14,8 @@
       "segment"
     ],
     "module_source_sha256": {
-      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
-      "lexer": "c1077466c79a3ba0735f079e95b77954a01a457bc065c13c9911c86a0a965067",
+      "source": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+      "lexer": "7e274db387adc0e38b2408137e2603698a8c70e5bc0d234c2cb571e7c14e1879",
       "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
     },
     "target_module": "mncs.compiler.segment.v1",
@@ -24,7 +24,7 @@
       "significant_global"
     ],
     "test_harness": "tools/test_vm_global_segment_frontier.py",
-    "test_harness_sha256": "8f07bb00fa6e5cb70abc19bf5b92d8da4acb317dcac2d5131971784483033be1"
+    "test_harness_sha256": "3da83187119d0abc88f5b9eb3f26f935041c84cfbfa89ae8cb167d7579505b3a"
   },
   "toolchains": {
     "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
@@ -32,18 +32,18 @@
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
     "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
-    "vm_revision": "373da2964149a63801b09a8dd2c63444261e0bf7"
+    "vm_revision": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1"
   },
   "verification": {
     "executor_case_counts": {
-      "reference_interpreter": 1208,
-      "cranelift": 1208,
-      "canonical_vm": 1208
+      "reference_interpreter": 1216,
+      "cranelift": 1216,
+      "canonical_vm": 1216
     },
     "semantic_digests": {
-      "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
-      "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
-      "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+      "reference_interpreter": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd",
+      "cranelift": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd",
+      "canonical_vm": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd"
     },
     "stage0_checks": "all generated token kinds, spans, diagnostics, and significant-token outcomes passed",
     "stage1_claimed": false,
@@ -51,18 +51,18 @@
   },
   "measurements": {
     "timing_seconds": {
-      "stage0_oracle_and_reference": 11.201511,
-      "direct_vm_emission": 1.524988,
-      "cranelift_execution": 0.927686,
-      "canonical_vm_batch": 4.866737,
-      "whole_frontier": 29.670237
+      "stage0_oracle_and_reference": 40.487084,
+      "direct_vm_emission": 1.710331,
+      "cranelift_execution": 1.259736,
+      "canonical_vm_batch": 13.835681,
+      "whole_frontier": 64.446969
     },
     "resource_measurements": {
-      "child_cpu_seconds": 27.5118,
-      "child_peak_rss_kib": 1111816,
-      "canonical_vm_peak_rss_kib": 139456,
-      "canonical_vm_calls_bytes": 10884256,
-      "canonical_vm_results_bytes": 1821585,
+      "child_cpu_seconds": 61.736275,
+      "child_peak_rss_kib": 1111620,
+      "canonical_vm_peak_rss_kib": 146624,
+      "canonical_vm_calls_bytes": 12416084,
+      "canonical_vm_results_bytes": 1833874,
       "cgroup_before": {
         "memory.current": null,
         "memory.max": null,
@@ -79,7 +79,7 @@
   "raw_test_report": {
     "schema_version": 1,
     "kind": "mncs-compiler-global-segment-canonical-vm-frontier",
-    "compiler_revision_tested": "373da2964149a63801b09a8dd2c63444261e0bf7",
+    "compiler_revision_tested": "ee3611f8be5cd99856c0dde53e3071a48fa8e5d1",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "reference_backend": "reference_interpreter",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
@@ -90,8 +90,8 @@
       "segment"
     ],
     "module_source_sha256": {
-      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
-      "lexer": "c1077466c79a3ba0735f079e95b77954a01a457bc065c13c9911c86a0a965067",
+      "source": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+      "lexer": "7e274db387adc0e38b2408137e2603698a8c70e5bc0d234c2cb571e7c14e1879",
       "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
     },
     "target_module": "mncs.compiler.segment.v1",
@@ -99,8 +99,8 @@
       "next_token_global",
       "significant_global"
     ],
-    "test_harness_sha256": "8f07bb00fa6e5cb70abc19bf5b92d8da4acb317dcac2d5131971784483033be1",
-    "artifact_identity": "sha256:41a43f1d9cac880ac03283f4300568bda891c16ab2a211fa3f4b9ba8b243d36f",
+    "test_harness_sha256": "3da83187119d0abc88f5b9eb3f26f935041c84cfbfa89ae8cb167d7579505b3a",
+    "artifact_identity": "sha256:fa20c9f90f5639faf755913184f905d2f8697c2b07c57807362e80970d3f7be3",
     "specializations": [
       [
         "1024",
@@ -111,10 +111,14 @@
         "1024"
       ]
     ],
-    "input_count": 10,
+    "input_count": 18,
     "input_sha256": [
+      "14121fc8ba0f04494d250430818a1d80615925d716e0949e5b88d1ad61e5f1fb",
+      "18f2da3e4f492f6b96329f0c6bdd2114dedbbe2c431ec2c209031696b7dfdd52",
       "20780ee1a4906c003c9380ab220813481ba54ecfe021cf4be8e3cd2181c7fb82",
       "25b4a2fb004af37784095a82d9f32dda05482865fc2b7afed8eaeecdb9e8199a",
+      "4151666b6189f4eb5ac526b17bd6cc7c5dbe1b6f1cec79faab9d98b17e491ae4",
+      "4c5a4f41ce1b6e19343f5cc5a6b26cc7d757543f1b7ce9b12f30302777c50981",
       "7bbdf876bf822f5a1c2ae78c18e448068c9142e314df9cd9369e522e77449a78",
       "85e62acd750c4eb56b7b6a1d66dca5bfaac5f062608a1a893410d0288936c09a",
       "9e6208ddd2cc30eba15cb2137bba398d921e3cf2e18fa38267d84e35b3c03d3b",
@@ -122,50 +126,56 @@
       "a3c074f0e3d24a880253b5201ba2e67b1cabf69c246fdeb98d351b2109da00af",
       "a9713caffa6294114e928a5683a30b27db3f98da13af4924085bb491a76aed5a",
       "d166576d6ab9daa0aae694ee0b27f9cfda339eee568f62b2b86ce13c1139e670",
-      "e51418fa04efd75f2700c8293cf7a0c50ed7e9ccd003d61b1259a6c2c4fdaf19"
+      "d4244d71f7c30f958442f26f45fe234cb0226c4e6f1d9b2cdea1ccd4d6780c0f",
+      "e51418fa04efd75f2700c8293cf7a0c50ed7e9ccd003d61b1259a6c2c4fdaf19",
+      "e5c8309afda18ec4ec225ada92dab2d5768f7d845d8cebf2b9968392a6bfd6de",
+      "f4f13741f3b1300f6b018f8768431b4b38aa142693d05c9bc499870346fde135",
+      "fb8e20fc2e4c3f248c60c39bd652f3c1347298bb977b8b4d5903b85055620603"
     ],
     "base_stage0_cases": 302,
     "page_strides": [
       1,
+      2,
       7,
       64,
       256
     ],
-    "case_count": 1208,
+    "case_count": 1216,
     "per_function_case_counts": {
-      "next_token": 764,
-      "significant": 444
+      "next_token": 770,
+      "significant": 446
     },
     "per_stride_case_counts": {
       "1": 302,
+      "2": 1,
       "7": 302,
-      "64": 302,
+      "64": 309,
       "256": 302
     },
     "executor_case_counts": {
-      "reference_interpreter": 1208,
-      "cranelift": 1208,
-      "canonical_vm": 1208
+      "reference_interpreter": 1216,
+      "cranelift": 1216,
+      "canonical_vm": 1216
     },
     "semantic_digests": {
-      "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
-      "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
-      "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+      "reference_interpreter": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd",
+      "cranelift": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd",
+      "canonical_vm": "e7f35e3076d8887bc55b1daa6f41df18b96c92a81934ec232a51881e02e86cdd"
     },
     "stage0_generated_token_count": 181,
     "timing_seconds": {
-      "stage0_oracle_and_reference": 11.201511,
-      "direct_vm_emission": 1.524988,
-      "cranelift_execution": 0.927686,
-      "canonical_vm_batch": 4.866737,
-      "whole_frontier": 29.670237
+      "stage0_oracle_and_reference": 40.487084,
+      "direct_vm_emission": 1.710331,
+      "cranelift_execution": 1.259736,
+      "canonical_vm_batch": 13.835681,
+      "whole_frontier": 64.446969
     },
     "resource_measurements": {
-      "child_cpu_seconds": 27.5118,
-      "child_peak_rss_kib": 1111816,
-      "canonical_vm_peak_rss_kib": 139456,
-      "canonical_vm_calls_bytes": 10884256,
-      "canonical_vm_results_bytes": 1821585,
+      "child_cpu_seconds": 61.736275,
+      "child_peak_rss_kib": 1111620,
+      "canonical_vm_peak_rss_kib": 146624,
+      "canonical_vm_calls_bytes": 12416084,
+      "canonical_vm_results_bytes": 1833874,
       "cgroup_before": {
         "memory.current": null,
         "memory.max": null,
@@ -178,25 +188,25 @@
       },
       "cgroup_measurements_are_ambient": true
     },
-    "scope": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected cursor frontier, not full segment/lexer module verification.",
+    "scope": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. Additional identifier window-boundary, overlong, nonzero-cursor, and malformed page-table cases have explicit expected tokens. This is a selected cursor frontier, not full segment/lexer module verification.",
     "stage1_claimed": false,
     "stage2_claimed": false
   },
   "step_summaries": {
     "reference_interpreter": {
-      "count": 1208,
-      "total": 1713839,
-      "maximum": 39923
+      "count": 1216,
+      "total": 6206444,
+      "maximum": 758584
     },
     "cranelift": {
-      "count": 1208,
-      "total": 1208,
+      "count": 1216,
+      "total": 1216,
       "maximum": 1
     },
     "canonical_vm": {
-      "count": 1208,
-      "total": 2123165,
-      "maximum": 50422
+      "count": 1216,
+      "total": 7278443,
+      "maximum": 870914
     }
   }
 }
