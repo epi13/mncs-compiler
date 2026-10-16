@@ -15,21 +15,25 @@ fn ascii<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
     return ascii_view<N>(source);
 }
 
-// Check four bytes per interpreter transition. The bounded source views used
+// Check eight bytes per interpreter transition. The bounded source views used
 // by the compiler are often long, so a byte-at-a-time loop made ASCII
 // admission consume one MNCS step for every byte before parsing could start.
 fn ascii_view<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
-    let groups: u64 = source.len / 4;
+    let groups: u64 = source.len / 8;
     iterate group over source[0..groups] carrying valid: bool = true {
         if !valid { return false; }
-        let base: u64 = group * 4;
+        let base: u64 = group * 8;
         if source[base + 0] as u64 >= 128 { return false; }
         if source[base + 1] as u64 >= 128 { return false; }
         if source[base + 2] as u64 >= 128 { return false; }
         if source[base + 3] as u64 >= 128 { return false; }
+        if source[base + 4] as u64 >= 128 { return false; }
+        if source[base + 5] as u64 >= 128 { return false; }
+        if source[base + 6] as u64 >= 128 { return false; }
+        if source[base + 7] as u64 >= 128 { return false; }
         next valid = true;
     }
-    let tail: u64 = groups * 4;
+    let tail: u64 = groups * 8;
     if tail < source.len {
         if source[tail] as u64 >= 128 { return false; }
     }
@@ -38,6 +42,18 @@ fn ascii_view<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
     }
     if tail + 2 < source.len {
         if source[tail + 2] as u64 >= 128 { return false; }
+    }
+    if tail + 3 < source.len {
+        if source[tail + 3] as u64 >= 128 { return false; }
+    }
+    if tail + 4 < source.len {
+        if source[tail + 4] as u64 >= 128 { return false; }
+    }
+    if tail + 5 < source.len {
+        if source[tail + 5] as u64 >= 128 { return false; }
+    }
+    if tail + 6 < source.len {
+        if source[tail + 6] as u64 >= 128 { return false; }
     }
     return true;
 }

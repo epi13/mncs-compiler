@@ -29,7 +29,7 @@ STRIDE = 1024
 PAGE_BOUND = 1024
 SOURCE_BOUND = 1024
 STEP_BUDGET = 8_000_000
-EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-four-byte-20261016.json"
+EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-eight-byte-20261016.json"
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
@@ -46,7 +46,7 @@ def seeds() -> list[dict]:
 
 def inputs() -> list[dict]:
     length = 256 * 1024
-    return [
+    samples = [
         {"id": "ascii-64k", "raw": b"a" * (64 * 1024), "expected": True},
         {"id": "ascii-256k", "raw": b"a" * length, "expected": True},
         {"id": "nonascii-last-256k", "raw": b"a" * (length - 1) + b"\xff",
@@ -54,13 +54,27 @@ def inputs() -> list[dict]:
         {"id": "nonascii-first-256k", "raw": b"\xff" + b"a" * (length - 1),
          "expected": False},
     ]
+    samples.extend(
+        {"id": f"ascii-tail-{size}", "raw": b"a" * size,
+         "expected": True, "stride": PAGE_BOUND}
+        for size in range(18)
+    )
+    for offset in range(17):
+        raw = bytearray(b"a" * 17)
+        raw[offset] = 0xFF
+        samples.append({
+            "id": f"nonascii-offset-{offset}-strided-9",
+            "raw": bytes(raw), "expected": False, "stride": 9,
+        })
+    return samples
 
 
 def summarize_probe(probe: cp0001.Probe, sample: dict) -> tuple[bool, int, float]:
     raw = sample["raw"]
+    stride = sample.get("stride", STRIDE)
     started = time.monotonic()
     result = probe.run_global_wire(
-        MODULE, FUNCTION, cp0001.chunk(raw, STRIDE), STRIDE, len(raw),
+        MODULE, FUNCTION, cp0001.chunk(raw, stride), stride, len(raw),
         budget=STEP_BUDGET,
     )
     elapsed = time.monotonic() - started
@@ -124,8 +138,9 @@ def main() -> None:
     vm_cases = [{
         "id": sample["id"],
         "function": FUNCTION,
-        "args": [cp0001.pages_value(cp0001.chunk(sample["raw"], STRIDE)),
-                 cp0001.integer(STRIDE), cp0001.integer(len(sample["raw"]))],
+        "args": [cp0001.pages_value(cp0001.chunk(sample["raw"], sample.get("stride", STRIDE))),
+                 cp0001.integer(sample.get("stride", STRIDE)),
+                 cp0001.integer(len(sample["raw"]))],
         "type_args": [cp0001.nat_arg(PAGE_BOUND),
                       cp0001.nat_arg(SOURCE_BOUND)],
         "step_budget": STEP_BUDGET,
@@ -166,7 +181,7 @@ def main() -> None:
     )
     report = {
         "schema_version": 1,
-        "kind": "mncs.compiler.source-ascii-global-four-byte-frontier",
+        "kind": "mncs.compiler.source-ascii-global-eight-byte-frontier",
         "compiler_revision_tested": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
@@ -186,7 +201,7 @@ def main() -> None:
                    "generic_arguments": [PAGE_BOUND, SOURCE_BOUND]},
         "stride": STRIDE,
         "page_count_by_case": {
-            sample["id"]: len(cp0001.chunk(sample["raw"], STRIDE))
+            sample["id"]: len(cp0001.chunk(sample["raw"], sample.get("stride", STRIDE)))
             for sample in observations
         },
         "reference_interpreter": results["reference_interpreter"],
@@ -220,12 +235,24 @@ def main() -> None:
             ),
         },
         "language_verified_facts_reused": 0,
+        "previous_four_byte_frontier": {
+            "source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+            "evidence_artifact": "evidence/self-host-source-ascii-global-four-byte-20261016.json",
+            "reference_interpreter_steps": {
+                "ascii-64k": 740174,
+                "ascii-256k": 2960654,
+                "nonascii-last-256k": 2960628,
+                "nonascii-first-256k": 3114,
+            },
+        },
         "scope": (
-            "source.ascii_global and its bounded source.ascii helper inspect four bytes per MNCS "
-            "loop transition and return immediately at the first non-ASCII byte. The selected "
+            "source.ascii_global and its bounded source.ascii helper inspect eight bytes per MNCS "
+            "loop transition and return immediately at the first non-ASCII byte. ASCII tails "
+            "from zero through seventeen bytes and every non-ASCII position in a two-page "
+            "seventeen-byte view are checked alongside 64 KiB and 256 KiB cases. The selected "
             "source callable agrees across the reference interpreter, Cranelift, and one fresh "
-            "canonical VM artifact on 64 KiB and 256 KiB cases. This is a bounded source-scanner "
-            "frontier, not full source-module verification or compiler succession."
+            "canonical VM artifact. This is a bounded source-scanner frontier, not full "
+            "source-module verification or compiler succession."
         ),
     }
     EVIDENCE.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
