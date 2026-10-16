@@ -12,10 +12,12 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import queue
 import re
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 
 import test_vm_test_digest_app as digest_app
@@ -203,6 +205,151 @@ def vm_batch(
     }, normalized
 
 
+def vm_retained_session(
+    artifact: dict, inputs: list[dict], expected: list[list[dict]]
+) -> tuple[dict, list[dict]]:
+    """Run the digest callables over one long-lived canonical VM process."""
+    calls = [
+        ("digest-budget-exhaustion", {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": "build_digest"},
+            "arguments": [inputs[0]],
+            "type_arguments": [],
+            "step_budget": 1,
+        }, "budget_exhausted", None),
+    ]
+    for index, argument in enumerate(inputs):
+        calls.append((f"digest-case-{index}", {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": "build_digest"},
+            "arguments": [argument],
+            "type_arguments": [],
+            "step_budget": 3_000_000,
+        }, "completed", expected[index][0]))
+    calls.extend([
+        ("request-schema", {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": "request_schema"},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 10_000,
+        }, "completed", list(b"mncs.test-digest-request/1")),
+        ("result-schema", {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": "result_schema"},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 10_000,
+        }, "completed", list(b"mncs.test-digest/1")),
+    ])
+
+    with tempfile.TemporaryDirectory(prefix="mncs-native-digest-session-") as raw:
+        artifact_path = Path(raw) / "application.vm.json"
+        artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n")
+        stderr_file = tempfile.TemporaryFile(mode="w+t")
+        started = time.monotonic()
+        process = subprocess.Popen(
+            ["/usr/bin/time", "-v", str(VM_BIN), "serve", "--artifact", str(artifact_path)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=True,
+            bufsize=1,
+        )
+        lines: queue.Queue[str | None] = queue.Queue()
+
+        def read_lines() -> None:
+            assert process.stdout is not None
+            for line in process.stdout:
+                lines.put(line)
+            lines.put(None)
+
+        reader = threading.Thread(target=read_lines, daemon=True)
+        reader.start()
+
+        def receive() -> dict:
+            try:
+                line = lines.get(timeout=30)
+            except queue.Empty as error:
+                raise TimeoutError("canonical VM retained session stopped responding") from error
+            if line is None:
+                raise RuntimeError("canonical VM retained session closed its output")
+            return json.loads(line)
+
+        responses = []
+        try:
+            ready = receive()
+            if (ready.get("schema_version") != "mncs.vm.session/1"
+                    or ready.get("status") != "ready"
+                    or ready.get("artifact_id") != artifact.get("artifact_id")):
+                raise AssertionError(f"canonical VM admitted an unexpected retained artifact: {ready}")
+            if process.stdin is None:
+                raise AssertionError("canonical VM retained session has no request pipe")
+            for index, (call_id, request, outcome, expected_value) in enumerate(calls):
+                process.stdin.write(json.dumps({
+                    "schema_version": "mncs.vm.session/1",
+                    "id": call_id,
+                    "request": request,
+                }, sort_keys=True) + "\n")
+                process.stdin.flush()
+                response = receive()
+                result = response.get("result", {})
+                record = result.get("record", {})
+                execution = result.get("execution", {})
+                if (response.get("id") != call_id
+                        or response.get("ok") is not True
+                        or result.get("outcome", {}).get("kind") != outcome
+                        or record.get("artifact_id") != artifact.get("artifact_id")):
+                    raise AssertionError(f"retained VM call {call_id} returned an invalid result: {response}")
+                if expected_value is not None:
+                    returned = execution.get("returned", [])
+                    normalized = [digest_app.support.decode_wire(value) for value in returned]
+                    if normalized != [expected_value] or execution.get("status") != "returned":
+                        raise AssertionError(
+                            f"retained VM call {call_id} differs from its Stage-0 oracle: {normalized}"
+                        )
+                responses.append({
+                    "id": call_id,
+                    "outcome": outcome,
+                    "artifact_id": record.get("artifact_id"),
+                    "steps": record.get("usage", {}).get("steps"),
+                    "returned_sha256": (
+                        sha(json.dumps(expected_value, sort_keys=True,
+                                       separators=(",", ":")).encode())
+                        if expected_value is not None else None
+                    ),
+                })
+            process.stdin.close()
+            if process.wait(timeout=30) != 0:
+                raise AssertionError("canonical VM retained session exited unsuccessfully")
+            reader.join(timeout=2)
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
+            if process.stdin is not None and not process.stdin.closed:
+                process.stdin.close()
+        wall = time.monotonic() - started
+        stderr_file.seek(0)
+        stderr = stderr_file.read()
+        stderr_file.close()
+
+    peak_rss = re.search(r"Maximum resident set size \(kbytes\): (\d+)", stderr)
+    return {
+        "ready_artifact_id": ready.get("artifact_id"),
+        "process_count": 1,
+        "call_count": len(responses),
+        "call_ids": [row["id"] for row in responses],
+        "wall_seconds": round(wall, 6),
+        "peak_rss_kib": int(peak_rss.group(1)) if peak_rss else None,
+        "low_fuel_recovery_in_same_session": (
+            responses[0]["outcome"] == "budget_exhausted"
+            and responses[1]["outcome"] == "completed"
+        ),
+        "results": responses,
+    }, responses
+
+
 def main() -> None:
     if not PROBE.is_file() or not VM_BIN.is_file():
         raise SystemExit(f"missing probe or canonical VM binary: {PROBE}, {VM_BIN}")
@@ -382,6 +529,14 @@ def main() -> None:
         fixture["execution"]["inputs"],
         fixture["execution"]["canonical_vm_results"],
     )
+    retained_session, retained_results = vm_retained_session(
+        dependency_build.get("artifact", {}).get("value"),
+        fixture["execution"]["inputs"],
+        fixture["execution"]["canonical_vm_results"],
+    )
+    if (not retained_session["low_fuel_recovery_in_same_session"]
+            or any(row["outcome"] != "completed" for row in retained_results[1:])):
+        raise AssertionError("retained VM session did not recover after bounded low-fuel execution")
     report = {
         "schema_version": 1,
         "kind": "mncs.compiler.native-test-digest-multi-callable-batch",
@@ -459,6 +614,7 @@ def main() -> None:
                 for value in normalized_results
             ],
         },
+        "retained_vm_session": retained_session,
         "measurements": {"cold_build": cold_metrics, "fresh_process_hit": warm_metrics},
         "language_verified_facts_reused": 0,
         "multi_callable_verified_vm_artifact_reused_after_full_frontend": (
@@ -470,8 +626,10 @@ def main() -> None:
             "VM closure while rebinding all three current callable interfaces. A semantics-preserving "
             "edit to reachable mncs.test.suite::empty invalidated the closure and regenerated the artifact. "
             "Three Stage-0-backed build_digest inputs and both schema callables then ran in one bounded "
-            "canonical VM batch. This does not reuse Language verified facts and does not establish "
-            "Forge/Environment/Store execution or full mncs-test conversion."
+            "canonical VM batch and one retained VM session; the retained session recovered from a "
+            "low-fuel call before completing the same oracle-backed callable set. This does not reuse "
+            "Language verified facts and does not establish Forge/Environment/Store execution or full "
+            "mncs-test conversion."
         ),
     }
     EVIDENCE_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
