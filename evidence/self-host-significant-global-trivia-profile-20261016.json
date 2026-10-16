@@ -1,0 +1,247 @@
+{
+  "schema_version": "mncs.compiler.self-host-significant-global-trivia-profile/1",
+  "kind": "mncs-compiler-global-significant-trivia-limit-cleanup",
+  "observed_at": "2026-10-16T18:11:57.731136Z",
+  "status": "passed_with_no_material_wall_time_change",
+  "compiler": {
+    "tested_source_revision": "1cd4233f90dd4f390f10ecf4f895930e415846af",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "source_file": "src/compiler/lexer.mncs",
+    "candidate_source_sha256": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387",
+    "baseline_source_sha256": "5d94bd82a7c5ab60d338a2744146c96039804abe15da4aad75e7a661245283d1",
+    "commit_containing_candidate_source": "1cd4233f90dd4f390f10ecf4f895930e415846af"
+  },
+  "implementation_scope": {
+    "change": "Remove the repeated trivia predicate on the second token while preserving the 2049-token inspection limit with legal 1024- and 1023-step loops.",
+    "language_semantics_changed": false,
+    "language_verified_facts_reused": 0
+  },
+  "correctness": {
+    "stage0_segment_differential": {
+      "status": "passed_twice",
+      "suite": "tools/test_segment.py",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "requests_per_run": 6564,
+      "texts_per_run": 43,
+      "tokens_compared_per_run": 3161,
+      "result_sha256": "e1bb03923d1fac892e0848c8d72865b6fd6e84cca84c320b99060048fec12ca5",
+      "execution_mode": "retained_cranelift"
+    },
+    "canonical_vm_global_segment": {
+      "status": "passed",
+      "evidence": "evidence/self-host-global-segment-significant-trivia-limit-20261016.json",
+      "evidence_sha256": "4b7d90fa10852059dc3582b4e4115eaed8fd914020806ebbbc0e1cafbf858483",
+      "cases": 1210,
+      "executor_case_counts": {
+        "reference_interpreter": 1210,
+        "cranelift": 1210,
+        "canonical_vm": 1210
+      },
+      "semantic_digests": {
+        "reference_interpreter": "98db4d9b5b5edd787e70f1a15f65b8eadcf7cec2d29e2e740eef30011b25a9d2",
+        "cranelift": "98db4d9b5b5edd787e70f1a15f65b8eadcf7cec2d29e2e740eef30011b25a9d2",
+        "canonical_vm": "98db4d9b5b5edd787e70f1a15f65b8eadcf7cec2d29e2e740eef30011b25a9d2"
+      },
+      "page_strides": [
+        1,
+        7,
+        64,
+        256
+      ]
+    },
+    "trivia_limit_cases": [
+      {
+        "trivia_tokens": 2049,
+        "expected_from": "Stage-0 lexical oracle",
+        "expected_result": "identifier after the 2049th trivia token"
+      },
+      {
+        "trivia_tokens": 2050,
+        "expected_from": "Stage-0 lexical oracle",
+        "expected_result": "the 2050th trivia token remains visible at the bound"
+      }
+    ]
+  },
+  "performance": {
+    "workload": {
+      "backend": "reference_interpreter",
+      "modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "target": "decl.parse_unit_mode through compile_project_target",
+      "step_budget": 1000000,
+      "result": "budget_exhausted; incomplete six-module project frontier"
+    },
+    "same_source_cache_comparison": {
+      "baseline_source_sha256": "5d94bd82a7c5ab60d338a2744146c96039804abe15da4aad75e7a661245283d1",
+      "baseline_warm_samples": [
+        {
+          "label": "ascii-fold-global-2",
+          "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-fold-global-2-source-lexer-parser-segment-decl-flow-measurement.json",
+          "measurement_artifact_sha256": "4ac54eb0ce73cfebc34d332c2dae3c59e7fd263e0935bc206efcfbff878bcfd2",
+          "classification": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 43.104,
+          "probe_cpu_seconds": 40.62,
+          "probe_peak_hwm_kib": 1761860,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0,
+          "next_token_global": {
+            "calls": 1623,
+            "exclusive_ns": 12859177953,
+            "inclusive_ns": 17889715809,
+            "max_inclusive_ns": 95127035,
+            "steps": 679078
+          },
+          "significant_global": {
+            "calls": 890,
+            "exclusive_ns": 6191958463,
+            "inclusive_ns": 24273791888,
+            "max_inclusive_ns": 3696191180,
+            "steps": 10560
+          },
+          "is_trivia_cont": {
+            "calls": 1627,
+            "exclusive_ns": 192117616,
+            "inclusive_ns": 192117616,
+            "max_inclusive_ns": 202463,
+            "steps": 26032
+          }
+        },
+        {
+          "label": "ascii-fold-global-4",
+          "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-ascii-fold-global-4-source-lexer-parser-segment-decl-flow-measurement.json",
+          "measurement_artifact_sha256": "3dd3f0b261370de8b4d19398f0ebf633a9a6d971c062f1243f953dce659acfd3",
+          "classification": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 43.102,
+          "probe_cpu_seconds": 40.589999999999996,
+          "probe_peak_hwm_kib": 1761936,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0,
+          "next_token_global": {
+            "calls": 1623,
+            "exclusive_ns": 12868608934,
+            "inclusive_ns": 17914553339,
+            "max_inclusive_ns": 96816097,
+            "steps": 679078
+          },
+          "significant_global": {
+            "calls": 890,
+            "exclusive_ns": 6196357424,
+            "inclusive_ns": 24304934292,
+            "max_inclusive_ns": 3689770783,
+            "steps": 10560
+          },
+          "is_trivia_cont": {
+            "calls": 1627,
+            "exclusive_ns": 194023529,
+            "inclusive_ns": 194023529,
+            "max_inclusive_ns": 224907,
+            "steps": 26032
+          }
+        }
+      ],
+      "candidate_warm_samples": [
+        {
+          "label": "significant-trivia-dedup-20261016-2",
+          "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-dedup-20261016-2-source-lexer-parser-segment-decl-flow-measurement.json",
+          "measurement_artifact_sha256": "2b004ef4e6c70297ed5b3d6c39d642bdf285dcbbad7296cb8e66b9e928debd8d",
+          "classification": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 43.106,
+          "probe_cpu_seconds": 40.629999999999995,
+          "probe_peak_hwm_kib": 1762192,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0,
+          "next_token_global": {
+            "calls": 1623,
+            "exclusive_ns": 12905411728,
+            "inclusive_ns": 17957958968,
+            "max_inclusive_ns": 88963195,
+            "steps": 679213
+          },
+          "significant_global": {
+            "calls": 890,
+            "exclusive_ns": 6202163611,
+            "inclusive_ns": 24353515979,
+            "max_inclusive_ns": 3717460728,
+            "steps": 10505
+          },
+          "is_trivia_cont": {
+            "calls": 1622,
+            "exclusive_ns": 193393400,
+            "inclusive_ns": 193393400,
+            "max_inclusive_ns": 237824,
+            "steps": 25952
+          }
+        },
+        {
+          "label": "significant-trivia-dedup-20261016-3",
+          "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-significant-trivia-dedup-20261016-3-source-lexer-parser-segment-decl-flow-measurement.json",
+          "measurement_artifact_sha256": "e07078b37a16633bcb13065c03c0bbf97283defb284099236793be4c2aaf2bfa",
+          "classification": "RESOURCE_EXHAUSTED",
+          "semantic_result": "UNKNOWN_NO_RETURNED_PROJECT_RESULT",
+          "wall_seconds": 43.104,
+          "probe_cpu_seconds": 40.59,
+          "probe_peak_hwm_kib": 1762196,
+          "memory_cap_triggered": false,
+          "oom_kill_delta": 0,
+          "next_token_global": {
+            "calls": 1623,
+            "exclusive_ns": 12882680228,
+            "inclusive_ns": 17931494397,
+            "max_inclusive_ns": 89992478,
+            "steps": 679213
+          },
+          "significant_global": {
+            "calls": 890,
+            "exclusive_ns": 6175606318,
+            "inclusive_ns": 24300672836,
+            "max_inclusive_ns": 3713866743,
+            "steps": 10505
+          },
+          "is_trivia_cont": {
+            "calls": 1622,
+            "exclusive_ns": 193572121,
+            "inclusive_ns": 193572121,
+            "max_inclusive_ns": 255294,
+            "steps": 25952
+          }
+        }
+      ],
+      "summary": {
+        "baseline_mean_wall_seconds": 43.103,
+        "candidate_mean_wall_seconds": 43.105,
+        "wall_change_percent": 0.005,
+        "baseline_mean_probe_cpu_seconds": 40.605,
+        "candidate_mean_probe_cpu_seconds": 40.61,
+        "probe_cpu_change_percent": 0.012,
+        "baseline_mean_next_token_global_exclusive_seconds": 12.863893,
+        "candidate_mean_next_token_global_exclusive_seconds": 12.894046,
+        "next_token_global_exclusive_change_percent": 0.234,
+        "baseline_mean_significant_global_exclusive_seconds": 6.194158,
+        "candidate_mean_significant_global_exclusive_seconds": 6.188885,
+        "significant_global_exclusive_change_percent": -0.085,
+        "baseline_mean_is_trivia_cont_calls": 1627,
+        "candidate_mean_is_trivia_cont_calls": 1622,
+        "interpretation": "The removed predicate is infrequent on this workload. Wall and CPU differences are within measurement noise; no speedup is claimed."
+      }
+    },
+    "resource_note": "The 4 GiB sampled RSS cap was not triggered and OOM-kill delta was zero. Cgroup peak/current data is not interpreted as zero usage."
+  },
+  "claim_boundary": {
+    "reused_language_verified_facts": 0,
+    "full_six_module_project_result": false,
+    "full_lexer_module_verification": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "A selected global significant-token limit case, a Stage-0 segment differential, and a bounded six-module runtime profile only."
+  }
+}
