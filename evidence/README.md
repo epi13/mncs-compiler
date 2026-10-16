@@ -319,3 +319,17 @@ response digest was rejected and rebuilt through the full frontend. The
 passed invalid-source, corrupt Store-input, and local VM adapter checks. This
 still reuses zero Language verified facts and does not establish live
 Forge/Environment/Store execution.
+
+## Unreachable imported body and digest artifact reuse (2026-10-16)
+
+The [unreachable-body report](native-app-readiness-digest-unreachable-body-20261016.json)
+edits the unused `mncs.test.assertions::equals_i64` body in the real digest
+application's imported module. The changed source snapshot receives a complete
+frontend verification (one invocation, all 30 program functions rechecked),
+while its selected executable closure retains the same artifact identity and
+reuses the VM artifact. A fresh process then reuses the exact edited snapshot
+with zero frontend invocations. Stage-0, canonical VM, and the pinned digest
+fixture agree on all five results. The cold, changed-snapshot, and fresh-process
+builds took 3.81, 2.20, and 0.55 seconds respectively; peak RSS was 74, 63, and
+35 MiB. This is executable artifact reuse after full semantic verification,
+not Language-owned verified-fact reuse; the reused-fact count remains zero.
