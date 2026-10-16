@@ -2743,7 +2743,9 @@ fn parse_flat_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     // fuel). Qualified paths are short; the first chunk almost always
     // finishes, skipping ~1000 re-scans of the terminating token.
     iterate i up_to 16 carrying d0: TypeParse = TypeParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, node: TypeRef { kind: 0, start: start, end: cursor }, done: false } {
-        next d0 = qualified_step<P, N>(pages, stride, total, d0);
+        let next_step: TypeParse = qualified_step<P, N>(pages, stride, total, d0);
+        if next_step.done || !(next_step.ok) { return finish_named_type<P, N>(pages, stride, total, start, next_step); }
+        next d0 = next_step;
     }
     if d0.done || !(d0.ok) { return finish_named_type<P, N>(pages, stride, total, start, d0); }
     iterate i up_to 1008 carrying d: TypeParse = d0 {
@@ -2829,7 +2831,9 @@ fn parse_fields<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
     // fuel). Field lists are short; the first chunk almost always
     // finishes, skipping ~1000 no-op tails per parameter/result list.
     iterate i up_to 16 carrying d0: FieldsParse = FieldsParse { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: FieldList.FNil, done: false } {
-        next d0 = fields_step<P, N>(pages, stride, total, d0, closer, name_mode, profile_013);
+        let next_step: FieldsParse = fields_step<P, N>(pages, stride, total, d0, closer, name_mode, profile_013);
+        if next_step.done || !(next_step.ok) { return finish_fields<P, N>(pages, stride, total, next_step); }
+        next d0 = next_step;
     }
     if d0.done || !(d0.ok) { return finish_fields<P, N>(pages, stride, total, d0); }
     iterate i up_to 1008 carrying d: FieldsParse = d0 {
@@ -2996,7 +3000,9 @@ fn parse_variants<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     // 1024-variant ceiling, so conditionally skip no-op calls while preserving
     // the complete original bound for large declarations.
     iterate i up_to 64 carrying d0: VariantsState = VariantsState { cursor: cursor, ok: true, err_start: 0, err_end: 0, list: VariantList.VNil, done: false } {
-        next d0 = variants_step<P, N>(pages, stride, total, d0, profile_013);
+        let next_step: VariantsState = variants_step<P, N>(pages, stride, total, d0, profile_013);
+        if next_step.done || !(next_step.ok) { return finish_variants<P, N>(pages, stride, total, next_step); }
+        next d0 = next_step;
     }
     if d0.done { return finish_variants<P, N>(pages, stride, total, d0); }
     iterate i up_to 960 carrying d: VariantsState = d0 {
