@@ -133,6 +133,23 @@ plan or closure was produced. [`ravel-impact-flow.json`](ravel-impact-flow.json)
 preserves the result. It is not treated as a zero-obligation PASS; the direct
 current-pin suites above provide this campaign's verification closure.
 
+## Native Test digest suite specialization (2026-10-16)
+
+The [digest suite specialization record](native-app-readiness-digest-suite-specialization-20261016.json)
+extends the real `mncs.test.digest` multi-callable artifact with a harness-only
+root that explicitly selects and executes
+`mncs.test.suite::summarize<4>`. A mixed PASS/FAIL/SKIP/UNSUPPORTED suite result
+matches the Stage-0 project oracle in both a six-call canonical VM batch and an
+eight-call retained VM session, including recovery after exhausted fuel and a
+rejected typed request. The artifact also preserves fresh-process cache reuse
+and invalidation after a reachable imported function edit. The measured cold
+build was 3.949 seconds (3.91 CPU seconds, 81,338,368-byte peak RSS); the fresh
+process hit was 0.554 seconds (0.53 CPU seconds, 38,318,080-byte peak RSS). The
+VM batch used 28,096 KiB peak RSS; cgroup memory measurements were unavailable.
+The run reused zero Language verified facts and still uses a local bounded VM
+provider harness, so it does not establish Forge/Environment/Store execution
+or full `mncs-test` conversion.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:
