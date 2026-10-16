@@ -333,3 +333,14 @@ fixture agree on all five results. The cold, changed-snapshot, and fresh-process
 builds took 3.81, 2.20, and 0.55 seconds respectively; peak RSS was 74, 63, and
 35 MiB. This is executable artifact reuse after full semantic verification,
 not Language-owned verified-fact reuse; the reused-fact count remains zero.
+
+## Environment application-build contract revision (2026-10-16)
+
+The [contract revision report](native-app-readiness-environment-build-contract-v5-20261016.json)
+records the selected nested Compiler worktree resuming its existing authenticated
+session after the manifest update. Environment now reports capability revision
+5 with request `/2` and response `/5` as current while retaining request `/1`
+and response `/4`. The focused manifest/provider agreement check passed. This
+validates Environment's advertised contract metadata and compatibility pair;
+it does not establish a new application invocation or the effectful
+Forge/Environment/Store route.
