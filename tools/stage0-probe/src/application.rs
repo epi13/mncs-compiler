@@ -9,13 +9,15 @@ use mncs_compiler::{ModuleResolution, ModuleResolver, ReferenceCompiler};
 use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 static CACHE_NONCE: AtomicU64 = AtomicU64::new(0);
 static PRODUCER_IDENTITY: OnceLock<(String, Value)> = OnceLock::new();
@@ -67,14 +69,25 @@ fn source_snapshot_identity(
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
 
+fn sha256_file(path: &Path) -> std::io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    Ok(format!("sha256:{:x}", hasher.finalize()))
+}
+
 fn producer_identity() -> (String, Value) {
     PRODUCER_IDENTITY
         .get_or_init(|| {
             let executable = std::env::current_exe().ok();
-            let executable_sha256 = executable
-                .as_ref()
-                .and_then(|path| std::fs::read(path).ok())
-                .map(|bytes| format!("sha256:{}", mncs_model::sha256_hex(&bytes)));
+            let executable_sha256 = executable.as_ref().and_then(|path| sha256_file(path).ok());
             let identity = executable_sha256
                 .clone()
                 .unwrap_or_else(|| "unknown".to_owned());
@@ -428,15 +441,40 @@ fn read_application_cache(
     probe_identity: &str,
     toolchain: Option<&ToolchainIdentity>,
 ) -> Option<Value> {
-    let entry: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    let read_started = Instant::now();
+    let bytes = fs::read(path).ok()?;
+    crate::trace_phase(
+        "application_cache_file_read",
+        read_started,
+        json!({"cache_bytes": bytes.len()}),
+    );
+    let decode_started = Instant::now();
+    let entry: Value = serde_json::from_slice(&bytes).ok()?;
+    crate::trace_phase(
+        "application_cache_entry_decode",
+        decode_started,
+        json!({"cache_bytes": bytes.len()}),
+    );
     if entry.get("schema_version").and_then(Value::as_str)
         != Some("mncs.compiler.application-build-cache-entry/3")
         || entry.get("key").and_then(Value::as_str) != Some(key)
     {
         return None;
     }
+    let clone_started = Instant::now();
     let response = entry.get("response")?.clone();
+    crate::trace_phase(
+        "application_cache_response_clone",
+        clone_started,
+        json!({"response_sha256": entry.get("response_sha256").and_then(Value::as_str)}),
+    );
+    let encode_started = Instant::now();
     let response_bytes = serde_json::to_vec(&response).ok()?;
+    crate::trace_phase(
+        "application_cache_response_encode",
+        encode_started,
+        json!({"response_bytes": response_bytes.len()}),
+    );
     let response_digest = format!("sha256:{}", mncs_model::sha256_hex(&response_bytes));
     let cached_source_identity = response
         .pointer("/source_snapshot/identity")
@@ -1740,6 +1778,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         })
         .unwrap_or_default();
 
+    let cache_identity_started = Instant::now();
     let source_identity = source_snapshot_identity(root_id, root_source, &modules);
     let source_files: Vec<Value> = std::iter::once(json!({
         "module": "root",
@@ -1783,14 +1822,30 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     // admitted only when the selected executable closure, every selected
     // callable interface, and the language-owned artifact interface match.
     let cache_index_path = application_cache_index_path(&cache_index_key);
+    crate::trace_phase(
+        "application_cache_identity",
+        cache_identity_started,
+        json!({
+            "source_bytes": total_bytes,
+            "module_count": modules.len(),
+            "source_snapshot_identity": source_identity,
+        }),
+    );
     if let Some(path) = cache_path.as_ref() {
-        if let Some(response) = read_application_cache(
+        let exact_cache_started = Instant::now();
+        let cached_response = read_application_cache(
             path,
             &cache_key,
             Some(&source_identity),
             &probe_identity,
             toolchain,
-        ) {
+        );
+        crate::trace_phase(
+            "application_cache_exact_lookup",
+            exact_cache_started,
+            json!({"hit": cached_response.is_some()}),
+        );
+        if let Some(response) = cached_response {
             return annotate_cache(
                 response,
                 &cache_key,

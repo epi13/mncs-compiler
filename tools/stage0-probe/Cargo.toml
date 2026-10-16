@@ -9,6 +9,7 @@ mncs-syntax = { path = "../../.bootstrap/crates/mncs-syntax" }
 mncs-compiler = { path = "../../.bootstrap/crates/mncs-compiler" }
 mncs-model = { path = "../../.bootstrap/crates/mncs-model" }
 mncs-codegen = { path = "../../.bootstrap/crates/mncs-codegen" }
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["unbounded_depth"] }
 mncs-vm-artifact-codec = { path = "../vm-artifact-codec" }
@@ -16,3 +17,9 @@ mncs-vm-artifact-codec = { path = "../vm-artifact-codec" }
 [build-dependencies]
 sha2 = "0.10"
 serde_json = "1"
+
+# The probe performs exact executable SHA-256 identity checks on every fresh
+# process. Keep the cryptographic primitive optimized in the debug profile so
+# provenance checks do not dominate warm application-cache hits.
+[profile.dev.package.sha2]
+opt-level = 3
