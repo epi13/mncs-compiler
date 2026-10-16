@@ -32,7 +32,7 @@ VM_BIN = Path(os.environ.get(
 CACHE_DIR = ROOT / ".build/native-app-readiness/digest-batch-cache" / (
     f"run-{os.getpid()}-{time.time_ns()}"
 )
-EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-digest-native-batch.json"
+EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-digest-multi-callable-reuse-20261016.json"
 MODULE = "mncs.test.digest"
 ROOTS = [
     {"module": MODULE, "function": "build_digest"},
@@ -268,8 +268,117 @@ def main() -> None:
             or warm_work.get("front_end_invocations") != 0):
         raise AssertionError("fresh-process digest reuse re-ran frontend or changed artifact")
 
+    comment_modules = dict(modules)
+    comment_modules["mncs.test.assertions"] += (
+        "\n// source-only edit for selected executable-closure reuse\n"
+    )
+    comment_probe = digest_app.support.Probe(CACHE_DIR, executable=PROBE)
+    try:
+        comment_build, comment_metrics = comment_probe.send(
+            {"compile_application": build_request(root_source, comment_modules)},
+            timeout=180,
+        )
+        comment_probe.close()
+    except BaseException:
+        if comment_probe.proc.poll() is None:
+            comment_probe.proc.kill()
+            comment_probe.proc.wait(timeout=5)
+        raise
+    comment_work = comment_build.get("cache", {}).get("verification_work", {})
+    if (
+        comment_build.get("status") != "verified"
+        or comment_build.get("cache", {}).get("status") != "hit"
+        or comment_build.get("cache", {}).get("reuse_basis")
+        != "verified_application_executable_closure"
+        or comment_build.get("artifact", {}).get("identity")
+        != built.get("artifact", {}).get("identity")
+        or comment_work.get("front_end_invocations") != 1
+        or comment_work.get("backend_artifact") != "reused"
+        or comment_build.get("source_snapshot", {}).get("identity")
+        == built.get("source_snapshot", {}).get("identity")
+    ):
+        raise AssertionError(
+            "multi-callable comment edit did not verify the new snapshot and reuse its unchanged executable closure"
+        )
+    current_interfaces = [
+        row.get("interface", {}).get("identity")
+        for row in comment_build.get("callable_scope", {}).get("callable_roots", [])
+    ]
+    if current_interfaces != [
+        row.get("interface", {}).get("identity")
+        for row in built.get("callable_scope", {}).get("callable_roots", [])
+    ] or [
+        row.get("interface", {}).get("identity")
+        for row in comment_build.get("entries", [])
+    ] != current_interfaces:
+        raise AssertionError("semantic reuse did not refresh every selected callable interface")
+    comment_source_file = next(
+        (row for row in comment_build.get("source_snapshot", {}).get("files", [])
+         if row.get("source_id") == "mncs.test.assertions"),
+        None,
+    )
+    if comment_source_file is None or comment_source_file.get("sha256") != sha(
+        comment_modules["mncs.test.assertions"].encode()
+    ):
+        raise AssertionError("semantic reuse retained the cached imported source identity")
+
+    suite_modules = dict(modules)
+    empty_total = "        total: 0,"
+    if suite_modules["mncs.test.suite"].count(empty_total) != 1:
+        raise AssertionError("suite.empty source anchor changed")
+    suite_modules["mncs.test.suite"] = suite_modules["mncs.test.suite"].replace(
+        empty_total, "        total: 0 +% 0,", 1
+    )
+    dependency_probe = digest_app.support.Probe(CACHE_DIR, executable=PROBE)
+    try:
+        dependency_build, dependency_metrics = dependency_probe.send(
+            {"compile_application": build_request(root_source, suite_modules)},
+            timeout=180,
+        )
+        dependency_probe.close()
+    except BaseException:
+        if dependency_probe.proc.poll() is None:
+            dependency_probe.proc.kill()
+            dependency_probe.proc.wait(timeout=5)
+        raise
+    dependency_work = dependency_build.get("cache", {}).get("verification_work", {})
+    if (
+        dependency_build.get("status") != "verified"
+        or dependency_build.get("cache", {}).get("status") != "miss"
+        or dependency_build.get("cache", {}).get("reuse_basis")
+        == "verified_application_executable_closure"
+        or dependency_work.get("front_end_invocations") != 1
+        or dependency_work.get("backend_artifact") != "generated"
+    ):
+        raise AssertionError(
+            "reachable suite.empty edit reused a stale multi-callable executable artifact"
+        )
+
+    dependency_exact_probe = digest_app.support.Probe(CACHE_DIR, executable=PROBE)
+    try:
+        dependency_exact, dependency_exact_metrics = dependency_exact_probe.send(
+            {"compile_application": build_request(root_source, suite_modules)},
+            timeout=180,
+        )
+        dependency_exact_probe.close()
+    except BaseException:
+        if dependency_exact_probe.proc.poll() is None:
+            dependency_exact_probe.proc.kill()
+            dependency_exact_probe.proc.wait(timeout=5)
+        raise
+    dependency_exact_work = dependency_exact.get("cache", {}).get(
+        "verification_work", {}
+    )
+    if (
+        dependency_exact.get("cache", {}).get("status") != "hit"
+        or dependency_exact.get("artifact", {}).get("identity")
+        != dependency_build.get("artifact", {}).get("identity")
+        or dependency_exact_work.get("front_end_invocations") != 0
+    ):
+        raise AssertionError("fresh-process reuse failed after reachable dependency invalidation")
+
     vm_result, vm_metrics, normalized_results = vm_batch(
-        artifact,
+        dependency_build.get("artifact", {}).get("value"),
         fixture["execution"]["inputs"],
         fixture["execution"]["canonical_vm_results"],
     )
@@ -310,6 +419,31 @@ def main() -> None:
             "artifact_identity": warm.get("artifact", {}).get("identity"),
             "verification_work": warm_work,
         },
+        "comment_edit_executable_closure_reuse": {
+            "status": comment_build.get("cache", {}).get("status"),
+            "reuse_basis": comment_build.get("cache", {}).get("reuse_basis"),
+            "source_snapshot_identity": comment_build.get("source_snapshot", {}).get("identity"),
+            "artifact_identity": comment_build.get("artifact", {}).get("identity"),
+            "verification_work": comment_work,
+            "measurement": comment_metrics,
+            "selected_callable_interface_identities": current_interfaces,
+            "changed_module_sha256": comment_source_file.get("sha256"),
+        },
+        "reachable_dependency_edit_invalidation": {
+            "edited_function": "mncs.test.suite::empty",
+            "semantics_preserving_expression": "total: 0 +% 0",
+            "status": dependency_build.get("cache", {}).get("status"),
+            "reuse_basis": dependency_build.get("cache", {}).get("reuse_basis"),
+            "artifact_identity": dependency_build.get("artifact", {}).get("identity"),
+            "verification_work": dependency_work,
+            "measurement": dependency_metrics,
+            "fresh_process_reuse": {
+                "status": dependency_exact.get("cache", {}).get("status"),
+                "front_end_invocations": dependency_exact_work.get("front_end_invocations"),
+                "artifact_identity": dependency_exact.get("artifact", {}).get("identity"),
+                "measurement": dependency_exact_metrics,
+            },
+        },
         "oracle_fixture": {
             "kind": fixture["kind"] if "kind" in fixture else fixture["objective"],
             "exact_stage0_canonical_vm_agreement": fixture["execution"]["exact_result_agreement"],
@@ -327,11 +461,17 @@ def main() -> None:
         },
         "measurements": {"cold_build": cold_metrics, "fresh_process_hit": warm_metrics},
         "language_verified_facts_reused": 0,
+        "multi_callable_verified_vm_artifact_reused_after_full_frontend": (
+            comment_work.get("backend_artifact") == "reused"
+        ),
         "scope": (
-            "The real mncs.test.digest source was compiled into one application-build/5 artifact, "
-            "then three Stage-0-backed build_digest inputs and both schema callables were invoked "
-            "in one bounded canonical VM batch. This covers a native Test semantic slice; it does "
-            "not establish Forge/Environment/Store execution or full mncs-test conversion."
+            "The real mncs.test.digest source was compiled into one multi-callable application-build/5 "
+            "artifact. An imported comment edit reran the full frontend and reused the selected verified "
+            "VM closure while rebinding all three current callable interfaces. A semantics-preserving "
+            "edit to reachable mncs.test.suite::empty invalidated the closure and regenerated the artifact. "
+            "Three Stage-0-backed build_digest inputs and both schema callables then ran in one bounded "
+            "canonical VM batch. This does not reuse Language verified facts and does not establish "
+            "Forge/Environment/Store execution or full mncs-test conversion."
         ),
     }
     EVIDENCE_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")

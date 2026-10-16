@@ -868,6 +868,114 @@ fn rebind_cached_source_snapshot(
     Some(response)
 }
 
+fn cached_callable_interfaces_match(
+    response: &Value,
+    callable_roots: &[(String, String)],
+    callable_interfaces: &[Option<Value>],
+) -> bool {
+    if callable_roots.is_empty() || callable_roots.len() != callable_interfaces.len() {
+        return false;
+    }
+    let Some(entries) = response.pointer("/entries").and_then(Value::as_array) else {
+        return false;
+    };
+    let Some(scope_entries) = response
+        .pointer("/callable_scope/callable_roots")
+        .and_then(Value::as_array)
+    else {
+        return false;
+    };
+    if entries.len() != callable_roots.len() || scope_entries.len() != callable_roots.len() {
+        return false;
+    }
+
+    for (index, ((module, function), current)) in
+        callable_roots.iter().zip(callable_interfaces).enumerate()
+    {
+        let Some(current) = current.as_ref() else {
+            return false;
+        };
+        let Some(identity) = current.get("identity").and_then(Value::as_str) else {
+            return false;
+        };
+        if identity.is_empty() || current.get("status").and_then(Value::as_str) != Some("verified")
+        {
+            return false;
+        }
+        for row in [&entries[index], &scope_entries[index]] {
+            if row.get("module").and_then(Value::as_str) != Some(module)
+                || row.get("function").and_then(Value::as_str) != Some(function)
+                || row.get("status").and_then(Value::as_str) != Some("verified")
+                || row.pointer("/interface/status").and_then(Value::as_str) != Some("verified")
+                || row.pointer("/interface/identity").and_then(Value::as_str) != Some(identity)
+            {
+                return false;
+            }
+        }
+    }
+
+    let (first_module, first_function) = &callable_roots[0];
+    let Some(first_interface) = callable_interfaces[0].as_ref() else {
+        return false;
+    };
+    response.pointer("/entry/module").and_then(Value::as_str) == Some(first_module)
+        && response.pointer("/entry/function").and_then(Value::as_str) == Some(first_function)
+        && response.pointer("/entry/status").and_then(Value::as_str) == Some("verified")
+        && response
+            .pointer("/entry/interface/identity")
+            .and_then(Value::as_str)
+            == first_interface.get("identity").and_then(Value::as_str)
+}
+
+fn rebind_callable_interface_rows(
+    rows: &mut [Value],
+    callable_roots: &[(String, String)],
+    callable_interfaces: &[Option<Value>],
+) -> Option<()> {
+    if callable_roots.is_empty()
+        || rows.len() != callable_roots.len()
+        || callable_interfaces.len() != callable_roots.len()
+    {
+        return None;
+    }
+
+    for (index, ((module, function), current)) in
+        callable_roots.iter().zip(callable_interfaces).enumerate()
+    {
+        let current = current.as_ref()?;
+        let row = &mut rows[index];
+        if row.get("module").and_then(Value::as_str) != Some(module)
+            || row.get("function").and_then(Value::as_str) != Some(function)
+            || row.get("status").and_then(Value::as_str) != Some("verified")
+        {
+            return None;
+        }
+        row.as_object_mut()?
+            .insert("interface".to_owned(), current.clone());
+    }
+    Some(())
+}
+
+fn rebind_cached_callable_interfaces(
+    response: &mut Value,
+    callable_roots: &[(String, String)],
+    callable_interfaces: &[Option<Value>],
+) -> Option<()> {
+    {
+        let entries = response
+            .pointer_mut("/entries")
+            .and_then(Value::as_array_mut)?;
+        rebind_callable_interface_rows(entries, callable_roots, callable_interfaces)?;
+    }
+    {
+        let scope_entries = response
+            .pointer_mut("/callable_scope/callable_roots")
+            .and_then(Value::as_array_mut)?;
+        rebind_callable_interface_rows(scope_entries, callable_roots, callable_interfaces)?;
+    }
+    Some(())
+}
+
 fn rebind_cached_application_response(
     mut response: Value,
     source_identity: &str,
@@ -878,8 +986,14 @@ fn rebind_cached_application_response(
     executable_closure_identity: &str,
     entry_interface: Value,
     diagnostics: Value,
+    multiple_callables: bool,
+    callable_roots: &[(String, String)],
+    callable_interfaces: &[Option<Value>],
 ) -> Option<Value> {
     response = rebind_cached_source_snapshot(response, source_identity, source_files)?;
+    if multiple_callables {
+        rebind_cached_callable_interfaces(&mut response, callable_roots, callable_interfaces)?;
+    }
     let dependency_graph = response.get_mut("dependency_graph")?.as_object_mut()?;
     dependency_graph.insert("identity".to_owned(), json!(graph_identity));
     dependency_graph.insert("details".to_owned(), graph_details);
@@ -1627,14 +1741,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         &probe_identity,
     );
     let cache_path = application_cache_path(&cache_key);
-    // The first multi-callable contract deliberately admits only exact
-    // snapshot cache hits. Semantic-closure reuse will be enabled once the
-    // Language fact set can bind every selected callable interface.
-    let cache_index_path = if multiple_callables {
-        None
-    } else {
-        application_cache_index_path(&cache_index_key)
-    };
+    // The index only locates a previously verified artifact candidate. A
+    // changed snapshot still runs the full Language frontend; reuse below is
+    // admitted only when the selected executable closure, every selected
+    // callable interface, and the language-owned artifact interface match.
+    let cache_index_path = application_cache_index_path(&cache_index_key);
     if let Some(path) = cache_path.as_ref() {
         if let Some(response) = read_application_cache(
             path,
@@ -1809,10 +1920,16 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         executable_closure_identity.as_deref(),
         entry_interface.clone(),
     ) {
-        let current_interface_identity = interface.get("identity").and_then(Value::as_str);
-        let cached_interface_identity = candidate
-            .pointer("/entry/interface/identity")
-            .and_then(Value::as_str);
+        let selected_interfaces_match = if multiple_callables {
+            cached_callable_interfaces_match(&candidate, &callable_roots, &callable_interfaces)
+        } else {
+            let current_interface_identity = interface.get("identity").and_then(Value::as_str);
+            let cached_interface_identity = candidate
+                .pointer("/entry/interface/identity")
+                .and_then(Value::as_str);
+            current_interface_identity.is_some()
+                && current_interface_identity == cached_interface_identity
+        };
         let executable_closure_match = candidate
             .pointer("/dependency_graph/application_executable_closure_identity")
             .and_then(Value::as_str)
@@ -1825,8 +1942,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         if candidate.get("status").and_then(Value::as_str) == Some("verified")
             && executable_closure_match
             && interface.get("status").and_then(Value::as_str) == Some("verified")
-            && current_interface_identity.is_some()
-            && current_interface_identity == cached_interface_identity
+            && selected_interfaces_match
             && cached_artifact_interface_identity
                 == Some(current_artifact_interface_identity.as_str())
         {
@@ -1840,6 +1956,9 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 executable_closure_identity,
                 interface,
                 diagnostics.clone(),
+                multiple_callables,
+                &callable_roots,
+                &callable_interfaces,
             ) {
                 let publication = match cache_path.as_ref() {
                     Some(path) => match publish_application_cache(path, &cache_key, &response) {
