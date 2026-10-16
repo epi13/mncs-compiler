@@ -142,13 +142,18 @@ root that explicitly selects and executes
 matches the Stage-0 project oracle in both a six-call canonical VM batch and an
 eight-call retained VM session, including recovery after exhausted fuel and a
 rejected typed request. The artifact also preserves fresh-process cache reuse
-and invalidation after a reachable imported function edit. The measured cold
-build was 3.949 seconds (3.91 CPU seconds, 81,338,368-byte peak RSS); the fresh
-process hit was 0.554 seconds (0.53 CPU seconds, 38,318,080-byte peak RSS). The
-VM batch used 28,096 KiB peak RSS; cgroup memory measurements were unavailable.
-The run reused zero Language verified facts and still uses a local bounded VM
-provider harness, so it does not establish Forge/Environment/Store execution
-or full `mncs-test` conversion.
+and invalidation after a reachable imported function edit. The Environment
+verification operation passed again at compiler revision `a95b9df`; the
+updated [digest suite report](native-app-readiness-digest-suite-specialization-20261016.json)
+records a 3.950-second cold build (3.91 CPU seconds, 81,408,000-byte peak RSS),
+a 0.555-second fresh-process hit (0.52 CPU seconds, 38,461,440-byte peak RSS),
+a six-call VM batch at 0.208 seconds and 27,524 KiB peak RSS, and an eight-call
+retained session at 0.224 seconds and 27,956 KiB peak RSS. Cgroup memory
+measurements were unavailable. The cold build and changed-source check still
+run the full frontend; the exact-snapshot hit avoids it. The run reused zero
+Language verified facts. Environment returned the passing verification result
+without a separate Store artifact; this does not establish Forge execution of
+`digest_app` or full `mncs-test` conversion.
 
 ## Succession evidence
 
