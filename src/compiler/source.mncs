@@ -12,10 +12,34 @@ fn byte_at<N: Nat>(source: [byte; up_to N], offset: u64) -> (result: u64) {
 }
 
 fn ascii<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
-    iterate i over source carrying valid: bool = true {
-        next valid = valid && source[i] as u64 < 128;
+    return ascii_view<N>(source);
+}
+
+// Check four bytes per interpreter transition. The bounded source views used
+// by the compiler are often long, so a byte-at-a-time loop made ASCII
+// admission consume one MNCS step for every byte before parsing could start.
+fn ascii_view<N: Nat>(source: [byte; up_to N]) -> (result: bool) {
+    let groups: u64 = source.len / 4;
+    iterate group over source[0..groups] carrying valid: bool = true {
+        if !valid { return false; }
+        let base: u64 = group * 4;
+        if source[base + 0] as u64 >= 128 { return false; }
+        if source[base + 1] as u64 >= 128 { return false; }
+        if source[base + 2] as u64 >= 128 { return false; }
+        if source[base + 3] as u64 >= 128 { return false; }
+        next valid = true;
     }
-    return valid;
+    let tail: u64 = groups * 4;
+    if tail < source.len {
+        if source[tail] as u64 >= 128 { return false; }
+    }
+    if tail + 1 < source.len {
+        if source[tail + 1] as u64 >= 128 { return false; }
+    }
+    if tail + 2 < source.len {
+        if source[tail + 2] as u64 >= 128 { return false; }
+    }
+    return true;
 }
 
 fn span_valid<N: Nat>(source: [byte; up_to N], start: u64, end: u64) -> (result: bool) {
@@ -185,10 +209,7 @@ fn ascii_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
 fn ascii_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], index: u64, valid: bool) -> (result: bool) {
     if !valid { return false; }
     let page: [byte; up_to N] = pages[index];
-    iterate i over page carrying ok: bool = true {
-        next ok = ok && page[i] as u64 < 128;
-    }
-    return ok;
+    return ascii_view<N>(page);
 }
 
 // FNV-1a/64 content identity, vendored from the mncs.std.fnv1a.v1 step so
