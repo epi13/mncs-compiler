@@ -1,0 +1,952 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "decl-parse-missing-separator-canonical-vm",
+  "observed_at": "2026-10-16T16:35:25.560336Z",
+  "status": "passed",
+  "claim_boundary": "34 decl.parse_unit cases including two missing-separator regressions from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence.",
+  "compiler": {
+    "tested_source_revision": "a0a908957f4b7d818829db007129b6711529db55",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "b3e712ad453ecc5170850b6bcf82465360a10ac73ffce982df878674f0326c7b",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "71f9a95798ec91b4aa1a892089f4eff6fca390f0761cdf850c048514757829d7"
+    },
+    "decl_source_sha256": "71f9a95798ec91b4aa1a892089f4eff6fca390f0761cdf850c048514757829d7",
+    "test_harness": "tools/test_vm_stage1_frontier.py",
+    "test_harness_sha256": "7657013d819b8d8d925ebac0662abdbe9dee1fb5ae6ec2fc798d99bfbd0c5193",
+    "commit_containing_measured_source": "c0b77f28a46bb0511893057751e371224f30e014",
+    "tested_source_commit": "c0b77f28a46bb0511893057751e371224f30e014",
+    "working_tree_was_dirty_during_execution": true
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_repository": "/home/epi13/Documents/Projects/mncs-vm",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "workload": {
+    "module": "mncs.compiler.decl.v1",
+    "function": "parse_unit<1024,1024>",
+    "artifact_id": "sha256:a9448bce83915d07665dc2d9e837e534ecf1b6e4ec51c2f291bc0678562b7c98",
+    "selected_case_count": 34,
+    "valid_case_count": 19,
+    "invalid_case_count": 15,
+    "cases": [
+      {
+        "id": "decl.parse_unit:bounded-slice-postfix",
+        "kind": "pos",
+        "bytes": 89,
+        "sha256": "1fea3f544fa959f42733c735a377140a4d45071a70dddd996bede46aad2c25cb"
+      },
+      {
+        "id": "decl.parse_unit:nested-if-parent-close",
+        "kind": "pos",
+        "bytes": 105,
+        "sha256": "645ef41decb9a5dcb81cb9bd73eef1736c6895ffc67472d64a084cd49db33ee8"
+      },
+      {
+        "id": "decl.parse_unit:generic-signature-and-call",
+        "kind": "pos",
+        "bytes": 112,
+        "sha256": "96103848b18071a7713037771f07de0c0817d03b11220169fa2a6bbaf02400d9"
+      },
+      {
+        "id": "decl.parse_unit:record-update",
+        "kind": "pos",
+        "bytes": 115,
+        "sha256": "9084fe257be0101d844ba56678e9753dfbde16455e4430727edf14a4b0111cbf"
+      },
+      {
+        "id": "decl.parse_unit:first-error-span",
+        "kind": "neg",
+        "bytes": 56,
+        "sha256": "51238d1ee324fc5b29e0a9f843b29322e8cd4e809551a97fe33d2967c50afe65"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-02",
+        "kind": "pos",
+        "bytes": 106,
+        "sha256": "ea77fcd69c0a24487a9973ea9e9e4bc9e2fa037da314302481172bbf9a753a1d"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-05",
+        "kind": "pos",
+        "bytes": 140,
+        "sha256": "b81a9b3dcfaf04ba19b183d10571c427e379feefd5b075cc233a6e12875baf77"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-08",
+        "kind": "pos",
+        "bytes": 106,
+        "sha256": "a917ae4c373e6df937c1041f352988c8afd54eb575ae46cb7af366e083171aff"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-10",
+        "kind": "pos",
+        "bytes": 291,
+        "sha256": "7980a49f3586a2262c90f76ebdcfaad744ef532ec8261e6cb771c73a91fcad5d"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-12",
+        "kind": "pos",
+        "bytes": 92,
+        "sha256": "94e6c8a350920123e1584bf76754c99dcd86abb97f0e6e23a5787a8f07e789d8"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-20",
+        "kind": "pos",
+        "bytes": 79,
+        "sha256": "73f0167271055d649758e1f450445f649e8ec452e302dbd6c2efb377ef74ca24"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-22",
+        "kind": "pos",
+        "bytes": 112,
+        "sha256": "96103848b18071a7713037771f07de0c0817d03b11220169fa2a6bbaf02400d9"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-28",
+        "kind": "pos",
+        "bytes": 115,
+        "sha256": "9084fe257be0101d844ba56678e9753dfbde16455e4430727edf14a4b0111cbf"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-30",
+        "kind": "pos",
+        "bytes": 139,
+        "sha256": "91dd93c8cce8f9bcbe7380ce2edc39e2f9a2d8c608f86c9f892655ea0d34055c"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-34",
+        "kind": "pos",
+        "bytes": 113,
+        "sha256": "423218dd01592dad449f93f3627006c06609eba7859efc0834f81034ef04a04b"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-38",
+        "kind": "pos",
+        "bytes": 79,
+        "sha256": "7832190b743fd8f62f33adbb49ca51cdb1ece23485f2ebee776936353207b540"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-42",
+        "kind": "pos",
+        "bytes": 107,
+        "sha256": "5c55cf543d723a9843984f68ffb9b548db0c5c00fe63eed921dcd8bc04e93f1f"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-46",
+        "kind": "pos",
+        "bytes": 131,
+        "sha256": "743e6e9c2ae4b09bb35b56d0f6484a9aad08ba319654b5540d0d6148991cbf05"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-59",
+        "kind": "pos",
+        "bytes": 88,
+        "sha256": "a02c0e3c76ec416421b2f9baf6f9312183100bf144ac477df8f59ab93d194bef"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-74",
+        "kind": "pos",
+        "bytes": 106,
+        "sha256": "b41387d0f19fd1056b6178eb08973170b3ebdfea8a83549a8e4771595a6577bd"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-02",
+        "kind": "neg",
+        "bytes": 91,
+        "sha256": "2c04b8e0816098beaac2f74830b27dd6d095c6b47e4a052a8cb8bcf4cfda4414"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-05",
+        "kind": "neg",
+        "bytes": 91,
+        "sha256": "b5a6e85f460a339e892ff2bc4a997ae90c5178d066bfd8a97a4133169a555eab"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-07",
+        "kind": "neg",
+        "bytes": 138,
+        "sha256": "43cd4c623be9cc9e61319477fdf3d94ee28dd5c7729f0d000862f7fe26203807"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-13",
+        "kind": "neg",
+        "bytes": 106,
+        "sha256": "259963ee102625cc1e01f69afb33a5b652e6eb71d8fde7b9c9a2e441cce56e89"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-14",
+        "kind": "neg",
+        "bytes": 65,
+        "sha256": "1cc4971984fd17faabc95643487d6527f9b4249d7c686ea9f145412cbaff5b2e"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-18",
+        "kind": "neg",
+        "bytes": 96,
+        "sha256": "d7c2a808b28e05ebffa1464261aa0e6497b55070257aa5fd6724fc592e5e397f"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-21",
+        "kind": "neg",
+        "bytes": 107,
+        "sha256": "bbc9eafb248f787bf528767345c83286018a4857ab80383b0610fed7b51cffb8"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-28",
+        "kind": "neg",
+        "bytes": 121,
+        "sha256": "b11ab1adda1dc88853ed609c80e04a331d43008ec69c7ac488a980cbe020500e"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-37",
+        "kind": "neg",
+        "bytes": 69,
+        "sha256": "9c6f268eb7ce03d0d9963e5b4c65bfd6fe01fcf322747b6f9df489a2f55d0f30"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-44",
+        "kind": "neg",
+        "bytes": 62,
+        "sha256": "c4de580617de8eddf651afcb7a052ce5ff98f048f402e9bc5c59cba7a16a990c"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-52",
+        "kind": "neg",
+        "bytes": 80,
+        "sha256": "bcc45f9d5c38cf229c3ade2956d41eb8f34fd5e12d9dc921a0c600f58f086ceb"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-54",
+        "kind": "neg",
+        "bytes": 91,
+        "sha256": "4080de46efd898d4854cec7396b27b6b40cac5adc0d1de237d2edafe772caebe"
+      },
+      {
+        "id": "decl.parse_unit:missing-field-separator-0",
+        "kind": "neg",
+        "bytes": 66,
+        "sha256": "718413f5d15d4df3ad0973159fac91e35efacb00281f783a3c093b9a787ccda9"
+      },
+      {
+        "id": "decl.parse_unit:missing-field-separator-1",
+        "kind": "neg",
+        "bytes": 80,
+        "sha256": "f5ff70fb6338ea5c0bbbfbf6eb120b7f1e197da880fc5dc6cecc937bb3ae8f5b"
+      }
+    ]
+  },
+  "verification": {
+    "stage0_structural_and_diagnostic_checks": "passed_for_all_cases",
+    "executor_case_counts": {
+      "reference_interpreter": 34,
+      "cranelift": 34,
+      "canonical_vm": 34
+    },
+    "semantic_digests": {
+      "reference_interpreter": "6ab2e28a3d2626c5a5da0d03ab4a9bdd569dece907bd31e047061a26435a7f46",
+      "cranelift": "6ab2e28a3d2626c5a5da0d03ab4a9bdd569dece907bd31e047061a26435a7f46",
+      "canonical_vm": "6ab2e28a3d2626c5a5da0d03ab4a9bdd569dece907bd31e047061a26435a7f46"
+    },
+    "steps": {
+      "reference_interpreter": [
+        46096,
+        52583,
+        59895,
+        49180,
+        20119,
+        62657,
+        137185,
+        114848,
+        211199,
+        36608,
+        27405,
+        59895,
+        49180,
+        50693,
+        42260,
+        32925,
+        37996,
+        55610,
+        45817,
+        46171,
+        8672,
+        47247,
+        72776,
+        34104,
+        9642,
+        31498,
+        35213,
+        34588,
+        28467,
+        21478,
+        28066,
+        37758,
+        9885,
+        11051
+      ],
+      "cranelift": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "canonical_vm": [
+        55065,
+        63013,
+        72991,
+        58747,
+        24038,
+        76185,
+        164561,
+        136797,
+        257379,
+        43536,
+        32804,
+        72991,
+        58747,
+        60191,
+        50228,
+        39410,
+        45438,
+        66443,
+        54708,
+        55047,
+        10068,
+        57437,
+        87810,
+        40321,
+        11417,
+        37295,
+        41733,
+        41073,
+        33898,
+        25427,
+        33175,
+        44672,
+        11613,
+        12942
+      ]
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "timing_seconds": {
+      "reference_interpreter_cases": [
+        5.315982750005787,
+        1.6752825350267813,
+        2.7030197870044503,
+        1.5626698810083326,
+        0.6374656289990526,
+        2.2489300760207698,
+        4.592414177983301,
+        3.5103407290007453,
+        9.112815697008045,
+        1.1064490340068005,
+        0.9190010580059607,
+        2.7031264510005713,
+        1.558627560007153,
+        1.513794025988318,
+        1.290532343002269,
+        1.0993940070038661,
+        1.2094729329983238,
+        1.7258681620005518,
+        1.468017401988618,
+        1.4475965420133434,
+        0.21500353098963387,
+        1.5400928009767085,
+        2.4018429680145346,
+        1.0049298480153084,
+        0.30687227501766756,
+        0.9177159579994623,
+        1.0592178749793675,
+        1.0255416269937996,
+        0.883902803005185,
+        0.6255702789931092,
+        0.8034970939916093,
+        1.1098430829879362,
+        0.2947427569888532,
+        0.2974675520090386
+      ],
+      "reference_interpreter_total_including_oracles_and_emit": 105.75051448997692,
+      "cranelift_cases": [
+        62.26373034299468,
+        0.0014436370111070573,
+        0.0014331389975268394,
+        0.0014269919774960726,
+        0.0010511360014788806,
+        0.0014221149904187769,
+        0.00355833800858818,
+        0.00335194100625813,
+        0.0027093529934063554,
+        0.0012884160096291453,
+        0.001171559008071199,
+        0.0014582850271835923,
+        0.001480268983868882,
+        0.0014546650054398924,
+        0.0013413270062301308,
+        0.001232050999533385,
+        0.001263354002730921,
+        0.0014995390083640814,
+        0.0013299129786901176,
+        0.0013764209870714694,
+        0.0009753389749675989,
+        0.0011397619964554906,
+        0.0013296600081957877,
+        0.0012128379894420505,
+        0.0009675849869381636,
+        0.0010970860021188855,
+        0.0012418559927027673,
+        0.0011837150086648762,
+        0.0010747420019470155,
+        0.001031065999995917,
+        0.0010784539917949587,
+        0.001134897000156343,
+        0.0009604969818610698,
+        0.0009773739730007946
+      ],
+      "canonical_vm_batch": 12.511948408995522,
+      "whole_frontier": 181.987467
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 179.894578,
+      "child_peak_rss_kib": 2503004,
+      "host_memory_before": {
+        "total_bytes": 33411579904,
+        "available_bytes": 24755294208
+      },
+      "cgroup_memory_files": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_peak_attributable_to_test": false,
+      "method": "resource.getrusage for child processes; /proc/meminfo; cgroup readings are ambient and not attributed to this test"
+    },
+    "canonical_vm_peak_rss_kib": 356692,
+    "canonical_vm_batch_bytes": {
+      "calls": 106096,
+      "results": 318422
+    }
+  },
+  "raw_test_report": {
+    "schema_version": 1,
+    "kind": "mncs-compiler-decl-parse-canonical-vm-frontier",
+    "compiler_revision_tested": "a0a908957f4b7d818829db007129b6711529db55",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "b3e712ad453ecc5170850b6bcf82465360a10ac73ffce982df878674f0326c7b",
+      "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "71f9a95798ec91b4aa1a892089f4eff6fca390f0761cdf850c048514757829d7"
+    },
+    "test_harness_sha256": "7657013d819b8d8d925ebac0662abdbe9dee1fb5ae6ec2fc798d99bfbd0c5193",
+    "probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "language_source_sha256": "71f9a95798ec91b4aa1a892089f4eff6fca390f0761cdf850c048514757829d7",
+    "artifact_id": "sha256:a9448bce83915d07665dc2d9e837e534ecf1b6e4ec51c2f291bc0678562b7c98",
+    "cases": [
+      {
+        "id": "decl.parse_unit:bounded-slice-postfix",
+        "kind": "pos",
+        "bytes": 89,
+        "sha256": "1fea3f544fa959f42733c735a377140a4d45071a70dddd996bede46aad2c25cb"
+      },
+      {
+        "id": "decl.parse_unit:nested-if-parent-close",
+        "kind": "pos",
+        "bytes": 105,
+        "sha256": "645ef41decb9a5dcb81cb9bd73eef1736c6895ffc67472d64a084cd49db33ee8"
+      },
+      {
+        "id": "decl.parse_unit:generic-signature-and-call",
+        "kind": "pos",
+        "bytes": 112,
+        "sha256": "96103848b18071a7713037771f07de0c0817d03b11220169fa2a6bbaf02400d9"
+      },
+      {
+        "id": "decl.parse_unit:record-update",
+        "kind": "pos",
+        "bytes": 115,
+        "sha256": "9084fe257be0101d844ba56678e9753dfbde16455e4430727edf14a4b0111cbf"
+      },
+      {
+        "id": "decl.parse_unit:first-error-span",
+        "kind": "neg",
+        "bytes": 56,
+        "sha256": "51238d1ee324fc5b29e0a9f843b29322e8cd4e809551a97fe33d2967c50afe65"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-02",
+        "kind": "pos",
+        "bytes": 106,
+        "sha256": "ea77fcd69c0a24487a9973ea9e9e4bc9e2fa037da314302481172bbf9a753a1d"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-05",
+        "kind": "pos",
+        "bytes": 140,
+        "sha256": "b81a9b3dcfaf04ba19b183d10571c427e379feefd5b075cc233a6e12875baf77"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-08",
+        "kind": "pos",
+        "bytes": 106,
+        "sha256": "a917ae4c373e6df937c1041f352988c8afd54eb575ae46cb7af366e083171aff"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-10",
+        "kind": "pos",
+        "bytes": 291,
+        "sha256": "7980a49f3586a2262c90f76ebdcfaad744ef532ec8261e6cb771c73a91fcad5d"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-12",
+        "kind": "pos",
+        "bytes": 92,
+        "sha256": "94e6c8a350920123e1584bf76754c99dcd86abb97f0e6e23a5787a8f07e789d8"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-20",
+        "kind": "pos",
+        "bytes": 79,
+        "sha256": "73f0167271055d649758e1f450445f649e8ec452e302dbd6c2efb377ef74ca24"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-22",
+        "kind": "pos",
+        "bytes": 112,
+        "sha256": "96103848b18071a7713037771f07de0c0817d03b11220169fa2a6bbaf02400d9"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-28",
+        "kind": "pos",
+        "bytes": 115,
+        "sha256": "9084fe257be0101d844ba56678e9753dfbde16455e4430727edf14a4b0111cbf"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-30",
+        "kind": "pos",
+        "bytes": 139,
+        "sha256": "91dd93c8cce8f9bcbe7380ce2edc39e2f9a2d8c608f86c9f892655ea0d34055c"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-34",
+        "kind": "pos",
+        "bytes": 113,
+        "sha256": "423218dd01592dad449f93f3627006c06609eba7859efc0834f81034ef04a04b"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-38",
+        "kind": "pos",
+        "bytes": 79,
+        "sha256": "7832190b743fd8f62f33adbb49ca51cdb1ece23485f2ebee776936353207b540"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-42",
+        "kind": "pos",
+        "bytes": 107,
+        "sha256": "5c55cf543d723a9843984f68ffb9b548db0c5c00fe63eed921dcd8bc04e93f1f"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-46",
+        "kind": "pos",
+        "bytes": 131,
+        "sha256": "743e6e9c2ae4b09bb35b56d0f6484a9aad08ba319654b5540d0d6148991cbf05"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-59",
+        "kind": "pos",
+        "bytes": 88,
+        "sha256": "a02c0e3c76ec416421b2f9baf6f9312183100bf144ac477df8f59ab93d194bef"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-pos-74",
+        "kind": "pos",
+        "bytes": 106,
+        "sha256": "b41387d0f19fd1056b6178eb08973170b3ebdfea8a83549a8e4771595a6577bd"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-02",
+        "kind": "neg",
+        "bytes": 91,
+        "sha256": "2c04b8e0816098beaac2f74830b27dd6d095c6b47e4a052a8cb8bcf4cfda4414"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-05",
+        "kind": "neg",
+        "bytes": 91,
+        "sha256": "b5a6e85f460a339e892ff2bc4a997ae90c5178d066bfd8a97a4133169a555eab"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-07",
+        "kind": "neg",
+        "bytes": 138,
+        "sha256": "43cd4c623be9cc9e61319477fdf3d94ee28dd5c7729f0d000862f7fe26203807"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-13",
+        "kind": "neg",
+        "bytes": 106,
+        "sha256": "259963ee102625cc1e01f69afb33a5b652e6eb71d8fde7b9c9a2e441cce56e89"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-14",
+        "kind": "neg",
+        "bytes": 65,
+        "sha256": "1cc4971984fd17faabc95643487d6527f9b4249d7c686ea9f145412cbaff5b2e"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-18",
+        "kind": "neg",
+        "bytes": 96,
+        "sha256": "d7c2a808b28e05ebffa1464261aa0e6497b55070257aa5fd6724fc592e5e397f"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-21",
+        "kind": "neg",
+        "bytes": 107,
+        "sha256": "bbc9eafb248f787bf528767345c83286018a4857ab80383b0610fed7b51cffb8"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-28",
+        "kind": "neg",
+        "bytes": 121,
+        "sha256": "b11ab1adda1dc88853ed609c80e04a331d43008ec69c7ac488a980cbe020500e"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-37",
+        "kind": "neg",
+        "bytes": 69,
+        "sha256": "9c6f268eb7ce03d0d9963e5b4c65bfd6fe01fcf322747b6f9df489a2f55d0f30"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-44",
+        "kind": "neg",
+        "bytes": 62,
+        "sha256": "c4de580617de8eddf651afcb7a052ce5ff98f048f402e9bc5c59cba7a16a990c"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-52",
+        "kind": "neg",
+        "bytes": 80,
+        "sha256": "bcc45f9d5c38cf229c3ade2956d41eb8f34fd5e12d9dc921a0c600f58f086ceb"
+      },
+      {
+        "id": "decl.parse_unit:decl-suite-neg-54",
+        "kind": "neg",
+        "bytes": 91,
+        "sha256": "4080de46efd898d4854cec7396b27b6b40cac5adc0d1de237d2edafe772caebe"
+      },
+      {
+        "id": "decl.parse_unit:missing-field-separator-0",
+        "kind": "neg",
+        "bytes": 66,
+        "sha256": "718413f5d15d4df3ad0973159fac91e35efacb00281f783a3c093b9a787ccda9"
+      },
+      {
+        "id": "decl.parse_unit:missing-field-separator-1",
+        "kind": "neg",
+        "bytes": 80,
+        "sha256": "f5ff70fb6338ea5c0bbbfbf6eb120b7f1e197da880fc5dc6cecc937bb3ae8f5b"
+      }
+    ],
+    "valid_case_count": 19,
+    "invalid_case_count": 15,
+    "executor_case_counts": {
+      "reference_interpreter": 34,
+      "cranelift": 34,
+      "canonical_vm": 34
+    },
+    "semantic_digests": {
+      "reference_interpreter": "6ab2e28a3d2626c5a5da0d03ab4a9bdd569dece907bd31e047061a26435a7f46",
+      "cranelift": "6ab2e28a3d2626c5a5da0d03ab4a9bdd569dece907bd31e047061a26435a7f46",
+      "canonical_vm": "6ab2e28a3d2626c5a5da0d03ab4a9bdd569dece907bd31e047061a26435a7f46"
+    },
+    "steps": {
+      "reference_interpreter": [
+        46096,
+        52583,
+        59895,
+        49180,
+        20119,
+        62657,
+        137185,
+        114848,
+        211199,
+        36608,
+        27405,
+        59895,
+        49180,
+        50693,
+        42260,
+        32925,
+        37996,
+        55610,
+        45817,
+        46171,
+        8672,
+        47247,
+        72776,
+        34104,
+        9642,
+        31498,
+        35213,
+        34588,
+        28467,
+        21478,
+        28066,
+        37758,
+        9885,
+        11051
+      ],
+      "cranelift": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "canonical_vm": [
+        55065,
+        63013,
+        72991,
+        58747,
+        24038,
+        76185,
+        164561,
+        136797,
+        257379,
+        43536,
+        32804,
+        72991,
+        58747,
+        60191,
+        50228,
+        39410,
+        45438,
+        66443,
+        54708,
+        55047,
+        10068,
+        57437,
+        87810,
+        40321,
+        11417,
+        37295,
+        41733,
+        41073,
+        33898,
+        25427,
+        33175,
+        44672,
+        11613,
+        12942
+      ]
+    },
+    "timing_seconds": {
+      "reference_interpreter_cases": [
+        5.315982750005787,
+        1.6752825350267813,
+        2.7030197870044503,
+        1.5626698810083326,
+        0.6374656289990526,
+        2.2489300760207698,
+        4.592414177983301,
+        3.5103407290007453,
+        9.112815697008045,
+        1.1064490340068005,
+        0.9190010580059607,
+        2.7031264510005713,
+        1.558627560007153,
+        1.513794025988318,
+        1.290532343002269,
+        1.0993940070038661,
+        1.2094729329983238,
+        1.7258681620005518,
+        1.468017401988618,
+        1.4475965420133434,
+        0.21500353098963387,
+        1.5400928009767085,
+        2.4018429680145346,
+        1.0049298480153084,
+        0.30687227501766756,
+        0.9177159579994623,
+        1.0592178749793675,
+        1.0255416269937996,
+        0.883902803005185,
+        0.6255702789931092,
+        0.8034970939916093,
+        1.1098430829879362,
+        0.2947427569888532,
+        0.2974675520090386
+      ],
+      "reference_interpreter_total_including_oracles_and_emit": 105.75051448997692,
+      "cranelift_cases": [
+        62.26373034299468,
+        0.0014436370111070573,
+        0.0014331389975268394,
+        0.0014269919774960726,
+        0.0010511360014788806,
+        0.0014221149904187769,
+        0.00355833800858818,
+        0.00335194100625813,
+        0.0027093529934063554,
+        0.0012884160096291453,
+        0.001171559008071199,
+        0.0014582850271835923,
+        0.001480268983868882,
+        0.0014546650054398924,
+        0.0013413270062301308,
+        0.001232050999533385,
+        0.001263354002730921,
+        0.0014995390083640814,
+        0.0013299129786901176,
+        0.0013764209870714694,
+        0.0009753389749675989,
+        0.0011397619964554906,
+        0.0013296600081957877,
+        0.0012128379894420505,
+        0.0009675849869381636,
+        0.0010970860021188855,
+        0.0012418559927027673,
+        0.0011837150086648762,
+        0.0010747420019470155,
+        0.001031065999995917,
+        0.0010784539917949587,
+        0.001134897000156343,
+        0.0009604969818610698,
+        0.0009773739730007946
+      ],
+      "canonical_vm_batch": 12.511948408995522,
+      "whole_frontier": 181.987467
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 179.894578,
+      "child_peak_rss_kib": 2503004,
+      "host_memory_before": {
+        "total_bytes": 33411579904,
+        "available_bytes": 24755294208
+      },
+      "cgroup_memory_files": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_peak_attributable_to_test": false,
+      "method": "resource.getrusage for child processes; /proc/meminfo; cgroup readings are ambient and not attributed to this test"
+    },
+    "canonical_vm_peak_rss_kb": 356692,
+    "canonical_vm_batch_bytes": {
+      "calls": 106096,
+      "results": 318422
+    },
+    "scope": "34 decl.parse_unit cases from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence.",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_artifact": "evidence/self-host-decl-missing-separator-canonical-vm-20261016.json",
+    "commit_containing_measured_source": "c0b77f28a46bb0511893057751e371224f30e014",
+    "working_tree_was_dirty_during_execution": true
+  },
+  "evidence_artifact": "evidence/self-host-decl-missing-separator-canonical-vm-20261016.json",
+  "test_decl_suite": {
+    "status": "passed",
+    "result_sha256": "4a993018d7201f0abdff51a3431918ded53792d46c7a40d86b3245074cf4eedc",
+    "requests": 159,
+    "positive_cases": 78,
+    "negative_cases": 62,
+    "self_ingestion_modules_passed": 9,
+    "capacity_frontier": {
+      "functions": 1122,
+      "declarations": 1123
+    },
+    "language_verified_facts_reused": 0
+  }
+}
