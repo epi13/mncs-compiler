@@ -234,6 +234,18 @@ def vm_retained_session(
             "type_arguments": [],
             "step_budget": 1,
         }, "budget_exhausted", None),
+        ("digest-invalid-typed-input", {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": "build_digest"},
+            "arguments": [{
+                "integer": {
+                    "type": {"bits": 64, "signed": False},
+                    "value": 7,
+                },
+            }],
+            "type_arguments": [],
+            "step_budget": 3_000_000,
+        }, "invalid_request", None),
     ]
     for index, argument in enumerate(inputs):
         calls.append((f"digest-case-{index}", {
@@ -363,7 +375,11 @@ def vm_retained_session(
         "peak_rss_kib": int(peak_rss.group(1)) if peak_rss else None,
         "low_fuel_recovery_in_same_session": (
             responses[0]["outcome"] == "budget_exhausted"
-            and responses[1]["outcome"] == "completed"
+            and responses[2]["outcome"] == "completed"
+        ),
+        "typed_failure_rejected_without_poisoning_following_calls": (
+            responses[1]["outcome"] == "invalid_request"
+            and all(row["outcome"] == "completed" for row in responses[2:])
         ),
         "results": responses,
     }, responses
@@ -554,8 +570,9 @@ def main() -> None:
         fixture["execution"]["canonical_vm_results"],
     )
     if (not retained_session["low_fuel_recovery_in_same_session"]
-            or any(row["outcome"] != "completed" for row in retained_results[1:])):
-        raise AssertionError("retained VM session did not recover after bounded low-fuel execution")
+            or not retained_session["typed_failure_rejected_without_poisoning_following_calls"]
+            or retained_results[1]["outcome"] != "invalid_request"):
+        raise AssertionError("retained VM session failure handling changed later valid calls")
     report = {
         "schema_version": 1,
         "kind": "mncs.compiler.native-test-digest-multi-callable-batch",
@@ -646,9 +663,9 @@ def main() -> None:
             "edit to reachable mncs.test.suite::empty invalidated the closure and regenerated the artifact. "
             "Three Stage-0-backed build_digest inputs and both schema callables then ran in one bounded "
             "canonical VM batch and one retained VM session; the retained session recovered from a "
-            "low-fuel call before completing the same oracle-backed callable set. This does not reuse "
-            "Language verified facts and does not establish Forge/Environment/Store execution or full "
-            "mncs-test conversion."
+            "low-fuel interruption and rejected typed input before completing the same oracle-backed "
+            "callable set in that process. This does not reuse Language verified facts and does not "
+            "establish Forge/Environment/Store execution or full mncs-test conversion."
         ),
     }
     EVIDENCE_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
