@@ -1,0 +1,154 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.self-host-lexer-inline-start-classifier-profile",
+  "observed_at": "2026-10-16T13:39:31Z",
+  "compiler_revision_before_candidate": "47ada5610306d29cf8d2283dd7d31c8abd4cfcc4",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "implementation": {
+    "path": "src/compiler/lexer.mncs",
+    "functions": [
+      "next_token",
+      "next_token_global"
+    ],
+    "baseline_source_sha256": "c1077466c79a3ba0735f079e95b77954a01a457bc065c13c9911c86a0a965067",
+    "candidate_source_sha256": "e1c1d5e40e4c59b10d5981bba72a59528a7b45190b887042a63f51526de33b88",
+    "change": "Remove scan_start_class(c) and keep the disjoint word, number, and whitespace predicates directly in both token-start dispatch frames.",
+    "decision": "retained_pending_commit"
+  },
+  "toolchain": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "canonical_vm_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "test_harness_sha256": "cf372ed0f435bcc3b6bb1da989bab96b2b3e1db5dae5994eba0930dddfe2726e"
+  },
+  "semantic_checks": {
+    "segment_smoke": {
+      "command": "MNCS_VM_BIN=/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm python tools/test_vm_segment.py --smoke",
+      "status": "passed",
+      "texts": 2,
+      "cases": 63,
+      "tokens_compared": 29,
+      "artifact_identity": "sha256:4db5e871c476d1fb93ecf7f48fbcf6e14b4985e1e6730de1a809914a0340c162",
+      "semantic_digest": "7bfe9010838a3f89ea3ded58376e70a7444437f7aa1d43470ad78f6be121f579",
+      "stage0_reference_vm_cranelift_digests_equal": true,
+      "canonical_vm_calls_completed": 63,
+      "canonical_vm_steps_total": 54981,
+      "elapsed_seconds": 11.609,
+      "children_peak_rss_kib": 1111760,
+      "result_sha256": "7d6a0c22eba3fc4ecf180a5e9ce94322d8ee25b2caef045830f5c082e43a0132"
+    }
+  },
+  "matched_profile": {
+    "command": "python tools/measure_compiler_probe.py --backend reference_interpreter --modules source lexer parser segment decl flow --step-budget 1000000 --runtime-profile --skip-stage0-oracle --timeout-seconds 180",
+    "target": "mncs.compiler.project.v1::compile_project",
+    "profiled_steps_per_run": 1000000,
+    "comparison_note": "Same six modules, reference executor, step budget, and warm frontend cache state. The candidate is compiler source being compiled, so its source set differs by the candidate edit; measured source bytes are recorded below.",
+    "baseline": {
+      "measurement_head": "a9d025501435f17d4a764595578e82ded09ce68e",
+      "source_tree_equivalent_to_committed_head": "47ada5610306d29cf8d2283dd7d31c8abd4cfcc4",
+      "compiler_source_set_sha256": "5c144f221d67f9e82f17668826b003b6dbeeacdcc8c4ee5d126651674a2a1d2d",
+      "source_bytes": 1351291,
+      "wall_seconds": 58.655,
+      "target_elapsed_seconds": 45.756272282,
+      "sampled_probe_peak_rss_kib": 1993948,
+      "classification": "RESOURCE_EXHAUSTED",
+      "failure_site": "lexer.next_token_global",
+      "measurement_sha256": "60be45693dc28c5102b3b12d360ccf1120de8f0d31db56df79b3ff667fbdf6c8",
+      "cpu_seconds": 56.29,
+      "cpu_user_seconds": 55.48,
+      "cpu_system_seconds": 0.81,
+      "max_hwm_kib": 2003944
+    },
+    "candidate_warm_runs": [
+      {
+        "label": "lexer-inline-start-classifier-candidate-warm-180s",
+        "compiler_source_set_sha256": "0562fac33352922d516485d7afbf965a859bf06d3c4d1560ba2fee83e6e4430c",
+        "source_bytes": 1351265,
+        "wall_seconds": 54.149,
+        "target_elapsed_seconds": 40.880424204,
+        "sampled_probe_peak_rss_kib": 1993928,
+        "measurement_sha256": "3fd85b806be8e09f39e6d54bd453e0175a44c64c9e3a0cd454249c0cf626cdf9",
+        "cpu_seconds": 51.71,
+        "cpu_user_seconds": 50.87,
+        "cpu_system_seconds": 0.84,
+        "max_hwm_kib": 2003812
+      },
+      {
+        "label": "lexer-inline-start-classifier-candidate-warm-repeat-180s",
+        "compiler_source_set_sha256": "0562fac33352922d516485d7afbf965a859bf06d3c4d1560ba2fee83e6e4430c",
+        "source_bytes": 1351265,
+        "wall_seconds": 54.146,
+        "target_elapsed_seconds": 40.974751712,
+        "sampled_probe_peak_rss_kib": 1993824,
+        "measurement_sha256": "dbc658c60bfa8ce9292d364c5d267f883c077085ed2f8c4192dca1612a09b8af",
+        "cpu_seconds": 51.74,
+        "cpu_user_seconds": 50.84,
+        "cpu_system_seconds": 0.9,
+        "max_hwm_kib": 2003808
+      }
+    ],
+    "candidate_cold_cache_observation": {
+      "wall_seconds": 157.335,
+      "sampled_probe_peak_rss_kib": 1941460,
+      "frontend_program_cache_entries_reused": 0,
+      "measurement_sha256": "a938aa7dfd3263abdc06f4b96b0cafb526e79418c94fbd13a061082323d0ff95",
+      "excluded_from_warm_comparison": true
+    },
+    "function_metrics": {
+      "next_token_global": {
+        "baseline": {
+          "calls": 1859,
+          "steps": 544768,
+          "exclusive_ns": 25678074788
+        },
+        "candidate_each_warm_run": {
+          "calls": 1907,
+          "steps": 593310,
+          "exclusive_ns": [
+            20547434759,
+            20585758098
+          ]
+        }
+      },
+      "scan_start_class": {
+        "baseline": {
+          "calls": 1858,
+          "steps": 56612,
+          "exclusive_ns": 283200069
+        },
+        "candidate": {
+          "calls": 0,
+          "steps": 0,
+          "exclusive_ns": 0
+        }
+      },
+      "combined_token_and_classifier_steps": {
+        "baseline": 601380,
+        "candidate": 593310,
+        "reduction_percent": 1.34
+      },
+      "combined_exclusive_runtime_ns": {
+        "baseline": 25961274857,
+        "candidate_warm_average": 20566596428.5,
+        "reduction_percent": 20.77
+      },
+      "warm_wall_reduction_percent_average": 7.68,
+      "warm_target_elapsed_reduction_percent_average": 10.55,
+      "warm_sampled_peak_rss_kib_average": 1993876,
+      "warm_average_cpu_seconds": 51.725,
+      "warm_average_user_cpu_seconds": 50.855000000000004,
+      "warm_average_system_cpu_seconds": 0.87,
+      "warm_cpu_reduction_percent_average": 8.11
+    },
+    "interpretation": "The removed classifier work is shifted into the caller: next_token_global alone records more steps, but its combined steps with the old classifier decrease 1.34%. Two repeated warm candidate runs show consistent workload-specific reductions in wall time and CPU time with essentially unchanged RSS. The six-module target still exhausts its one-million-step budget in next_token_global; no complete project result or frontier promotion is claimed.",
+    "resource_note": "No cgroup OOM/high event was observed in the warm runs; per-process RSS is sampled, not an exact peak."
+  },
+  "limitations": {
+    "language_verified_facts_reused": 0,
+    "full_six_module_frontier_completed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "full_mncs_test_conversion_completed": false,
+    "forge_effectful_digest_app_route_completed": false
+  }
+}

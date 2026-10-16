@@ -17,15 +17,6 @@ fn letter(c: u64) -> (result: bool) {
 fn word_char(c: u64) -> (result: bool) {
     return (c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95;
 }
-// The three starting-byte classes are disjoint. Resolve them with one
-// short-circuiting classifier instead of invoking all three predicates for
-// every token start.
-fn scan_start_class(c: u64) -> (result: u64) {
-    if (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 95 { return 1; }
-    if c >= 48 && c <= 57 { return 2; }
-    if c == 32 || (c >= 9 && c <= 13) { return 3; }
-    return 0;
-}
 // Source text reaches the reference parser as UTF-8. A rejected non-ASCII
 // scalar therefore occupies its full encoded width in the shared byte-span
 // vocabulary, even though the MNCS token grammar is ASCII-only.
@@ -231,10 +222,12 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     }
     let line: bool = a == 47 && b == 47;
     let block: bool = a == 47 && b == 42;
-    let start_class: u64 = scan_start_class(a);
-    let word: bool = start_class == 1;
-    let number: bool = start_class == 2;
-    let ws: bool = start_class == 3;
+    // Starting-byte classes are disjoint. Keep their predicates in this
+    // dispatch frame to avoid one classifier call and numeric result checks
+    // for every token start.
+    let word: bool = (a >= 65 && a <= 90) || (a >= 97 && a <= 122) || a == 95;
+    let number: bool = a >= 48 && a <= 57;
+    let ws: bool = a == 32 || (a >= 9 && a <= 13);
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
         iterate i over text[start..text.len] carrying st: Scan = seed {
@@ -619,10 +612,12 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     }
     let line: bool = a == 47 && b == 47;
     let block: bool = a == 47 && b == 42;
-    let start_class: u64 = scan_start_class(a);
-    let word: bool = start_class == 1;
-    let number: bool = start_class == 2;
-    let ws: bool = start_class == 3;
+    // Starting-byte classes are disjoint. Keep their predicates in this
+    // dispatch frame to avoid one classifier call and numeric result checks
+    // for every token start.
+    let word: bool = (a >= 65 && a <= 90) || (a >= 97 && a <= 122) || a == 95;
+    let number: bool = a >= 48 && a <= 57;
+    let ws: bool = a == 32 || (a >= 9 && a <= 13);
     if line || block || word || number || ws {
         let seed: Scan = Scan { end: start + select(line || block, 2, 1), depth: select(block, 1, 0), dotted: false, done: false };
         // Keep each scan window in the current page when it fits. Passing the
