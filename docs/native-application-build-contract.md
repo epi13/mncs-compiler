@@ -34,9 +34,14 @@ body makes the full request unsupported.
 The `/5` path currently reuses only exact source snapshots from its persistent
 artifact cache. Changed snapshots run the full Language frontend and rebuild
 the selected SSA closure; the cache does not claim Language verified-fact
-reuse. The manifest-bound provider remains on request `/1` and response `/4`
-until its Environment binding is advanced. The focused direct compiler proof
-is `python3 tools/test_vm_native_application_batch.py`.
+reuse. The Environment provider accepts request `/1` with response `/4` and
+request `/2` with response `/5`; its bounded stdout summary preserves each
+selected callable identity when it fits the 12 KiB bound. For large selections
+it reports the root count and points to the shareable result artifact, which
+retains the complete typed interfaces. The focused direct compiler proof is
+`python3 tools/test_vm_native_application_batch.py`; the provider regression
+also sends `/2` through the adapter and calls both exports in one canonical VM
+batch.
 
 `mncs.compiler.application-build/4` records framed source-snapshot identity,
 source hashes, resolved dependency identity, Stage-0 and producer identities,
@@ -131,12 +136,13 @@ interface is implemented and consumed.
 ## Environment capability
 
 The Compiler manifest declares the contract as
-`mncs-compiler:native-application-build`. The provider accepts a request from
-the selected Compiler checkout with `--request-file PATH`, or from a canonical
-Store input artifact with `--request-artifact NAME`. It writes the complete
-response as the shareable `native-application-build.json` invocation artifact
-and keeps stdout bounded; consumers read the full response through the exact
-Environment artifact binding and path. The selected real `mncs-test` digest
+`mncs-compiler:native-application-build` and records the supported request and
+response schema pairs. The provider accepts a request from the selected
+Compiler checkout with `--request-file PATH`, or from a canonical Store input
+artifact with `--request-artifact NAME`. It writes the complete response as
+the shareable `native-application-build.json` invocation artifact and keeps
+stdout bounded; consumers read the full response through the exact Environment
+artifact binding and path. The selected real `mncs-test` digest
 workload has already passed the integrated Compiler to Forge to canonical VM
 to Environment to Store route with fresh-process artifact readback; its exact
 identities and limits are recorded in
@@ -151,10 +157,11 @@ has already executed. `unsupported`, `unavailable`, `unknown`, and `rejected`
 are preserved as structured outcomes. Provider transport errors remain
 invocation errors and do not produce a result artifact.
 
-The manifest-bound regression is
-`python3 tools/test_application_build_provider.py`. It checks a cold build, a
-fresh-process warm hit, Store-input byte/hash validation, the exact canonical
-artifact identity, precise invalid-source diagnostics, and suppression of
-successful cache publication for rejected input. The `mncs-test` consumer
-fixture remains the source and Stage-0 differential oracle for the application
-itself.
+The provider regression is `python3 tools/test_application_build_provider.py`.
+It checks a cold build, a fresh-process warm hit, Store-input byte/hash
+validation, both request/response schema pairs, the exact canonical artifact
+identity, precise invalid-source diagnostics, suppression of successful cache
+publication for rejected input, and local VM execution of the two selected
+callables. This local adapter test is not evidence of live Environment or
+canonical Store execution. The `mncs-test` consumer fixture remains the source
+and Stage-0 differential oracle for the application itself.

@@ -17,14 +17,17 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/4"
+RESPONSE_SCHEMA_BY_REQUEST = {
+    "mncs.compiler.application-build-request/1": "mncs.compiler.application-build/4",
+    "mncs.compiler.application-build-request/2": "mncs.compiler.application-build/5",
+}
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 INPUT_ARTIFACT_SCHEMA = "mncs.environment.provider-input-artifacts/1"
 INPUT_ARTIFACT_DIR_ENV = "MNCS_ENV_INPUT_ARTIFACT_DIR"
 INPUT_ARTIFACTS_ENV = "MNCS_ENV_INPUT_ARTIFACTS_JSON"
 OUTPUT_ARTIFACT_DIR_ENV = "MNCS_ENV_SESSION_ARTIFACT_DIR"
 MAX_REQUEST_BYTES = 8 * 1024 * 1024
+MAX_SUMMARY_BYTES = 12 * 1024
 
 
 class ProviderError(RuntimeError):
@@ -196,7 +199,8 @@ def run_build(request_bytes: bytes, *, cache: Path, timeout: float) -> dict:
         raise ProviderError("application build request is not valid UTF-8 JSON") from error
     if not isinstance(request, dict):
         raise ProviderError("application build request must be a JSON object")
-    if request.get("schema_version") != REQUEST_SCHEMA:
+    expected_response_schema = RESPONSE_SCHEMA_BY_REQUEST.get(request.get("schema_version"))
+    if expected_response_schema is None:
         raise ProviderError("application build request schema is unsupported")
     probe = selected_probe()
     environment = os.environ.copy()
@@ -239,7 +243,7 @@ def run_build(request_bytes: bytes, *, cache: Path, timeout: float) -> dict:
         raise ProviderError("Stage-0 application build returned invalid JSON") from error
     if not isinstance(status, dict) or not isinstance(response, dict):
         raise ProviderError("Stage-0 application build returned an invalid response shape")
-    if response.get("schema_version") != RESPONSE_SCHEMA:
+    if response.get("schema_version") != expected_response_schema:
         raise ProviderError("Stage-0 application build returned an unsupported response schema")
     if response.get("status") not in {
         "verified", "unsupported", "unavailable", "unknown", "rejected"
@@ -304,12 +308,33 @@ def summary(response: dict, output_name: str | None) -> dict:
                 len(obligations) if isinstance(obligations, list) else None
             ),
         }
-    return {
+    raw_scope = response.get("callable_scope")
+    callable_roots: list[dict] | None = None
+    if isinstance(raw_scope, dict):
+        raw_roots = raw_scope.get("callable_roots", [])
+        if isinstance(raw_roots, list):
+            callable_roots = []
+            for raw_root in raw_roots:
+                if not isinstance(raw_root, dict):
+                    continue
+                root = {
+                    key: raw_root[key]
+                    for key in ("module", "function", "status")
+                    if key in raw_root
+                }
+                raw_interface = raw_root.get("interface")
+                if isinstance(raw_interface, dict) and isinstance(
+                    raw_interface.get("identity"), str
+                ):
+                    root["interface_identity"] = raw_interface["identity"]
+                callable_roots.append(root)
+    result = {
         "schema_version": INVOCATION_SCHEMA,
-        "response_schema": RESPONSE_SCHEMA,
+        "response_schema": response.get("schema_version"),
         "status": "stored" if output_name else "available",
         "build_status": response.get("status"),
         "entry": entry,
+        "callable_roots": callable_roots,
         "source_snapshot_identity": (
             response.get("source_snapshot", {}).get("identity")
             if isinstance(response.get("source_snapshot"), dict) else None
@@ -325,6 +350,30 @@ def summary(response: dict, output_name: str | None) -> dict:
         "capability_dispatch": dispatch,
         "result_file": output_name,
     }
+    if callable_roots is not None:
+        result["callable_root_count"] = len(callable_roots)
+        result["callable_roots"] = callable_roots
+    if len(json_bytes(result)) + 1 <= MAX_SUMMARY_BYTES:
+        return result
+
+    # The complete response remains available as the shareable invocation
+    # artifact. Keep transport stdout comfortably below Environment's 16 KiB
+    # capture limit even for requests selecting hundreds of long-named roots.
+    compact = {
+        "schema_version": INVOCATION_SCHEMA,
+        "response_schema": response.get("schema_version"),
+        "status": "stored" if output_name else "available",
+        "build_status": response.get("status"),
+        "source_snapshot_identity": result["source_snapshot_identity"],
+        "dependency_graph_identity": result["dependency_graph_identity"],
+        "artifact_identity": result["artifact_identity"],
+        "callable_root_count": len(callable_roots) if callable_roots is not None else None,
+        "callable_roots_in_result_artifact": callable_roots is not None,
+        "result_file": output_name,
+    }
+    if len(json_bytes(compact)) + 1 > MAX_SUMMARY_BYTES:
+        raise ProviderError("application build summary exceeds the provider output bound")
+    return compact
 
 
 def main(argv: list[str] | None = None) -> int:

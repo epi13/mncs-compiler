@@ -16,7 +16,9 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_vm_native_application as app
+import test_vm_native_application_batch as batch_app
 import test_vm_test_digest_app as digest_app
+import application_build_provider as provider
 
 configured_probe = os.environ.get("MNCS_COMPILER_PROBE")
 configured_native_probe = os.environ.get("MNCS_NATIVE_APP_PROBE_BIN")
@@ -27,6 +29,8 @@ ROOT = app.ROOT
 PROVIDER = ROOT / "tools/application_build_provider.py"
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/4"
+MULTI_REQUEST_SCHEMA = "mncs.compiler.application-build-request/2"
+MULTI_RESPONSE_SCHEMA = "mncs.compiler.application-build/5"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 DIGEST_EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-provider-digest.json"
 
@@ -319,12 +323,41 @@ def invoke(
         raise AssertionError("Environment invocation summary schema is missing")
     result_path = output_dir / "native-application-build.json"
     response = json.loads(result_path.read_text())
-    if response.get("schema_version") != RESPONSE_SCHEMA:
-        raise AssertionError("stored application build response schema is wrong")
+    if response.get("schema_version") not in {RESPONSE_SCHEMA, MULTI_RESPONSE_SCHEMA}:
+        raise AssertionError("stored application build response schema is unsupported")
+    if summary.get("response_schema") != response.get("schema_version"):
+        raise AssertionError("provider summary changed the application response schema")
     return summary, response, elapsed, metrics
 
 
 def main() -> None:
+    large_summary_response = {
+        "schema_version": MULTI_RESPONSE_SCHEMA,
+        "status": "verified",
+        "source_snapshot": {"identity": "sha256:" + "a" * 64},
+        "dependency_graph": {"identity": "sha256:" + "b" * 64},
+        "artifact": {"identity": "sha256:" + "c" * 64},
+        "callable_scope": {
+            "callable_roots": [
+                {
+                    "module": "m" * 96 + str(index),
+                    "function": "f" * 96 + str(index),
+                    "status": "verified",
+                    "interface": {"identity": "sha256:" + "d" * 64},
+                }
+                for index in range(256)
+            ]
+        },
+    }
+    bounded_summary = provider.summary(large_summary_response, "result.json")
+    bounded_summary_bytes = provider.json_bytes(bounded_summary) + b"\n"
+    if (
+        len(bounded_summary_bytes) > provider.MAX_SUMMARY_BYTES
+        or bounded_summary.get("callable_root_count") != 256
+        or bounded_summary.get("callable_roots_in_result_artifact") is not True
+    ):
+        raise AssertionError("large callable selection exceeded the bounded summary contract")
+
     probe_build = ensure_current_probe()
     if not app.PROBE.is_file():
         raise SystemExit("campaign Stage-0 compiler probe is missing")
@@ -482,6 +515,94 @@ def main() -> None:
         )
         if warm_response.get("artifact", {}).get("identity") != artifact.get("identity"):
             raise AssertionError("warm provider build changed the canonical artifact identity")
+
+        batch_roots = [
+            {"module": batch_app.MODULE, "function": "increment"},
+            {"module": batch_app.MODULE, "function": "decrement"},
+        ]
+        batch_request = batch_app.request(batch_roots)
+        batch_request_path = base / "multi-callable-request.json"
+        write_json(batch_request_path, batch_request)
+        batch_cache_dir = base / "multi-callable-cache"
+        batch_cache_arg = batch_cache_dir.relative_to(ROOT).as_posix()
+        batch_output_dir = base / "multi-callable-output"
+        batch_output_dir.mkdir()
+        batch_summary, batch_response, batch_elapsed, batch_metrics = invoke(
+            [
+                "--request-file", batch_request_path.relative_to(ROOT).as_posix(),
+                "--cache-dir", batch_cache_arg,
+            ],
+            output_dir=batch_output_dir,
+            cache_dir=batch_cache_dir,
+        )
+        batch_work = verification_work(
+            batch_response, label="multi-callable application build",
+            frontend_invocations=1,
+        )
+        batch_callable_roots = batch_response.get("callable_scope", {}).get(
+            "callable_roots", []
+        )
+        batch_expected = [
+            {
+                "module": batch_app.MODULE,
+                "function": "decrement",
+                "status": "verified",
+            },
+            {
+                "module": batch_app.MODULE,
+                "function": "increment",
+                "status": "verified",
+            },
+        ]
+        batch_summary_roots = batch_summary.get("callable_roots")
+        if (
+            batch_response.get("schema_version") != MULTI_RESPONSE_SCHEMA
+            or batch_response.get("status") != "verified"
+            or [
+                {key: row.get(key) for key in ("module", "function", "status")}
+                for row in batch_callable_roots
+            ] != batch_expected
+            or not all(
+                isinstance(row.get("interface", {}).get("identity"), str)
+                and row["interface"]["identity"]
+                for row in batch_callable_roots
+            )
+            or len(batch_summary_roots or []) != len(batch_expected)
+            or [
+                {key: row.get(key) for key in ("module", "function", "status")}
+                for row in batch_summary_roots or []
+            ] != batch_expected
+            or any(not row.get("interface_identity") for row in batch_summary_roots or [])
+        ):
+            raise AssertionError(
+                "provider did not preserve the /2-to-/5 selected callable identities"
+            )
+        batch_artifact = batch_response.get("artifact", {}).get("value")
+        batch_artifact_callables = {
+            (row.get("module"), row.get("name"))
+            for row in (batch_artifact or {}).get("callables", [])
+        }
+        if batch_artifact_callables != {
+            (batch_app.MODULE, "increment"),
+            (batch_app.MODULE, "decrement"),
+        }:
+            raise AssertionError(
+                "provider multi-callable build emitted an unexpected callable set"
+            )
+        batch_vm_result, batch_vm_elapsed, batch_vm_peak_rss_kib = batch_app.vm_batch(
+            batch_artifact
+        )
+        batch_vm_rows = batch_vm_result.get("results", [])
+        if len(batch_vm_rows) != 2 or any(
+            row.get("outcome") != {"kind": "completed"}
+            or len(row.get("record", {}).get("returned", [])) != 1
+            or app.vm_to_wire(row["record"]["returned"][0])
+            != batch_app.integer(42)
+            for row in batch_vm_rows
+        ):
+            raise AssertionError(
+                "provider-produced multi-callable artifact did not pass canonical VM calls"
+            )
 
         digest_modules = {
             name: path.read_text(encoding="utf-8")
@@ -803,8 +924,36 @@ def main() -> None:
                     )
                 } if digest_metrics is not None else None,
             },
+            "multi_callable_application": {
+                "request_schema": MULTI_REQUEST_SCHEMA,
+                "response_schema": batch_response["schema_version"],
+                "source_snapshot_identity": batch_response.get(
+                    "source_snapshot", {}
+                ).get("identity"),
+                "callable_roots": batch_summary_roots,
+                "artifact_identity": batch_response.get("artifact", {}).get(
+                    "identity"
+                ),
+                "artifact_callable_set": [
+                    {"module": module, "function": function}
+                    for module, function in sorted(batch_artifact_callables)
+                ],
+                "verification_work": batch_work,
+                "provider_wall_seconds": round(batch_elapsed, 6),
+                "provider_metrics": batch_metrics,
+                "canonical_vm_wall_seconds": round(batch_vm_elapsed, 6),
+                "canonical_vm_peak_rss_kib": batch_vm_peak_rss_kib,
+                "canonical_vm_results": batch_vm_rows,
+                "large_selection_summary": {
+                    "root_count": bounded_summary["callable_root_count"],
+                    "summary_bytes": len(bounded_summary_bytes),
+                    "detail_in_result_artifact": bounded_summary[
+                        "callable_roots_in_result_artifact"
+                    ],
+                },
+            },
             "limitations": [
-                "This verifies application-build output and capability identities; it does not invoke Forge, Environment, or canonical Store execution.",
+                "This invokes the local canonical VM but does not exercise Forge, the live Environment provider route, or canonical Store execution.",
                 "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
                 "A warm application artifact cache hit is not Language verified-fact reuse.",
             ],
@@ -818,6 +967,12 @@ def main() -> None:
                 "digest_app_fresh_process_warm_hit": (
                     digest_warm_response.get("cache", {}).get("status") == "hit"
                 ),
+                "provider_multi_callable_build_verified": (
+                    batch_response.get("schema_version") == MULTI_RESPONSE_SCHEMA
+                    and batch_response.get("status") == "verified"
+                ),
+                "provider_multi_callable_vm_batch_completed": len(batch_vm_rows) == 2
+                and all(row.get("outcome") == {"kind": "completed"} for row in batch_vm_rows),
                 "store_input_artifact_reused": store_response["cache"]["status"] == "hit",
                 "invalid_source_precise_rejection": diagnostic_codes,
                 "invalid_success_publication": invalid_response["cache"]["publication"],
@@ -832,6 +987,7 @@ def main() -> None:
                 "invalid_source": invalid_work,
                 "digest_app_cold": digest_cold_work,
                 "digest_app_warm_exact_snapshot": digest_warm_work,
+                "multi_callable_provider_build": batch_work,
             },
             "wall_seconds": {
                 "cold": round(cold_elapsed, 6),
@@ -840,6 +996,8 @@ def main() -> None:
                 "invalid": round(invalid_elapsed, 6),
                 "digest_app_cold": round(digest_cold_elapsed, 6),
                 "digest_app_warm": round(digest_warm_elapsed, 6),
+                "multi_callable_provider": round(batch_elapsed, 6),
+                "multi_callable_vm_batch": round(batch_vm_elapsed, 6),
             },
             "process_tree_metrics": {
                 "method": "sampled /proc process tree at 10 ms intervals",
@@ -849,6 +1007,7 @@ def main() -> None:
                 "invalid": invalid_metrics,
                 "digest_app_cold": digest_cold_metrics,
                 "digest_app_warm": digest_warm_metrics,
+                "multi_callable_provider": batch_metrics,
             },
         }
         DIGEST_EVIDENCE_PATH.write_text(

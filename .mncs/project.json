@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 15,
+  "revision": 16,
   "manifest_location": "in-repository",
   "authority": {
     "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
@@ -125,7 +125,7 @@
       },
       {
         "contract": "native-application-build",
-        "version": "3",
+        "version": "4",
         "kind": "compiler-application-build-provider",
         "stability": "experimental",
         "effects": [
@@ -138,6 +138,17 @@
         "artifact_contract": {
           "request_schema": "mncs.compiler.application-build-request/1",
           "response_schema": "mncs.compiler.application-build/4",
+          "supported_request_response_pairs": [
+            {
+              "request_schema": "mncs.compiler.application-build-request/1",
+              "response_schema": "mncs.compiler.application-build/4"
+            },
+            {
+              "request_schema": "mncs.compiler.application-build-request/2",
+              "response_schema": "mncs.compiler.application-build/5"
+            }
+          ],
+          "callable_root_maximum_count": 256,
           "callable_interface_schema": "mncs.compiler.callable-interface/1",
           "callable_interface_status_values": [
             "verified",
@@ -158,6 +169,7 @@
         "fingerprint_sources": [
           "tools/application_build_provider.py",
           "tools/test_application_build_provider.py",
+          "tools/test_vm_native_application_batch.py",
           "tools/test_vm_native_application.py",
           "tools/test_native_application_incremental.py",
           "tools/stage0-probe/src/application.rs",
