@@ -1,0 +1,260 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "global-segment-canonical-vm-cursor-carry-candidate",
+  "observed_at": "2026-10-16T12:28:51.969516Z",
+  "status": "passed_semantics_rejected_performance",
+  "claim_boundary": "A dirty-worktree cursor-carry candidate passed the selected Stage-0, reference, Cranelift, and canonical VM frontier, but was rejected after the same 1,000,000-step self-consumption profile showed more next_token_global VM steps and lower parser progress. The source change was reverted; this is candidate evidence, not current-source evidence.",
+  "compiler": {
+    "tested_source_revision": "b8f963cbe257f4a0d503ff2a7d7156f40b11be33",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "8d047b35a7fcdbfb6cceded6b1489e8e6458add6cddbaa2b98c98daf89f0364b",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.segment.v1",
+    "target_functions": [
+      "next_token_global",
+      "significant_global"
+    ],
+    "test_harness": "tools/test_vm_global_segment_frontier.py",
+    "test_harness_sha256": "8f07bb00fa6e5cb70abc19bf5b92d8da4acb317dcac2d5131971784483033be1",
+    "tested_worktree_was_dirty": true,
+    "candidate_source_change": "Carry Scan, page index, and page intra-page offset together across bounded global scan windows; increment page coordinates instead of dividing and taking remainder for each window.",
+    "candidate_source_restored_after_rejection": true
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "vm_revision": "b8f963cbe257f4a0d503ff2a7d7156f40b11be33"
+  },
+  "verification": {
+    "executor_case_counts": {
+      "reference_interpreter": 1208,
+      "cranelift": 1208,
+      "canonical_vm": 1208
+    },
+    "semantic_digests": {
+      "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+    },
+    "stage0_checks": "all generated token kinds, spans, diagnostics, and significant-token outcomes passed",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "timing_seconds": {
+      "stage0_oracle_and_reference": 12.252014,
+      "direct_vm_emission": 1.603514,
+      "cranelift_execution": 1.305336,
+      "canonical_vm_batch": 5.113991,
+      "whole_frontier": 31.686758
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 29.396143,
+      "child_peak_rss_kib": 1111712,
+      "canonical_vm_peak_rss_kib": 139884,
+      "canonical_vm_calls_bytes": 10884256,
+      "canonical_vm_results_bytes": 1821552,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    }
+  },
+  "raw_test_report": {
+    "schema_version": 1,
+    "kind": "global-segment-canonical-vm-cursor-carry-candidate",
+    "compiler_revision_tested": "b8f963cbe257f4a0d503ff2a7d7156f40b11be33",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "reference_backend": "reference_interpreter",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "8d047b35a7fcdbfb6cceded6b1489e8e6458add6cddbaa2b98c98daf89f0364b",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.segment.v1",
+    "target_functions": [
+      "next_token_global",
+      "significant_global"
+    ],
+    "test_harness_sha256": "8f07bb00fa6e5cb70abc19bf5b92d8da4acb317dcac2d5131971784483033be1",
+    "artifact_identity": "sha256:102e8ea3dd60ff78ed791f5317ff734f1ca2df734167c8728bf0b72c267b622b",
+    "specializations": [
+      [
+        "1024",
+        "1024"
+      ],
+      [
+        "1024",
+        "1024"
+      ]
+    ],
+    "input_count": 10,
+    "input_sha256": [
+      "20780ee1a4906c003c9380ab220813481ba54ecfe021cf4be8e3cd2181c7fb82",
+      "25b4a2fb004af37784095a82d9f32dda05482865fc2b7afed8eaeecdb9e8199a",
+      "7bbdf876bf822f5a1c2ae78c18e448068c9142e314df9cd9369e522e77449a78",
+      "85e62acd750c4eb56b7b6a1d66dca5bfaac5f062608a1a893410d0288936c09a",
+      "9e6208ddd2cc30eba15cb2137bba398d921e3cf2e18fa38267d84e35b3c03d3b",
+      "a09c7e3d27e403f04fa7d08844899aad3751f2c6f11ca42c5cd58ed3c662f6c9",
+      "a3c074f0e3d24a880253b5201ba2e67b1cabf69c246fdeb98d351b2109da00af",
+      "a9713caffa6294114e928a5683a30b27db3f98da13af4924085bb491a76aed5a",
+      "d166576d6ab9daa0aae694ee0b27f9cfda339eee568f62b2b86ce13c1139e670",
+      "e51418fa04efd75f2700c8293cf7a0c50ed7e9ccd003d61b1259a6c2c4fdaf19"
+    ],
+    "base_stage0_cases": 302,
+    "page_strides": [
+      1,
+      7,
+      64,
+      256
+    ],
+    "case_count": 1208,
+    "per_function_case_counts": {
+      "next_token": 764,
+      "significant": 444
+    },
+    "per_stride_case_counts": {
+      "1": 302,
+      "7": 302,
+      "64": 302,
+      "256": 302
+    },
+    "executor_case_counts": {
+      "reference_interpreter": 1208,
+      "cranelift": 1208,
+      "canonical_vm": 1208
+    },
+    "semantic_digests": {
+      "reference_interpreter": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "cranelift": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a",
+      "canonical_vm": "f1ccff4e8cc9d27deefe3a2d772e4fa944191a2c55025580fb76597f4482bc6a"
+    },
+    "stage0_generated_token_count": 181,
+    "timing_seconds": {
+      "stage0_oracle_and_reference": 12.252014,
+      "direct_vm_emission": 1.603514,
+      "cranelift_execution": 1.305336,
+      "canonical_vm_batch": 5.113991,
+      "whole_frontier": 31.686758
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 29.396143,
+      "child_peak_rss_kib": 1111712,
+      "canonical_vm_peak_rss_kib": 139884,
+      "canonical_vm_calls_bytes": 10884256,
+      "canonical_vm_results_bytes": 1821552,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    },
+    "scope": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a selected cursor frontier, not full segment/lexer module verification.",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "candidate_source_sha256": "8d047b35a7fcdbfb6cceded6b1489e8e6458add6cddbaa2b98c98daf89f0364b"
+  },
+  "step_summaries": {
+    "reference_interpreter": {
+      "count": 1208,
+      "total": 1877749,
+      "maximum": 42967
+    },
+    "cranelift": {
+      "count": 1208,
+      "total": 1208,
+      "maximum": 1
+    },
+    "canonical_vm": {
+      "count": 1208,
+      "total": 2313583,
+      "maximum": 53847
+    }
+  },
+  "performance_comparison": {
+    "workload": "six-module compile_project_target, reference interpreter, 1,000,000 steps",
+    "baseline": {
+      "source_bundle_sha256": "1e794c21c6a72e564ea4ce380bfbc1f5f45cfa7aeef90687c74cf21bc7295573",
+      "target_status": "budget_exhausted",
+      "profile_elapsed_ns": 47427764686,
+      "wall_seconds": 60.124,
+      "child_cpu_seconds": 57.54,
+      "child_peak_rss_kib": 1749852,
+      "next_token_global_calls": 1847,
+      "next_token_global_steps": 542777,
+      "next_token_global_exclusive_ns": 25427599708,
+      "significant_global_calls": 1031,
+      "significant_global_steps": 11764,
+      "scan_chunk_window_calls": 2631,
+      "scan_chunk_window_steps": 102276
+    },
+    "candidate": {
+      "lexer_source_sha256": "8d047b35a7fcdbfb6cceded6b1489e8e6458add6cddbaa2b98c98daf89f0364b",
+      "target_status": "budget_exhausted",
+      "profile_elapsed_ns": 55829213618,
+      "wall_seconds": 119.874,
+      "child_cpu_seconds": 116.94,
+      "child_peak_rss_kib": 1846948,
+      "next_token_global_calls": 1631,
+      "next_token_global_steps": 584122,
+      "next_token_global_exclusive_ns": 29280613004,
+      "significant_global_calls": 896,
+      "significant_global_steps": 10602,
+      "scan_chunk_window_calls": 2549,
+      "scan_chunk_window_steps": 100882,
+      "raw_measurement": ".build/campaign-artifacts/compiler-facts/compiler-probe-cursor-carry-20261016-source-lexer-parser-segment-decl-flow-measurement.json",
+      "raw_measurement_sha256": "182ea783be159eb8a1b7756b9c24c609d6fdaa194b339e35bbc9094c3de0fc18"
+    },
+    "decision": "rejected",
+    "reason": "At the same total step budget, next_token_global consumed 41,345 more VM steps (+7.62%) and the profile did not return a project result. Profile and wall timing differences are workload measurements; they support no general speed claim.",
+    "scanner_modes": {
+      "status": "passed",
+      "source_bytes": 5250,
+      "tokens": 11,
+      "native_steps": 299960,
+      "stage0_token_and_span_match": true
+    },
+    "keyword_dispatch": {
+      "status": "passed",
+      "keywords": 30,
+      "near_misses": 60,
+      "page_boundary_starts": 30,
+      "tokens": 180,
+      "native_steps": 1697995,
+      "stage0_token_and_span_match": true
+    },
+    "source_restored_to": "b8f963cbe257f4a0d503ff2a7d7156f40b11be33"
+  }
+}

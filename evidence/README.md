@@ -250,3 +250,21 @@ establish fresh whole-module parse evidence or a complete legacy-fixture sweep.
 The dedicated boundary differential above completed. The historical matrix
 rows and compiler-head identity remain unchanged; this report keeps the
 candidate source digest and delivered revision separate.
+
+## Native digest callable batch (2026-10-16)
+
+The [digest callable batch report](native-app-readiness-digest-native-batch.json)
+uses the exact `mncs-test` digest source snapshot covered by the Gate A
+Stage-0 fixture. One `application-build/5` artifact contains `build_digest`,
+`request_schema`, and `result_schema`; five calls then complete in one bounded
+canonical VM batch. All three digest results match the pinned Stage-0 outputs,
+and a fresh-process build reuses the same artifact with zero frontend
+invocations. The batch used 1,977 VM steps and peaked at 27,076 KiB RSS; the
+measured cold build took 9.16 seconds and the warm hit 4.32 seconds.
+
+This establishes a pure native Test workflow slice. It does not establish
+`digest_app` capability execution through Forge, Environment, or Store, full
+`mncs-test` conversion, or Language verified-fact reuse. The
+[cursor-carry candidate record](self-host-global-segment-canonical-vm-cursor-carry-candidate-20261016.json)
+retains a correctness-passing lexer experiment that was reverted after its
+matched 1,000,000-step profile showed more `next_token_global` work.
