@@ -31,7 +31,7 @@ STRIDES = (1, 7, 64, 256)
 SAMPLE_INDICES = (2, 5, 6, 7, 8, 9, 10, 13, 15)
 STEP_BUDGET = 8_000_000
 OUT = ROOT / ".build" / "vm-global-segment-frontier.json"
-EVIDENCE = ROOT / "evidence" / "self-host-global-segment-canonical-vm-20261016.json"
+EVIDENCE = ROOT / "evidence" / "self-host-global-segment-line-comment-canonical-vm-20261016.json"
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
