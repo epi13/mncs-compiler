@@ -2667,16 +2667,6 @@ fn pattern_profiles<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     return PatternProfiles { profile_006: profile_at_least_006<P, N>(pages, stride, total, head.version_start, head.version_end), profile_009: profile_at_least_009<P, N>(pages, stride, total, head.version_start, head.version_end) };
 }
 
-// A term-level name: identifier (4) or the capability keyword (25) used as
-// an identifier. Mirrors Stage-0 value_name positions.
-fn is_value_name(kind: u64) -> (result: bool) {
-    return match kind {
-        4 => true,
-        25 => true,
-        _ => false
-    };
-}
-
 // Expect the significant token at cursor to have the wanted kind. Returns
 // the token end on success; on failure ok is false and the span is the
 // offending (or EOF) token, mirroring Stage-0 expect<N>() spans.
@@ -2848,8 +2838,8 @@ fn fields_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     if !(st.ok) || st.done { return st; }
     let token: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, st.cursor);
     let next_field: bool = name_mode == 2 && token.kind == 34 && profile_013;
-    if token.diagnostic != 0 || token.kind == closer || (!(is_value_name(token.kind)) && token.kind != 4 && !(next_field)) { return FieldsParse { ..st, done: true }; }
-    if token.kind != 4 && !(name_mode == 1 && token.kind == 25) && !(next_field) { return FieldsParse { ..st, done: true }; }
+    let accepted_name: bool = token.kind == 4 || (name_mode == 1 && token.kind == 25) || next_field;
+    if token.diagnostic != 0 || token.kind == closer || !(accepted_name) { return FieldsParse { ..st, done: true }; }
     let name: NameParse = parse_name_token(st.cursor, token, name_mode);
     if !(name.ok) { return FieldsParse { cursor: st.cursor, ok: false, err_start: name.err_start, err_end: name.err_end, list: st.list, done: true }; }
     let colon: Expect = expect<P, N>(pages, stride, total, name.cursor, 62);
