@@ -79,7 +79,9 @@ def main():
         'new_vm_envelope_blocker': False,
         'scope': 'bounded-slice postfix AST: Stage-0, reference, freshly emitted canonical VM, and Cranelift agree',
     }
-    Path('.build/vm-efficiency/stage1-frontier.json').write_text(json.dumps(report, indent=2) + '\n')
+    report_path = Path('.build/vm-efficiency/stage1-frontier.json')
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))
 
 
