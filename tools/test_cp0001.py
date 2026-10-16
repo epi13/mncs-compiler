@@ -19,6 +19,14 @@ Tiers (MNCS_CP0001_TIERS, default ABCD; MNCS_CP0001_SMOKE=1 for a fast cut):
   D  self-host milestones (real compiler/CLI sources to ~490KB) plus the
      self-host-distance matrix with per-stage booleans from actual execution.
 
+Set MNCS_CP0001_MILESTONE to one Tier D label to run and report that exact
+self-host frontier. MNCS_CP0001_D_PHASE=lexical runs its source transport,
+identity, lexing, and header checks without project compilation; it requires
+a milestone selector and marks project stages unknown. With no selectors,
+Tier D covers every milestone and its project stages. MNCS_CP0001_STRIDE can
+narrow the lexical run to one valid page width; cross-stride invariance is
+then unknown.
+
 Evidence: evidence/cp0001-results.json (compact) and
 evidence/cp0001-matrix.json (executable matrix input). No full token traces
 are retained; digests plus the deterministic suite reproduce them.
@@ -46,6 +54,9 @@ STRIDE_BOUND = 1024
 SMALL_BOUND = 256
 SMOKE = os.environ.get("MNCS_CP0001_SMOKE") == "1"
 TIERS = os.environ.get("MNCS_CP0001_TIERS", "A" if SMOKE else "ABCD")
+MILESTONE_FILTER = os.environ.get("MNCS_CP0001_MILESTONE")
+D_PHASE = os.environ.get("MNCS_CP0001_D_PHASE", "full")
+STRIDE_FILTER = os.environ.get("MNCS_CP0001_STRIDE")
 FNV_BASIS = 14695981039346656037
 
 
@@ -1053,7 +1064,10 @@ def tier_d(probe, kinds_inv, stats):
     project_probe = None
     project_identities = None
     for rel, label in MILESTONES:
-        if SMOKE and label not in ("parser", "cli-outcome"):
+        if MILESTONE_FILTER and label != MILESTONE_FILTER:
+            continue
+        if (SMOKE and not MILESTONE_FILTER
+                and label not in ("parser", "cli-outcome")):
             continue
         path = workspace / rel
         data = path.read_bytes()
@@ -1098,7 +1112,10 @@ def tier_d(probe, kinds_inv, stats):
         exact_all = True
         not_gaps = 0
         first_gap = None
-        for stride in file_strides(total):
+        strides = file_strides(total)
+        if STRIDE_FILTER is not None:
+            strides = [int(STRIDE_FILTER)]
+        for stride in strides:
             pages = chunk(data, stride)
             assert len(pages) <= PAGE_BOUND, (rel, stride)
             transport_ok = reassemble(pages) == data
@@ -1180,6 +1197,10 @@ def tier_d(probe, kinds_inv, stats):
         assert len(fingerprints) == 1, (rel, fingerprints)
         row["representation"] = f"logical pages stride varied " \
             f"(min {file_strides(total)[0]}, 1024)"
+        row["stride_invariant"] = (
+            True if set(strides) == set(file_strides(total)) else None)
+        if not row["stride_invariant"]:
+            row["representation"] = f"logical pages stride {strides[0]}"
         row["stages"]["transport"] = True
         row["stages"]["lex"] = exact_all
         if is_ascii:
@@ -1190,6 +1211,17 @@ def tier_d(probe, kinds_inv, stats):
                 for info in row["strides"].values())
         row["lex_gap"] = {"pressure": "CP-0022", "not_tokens": not_gaps,
                           "first_span": first_gap} if not_gaps else None
+        if D_PHASE == "lexical":
+            row["stages"].update({"parse": None, "proof": None,
+                                  "cfg": None, "verified_ssa": None})
+            row["semantic_oracle"] = {
+                "status": "not_run",
+                "reason": "bounded lexical phase selected"}
+            row["native_pipeline"] = {
+                "status": "not_run",
+                "reason": "bounded lexical phase selected"}
+            matrix.append(row)
+            continue
         elaborated = probe.send({"elaborate": text}) \
             if text is not None else None
         row["oracle_elaborate_count"] = len(elaborated) \
@@ -1428,6 +1460,40 @@ def fresh_stats():
 
 
 def run_suite():
+    if D_PHASE not in ("full", "lexical"):
+        raise SystemExit("MNCS_CP0001_D_PHASE must be 'full' or 'lexical'")
+    if D_PHASE != "full" and "D" not in TIERS:
+        raise SystemExit("MNCS_CP0001_D_PHASE requires Tier D")
+    if D_PHASE == "lexical" and not MILESTONE_FILTER:
+        raise SystemExit(
+            "MNCS_CP0001_D_PHASE=lexical requires one "
+            "MNCS_CP0001_MILESTONE")
+    if MILESTONE_FILTER:
+        labels = {label for _, label in MILESTONES}
+        if MILESTONE_FILTER not in labels:
+            raise SystemExit(
+                f"unknown MNCS_CP0001_MILESTONE {MILESTONE_FILTER!r}; "
+                f"choose one of {', '.join(sorted(labels))}")
+        if "D" not in TIERS:
+            raise SystemExit(
+                "MNCS_CP0001_MILESTONE requires Tier D in "
+                "MNCS_CP0001_TIERS")
+    if STRIDE_FILTER is not None:
+        if D_PHASE != "lexical" or not MILESTONE_FILTER:
+            raise SystemExit(
+                "MNCS_CP0001_STRIDE requires the lexical phase and one "
+                "milestone")
+        try:
+            selected_stride = int(STRIDE_FILTER)
+        except ValueError:
+            raise SystemExit("MNCS_CP0001_STRIDE must be a positive integer")
+        milestone_path = ROOT.parent / next(
+            rel for rel, label in MILESTONES if label == MILESTONE_FILTER)
+        available_strides = file_strides(milestone_path.stat().st_size)
+        if selected_stride not in available_strides:
+            raise SystemExit(
+                f"stride {selected_stride} is not valid for "
+                f"{MILESTONE_FILTER}: {available_strides}")
     stats = fresh_stats()
     probe = lex_probe()
     try:
@@ -1479,6 +1545,9 @@ if __name__ == "__main__":
             Path("mncs-language.lock.json").read_text())["revision"],
         "tiers": TIERS,
         "smoke": SMOKE,
+        "milestone": MILESTONE_FILTER,
+        "tier_d_phase": D_PHASE,
+        "stride": STRIDE_FILTER,
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "scope": "CP-0001 logical immutable source: validation, global "
                  "access, cross-boundary lexing, headers, identity, matrix",

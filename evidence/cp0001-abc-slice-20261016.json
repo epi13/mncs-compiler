@@ -1,0 +1,176 @@
+{
+  "schema_version": "mncs.compiler.cp0001-slice-evidence/1",
+  "identity": "ev_native_cp0001_abc_20261016",
+  "produced_at": "2026-10-16T22:39:59.824618Z",
+  "repository": {
+    "name": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "revision": "105535f5f8898291e75e2cd00e72a8c0ce16b7a6",
+    "source_file": "tools/test_cp0001.py",
+    "source_file_sha256": "590522f20ab0018bd07a1e06da3e99078a21fb91052dbf02247e2f690aafc974"
+  },
+  "verification": {
+    "command": "MNCS_CP0001_TIERS=ABC python3 tools/test_cp0001.py",
+    "provider": "MNCS Control terminal",
+    "job_id": "term-bf49c74dc0e1c53dd45d3f92",
+    "exit_code": 0,
+    "timed_out": false,
+    "timeout_seconds": 120,
+    "wall_seconds": 95.456,
+    "peak_rss_bytes": null,
+    "cgroup_memory_measurement_available": false,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "backend": "cranelift",
+    "modules": 3,
+    "retained_sessions": 3,
+    "result_digest": "05290daa463f00c28fa9db3b872ae10d5bbda88277c99ae27ec6c52fd7614255",
+    "report_sha256": "fdcb740b954b5a0daf3b27fb018b6369ea85c86230f0e6004238ee1a5d13bf6e"
+  },
+  "coverage": {
+    "tiers": "ABC",
+    "tier_d_executed": false,
+    "complete_cp0001": false,
+    "description": "Tier A strided correctness, Tier B page-boundary grid, and Tier C malformed-input and transport-fault checks passed in one retained probe process."
+  },
+  "report": {
+    "schema_version": 1,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "tiers": "ABC",
+    "smoke": false,
+    "milestone": null,
+    "tier_d_phase": "full",
+    "stride": null,
+    "elapsed_seconds": 95.456,
+    "scope": "CP-0001 logical immutable source: validation, global access, cross-boundary lexing, headers, identity, matrix",
+    "tests": {
+      "transport_bytes": 170007,
+      "tokens_compared": 95895,
+      "fingerprint_shapes": 41,
+      "summary_equivalence": 4,
+      "nonascii": 3,
+      "tier_a_cases": 738,
+      "tier_b_cases": 114,
+      "splits_canonical": 42,
+      "splits_rejected": 40,
+      "malformed": {
+        "stride-zero": 1,
+        "stride-huge": 2,
+        "page-over-stride": 3,
+        "short-middle": 4,
+        "empty-middle": 4,
+        "extra-page": 5,
+        "missing-page": 5,
+        "total-points-elsewhere": 5,
+        "total-off-by-one": 6,
+        "terminal-mismatch": 6,
+        "empty-noncanonical": 5
+      },
+      "transport_faults": 2,
+      "trivia_prefix": {
+        "tokens": 2,
+        "first_prefix_end": 8193
+      },
+      "overlong": {
+        "span": [
+          0,
+          8193
+        ]
+      },
+      "headers_ok": 12,
+      "line_col": true,
+      "accounting": {
+        "byte_at_steps": 1,
+        "bytes": 490607,
+        "capacity": 491520,
+        "full_scan_steps": 490607,
+        "pages": 480,
+        "validate_steps": 480
+      },
+      "skipped_page_bound": 6,
+      "execution_status": {
+        "backend": "cranelift",
+        "modules": 3,
+        "retained_sessions": 3
+      },
+      "malformed_initial_windows": {
+        "empty-page-table": [
+          7,
+          0,
+          1,
+          3
+        ],
+        "empty-initial-page": [
+          7,
+          0,
+          1,
+          3
+        ],
+        "zero-stride": [
+          7,
+          0,
+          1,
+          3
+        ]
+      },
+      "keyword_page_window_cases": {
+        "same_page": [
+          37,
+          5
+        ],
+        "split_page_fallback": [
+          37,
+          5
+        ],
+        "missing_page_fallback": [
+          4,
+          2
+        ]
+      },
+      "keyword_corpus": {
+        "keyword_count": 30,
+        "near_miss_count": 60,
+        "token_count": 179,
+        "stage0_oracle_exact": true,
+        "strides": {
+          "1": {
+            "pages": 665,
+            "tokens": 179
+          },
+          "2": {
+            "pages": 333,
+            "tokens": 179
+          },
+          "7": {
+            "pages": 95,
+            "tokens": 179
+          },
+          "64": {
+            "pages": 11,
+            "tokens": 179
+          },
+          "1024": {
+            "pages": 1,
+            "tokens": 179
+          }
+        }
+      },
+      "malformed_page_table_scan": {
+        "shape": {
+          "pages": 1,
+          "stride": 4,
+          "claimed_total": 8
+        },
+        "token": [
+          3,
+          0,
+          8,
+          1
+        ]
+      },
+      "probe_requests": 136313,
+      "probe_steps_total": 136313,
+      "probe_steps_max": 1,
+      "result_sha256": "05290daa463f00c28fa9db3b872ae10d5bbda88277c99ae27ec6c52fd7614255"
+    }
+  }
+}
