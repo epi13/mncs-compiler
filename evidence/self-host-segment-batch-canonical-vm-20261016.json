@@ -1,0 +1,153 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "segment-batch-canonical-vm-current-source",
+  "observed_at": "2026-10-16T19:21:55.585730Z",
+  "status": "passed",
+  "claim_boundary": "Selected segment.lex_batch_from<1024, 1024> cases preserve complete token batches, cursor, count, and EOF across three source corpus entries and page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one canonical VM artifact agree. This is a selected batch frontier, not full segment/lexer module proof.",
+  "compiler": {
+    "tested_source_revision": "adee0960a8c1248a0af16b42ce586fba5630cdf3",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
+      "lexer": "a8766aa69dbe82cd7335e32ec86362a3aebf19bdf8f5fc9c8ead8f32dc495387",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.segment.v1",
+    "target_function": "lex_batch_from",
+    "type_arguments": [
+      "1024",
+      "1024"
+    ],
+    "test_harness": "tools/test_vm_global_segment_batch_frontier.py",
+    "test_harness_sha256": "d964b42ea092c75e4007d38c1d31c4d73ef221f3e963e2960c71fdebeae61d42"
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "a646f39dba80ea118821dcd2adeee4c31b254aea36815fd0e378562b9df6a927",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "vm_revision": "adee0960a8c1248a0af16b42ce586fba5630cdf3",
+    "artifact_identity": "sha256:f3001f2abbede9904de8a346d8b314df4514e5600a07c6ebec97b11ebca9e34e"
+  },
+  "verification": {
+    "case_count": 12,
+    "source_count": 3,
+    "page_strides": [
+      1,
+      7,
+      64,
+      256
+    ],
+    "executor_case_counts": {
+      "reference_interpreter": 12,
+      "cranelift": 12,
+      "canonical_vm": 12
+    },
+    "semantic_digests": {
+      "reference_interpreter": "f4b1914701fb4fdee8ca019336f62013a3f5f21e5f1276433c0439b8f048c4eb",
+      "cranelift": "f4b1914701fb4fdee8ca019336f62013a3f5f21e5f1276433c0439b8f048c4eb",
+      "canonical_vm": "f4b1914701fb4fdee8ca019336f62013a3f5f21e5f1276433c0439b8f048c4eb"
+    },
+    "stage0_checks": "complete token list, offsets, diagnostics, count, cursor, and EOF passed",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "timing_seconds": {
+      "stage0_oracle_and_reference": 7.54867,
+      "cranelift_execution": 0.04413,
+      "canonical_vm_batch": 2.104292,
+      "whole_frontier": 20.983474
+    },
+    "child_cpu_seconds": 20.54233,
+    "child_peak_rss_kib": 1111860,
+    "canonical_vm_peak_rss_kib": 56000,
+    "canonical_vm_calls_bytes": 23542,
+    "canonical_vm_results_bytes": 238945
+  },
+  "cases": [
+    {
+      "id": "sample-2@stride-1",
+      "source_bytes": 20,
+      "source_sha256": "994a064800b645965118d3ef0895f53461ae5f1999d102db209ee31ac953b91e",
+      "expected_token_count": 10
+    },
+    {
+      "id": "sample-2@stride-7",
+      "source_bytes": 20,
+      "source_sha256": "994a064800b645965118d3ef0895f53461ae5f1999d102db209ee31ac953b91e",
+      "expected_token_count": 10
+    },
+    {
+      "id": "sample-2@stride-64",
+      "source_bytes": 20,
+      "source_sha256": "994a064800b645965118d3ef0895f53461ae5f1999d102db209ee31ac953b91e",
+      "expected_token_count": 10
+    },
+    {
+      "id": "sample-2@stride-256",
+      "source_bytes": 20,
+      "source_sha256": "994a064800b645965118d3ef0895f53461ae5f1999d102db209ee31ac953b91e",
+      "expected_token_count": 10
+    },
+    {
+      "id": "sample-7@stride-1",
+      "source_bytes": 40,
+      "source_sha256": "1bf28286f3c37dc441c0ff4d3b3a419ed0164a67727078baad397803681e7569",
+      "expected_token_count": 26
+    },
+    {
+      "id": "sample-7@stride-7",
+      "source_bytes": 40,
+      "source_sha256": "1bf28286f3c37dc441c0ff4d3b3a419ed0164a67727078baad397803681e7569",
+      "expected_token_count": 26
+    },
+    {
+      "id": "sample-7@stride-64",
+      "source_bytes": 40,
+      "source_sha256": "1bf28286f3c37dc441c0ff4d3b3a419ed0164a67727078baad397803681e7569",
+      "expected_token_count": 26
+    },
+    {
+      "id": "sample-7@stride-256",
+      "source_bytes": 40,
+      "source_sha256": "1bf28286f3c37dc441c0ff4d3b3a419ed0164a67727078baad397803681e7569",
+      "expected_token_count": 26
+    },
+    {
+      "id": "sample-13@stride-1",
+      "source_bytes": 70,
+      "source_sha256": "204c5f34f449c438ecbea52586d7e9d4ca62e81f2c60b6c727d9af94f4e310aa",
+      "expected_token_count": 54
+    },
+    {
+      "id": "sample-13@stride-7",
+      "source_bytes": 70,
+      "source_sha256": "204c5f34f449c438ecbea52586d7e9d4ca62e81f2c60b6c727d9af94f4e310aa",
+      "expected_token_count": 54
+    },
+    {
+      "id": "sample-13@stride-64",
+      "source_bytes": 70,
+      "source_sha256": "204c5f34f449c438ecbea52586d7e9d4ca62e81f2c60b6c727d9af94f4e310aa",
+      "expected_token_count": 54
+    },
+    {
+      "id": "sample-13@stride-256",
+      "source_bytes": 70,
+      "source_sha256": "204c5f34f449c438ecbea52586d7e9d4ca62e81f2c60b6c727d9af94f4e310aa",
+      "expected_token_count": 54
+    }
+  ],
+  "probe_stderr_bytes": {
+    "reference": 132,
+    "cranelift": 282
+  }
+}

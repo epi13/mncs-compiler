@@ -269,6 +269,17 @@ This establishes a pure native Test workflow slice. It does not establish
 retains a correctness-passing lexer experiment that was reverted after its
 matched 1,000,000-step profile showed more `next_token_global` work.
 
+## Native segment token batch frontier (2026-10-16)
+
+The [segment batch report](self-host-segment-batch-canonical-vm-20261016.json)
+extends the selected global cursor workload through `segment.lex_batch_from`.
+Twelve calls cover three existing segment corpus inputs at page strides 1, 7,
+64, and 256. Stage-0 expectations, the reference interpreter, Cranelift, and a
+single canonical VM artifact agree on every token, span, diagnostic, count,
+cursor, and EOF result. The canonical VM batch took 2.10 seconds and peaked at
+56,000 KiB RSS; the full frontier took 20.98 seconds. This is a selected
+executable batch frontier, not full module proof or Stage-1/Stage-2 succession.
+
 ## Probe producer identity cache cost (2026-10-16)
 
 The [probe cache identity report](native-app-readiness-probe-cache-identity-20261016.json)
