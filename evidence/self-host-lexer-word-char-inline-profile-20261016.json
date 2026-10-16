@@ -1,0 +1,146 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-profile/1",
+  "kind": "lexer-word-character-classification-inline-profile",
+  "observed_at": "2026-10-16T15:02:13Z",
+  "status": "measured-and-correctness-checked",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "baseline_revision": "ae6838ff0837553db27bff588bd6ff136a95b8a7",
+    "candidate_revision": "a2948b6d66d222b4c47afad3d5f852c8178827e8",
+    "baseline_lexer_source_sha256": "e1c1d5e40e4c59b10d5981bba72a59528a7b45190b887042a63f51526de33b88",
+    "candidate_lexer_source_sha256": "abd7c3cecce8f5c49910c90a8993dcc7ea551bbb235c892fc280141197e89ae3",
+    "baseline_source_bundle_sha256": "e6092bdaf89b9f1786272a54ffca66c36f5001cc728f28de0482ba71b5dde08f",
+    "candidate_source_bundle_sha256": "e26353c6e1de141ecef37b385d65580951f4764c2f80b733f6d5b69fff1662fd",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "change": "Inline the exact word_char predicate in the four-byte continuation scan of next_token_global; retain word_char for other callers."
+  },
+  "performance": {
+    "backend": "reference_interpreter",
+    "target": "mncs.compiler.project.v1::compile_project",
+    "step_budget": 1000000,
+    "all_runs_status": "budget_exhausted",
+    "cache_state": "warm; candidate cache prepared before two runs",
+    "baseline": {
+      "wall_seconds": 54.145,
+      "cpu_seconds": 51.61,
+      "peak_rss_kib": 2003080,
+      "native_steps": 1000000,
+      "next_token_global": {
+        "calls": 1914,
+        "steps": 594981,
+        "exclusive_ns": 20694136082
+      },
+      "word_char": {
+        "calls": 2483,
+        "steps": 52143,
+        "exclusive_ns": 291205345
+      }
+    },
+    "candidate_runs": [
+      {
+        "wall_seconds": 51.154,
+        "cpu_seconds": 48.449999999999996,
+        "peak_rss_kib": 2004668,
+        "native_steps": 1000000,
+        "next_token_global": {
+          "calls": 1890,
+          "steps": 650244,
+          "exclusive_ns": 15274785157
+        },
+        "word_char": "not called on profiled hot path"
+      },
+      {
+        "wall_seconds": 50.647,
+        "cpu_seconds": 47.99,
+        "peak_rss_kib": 2004400,
+        "native_steps": 1000000,
+        "next_token_global": {
+          "calls": 1890,
+          "steps": 650244,
+          "exclusive_ns": 15145806869
+        },
+        "word_char": "not called on profiled hot path"
+      }
+    ],
+    "candidate_mean_wall_seconds": 50.901,
+    "candidate_mean_cpu_seconds": 48.22,
+    "wall_reduction_percent_vs_baseline": 5.99,
+    "cpu_reduction_percent_vs_baseline": 6.57,
+    "next_token_exclusive_reduction_percent": 26.5,
+    "interpretation": "Whole-workload wall and CPU improved in both repetitions; per-function step count rose, and the overall target still exhausts at 1M steps. No complete-project speedup or completion is claimed.",
+    "cgroup_attribution": "ambient cgroup measurements were not attributable; per-process CPU/RSS were sampled by PID"
+  },
+  "correctness": {
+    "targeted_test": "tools/test_global_scan_modes.py",
+    "targeted_status": "passed",
+    "targeted_fixture": {
+      "source_bytes": 5250,
+      "source_sha256": "a51137e1d135c98313a1beb00cf4888f35fd70762ad9c22f8166bdf077a594da",
+      "native_steps": 262685,
+      "native_token_count": 11,
+      "stage0_token_count": 11,
+      "native_matches_stage0": true,
+      "eof_and_global_spans_match": true
+    },
+    "frontier_test": "tools/test_vm_stage1_frontier.py",
+    "status": "passed",
+    "frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+    "frontier_evidence_sha256": "16ccc4c93bb06e0164e8efe67eb2abfd3dc17f09c169a8a2d00674e244718d64",
+    "tested_source_revision": "a2948b6d66d222b4c47afad3d5f852c8178827e8",
+    "lexer_source_sha256": "abd7c3cecce8f5c49910c90a8993dcc7ea551bbb235c892fc280141197e89ae3",
+    "cases": 32,
+    "valid_cases": 19,
+    "invalid_cases": 13,
+    "executor_case_counts": {
+      "reference_interpreter": 32,
+      "cranelift": 32,
+      "canonical_vm": 32
+    },
+    "semantic_digests": {
+      "reference_interpreter": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "cranelift": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "canonical_vm": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0"
+    },
+    "artifact_identity": "sha256:34de93dd10928fb5d8aa8f2c30e02b1814ed80d9f87357c24bdee00d0e2cfd33",
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "32 decl.parse_unit cases from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence."
+  },
+  "resource_observations": {
+    "baseline": {
+      "probe_last_cpu_seconds": 51.61,
+      "probe_last_cpu_user_seconds": 50.75,
+      "probe_last_cpu_system_seconds": 0.86,
+      "probe_max_sampled_rss_kib": 1993248,
+      "probe_max_observed_hwm_kib": 2003080
+    },
+    "candidate_runs": [
+      {
+        "probe_last_cpu_seconds": 48.449999999999996,
+        "probe_last_cpu_user_seconds": 47.55,
+        "probe_last_cpu_system_seconds": 0.9,
+        "probe_max_sampled_rss_kib": 1994816,
+        "probe_max_observed_hwm_kib": 2004668
+      },
+      {
+        "probe_last_cpu_seconds": 47.99,
+        "probe_last_cpu_user_seconds": 46.79,
+        "probe_last_cpu_system_seconds": 1.2,
+        "probe_max_sampled_rss_kib": 1999724,
+        "probe_max_observed_hwm_kib": 2004400
+      }
+    ],
+    "frontier_child_peak_rss_kib": 2494156,
+    "frontier_host_available_bytes_before": 24404725760
+  },
+  "claim_boundary": "The Lexer word scan is faster in two warm reference-interpreter profiles and passes scanner and Decl differential cases. The six-module project remains incomplete at 1M steps; Language facts, full compiler verification, Stage-1, and Stage-2 are not established."
+}

@@ -657,19 +657,19 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 // parser to consume boolean match patterns.
                 let advanced: Scan = match select(word, 1, 0) {
                     0 => scan_chunk_window(total, window, inner, line, block, word, number, ws),
-                    _ => match select(word_char(window.b0), 1, 0) {
+                    _ => match select((window.b0 >= 48 && window.b0 <= 57) || (window.b0 >= 65 && window.b0 <= 90) || (window.b0 >= 97 && window.b0 <= 122) || window.b0 == 95, 1, 0) {
                         0 => Scan { ..inner, done: true },
                         _ => match select(inner.end + 1 >= total, 1, 0) {
                             1 => Scan { ..inner, end: inner.end + 1 },
-                            _ => match select(word_char(window.b1), 1, 0) {
+                            _ => match select((window.b1 >= 48 && window.b1 <= 57) || (window.b1 >= 65 && window.b1 <= 90) || (window.b1 >= 97 && window.b1 <= 122) || window.b1 == 95, 1, 0) {
                                 0 => Scan { ..inner, end: inner.end + 1, done: true },
                                 _ => match select(inner.end + 2 >= total, 1, 0) {
                                     1 => Scan { ..inner, end: inner.end + 2 },
-                                    _ => match select(word_char(window.b2), 1, 0) {
+                                    _ => match select((window.b2 >= 48 && window.b2 <= 57) || (window.b2 >= 65 && window.b2 <= 90) || (window.b2 >= 97 && window.b2 <= 122) || window.b2 == 95, 1, 0) {
                                         0 => Scan { ..inner, end: inner.end + 2, done: true },
                                         _ => match select(inner.end + 3 >= total, 1, 0) {
                                             1 => Scan { ..inner, end: inner.end + 3 },
-                                            _ => match select(word_char(window.b3), 1, 0) {
+                                            _ => match select((window.b3 >= 48 && window.b3 <= 57) || (window.b3 >= 65 && window.b3 <= 90) || (window.b3 >= 97 && window.b3 <= 122) || window.b3 == 95, 1, 0) {
                                                 0 => Scan { ..inner, end: inner.end + 3, done: true },
                                                 _ => Scan { ..inner, end: inner.end + 4 }
                                             }
