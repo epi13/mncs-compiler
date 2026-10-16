@@ -91,7 +91,7 @@ overrides use the standard `MNCS_TEST_ROOT`, `MNCS_STDLIB_ROOT`,
 
 The batch took 0.031 s / 0.010 CPU / 11.7 MiB peak RSS in one process. The
 Compiler build measured 3.02 s / 2.97 CPU; its separate Stage-0 oracle took
-0.350 s / 0.340 CPU. The probe process peaked at 1.14 GiB RSS. These are
+0.350 s / 0.340 CPU. The probe process peaked at 1.06 GiB RSS. These are
 measurements for this selected workload; cgroup memory counters were
 unavailable. The test harness now locates sibling repositories
 from the selected nested Compiler worktree or explicit `MNCS_*_ROOT` overrides,

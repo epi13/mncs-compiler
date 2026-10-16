@@ -52,7 +52,7 @@ specializations, typed failures, and explicit host effects.
   capability identity, mismatched dispatch alias, and tampered artifact identity.
   The batch took 0.031 s / 0.010 CPU / 11.7 MiB peak RSS in one process. The
   Compiler build measured 3.02 s / 2.97 CPU; the separate Stage-0 oracle took
-  0.350 s / 0.340 CPU. The probe process peaked at 1.14 GiB RSS; cgroup memory
+  0.350 s / 0.340 CPU. The probe process peaked at 1.06 GiB RSS; cgroup memory
   counters were unavailable. Producer revision is
   Compiler `8d44d0b57aea1807ef5131094c8dfcd364dae449`, Test
   `57802fba4dea04ad50004d3e1e6768b507b889bb`, Stdlib
