@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 17,
+  "revision": 18,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1070,6 +1070,67 @@
         "argv": [
           "python3",
           "tools/test_vm_parser_global_frontier.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.global-segment-canonical-vm-frontier",
+      "title": "Global segment token cursors preserve Stage-0 spans and diagnostics across canonical VM page layouts",
+      "guarantee_domain": "parser_front_end",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.segment.v1::next_token_global",
+        "mncs:0.2:function:mncs.compiler.segment.v1::significant_global",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::significant_global"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/token-kinds.json",
+        "tools/backend_policy.py",
+        "tools/test_segment.py",
+        "tools/test_vm_segment.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_native_application.py",
+        "tools/test_vm_global_segment_frontier.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_global_segment_frontier.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_global_segment_frontier.py"
         ],
         "working_directory": ".",
         "timeout_seconds": 1800,
