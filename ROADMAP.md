@@ -43,18 +43,26 @@ specializations, typed failures, and explicit host effects.
   a rejected write returns typed exit 3 without publishing output. Artifact
   `sha256:da7f6609992c33975c1f02ad71f31bddafe55ca8e524e6cddedc9ac299643a3d`,
   interface `sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2`,
-  and evidence `evidence/native-app-readiness-test-digest-app.json` (SHA-256
-  `7b385f42d16bf1c4bf011fe307362b5bd6d48fccb95a98acb8ee770398679898`).
-  Build measured 0.839 s / 0.620 CPU / 62.6 MiB RSS; VM cases took
-  0.022–0.024 s / 0.010 CPU and 11.3–11.4 MiB RSS. Producer identities are
-  Test `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib
+  and evidence `evidence/native-app-readiness-test-digest-app.json` schema
+  `/2` (SHA-256 `28338c927e9f3666118dcb7fb69700f404f13e23257aad639b249b1e0892ee36`).
+  One verified artifact served seven isolated calls in one canonical VM
+  session: three results matched Stage-0, interleaved with missing capability,
+  invalid typed input, rejected publication, and step-budget exhaustion.
+  Later successful calls still completed. Separate checks rejected a mismatched
+  capability identity, mismatched dispatch alias, and tampered artifact identity.
+  The batch took 0.031 s / 0.010 CPU / 11.7 MiB peak RSS in one process. The
+  Compiler build measured 3.02 s / 2.97 CPU; the separate Stage-0 oracle took
+  0.350 s / 0.340 CPU. The probe process peaked at 1.14 GiB RSS; cgroup memory
+  counters were unavailable. Producer revision is
+  Compiler `8d44d0b57aea1807ef5131094c8dfcd364dae449`, Test
+  `57802fba4dea04ad50004d3e1e6768b507b889bb`, Stdlib
   `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language
-  `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM
+  `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, and VM
   `1c19a94732c9d24029dd00e2d5af13710f481d02`, Stage-0
-  `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, and release probe SHA-256
-  `0c574df5c69330b2bdc753bfe744638304d6c4d7a61b80e899c78c6e6dae6827`.
-  cgroup memory counters were unavailable. These application proofs do not
-  establish compiler succession or full Test command parity.
+  `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`. This remains a bounded Compiler
+  test adapter; it does not prove Forge/Environment/Store execution of
+  `digest_app`, full Test command parity, or compiler succession. No
+  Language-owned verification facts were reused in this slice.
 - **Application VM SSA projection — verified.** Compiler commit
   `c70dc851717b623f091d844dab23eab0c810052b` serializes only the selected
   exports' verified transitive call closure, including bounded-iteration

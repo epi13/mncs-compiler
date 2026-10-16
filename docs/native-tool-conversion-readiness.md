@@ -1,6 +1,6 @@
 # MNCS Native Application Readiness: Test conversion assessment
 
-**Assessment date:** 2026-10-14
+**Assessment date:** 2026-10-16
 **Candidate tool:** `mncs-test`
 **Current recommendation:** Start with the native-first digest and verify path. Keep the production host orchestration until the native command proves full parity.
 
@@ -63,11 +63,53 @@ execution bindings, matching their manifests. Forge's measured-work envelope
 for this call is tighter at 45 seconds. The previously reported null timeout
 is not present in the current bindings.
 
-This proves the selected native application invocation contract. It does not
-yet prove the full production `mncs test` command, its retained-session/batch
-workflow, Monitor correlation, or Automation eligibility. The Language-owned
-verified-facts API needed for finer-grained semantic reuse remains outside
-this Compiler campaign's write authority.
+This proves the selected native application invocation contract. The effectful
+`digest_app` now has a local retained-session batch proof, but the complete
+production `mncs test` command, Forge-routed `digest_app` execution,
+Monitor correlation, and Automation eligibility remain unproven. The selected
+Environment session exposes Compiler capabilities only; it has no bound Forge
+application-execution capability. Language-owned verified-fact work also
+remains outside this Compiler campaign's write authority.
+
+## Retained-session batch follow-up (2026-10-16)
+
+Compiler commit `a6151ca832c29feeba110d7b3068464d31760bb2` extends the
+Compiler-owned `digest_app` harness with the versioned
+`mncs.compiler.native-application-batch-request/1` contract. It admits one
+verified artifact and opens one canonical VM `Session`, then executes seven
+calls with unique request, input, and output paths. Three successful results
+match the Stage-0 oracle exactly. Missing capability admission, invalid typed
+input, rejected output publication, and a one-step budget interruption are
+interleaved; subsequent calls still succeed. Separate runs reject a mismatched
+capability identity, mismatched dispatch alias, and tampered artifact identity.
+Each call has an independent VM execution record and resource budget under the
+same artifact and runtime identity.
+
+Compiler commit `8d44d0b57aea1807ef5131094c8dfcd364dae449` makes sibling-root
+overrides use the standard `MNCS_TEST_ROOT`, `MNCS_STDLIB_ROOT`,
+`MNCS_LANGUAGE_ROOT`, and `MNCS_VM_ROOT` names.
+
+The batch took 0.031 s / 0.010 CPU / 11.7 MiB peak RSS in one process. The
+Compiler build measured 3.02 s / 2.97 CPU; its separate Stage-0 oracle took
+0.350 s / 0.340 CPU. The probe process peaked at 1.14 GiB RSS. These are
+measurements for this selected workload; cgroup memory counters were
+unavailable. The test harness now locates sibling repositories
+from the selected nested Compiler worktree or explicit `MNCS_*_ROOT` overrides,
+and seeds its isolated offline Cargo build from the pinned VM lockfile.
+
+Current evidence is `evidence/native-app-readiness-test-digest-app.json`,
+schema `mncs.compiler.native-application-proof/2`, SHA-256
+`28338c927e9f3666118dcb7fb69700f404f13e23257aad639b249b1e0892ee36`. It pins
+Compiler `8d44d0b57aea1807ef5131094c8dfcd364dae449`, Test
+`57802fba4dea04ad50004d3e1e6768b507b889bb`, Stdlib
+`6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language
+`3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, and VM
+`1c19a94732c9d24029dd00e2d5af13710f481d02`. Stage-0 is pinned at
+`e8f8a5f8659c71b33cd32c964d4982bec1a9668e`. The host adapter remains a
+bounded test fixture, not a production provider. This work did not reuse
+Language verification facts or advance the compiler self-consumption matrix.
+The authenticated Forge/Environment/Store route for `digest_app` remains the
+next integration target.
 
 ## Evidence boundary
 
@@ -79,7 +121,7 @@ The real `mncs.test.digest::build_digest` function compiles under application-bu
 
 A second application, `mncs.test.digest::digest_app`, exercises typed application input/output and structured read/write effects through the canonical VM. The compiler response includes `mncs.compiler.capability-dispatch/1`; both `HostCall` rows map canonical identity `mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact` to runtime key `test_artifact`, with operation and instruction provenance. The Rust runner only supplies the canonical VM host and the explicit test-artifact capability; it cross-checks the contract mapping against admitted SSA and contains no digest policy. Stage-0 and VM results agree for all three cases. Missing provider admission returns `capability_denied`; rejected output publication returns typed application exit 3 and leaves no output.
 
-The effectful artifact is `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919`; interface is `sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2`. Evidence is `evidence/native-app-readiness-test-digest-app.json` (SHA-256 `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`). The build took 0.628 s / 0.590 CPU / 64.9 MiB peak RSS; the Stage-0 project oracle took 0.354 s; canonical VM calls took 0.024–0.028 s / 0.010 CPU / 12.2–12.5 MiB. cgroup memory counters were unavailable.
+The original effectful-app proof used artifact `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919` and evidence SHA-256 `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`; it is retained as the historical baseline. The projected artifact and current retained-session batch proof are recorded in the follow-up above.
 
 Gate B remains partial. The latest readiness-suite evidence
 `evidence/native-app-readiness-gate-b.json` (SHA-256
