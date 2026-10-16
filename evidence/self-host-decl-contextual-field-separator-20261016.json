@@ -1,0 +1,67 @@
+{
+  "schema_version": "mncs.compiler.parser-regression-evidence/1",
+  "kind": "declaration-contextual-field-missing-separator",
+  "observed_at": "2026-10-16T16:58:23Z",
+  "status": "passed",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "head_at_test": "95fa238bee981568ee7314e446b10e003fdab7f7",
+    "tested_source_commit": "c0b77f28a46bb0511893057751e371224f30e014",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "decl_source_sha256": "71f9a95798ec91b4aa1a892089f4eff6fca390f0761cdf850c048514757829d7",
+    "test_harness": "tools/test_decl.py",
+    "test_harness_sha256": "ad3f5c96f429428d3ac120bbc2caa7ee1f49d093e2d22c92ebc746c00d0775b5",
+    "working_tree_was_dirty_during_execution": true
+  },
+  "oracle": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "comparison": "declaration parse results and first-error spans matched the Stage-0 oracle"
+  },
+  "workload": {
+    "suite": "tools/test_decl.py",
+    "identical_runs": 2,
+    "elapsed_seconds": 414.705,
+    "requests_per_run": 162,
+    "positive_cases": 78,
+    "negative_cases": 65,
+    "check_unit_cases": 9,
+    "execution_mode": "retained_cranelift",
+    "retained_execution_sessions": 1,
+    "result_sha256": "e28c663c4425b4ac238c548173183c7fb27cc329927b2c2c0c7ff5160f0fb2e9",
+    "self_ingestion_modules_passed": 9,
+    "declaration_capacity_frontier": {
+      "functions": 1122,
+      "declarations": 1123
+    },
+    "added_cases": [
+      {
+        "id": "missing-separator-contextual-capability-parameter",
+        "kind": "negative",
+        "source": "mncs 0.18; module t; fn f(capability: u64 capability: u64) -> (r: u64) { return capability; }",
+        "padded_bytes": 435,
+        "padded_source_sha256": "c8cfd3b4ee897047e16af8e5e3edc878fe7f6477d679f6ef657673bb22d84f9d"
+      },
+      {
+        "id": "missing-separator-next-record-field",
+        "kind": "negative",
+        "source": "mncs 0.18; module t; record R { next: u64 next: u64 } fn f() -> (r: u64) { return 0; }",
+        "padded_bytes": 435,
+        "padded_source_sha256": "6b1b4bcd0111f9bc57286f0f474267371848f8afbf0d0b193099e7ee6906a217"
+      },
+      {
+        "id": "missing-separator-next-enum-payload-field",
+        "kind": "negative",
+        "source": "mncs 0.18; module t; enum E { Item { next: u64 next: u64 }, No }",
+        "padded_bytes": 435,
+        "padded_source_sha256": "87b4433e6132fb075a91d2e9258ce69d6f693ed56b617e1f2ecc9990104026bb"
+      }
+    ]
+  },
+  "claim_boundary": {
+    "verified_facts_reused": 0,
+    "canonical_vm_cases_for_added_inputs": 0,
+    "stage1_or_stage2_succession_claimed": false,
+    "scope": "The three added contextual-name regressions and the existing declaration suite passed the Stage-0 structural/diagnostic differential under the retained Cranelift executor. This evidence does not establish canonical VM execution for the added inputs, Language verified-fact reuse, or full compiler-module proof."
+  }
+}
