@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf};
+use std::{collections::BTreeSet, env, fs, path::PathBuf};
 
 use mncs_model::{ExecutionRequest, ExecutionValue};
 use mncs_vm::{
@@ -124,6 +124,173 @@ fn take_arg(args: &mut impl Iterator<Item = String>, label: &str) -> Result<Stri
     args.next().ok_or_else(|| format!("missing {label}"))
 }
 
+fn execute_call(
+    session: &mut Session<'_>,
+    request_path: &PathBuf,
+    input_path: &PathBuf,
+    output_path: &PathBuf,
+    authorized_identity: &str,
+    dispatch_alias: &str,
+    mapped_host_calls: usize,
+    mode: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    if mode != "none" && mode != "success" && mode != "fail-write" {
+        return Err(std::io::Error::other(format!("unsupported provider mode {mode}")).into());
+    }
+    if mode != "none" && output_path.exists() {
+        return Err(std::io::Error::other("output path already exists").into());
+    }
+    let request: ExecutionRequest = serde_json::from_slice(&fs::read(request_path)?)?;
+    let spec = CallSpec::from_request(request, None).map_err(std::io::Error::other)?;
+    let caps = if mode == "none" {
+        CapabilityEnv::empty()
+    } else {
+        CapabilityEnv::empty().bind(
+            dispatch_alias,
+            StructuredFileProvider {
+                capability: dispatch_alias.to_owned(),
+                input_path: input_path.clone(),
+                output_path: output_path.clone(),
+                fail_write: mode == "fail-write",
+            },
+        )
+    };
+    let (outcome, record) = session.call(&caps, spec);
+    let returned_wire = record.returned.iter().map(to_wire).collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "outcome": outcome,
+        "record": record,
+        "returned_wire": returned_wire,
+        "capability_binding": {
+            "authorized_capability_identity": authorized_identity,
+            "runtime_dispatch_alias": dispatch_alias,
+            "contract_dispatch_alias": dispatch_alias,
+            "mapped_host_call_count": mapped_host_calls,
+        },
+    }))
+}
+
+fn absolute_path(row: &serde_json::Value, key: &str) -> Result<PathBuf, String> {
+    let value = row
+        .get(key)
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| format!("batch call is missing {key}"))?;
+    let path = PathBuf::from(value);
+    if !path.is_absolute() {
+        return Err(format!("batch call {key} must be an absolute path"));
+    }
+    Ok(path)
+}
+
+fn run_single(
+    args: &mut impl Iterator<Item = String>,
+    admitted: &mncs_vm::admit::Admitted,
+    authorized_identity: &str,
+    declared_dispatch_alias: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let request_path = PathBuf::from(take_arg(args, "execution request path")?);
+    let input_path = PathBuf::from(take_arg(args, "input path")?);
+    let output_path = PathBuf::from(take_arg(args, "output path")?);
+    let mode = take_arg(args, "provider mode")?;
+    let (dispatch_alias, mapped_host_calls) =
+        capability_dispatch_binding(admitted, authorized_identity)
+            .map_err(std::io::Error::other)?;
+    if dispatch_alias != declared_dispatch_alias {
+        return Err(std::io::Error::other(
+            "application contract dispatch alias differs from admitted SSA",
+        )
+        .into());
+    }
+    let mut session = Session::open(admitted);
+    execute_call(
+        &mut session,
+        &request_path,
+        &input_path,
+        &output_path,
+        authorized_identity,
+        &dispatch_alias,
+        mapped_host_calls,
+        &mode,
+    )
+}
+
+fn run_batch(
+    args: &mut impl Iterator<Item = String>,
+    admitted: &mncs_vm::admit::Admitted,
+    authorized_identity: &str,
+    declared_dispatch_alias: &str,
+) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let manifest_path = PathBuf::from(take_arg(args, "batch manifest path")?);
+    let manifest: serde_json::Value = serde_json::from_slice(&fs::read(manifest_path)?)?;
+    if manifest
+        .get("schema_version")
+        .and_then(serde_json::Value::as_str)
+        != Some("mncs.compiler.native-application-batch-request/1")
+    {
+        return Err(std::io::Error::other("unsupported application batch request schema").into());
+    }
+    let rows = manifest
+        .get("calls")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| std::io::Error::other("batch request calls must be an array"))?;
+    if rows.is_empty() || rows.len() > 64 {
+        return Err(std::io::Error::other("batch request must contain 1 to 64 calls").into());
+    }
+
+    let (dispatch_alias, mapped_host_calls) =
+        capability_dispatch_binding(admitted, authorized_identity)
+            .map_err(std::io::Error::other)?;
+    if dispatch_alias != declared_dispatch_alias {
+        return Err(std::io::Error::other(
+            "application contract dispatch alias differs from admitted SSA",
+        )
+        .into());
+    }
+
+    let mut unique_paths = BTreeSet::new();
+    let mut session = Session::open(admitted);
+    let mut calls = Vec::with_capacity(rows.len());
+    for (index, row) in rows.iter().enumerate() {
+        let request_path = absolute_path(row, "request_path").map_err(std::io::Error::other)?;
+        let input_path = absolute_path(row, "input_path").map_err(std::io::Error::other)?;
+        let output_path = absolute_path(row, "output_path").map_err(std::io::Error::other)?;
+        for path in [&request_path, &input_path, &output_path] {
+            let key = path.to_string_lossy().into_owned();
+            if !unique_paths.insert(key) {
+                return Err(std::io::Error::other(
+                    "batch calls must use distinct request, input, and output paths",
+                )
+                .into());
+            }
+        }
+        let mode = row
+            .get("provider_mode")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| std::io::Error::other("batch call is missing provider_mode"))?;
+        let result = execute_call(
+            &mut session,
+            &request_path,
+            &input_path,
+            &output_path,
+            authorized_identity,
+            &dispatch_alias,
+            mapped_host_calls,
+            mode,
+        )?;
+        calls.push(serde_json::json!({
+            "call_index": index,
+            "result": result,
+        }));
+    }
+    Ok(serde_json::json!({
+        "schema_version": "mncs.compiler.native-application-batch-result/1",
+        "artifact_id": admitted.artifact_id(),
+        "runtime_id": format!("mncs-vm-runtime:{}", admitted.artifact_id()),
+        "call_count": calls.len(),
+        "calls": calls,
+    }))
+}
+
 fn capability_dispatch_binding(
     admitted: &mncs_vm::admit::Admitted,
     authorized_identity: &str,
@@ -181,53 +348,27 @@ fn capability_dispatch_binding(
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = env::args().skip(1);
     let artifact_path = PathBuf::from(take_arg(&mut args, "artifact path")?);
-    let request_path = PathBuf::from(take_arg(&mut args, "execution request path")?);
-    let input_path = PathBuf::from(take_arg(&mut args, "input path")?);
-    let output_path = PathBuf::from(take_arg(&mut args, "output path")?);
     let authorized_identity = take_arg(&mut args, "authorized capability identity")?;
     let declared_dispatch_alias = take_arg(&mut args, "declared VM dispatch alias")?;
-    let mode = take_arg(&mut args, "provider mode")?;
+    let invocation_mode = take_arg(&mut args, "invocation mode")?;
 
     let artifact = fs::read(&artifact_path)?;
     let admitted = admit_owned(artifact)?;
-    let (dispatch_alias, mapped_host_calls) =
-        capability_dispatch_binding(&admitted, &authorized_identity)
-            .map_err(std::io::Error::other)?;
-    if dispatch_alias != declared_dispatch_alias {
-        return Err(std::io::Error::other(
-            "application contract dispatch alias differs from admitted SSA",
-        )
-        .into());
-    }
-    let request: ExecutionRequest = serde_json::from_slice(&fs::read(request_path)?)?;
-    let spec = CallSpec::from_request(request, None).map_err(std::io::Error::other)?;
-    let caps = if mode == "none" {
-        CapabilityEnv::empty()
-    } else {
-        CapabilityEnv::empty().bind(
-            &dispatch_alias,
-            StructuredFileProvider {
-                capability: dispatch_alias.clone(),
-                input_path,
-                output_path,
-                fail_write: mode == "fail-write",
-            },
-        )
+    let document = match invocation_mode.as_str() {
+        "single" => run_single(
+            &mut args,
+            &admitted,
+            &authorized_identity,
+            &declared_dispatch_alias,
+        )?,
+        "batch" => run_batch(
+            &mut args,
+            &admitted,
+            &authorized_identity,
+            &declared_dispatch_alias,
+        )?,
+        _ => return Err(std::io::Error::other("invocation mode must be single or batch").into()),
     };
-    let mut session = Session::open(&admitted);
-    let (outcome, record) = session.call(&caps, spec);
-    let returned_wire = record.returned.iter().map(to_wire).collect::<Vec<_>>();
-    let document = serde_json::json!({
-        "outcome": outcome,
-        "record": record,
-        "returned_wire": returned_wire,
-        "capability_binding": {
-            "authorized_capability_identity": authorized_identity,
-            "runtime_dispatch_alias": dispatch_alias,
-            "contract_dispatch_alias": declared_dispatch_alias,
-            "mapped_host_call_count": mapped_host_calls,
-        },
-    });
     println!("{}", serde_json::to_string(&document)?);
     Ok(())
 }
