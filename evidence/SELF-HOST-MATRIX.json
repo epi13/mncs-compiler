@@ -249,12 +249,39 @@
           "cases": 32,
           "valid_cases": 19,
           "invalid_cases": 13,
-          "artifact_identity": "sha256:756988424781d573271c57e7ee693a258623a6649ebe6100ad65f2ac63ab3019",
+          "artifact_identity": "sha256:c54dac686a0e367e9d21ea2fdbe4c04eedd7b2766bf555ddbb420dd7684beb1b",
           "semantic_digest_sha256": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
           "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
-          "evidence_sha256": "accd14a73268dadf4dc480867fb53fc8bd44114951bf0a7bda6e789a499acee5",
+          "evidence_sha256": "8ef042b3e07a0b7a802060da4ea3b4568ceafff6b66af2bfa004fc77fec82b94",
           "candidate_lexer_source_sha256": "3bef8a5bbf0ac56b03811101e9c36215f4099fa5468be862c065d84ebe4562aa",
-          "scope": "Bounded parse_unit function frontier only; not full decl-module verification or Stage-1/Stage-2 succession."
+          "scope": "Bounded parse_unit function frontier only; not full decl-module verification or Stage-1/Stage-2 succession.",
+          "decl_source_sha256": "5bbe3c6a30b9c02f9b050a129b02e7ba2fd643c54cdd1d2a166359d317bff304"
+        },
+        "terminal_early_exit_profile": {
+          "status": "measured",
+          "evidence_artifact": "evidence/self-host-decl-terminal-early-exit-profile-20261016.json",
+          "evidence_sha256": "a213ebf953b5bad852c810ae8c0ab86290bf7b193b5913ca94f8d7af6d59760d",
+          "implementation_commit": "666c872e8a25f7588220c40e713b438b88ed552f",
+          "decl_source_sha256": "5bbe3c6a30b9c02f9b050a129b02e7ba2fd643c54cdd1d2a166359d317bff304",
+          "step_budget": 1000000,
+          "baseline_function_steps": {
+            "parse_flat_type": 19845,
+            "qualified_step": 15390,
+            "parse_fields": 12317,
+            "fields_step": 21925,
+            "parse_variants": 5797,
+            "variants_step": 5608
+          },
+          "candidate_function_steps": {
+            "parse_flat_type": 3045,
+            "qualified_step": 3480,
+            "parse_fields": 10703,
+            "fields_step": 21126,
+            "parse_variants": 618,
+            "variants_step": 1731
+          },
+          "candidate_compile_project_result": "budget_exhausted; no complete project result",
+          "scope": "Function-level declaration parser runtime profile only; correctness is established by the separate 32-case parse_unit differential, not by this incomplete six-module project run."
         }
       }
     },
@@ -1350,7 +1377,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-10T15:53:22Z",
+    "updated_at": "2026-10-16T11:37:27.689455Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -4473,9 +4500,59 @@
       "language_facts_reused": false,
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    "decl_terminal_early_exit_campaign_20261016": {
+      "observed_at": "2026-10-16T11:37:27.686128Z",
+      "candidate_base_revision": "2ac02184d445ad356a0c91b2f78a68c1687db3aa",
+      "implementation_commit": "666c872e8a25f7588220c40e713b438b88ed552f",
+      "tested_candidate_branch": "campaign/native-application-readiness-20261013",
+      "tested_candidate_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "tested_decl_source_sha256": "5bbe3c6a30b9c02f9b050a129b02e7ba2fd643c54cdd1d2a166359d317bff304",
+      "tested_module_bundle_sha256": "ea7e0b41953eeef5ad1adf75303bb7bae9ca7646ae199a044007bb5a1f3cdd46",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "test_harness": "tools/test_vm_stage1_frontier.py",
+      "test_harness_sha256": "0b951063d9783dc073be0ba7610fc520fc3ca9a181d79e9ba31d27a14d1d5b1c",
+      "stage1_parse_unit_frontier": {
+        "status": "passed",
+        "cases": 32,
+        "valid_cases": 19,
+        "invalid_cases": 13,
+        "artifact_identity": "sha256:c54dac686a0e367e9d21ea2fdbe4c04eedd7b2766bf555ddbb420dd7684beb1b",
+        "semantic_digest_sha256": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+        "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+        "evidence_sha256": "8ef042b3e07a0b7a802060da4ea3b4568ceafff6b66af2bfa004fc77fec82b94",
+        "agreement": "Stage-0, reference interpreter, Cranelift, and canonical VM."
+      },
+      "variant_loop_boundary": {
+        "status": "passed",
+        "positive_variants": 65,
+        "negative_first_error_span": [
+          428,
+          429
+        ],
+        "stage0_and_native_spans_match": true,
+        "tested_decl_source_sha256": "5bbe3c6a30b9c02f9b050a129b02e7ba2fd643c54cdd1d2a166359d317bff304"
+      },
+      "profile_evidence": {
+        "artifact": "evidence/self-host-decl-terminal-early-exit-profile-20261016.json",
+        "sha256": "a213ebf953b5bad852c810ae8c0ab86290bf7b193b5913ca94f8d7af6d59760d",
+        "baseline_bundle_sha256": "94e9349f1066668882e3d9da7959f8563d2bd2832c2ca3dc4aeb02022c18bfb7",
+        "candidate_bundle_sha256": "ea7e0b41953eeef5ad1adf75303bb7bae9ca7646ae199a044007bb5a1f3cdd46",
+        "same_one_million_step_budget": true,
+        "both_runs_budget_exhausted": true,
+        "source_bundle_verification": {
+          "method": "Recomputed the existing selected compiler module bundle identity from exact file bytes, using the profile tool algorithm.",
+          "baseline_bundle_reconstructed_with_decl_from": "2ac02184d445ad356a0c91b2f78a68c1687db3aa",
+          "baseline_bundle_sha256_matches_measurement": true,
+          "candidate_bundle_reconstructed_from_implementation_commit": true,
+          "candidate_bundle_sha256_matches_measurement": true,
+          "only_selected_source_difference": "src/compiler/decl.mncs"
+        }
+      },
+      "delivery_status": "Implementation commit is on the campaign branch; main merge and push are recorded in the subsequent delivery entry."
     }
   },
-  "evidence_updated_at": "2026-10-16T11:21:44Z",
+  "evidence_updated_at": "2026-10-16T11:38:14.885022Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
