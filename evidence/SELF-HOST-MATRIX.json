@@ -841,6 +841,53 @@
       "evidence_sha256": "b67185b9da185a0a640bffb3ff08a453a7dd837fd37d9a7e6eb24bc73b368216",
       "evidence_scope": "The current pushed Compiler revision emitted the exact source/lexer/segment helper closure and completed all 6,564 selected calls under canonical VM batch execution. Stage-0 reference, Cranelift, and VM semantic digests matched. This proves this selected helper workload only; it does not establish all segment functions, whole-module verification, Stage-1, or Stage-2 succession.",
       "stage0_probe_build_revision": "df10041e39c5b4acff4c93b96b4c4bb58c512a82"
+    },
+    {
+      "kind": "decl-parse-canonical-vm-expanded-corpus",
+      "status": "passed",
+      "observed_at": "2026-10-16T08:35:33.450878Z",
+      "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "target_module": "mncs.compiler.decl.v1",
+      "target_function": "parse_unit<1024,1024>",
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl"
+      ],
+      "module_source_sha256": {
+        "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+        "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "8501213a86634661a0a9d7200257831e1aec042a67840313518121c89d54f145"
+      },
+      "stage0_probe_sha256": "aa71a6af510f21b264ef42521137cd17e03772b7e352de0d2e038ae571d4d13d",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "cases": 32,
+      "valid_cases": 19,
+      "invalid_cases": 13,
+      "executor_case_counts": {
+        "reference_interpreter": 32,
+        "cranelift": 32,
+        "canonical_vm": 32
+      },
+      "semantic_digest_sha256": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "artifact_identity": "sha256:d5b980a0a72ef5d1b23297dcb7053b69168b365a5ccaf8caea5212ef36a6696c",
+      "language_verified_facts_reused": 0,
+      "whole_frontier_seconds": 151.36152,
+      "child_cpu_seconds": 149.264037,
+      "child_peak_rss_kib": 1935532,
+      "canonical_vm_batch_wall_seconds": 12.733400309996796,
+      "canonical_vm_peak_rss_kib": 354640,
+      "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+      "evidence_sha256": "34949d5b05c97b26ff9b76450188375c71ed132d99d0749a66c8afa198221b2b",
+      "evidence_scope": "32 decl.parse_unit cases from hand-picked boundaries and the production declaration parser suite agree across Stage-0 structural/diagnostic checks, the reference interpreter, Cranelift, and one freshly emitted canonical VM artifact. This is a function frontier only; it is not full decl-module or succession evidence.",
+      "stage1_claimed": false,
+      "stage2_claimed": false
     }
   ],
   "whole_module_parse_snapshot": {
@@ -4172,15 +4219,24 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-16T06:55:47Z",
+  "evidence_updated_at": "2026-10-16T08:35:33.450878Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "current_campaign_frontier_update": {
-    "observed_at": "2026-10-16T06:55:47Z",
-    "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
-    "completed_frontier": "decl-parse-canonical-vm-five-cases",
-    "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
-    "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
-    "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+    "observed_at": "2026-10-16T08:35:33.450878Z",
+    "compiler_head": "e93da31065531db86d10ded4e41c31264d175e4e",
+    "completed_frontier": "decl-parse-canonical-vm-expanded-corpus-32-cases",
+    "completed_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+    "previous_frontier_update": {
+      "observed_at": "2026-10-16T06:55:47Z",
+      "compiler_head": "b7b980584f5ecf596b1f5b5647273ca84d3a6e65",
+      "completed_frontier": "decl-parse-canonical-vm-five-cases",
+      "next_frontier": "Run a larger retained decl.parse_unit corpus through one freshly emitted canonical VM artifact, preserving the pinned Stage-0 diagnostic checks and reference/Cranelift parity. Keep this function workload distinct from full decl-module verification and succession.",
+      "completed_frontier_evidence": "evidence/self-host-decl-parse-canonical-vm-five-cases-20261016.json",
+      "next_frontier_evidence": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json"
+    },
+    "next_frontier": "Select one current compiler module and carry its real source through the smallest independently verified canonical VM workload, with bounded memory and exact Stage-0 plus reference/Cranelift parity.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }
