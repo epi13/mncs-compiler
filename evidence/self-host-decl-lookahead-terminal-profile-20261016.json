@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.declaration-lookahead-terminal-profile/1",
+  "observed_at": "2026-10-16T11:51:39.544367Z",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "commit": "15b6659b279859d5c33f9c197f42e6559b550236",
+    "candidate_base_revision": "a309c97bacf1c3ed8ed30918583396d4932fda7c",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "source_file": "src/compiler/decl.mncs",
+    "source_sha256": "e6be69c854bc0a41edbf11eccf820b1ee54d667c1ae75c331eb8a2116c6ad71b",
+    "selected_module_bundle_sha256": "4696af4fee223a23c7bf1fe181b2c4fd51006071b9bca34db93c06abc6a4cf4d",
+    "changed_functions": [
+      "fields_step",
+      "variants_step"
+    ],
+    "behavior": "Use the already-read token after each parsed field or variant to mark the list terminal immediately when it cannot begin another element, avoiding a duplicate lookahead scan."
+  },
+  "source_bundle_verification": {
+    "method": "Recomputed the selected module identity using the probe tool algorithm over exact file bytes.",
+    "baseline_bundle_reconstructed_with_decl_from": "a309c97bacf1c3ed8ed30918583396d4932fda7c",
+    "baseline_bundle_sha256_matches_measurement": true,
+    "candidate_bundle_reconstructed_from_implementation_commit": true,
+    "candidate_bundle_sha256_matches_measurement": true,
+    "only_selected_source_difference": "src/compiler/decl.mncs"
+  },
+  "workload": {
+    "backend": "reference_interpreter",
+    "target": "mncs.compiler.project.v1::compile_project_target",
+    "modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "step_budget": 1000000,
+    "runtime_profile": true,
+    "stage0_oracle_skipped": true,
+    "comparison_basis": "Same bounded compiler target, module set, executor, and step budget. The baseline is the previously delivered early-return implementation."
+  },
+  "baseline": {
+    "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-terminal-early-exit-source-lexer-parser-segment-decl-flow-measurement.json",
+    "compiler_head_recorded_by_runner": "2ac02184d445ad356a0c91b2f78a68c1687db3aa",
+    "compiler_module_bundle_sha256": "ea7e0b41953eeef5ad1adf75303bb7bae9ca7646ae199a044007bb5a1f3cdd46",
+    "status": "RESOURCE_EXHAUSTED",
+    "target_result": "budget_exhausted",
+    "step_budget": 1000000,
+    "profiled_steps": 1000000,
+    "wall_seconds": 144.246,
+    "child_cpu_seconds": 140.49,
+    "peak_sampled_rss_kib": 1843188,
+    "module_executor_steps_at_budget_edge": {
+      "lexer": 892595,
+      "decl": 74505
+    },
+    "function_profiles": {
+      "parse_flat_type": {
+        "calls": 145,
+        "steps": 3045,
+        "inclusive_ns": 7787216927,
+        "exclusive_ns": 466945424
+      },
+      "qualified_step": {
+        "calls": 145,
+        "steps": 3480,
+        "inclusive_ns": 4175791387,
+        "exclusive_ns": 479600275
+      },
+      "parse_fields": {
+        "calls": 32,
+        "steps": 10703,
+        "inclusive_ns": 46749821351,
+        "exclusive_ns": 1191319157
+      },
+      "fields_step": {
+        "calls": 1182,
+        "steps": 21126,
+        "inclusive_ns": 44987976713,
+        "exclusive_ns": 2472758375
+      },
+      "parse_variants": {
+        "calls": 12,
+        "steps": 618,
+        "inclusive_ns": 26666931401,
+        "exclusive_ns": 126724057
+      },
+      "variants_step": {
+        "calls": 39,
+        "steps": 1731,
+        "inclusive_ns": 26331486823,
+        "exclusive_ns": 311986813
+      }
+    }
+  },
+  "candidate": {
+    "measurement_artifact": ".build/campaign-artifacts/compiler-facts/compiler-probe-decl-lookahead-terminal-source-lexer-parser-segment-decl-flow-measurement.json",
+    "compiler_head_recorded_by_runner": "a309c97bacf1c3ed8ed30918583396d4932fda7c",
+    "compiler_module_bundle_sha256": "4696af4fee223a23c7bf1fe181b2c4fd51006071b9bca34db93c06abc6a4cf4d",
+    "status": "RESOURCE_EXHAUSTED",
+    "target_result": "budget_exhausted",
+    "step_budget": 1000000,
+    "profiled_steps": 1000000,
+    "wall_seconds": 142.232,
+    "child_cpu_seconds": 138.94000000000003,
+    "peak_sampled_rss_kib": 1843904,
+    "module_executor_steps_at_budget_edge": {
+      "lexer": 891821,
+      "decl": 75072
+    },
+    "function_profiles": {
+      "parse_flat_type": {
+        "calls": 151,
+        "steps": 3164,
+        "inclusive_ns": 7970830070,
+        "exclusive_ns": 481538755
+      },
+      "qualified_step": {
+        "calls": 151,
+        "steps": 3608,
+        "inclusive_ns": 4276110075,
+        "exclusive_ns": 492637913
+      },
+      "parse_fields": {
+        "calls": 33,
+        "steps": 10359,
+        "inclusive_ns": 46425638948,
+        "exclusive_ns": 1158698714
+      },
+      "fields_step": {
+        "calls": 1157,
+        "steps": 21181,
+        "inclusive_ns": 44653950155,
+        "exclusive_ns": 2387697994
+      },
+      "parse_variants": {
+        "calls": 13,
+        "steps": 477,
+        "inclusive_ns": 25762807215,
+        "exclusive_ns": 98624519
+      },
+      "variants_step": {
+        "calls": 29,
+        "steps": 1594,
+        "inclusive_ns": 25452148677,
+        "exclusive_ns": 284402104
+      }
+    }
+  },
+  "correctness": {
+    "stage1_parse_unit": {
+      "status": "passed",
+      "cases": 32,
+      "valid_cases": 19,
+      "invalid_cases": 13,
+      "canonical_vm_artifact_identity": "sha256:10568b1022067727f84e68793bf8af4f2ecfcba77697d96c455b8cca8f6ceaff",
+      "semantic_digest_sha256": "901ab92d1d4d475371460fb0513644bea4ddd142dac7541c2374fc2e61f575e0",
+      "cross_executor_agreement": "Stage-0, reference interpreter, Cranelift, and canonical VM.",
+      "evidence_artifact": "evidence/self-host-decl-parse-expanded-canonical-vm-20261016.json",
+      "evidence_sha256": "f930ed796f981a038923c750e9038adeedfa2bd7d414e7dad9f5a771f05a61e4"
+    },
+    "variant_boundary": {
+      "status": "passed",
+      "positive_variant_count": 65,
+      "negative_first_error_span": [
+        428,
+        429
+      ],
+      "stage0_and_native_spans_match": true,
+      "decl_source_sha256": "e6be69c854bc0a41edbf11eccf820b1ee54d667c1ae75c331eb8a2116c6ad71b"
+    }
+  },
+  "interpretation": {
+    "whole_project_result": "Both profiles exhausted the one-million-step budget before returning a complete project result.",
+    "function_observations": [
+      "parse_fields executor steps fell from 10703 to 10359 while the bounded candidate reached one additional parse_fields call.",
+      "variants_step calls fell from 39 to 29 and parse_variants steps fell from 618 to 477 while the candidate reached one additional parse_variants call.",
+      "fields_step calls fell from 1182 to 1157; total fields_step executor steps were similar because the candidate progressed farther through the project."
+    ],
+    "resource_limit": "Wall time, child CPU, and peak RSS were similar. The evidence supports reduced repeated terminal list scans under this bounded profile; it does not claim a whole-build speedup or general performance guarantee."
+  }
+}
