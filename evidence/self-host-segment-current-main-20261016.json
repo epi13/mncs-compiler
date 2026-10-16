@@ -1,0 +1,123 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "segment-canonical-vm-current-main",
+  "observed_at": "2026-10-16T06:43:13Z",
+  "claim_boundary": "The current pushed Compiler revision emitted the exact source/lexer/segment helper closure and completed all 6,564 selected calls under canonical VM batch execution. Stage-0 reference, Cranelift, and VM semantic digests matched. This proves this selected helper workload only; it does not establish all segment functions, whole-module verification, Stage-1, or Stage-2 succession.",
+  "compiler": {
+    "revision": "de05ba755a4d5cb4d623a28ee563e42430e00c3f",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "worktree_dirty": true,
+    "retained_dirty_paths": [
+      "evidence/native-app-readiness-gate-a.json",
+      ".bootstrap.control-workspace-link"
+    ],
+    "target_module": "src/compiler/segment.mncs",
+    "selected_module_source_sha256": {
+      "source": "a9c1e828fb43ef2ccfd8b938528c388caf22ea6432495ab43ad0eb4e1e5ac6a1",
+      "lexer": "30c9880eca1c8318382402465a3b87d5423a84c15c84b31b2e817067fd3bbad7",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "test_harness": "tools/test_vm_segment.py",
+    "test_harness_sha256": "cf372ed0f435bcc3b6bb1da989bab96b2b3e1db5dae5994eba0930dddfe2726e",
+    "support_harness_sha256": {
+      "tools/test_segment.py": "c999fd55e08c3e881117974c3a49f2435ab89f52f45d5511724ef11e874365b4",
+      "tools/test_vm_emit.py": "6ffe3675910234953759219922d65a6ff3edd1df3e7ed2bbd88cb9833595d653",
+      "tools/backend_policy.py": "90f2049e7d059f1acf568a619461f3e29c2f24d115a4bdf36889b40c3557b912"
+    }
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/stage0-target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "209565e192ad28e38ed89b7842a85b08a49f780a5fa6ab1a2ebfb8b381cbe8db",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_repository": "/home/epi13/Documents/Projects/mncs-vm",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "stage0_probe_build_revision": "df10041e39c5b4acff4c93b96b4c4bb58c512a82"
+  },
+  "workload": {
+    "module": "mncs.compiler.segment.v1",
+    "functions": [
+      "byte_at",
+      "ascii",
+      "span_valid",
+      "next_token",
+      "significant"
+    ],
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "raw_result": {
+      "schema_version": 1,
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "suite": "segment",
+      "smoke": false,
+      "texts": 43,
+      "cases": 6564,
+      "tokens_compared": 3161,
+      "artifact_id": "sha256:edeb35bf701ac8581c2b748e2222600031b9bbfcd47ae757f889b1532887d361",
+      "artifact_bytes": 4573514,
+      "batch_calls_bytes": 44365070,
+      "batch_results_bytes": 9517495,
+      "batch_peak_rss_kb": 424388,
+      "children_peak_rss_kb": 838004,
+      "process_count": 3,
+      "vm_summary": {
+        "call_depth_max": 6,
+        "calls": 6564,
+        "effects_total": 0,
+        "memory_cells_max": 1314,
+        "outcomes": {
+          "completed": 6564
+        },
+        "steps_max": 21899,
+        "steps_total": 2619527
+      },
+      "reference_steps_total": 2097122,
+      "reference_steps_max": 17777,
+      "cranelift_steps_total": 6564,
+      "semantic_digests": {
+        "reference": "af5475db88b112558f59210ab3d03d773fd04156e46242616d18501ddf30387e",
+        "vm": "af5475db88b112558f59210ab3d03d773fd04156e46242616d18501ddf30387e",
+        "cranelift": "af5475db88b112558f59210ab3d03d773fd04156e46242616d18501ddf30387e"
+      },
+      "reference_raw_digest": "e1bb03923d1fac892e0848c8d72865b6fd6e84cca84c320b99060048fec12ca5",
+      "cranelift": {
+        "worked": true,
+        "note": ""
+      },
+      "reference_probe": [
+        "mncs-stage0-probe backend=none modules=1 cache_hits=1 frontend_program_cache_hits=1 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c"
+      ],
+      "cranelift_probe": [
+        "mncs-stage0-probe backend=cranelift modules=1 retained_sessions=1 artifacts=[(\"mncs.compiler.segment.v1\", \"mncs-cranelift\", \"cranelift_clif\", true)] cache_hits=1 backend_artifact_cache_hits=0 frontend_program_cache_hits=1 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c ready_s=3.1"
+      ],
+      "phase_wall_seconds": {
+        "oracle_and_generation": 1.452,
+        "direct_emission": 1.088,
+        "reference_execution": 19.506,
+        "vm_batch": 7.496,
+        "cranelift_execution": 6.762
+      },
+      "elapsed_seconds": 37.421,
+      "scope": "segment/lexer helpers via direct mncs.vm.artifact/1 + canonical VM batch vs reference + Cranelift"
+    }
+  },
+  "measurements": {
+    "elapsed_seconds": 37.421,
+    "phase_wall_seconds": {
+      "oracle_and_generation": 1.452,
+      "direct_emission": 1.088,
+      "reference_execution": 19.506,
+      "vm_batch": 7.496,
+      "cranelift_execution": 6.762
+    },
+    "batch_peak_rss_kib": 424388,
+    "children_peak_rss_kib": 838004,
+    "cgroup_memory": "not measured by this harness"
+  },
+  "semantic_digest_match": true
+}
