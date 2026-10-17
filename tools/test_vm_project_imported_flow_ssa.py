@@ -552,7 +552,7 @@ def main() -> None:
             "Project-wide module resolution, Language verified-fact reuse, native Test conversion, or compiler succession."
         ),
     }
-    report["evidence_artifact"] = "evidence/self-host-imported-nominal-generic-flow-ssa-20261016.json"
+    report["evidence_artifact"] = "evidence/self-host-imported-nominal-generic-flow-ssa-current-20261017.json"
     output = ROOT / os.environ.get("MNCS_PROJECT_FLOW_SSA_EVIDENCE_PATH", report["evidence_artifact"])
     output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
