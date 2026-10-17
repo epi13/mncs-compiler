@@ -118,6 +118,11 @@ record ImportLink {
     has_alias: bool
 }
 enum ImportList { INil, ICons { head: ImportLink, tail: ImportList } }
+enum ProjectIndexList { PINil, PICons { head: u64, tail: ProjectIndexList } }
+record ProjectIndexContains { rest: ProjectIndexList, wanted: u64, found: bool }
+record ProjectImportClosure { indices: ProjectIndexList, changed: bool }
+record ProjectImportClosureWalk { rest: ImportList, indices: ProjectIndexList, changed: bool }
+record ProjectModuleClosureFilter { rest: ModuleList, indices: ProjectIndexList, acc: ModuleList }
 
 enum ProjectDiagnostic {
     SourceOrder { source_index: u64 },
@@ -1476,12 +1481,98 @@ fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], fla
 }
 fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, target_source_index: u64) -> (result: ProjectBuild) {
     let selected: TargetModuleSelection = select_target_module(modules, target_source_index);
-    return lower_project_modules_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, selected.found);
+    let dependency_indices: ProjectIndexList = project_import_closure(imports, target_source_index);
+    let dependency_modules: ModuleList = project_modules_in_closure<64>(sources, modules, dependency_indices);
+    return lower_project_modules_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, selected.found);
 }
-fn lower_project_modules_selected<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, to_lower: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, target_found: bool) -> (result: ProjectBuild) {
+
+// Resolve the target's transitive import closure for schema construction.
+// Import signatures and source diagnostics still use the complete project;
+// only record and enum schemas are restricted to modules that can affect the
+// selected module. Up to 64 sources and 64 resolved uses per source bound the
+// import list at 4096 links. Repeated passes handle source ordering and cycles.
+fn project_import_closure(imports: ImportList, target_source_index: u64) -> (result: ProjectIndexList) {
+    let first: ProjectImportClosure = ProjectImportClosure { indices: ProjectIndexList.PICons { head: target_source_index, tail: ProjectIndexList.PINil }, changed: true };
+    iterate i up_to 64 carrying st: ProjectImportClosure = first {
+        if !(st.changed) { return st.indices; }
+        next st = project_import_closure_round(imports, st.indices);
+    }
+    return st.indices;
+}
+fn project_import_closure_round(imports: ImportList, indices: ProjectIndexList) -> (result: ProjectImportClosure) {
+    let first: ProjectImportClosureWalk = project_import_closure_part(ProjectImportClosureWalk { rest: imports, indices: indices, changed: false });
+    let second: ProjectImportClosureWalk = project_import_closure_part(first);
+    let third: ProjectImportClosureWalk = project_import_closure_part(second);
+    let fourth: ProjectImportClosureWalk = project_import_closure_part(third);
+    return ProjectImportClosure { indices: fourth.indices, changed: fourth.changed };
+}
+fn project_import_closure_part(initial: ProjectImportClosureWalk) -> (result: ProjectImportClosureWalk) {
+    iterate i up_to 1024 carrying st: ProjectImportClosureWalk = initial {
+        if import_list_empty(st.rest) { return st; }
+        next st = project_import_closure_link(st);
+    }
+    return st;
+}
+fn import_list_empty(imports: ImportList) -> (result: bool) {
+    return match imports { INil => true, ICons { head: link, tail: rest } => false };
+}
+fn project_import_closure_link(st: ProjectImportClosureWalk) -> (result: ProjectImportClosureWalk) {
+    return match st.rest {
+        INil => st,
+        ICons { head: link, tail: rest } => project_import_closure_link_one(st, link, rest)
+    };
+}
+fn project_import_closure_link_one(st: ProjectImportClosureWalk, link: ImportLink, rest: ImportList) -> (result: ProjectImportClosureWalk) {
+    let reachable: bool = project_index_contains(st.indices, link.source_index);
+    if !(reachable) { return ProjectImportClosureWalk { rest: rest, indices: st.indices, changed: st.changed }; }
+    let already_included: bool = project_index_contains(st.indices, link.target_index);
+    if already_included { return ProjectImportClosureWalk { rest: rest, indices: st.indices, changed: st.changed }; }
+    return ProjectImportClosureWalk {
+        rest: rest,
+        indices: ProjectIndexList.PICons { head: link.target_index, tail: st.indices },
+        changed: true
+    };
+}
+fn project_index_contains(indices: ProjectIndexList, wanted: u64) -> (result: bool) {
+    iterate i up_to 64 carrying st: ProjectIndexContains = ProjectIndexContains { rest: indices, wanted: wanted, found: false } {
+        if st.found { return true; }
+        next st = project_index_contains_step(st);
+    }
+    return st.found;
+}
+fn project_index_contains_step(st: ProjectIndexContains) -> (result: ProjectIndexContains) {
+    return match st.rest {
+        PINil => st,
+        PICons { head: index, tail: rest } => project_index_contains_one(st, index, rest)
+    };
+}
+fn project_index_contains_one(st: ProjectIndexContains, index: u64, rest: ProjectIndexList) -> (result: ProjectIndexContains) {
+    if index == st.wanted { return ProjectIndexContains { rest: ProjectIndexList.PINil, wanted: st.wanted, found: true }; }
+    return ProjectIndexContains { rest: rest, wanted: st.wanted, found: false };
+}
+fn project_modules_in_closure<M: Nat>(sources: [ProjectSource; up_to M], modules: ModuleList, indices: ProjectIndexList) -> (result: ModuleList) {
+    iterate i over sources carrying st: ProjectModuleClosureFilter = ProjectModuleClosureFilter { rest: modules, indices: indices, acc: ModuleList.MNil } {
+        if module_list_empty(st.rest) { return reverse_modules<M>(sources, st.acc); }
+        next st = project_module_closure_filter_step(st);
+    }
+    return reverse_modules<M>(sources, st.acc);
+}
+fn project_module_closure_filter_step(st: ProjectModuleClosureFilter) -> (result: ProjectModuleClosureFilter) {
+    return match st.rest {
+        MNil => st,
+        MCons { head: parsed, tail: rest } => project_module_closure_filter_one(st, parsed, rest)
+    };
+}
+fn project_module_closure_filter_one(st: ProjectModuleClosureFilter, parsed: ParsedModule, rest: ModuleList) -> (result: ProjectModuleClosureFilter) {
+    let included: bool = project_index_contains(st.indices, parsed.source_index);
+    if !(included) { return ProjectModuleClosureFilter { rest: rest, indices: st.indices, acc: st.acc }; }
+    return ProjectModuleClosureFilter { rest: rest, indices: st.indices, acc: ModuleList.MCons { head: parsed, tail: st.acc } };
+}
+
+fn lower_project_modules_selected<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, to_lower: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, target_found: bool) -> (result: ProjectBuild) {
     let markers: decl.NominalTypeIdentityList = project_nominal_markers(nominal_modules);
-    let imported_records: decl.ImportedRecordList = project_record_schemas<M, N>(sources, flat_pages, all_modules, nominal_modules, markers);
-    let imported_enums: decl.ImportedEnumList = project_enum_schemas<M, N>(sources, flat_pages, all_modules, nominal_modules, markers);
+    let imported_records: decl.ImportedRecordList = project_record_schemas<M, N>(sources, flat_pages, dependency_modules, nominal_modules, markers);
+    let imported_enums: decl.ImportedEnumList = project_enum_schemas<M, N>(sources, flat_pages, dependency_modules, nominal_modules, markers);
     let initial: ProjectBuild = begin_project_lowering_for_modules(to_lower, all_modules, imports, nominal_modules, markers, imported_records, imported_enums, target_found);
     iterate i over sources carrying st: ProjectBuild = initial {
         next st = lower_project_one<M, N>(sources, flat_pages, st);

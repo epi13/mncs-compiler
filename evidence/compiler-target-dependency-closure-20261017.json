@@ -1,0 +1,83 @@
+{
+  "schema_version": "mncs.compiler.target-dependency-closure/1",
+  "identity": "ev_compiler_target_dependency_closure_20261017",
+  "observed_at": "2026-10-17T05:04:30Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "base_head": "dab9e2258706740b78b9c82d146945ff6e20d6f9",
+    "source_path": "src/compiler/project.mncs",
+    "source_sha256": "14574326e5a146bcd7ac613124f2d932487564ed515c97a63dc118d6057a45de"
+  },
+  "change": {
+    "summary": "Target-only lowering now computes the selected module's transitive closure from resolved import links and builds imported record and enum schemas only for that closure. Project parsing, import resolution and diagnostics, imported signatures, nominal identity resolution, and source/module counts retain whole-snapshot scope.",
+    "closure_bound": {
+      "source_modules": 64,
+      "resolved_import_links": 4096,
+      "rounds": 64,
+      "link_scan_batches_per_round": 4,
+      "links_per_batch": 1024
+    },
+    "language_verified_facts_reused": 0,
+    "application_build_contract_changed": false
+  },
+  "verification": {
+    "command": "MNCS_PROBE_TELEMETRY=1 python3 tools/test_project_target_dependency_closure.py",
+    "result": "passed",
+    "backend": "cranelift",
+    "stage0_language_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "simple_target_snapshot_sha256": "72d20fe856cb76dce7b256c7498c1595dda391b585ab21e464620e0c276fd231",
+    "simple_target_sources": 21,
+    "simple_target_unrelated_record_modules": 20,
+    "simple_target_lowered_modules": 1,
+    "transitive_nominal_snapshot_sha256": "91fc3f26da6240a66ef07c0d6e5799c351f3d97c3726f35446ba557f50c648ce",
+    "transitive_nominal_sources": 23,
+    "transitive_import_links": [
+      {"source_index": 22, "target_index": 21},
+      {"source_index": 21, "target_index": 20}
+    ],
+    "transitive_nominal_lowered_modules": 1,
+    "transitive_nominal_verified_functions": 1,
+    "transitive_nominal_stage0_parity": true,
+    "invalid_field_rejected_natively": true,
+    "invalid_field_rejected_by_stage0": true,
+    "invalid_field_native_span": [108, 114],
+    "invalid_field_native_span_is_fresh_source_span": true,
+    "python_syntax_check": "passed",
+    "diff_check": "passed"
+  },
+  "performance": {
+    "workload": "compile_project_target<1024,1024> with 20 unrelated modules, each containing one eight-field record, and one import-free target module",
+    "baseline_head": "dab9e2258706740b78b9c82d146945ff6e20d6f9",
+    "baseline": {
+      "target_request_wall_seconds": 0.423195,
+      "target_request_cpu_seconds": 0.31,
+      "process_peak_rss_sampled_bytes": 6562803712,
+      "process_rss_high_water_bytes": 6875648000,
+      "sample_count": 3
+    },
+    "after": {
+      "target_request_wall_seconds": 0.236547,
+      "target_request_cpu_seconds": 0.22,
+      "process_peak_rss_sampled_bytes": 6576566272,
+      "process_rss_high_water_bytes": 6889676800,
+      "sample_count": 3
+    },
+    "observed_wall_time_reduction_percent": 44.1,
+    "observed_cpu_time_reduction_percent": 29.0,
+    "transitive_nominal_case_wall_seconds": 0.260182,
+    "transitive_nominal_case_cpu_seconds": 0.23,
+    "negative_case_wall_seconds": 0.228319,
+    "cgroup_memory_bytes": null,
+    "memory_note": "Sampled peak RSS and process RSS high-water are reported separately. The RSS high-water value spans probe initialization and retained-session admission. No cgroup memory measurement was available.",
+    "sampling_note": "One request sample per configuration on this machine. These timings are workload-specific and are not general performance guarantees."
+  },
+  "limitations": [
+    "This Compiler-owned closure optimization does not implement or claim Language verified-fact reuse.",
+    "All source modules are still parsed and import and nominal identity resolution still cover the complete snapshot.",
+    "The measured improvement applies to this target-only schema workload; broader workloads need their own measurements."
+  ]
+}
