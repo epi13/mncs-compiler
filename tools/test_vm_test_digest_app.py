@@ -62,6 +62,8 @@ EVIDENCE_PATH = ROOT / 'evidence/native-app-readiness-test-digest-app.json'
 ENTRY_MODULE = 'mncs.test.digest'
 APP_FUNCTION = 'digest_app'
 PURE_FUNCTION = 'build_digest'
+ENVIRONMENT_ARTIFACT_CHUNK_BYTES = 768 * 1024
+ENVIRONMENT_ARTIFACT_MAX_CHUNKS = 3
 
 sys.path.insert(0, str(ROOT / 'tools'))
 import test_vm_native_application as support
@@ -95,15 +97,27 @@ def publish_environment_artifacts() -> list[dict]:
     if not stat.S_ISDIR(root_mode):
         raise RuntimeError('Environment artifact root must be a real directory')
 
-    sources = [
-        ('native-app-readiness-test-digest-app.json', EVIDENCE_PATH),
-        ('test-digest-app.vm.json', ARTIFACT_PATH),
-    ]
+    sources = [('native-app-readiness-test-digest-app.json', EVIDENCE_PATH.read_bytes())]
+    artifact_payload = ARTIFACT_PATH.read_bytes()
+    chunk_count = max(
+        1,
+        (len(artifact_payload) + ENVIRONMENT_ARTIFACT_CHUNK_BYTES - 1)
+        // ENVIRONMENT_ARTIFACT_CHUNK_BYTES,
+    )
+    if chunk_count > ENVIRONMENT_ARTIFACT_MAX_CHUNKS:
+        raise RuntimeError('canonical VM artifact exceeds the bounded Environment chunk contract')
+    sources.extend(
+        (
+            f'test-digest-app.vm.json.part-{index:02d}',
+            artifact_payload[
+                index * ENVIRONMENT_ARTIFACT_CHUNK_BYTES:
+                (index + 1) * ENVIRONMENT_ARTIFACT_CHUNK_BYTES
+            ],
+        )
+        for index in range(chunk_count)
+    )
     published = []
-    for name, source in sources:
-        if source.is_symlink() or not source.is_file():
-            raise RuntimeError(f'Environment artifact source is not a regular file: {source}')
-        payload = source.read_bytes()
+    for name, payload in sources:
         destination = artifact_root / name
         flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
         try:
@@ -117,6 +131,12 @@ def publish_environment_artifacts() -> list[dict]:
             'byte_count': len(payload),
             'sha256': sha(payload),
         })
+    for index in range(chunk_count, ENVIRONMENT_ARTIFACT_MAX_CHUNKS):
+        stale = artifact_root / f'test-digest-app.vm.json.part-{index:02d}'
+        if stale.is_dir() and not stale.is_symlink():
+            raise RuntimeError(f'Environment artifact chunk path is a directory: {stale.name}')
+        if stale.exists() or stale.is_symlink():
+            stale.unlink()
     return published
 
 
@@ -910,6 +930,8 @@ def main() -> None:
         'evidence': str(EVIDENCE_PATH),
         'environment_artifacts': environment_artifacts,
         'artifact_identity': artifact_id,
+        'artifact_file_sha256': sha(ARTIFACT_PATH.read_bytes()),
+        'artifact_bytes': ARTIFACT_PATH.stat().st_size,
         'interface_identity': current_interface.get('identity'),
         'build_metrics': build_metrics,
         'case_count': len(success_cases),
