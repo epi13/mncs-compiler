@@ -693,3 +693,20 @@ This remains workload-specific evidence; Language verified-fact reuse is
 still zero, and the report does not execute `provider_batch_app`, admit
 `provider_digest`, invoke Forge, publish Store evidence, or establish full
 provider/CLI conversion.
+
+## Native Test provider application boundary (2026-10-17)
+
+The [provider application boundary report](native-test-provider-app-boundary-20261017.json)
+compiles the production `mncs.test.provider::provider_batch_app` with verified
+dispatch for `provider_artifact` file operations and `provider_digest` hashing.
+The VM runner now validates the selected canonical capability identity against
+its own source alias while permitting other independently identified
+capabilities in the same artifact. It rejects a mismatched identity and a
+mismatched alias. The canonical VM then executes the application's native
+invalid-argument branch with no capabilities admitted; its typed exit code 2
+and message match the Stage-0 oracle, and no effects or output publication
+occur. The cold application build took 1.27 seconds at 110 MiB peak RSS; the
+VM call took 43 ms at 18 MiB peak RSS. Language verified facts remain unused.
+This covers an application boundary and fail-closed dispatch only; successful
+provider execution still needs the exact `structured_digest` provider and the
+authorized Forge/Environment/Store route.
