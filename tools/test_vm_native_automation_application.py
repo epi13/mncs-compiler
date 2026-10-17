@@ -233,6 +233,43 @@ def append_call_argument(source: str, function: str, old_arity: int,
     return "".join(pieces)
 
 
+def replace_repeated(source: str, before: str, after: str, expected: int,
+                     description: str) -> str:
+    count = source.count(before)
+    if count != expected:
+        raise AssertionError(
+            f"expected {expected} {description} anchors, found {count}"
+        )
+    return source.replace(before, after)
+
+
+def rename_record_constructor_field(source: str, record: str, old: str,
+                                    new: str, expected: int) -> str:
+    pattern = re.compile(
+        rf"(?<!record )\b{re.escape(record)}\s*\{{([^}}]*)\}}"
+    )
+    field_pattern = re.compile(rf"(?<![A-Za-z0-9_]){re.escape(old)}\s*:")
+    matches = list(pattern.finditer(source))
+    if len(matches) != expected:
+        raise AssertionError(
+            f"expected {expected} {record} constructors, found {len(matches)}"
+        )
+    pieces = []
+    offset = 0
+    for match in matches:
+        body = match.group(1)
+        count = len(field_pattern.findall(body))
+        if count != 1:
+            raise AssertionError(
+                f"expected one {old} field in {record} constructor, found {count}"
+            )
+        pieces.append(source[offset:match.start(1)])
+        pieces.append(field_pattern.sub(f"{new}:", body, count=1))
+        offset = match.end(1)
+    pieces.append(source[offset:])
+    return "".join(pieces)
+
+
 def main() -> None:
     if not PROBE.is_file() or not VM_BIN.is_file():
         raise SystemExit(f"missing Stage-0 probe or canonical VM binary: {PROBE}, {VM_BIN}")
@@ -475,6 +512,135 @@ def main() -> None:
                 )
             interface_actual.append(value)
 
+        record_only_modules = dict(modules)
+        old_next_occurrence = "record NextOccurrence { found: bool, at_ms: i64 }"
+        new_next_occurrence = (
+            "record NextOccurrence { found: bool, scheduled_at_ms: i64 }"
+        )
+        record_only_modules["mncs.automation.schedule"] = replace_once(
+            schedule_source, old_next_occurrence, new_next_occurrence,
+            "imported NextOccurrence record field",
+        )
+        record_only, record_only_metrics = probe.send({
+            "compile_application": build_request(root_source, record_only_modules),
+        }, timeout=240)
+        record_only_work = record_only.get("cache", {}).get(
+            "verification_work", {}
+        )
+        record_only_diagnostics = sorted({
+            item.get("code") for item in record_only.get("diagnostics", [])
+            if isinstance(item, dict) and isinstance(item.get("code"), str)
+        })
+        if (record_only.get("status") != "rejected"
+                or record_only.get("artifact") is not None
+                or record_only.get("source_snapshot", {}).get("identity")
+                == cold.get("source_snapshot", {}).get("identity")
+                or record_only_work.get("front_end_invocations") != 1
+                or not record_only_diagnostics
+                or record_only_work.get("backend_artifact") == "reused"):
+            raise AssertionError(
+                "an imported nominal record edit with stale constructors and projections "
+                "was not freshly rejected: "
+                + json.dumps({
+                    "status": record_only.get("status"),
+                    "diagnostic_codes": record_only_diagnostics,
+                    "cache": record_only.get("cache"),
+                }, sort_keys=True)
+            )
+
+        updated_record_modules = dict(record_only_modules)
+        updated_schedule_source = rename_record_constructor_field(
+            updated_record_modules["mncs.automation.schedule"],
+            "NextOccurrence", "at_ms", "scheduled_at_ms", expected=9,
+        )
+        updated_schedule_source = replace_repeated(
+            updated_schedule_source, ".at_ms", ".scheduled_at_ms", 5,
+            "NextOccurrence schedule projection",
+        )
+        updated_record_modules["mncs.automation.schedule"] = updated_schedule_source
+        updated_evaluation_source = replace_once(
+            root_source, "ahead.at_ms", "ahead.scheduled_at_ms",
+            "first NextOccurrence consumer projection",
+        )
+        updated_evaluation_source = replace_repeated(
+            updated_evaluation_source, "nxt.at_ms", "nxt.scheduled_at_ms", 4,
+            "next-occurrence consumer projection",
+        )
+        updated_evaluation_source = replace_once(
+            updated_evaluation_source, "after_fire.at_ms",
+            "after_fire.scheduled_at_ms",
+            "post-fire NextOccurrence consumer projection",
+        )
+        record_updated, record_updated_metrics = probe.send({
+            "compile_application": build_request(
+                updated_evaluation_source, updated_record_modules,
+            ),
+        }, timeout=240)
+        record_updated_work = record_updated.get("cache", {}).get(
+            "verification_work", {}
+        )
+        record_artifact = (record_updated.get("artifact") or {}).get("value")
+        record_artifact_identity = (record_updated.get("artifact") or {}).get(
+            "identity"
+        )
+        if (record_updated.get("status") != "verified"
+                or record_updated_work.get("front_end_invocations") != 1
+                or record_updated_work.get("backend_artifact") != "generated"
+                or record_artifact_identity == artifact_identity
+                or not isinstance(record_artifact, dict)):
+            raise AssertionError(
+                "updating the imported nominal record consumers did not regenerate "
+                "the artifact: "
+                + json.dumps({
+                    "status": record_updated.get("status"),
+                    "cache": record_updated.get("cache"),
+                    "artifact_identity": record_artifact_identity,
+                }, sort_keys=True)
+            )
+        record_oracle, record_oracle_metrics = probe.send({
+            "project_oracle": {
+                "root": updated_evaluation_source,
+                "modules": updated_record_modules,
+                "calls": calls,
+            },
+        }, timeout=240)
+        record_executions = record_oracle.get("executions", [])
+        if (record_oracle.get("valid") is not True
+                or len(record_executions) != len(rows)
+                or any(item.get("status") != "returned"
+                       for item in record_executions)):
+            raise AssertionError(
+                "Stage-0 rejected the updated imported nominal-record Automation source"
+            )
+        record_expected = [support.decode_wire(item["returned"][0])
+                           for item in record_executions]
+        record_vm_results, record_vm_metrics = run_vm_batch(record_artifact, rows)
+        if len(record_vm_results) != len(rows):
+            raise AssertionError(
+                "canonical VM omitted imported nominal-record update results"
+            )
+        record_actual = []
+        for row, vm_row, expected_value in zip(rows, record_vm_results, record_expected):
+            if (vm_row.get("id") != row["id"]
+                    or vm_row.get("outcome") != {"kind": "completed"}):
+                raise AssertionError(
+                    f"nominal-record VM call failed for {row['id']}: {vm_row}"
+                )
+            returned = vm_row.get("record", {}).get("returned", [])
+            if len(returned) != 1:
+                raise AssertionError(
+                    f"nominal-record result malformed for {row['id']}"
+                )
+            value = support.decode_wire(support.vm_to_wire(returned[0]))
+            if value != expected_value:
+                raise AssertionError(
+                    "nominal-record Stage-0/VM disagreement for "
+                    f"{row['id']}: "
+                    + json.dumps({"vm": value, "stage0": expected_value},
+                                 sort_keys=True)
+                )
+            record_actual.append(value)
+
         reachable_root_source = replace_once(
             root_source,
             "fn reason_cond_false() -> (code: u64) {\n    return 3;\n}",
@@ -588,6 +754,7 @@ def main() -> None:
         "compiler": {
             "revision_before_harness_commit": git(ROOT, "rev-parse", "HEAD"),
             "branch": git(ROOT, "branch", "--show-current"),
+            "application_harness_sha256": sha(Path(__file__).read_bytes()),
             "probe_sha256": sha(PROBE.read_bytes()),
             "verification_engine_identity": cold.get("cache", {}).get(
                 "verification_work", {}).get("verification_engine_identity"),
@@ -665,6 +832,34 @@ def main() -> None:
                 "stage0_vm_agreement": interface_actual == interface_expected,
                 "exact_stage0_vm_agreement": True,
             },
+            "imported_nominal_record_edit_with_stale_uses": {
+                "changed_module": "mncs.automation.schedule",
+                "changed_record": "NextOccurrence",
+                "changed_field": "at_ms -> scheduled_at_ms",
+                "source_snapshot_identity": record_only.get(
+                    "source_snapshot", {}).get("identity"),
+                "status": record_only.get("status"),
+                "diagnostic_codes": record_only_diagnostics,
+                "frontend_invocations": record_only_work.get(
+                    "front_end_invocations"),
+                "artifact_present": record_only.get("artifact") is not None,
+                "backend_artifact": record_only_work.get("backend_artifact"),
+                "cache_status": record_only.get("cache", {}).get("status"),
+            },
+            "imported_nominal_record_with_updated_consumers": {
+                "changed_module": "mncs.automation.schedule",
+                "changed_record": "NextOccurrence",
+                "changed_field": "at_ms -> scheduled_at_ms",
+                "source_snapshot_identity": record_updated.get(
+                    "source_snapshot", {}).get("identity"),
+                "frontend_invocations": record_updated_work.get(
+                    "front_end_invocations"),
+                "backend_artifact": record_updated_work.get("backend_artifact"),
+                "artifact_identity": record_artifact_identity,
+                "prior_artifact_identity": artifact_identity,
+                "stage0_vm_agreement": record_actual == record_expected,
+                "exact_stage0_vm_agreement": True,
+            },
             "reachable_body_edit": {
                 "source_snapshot_identity": reachable.get("source_snapshot", {}).get("identity"),
                 "semantic_identity": reachable.get("dependency_graph", {}).get("semantic_identity"),
@@ -706,6 +901,10 @@ def main() -> None:
             "imported_signature_with_updated_consumers": interface_updated_metrics,
             "imported_signature_stage0_oracle": interface_oracle_metrics,
             "imported_signature_canonical_vm_batch": interface_vm_metrics,
+            "imported_nominal_record_edit_with_stale_uses": record_only_metrics,
+            "imported_nominal_record_with_updated_consumers": record_updated_metrics,
+            "imported_nominal_record_stage0_oracle": record_oracle_metrics,
+            "imported_nominal_record_canonical_vm_batch": record_vm_metrics,
             "reachable_body_edit": reachable_metrics,
             "reachable_stage0_oracle": reachable_oracle_metrics,
             "reachable_canonical_vm_batch": reachable_vm_metrics,
@@ -718,7 +917,7 @@ def main() -> None:
         "forge_execution_performed": False,
         "canonical_store_publication_performed": False,
         "production_automation_orchestration_replaced": False,
-        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit and an uncalled test-body edit each received fresh full frontend verification and reused the executable-closure artifact. An imported schedule signature change with unchanged callers was freshly rejected without artifact reuse; updating the imported call sites and callers regenerated the artifact, and all 18 Stage-0 results matched the canonical VM. Editing reachable reason_cond_false changed the selected caller result, regenerated the artifact, and matched Stage-0 in the canonical VM. An unresolved function body was freshly rejected without artifact fallback. Language verified facts remained zero, so each changed valid snapshot still rechecked whole-program semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
+        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit and an uncalled test-body edit each received fresh full frontend verification and reused the executable-closure artifact. An imported schedule signature change with unchanged callers and an imported NextOccurrence field rename with stale constructors and projections were freshly rejected without artifact reuse. Updating the imported call sites and consumers regenerated new artifacts; each updated 18-case Stage-0 result matched the canonical VM. Editing reachable reason_cond_false changed the selected caller result, regenerated the artifact, and matched Stage-0 in the canonical VM. An unresolved function body was freshly rejected without artifact fallback. Language verified facts remained zero, so each changed valid snapshot still rechecked whole-program semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
     }
     default_evidence_name = (
         "evidence/native-app-readiness-automation-evaluation-"

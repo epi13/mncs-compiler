@@ -259,6 +259,21 @@ and records the exact application harness hash. This does not prove
 generic-specialization invalidation, nominal type invalidation, Forge routing,
 or Language-owned fact reuse.
 
+A combined follow-up also renamed the imported `NextOccurrence.at_ms` field.
+The stale constructor and projection set was freshly rejected with `MNE172`
+and no artifact. After updating the nine constructors and dependent projections,
+the Compiler generated artifact
+`sha256:c1c55a325e0352756b038c9afb42b5f730f0a9e80f65d69f8cf1299acfab6d3f`; all
+18 Stage-0 results matched the canonical VM. The stale build took 0.069 s, the
+updated build 1.475 s, the oracle 2.200 s, and the VM batch 0.449 s / 0.430 CPU
+s with 35.8 MiB peak RSS. Peak RSS for both compiler builds was 129.0 MiB;
+cgroup memory was unavailable. The combined evidence also repeats the imported
+function-signature case and records the exact harness hash:
+[`evidence/native-app-readiness-automation-dependency-invalidation-20261017.json`](../evidence/native-app-readiness-automation-dependency-invalidation-20261017.json)
+(SHA-256 `0538e424a111d64ca820d8c64989d2c74b153b619f485375f9c2704623bd908b`).
+The frontend still rechecks every changed snapshot, Language facts reused are
+zero, and generic-specialization invalidation remains unproven.
+
 ## Evidence boundary
 
 This assessment uses the read-only `mncs-test` checkout at `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM `1c19a94732c9d24029dd00e2d5af13710f481d02`, and Compiler producer commit `24dda63ae59e0505969c490604e14348dab1f7d7`. The Stage-0 reference revision is `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, release probe SHA-256 `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`; the VM binary SHA-256 is `2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5`.
