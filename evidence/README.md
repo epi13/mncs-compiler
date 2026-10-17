@@ -252,6 +252,23 @@ verified facts. The Environment-bound verification passed without producing a
 separate Store artifact; this does not establish Forge execution of
 `digest_app` or full `mncs-test` conversion.
 
+## Native Test digest workflow refresh (2026-10-17)
+
+The [current workflow report](native-app-readiness-native-test-workflow-20261017.json)
+re-runs the multi-callable `application-build/5` workflow at Compiler revision
+`f0de9fa`. The pinned Stage-0 digest cases, schema callables, and generic Test
+suite summaries agree across the reference oracle and canonical VM. The
+bounded batch completes seven calls in 0.256 seconds at 27,192 KiB peak RSS;
+one retained VM process completes nine calls in 0.269 seconds at 27,424 KiB
+peak RSS, recovering after low fuel and rejecting invalid typed input without
+poisoning later calls. The cold build takes 4.538 seconds (4.47 CPU seconds,
+92,786,688-byte peak RSS); a fresh-process exact-snapshot hit takes 0.575
+seconds with zero frontend invocations. The comment-edit path still runs the
+full frontend and reuses the verified VM artifact closure; Language verified
+facts reused remain zero. The registered Environment verifier passed. This
+refresh does not establish Forge/Environment/Store application execution or
+full `mncs-test` conversion.
+
 ## Effectful digest application, incremental cache, and Environment artifacts (2026-10-17)
 
 The [effectful digest application report](native-app-readiness-test-digest-app.json)
