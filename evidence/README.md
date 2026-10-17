@@ -483,6 +483,21 @@ passed in 96 probe requests. This optimizes source identity only: Language
 verified facts remain unreused, and it does not prove the full Source module
 or compiler succession.
 
+## Source location line/column frontier (2026-10-17)
+
+The [line/column frontier](self-host-source-line-col-global-20261017.json)
+checks `source.line_col_global` for empty input, newline and page-edge offsets,
+clamped offsets, CRLF bytes, UTF-8 byte columns, and a 64 KiB source. The
+reference interpreter, Cranelift, and one fresh canonical VM artifact agree
+with the byte-based SourceSpan convention over 85 requests per executor and
+strides 1, 7, 64, and 1024. The canonical VM batch took 11.38 seconds, peaked
+at 102,184 KiB RSS, and used at most 2,032,971 steps in one call; cgroup
+measurements were unavailable. Language verified facts remain unreused, and
+this selected callable does not prove Unicode-scalar columns or the full Source
+module. An initial larger test set hit Environment's effective 120-second
+limit despite a 900-second verifier descriptor; the 85-request committed
+frontier passed through the same Environment verifier.
+
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)

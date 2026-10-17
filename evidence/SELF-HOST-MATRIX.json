@@ -536,6 +536,40 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "Four sequential FNV-1a bytes are folded per MNCS page-loop transition, preserving the exact 64-bit hash for empty input, all short-tail lengths, page boundaries, and 64/256 KiB inputs. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a source-identity implementation frontier; it does not implement Language-owned verified-fact reuse or compiler succession."
+        },
+        "selected_line_col_global_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "target_module": "mncs.compiler.source.v1",
+          "target_function": "line_col_global",
+          "page_strides": [
+            1,
+            7,
+            64,
+            1024
+          ],
+          "input_count": 23,
+          "request_count_per_executor": 85,
+          "source_sha256": "becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
+          "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
+          "canonical_vm_artifact_identity": "sha256:a69caf8461493220a6ad5570c74d06d9cf1dc503a1dee60bd04ef35b588c2c98",
+          "canonical_vm_wall_seconds": 11.379269,
+          "canonical_vm_peak_rss_kib": 102184,
+          "maximum_steps_per_call": 2032971,
+          "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
+          "evidence_sha256": "69fa3a85b713a84edd60d0c7ab341666a1a03daf9a798615f44eabe6e0b86407",
+          "environment_verification": {
+            "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+            "binding_id": "cap_97d3c4286c601232",
+            "contract_revision": "56127bce0b54b0a7",
+            "inventory_revision": 44,
+            "status": "ok",
+            "returncode": 0,
+            "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+            "session_id": "ses_164edc158d9b1637",
+            "checkpoint_before_verification": "chk_497c5d551196d612"
+          },
+          "language_verified_facts_reused": 0,
+          "scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
         }
       }
     },
@@ -3483,7 +3517,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-17T22:45:59Z",
+    "updated_at": "2026-10-17T23:02:05Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -7682,9 +7716,64 @@
       "evidence_sha256": "sha256:1478ad7b299ccda7e237a7dd60b731a6950fadad39e4b29d9675f28d8f9c493d",
       "delivery_boundary": "Repeated digest and native suite execution passes through the canonical VM batch and retained VM session. This does not establish Forge-hosted effectful capability execution, Language verified-fact reuse, or full mncs-test conversion.",
       "evidence_identity": "ev_compiler_native_test_workflow_batch_f0de_20261017"
+    },
+    "native_application_readiness_20261013_source_line_col_global_20261017": {
+      "observed_at": "2026-10-17T23:02:05Z",
+      "implementation_commit": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+      "tested_source_revision": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+      "branch": "campaign/native-application-readiness-20261013",
+      "source_module_sha256": "becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
+      "test_harness": "tools/test_vm_source_line_col_frontier.py",
+      "test_harness_sha256": "dc5e312ded8174603b1a76ae2a1ed809fb3e46984edfd9e4a4bd7f68ce1cb26a",
+      "target": {
+        "module": "mncs.compiler.source.v1",
+        "function": "line_col_global",
+        "generic_arguments": [
+          1024,
+          1024
+        ]
+      },
+      "page_strides": [
+        1,
+        7,
+        64,
+        1024
+      ],
+      "input_count": 23,
+      "request_count_per_executor": 85,
+      "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
+      "canonical_vm_artifact_identity": "sha256:a69caf8461493220a6ad5570c74d06d9cf1dc503a1dee60bd04ef35b588c2c98",
+      "canonical_vm_wall_seconds": 11.379269,
+      "canonical_vm_peak_rss_kib": 102184,
+      "maximum_steps_per_call": 2032971,
+      "environment_verification": {
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+        "binding_id": "cap_97d3c4286c601232",
+        "contract_revision": "56127bce0b54b0a7",
+        "inventory_revision": 44,
+        "status": "ok",
+        "returncode": 0,
+        "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+        "session_id": "ses_164edc158d9b1637",
+        "checkpoint_before_verification": "chk_497c5d551196d612"
+      },
+      "transport_timeout_observation": {
+        "initial_attempt_status": "timeout",
+        "executor_declared_timeout_seconds": 900,
+        "effective_timeout_message": "exceeded 120s",
+        "final_attempt_status": "passed",
+        "final_request_count_per_executor": 85,
+        "note": "The first broad offset corpus exceeded the Environment bridge limit; after retaining the required page-edge, clamp, UTF-8 byte-column, empty-input, and 64 KiB cases with 85 requests, the exact committed frontier passed."
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
+      "evidence_sha256": "69fa3a85b713a84edd60d0c7ab341666a1a03daf9a798615f44eabe6e0b86407",
+      "evidence_scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
     }
   },
-  "evidence_updated_at": "2026-10-17T22:35:53.352120Z",
+  "evidence_updated_at": "2026-10-17T23:02:05Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -7715,51 +7804,49 @@
     "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
   },
   "current_campaign_frontier_update": {
-    "kind": "mncs.compiler.source-fingerprint-global-four-byte-frontier",
+    "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
     "status": "passed_with_bounded_frontier",
-    "observed_at": "2026-10-17T22:35:53.352120Z",
+    "observed_at": "2026-10-17T23:02:05Z",
     "compiler_branch": "campaign/native-application-readiness-20261013",
-    "compiler_head": "bc4eefde9506c79318c6d251c0b6f001f89419da",
-    "tested_source_revision": "bc4eefde9506c79318c6d251c0b6f001f89419da",
-    "commit_containing_measured_source": "bc4eefde9506c79318c6d251c0b6f001f89419da",
-    "test_harness": "tools/test_vm_source_fingerprint_frontier.py",
-    "test_harness_sha256": "ca956cfc8746f749049bf50623eeb4e1acb8195cd6e251218a5a6f0d99d6d4b9",
-    "evidence_artifact": "evidence/self-host-source-fingerprint-global-four-byte-20261017.json",
-    "evidence_sha256": "e98b343ad494fd380c4056789fdbb8deb99a5703d73be60ae3f61fb08ad05bee",
+    "compiler_head": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+    "tested_source_revision": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+    "commit_containing_measured_source": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+    "test_harness": "tools/test_vm_source_line_col_frontier.py",
+    "test_harness_sha256": "dc5e312ded8174603b1a76ae2a1ed809fb3e46984edfd9e4a4bd7f68ce1cb26a",
+    "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
+    "evidence_sha256": "69fa3a85b713a84edd60d0c7ab341666a1a03daf9a798615f44eabe6e0b86407",
     "target_module": "mncs.compiler.source.v1",
-    "target_function": "fingerprint_global",
-    "source_sha256": "sha256:becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
-    "reference_interpreter_steps_baseline": {
-      "fnv-64k": 918480,
-      "fnv-256k": 3673872
-    },
-    "reference_interpreter_steps_candidate": {
-      "fnv-64k": 608208,
-      "fnv-256k": 2432784
-    },
-    "reference_interpreter_wall_seconds_baseline": {
-      "fnv-64k": 3.822357,
-      "fnv-256k": 13.954254
-    },
-    "reference_interpreter_wall_seconds_candidate": {
-      "fnv-64k": 1.896315,
-      "fnv-256k": 7.554412
-    },
-    "canonical_vm_artifact_identity": "sha256:bd5cc45c4833191dd69614ae5c2e7d60390704ade435201d0c50a204c9a5caaf",
-    "canonical_vm_case_count": 24,
-    "canonical_vm_wall_seconds": 5.055677,
-    "canonical_vm_peak_rss_kib": 248792,
+    "target_function": "line_col_global",
+    "source_sha256": "becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
+    "page_strides": [
+      1,
+      7,
+      64,
+      1024
+    ],
+    "input_count": 23,
+    "request_count_per_executor": 85,
+    "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
+    "canonical_vm_artifact_identity": "sha256:a69caf8461493220a6ad5570c74d06d9cf1dc503a1dee60bd04ef35b588c2c98",
+    "canonical_vm_wall_seconds": 11.379269,
+    "canonical_vm_peak_rss_kib": 102184,
+    "canonical_vm_maximum_steps_per_call": 2032971,
     "environment_verification": {
-      "capability": "mncs-compiler:verification-executor/mncs-compiler.source-fingerprint-global-canonical-vm-frontier",
-      "binding_id": "cap_4bb1d2a458f01a6f",
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+      "binding_id": "cap_97d3c4286c601232",
+      "contract_revision": "56127bce0b54b0a7",
+      "inventory_revision": 44,
       "status": "ok",
-      "returncode": 0
+      "returncode": 0,
+      "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+      "session_id": "ses_164edc158d9b1637",
+      "checkpoint_before_verification": "chk_497c5d551196d612"
     },
     "language_verified_facts_reused": 0,
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Continue the effectful native Test provider route and retained-session workflow under Compiler authority; integrate Language-owned verified-fact reuse when owner-managed Language write scope is provisioned.",
-    "evidence_scope": "Four sequential FNV-1a bytes are folded per MNCS page-loop transition, preserving the exact 64-bit hash for empty input, all short-tail lengths, page boundaries, and 64/256 KiB inputs. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a source-identity implementation frontier; it does not implement Language-owned verified-fact reuse or compiler succession."
+    "next_frontier": "Execute mncs.test.digest::digest_app through the authorized Forge/Environment/Store route; implement Language-owned verified-fact reuse when its authenticated Language writable scope is available.",
+    "evidence_scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
   },
   "campaign_frontier_history": [
     {
@@ -10574,6 +10661,51 @@
       "stage2_claimed": false,
       "next_frontier": "Continue the effectful native Test provider route and retained-session workflow under Compiler authority; integrate Language-owned verified-fact reuse when owner-managed Language write scope is provisioned.",
       "evidence_scope": "Four sequential FNV-1a bytes are folded per MNCS page-loop transition, preserving the exact 64-bit hash for empty input, all short-tail lengths, page boundaries, and 64/256 KiB inputs. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree. This is a source-identity implementation frontier; it does not implement Language-owned verified-fact reuse or compiler succession."
+    },
+    {
+      "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
+      "status": "passed_with_bounded_frontier",
+      "observed_at": "2026-10-17T23:02:05Z",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "compiler_head": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+      "tested_source_revision": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+      "commit_containing_measured_source": "ab1202abb8bea962fd0235fe3f042a6b2a6f3aea",
+      "test_harness": "tools/test_vm_source_line_col_frontier.py",
+      "test_harness_sha256": "dc5e312ded8174603b1a76ae2a1ed809fb3e46984edfd9e4a4bd7f68ce1cb26a",
+      "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
+      "evidence_sha256": "69fa3a85b713a84edd60d0c7ab341666a1a03daf9a798615f44eabe6e0b86407",
+      "target_module": "mncs.compiler.source.v1",
+      "target_function": "line_col_global",
+      "source_sha256": "becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
+      "page_strides": [
+        1,
+        7,
+        64,
+        1024
+      ],
+      "input_count": 23,
+      "request_count_per_executor": 85,
+      "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
+      "canonical_vm_artifact_identity": "sha256:a69caf8461493220a6ad5570c74d06d9cf1dc503a1dee60bd04ef35b588c2c98",
+      "canonical_vm_wall_seconds": 11.379269,
+      "canonical_vm_peak_rss_kib": 102184,
+      "canonical_vm_maximum_steps_per_call": 2032971,
+      "environment_verification": {
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+        "binding_id": "cap_97d3c4286c601232",
+        "contract_revision": "56127bce0b54b0a7",
+        "inventory_revision": 44,
+        "status": "ok",
+        "returncode": 0,
+        "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+        "session_id": "ses_164edc158d9b1637",
+        "checkpoint_before_verification": "chk_497c5d551196d612"
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "next_frontier": "Execute mncs.test.digest::digest_app through the authorized Forge/Environment/Store route; implement Language-owned verified-fact reuse when its authenticated Language writable scope is available.",
+      "evidence_scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {
