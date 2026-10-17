@@ -250,6 +250,16 @@ fn nominal_value_type_bound<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     return (imported.found && imported.identity.valid) || (local.found && local.identity.valid);
 }
 
+// End-to-end local-unit path: prove and lower the source with Flow, derive
+// nominal identities from that verified unit, and feed the exact lowered
+// result into value SSA. Keeping this handoff in MNCS makes the canonical VM
+// exercise the same typed intermediate value that the compiler pipeline uses.
+fn lower_flow_unit_value_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: ValueSsaSummary) {
+    let lowered: flow.LoweredUnit = flow.lower_unit<P, N>(pages, stride, total);
+    let nominals: decl.NominalTypeIdentityList = decl.local_nominal_type_identities<P, N>(pages, stride, total, lowered.proof.unit);
+    return lower_value_ssa<P, N>(pages, stride, total, lowered, nominals);
+}
+
 fn lower_value_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList) -> (result: ValueSsaSummary) {
     return lower_value_ssa_with_imported_records<P, N>(pages, stride, total, lowered, nominals, decl.ImportedRecordList.IRNil);
 }

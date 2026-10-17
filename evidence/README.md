@@ -197,6 +197,12 @@ The [current Flow proof handoff](self-host-flow-proven-unit-canonical-vm-2026101
 
 The VM batch took 18.19 seconds and peaked at 461,748 KiB; the whole frontier took 69.23 seconds and 66.90 child CPU seconds. Host memory was sampled and cgroup readings were unavailable. This bounded Flow function frontier reused zero Language-owned verified facts and does not establish full module proof or compiler succession.
 
+## Current Flow-to-SSA frontier (2026-10-16)
+
+The [current Flow-to-SSA handoff](self-host-flow-ssa-canonical-vm-20261016.json) runs a real MNCS source function through `flow.lower_unit`, derives local nominal identities from its proved unit, and passes that exact `flow.LoweredUnit` value into value SSA from one canonical VM call. The selected function is supported and verified; its one branch and two returns match the Stage-0 SSA oracle. Environment's registered verification capability passed with the exact-source artifact cache hit.
+
+The Environment verification took 32.53 seconds end to end, including a 25.29-second canonical VM batch. Child peak RSS was 1,242,372 KiB and VM peak RSS was 614,972 KiB; the cgroup counters were unavailable. Language-owned verified facts reused: zero. This selected pipeline handoff does not prove the whole SSA module, imported-interface invalidation, incremental semantic reuse, or compiler succession. The next compiler frontier is to carry imported nominal interfaces and generic specializations through this same Flow-to-SSA path.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:

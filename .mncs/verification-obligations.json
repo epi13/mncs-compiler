@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 25,
+  "revision": 26,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1314,6 +1314,69 @@
         "argv": [
           "python3",
           "tools/test_vm_flow_proven_frontier.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 120,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.flow-to-ssa-canonical-vm-frontier",
+      "title": "Current source proof-to-Flow result reaches verified value SSA on canonical VM",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.ssa.v1::lower_flow_unit_value_ssa",
+        "mncs.compiler.ssa.v1::lower_value_ssa",
+        "mncs.compiler.flow.v1::lower_unit",
+        "mncs.compiler.decl.v1::prove_unit"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/source.mncs",
+        "tools/test_flow.py",
+        "tools/test_vm_flow_ssa_frontier.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_segment.py",
+        "tools/vm_emit.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_flow_ssa_frontier.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_flow_ssa_frontier.py"
         ],
         "working_directory": ".",
         "timeout_seconds": 120,
