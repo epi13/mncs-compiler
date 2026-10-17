@@ -81,6 +81,17 @@ and fuel failures. The exact report and VM artifact chunk hashes are in
 This remains verification-output publication through the bounded test file
 provider; it is not a Forge application-execution receipt.
 
+The same bound Compiler verifier passed again on commit
+`8d3669c96428027056983e7b666c6588a771eb54`. Campaign continuation selected the
+single active Compiler session, and authenticated `artifact_read` returned all
+three files from canonical Store with byte counts and SHA-256 values matching
+the invocation manifest. The rerun measured a 0.581 s cold build, 0.125 s
+fresh-process warm hit, and 0.362 s comment-edit build; the comment edit still
+ran the full frontend and reused zero Language facts. See
+[`evidence/native-app-readiness-effectful-digest-store-readback-rerun-20261017.json`](../evidence/native-app-readiness-effectful-digest-store-readback-rerun-20261017.json)
+for the exact invocation and readback identities. This remains a Compiler
+canonical VM test-provider run and does not exercise Forge.
+
 A fresh attempt to publish the `/4` application-build result through the
 selected Compiler campaign was refused by Control with
 `ENVIRONMENT_AUTHORITY_DENIED`. Control currently requires the separate

@@ -1,0 +1,111 @@
+{
+  "schema_version": "mncs.compiler.native-application-store-readback/1",
+  "identity": "ev_native_digest_effectful_store_readback_rerun_20261017",
+  "observed_at": "2026-10-17T12:38:58Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "continuation": {
+    "operation": "continuation",
+    "status": "ready",
+    "selected_session_id": "ses_164edc158d9b1637",
+    "campaigns_count": 1,
+    "continuations_count": 1,
+    "lifecycle": "active",
+    "checkpoint_before": "chk_9f9d3b09e97016c0",
+    "checkpoint_sequence_before": 181
+  },
+  "compiler": {
+    "revision": "8d3669c96428027056983e7b666c6588a771eb54",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": ".worktrees/native-app-readiness-20261013/mncs-compiler"
+  },
+  "verification": {
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.native-test-digest-effectful-app-incremental-cache",
+    "binding_id": "cap_705aa531b073469b",
+    "status": "passed",
+    "exit_code": 0,
+    "returncode": 0,
+    "artifact_store_ref": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:b7fd75703e89746dc903edbfb4202c242aafa7e19067b06928f77cc48fefa919",
+    "artifact_file_count": 3,
+    "artifact_byte_count": 1136647
+  },
+  "store_readback": {
+    "operation": "artifact_read",
+    "authenticated_session": "ses_164edc158d9b1637",
+    "files": [
+      {
+        "path": "native-app-readiness-test-digest-app.json",
+        "byte_count": 28253,
+        "sha256": "1ae37275e1a640a4b70981b870973d3061d6c316c2a06e5076695521a21455b4"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-00",
+        "byte_count": 786432,
+        "sha256": "7f41930a6075e1e899ffe8b540827048f7ac68af953443732500fb6d20db751e"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-01",
+        "byte_count": 321962,
+        "sha256": "410ef8d48f81eb17666dcfc36f730379f6cb5d396885bb4c87bcf4b52ecc4d9c"
+      }
+    ],
+    "all_byte_counts_match": true,
+    "all_sha256_values_match_invocation_manifest": true
+  },
+  "application": {
+    "entry": "mncs.test.digest::digest_app",
+    "artifact_identity": "sha256:fff98e04569923d235cae2c4787e8a613b65324f0c78fb1d652fec600d8269c4",
+    "artifact_file_sha256": "efb6411d21c968f625e7b299b1994ec1be753a48ae23209b7a0afc33ecd1f047",
+    "artifact_bytes": 1108394,
+    "capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+    "runtime_dispatch_alias": "test_artifact",
+    "successful_canonical_vm_cases": 3,
+    "structured_effects_per_case": [
+      "structured_read",
+      "structured_write"
+    ],
+    "stage0_result_agreement": true,
+    "retained_session": {
+      "calls": 7,
+      "process_count": 1,
+      "wall_seconds": 0.033912,
+      "cpu_seconds": 0.02,
+      "peak_rss_bytes": 16224256,
+      "peak_cgroup_memory_bytes": null
+    },
+    "negative_cases": [
+      "missing capability admission",
+      "mismatched capability identity",
+      "mismatched dispatch alias",
+      "incorrect artifact identity",
+      "invalid typed input",
+      "rejected output publication",
+      "step budget exhaustion"
+    ],
+    "language_verified_facts_reused": 0
+  },
+  "performance": {
+    "cold_build_wall_seconds": 0.580895,
+    "cold_build_cpu_seconds": 0.54,
+    "cold_build_peak_rss_bytes": 65662976,
+    "cold_build_peak_cgroup_memory_bytes": null,
+    "fresh_process_warm_wall_seconds": 0.125007,
+    "fresh_process_warm_cpu_seconds": 0.1,
+    "comment_only_edit_wall_seconds": 0.361626,
+    "comment_only_edit_cpu_seconds": 0.32,
+    "frontend_invocations_for_comment_edit": 1,
+    "semantic_facts_reused_for_comment_edit": 0
+  },
+  "source_revisions": {
+    "test": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "language": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "stdlib": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "vm": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "stage0_probe_sha256": "1d5fb718cc36be6acf009bb85aa6aaa8547b997046451b407616ad02f1c98d45"
+  },
+  "limitations": [
+    "Execution used the Compiler canonical VM Provider API and a bounded test file provider, not the Forge native-application provider.",
+    "The Store bundle is verifier output and is not a Forge application-execution receipt.",
+    "Language-owned verified-fact reuse remains unimplemented and was not claimed."
+  ]
+}
