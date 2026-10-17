@@ -702,22 +702,25 @@ fn application_semantic_identity(
         {
             return None;
         }
-        let module_identity = resolution.module_identity.0.clone();
-        if !resolved_identities.insert(module_identity.clone()) {
-            return None;
-        }
-        let row = json!({
-            "requested_module": resolution.requested_module,
-            "declared_module": resolution.declared_module,
-            "module_identity": module_identity,
-            "semantic_fingerprint": semantic_fingerprint,
-        });
-        if resolved_modules
-            .insert(resolution.requested_module.clone(), row)
-            .is_some()
+        let declared_identity = resolution.module_identity.0.clone();
+        let requested_identity = mncs_model::module_id(&resolution.requested_module).0;
+        if resolved_modules.contains_key(&resolution.requested_module)
+            || !resolved_identities.insert(declared_identity.clone())
         {
             return None;
         }
+        // The frontend records imports under their requested source name as
+        // well as the resolved declaration identity. Versioned modules can
+        // intentionally be exposed through an unversioned source path, so
+        // both identities must be covered by this authenticated resolution.
+        resolved_identities.insert(requested_identity);
+        let row = json!({
+            "requested_module": resolution.requested_module,
+            "declared_module": resolution.declared_module,
+            "module_identity": declared_identity,
+            "semantic_fingerprint": semantic_fingerprint,
+        });
+        resolved_modules.insert(resolution.requested_module.clone(), row);
     }
     if !program_dependencies.is_subset(&resolved_identities) {
         return None;
@@ -1686,7 +1689,7 @@ mod tests {
         "#;
         let dependency = r#"
             mncs 0.18;
-            module semantic.dep;
+            module semantic.dep.v1;
             fn value() -> (result: u64) { return 7; }
         "#;
         let resolver = ApplicationSources(BTreeMap::from([(
@@ -1704,6 +1707,16 @@ mod tests {
             frontend.diagnostics
         );
         let program = frontend.program.as_ref().expect("valid root Program");
+        let requested_identity = mncs_model::module_id("semantic.dep").0;
+        let declared_identity = mncs_model::module_id("semantic.dep.v1").0;
+        assert!(program
+            .dependencies
+            .iter()
+            .any(|identity| identity.0 == requested_identity));
+        assert!(program
+            .dependencies
+            .iter()
+            .any(|identity| identity.0 == declared_identity));
         let root_fingerprint = &frontend
             .artifact(ArtifactRepresentation::Semantic)
             .expect("canonical root semantic artifact")
@@ -2172,6 +2185,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             );
         }
     }
+    let cache_candidate_lookup_started = Instant::now();
     let mut semantic_cache_candidate: Option<(Value, String)> = None;
     if let (Some(index_path), Some(_)) = (cache_index_path.as_ref(), cache_path.as_ref()) {
         if let Some(candidate_key) = read_application_cache_index(index_path, &cache_index_key) {
@@ -2211,6 +2225,15 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             }
         }
     }
+    crate::trace_phase(
+        "application_cache_semantic_candidate_lookup",
+        cache_candidate_lookup_started,
+        json!({
+            "candidate_loaded": semantic_cache_candidate.is_some(),
+            "index_configured": cache_index_path.is_some(),
+            "cache_configured": cache_path.is_some(),
+        }),
+    );
 
     let resolver = ApplicationSources(
         modules
@@ -2328,6 +2351,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         executable_closure_identity.as_deref(),
         entry_interface.clone(),
     ) {
+        let candidate_validation_started = Instant::now();
         let selected_interfaces_match = if multiple_callables {
             cached_callable_interfaces_match(&candidate, &callable_roots, &callable_interfaces)
         } else {
@@ -2347,14 +2371,19 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         let cached_artifact_interface_identity = candidate
             .pointer("/artifact/value/source/interface_identity")
             .and_then(Value::as_str);
-        if candidate.get("status").and_then(Value::as_str) == Some("verified")
+        let candidate_verified =
+            candidate.get("status").and_then(Value::as_str) == Some("verified");
+        let selected_entry_verified =
+            interface.get("status").and_then(Value::as_str) == Some("verified");
+        let artifact_interface_match = cached_artifact_interface_identity
+            == Some(current_artifact_interface_identity.as_str());
+        let candidate_admitted = candidate_verified
             && executable_closure_match
-            && interface.get("status").and_then(Value::as_str) == Some("verified")
+            && selected_entry_verified
             && selected_interfaces_match
-            && cached_artifact_interface_identity
-                == Some(current_artifact_interface_identity.as_str())
-        {
-            if let Some(response) = rebind_cached_application_response(
+            && artifact_interface_match;
+        let rebound = if candidate_admitted {
+            rebind_cached_application_response(
                 candidate,
                 &source_identity,
                 &source_files,
@@ -2367,43 +2396,60 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 multiple_callables,
                 &callable_roots,
                 &callable_interfaces,
-            ) {
-                let publication = match cache_path.as_ref() {
-                    Some(path) => match publish_application_cache(path, &cache_key, &response) {
-                        Ok(()) => {
-                            if let Some(index_path) = cache_index_path.as_ref() {
-                                let _ = publish_application_cache_index(
-                                    index_path,
-                                    &cache_index_key,
-                                    &cache_key,
-                                );
-                            }
-                            "stored"
+            )
+        } else {
+            None
+        };
+        crate::trace_phase(
+            "application_cache_semantic_candidate_validation",
+            candidate_validation_started,
+            json!({
+                "candidate_key": candidate_key,
+                "candidate_verified": candidate_verified,
+                "executable_closure_match": executable_closure_match,
+                "selected_entry_verified": selected_entry_verified,
+                "selected_interfaces_match": selected_interfaces_match,
+                "artifact_interface_match": artifact_interface_match,
+                "candidate_admitted": candidate_admitted,
+                "response_rebound": rebound.is_some(),
+            }),
+        );
+        if let Some(response) = rebound {
+            let publication = match cache_path.as_ref() {
+                Some(path) => match publish_application_cache(path, &cache_key, &response) {
+                    Ok(()) => {
+                        if let Some(index_path) = cache_index_path.as_ref() {
+                            let _ = publish_application_cache_index(
+                                index_path,
+                                &cache_index_key,
+                                &cache_key,
+                            );
                         }
-                        Err(_) => "write_failed",
-                    },
-                    None => "not_configured",
-                };
-                let response = annotate_cache_with_basis(
-                    response,
-                    &cache_key,
-                    "hit",
-                    publication,
-                    "verified_application_executable_closure",
-                    Some(&candidate_key),
-                    &["verified_vm_artifact"],
-                    &[
-                        "source_semantic_check",
-                        "application_executable_closure_verification",
-                    ],
-                );
-                return annotate_frontend_work(
-                    response,
-                    resolved_module_count,
-                    program_function_count,
-                    "verified",
-                );
-            }
+                        "stored"
+                    }
+                    Err(_) => "write_failed",
+                },
+                None => "not_configured",
+            };
+            let response = annotate_cache_with_basis(
+                response,
+                &cache_key,
+                "hit",
+                publication,
+                "verified_application_executable_closure",
+                Some(&candidate_key),
+                &["verified_vm_artifact"],
+                &[
+                    "source_semantic_check",
+                    "application_executable_closure_verification",
+                ],
+            );
+            return annotate_frontend_work(
+                response,
+                resolved_module_count,
+                program_function_count,
+                "verified",
+            );
         }
     }
     let producer_reference = format!("stage0-probe:{probe_identity}");

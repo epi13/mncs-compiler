@@ -164,6 +164,40 @@ Forge/Environment/Store `digest_app` route. Evidence is
 `evidence/native-app-readiness-digest-multi-callable-reuse-20261016.json`,
 SHA-256 `05cd710cae196905fca285c3843ee73f67df1556697e27510e3386db56d69b37`.
 
+## Native Automation evaluation workload and alias identity fix (2026-10-17)
+
+The Compiler now includes both requested import identities and resolved
+declaration identities in its application semantic identity, each tied to the
+frontend's module-resolution row and semantic fingerprint. This covers the
+supported unversioned import to versioned declaration pattern used by
+Automation (`mncs.automation.schedule` to
+`mncs.automation.schedule.v1`). Previously, the requested identity appeared
+in `Program.dependencies` but not in the identity set, so valid applications
+received no semantic identity and their verified executable-closure candidate
+was never considered.
+
+The real Automation schedule, trigger, and evaluation modules plus Test's
+Assertions and Suite modules compiled into one application-build/5 artifact.
+Seventeen deterministic `evaluate_tick` and `evaluate_resource_headroom`
+inputs matched the independent Stage-0 oracle in one canonical VM batch. A
+fresh process reused the exact-source response without a frontend invocation.
+A comment-only Assertions edit ran a fresh full frontend check, reused the
+same artifact through `verified_application_executable_closure`, and retained
+the same artifact identity. Cold build measured 1.589 s / 1.530 CPU s / 128.1
+MiB peak RSS; exact-snapshot reuse measured 0.149 s / 0.130 CPU s / 46.0 MiB;
+the comment edit measured 0.752 s / 0.720 CPU s / 101.2 MiB. The VM batch took
+0.456 s / 0.430 CPU s and peaked at 35,952 KiB. cgroup memory counters were
+unavailable. These results are workload-specific.
+
+This is executable-artifact reuse after complete source verification; no
+Language verified facts were reused, and the changed snapshot still performed
+whole-frontend semantic checking. Forge/Environment/Store execution and
+replacement of Automation host orchestration remain unproven. The focused
+Compiler unit test uses the supported unversioned-to-`.v1` import, and the
+real workload harness is `tools/test_vm_native_automation_application.py`.
+Evidence is `evidence/native-app-readiness-automation-evaluation-executable-reuse-verified-20261017.json`
+(SHA-256 `0ea6816e3fb3af1bf80b7e634dc95e264961cbc635beaa7b38d8acd35f2fb000`).
+
 ## Evidence boundary
 
 This assessment uses the read-only `mncs-test` checkout at `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM `1c19a94732c9d24029dd00e2d5af13710f481d02`, and Compiler producer commit `24dda63ae59e0505969c490604e14348dab1f7d7`. The Stage-0 reference revision is `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, release probe SHA-256 `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`; the VM binary SHA-256 is `2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5`.
