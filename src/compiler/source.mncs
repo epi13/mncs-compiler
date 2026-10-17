@@ -250,7 +250,9 @@ fn span_valid_global(total: u64, start: u64, end: u64) -> (result: bool) {
 fn ascii_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: bool) {
     if stride == 0 || total == 0 { return true; }
     iterate p over pages carrying valid: bool = true {
-        next valid = ascii_page_step<P, N>(pages, p, valid);
+        let page_valid: bool = ascii_page_step<P, N>(pages, p, valid);
+        if !page_valid { return false; }
+        next valid = page_valid;
     }
     return valid;
 }

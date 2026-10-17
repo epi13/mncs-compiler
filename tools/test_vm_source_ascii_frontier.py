@@ -8,6 +8,7 @@ strided, malformed, and non-ASCII boundary cases.
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
@@ -29,8 +30,9 @@ STRIDE = 1024
 PAGE_BOUND = 1024
 SOURCE_BOUND = 1024
 STEP_BUDGET = 8_000_000
-EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-sixteen-byte-20261016.json"
-PREVIOUS_EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-eight-byte-20261016.json"
+EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-early-exit-20261017.json"
+PREVIOUS_SIXTEEN_BYTE_EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-sixteen-byte-20261016.json"
+PREVIOUS_EIGHT_BYTE_EVIDENCE = ROOT / "evidence" / "self-host-source-ascii-global-eight-byte-20261016.json"
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
@@ -86,6 +88,16 @@ def summarize_probe(probe: cp0001.Probe, sample: dict) -> tuple[bool, int, float
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--ephemeral-output", action="store_true",
+        help="write generated evidence under .build instead of evidence/",
+    )
+    args = parser.parse_args()
+    evidence_path = (
+        ROOT / ".build" / "source-ascii-global-early-exit-20261017.json"
+        if args.ephemeral_output else EVIDENCE
+    )
     if not test_vm_emit.PROBE.is_file():
         raise SystemExit(f"Stage-0 probe is missing: {test_vm_emit.PROBE}")
     test_vm_emit.ensure_vm()
@@ -104,6 +116,15 @@ def main() -> None:
                 "id": sample["id"], "value": value, "steps": steps,
                 "wall_seconds": round(elapsed, 6),
             })
+        first_invalid = next(
+            row for row in results["reference_interpreter"]
+            if row["id"] == "nonascii-first-256k"
+        )
+        if first_invalid["steps"] >= 1_000:
+            raise AssertionError(
+                "ascii_global did not stop at the first invalid page: "
+                f"{first_invalid['steps']} reference steps"
+            )
         emitted = reference.send({"emit_vm_artifact": {"module": MODULE}})
         artifact = emitted.get("artifact")
         if not isinstance(artifact, dict) or artifact.get("schema_version") != "mncs.vm.artifact/1":
@@ -180,7 +201,7 @@ def main() -> None:
         after_children.ru_utime - before_children.ru_utime
         + after_children.ru_stime - before_children.ru_stime
     )
-    previous_report = json.loads(PREVIOUS_EVIDENCE.read_text(encoding="utf-8"))
+    previous_report = json.loads(PREVIOUS_EIGHT_BYTE_EVIDENCE.read_text(encoding="utf-8"))
     previous_reference = {
         row["id"]: row for row in previous_report["reference_interpreter"]
     }
@@ -202,9 +223,30 @@ def main() -> None:
             "wall_change_percent": round(
                 (current["wall_seconds"] / previous["wall_seconds"] - 1) * 100, 2),
         }
+    previous_sixteen_report = json.loads(
+        PREVIOUS_SIXTEEN_BYTE_EVIDENCE.read_text(encoding="utf-8")
+    )
+    previous_sixteen_reference = {
+        row["id"]: row for row in previous_sixteen_report["reference_interpreter"]
+    }
+    sixteen_byte_comparison = {}
+    for case_id in ("ascii-64k", "ascii-256k", "nonascii-last-256k",
+                    "nonascii-first-256k"):
+        previous = previous_sixteen_reference[case_id]
+        current = current_reference[case_id]
+        sixteen_byte_comparison[case_id] = {
+            "previous_sixteen_byte_steps": previous["steps"],
+            "current_early_exit_steps": current["steps"],
+            "step_change_percent": round(
+                (current["steps"] / previous["steps"] - 1) * 100, 2),
+            "previous_sixteen_byte_wall_seconds": previous["wall_seconds"],
+            "current_early_exit_wall_seconds": current["wall_seconds"],
+            "wall_change_percent": round(
+                (current["wall_seconds"] / previous["wall_seconds"] - 1) * 100, 2),
+        }
     report = {
         "schema_version": 1,
-        "kind": "mncs.compiler.source-ascii-global-sixteen-byte-frontier",
+        "kind": "mncs.compiler.source-ascii-global-first-invalid-page-frontier",
         "compiler_revision_tested": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
@@ -215,7 +257,7 @@ def main() -> None:
         "stage0_probe_sha256": hashlib.sha256(test_vm_emit.PROBE.read_bytes()).hexdigest(),
         "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
         "vm_revision": subprocess.check_output(
-            ["git", "-C", str(test_vm_emit.VM_BIN.parents[2]), "rev-parse", "HEAD"],
+            ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"],
             text=True,
         ).strip(),
         "source_sha256": source_hash,
@@ -243,7 +285,7 @@ def main() -> None:
             "cgroup_memory": memory,
         },
         "previous_eight_byte_frontier": {
-            "evidence_artifact": str(PREVIOUS_EVIDENCE.relative_to(ROOT)),
+            "evidence_artifact": str(PREVIOUS_EIGHT_BYTE_EVIDENCE.relative_to(ROOT)),
             "source_sha256": previous_report["source_sha256"],
             "backend": "reference_interpreter",
             "observations": [previous_reference[case_id] for case_id in
@@ -255,6 +297,15 @@ def main() -> None:
             ),
         },
         "performance_comparison_vs_previous_eight_byte_frontier": performance_comparison,
+        "previous_sixteen_byte_frontier": {
+            "evidence_artifact": str(PREVIOUS_SIXTEEN_BYTE_EVIDENCE.relative_to(ROOT)),
+            "source_sha256": previous_sixteen_report["source_sha256"],
+            "backend": "reference_interpreter",
+            "observations": [previous_sixteen_reference[case_id] for case_id in
+                             ("ascii-64k", "ascii-256k",
+                              "nonascii-last-256k", "nonascii-first-256k")],
+        },
+        "performance_comparison_vs_previous_sixteen_byte_frontier": sixteen_byte_comparison,
         "language_verified_facts_reused": 0,
         "previous_four_byte_frontier": {
             "source_sha256": "28b185e4d0028dadca04535b09e567506fe71cded9fe1d79210bf332b0a3e44a",
@@ -268,7 +319,8 @@ def main() -> None:
         },
         "scope": (
             "source.ascii_global and its bounded source.ascii helper inspect sixteen bytes per MNCS "
-            "loop transition and return immediately at the first non-ASCII byte. ASCII tails "
+            "loop transition and return immediately when the first page containing a non-ASCII "
+            "byte is found. ASCII tails "
             "from zero through thirty-three bytes and every non-ASCII position in a four-page "
             "thirty-three-byte view are checked alongside 64 KiB and 256 KiB cases. The selected "
             "source callable agrees across the reference interpreter, Cranelift, and one fresh "
@@ -276,13 +328,15 @@ def main() -> None:
             "source-module verification or compiler succession."
         ),
     }
-    EVIDENCE.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps({
-        "evidence": str(EVIDENCE.relative_to(ROOT)),
+        "evidence": str(evidence_path.relative_to(ROOT)),
         "reference": results["reference_interpreter"],
         "cranelift": results["cranelift"],
         "canonical_vm": report["canonical_vm"],
         "performance_comparison_vs_previous_eight_byte_frontier": performance_comparison,
+        "performance_comparison_vs_previous_sixteen_byte_frontier": sixteen_byte_comparison,
         "resource_observation": report["resource_observation"],
     }, indent=2))
 
