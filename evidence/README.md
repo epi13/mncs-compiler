@@ -451,6 +451,21 @@ interpreter, Cranelift, and canonical VM. Language verified facts remain
 unreused, and full Source module verification and compiler succession remain
 unproven.
 
+## Source content identity frontier (2026-10-17)
+
+The [four-byte fingerprint frontier](self-host-source-fingerprint-global-four-byte-20261017.json)
+changes `source.fingerprint_global` to fold four sequential FNV-1a bytes inline
+per page-loop transition. It matches the previous fingerprint for 24 cases
+covering empty input, all short tails, page boundaries, and 64/256 KiB inputs
+across the reference interpreter, Cranelift, and a fresh canonical VM artifact.
+On 256 KiB of source, reference steps fell 33.78% and observed wall time fell
+45.86% (13.95 s to 7.55 s); the 64 KiB run fell 33.78% in steps and 50.39%
+in wall time. These are single-run measurements. The canonical VM batch took
+5.06 s at 243 MiB peak RSS. The CP-0001 Tier C source identity checks also
+passed in 96 probe requests. This optimizes source identity only: Language
+verified facts remain unreused, and it does not prove the full Source module
+or compiler succession.
+
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)
