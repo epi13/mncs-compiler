@@ -1,0 +1,96 @@
+{
+  "schema_version": "mncs.compiler.project-import-link-capacity-boundary/1",
+  "identity": "ev_compiler_project_import_link_total_boundary_4096_20261017",
+  "kind": "self-hosted-project-import-link-total-boundary",
+  "observed_at": "2026-10-17T07:57:18Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "environment_claim": {
+    "identity": "clm_b1b245991e6a7569",
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "scope": "worktree",
+    "status": "held"
+  },
+  "compiler": {
+    "project_source_commit": "8039e4423f648428d7369b1e55cfdb6561f3e9a8",
+    "project_module_sha256": "9c28456430f9a487faf36aa7a09c98768428a7cec56280f59f303a0f3669e8a8",
+    "tested_candidate_head": "7e890b779a3910fab1d0deb2c7ef13092a0f87a3",
+    "test_harness_commit": "7c14050904a1ecc613be3d57a07027460c825dda",
+    "test_harness_sha256": "9b24726251b7716062c71b4daef9e23b6872aa10d66ae8ae9c389ed7f7436d56",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree_dirty_during_test": true
+  },
+  "verification": {
+    "status": "passed",
+    "executor": "mncs-control-terminal tracked asynchronous project job",
+    "job_id": "term-a590e87868ebbd75b796780b",
+    "network": false,
+    "backend": "cranelift",
+    "returncode": 0,
+    "wall_seconds": 57.634,
+    "stage0_ready_seconds": 54.1,
+    "probe_request_count": 11,
+    "result_sha256": "c1aea1a5ddb8e60b5d07a5992c4e46311567632b61f5502485a3e7c982c59806",
+    "dense_project": {
+      "source_count": 6,
+      "expected_import_links": 15,
+      "observed_import_links": 15,
+      "all_transitive_record_schemas_verified": true,
+      "target_flow_and_ssa_valid": true,
+      "stage0_oracle_valid": true
+    },
+    "project_boundary": {
+      "source_count": 5,
+      "import_links": 4096,
+      "project_valid": true,
+      "value_ssa_valid": true,
+      "retained_import_count": 4096
+    },
+    "project_overflow": {
+      "source_count": 6,
+      "attempted_import_links": 4097,
+      "project_valid": false,
+      "value_ssa_valid": false,
+      "retained_import_count": 4096,
+      "diagnostic_count": 1,
+      "diagnostic": {
+        "source_index": 5,
+        "start": 37,
+        "end": 45,
+        "limit": 4096,
+        "source_slice": "demo.dep"
+      }
+    },
+    "per_module_boundary": {
+      "limit": 1024,
+      "accepts_1024": true,
+      "rejects_1025": true,
+      "over_limit_diagnostic_count": 1
+    },
+    "guard_predicate": {
+      "4095_reached": false,
+      "4096_reached": true
+    }
+  },
+  "resource_observations": {
+    "host_available_memory_after_bytes": 24202403840,
+    "cgroup_memory_measurement": "unavailable",
+    "rss_peak_measured": false,
+    "orphan_probe_after_completion": false
+  },
+  "scope": {
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_performed": false,
+    "whole_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "limitations": [
+    "The independent Stage-0 project oracle was run on the dense six-source fixture, not on the 4096-link boundary fixture.",
+    "The tracked job returned cleanly in 57.634 seconds; true peak RSS and cgroup memory were unavailable.",
+    "This establishes a bounded self-hosted Project target frontier, not full Project module proof, Language fact reuse, or native application execution."
+  ]
+}
