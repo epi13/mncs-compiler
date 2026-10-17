@@ -101,7 +101,9 @@ def frontend_invocations(response: dict) -> int | None:
             .get("front_end_invocations"))
 
 
-def execute_inventory_batch(artifact: dict, inventory: dict) -> tuple[dict, float, int | None]:
+def execute_inventory_batch(
+    artifact: dict, inventory: dict, step_budget: int = 100_000
+) -> tuple[dict, float, int | None]:
     tests = inventory.get("tests", [])
     inventory_module = inventory.get("module")
     if not isinstance(inventory_module, str) or not inventory_module:
@@ -119,7 +121,7 @@ def execute_inventory_batch(artifact: dict, inventory: dict) -> tuple[dict, floa
                 "target": {"module": row["module"], "function": row["name"]},
                 "arguments": [],
                 "type_arguments": [],
-                "step_budget": 100_000,
+                "step_budget": step_budget,
             },
         })
     with tempfile.TemporaryDirectory(prefix="mncs-test-inventory-batch-") as raw:
@@ -147,24 +149,61 @@ def execute_inventory_batch(artifact: dict, inventory: dict) -> tuple[dict, floa
 
 
 def run_real_mncs_test_suite() -> dict:
-    module = "tests.closure_suite"
-    root_path = app.TEST_ROOT / "tests/closure_suite.mncs"
+    module = "tests.self_suite"
+    root_path = app.TEST_ROOT / "tests/self_suite.mncs"
     module_paths = {
         "mncs.test.assertions": app.TEST_ROOT / "native/mncs/test/assertions.mncs",
         "mncs.test.suite": app.TEST_ROOT / "native/mncs/test/suite.mncs",
+        "mncs.test.generative": app.TEST_ROOT / "native/mncs/test/generative.mncs",
+        "mncs.test.snapshot": app.TEST_ROOT / "native/mncs/test/snapshot.mncs",
+        "mncs.test.runner": app.TEST_ROOT / "native/mncs/test/runner.mncs",
+    }
+    expected_names = {
+        "arithmetic",
+        "boolean",
+        "task_lifecycle",
+        "property_replay",
+        "snapshot_witness",
+        "skipped",
+        "native_runner_policy",
     }
     if not root_path.is_file() or any(not path.is_file() for path in module_paths.values()):
-        raise FileNotFoundError("the selected mncs-test source suite or its declared MNCS libraries are missing")
+        raise FileNotFoundError("the selected mncs-test self-suite or one of its MNCS libraries is missing")
     source = root_path.read_text(encoding="utf-8")
     module_sources = {
         name: path.read_text(encoding="utf-8") for name, path in module_paths.items()
     }
+    language_repo = app.WORKSPACE_ROOT / "mncs-language"
+    language_revision = json.loads((ROOT / "mncs-language.lock.json").read_text())["revision"]
+    language_head = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=language_repo, text=True
+    ).strip()
+    task_source = subprocess.check_output(
+        ["git", "show", f"{language_revision}:library/std/task.mncs"],
+        cwd=language_repo,
+        text=True,
+    )
+    module_sources["mncs.std.task.v1"] = task_source
+    module_sources = dict(sorted(module_sources.items()))
+    module_provenance = {
+        name: {
+            "repository": "mncs-test",
+            "path": str(path.relative_to(app.TEST_ROOT)),
+            "sha256": sha(module_sources[name].encode("utf-8")),
+        }
+        for name, path in module_paths.items()
+    }
+    module_provenance["mncs.std.task.v1"] = {
+        "repository": "mncs-language",
+        "revision": language_revision,
+        "path": "library/std/task.mncs",
+        "sha256": sha(task_source.encode("utf-8")),
+    }
     callable_roots = [
-        {"module": module, "function": "independent_arithmetic"},
-        {"module": module, "function": "independent_boolean"},
+        {"module": module, "function": name} for name in sorted(expected_names)
     ]
 
-    with tempfile.TemporaryDirectory(prefix="mncs-test-real-suite-") as raw:
+    with tempfile.TemporaryDirectory(prefix="mncs-test-real-self-suite-") as raw:
         directory = Path(raw)
         probe = app.Probe(
             directory / "program-cache",
@@ -176,7 +215,7 @@ def run_real_mncs_test_suite() -> dict:
                 {"compile_application": request(
                     source,
                     callable_roots,
-                    root_source_id="mncs-test/tests/closure_suite.mncs",
+                    root_source_id="mncs-test/tests/self_suite.mncs",
                     modules=module_sources,
                 )},
                 timeout=180.0,
@@ -186,22 +225,19 @@ def run_real_mncs_test_suite() -> dict:
 
         inventory = require_inventory(
             built,
-            {"independent_arithmetic", "independent_boolean"},
+            expected_names,
             expected_module=module,
         )
         artifact = built.get("artifact", {}).get("value")
         if (built.get("cache", {}).get("status") != "miss"
                 or frontend_invocations(built) != 1
                 or not isinstance(artifact, dict)):
-            raise AssertionError("real mncs-test suite did not produce one fresh verified artifact")
+            raise AssertionError("real mncs-test self-suite did not produce one fresh verified artifact")
         artifact_callables = {
             (row.get("module"), row.get("name"))
             for row in artifact.get("callables", [])
         }
-        selected = {
-            (module, "independent_arithmetic"),
-            (module, "independent_boolean"),
-        }
+        selected = {(module, name) for name in expected_names}
         if not selected <= artifact_callables:
             raise AssertionError("real Test inventory roots are absent from the verified artifact")
 
@@ -221,10 +257,13 @@ def run_real_mncs_test_suite() -> dict:
             }}, timeout=180.0)
         finally:
             oracle_probe.close()
-        if not oracle.get("valid") or len(oracle.get("executions", [])) != len(inventory["tests"]):
-            raise AssertionError("Stage-0 did not execute every real mncs-test source inventory entry")
+        if (not oracle.get("valid")
+                or len(oracle.get("executions", [])) != len(inventory["tests"])):
+            raise AssertionError("Stage-0 did not execute every real mncs-test self-suite entry")
 
-        vm, vm_wall, vm_peak_rss = execute_inventory_batch(artifact, inventory)
+        vm, vm_wall, vm_peak_rss = execute_inventory_batch(
+            artifact, inventory, step_budget=200_000
+        )
         rows = vm.get("results", [])
         if (vm.get("artifact_id") != artifact.get("artifact_id")
                 or len(rows) != len(inventory["tests"])):
@@ -247,34 +286,37 @@ def run_real_mncs_test_suite() -> dict:
             if actual != expected:
                 raise AssertionError(f"canonical VM TestResult differs from Stage-0 for {test['name']}")
             if (not isinstance(actual, dict)
-                    or not {"verdict", "verdict_code", "failure_kind", "assertions", "failures"} <= set(actual)
-                    or actual["verdict_code"] != 0
-                    or actual["failures"] != 0
-                    or actual["assertions"] != 1):
-                raise AssertionError(f"real Test case did not return one typed passing TestResult: {actual}")
+                    or not {"verdict", "verdict_code", "failure_kind", "failure_code",
+                            "assertions", "failures"} <= set(actual)):
+                raise AssertionError(f"real Test case did not return a typed TestResult: {actual}")
+            if test["name"] == "skipped":
+                if (actual["verdict_code"] != 2 or actual["failure_code"] != 1006
+                        or actual["assertions"] != 0 or actual["failures"] != 0):
+                    raise AssertionError(f"native skip result changed its typed meaning: {actual}")
+            elif (actual["verdict_code"] != 0
+                    or actual["assertions"] != 1
+                    or actual["failures"] != 0):
+                raise AssertionError(f"real Test case did not return one passing TestResult: {actual}")
             results[test["name"]] = actual
 
-        git_revision = subprocess.check_output(
+        test_revision = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
         ).strip()
         return {
-            "test_repository_revision": git_revision,
+            "test_repository_revision": test_revision,
+            "language_repository_head": language_head,
+            "language_locked_revision": language_revision,
             "root_source": {
-                "path": "tests/closure_suite.mncs",
+                "path": "tests/self_suite.mncs",
                 "sha256": sha(source.encode("utf-8")),
                 "module": module,
             },
-            "dependency_sources": {
-                name: {
-                    "path": str(path.relative_to(app.TEST_ROOT)),
-                    "sha256": sha(module_sources[name].encode("utf-8")),
-                }
-                for name, path in module_paths.items()
-            },
+            "dependency_sources": module_provenance,
             "request_schema": "mncs.compiler.application-build-request/3",
             "response_schema": built.get("schema_version"),
             "inventory_schema": inventory.get("schema_version"),
             "frontend_invocations": frontend_invocations(built),
+            "verification_work": built.get("cache", {}).get("verification_work"),
             "test_case_identities": {
                 row["name"]: row["test_case_identity"] for row in inventory["tests"]
             },
@@ -282,6 +324,12 @@ def run_real_mncs_test_suite() -> dict:
             "canonical_vm_artifact_identity": vm["artifact_id"],
             "canonical_vm_batch_count": len(rows),
             "canonical_vm_results": results,
+            "passing_test_count": sum(
+                result["verdict_code"] == 0 for result in results.values()
+            ),
+            "skipped_test_count": sum(
+                result["verdict_code"] == 2 for result in results.values()
+            ),
             "stage0_equivalent": True,
             "build_process_metrics": build_metrics,
             "stage0_oracle_metrics": oracle_metrics,
@@ -289,6 +337,7 @@ def run_real_mncs_test_suite() -> dict:
             "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
             "language_verified_facts_reused": 0,
         }
+
 
 
 def main() -> None:
@@ -574,7 +623,7 @@ def main() -> None:
                 "wall_seconds": round(provider_elapsed, 6),
                 "process_tree_metrics": provider_metrics,
             },
-            "real_mncs_test_suite_batch": real_mncs_test_suite,
+            "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
                 "inventory_test_count": len(runner_tests),
@@ -658,15 +707,16 @@ def main() -> None:
                     and inventory_vm.get("artifact_id") == runner_artifact.get("artifact_id")
                 ),
                 "selected_test_batch_matches_stage0": True,
-                "real_mncs_test_source_runs_from_compiler_inventory": (
+                "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
-                    and real_mncs_test_suite["canonical_vm_batch_count"] == 2
+                    and real_mncs_test_suite["canonical_vm_batch_count"] == 7
+                    and real_mncs_test_suite["passing_test_count"] == 6
+                    and real_mncs_test_suite["skipped_test_count"] == 1
                     and real_mncs_test_suite["stage0_equivalent"]
                 ),
-                "real_mncs_test_returns_typed_test_results": all(
-                    result.get("verdict_code") == 0
-                    and result.get("assertions") == 1
-                    and result.get("failures") == 0
+                "real_mncs_test_self_suite_returns_typed_results": all(
+                    {"verdict", "verdict_code", "failure_kind", "failure_code",
+                     "assertions", "failures"} <= set(result)
                     for result in real_mncs_test_suite["canonical_vm_results"].values()
                 ),
                 "language_verified_facts_reused": 0,
@@ -698,9 +748,11 @@ def main() -> None:
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
                 "with Stage-0 agreement. This does not implement Language verification-fact reuse "
                 "or change the production mncs-test consumer. A second workload reads the real "
-                "mncs-test closure_suite sources, emits its two compiler-inventoried TestResult "
-                "callables in one verified artifact, and runs both through one canonical VM batch "
-                "with Stage-0 agreement; production runner and Forge integration remain separate."
+                "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
+                "revision. One frontend emits all seven compiler-inventoried TestResult callables "
+                "into a verified artifact; one canonical VM batch matches Stage-0 for six passes "
+                "and the typed skip result. This does not migrate the production runner or add "
+                "Forge integration."
             ),
         }
         evidence = ROOT / "evidence/application-build-test-inventory-20261017.json"

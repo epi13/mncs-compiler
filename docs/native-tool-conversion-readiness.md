@@ -222,6 +222,20 @@ zero. This exercises the Compiler/VM contract on real Test sources; production
 runner migration, Forge integration, and generic selection remain open.
 Evidence is evidence/application-build-test-inventory-20261017.json.
 
+The actual seven-case mncs-test self-suite now runs through the same
+application-build/6 and canonical VM batch contract. It compiles
+tests/self_suite.mncs with the five Test library modules and the task module
+from the Compiler-pinned Language revision, returns all seven
+compiler-issued Test identities from one frontend invocation, then executes
+the same artifact in one VM batch. Six cases return passing typed TestResult
+values and skipped returns the expected typed skip; all seven match Stage-0.
+The build measured 0.582 s and 56.6 MiB peak RSS. The VM batch measured
+0.166 s and 26,460 KiB peak RSS. Cgroup memory was unavailable. Language
+verification facts reused: zero. The production host runner and Forge
+execution remain separate integration work. Exact Test and Language source
+identities are recorded in
+evidence/application-build-test-inventory-20261017.json.
+
 The real five-module mncs-test readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across
 five resolved modules and 24 functions; the selected executable closure,
