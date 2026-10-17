@@ -1,0 +1,145 @@
+{
+  "schema_version": "mncs.compiler.native-test-workflow-evidence/1",
+  "kind": "mncs-test-digest-multi-callable-batch-and-retained-session",
+  "observed_at": "2026-10-17T08:22:28.735789Z",
+  "status": "passed",
+  "campaign": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "checkpoint_before": "chk_d1a825c3c5d254c0"
+  },
+  "compiler": {
+    "revision": "83b43cca10aa923638ae0471b53033bd97e6afc0",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "application_source_sha256": "sha256:8a7d356f114029981fd37b20f660292eab1b9fb94c545ce74c6e2dd70f76dbff",
+    "test_harness": "tools/test_vm_native_digest_batch.py",
+    "test_harness_sha256": "sha256:02c041136a49e687f684db81e0f1f507ec8b5bb5b90da5b5a2074a565668d8b4",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "sha256:9a2eb67000d460074e2ce082d373712e336f104eae33ab635f116b1b3b5d27a8"
+  },
+  "consumers": {
+    "mncs_test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "mncs_stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "mncs_vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "mncs_vm_binary_sha256": "sha256:1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "fixture_sha256": "sha256:3ad5ba0758dfce1c7fed304bc3e91d37ff30b867ce244f144b98304ab025d694"
+  },
+  "workload": {
+    "entry": "mncs.test.digest::build_digest",
+    "callable_roots": [
+      "build_digest",
+      "request_schema",
+      "result_schema",
+      "native_suite_fixture"
+    ],
+    "harness_overlay": {
+      "function": "mncs.test.digest::native_suite_fixture",
+      "sha256": "sha256:97518998953e8a0a1c099d388efa9ba43c9a5a52bd5a7db4a04635e6699b125f"
+    },
+    "source_snapshot_identity": "sha256:19a47838def2ae6262079497400f5288a0ffe27811802218c1b385b6fdc3dba8",
+    "request_schema": "mncs.compiler.application-build-request/2",
+    "response_schema": "mncs.compiler.application-build/5",
+    "artifact_identity": "sha256:1477f29f259ffc968f51fb02e8949e1581af2417e861bba09b284286ec256442",
+    "artifact_sha256": "sha256:9223d79620926fe73d848ce184e0abaf24c3e44e3c269d832796caac9ab8a8b9",
+    "artifact_bytes": 1139440,
+    "selected_callables": [
+      "mncs.test.digest::build_digest",
+      "mncs.test.digest::native_suite_fixture",
+      "mncs.test.digest::request_schema",
+      "mncs.test.digest::result_schema",
+      "mncs.test.suite::summarize__spec_f10cf230"
+    ],
+    "selected_generic_specializations": [
+      "mncs.test.suite::summarize__spec_f10cf230"
+    ]
+  },
+  "verification": {
+    "application_build_status": "verified",
+    "cold_cache_status": "miss",
+    "cold_front_end_invocations": 1,
+    "warm_cache_status": "hit",
+    "fresh_process_warm_front_end_invocations": 0,
+    "stage0_oracle_valid": true,
+    "stage0_call_count": 6,
+    "canonical_vm_call_count": 6,
+    "canonical_vm_matches_stage0": true,
+    "retained_session_calls": 8,
+    "low_fuel_recovery": true,
+    "invalid_typed_input_rejected_without_poisoning_following_calls": true,
+    "language_verified_facts_reused": []
+  },
+  "telemetry_regression": {
+    "case": "selected callable root omitted from provided root source",
+    "status": "unsupported",
+    "artifact_present": false,
+    "front_end_invocations": 1,
+    "front_end_outcome": "verified",
+    "ssa_verification": "attempted",
+    "backend_artifact": "not_generated",
+    "unresolved_obligations": [
+      "selected application call target mncs:0.2:function:mncs.test.digest::native_suite_fixture has no verified SSA function"
+    ]
+  },
+  "measurements": {
+    "cold_build": {
+      "wall_seconds": 0.581839,
+      "cpu_seconds": 0.54,
+      "peak_rss_bytes": 67989504,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "fresh_process_warm_build": {
+      "wall_seconds": 0.124438,
+      "cpu_seconds": 0.1,
+      "peak_rss_bytes": 26451968,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 0.476081,
+      "cpu_seconds": 0.44,
+      "peak_rss_bytes": 38457344,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "canonical_vm_batch": {
+      "wall_seconds": 0.209385,
+      "user_cpu_seconds": 0.2,
+      "system_cpu_seconds": 0.0,
+      "cpu_seconds": 0.2,
+      "peak_rss_kib": 27564,
+      "calls": 6,
+      "call_ids": [
+        "digest-case-0",
+        "digest-case-1",
+        "digest-case-2",
+        "request-schema",
+        "result-schema",
+        "native-suite-mixed-verdicts"
+      ]
+    },
+    "retained_vm_session": {
+      "wall_seconds": 0.250277,
+      "cpu_seconds": 0.21,
+      "peak_rss_kib": 27240,
+      "call_count": 8
+    },
+    "cgroup_memory_measurement": "unavailable"
+  },
+  "scope": "A selected real mncs-test digest callable set and the real generic Test suite reducer specialization are compiled once into one application/5 artifact. Six batch calls match current Stage-0 oracle outputs; a retained VM process recovers after low fuel and invalid typed input. A fresh process reuses the exact artifact. Language-owned verified facts remain unused; the telemetry negative case confirms semantic frontend work is reported on an unsupported artifact-emission result.",
+  "limitations": [
+    "This verifies a bounded native Test workflow subset, not replacement of the production host-side Test orchestrator.",
+    "No effectful Forge provider execution was performed in this Compiler-only campaign scope.",
+    "Stage-1 and Stage-2 compiler succession remain unproven."
+  ]
+}
