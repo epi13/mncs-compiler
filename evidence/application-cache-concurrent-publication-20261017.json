@@ -1,0 +1,45 @@
+{
+  "schema_version": "mncs.compiler.application-cache-concurrent-publication/1",
+  "identity": "ev_compiler_application_cache_concurrent_publication_20261017",
+  "observed_at": "2026-10-17T03:45:03Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "base_head": "8c7a93a918f7df0b09121a45ba026d554944f060",
+    "source_path": "tools/stage0-probe/src/application.rs",
+    "source_sha256": "86dd63780be8e3b0d0387982f728890b5c13dd5cd10d43b2209841b68f7bc645"
+  },
+  "change": {
+    "test": "application::tests::concurrent_application_cache_publication_keeps_entries_and_index_atomic",
+    "summary": "Two concurrent writers publish application-cache entries and indexes while a reader validates each visible entry's response digest and each visible index. The test checks the final records and confirms successful publication leaves no temporary files.",
+    "writer_count": 2,
+    "writes_per_writer": 12,
+    "response_padding_bytes": 32768,
+    "publication": "existing fsync-and-atomic-rename implementation"
+  },
+  "verification": {
+    "format_command": "cargo fmt --manifest-path tools/stage0-probe/Cargo.toml --check",
+    "format_status": "passed",
+    "targeted_command": "cargo test --release --manifest-path tools/stage0-probe/Cargo.toml concurrent_application_cache_publication_keeps_entries_and_index_atomic -- --nocapture",
+    "targeted_result": "1 passed",
+    "full_command": "cargo test --release --manifest-path tools/stage0-probe/Cargo.toml",
+    "full_result": {
+      "passed": 23,
+      "failed": 0,
+      "ignored": 0,
+      "runtime_seconds": 0.11
+    },
+    "diff_check": "passed"
+  },
+  "resource_observations": {
+    "full_test_peak_rss_bytes": null,
+    "cgroup_memory_bytes": null,
+    "memory_note": "RSS and cgroup peaks were not sampled for this unit-test run."
+  },
+  "limitations": [
+    "The regression covers competing threads in one process; it is not a multi-process stress test.",
+    "It validates the Compiler's local application-cache entry and index only; it does not test canonical Store concurrency or Language fact reuse."
+  ]
+}

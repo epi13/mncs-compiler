@@ -1308,7 +1308,12 @@ mod tests {
     use serde_json::json;
     use std::collections::BTreeMap;
     use std::ffi::OsString;
+    use std::fs;
     use std::path::Path;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Barrier};
+    use std::thread;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn application_cache_can_be_isolated_from_program_cache() {
@@ -1337,6 +1342,142 @@ mod tests {
         assert_eq!(fallback, Path::new("/tmp/program-cache"));
         assert_eq!(application_cache_root_from(None, None), None);
         assert_eq!(application_cache_path_at(&root, "not-a-sha256-key"), None);
+    }
+
+    #[test]
+    fn concurrent_application_cache_publication_keeps_entries_and_index_atomic() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "mncs-application-cache-publication-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create isolated cache directory");
+        let cache_path = root.join("application.json");
+        let index_path = root.join("index.json");
+        let key = format!("sha256:{}", "a".repeat(64));
+        let source_identity = format!("sha256:{}", "b".repeat(64));
+        let probe_identity = format!("sha256:{}", "c".repeat(64));
+        let candidate_keys = [
+            format!("sha256:{}", "d".repeat(64)),
+            format!("sha256:{}", "e".repeat(64)),
+        ];
+        let start = Arc::new(Barrier::new(4));
+        let writers_done = Arc::new(AtomicBool::new(false));
+
+        let reader = {
+            let start = Arc::clone(&start);
+            let writers_done = Arc::clone(&writers_done);
+            let cache_path = cache_path.clone();
+            let index_path = index_path.clone();
+            let key = key.clone();
+            let source_identity = source_identity.clone();
+            let probe_identity = probe_identity.clone();
+            let candidate_keys = candidate_keys.clone();
+            thread::spawn(move || {
+                start.wait();
+                while !writers_done.load(Ordering::Acquire) {
+                    if cache_path.exists() {
+                        let response = super::read_application_cache(
+                            &cache_path,
+                            &key,
+                            Some(&source_identity),
+                            &probe_identity,
+                            None,
+                        )
+                        .expect("published cache entry is whole and valid");
+                        assert!(matches!(
+                            response.get("writer").and_then(serde_json::Value::as_str),
+                            Some("writer-a" | "writer-b")
+                        ));
+                        assert_eq!(
+                            response.get("padding").and_then(serde_json::Value::as_str),
+                            Some("x".repeat(32 * 1024).as_str())
+                        );
+                    }
+                    if index_path.exists() {
+                        let candidate = super::read_application_cache_index(&index_path, &key)
+                            .expect("published cache index is whole and valid");
+                        assert!(candidate_keys.contains(&candidate));
+                    }
+                    thread::yield_now();
+                }
+            })
+        };
+
+        let writers: Vec<_> = ["writer-a", "writer-b"]
+            .into_iter()
+            .enumerate()
+            .map(|(index, writer)| {
+                let start = Arc::clone(&start);
+                let cache_path = cache_path.clone();
+                let index_path = index_path.clone();
+                let key = key.clone();
+                let source_identity = source_identity.clone();
+                let probe_identity = probe_identity.clone();
+                let candidate_key = candidate_keys[index].clone();
+                thread::spawn(move || {
+                    start.wait();
+                    for _ in 0..12 {
+                        let response = json!({
+                            "source_snapshot": { "identity": source_identity },
+                            "producer": {
+                                "probe": { "probe_executable_sha256": probe_identity }
+                            },
+                            "artifact": {
+                                "schema_version": "mncs.vm.artifact/1",
+                                "identity": "sha256:artifact",
+                                "value": {
+                                    "schema_version": "mncs.vm.artifact/1",
+                                    "artifact_id": "sha256:artifact"
+                                }
+                            },
+                            "entry": { "status": "verified" },
+                            "writer": writer,
+                            "padding": "x".repeat(32 * 1024)
+                        });
+                        super::publish_application_cache(&cache_path, &key, &response)
+                            .expect("publish cache entry atomically");
+                        super::publish_application_cache_index(&index_path, &key, &candidate_key)
+                            .expect("publish cache index atomically");
+                    }
+                })
+            })
+            .collect();
+
+        start.wait();
+        for writer in writers {
+            writer.join().expect("cache writer completed");
+        }
+        writers_done.store(true, Ordering::Release);
+        reader
+            .join()
+            .expect("cache reader saw only complete publications");
+
+        let response = super::read_application_cache(
+            &cache_path,
+            &key,
+            Some(&source_identity),
+            &probe_identity,
+            None,
+        )
+        .expect("final cache entry is whole and valid");
+        assert!(matches!(
+            response.get("writer").and_then(serde_json::Value::as_str),
+            Some("writer-a" | "writer-b")
+        ));
+        assert!(candidate_keys.contains(
+            &super::read_application_cache_index(&index_path, &key)
+                .expect("final cache index is whole and valid")
+        ));
+        assert_eq!(
+            fs::read_dir(&root).expect("list cache directory").count(),
+            2,
+            "temporary publication files must not remain after successful writes"
+        );
+        fs::remove_dir_all(&root).expect("remove isolated cache directory");
     }
 
     fn interface_program() -> mncs_model::Program {

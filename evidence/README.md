@@ -560,3 +560,13 @@ canonical VM batch stayed at about 10.5 seconds and 358 MiB peak RSS, and warm
 Cranelift time stayed near 14.4 seconds. This is a small interpreter-step
 reduction with no material end-to-end speedup; full declaration-module proof,
 Language verified-fact reuse, Stage-1, and Stage-2 remain unproven.
+
+## Concurrent application-cache publication regression (2026-10-17)
+
+The [cache publication report](application-cache-concurrent-publication-20261017.json)
+adds a regression around the existing `fsync` plus atomic-rename path for
+application-cache entries and indexes. Two writers repeatedly publish the
+same key while a reader verifies every visible cache response digest and
+index. The targeted test passed, and the complete Stage-0 probe release unit
+suite passed 23/23 tests. The check covers in-process threads; it is not a
+multi-process stress run or a canonical Store concurrency test.
