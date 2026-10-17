@@ -31,6 +31,21 @@ worktree fixture also rejects an unregistered lookalike and a symlink escape.
 This validates the Environment and Control continuation path; it does not
 provision Language write scope or a Forge application-execution binding.
 
+## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
+
+The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the
+MNCS `flow.lower_unit` result directly into `lower_value_ssa` on one canonical
+VM artifact. Both the fallthrough-join case and a conditional return inside a
+counted loop match pinned Stage-0 SSA shapes. The registered Environment
+verification capability passed both calls. The loop call used 7,772,803 of
+its 8,000,000 step budget; the canonical batch took 43.89 seconds and the
+whole frontier 48.91 seconds, with 1.19 GiB child peak RSS and 604 MiB VM peak
+RSS. Cgroup memory measurements were unavailable. A more complex two-exit
+loop exhausted the same per-call step ceiling and is excluded from this
+frontier. The report records zero Language verified facts reused. This does
+not prove the complete SSA module, imported-interface lowering, compiler
+succession, or Language fact reuse.
+
 ## Native `mncs-test` core batch isolation (2026-10-17)
 
 The [batch isolation record](native-app-readiness-test-core-batch-isolation-20261017.json)

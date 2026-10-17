@@ -1234,6 +1234,113 @@
           "stage2_claimed": false,
           "evidence_scope": "This selected current-source canonical VM call starts from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. Its verified SSA function count and branch/return shape match the pinned Stage-0 oracle. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
           "next_frontier": "Carry imported nominal interfaces and generic specializations through the same current-source Flow-to-SSA canonical VM path."
+        },
+        "latest_flow_to_value_ssa_canonical_vm_frontier": {
+          "kind": "flow-to-ssa-canonical-vm-frontier",
+          "status": "passed_with_bounded_frontier",
+          "observed_at": "2026-10-17T20:34:46.085778Z",
+          "compiler_branch": "campaign/native-application-readiness-20261013",
+          "compiler_head": "1ce54286b40586bdad1a464c92748d782e3769de",
+          "tested_source_revision": "1ce54286b40586bdad1a464c92748d782e3769de",
+          "commit_containing_measured_source": "67a7384ccc6512d9bc3961e331bd8f5601e466ae",
+          "implementation_source_sha256": {
+            "flow": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+            "ssa": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545"
+          },
+          "selected_modules": [
+            "source",
+            "lexer",
+            "parser",
+            "segment",
+            "decl",
+            "flow",
+            "ssa"
+          ],
+          "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+          "test_harness_sha256": "72471a0b310b7114057ebd1a68642b33dfd1bf8484b018f5a94a585162938efa",
+          "evidence_artifact": "evidence/self-host-flow-ssa-current-20261017.json",
+          "evidence_sha256": "fa44ad0f1e72b2057eb8b7828e9aa5a5e40e759eb94e54a4dcaff5d02041d9ef",
+          "target_module": "mncs.compiler.ssa.v1",
+          "target_function": "lower_flow_unit_value_ssa<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+          "selected_cases": [
+            {
+              "name": "fallthrough_join",
+              "source_sha256": "f9dab71eb3ebb41e57622d6b6658e8d089aa78e5a3373ea7289080f06d0b33db",
+              "stage0_ssa_shape": {
+                "functions": 1,
+                "branches": 1,
+                "returns": 2
+              },
+              "expected_iterations": 0
+            },
+            {
+              "name": "conditional_return_counted_iteration",
+              "source_sha256": "61e9c91e4e651cedffc7fa4847067aba715edbfe23abdfafe6e82dd032290a28",
+              "stage0_ssa_shape": {
+                "functions": 1,
+                "branches": 2,
+                "returns": 2
+              },
+              "expected_iterations": 1
+            }
+          ],
+          "generic_specialization": [
+            1024,
+            1024
+          ],
+          "canonical_vm_case_count": 2,
+          "verified_functions": 2,
+          "stage0_shape_matches_canonical_vm": true,
+          "artifact_identity": "sha256:78243a023ad969ed3242c93fdd86473818b89ccf61892a33078ec7b324591f92",
+          "artifact_cache_key": "8902d91d7dda0ccf223071f06d8f8149bfeafacef6edf0cd0337d4ed3e7ec6e7",
+          "artifact_cache_sha256": "ff7ccd2c33230c5a22feae9d2b1f6f3e32389cf8cc6d8349338bc37a8ed3f464",
+          "artifact_cache_hit": true,
+          "canonical_vm_semantic_digest": "caea6a8bf3bdd66536abd01257004c5276b95472fd7f02e4446e46ebad533c87",
+          "canonical_vm_execution_steps": {
+            "fallthrough_join": 4253994,
+            "conditional_return_counted_iteration": 7772803
+          },
+          "canonical_vm_ssa_shapes": [
+            {
+              "name": "fallthrough_join",
+              "functions": 1,
+              "branches": 1,
+              "returns": 2
+            },
+            {
+              "name": "conditional_return_counted_iteration",
+              "functions": 1,
+              "branches": 2,
+              "returns": 2
+            }
+          ],
+          "source_to_flow_to_ssa_executed_in_one_vm_batch": true,
+          "flow_result_passed_to_value_ssa_by_mncs_source": true,
+          "language_verified_facts_reused": 0,
+          "timing_seconds": {
+            "canonical_vm_batch": 43.890511,
+            "whole_frontier": 48.905823
+          },
+          "resource_measurements": {
+            "child_cpu_seconds": 44.539849,
+            "child_peak_rss_kib": 1247536,
+            "canonical_vm_peak_rss_kib": 617644,
+            "host_memory_available_before_bytes": 24609619968,
+            "cgroup_memory_measurements_available": false
+          },
+          "verification_capability": {
+            "name": "mncs-compiler:verification-executor/mncs-compiler.flow-to-ssa-canonical-vm-frontier",
+            "binding_id": "cap_d26fa582784eee32",
+            "contract_revision": "8744798246c6649f",
+            "inventory_revision": 40,
+            "status": "ok",
+            "returncode": 0
+          },
+          "ssa_module_fully_proven": false,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "next_frontier": "Advance selected Flow-to-SSA cases across imported callable/schema interfaces; profile the multiple-exit loop before changing its VM step budget. Continue Compiler-owned native Test and effectful application work, and implement Language-owned verified-fact reuse when its authenticated writable scope is available.",
+          "evidence_scope": "This selected current-source canonical VM batch starts each case from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. It includes a conditional return inside a counted loop; both verified SSA function shapes match pinned Stage-0. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
         }
       }
     },
@@ -1327,7 +1434,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Reconcile the remaining Stage-0 diagnostic cascade for unreachable_loop_join while preserving proof-only elision and the dead-sink/no-backedge invariant; then advance selected current-source Flow results through SSA/imported interfaces. Continue Compiler-owned native application and tooling work in parallel, and implement Language-owned verified-fact reuse only with its authenticated writable scope.",
+  "next_frontier": "Advance selected Flow-to-SSA cases across imported callable/schema interfaces; profile the multiple-exit loop before changing its VM step budget. Continue Compiler-owned native Test and effectful application work, and implement Language-owned verified-fact reuse when its authenticated writable scope is available.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -7239,7 +7346,7 @@
       "delivery_status": "verified on the campaign branch; Environment checkpoint pending; merge and publish remain escalation-required"
     }
   },
-  "evidence_updated_at": "2026-10-17T20:15:53Z",
+  "evidence_updated_at": "2026-10-17T20:34:46.085778Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -7270,94 +7377,111 @@
     "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
   },
   "current_campaign_frontier_update": {
-    "kind": "flow-unreachable-loop-join-proof-elision-canonical-vm-frontier",
-    "observed_at": "2026-10-17T20:15:53Z",
-    "status": "completed_with_known_diagnostic_divergence",
+    "kind": "flow-to-ssa-canonical-vm-frontier",
+    "status": "passed_with_bounded_frontier",
+    "observed_at": "2026-10-17T20:34:46.085778Z",
     "compiler_branch": "campaign/native-application-readiness-20261013",
-    "compiler_head": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
-    "tested_source_revision": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
-    "implementation_source_sha256": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
-    "test_harness": "tools/test_vm_flow_proven_frontier.py",
-    "test_harness_sha256": "b8f0cfaf53e68ab9fae342029c1c506da057bbc12fb120fc949c157cce066e94",
-    "evidence_artifact": "evidence/self-host-flow-proven-unit-current-20261017.json",
-    "evidence_sha256": "6872c87fe55bf58e268c88fe64cec00c8b075ead1587e5d6989f99b60bff9a7e",
-    "target_module": "mncs.compiler.flow.v1",
-    "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
-    "selected_cases": [
-      "fallthrough_join",
-      "unreachable_join",
-      "bounded_iteration_counted",
-      "bounded_iteration_sequence",
-      "nested_bounded_iteration",
-      "conditional_return_counted_iteration",
-      "conditional_return_sequence_iteration",
-      "multiple_conditional_exits_counted_iteration",
-      "multiple_conditional_exits_sequence_iteration",
-      "unreachable_loop_join"
+    "compiler_head": "1ce54286b40586bdad1a464c92748d782e3769de",
+    "tested_source_revision": "1ce54286b40586bdad1a464c92748d782e3769de",
+    "commit_containing_measured_source": "67a7384ccc6512d9bc3961e331bd8f5601e466ae",
+    "implementation_source_sha256": {
+      "flow": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+      "ssa": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545"
+    },
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa"
     ],
-    "generic_specialization": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
-    "canonical_vm_case_count": 10,
-    "artifact_identity": "sha256:f063ea51236cf7d2a96b92f30e7aed05626a787b2514831fe6f9a29516e2d06d",
-    "canonical_vm_semantic_digest": "e6002b288f01a4e91834f9a7502d61f738aaf4a09aa57a657cf424e975d90b60",
-    "diagnostic_exact_match_cases": 9,
-    "diagnostic_total_cases": 10,
-    "known_diagnostic_divergences": [
+    "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+    "test_harness_sha256": "72471a0b310b7114057ebd1a68642b33dfd1bf8484b018f5a94a585162938efa",
+    "evidence_artifact": "evidence/self-host-flow-ssa-current-20261017.json",
+    "evidence_sha256": "fa44ad0f1e72b2057eb8b7828e9aa5a5e40e759eb94e54a4dcaff5d02041d9ef",
+    "target_module": "mncs.compiler.ssa.v1",
+    "target_function": "lower_flow_unit_value_ssa<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+    "selected_cases": [
       {
-        "case": "unreachable_loop_join",
-        "stage0_codes": [
-          "MNB010",
-          "MNB010",
-          "MNB017",
-          "MNB017",
-          "MNB038"
-        ],
-        "canonical_vm_codes": [
-          "MNB038"
-        ],
-        "reason": "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the next-state expression after an unreachable loop join. Native Flow keeps the already-verified expression in the function's explicit elided-expression inventory, emits no executable backedge, and reports MNB038. The diagnostic difference remains recorded and is not counted as parity."
+        "name": "fallthrough_join",
+        "source_sha256": "f9dab71eb3ebb41e57622d6b6658e8d089aa78e5a3373ea7289080f06d0b33db",
+        "stage0_ssa_shape": {
+          "functions": 1,
+          "branches": 1,
+          "returns": 2
+        },
+        "expected_iterations": 0
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "source_sha256": "61e9c91e4e651cedffc7fa4847067aba715edbfe23abdfafe6e82dd032290a28",
+        "stage0_ssa_shape": {
+          "functions": 1,
+          "branches": 2,
+          "returns": 2
+        },
+        "expected_iterations": 1
       }
     ],
-    "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": true,
-    "unreachable_loop_join_shape": {
-      "name": "unreachable_loop_join",
-      "functions": 1,
-      "blocks": 7,
-      "branches": 2,
-      "jumps": 1,
-      "returns": 3,
-      "typed_expressions": 5,
-      "typed_operations": 7,
-      "elided_typed_expressions": 1,
-      "elided_typed_operations": 3,
-      "iteration_headers": 1,
-      "iteration_backedges": 0,
-      "unreachable_sink_blocks": 1
+    "generic_specialization": [
+      1024,
+      1024
+    ],
+    "canonical_vm_case_count": 2,
+    "verified_functions": 2,
+    "stage0_shape_matches_canonical_vm": true,
+    "artifact_identity": "sha256:78243a023ad969ed3242c93fdd86473818b89ccf61892a33078ec7b324591f92",
+    "artifact_cache_key": "8902d91d7dda0ccf223071f06d8f8149bfeafacef6edf0cd0337d4ed3e7ec6e7",
+    "artifact_cache_sha256": "ff7ccd2c33230c5a22feae9d2b1f6f3e32389cf8cc6d8349338bc37a8ed3f464",
+    "artifact_cache_hit": true,
+    "canonical_vm_semantic_digest": "caea6a8bf3bdd66536abd01257004c5276b95472fd7f02e4446e46ebad533c87",
+    "canonical_vm_execution_steps": {
+      "fallthrough_join": 4253994,
+      "conditional_return_counted_iteration": 7772803
     },
-    "stage0_iteration_metadata_matches_vm": true,
+    "canonical_vm_ssa_shapes": [
+      {
+        "name": "fallthrough_join",
+        "functions": 1,
+        "branches": 1,
+        "returns": 2
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "functions": 1,
+        "branches": 2,
+        "returns": 2
+      }
+    ],
+    "source_to_flow_to_ssa_executed_in_one_vm_batch": true,
+    "flow_result_passed_to_value_ssa_by_mncs_source": true,
     "language_verified_facts_reused": 0,
     "timing_seconds": {
-      "canonical_vm_batch": 50.209392,
-      "whole_frontier": 97.144537,
-      "child_cpu": 94.576272
+      "canonical_vm_batch": 43.890511,
+      "whole_frontier": 48.905823
     },
     "resource_measurements": {
-      "child_peak_rss_kib": 2629780,
-      "canonical_vm_peak_rss_kib": 462972,
-      "host_memory_available_before_bytes": 24641941504,
+      "child_cpu_seconds": 44.539849,
+      "child_peak_rss_kib": 1247536,
+      "canonical_vm_peak_rss_kib": 617644,
+      "host_memory_available_before_bytes": 24609619968,
       "cgroup_memory_measurements_available": false
     },
     "verification_capability": {
-      "name": "mncs-compiler:verification-executor/mncs-compiler.flow-proven-unit-canonical-vm-frontier",
-      "binding_id": "cap_14e871e759f33100",
-      "timeout_seconds": 180
+      "name": "mncs-compiler:verification-executor/mncs-compiler.flow-to-ssa-canonical-vm-frontier",
+      "binding_id": "cap_d26fa582784eee32",
+      "contract_revision": "8744798246c6649f",
+      "inventory_revision": 40,
+      "status": "ok",
+      "returncode": 0
     },
-    "whole_flow_module_proven": false,
+    "ssa_module_fully_proven": false,
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Reconcile the remaining Stage-0 diagnostic cascade for unreachable_loop_join while preserving proof-only elision and the dead-sink/no-backedge invariant; then advance selected current-source Flow results through SSA/imported interfaces. Continue Compiler-owned native application and tooling work in parallel, and implement Language-owned verified-fact reuse only with its authenticated writable scope.",
-    "evidence_scope": "This selected current-source Flow frontier executes decl.prove_unit through flow.lower_proven_unit on one fresh canonical VM artifact. All typed proof operations are accounted for in executable blocks or explicit elided-expression records. For unreachable_loop_join, Flow retains the dead join sink and omits the loop backedge while preserving the verified next-state operations. Nine of ten diagnostic cases match Stage-0; one cascade difference remains open. The frontier does not establish full Flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
-    "commit_containing_measured_source": "2a5dbcd710d5b518d03563ce0166baa48a92e387",
-    "implementation_commit": "2a5dbcd710d5b518d03563ce0166baa48a92e387"
+    "next_frontier": "Advance selected Flow-to-SSA cases across imported callable/schema interfaces; profile the multiple-exit loop before changing its VM step budget. Continue Compiler-owned native Test and effectful application work, and implement Language-owned verified-fact reuse when its authenticated writable scope is available.",
+    "evidence_scope": "This selected current-source canonical VM batch starts each case from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. It includes a conditional return inside a counted loop; both verified SSA function shapes match pinned Stage-0. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
   },
   "campaign_frontier_history": [
     {
@@ -9947,6 +10071,113 @@
       "evidence_scope": "This selected current-source Flow frontier executes decl.prove_unit through flow.lower_proven_unit on one fresh canonical VM artifact. All typed proof operations are accounted for in executable blocks or explicit elided-expression records. For unreachable_loop_join, Flow retains the dead join sink and omits the loop backedge while preserving the verified next-state operations. Nine of ten diagnostic cases match Stage-0; one cascade difference remains open. The frontier does not establish full Flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
       "commit_containing_measured_source": "2a5dbcd710d5b518d03563ce0166baa48a92e387",
       "implementation_commit": "2a5dbcd710d5b518d03563ce0166baa48a92e387"
+    },
+    {
+      "kind": "flow-to-ssa-canonical-vm-frontier",
+      "status": "passed_with_bounded_frontier",
+      "observed_at": "2026-10-17T20:34:46.085778Z",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "compiler_head": "1ce54286b40586bdad1a464c92748d782e3769de",
+      "tested_source_revision": "1ce54286b40586bdad1a464c92748d782e3769de",
+      "commit_containing_measured_source": "67a7384ccc6512d9bc3961e331bd8f5601e466ae",
+      "implementation_source_sha256": {
+        "flow": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+        "ssa": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545"
+      },
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow",
+        "ssa"
+      ],
+      "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+      "test_harness_sha256": "72471a0b310b7114057ebd1a68642b33dfd1bf8484b018f5a94a585162938efa",
+      "evidence_artifact": "evidence/self-host-flow-ssa-current-20261017.json",
+      "evidence_sha256": "fa44ad0f1e72b2057eb8b7828e9aa5a5e40e759eb94e54a4dcaff5d02041d9ef",
+      "target_module": "mncs.compiler.ssa.v1",
+      "target_function": "lower_flow_unit_value_ssa<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+      "selected_cases": [
+        {
+          "name": "fallthrough_join",
+          "source_sha256": "f9dab71eb3ebb41e57622d6b6658e8d089aa78e5a3373ea7289080f06d0b33db",
+          "stage0_ssa_shape": {
+            "functions": 1,
+            "branches": 1,
+            "returns": 2
+          },
+          "expected_iterations": 0
+        },
+        {
+          "name": "conditional_return_counted_iteration",
+          "source_sha256": "61e9c91e4e651cedffc7fa4847067aba715edbfe23abdfafe6e82dd032290a28",
+          "stage0_ssa_shape": {
+            "functions": 1,
+            "branches": 2,
+            "returns": 2
+          },
+          "expected_iterations": 1
+        }
+      ],
+      "generic_specialization": [
+        1024,
+        1024
+      ],
+      "canonical_vm_case_count": 2,
+      "verified_functions": 2,
+      "stage0_shape_matches_canonical_vm": true,
+      "artifact_identity": "sha256:78243a023ad969ed3242c93fdd86473818b89ccf61892a33078ec7b324591f92",
+      "artifact_cache_key": "8902d91d7dda0ccf223071f06d8f8149bfeafacef6edf0cd0337d4ed3e7ec6e7",
+      "artifact_cache_sha256": "ff7ccd2c33230c5a22feae9d2b1f6f3e32389cf8cc6d8349338bc37a8ed3f464",
+      "artifact_cache_hit": true,
+      "canonical_vm_semantic_digest": "caea6a8bf3bdd66536abd01257004c5276b95472fd7f02e4446e46ebad533c87",
+      "canonical_vm_execution_steps": {
+        "fallthrough_join": 4253994,
+        "conditional_return_counted_iteration": 7772803
+      },
+      "canonical_vm_ssa_shapes": [
+        {
+          "name": "fallthrough_join",
+          "functions": 1,
+          "branches": 1,
+          "returns": 2
+        },
+        {
+          "name": "conditional_return_counted_iteration",
+          "functions": 1,
+          "branches": 2,
+          "returns": 2
+        }
+      ],
+      "source_to_flow_to_ssa_executed_in_one_vm_batch": true,
+      "flow_result_passed_to_value_ssa_by_mncs_source": true,
+      "language_verified_facts_reused": 0,
+      "timing_seconds": {
+        "canonical_vm_batch": 43.890511,
+        "whole_frontier": 48.905823
+      },
+      "resource_measurements": {
+        "child_cpu_seconds": 44.539849,
+        "child_peak_rss_kib": 1247536,
+        "canonical_vm_peak_rss_kib": 617644,
+        "host_memory_available_before_bytes": 24609619968,
+        "cgroup_memory_measurements_available": false
+      },
+      "verification_capability": {
+        "name": "mncs-compiler:verification-executor/mncs-compiler.flow-to-ssa-canonical-vm-frontier",
+        "binding_id": "cap_d26fa582784eee32",
+        "contract_revision": "8744798246c6649f",
+        "inventory_revision": 40,
+        "status": "ok",
+        "returncode": 0
+      },
+      "ssa_module_fully_proven": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "next_frontier": "Advance selected Flow-to-SSA cases across imported callable/schema interfaces; profile the multiple-exit loop before changing its VM step budget. Continue Compiler-owned native Test and effectful application work, and implement Language-owned verified-fact reuse when its authenticated writable scope is available.",
+      "evidence_scope": "This selected current-source canonical VM batch starts each case from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. It includes a conditional return inside a counted loop; both verified SSA function shapes match pinned Stage-0. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {
