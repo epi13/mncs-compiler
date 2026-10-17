@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import time
 
 import test_project as project
 from probe_compiler_module_frontier import _seed_target_specialization
@@ -104,7 +105,9 @@ def _connected_source_capacity_project(source_count: int = 64) -> tuple[list, di
 
 
 def run():
-    _seed_target_specialization()
+    # This suite invokes compile_project_target and a non-generic guard. Do
+    # not retain the unrelated whole-project compiler or standalone SSA JITs.
+    _seed_target_specialization(target_only=True)
     probe = project.Probe()
     try:
         execution = probe.send({"execution_status": True})
@@ -255,46 +258,126 @@ def run():
         assert interleaved_oracle.get("valid") is True, interleaved_oracle
         assert interleaved_oracle.get("program") is not None and interleaved_oracle.get("ssa") is not None, interleaved_oracle
 
-        # Longer names fall back to the uncached resolver and still link each
-        # current declaration to its target with exact source locations.
+        # Long names over the current memo bound use the uncached resolver.
+        # Put the target late in a bounded project list so repeated imports
+        # expose the fallback work while preserving exact source locations.
         long_module_name = "demo." + ("a" * 32) + "." + ("b" * 32)
         assert len(long_module_name) > 64
         long_root = "mncs 0.18; module demo.long_root;\n"
         long_root += "".join(
-            f"use {long_module_name} as l{index};\n" for index in range(3)
+            f"use {long_module_name} as l{index};\n" for index in range(4)
         )
         long_root += "fn main() -> (result: u64) { return 1; }\n"
         long_sources = [
-            ("00-long.mncs", Path("00-long.mncs"), f"mncs 0.18; module {long_module_name}; fn value() -> (result: u64) {{ return 1; }}".encode()),
-            ("zz-long-root.mncs", Path("zz-long-root.mncs"), long_root.encode()),
+            (
+                f"{index:02d}-decoy-{index:03d}.mncs",
+                Path(f"{index:02d}-decoy-{index:03d}.mncs"),
+                (
+                    f"mncs 0.18; module demo.decoy{index:03d}; "
+                    f"fn value() -> (result: u64) {{ return {index}; }}"
+                ).encode(),
+            )
+            for index in range(16)
         ]
-        long_response = probe.send(_target_request(
-            project.request_value(identities, long_sources), 1,
-        ))
+        long_sources.extend([
+            (
+                "16-long.mncs",
+                Path("16-long.mncs"),
+                f"mncs 0.18; module {long_module_name}; fn value() -> (result: u64) {{ return 1; }}".encode(),
+            ),
+            ("17-long-root.mncs", Path("17-long-root.mncs"), long_root.encode()),
+        ])
+        long_request = _target_request(
+            project.request_value(identities, long_sources), len(long_sources) - 1,
+        )
+        long_request_durations = []
+        long_response = None
+        for _ in range(5):
+            long_request_started = time.monotonic()
+            long_response = probe.send(long_request)
+            long_request_durations.append(time.monotonic() - long_request_started)
+        long_request_seconds = round(
+            sorted(long_request_durations)[len(long_request_durations) // 2], 6,
+        )
+        assert long_response is not None
         assert long_response.get("status") == "returned", long_response
         long_native = project.decode(long_response["returned"][0])
         long_imports = project.flist(long_native["imports"])
         expected_long_links = set()
         cursor = 0
-        for index in range(3):
+        for index in range(4):
             use_start = long_root.index(f"use {long_module_name} as l{index};", cursor)
             cursor = use_start + 1
             module_start = use_start + len("use ")
             module_end = module_start + len(long_module_name)
             alias_start = module_end + len(" as ")
             alias_end = alias_start + len(f"l{index}")
-            expected_long_links.add((module_start, module_end, alias_start, alias_end, 0))
+            expected_long_links.add((module_start, module_end, alias_start, alias_end, len(long_sources) - 2))
         observed_long_links = {
             (item["module_start"], item["module_end"], item["alias_start"], item["alias_end"], item["target_index"])
             for item in long_imports
         }
         assert long_native["valid"] and long_native["value_ssa_valid"], long_native
-        assert long_native["import_count"] == len(long_imports) == 3
-        assert long_native["import_module_name_comparisons"] == 3, long_native
+        assert long_native["import_count"] == len(long_imports) == 4
+        assert long_native["import_module_name_comparisons"] == 68, long_native
         assert long_native["import_resolution_cache_hits"] == 0, long_native
         assert observed_long_links == expected_long_links, {
             "observed": sorted(observed_long_links),
             "expected": sorted(expected_long_links),
+        }
+
+        # Much longer names retain the exact uncached fallback, including
+        # distinct source spans for each import.
+        oversized_module_name = "demo." + ("c" * 130)
+        assert len(oversized_module_name) > 128
+        oversized_root = "mncs 0.18; module demo.oversized_root;\n"
+        oversized_root += "".join(
+            f"use {oversized_module_name} as o{index};\n" for index in range(3)
+        )
+        oversized_root += "fn main() -> (result: u64) { return 1; }\n"
+        oversized_sources = [
+            (
+                "00-oversized.mncs",
+                Path("00-oversized.mncs"),
+                f"mncs 0.18; module {oversized_module_name}; "
+                "fn value() -> (result: u64) { return 1; }".encode(),
+            ),
+            ("01-oversized-root.mncs", Path("01-oversized-root.mncs"), oversized_root.encode()),
+        ]
+        oversized_response = probe.send(_target_request(
+            project.request_value(identities, oversized_sources), 1,
+        ))
+        assert oversized_response.get("status") == "returned", oversized_response
+        oversized_native = project.decode(oversized_response["returned"][0])
+        oversized_imports = project.flist(oversized_native["imports"])
+        expected_oversized_links = set()
+        cursor = 0
+        for index in range(3):
+            use_start = oversized_root.index(
+                f"use {oversized_module_name} as o{index};", cursor,
+            )
+            cursor = use_start + 1
+            module_start = use_start + len("use ")
+            module_end = module_start + len(oversized_module_name)
+            alias_start = module_end + len(" as ")
+            expected_oversized_links.add((
+                module_start, module_end, alias_start,
+                alias_start + len(f"o{index}"), 0,
+            ))
+        observed_oversized_links = {
+            (
+                item["module_start"], item["module_end"],
+                item["alias_start"], item["alias_end"], item["target_index"],
+            )
+            for item in oversized_imports
+        }
+        assert oversized_native["valid"] and oversized_native["value_ssa_valid"], oversized_native
+        assert oversized_native["import_count"] == len(oversized_imports) == 3
+        assert oversized_native["import_module_name_comparisons"] == 3, oversized_native
+        assert oversized_native["import_resolution_cache_hits"] == 0, oversized_native
+        assert observed_oversized_links == expected_oversized_links, {
+            "observed": sorted(observed_oversized_links),
+            "expected": sorted(expected_oversized_links),
         }
 
         missing_root = "mncs 0.18; module demo.missing_root;\n"
@@ -483,7 +566,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/5",
+            "schema_version": "mncs.compiler.project-import-link-capacity/7",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -503,9 +586,16 @@ def run():
             "interleaved_distinct_target_cache_hits": interleaved_native["import_resolution_cache_hits"],
             "interleaved_target_indices_preserved": observed_interleaved_links == expected_interleaved_links,
             "long_module_name_bytes": len(long_module_name),
+            "long_module_source_count": len(long_sources),
             "long_module_name_cache_hits": long_native["import_resolution_cache_hits"],
-            "long_module_name_fallback_header_comparisons": long_native["import_module_name_comparisons"],
+            "long_module_name_header_comparisons": long_native["import_module_name_comparisons"],
+            "long_module_name_request_seconds": long_request_seconds,
+            "long_module_name_request_samples": len(long_request_durations),
             "long_module_name_import_locations_preserved": observed_long_links == expected_long_links,
+            "oversized_module_name_bytes": len(oversized_module_name),
+            "oversized_module_name_cache_hits": oversized_native["import_resolution_cache_hits"],
+            "oversized_module_name_header_comparisons": oversized_native["import_module_name_comparisons"],
+            "oversized_module_name_import_locations_preserved": observed_oversized_links == expected_oversized_links,
             "repeated_missing_import_diagnostics_preserved": len(missing_diagnostics) == 3,
             "repeated_missing_import_cache_hits": missing_native["import_resolution_cache_hits"],
             "per_module_import_limit": 1024,
