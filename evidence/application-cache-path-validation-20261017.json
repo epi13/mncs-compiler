@@ -1,0 +1,32 @@
+{
+  "schema_version": "mncs.compiler.application-cache-path-validation/1",
+  "identity": "ev_compiler_application_cache_path_validation_20261017",
+  "observed_at": "2026-10-17T13:11:02Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "path": "tools/stage0-probe/src/application.rs",
+    "sha256": "cf2fc4ec0e0179bf6508120b2900d79f6ae974538741b4a31f49e324769fbd68",
+    "summary": "Application cache build and index paths now require a 64-character hexadecimal SHA-256 key; cache-index candidate validation uses the same parser before candidate lookup."
+  },
+  "verification": {
+    "command": "CARGO_TARGET_DIR=.bootstrap/target-verification cargo test --locked --manifest-path tools/stage0-probe/Cargo.toml --release",
+    "tests_run": 27,
+    "passed": 27,
+    "failed": 0,
+    "format_check": "cargo fmt --manifest-path tools/stage0-probe/Cargo.toml -- --check passed",
+    "diff_check": "git diff --check passed",
+    "regressions": [
+      "Valid content-addressed cache paths remain unchanged.",
+      "Short, non-hexadecimal, and traversal-like cache keys are rejected by both path helpers.",
+      "Malformed candidate keys in a cache index are rejected before they can select a cache path."
+    ]
+  },
+  "scope": "Compiler cache path integrity only. This does not implement Language-owned verified-fact reuse, change application-build contracts, or claim a performance improvement.",
+  "preserved_local_state": [
+    ".bootstrap.control-workspace-link was left untouched."
+  ]
+}

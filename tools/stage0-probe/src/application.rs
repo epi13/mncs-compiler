@@ -280,13 +280,20 @@ fn application_cache_root() -> Option<PathBuf> {
     )
 }
 
-fn application_cache_path_at(root: &Path, key: &str) -> Option<PathBuf> {
+/// Cache filenames are content identities; reject malformed hashes before
+/// joining the cache root so an invalid key cannot select an arbitrary path.
+fn sha256_cache_key_hex(key: &str) -> Option<&str> {
     let hex = key.strip_prefix("sha256:")?;
+    (hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())).then_some(hex)
+}
+
+fn application_cache_path_at(root: &Path, key: &str) -> Option<PathBuf> {
+    let hex = sha256_cache_key_hex(key)?;
     Some(root.join("application-builds").join(format!("{hex}.json")))
 }
 
 fn application_cache_index_path_at(root: &Path, key: &str) -> Option<PathBuf> {
-    let hex = key.strip_prefix("sha256:")?;
+    let hex = sha256_cache_key_hex(key)?;
     Some(
         root.join("application-build-indexes")
             .join(format!("{hex}.json")),
@@ -662,10 +669,7 @@ fn read_application_cache_index(path: &PathBuf, key: &str) -> Option<String> {
         return None;
     }
     let candidate_key = entry.get("candidate_key").and_then(Value::as_str)?;
-    let hex = candidate_key.strip_prefix("sha256:")?;
-    if hex.len() != 64 || !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return None;
-    }
+    sha256_cache_key_hex(candidate_key)?;
     Some(candidate_key.to_owned())
 }
 
@@ -1349,15 +1353,20 @@ mod tests {
         let root = application_cache_root_from(application_root, probe_root)
             .expect("explicit application cache root");
         assert_eq!(root, Path::new("/tmp/application-cache"));
+        let build_key = format!("sha256:{}", "a".repeat(64));
         assert_eq!(
-            application_cache_path_at(&root, "sha256:abc"),
-            Some(Path::new("/tmp/application-cache/application-builds/abc.json").to_path_buf())
-        );
-        assert_eq!(
-            application_cache_index_path_at(&root, "sha256:def"),
+            application_cache_path_at(&root, &build_key),
             Some(
-                Path::new("/tmp/application-cache/application-build-indexes/def.json")
-                    .to_path_buf()
+                root.join("application-builds")
+                    .join(format!("{}.json", "a".repeat(64)))
+            )
+        );
+        let index_key = format!("sha256:{}", "d".repeat(64));
+        assert_eq!(
+            application_cache_index_path_at(&root, &index_key),
+            Some(
+                root.join("application-build-indexes")
+                    .join(format!("{}.json", "d".repeat(64)))
             )
         );
 
@@ -1369,6 +1378,44 @@ mod tests {
         assert_eq!(fallback, Path::new("/tmp/program-cache"));
         assert_eq!(application_cache_root_from(None, None), None);
         assert_eq!(application_cache_path_at(&root, "not-a-sha256-key"), None);
+        for invalid_key in [
+            "sha256:abc",
+            "sha256:../application-cache",
+            "sha256:./cache",
+            "sha256:................................................................",
+        ] {
+            assert_eq!(application_cache_path_at(&root, invalid_key), None);
+            assert_eq!(application_cache_index_path_at(&root, invalid_key), None);
+        }
+    }
+
+    #[test]
+    fn application_cache_index_rejects_non_digest_candidate_paths() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "mncs-application-cache-index-key-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create isolated cache index directory");
+        let path = root.join("index.json");
+        let key = format!("sha256:{}", "a".repeat(64));
+        for candidate_key in ["sha256:../outside", "sha256:abc"] {
+            fs::write(
+                &path,
+                serde_json::to_vec(&json!({
+                    "schema_version": "mncs.compiler.application-build-cache-index/2",
+                    "key": key.as_str(),
+                    "candidate_key": candidate_key,
+                }))
+                .expect("encode malformed cache index"),
+            )
+            .expect("write malformed cache index");
+            assert_eq!(super::read_application_cache_index(&path, &key), None);
+        }
+        fs::remove_dir_all(&root).expect("remove isolated cache index directory");
     }
 
     #[test]
@@ -1896,7 +1943,9 @@ mod tests {
             let seed = HostGenericSeedRequest::from_request(
                 "semantic.generic",
                 "identity",
-                &[ExecutionTypeArgument::Type { ty: "u64".to_owned() }],
+                &[ExecutionTypeArgument::Type {
+                    ty: "u64".to_owned(),
+                }],
             );
             let seeds = [seed];
             let frontend =
