@@ -209,6 +209,8 @@ def graph_shape(flow):
     functions = flist(flow["functions"])
     assigned_ops = []
     all_blocks = []
+    elided_typed_expressions = 0
+    elided_typed_operations = 0
     for fn in functions:
         blocks = flist(fn["blocks"])
         assert fn["verified"] is True
@@ -252,8 +254,18 @@ def graph_shape(flow):
                 if block["kind"] == 3:
                     assert expressions and expressions[-1]["role"] == 3
                     assert (expressions[-1]["start"], expressions[-1]["end"]) == (block["term_start"], block["term_end"])
+        for expression in flist(fn.get("elided_expressions", [])):
+            ops = flist(expression["ops"])
+            assert expression["role"] == 6 and expression["op_count"] == len(ops) and ops, expression
+            assert expression["start"] <= expression["end"]
+            for op in ops:
+                assert expression["start"] <= op["$p"]["start"] <= op["$p"]["end"] <= expression["end"], (expression, op)
+            assigned_ops.append(expression["ops"])
+            elided_typed_expressions += 1
+            elided_typed_operations += len(ops)
     proof_ops = flist(flow["proof"]["tops"])
-    assert assigned_ops == proof_ops, (len(assigned_ops), len(proof_ops))
+    canonical_ops = lambda values: sorted(json.dumps(value, sort_keys=True) for value in values)
+    assert canonical_ops(assigned_ops) == canonical_ops(proof_ops), (len(assigned_ops), len(proof_ops))
     return {
         "functions": len(functions),
         "blocks": len(all_blocks),
@@ -262,8 +274,11 @@ def graph_shape(flow):
         "returns": sum(block["kind"] == 3 for block in all_blocks),
         "typed_expressions": sum(len(flist(block["expressions"])) for block in all_blocks),
         "typed_operations": sum(block["instructions"] for block in all_blocks),
+        "elided_typed_expressions": elided_typed_expressions,
+        "elided_typed_operations": elided_typed_operations,
         "iteration_headers": sum(block["is_iteration_header"] for block in all_blocks),
         "iteration_backedges": sum(block["is_iteration_backedge"] for block in all_blocks),
+        "unreachable_sink_blocks": sum(block["kind"] == 4 and not block["reachable"] for block in all_blocks),
     }
 
 

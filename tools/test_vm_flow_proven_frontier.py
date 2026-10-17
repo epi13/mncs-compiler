@@ -296,14 +296,24 @@ def main() -> None:
                 "stage0_diagnostics": [list(item) for item in case["expected_diagnostics"]],
                 "canonical_vm_diagnostics": [list(item) for item in native_diagnostics],
                 "reason": (
-                    "Stage-0 emits two MNB010 and two MNB017 diagnostics for the generated "
-                    "next-state block after an unreachable loop join; native Flow reports MNB038. "
-                    "This mismatch is retained as a compiler pressure, not counted as parity."
+                    "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the "
+                    "next-state expression after an unreachable loop join. Native Flow keeps the "
+                    "already-verified expression in the function's explicit elided-expression "
+                    "inventory, emits no executable backedge, and reports MNB038. The diagnostic "
+                    "difference remains recorded and is not counted as parity."
                 ),
             })
         if value["graph_ok"] is not True or value["valid"] is not (case["expected_mnb_count"] == 0):
             raise AssertionError(f"{case['name']} returned inconsistent Flow validity: {value}")
         shape = flow_test.graph_shape(value)
+        if case["name"] == "unreachable_loop_join":
+            if (shape["elided_typed_expressions"] != 1
+                    or shape["iteration_backedges"] != 0
+                    or shape["unreachable_sink_blocks"] != 1):
+                raise AssertionError(
+                    "unreachable loop must retain its dead join and next-state proof without an executable backedge: "
+                    f"{shape}"
+                )
         if case["expected_shape"] is not None and (
             shape["branches"], shape["returns"]
         ) != case["expected_shape"]:
@@ -411,7 +421,7 @@ def main() -> None:
             ],
             "proof_passed_to_lower_proven_unit_by_mncs_source": True,
             "stage0_diagnostics_match_vm_flow_diagnostics": not diagnostic_divergences,
-            "typed_proof_ops_match_lowered_expression_ops": True,
+            "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": True,
             "language_verified_facts_reused": 0,
             "stage1_claimed": False,
             "stage2_claimed": False,
@@ -432,11 +442,13 @@ def main() -> None:
         "claim_boundary": (
             "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS "
             "implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh "
-            "canonical VM graph preserves typed proof operations, matches selected Stage-0 "
+            "canonical VM graph accounts for every typed proof operation in executable blocks "
+            "or explicit elided-expression records, matches selected Stage-0 "
             "diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and "
             "preserves counted, sequence, and nested iteration headers and backedges against "
             "Stage-0 metadata, including multiple conditional exits in counted and sequence loops. "
-            "The unreachable loop-join negative case completes on the canonical VM but has one "
+            "The unreachable loop-join negative case completes on the canonical VM, retains its "
+            "verified next-state operations without adding an unreachable backedge, and has one "
             "recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. "
             "It does not establish full flow-module proof, Language-owned verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
@@ -444,7 +456,7 @@ def main() -> None:
     }
     output = ROOT / os.environ.get(
         "MNCS_FLOW_PROVEN_FRONTIER_EVIDENCE_PATH",
-        "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+        "evidence/self-host-flow-proven-unit-current-20261017.json",
     )
     report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
     output.write_text(json.dumps(report, indent=2) + "\n")

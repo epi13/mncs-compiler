@@ -1327,7 +1327,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Resolve the recorded unreachable_loop_join diagnostic divergence between Stage-0 and native Flow, then extend selected Flow coverage. Continue Compiler-owned application and tooling work in parallel; implement Language-owned verified-fact reuse when the authenticated Language worktree scope is available. This frontier does not prove the full Flow module, verified-fact reuse, or Stage-1/Stage-2 succession.",
+  "next_frontier": "Reconcile the remaining Stage-0 diagnostic cascade for unreachable_loop_join while preserving proof-only elision and the dead-sink/no-backedge invariant; then advance selected current-source Flow results through SSA/imported interfaces. Continue Compiler-owned native application and tooling work in parallel, and implement Language-owned verified-fact reuse only with its authenticated writable scope.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -7239,7 +7239,7 @@
       "delivery_status": "verified on the campaign branch; Environment checkpoint pending; merge and publish remain escalation-required"
     }
   },
-  "evidence_updated_at": "2026-10-17T19:33:37Z",
+  "evidence_updated_at": "2026-10-17T20:15:53Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -7270,81 +7270,92 @@
     "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
   },
   "current_campaign_frontier_update": {
-    "kind": "self-hosted-parser-terminal-state-early-exit-frontier",
-    "observed_at": "2026-10-17T19:33:37Z",
-    "status": "passed_selected_parser_callable_frontier",
+    "kind": "flow-unreachable-loop-join-proof-elision-canonical-vm-frontier",
+    "observed_at": "2026-10-17T20:15:53Z",
+    "status": "completed_with_known_diagnostic_divergence",
     "compiler_branch": "campaign/native-application-readiness-20261013",
-    "compiler_head": "ac23237fbaa9c67ed8e5bfffca8c3d51b11a2019",
-    "tested_source_revision": "ac23237fbaa9c67ed8e5bfffca8c3d51b11a2019",
-    "implementation_revision": "25c435e484bc73951bce669e9b1bdb01ce175089",
-    "test_harness": "tools/test_vm_parser_module_frontier.py",
-    "test_harness_sha256": "dba6030e9b6a2d0cd594f461eeff3fc69b96e43abe9e25f7a5200228cfe9f27c",
-    "evidence_artifact": "evidence/self-host-parser-terminal-early-exit-20261017.json",
-    "evidence_sha256": "f9c7abe6a410b758848474ff0c247d20b6261412f27bc9d11e49c72ed3c757ba",
-    "frontier_report_artifact": "evidence/self-host-parser-module-canonical-vm-frontier-20261017-current.json",
-    "frontier_report_sha256": "33546d9f2694ab9d021da3f7c425fa70247959bef4125007291b20fb349dd141",
-    "target_module": "mncs.compiler.parser.v1",
-    "target_function": "header<1024> and header_global<1024,1024>",
+    "compiler_head": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
+    "tested_source_revision": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
+    "implementation_source_sha256": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+    "test_harness": "tools/test_vm_flow_proven_frontier.py",
+    "test_harness_sha256": "b8f0cfaf53e68ab9fae342029c1c506da057bbc12fb120fc949c157cce066e94",
+    "evidence_artifact": "evidence/self-host-flow-proven-unit-current-20261017.json",
+    "evidence_sha256": "6872c87fe55bf58e268c88fe64cec00c8b075ead1587e5d6989f99b60bff9a7e",
+    "target_module": "mncs.compiler.flow.v1",
+    "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
     "selected_cases": [
-      "short-header-long-ascii-source",
-      "all 23 bounded cases",
-      "all 92 paged cases",
-      "five typed helper calls"
+      "fallthrough_join",
+      "unreachable_join",
+      "bounded_iteration_counted",
+      "bounded_iteration_sequence",
+      "nested_bounded_iteration",
+      "conditional_return_counted_iteration",
+      "conditional_return_sequence_iteration",
+      "multiple_conditional_exits_counted_iteration",
+      "multiple_conditional_exits_sequence_iteration",
+      "unreachable_loop_join"
     ],
-    "generic_specialization": "header<1024>; finish<1024>; step<1024>; header_global<1024,1024>; finish_global<1024,1024>; step_global<1024,1024>",
-    "canonical_vm_case_count": 120,
-    "artifact_identity": "sha256:b61c7da7efe79563cdf9e230747a655c7e2f8d0a4c74335208d68b0ca350d7dc",
-    "canonical_vm_semantic_digest": "0c1dfd8907b08f1c5414cd2ddeddce95dc97e745f7896b31fdd274abcedad6a7",
-    "semantic_digests": {
-      "bounded": {
-        "reference_interpreter": "3da93f51c256d54fc15a02d516843fab627db200dded30a9420b973cf658f577",
-        "cranelift": "3da93f51c256d54fc15a02d516843fab627db200dded30a9420b973cf658f577",
-        "canonical_vm": "3da93f51c256d54fc15a02d516843fab627db200dded30a9420b973cf658f577"
-      },
-      "global": {
-        "reference_interpreter": "c18547542daccd9f168f84f6ea151ecf9de49301fd0fe7bdb384e850810f134d",
-        "cranelift": "c18547542daccd9f168f84f6ea151ecf9de49301fd0fe7bdb384e850810f134d",
-        "canonical_vm": "c18547542daccd9f168f84f6ea151ecf9de49301fd0fe7bdb384e850810f134d"
-      },
-      "helpers": {
-        "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
-        "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
-        "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+    "generic_specialization": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+    "canonical_vm_case_count": 10,
+    "artifact_identity": "sha256:f063ea51236cf7d2a96b92f30e7aed05626a787b2514831fe6f9a29516e2d06d",
+    "canonical_vm_semantic_digest": "e6002b288f01a4e91834f9a7502d61f738aaf4a09aa57a657cf424e975d90b60",
+    "diagnostic_exact_match_cases": 9,
+    "diagnostic_total_cases": 10,
+    "known_diagnostic_divergences": [
+      {
+        "case": "unreachable_loop_join",
+        "stage0_codes": [
+          "MNB010",
+          "MNB010",
+          "MNB017",
+          "MNB017",
+          "MNB038"
+        ],
+        "canonical_vm_codes": [
+          "MNB038"
+        ],
+        "reason": "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the next-state expression after an unreachable loop join. Native Flow keeps the already-verified expression in the function's explicit elided-expression inventory, emits no executable backedge, and reports MNB038. The diagnostic difference remains recorded and is not counted as parity."
       }
-    },
-    "stage0_diagnostic_agreement": true,
-    "language_verified_facts_reused": 0,
-    "bounded_reference_interpreter_steps_before_after": [
-      29667,
-      12398
     ],
-    "bounded_reference_interpreter_steps_avoided": 17269,
+    "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": true,
+    "unreachable_loop_join_shape": {
+      "name": "unreachable_loop_join",
+      "functions": 1,
+      "blocks": 7,
+      "branches": 2,
+      "jumps": 1,
+      "returns": 3,
+      "typed_expressions": 5,
+      "typed_operations": 7,
+      "elided_typed_expressions": 1,
+      "elided_typed_operations": 3,
+      "iteration_headers": 1,
+      "iteration_backedges": 0,
+      "unreachable_sink_blocks": 1
+    },
+    "stage0_iteration_metadata_matches_vm": true,
+    "language_verified_facts_reused": 0,
     "timing_seconds": {
-      "committed_frontier_wall": 20.068892,
-      "baseline_frontier_wall": 37.849302,
-      "interpretation": "Toolchain cache state was not held constant; these whole-frontier timings do not support an end-to-end speedup claim. The deterministic execution-step reduction is the measured result."
+      "canonical_vm_batch": 50.209392,
+      "whole_frontier": 97.144537,
+      "child_cpu": 94.576272
     },
     "resource_measurements": {
-      "committed_run_child_cpu_seconds": 19.567396,
-      "committed_run_child_peak_rss_kib": 590208,
-      "committed_run_canonical_vm_peak_rss_kib": 73276,
-      "cgroup_before": {
-        "memory.current": null,
-        "memory.max": null,
-        "memory.peak": null
-      },
-      "cgroup_after": {
-        "memory.current": null,
-        "memory.max": null,
-        "memory.peak": null
-      },
-      "cgroup_measurements_are_ambient": true,
-      "host_memory_available_after_run": "approximately 23 GiB"
+      "child_peak_rss_kib": 2629780,
+      "canonical_vm_peak_rss_kib": 462972,
+      "host_memory_available_before_bytes": 24641941504,
+      "cgroup_memory_measurements_available": false
     },
-    "whole_parser_module_proven": false,
+    "verification_capability": {
+      "name": "mncs-compiler:verification-executor/mncs-compiler.flow-proven-unit-canonical-vm-frontier",
+      "binding_id": "cap_14e871e759f33100",
+      "timeout_seconds": 180
+    },
+    "whole_flow_module_proven": false,
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "evidence_scope": "This is current-source selected Parser callable evidence. All six parser callables execute at the listed specializations and selected states; full parser-module canonical VM coverage, Language verified-fact reuse, and compiler succession remain unproven."
+    "next_frontier": "Reconcile the remaining Stage-0 diagnostic cascade for unreachable_loop_join while preserving proof-only elision and the dead-sink/no-backedge invariant; then advance selected current-source Flow results through SSA/imported interfaces. Continue Compiler-owned native application and tooling work in parallel, and implement Language-owned verified-fact reuse only with its authenticated writable scope.",
+    "evidence_scope": "This selected current-source Flow frontier executes decl.prove_unit through flow.lower_proven_unit on one fresh canonical VM artifact. All typed proof operations are accounted for in executable blocks or explicit elided-expression records. For unreachable_loop_join, Flow retains the dead join sink and omits the loop backedge while preserving the verified next-state operations. Nine of ten diagnostic cases match Stage-0; one cascade difference remains open. The frontier does not establish full Flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
   },
   "campaign_frontier_history": [
     {
@@ -9844,6 +9855,94 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "evidence_scope": "This is current-source selected Parser callable evidence. All six parser callables execute at the listed specializations and selected states; full parser-module canonical VM coverage, Language verified-fact reuse, and compiler succession remain unproven."
+    },
+    {
+      "kind": "flow-unreachable-loop-join-proof-elision-canonical-vm-frontier",
+      "observed_at": "2026-10-17T20:15:53Z",
+      "status": "completed_with_known_diagnostic_divergence",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "compiler_head": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
+      "tested_source_revision": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
+      "implementation_source_sha256": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+      "test_harness": "tools/test_vm_flow_proven_frontier.py",
+      "test_harness_sha256": "b8f0cfaf53e68ab9fae342029c1c506da057bbc12fb120fc949c157cce066e94",
+      "evidence_artifact": "evidence/self-host-flow-proven-unit-current-20261017.json",
+      "evidence_sha256": "6872c87fe55bf58e268c88fe64cec00c8b075ead1587e5d6989f99b60bff9a7e",
+      "target_module": "mncs.compiler.flow.v1",
+      "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+      "selected_cases": [
+        "fallthrough_join",
+        "unreachable_join",
+        "bounded_iteration_counted",
+        "bounded_iteration_sequence",
+        "nested_bounded_iteration",
+        "conditional_return_counted_iteration",
+        "conditional_return_sequence_iteration",
+        "multiple_conditional_exits_counted_iteration",
+        "multiple_conditional_exits_sequence_iteration",
+        "unreachable_loop_join"
+      ],
+      "generic_specialization": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+      "canonical_vm_case_count": 10,
+      "artifact_identity": "sha256:f063ea51236cf7d2a96b92f30e7aed05626a787b2514831fe6f9a29516e2d06d",
+      "canonical_vm_semantic_digest": "e6002b288f01a4e91834f9a7502d61f738aaf4a09aa57a657cf424e975d90b60",
+      "diagnostic_exact_match_cases": 9,
+      "diagnostic_total_cases": 10,
+      "known_diagnostic_divergences": [
+        {
+          "case": "unreachable_loop_join",
+          "stage0_codes": [
+            "MNB010",
+            "MNB010",
+            "MNB017",
+            "MNB017",
+            "MNB038"
+          ],
+          "canonical_vm_codes": [
+            "MNB038"
+          ],
+          "reason": "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the next-state expression after an unreachable loop join. Native Flow keeps the already-verified expression in the function's explicit elided-expression inventory, emits no executable backedge, and reports MNB038. The diagnostic difference remains recorded and is not counted as parity."
+        }
+      ],
+      "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": true,
+      "unreachable_loop_join_shape": {
+        "name": "unreachable_loop_join",
+        "functions": 1,
+        "blocks": 7,
+        "branches": 2,
+        "jumps": 1,
+        "returns": 3,
+        "typed_expressions": 5,
+        "typed_operations": 7,
+        "elided_typed_expressions": 1,
+        "elided_typed_operations": 3,
+        "iteration_headers": 1,
+        "iteration_backedges": 0,
+        "unreachable_sink_blocks": 1
+      },
+      "stage0_iteration_metadata_matches_vm": true,
+      "language_verified_facts_reused": 0,
+      "timing_seconds": {
+        "canonical_vm_batch": 50.209392,
+        "whole_frontier": 97.144537,
+        "child_cpu": 94.576272
+      },
+      "resource_measurements": {
+        "child_peak_rss_kib": 2629780,
+        "canonical_vm_peak_rss_kib": 462972,
+        "host_memory_available_before_bytes": 24641941504,
+        "cgroup_memory_measurements_available": false
+      },
+      "verification_capability": {
+        "name": "mncs-compiler:verification-executor/mncs-compiler.flow-proven-unit-canonical-vm-frontier",
+        "binding_id": "cap_14e871e759f33100",
+        "timeout_seconds": 180
+      },
+      "whole_flow_module_proven": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "next_frontier": "Reconcile the remaining Stage-0 diagnostic cascade for unreachable_loop_join while preserving proof-only elision and the dead-sink/no-backedge invariant; then advance selected current-source Flow results through SSA/imported interfaces. Continue Compiler-owned native application and tooling work in parallel, and implement Language-owned verified-fact reuse only with its authenticated writable scope.",
+      "evidence_scope": "This selected current-source Flow frontier executes decl.prove_unit through flow.lower_proven_unit on one fresh canonical VM artifact. All typed proof operations are accounted for in executable blocks or explicit elided-expression records. For unreachable_loop_join, Flow retains the dead join sink and omits the loop backedge while preserving the verified next-state operations. Nine of ten diagnostic cases match Stage-0; one cascade difference remains open. The frontier does not establish full Flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {

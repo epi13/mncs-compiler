@@ -67,6 +67,7 @@ record DiagRev { rest: DiagnosticList, acc: DiagnosticList }
 record Build {
     rest: decl.StmtList,
     typed_rest: decl.TopsList,
+    elided_expressions: TypedExprList,
     frames: FlowFrames,
     current: Block,
     blocks: BlockList,
@@ -91,6 +92,7 @@ record FunctionFlow {
     fn_end: u64,
     entry: u64,
     blocks: BlockList,
+    elided_expressions: TypedExprList,
     block_count: u64,
     unreachable_joins: u64,
     verified: bool
@@ -127,7 +129,7 @@ fn ssa_function_count_step(st: SsaFunctionCount) -> (result: SsaFunctionCount) {
 }
 record SsaFunctionLookup { rest: FunctionList, index: u64, wanted: u64, found: bool, function: FunctionFlow }
 fn ssa_function_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit, wanted: u64) -> (result: FunctionFlow) {
-    let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, block_count: 0, unreachable_joins: 0, verified: false };
+    let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, elided_expressions: TypedExprList.ENil, block_count: 0, unreachable_joins: 0, verified: false };
     iterate i up_to 1024 carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } { next st = ssa_function_lookup_step(st); }
     return st.function;
 }
@@ -205,7 +207,8 @@ fn lower_fn_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
 }
 fn lower_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FnWalk, h: decl.FnDecl, t: decl.FnList) -> (result: FnWalk) {
     let initial: Build = Build {
-        rest: h.body.body, typed_rest: st.typed_rest, frames: FlowFrames.FNil,
+        rest: h.body.body, typed_rest: st.typed_rest,
+        elided_expressions: TypedExprList.ENil, frames: FlowFrames.FNil,
         current: empty_block(0, true, false), blocks: BlockList.BNil,
         diagnostics: DiagnosticList.DNil, next_id: 1, done: false, ok: h.ok,
         fn_start: h.fn_start, fn_end: h.fn_end,
@@ -221,7 +224,9 @@ fn lower_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
     let joins: u64 = diagnostic_count<P, N>(pages, stride, total, finished.diagnostics);
     let flow: FunctionFlow = FunctionFlow {
         fn_start: h.fn_start, fn_end: h.fn_end, entry: 0,
-        blocks: blocks, block_count: n, unreachable_joins: joins,
+        blocks: blocks,
+        elided_expressions: reverse_typed_expressions<P, N>(pages, stride, total, finished.elided_expressions),
+        block_count: n, unreachable_joins: joins,
         verified: verified
     };
     return FnWalk {
@@ -348,10 +353,45 @@ fn unwind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total:
     return unwind_else<P, N>(pages, stride, total, st, f, tail);
 }
 fn unwind_iterate<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
-    if st.current.kind != 0 { return finish_iterate(st, f, tail); }
+    if st.current.kind != 0 || !(st.current.reachable) {
+        let elided: Build = elide_iterate_next<P, N>(pages, stride, total, st, f);
+        let sink: Build = close_unreachable_loop_join(elided);
+        return finish_iterate(sink, f, tail);
+    }
     let with_next: Build = attach_expression_at<P, N>(pages, stride, total, st, f.iteration_next_start, f.iteration_next_end, 6, f.iteration_state_start, f.iteration_state_end);
     let backedge: Build = close_to_loop_backedge<P, N>(pages, stride, total, with_next, f.else_id, f.iteration_start, f.iteration_end, LoopMeta { ..f.iteration, role: 4 });
     return finish_iterate(backedge, f, tail);
+}
+// The declaration verifier has already checked the loop's next-state value.
+// When every body path terminates, that expression has no executable CFG
+// location. Retain its exact proof operations as an explicitly elided fact so
+// the proof inventory remains complete without inventing an unreachable edge.
+fn elide_iterate_next<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame) -> (result: Build) {
+    return match st.typed_rest {
+        decl.TopsList.TLNil => Build { ..st, done: true, ok: false },
+        decl.TopsList.TLCons { head: ops, tail: rest } => record_elided_iterate_next<P, N>(pages, stride, total, st, f, ops, rest)
+    };
+}
+fn record_elided_iterate_next<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Build, f: FlowFrame, ops: decl.TOpList, rest: decl.TopsList) -> (result: Build) {
+    let n: u64 = decl.count_tops<P, N>(pages, stride, total, ops);
+    if n == 0 { return Build { ..st, done: true, ok: false }; }
+    let typed: TypedExpr = TypedExpr {
+        role: 6, start: f.iteration_next_start, end: f.iteration_next_end,
+        binding_start: f.iteration_state_start, binding_end: f.iteration_state_end,
+        ops: ops, op_count: n
+    };
+    return Build {
+        ..st, typed_rest: rest,
+        elided_expressions: TypedExprList.ECons { head: typed, tail: st.elided_expressions }
+    };
+}
+fn close_unreachable_loop_join(st: Build) -> (result: Build) {
+    if st.current.kind != 0 { return st; }
+    if st.current.reachable { return Build { ..st, done: true, ok: false }; }
+    // Preserve the join's allocated block identity as a dead CFG sink. No
+    // executable next-state edge is added to this unreachable block.
+    let block: Block = Block { ..st.current, kind: 4, term_start: 0, term_end: 0 };
+    return Build { ..st, current: block, blocks: BlockList.BCons { head: block, tail: st.blocks } };
 }
 fn finish_iterate(st: Build, f: FlowFrame, tail: FlowFrames) -> (result: Build) {
     return Build { ..st, rest: f.next, frames: tail, current: Block { ..empty_block(f.join_id, f.parent_live, true), iteration: LoopMeta { ..f.iteration, role: 5 } }, done: false };
