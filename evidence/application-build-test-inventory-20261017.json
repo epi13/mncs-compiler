@@ -1,34 +1,123 @@
 {
   "schema_version": 1,
   "kind": "mncs.compiler.application-build-source-test-inventory-proof",
-  "observed_at": "2026-10-17T18:52:31.091935+00:00",
+  "observed_at": "2026-10-17T19:07:37.501063+00:00",
   "compiler": {
-    "revision": "47ea25dcca7444d3677ce3ea970d75da75d145a7",
+    "revision": "a5177559a7ca3b9985a0d594e9e6595d6c7d46b1",
     "branch": "campaign/native-application-readiness-20261013",
-    "probe_sha256": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343",
+    "probe_sha256": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8",
     "probe_build": {
       "built_from_selected_checkout": true,
       "target_directory": ".build/native-app-readiness/stage0-target",
-      "binary_sha256": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "binary_sha256": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     },
-    "harness_sha256": "sha256:1fc3c5df16beafff088c7466edd5c0ac6b4af0d5f449cd234e6f04b63cd2b7bc",
+    "harness_sha256": "sha256:5eb9e48aaf25a29ab365748031ddc0ccad9bc1f927728576b95886949369ed5a",
     "language_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
   },
   "provider_adapter": {
     "response_schema": "mncs.compiler.application-build/6",
     "source_test_count": 2,
-    "wall_seconds": 0.16869,
+    "wall_seconds": 0.169723,
     "process_tree_metrics": {
-      "wall_seconds": 0.16869,
-      "cpu_seconds": 0.1,
-      "peak_rss_bytes": 28200960,
+      "wall_seconds": 0.169723,
+      "cpu_seconds": 0.12,
+      "peak_rss_bytes": 31965184,
       "peak_cgroup_memory_bytes": null,
-      "peak_open_file_descriptors": 9,
+      "peak_open_file_descriptors": 10,
       "peak_threads": 2,
-      "peak_child_processes": 1,
-      "peak_process_count": 2,
+      "peak_child_processes": 2,
+      "peak_process_count": 3,
       "method": "sampled /proc process tree; 10 ms interval; cgroup peak unavailable"
     }
+  },
+  "real_mncs_test_suite_batch": {
+    "test_repository_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "root_source": {
+      "path": "tests/closure_suite.mncs",
+      "sha256": "sha256:1c6e7a7da70920c7dbc52ebc413f50d1f30ddc4fadc8a259bcd71ed7ddaaac52",
+      "module": "tests.closure_suite"
+    },
+    "dependency_sources": {
+      "mncs.test.assertions": {
+        "path": "native/mncs/test/assertions.mncs",
+        "sha256": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b"
+      },
+      "mncs.test.suite": {
+        "path": "native/mncs/test/suite.mncs",
+        "sha256": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+      }
+    },
+    "request_schema": "mncs.compiler.application-build-request/3",
+    "response_schema": "mncs.compiler.application-build/6",
+    "inventory_schema": "mncs.test-inventory/1",
+    "frontend_invocations": 1,
+    "test_case_identities": {
+      "independent_arithmetic": "mncs:0.2:test-case:tests.closure_suite::independent_arithmetic::f6b97985600350f4dc9234701e912705ffb5d4a50bd60e8abfb2163be88cd84b",
+      "independent_boolean": "mncs:0.2:test-case:tests.closure_suite::independent_boolean::4687b1baf988c8859ae852920e949e051ab8d2595c3f513b74557540edea560d"
+    },
+    "selected_artifact_identity": "sha256:725721d61a83aca30e03811167b96c36ec3469c82575bec443f96b1686b77624",
+    "canonical_vm_artifact_identity": "sha256:725721d61a83aca30e03811167b96c36ec3469c82575bec443f96b1686b77624",
+    "canonical_vm_batch_count": 2,
+    "canonical_vm_results": {
+      "independent_arithmetic": {
+        "actual": 7,
+        "assertion_code": 2001,
+        "assertions": 1,
+        "expected": 7,
+        "failure_code": 0,
+        "failure_kind": {
+          "$v": 0,
+          "$p": {}
+        },
+        "failures": 0,
+        "verdict": {
+          "$v": 0,
+          "$p": {}
+        },
+        "verdict_code": 0
+      },
+      "independent_boolean": {
+        "actual": 0,
+        "assertion_code": 2002,
+        "assertions": 1,
+        "expected": 0,
+        "failure_code": 0,
+        "failure_kind": {
+          "$v": 0,
+          "$p": {}
+        },
+        "failures": 0,
+        "verdict": {
+          "$v": 0,
+          "$p": {}
+        },
+        "verdict_code": 0
+      }
+    },
+    "stage0_equivalent": true,
+    "build_process_metrics": {
+      "wall_seconds": 0.405668,
+      "cpu_seconds": 0.36,
+      "peak_rss_bytes": 31031296,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle_metrics": {
+      "wall_seconds": 0.221344,
+      "cpu_seconds": 0.18,
+      "peak_rss_bytes": 25341952,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "canonical_vm_batch_wall_seconds": 0.09347,
+    "canonical_vm_batch_peak_rss_kib": 24004,
+    "language_verified_facts_reused": 0
   },
   "inventory_selected_batch": {
     "build_frontend_invocations": 1,
@@ -37,8 +126,8 @@
       "first_case": "mncs:0.2:test-case:tests.native_inventory_build::first_case::3a1e72528c666d3eacac0fb2367e16bc09c9554b5f4ff6acf2af59a6ce2a83ca",
       "second_case": "mncs:0.2:test-case:tests.native_inventory_build::second_case::665749f556fc9209b971311e2ce2a5b1e1302252f4bba8d3a847c584b2efdbc8"
     },
-    "verified_artifact_identity": "sha256:5ebca5affe2da931afc0271aa0000a73ec1205e20d096c973b6dab9ae1956b62",
-    "canonical_vm_artifact_identity": "sha256:5ebca5affe2da931afc0271aa0000a73ec1205e20d096c973b6dab9ae1956b62",
+    "verified_artifact_identity": "sha256:57b20bf0a4ffc3ed641601d6435e5aa49d5507ad53ee3c07a8bd8fae55084b85",
+    "canonical_vm_artifact_identity": "sha256:57b20bf0a4ffc3ed641601d6435e5aa49d5507ad53ee3c07a8bd8fae55084b85",
     "canonical_vm_batch_count": 2,
     "canonical_vm_results": {
       "first_case": 1,
@@ -46,9 +135,9 @@
     },
     "stage0_equivalent": true,
     "build_process_metrics": {
-      "wall_seconds": 0.113933,
+      "wall_seconds": 0.114343,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 6615040,
+      "peak_rss_bytes": 6475776,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -56,17 +145,17 @@
       "request_sequence": 1
     },
     "stage0_oracle_metrics": {
-      "wall_seconds": 0.014311,
+      "wall_seconds": 0.014404,
       "cpu_seconds": 0.0,
-      "peak_rss_bytes": 2158592,
+      "peak_rss_bytes": 1785856,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 3,
       "peak_threads": 1,
       "peak_child_processes": 0,
       "request_sequence": 1
     },
-    "canonical_vm_batch_wall_seconds": 0.005926,
-    "canonical_vm_batch_peak_rss_kib": 20292
+    "canonical_vm_batch_wall_seconds": 0.005984,
+    "canonical_vm_batch_peak_rss_kib": 20364
   },
   "contract": {
     "request_schema": "mncs.compiler.application-build-request/3",
@@ -80,7 +169,7 @@
       "first_case": "mncs:0.2:test-case:tests.native_inventory_build::first_case::3a1e72528c666d3eacac0fb2367e16bc09c9554b5f4ff6acf2af59a6ce2a83ca",
       "second_case": "mncs:0.2:test-case:tests.native_inventory_build::second_case::665749f556fc9209b971311e2ce2a5b1e1302252f4bba8d3a847c584b2efdbc8"
     },
-    "selected_artifact_identity": "sha256:0c7fc9b4382a430ad0be0d3da65a81f80aba1159fe99be17db767fb5cd151798"
+    "selected_artifact_identity": "sha256:c220edd05182ca15b494dd901c9ebe211fed64236bc13c524e94594a4171541e"
   },
   "checks": {
     "one_frontend_supplies_build_and_inventory": true,
@@ -89,8 +178,8 @@
     "unselected_test_body_changes_only_its_case_identity": true,
     "unselected_test_edit_preserves_executable_closure": true,
     "unselected_root_test_edit_artifact_identity": {
-      "before": "sha256:0c7fc9b4382a430ad0be0d3da65a81f80aba1159fe99be17db767fb5cd151798",
-      "after": "sha256:0c7fc9b4382a430ad0be0d3da65a81f80aba1159fe99be17db767fb5cd151798",
+      "before": "sha256:c220edd05182ca15b494dd901c9ebe211fed64236bc13c524e94594a4171541e",
+      "after": "sha256:c220edd05182ca15b494dd901c9ebe211fed64236bc13c524e94594a4171541e",
       "reused": true,
       "reuse_basis": "verified_application_executable_closure",
       "ssa_verification": "reused_verified_vm_artifact",
@@ -104,13 +193,15 @@
     "one_build_emits_artifact_inventory_and_selected_test_callables": true,
     "inventory_ids_drive_one_batch_on_same_artifact": true,
     "selected_test_batch_matches_stage0": true,
+    "real_mncs_test_source_runs_from_compiler_inventory": true,
+    "real_mncs_test_returns_typed_test_results": true,
     "language_verified_facts_reused": 0
   },
   "measurements": {
     "cold_build": {
-      "wall_seconds": 0.115446,
+      "wall_seconds": 0.11723,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 6463488,
+      "peak_rss_bytes": 6451200,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -118,9 +209,9 @@
       "request_sequence": 1
     },
     "fresh_process_exact_hit": {
-      "wall_seconds": 0.103725,
+      "wall_seconds": 0.104164,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 6610944,
+      "peak_rss_bytes": 6713344,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -128,9 +219,9 @@
       "request_sequence": 1
     },
     "comment_edit": {
-      "wall_seconds": 0.112247,
+      "wall_seconds": 0.114066,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 6672384,
+      "peak_rss_bytes": 6533120,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -138,9 +229,9 @@
       "request_sequence": 1
     },
     "unselected_test_body_edit": {
-      "wall_seconds": 0.107604,
+      "wall_seconds": 0.109838,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 7081984,
+      "peak_rss_bytes": 6479872,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -148,9 +239,9 @@
       "request_sequence": 1
     },
     "invalid_source": {
-      "wall_seconds": 0.000791,
+      "wall_seconds": 0.000802,
       "cpu_seconds": 0.0,
-      "peak_rss_bytes": 12361728,
+      "peak_rss_bytes": 12226560,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 3,
       "peak_threads": 1,
@@ -158,9 +249,9 @@
       "request_sequence": 2
     },
     "valid_source_without_tests": {
-      "wall_seconds": 0.009495,
+      "wall_seconds": 0.006877,
       "cpu_seconds": 0.0,
-      "peak_rss_bytes": 12361728,
+      "peak_rss_bytes": 12230656,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 3,
       "peak_threads": 1,
@@ -185,7 +276,7 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "recomputed",
-      "verification_engine_identity": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "verification_engine_identity": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     },
     "fresh_process_exact_hit": {
       "artifact_decision_reason": "verified_cached_application_artifact",
@@ -203,7 +294,7 @@
       "signature_verification": "not_run",
       "source_parsing": "not_run",
       "ssa_verification": "not_run",
-      "verification_engine_identity": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "verification_engine_identity": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     },
     "comment_edit": {
       "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
@@ -221,7 +312,7 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "reused_verified_vm_artifact",
-      "verification_engine_identity": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "verification_engine_identity": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     },
     "unselected_test_body_edit": {
       "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
@@ -239,7 +330,7 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "reused_verified_vm_artifact",
-      "verification_engine_identity": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "verification_engine_identity": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     },
     "invalid_source": {
       "artifact_decision_reason": "frontend_or_artifact_emission_did_not_produce_an_artifact",
@@ -257,7 +348,7 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "not_run",
-      "verification_engine_identity": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "verification_engine_identity": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     },
     "valid_source_without_tests": {
       "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
@@ -275,8 +366,8 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "recomputed",
-      "verification_engine_identity": "sha256:37b77356bc9ab3ff9f2bafbc9807c68de15e57005a35fc4883d4cb8590a64343"
+      "verification_engine_identity": "sha256:531307ec696e566b5cc3766dfccc8b9a87c982d393965d375b0e266bd11fb5e8"
     }
   },
-  "scope": "The Compiler returns the Language-owned source_module test inventory from the same frontend result used to verify callable roots and emit application-build/6. A fresh process can locate a prior artifact candidate across root snapshots; changed source still runs the full frontend before executable-closure reuse. Exact fresh-process reuse preserves the inventory; edits refresh source spans or the affected test identity, and invalid input publishes neither inventory nor artifact. A selected zero-argument source Test subset can now be emitted with the production entry, selected from the returned inventory, and executed in one canonical VM batch with Stage-0 agreement. This does not implement Language verification-fact reuse or change the production mncs-test consumer."
+  "scope": "The Compiler returns the Language-owned source_module test inventory from the same frontend result used to verify callable roots and emit application-build/6. A fresh process can locate a prior artifact candidate across root snapshots; changed source still runs the full frontend before executable-closure reuse. Exact fresh-process reuse preserves the inventory; edits refresh source spans or the affected test identity, and invalid input publishes neither inventory nor artifact. A selected zero-argument source Test subset can now be emitted with the production entry, selected from the returned inventory, and executed in one canonical VM batch with Stage-0 agreement. This does not implement Language verification-fact reuse or change the production mncs-test consumer. A second workload reads the real mncs-test closure_suite sources, emits its two compiler-inventoried TestResult callables in one verified artifact, and runs both through one canonical VM batch with Stage-0 agreement; production runner and Forge integration remain separate."
 }
