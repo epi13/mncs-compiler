@@ -14,7 +14,9 @@ fn header<N: Nat>(text: [byte; up_to N]) -> (result: Header) {
     let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     if source.ascii<N>(text) {
         iterate i over text carrying st: Header = seed {
-            next st = step<N>(text, st);
+            let advanced: Header = step<N>(text, st);
+            if advanced.code != 0 || advanced.state == 8 { return advanced; }
+            next st = advanced;
         }
         return finish<N>(text, st);
     }
@@ -61,7 +63,9 @@ fn header_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
     let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     if source.ascii_global<P, N>(pages, stride, total) {
         iterate i up_to 64 carrying st: Header = seed {
-            next st = step_global<P, N>(pages, stride, total, st);
+            let advanced: Header = step_global<P, N>(pages, stride, total, st);
+            if advanced.code != 0 || advanced.state == 8 { return advanced; }
+            next st = advanced;
         }
         return finish_global<P, N>(pages, stride, total, st);
     }

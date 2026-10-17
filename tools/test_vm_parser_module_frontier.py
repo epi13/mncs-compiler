@@ -196,6 +196,15 @@ def main() -> None:
         raise SystemExit(f"canonical VM binary is missing: {test_vm_emit.VM_BIN}")
 
     inputs = prior.source_cases()
+    short_header = b"mncs 0.18; module x;"
+    inputs.append({
+        "id": "short-header-long-ascii-source",
+        "raw": short_header + b" " * (BOUND - len(short_header)),
+        "expected_code": 0,
+        "version_span": None,
+        "module_span": None,
+        "stage0_check": True,
+    })
     global_cases = [
         {
             "id": f"{item['id']}@stride-{stride}",
@@ -232,6 +241,11 @@ def main() -> None:
             # for evidence while checking the direct parser entrypoint.
             direct_result = reference.send(request_bounded(raw))
             direct_value, direct_steps = prior.decode_result(direct_result, item["id"])
+            if (item["id"] == "short-header-long-ascii-source"
+                    and direct_steps >= 20_000):
+                raise AssertionError(
+                    "bounded header parsing kept stepping through the source after its header"
+                )
             bounded_reference[item["id"]] = direct_value
             if item["expected_code"] != 9:
                 if direct_value["code"] != item["expected_code"]:
