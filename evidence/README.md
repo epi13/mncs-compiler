@@ -614,3 +614,18 @@ passed. The current runs returned zero facts, so Gate B remains partial. The
 effectful digest verifier's refreshed report and both VM chunks were returned
 by authenticated Environment `artifact_read`; this remains verifier output,
 not a Forge execution receipt.
+
+## Native Test provider folding in a selected-callable VM batch (2026-10-17)
+
+The [provider fold report](native-test-provider-fold-batch-20261017.json)
+compiles the production `mncs.test.provider::fold_selected` implementation
+with its Test assertions/protocol and standard sequence/application imports.
+Four selected roots exercise mixed returned, unsupported, budget-exhausted,
+invalid-request, and assertion-failure cases. Their typed results match the
+Stage-0 oracle in one canonical VM batch. A fresh process reuses the exact
+artifact with zero frontend invocations. The cold build took 1.08 seconds,
+the exact hit 0.14 seconds, and the VM batch 0.34 seconds at 32 MiB peak RSS.
+This remains workload-specific evidence; Language verified-fact reuse is
+still zero, and the report does not execute `provider_batch_app`, admit
+`provider_digest`, invoke Forge, publish Store evidence, or establish full
+provider/CLI conversion.
