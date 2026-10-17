@@ -909,7 +909,7 @@
           "status": "passed_selected_callable_frontier",
           "target_module": "mncs.compiler.flow.v1",
           "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
-          "tested_source_revision": "aeba7240f903e191bd1e5d819fc95fd911141154",
+          "tested_source_revision": "b0de1a15eb371a96a78e1ed215729c5fa1aa4154",
           "selected_modules": [
             "source",
             "lexer",
@@ -928,11 +928,11 @@
           },
           "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
           "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
-          "cases": 6,
-          "valid_cases": 5,
+          "cases": 7,
+          "valid_cases": 6,
           "diagnostic_cases": 1,
-          "canonical_vm_cases": 6,
-          "bounded_iteration_cases": 4,
+          "canonical_vm_cases": 7,
+          "bounded_iteration_cases": 5,
           "stage0_iteration_metadata_matches_vm": true,
           "stage0_ssa_shapes": [
             {
@@ -959,40 +959,47 @@
               "name": "conditional_return_counted_iteration",
               "branches": 2,
               "returns": 2
+            },
+            {
+              "name": "conditional_return_sequence_iteration",
+              "branches": 2,
+              "returns": 2
             }
           ],
           "proof_passed_to_lower_proven_unit_by_mncs_source": true,
           "stage0_diagnostics_match_vm_flow_diagnostics": true,
           "typed_proof_ops_match_lowered_expression_ops": true,
-          "semantic_digest_sha256": "fa0c210b9ad4b1515c75d327de6eb6dd3b907b1e9c171259bc611f3b68882f5a",
+          "semantic_digest_sha256": "15429e6bcc0e96a44805e3a55af7c3116ff1fcb62cfbff76f519cc9cfc604dcf",
           "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
-          "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-20261017.json",
-          "evidence_sha256": "a4bcce892e2719d20eb684c59dac6d71d38ef5495ed1917065aaa9d28bc1bd18",
+          "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-sequence-loop-stage0-shape-canonical-vm-20261017.json",
+          "evidence_sha256": "0c19b4d3e7c3fc84cc9ee23c4c8492a944efb591ce7af43f5adaa25bd8a9172c",
           "selected_cases": [
             "fallthrough_join",
             "unreachable_join",
             "bounded_iteration_counted",
             "bounded_iteration_sequence",
             "nested_bounded_iteration",
-            "conditional_return_counted_iteration"
+            "conditional_return_counted_iteration",
+            "conditional_return_sequence_iteration"
           ],
           "canonical_vm_execution_steps": [
-            1765844,
-            1738482,
-            1730457,
-            2690784,
-            2224183,
-            2078390
+            1774638,
+            1747276,
+            1739251,
+            2699578,
+            2231615,
+            2087184,
+            3198839
           ],
-          "whole_frontier_seconds": 77.463219,
-          "canonical_vm_batch_seconds": 30.503361,
-          "child_cpu_seconds": 74.709854,
-          "child_peak_rss_kib": 2621104,
-          "canonical_vm_peak_rss_kib": 461536,
+          "whole_frontier_seconds": 83.434546,
+          "canonical_vm_batch_seconds": 35.956557,
+          "child_cpu_seconds": 80.667016,
+          "child_peak_rss_kib": 2620788,
+          "canonical_vm_peak_rss_kib": 461680,
           "language_verified_facts_reused": 0,
           "stage1_claimed": false,
           "stage2_claimed": false,
-          "scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including conditional return inside a counted loop. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+          "scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including conditional returns inside counted and sequence loops. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
         }
       }
     },
@@ -1200,7 +1207,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Extend selected Flow verification to conditional sequence iteration, multiple branch exits, and diagnostics at loop joins; continue Compiler-owned application/tooling work; implement Language-owned verified-fact reuse when owner-managed Language scope is established. This selected frontier does not prove the full Flow module or Stage-1/Stage-2 succession.",
+  "next_frontier": "Extend selected Flow verification to multiple conditional exits and diagnostics at loop joins; continue Compiler-owned application/tooling work; implement Language-owned verified-fact reuse when owner-managed Language scope is established. This selected frontier does not prove the full Flow module or Stage-1/Stage-2 succession.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -7005,7 +7012,7 @@
       "evidence_scope": "kernel.lex_evidence_batch_global preserves Stage-0 lexical evidence through a resumable 128-token MNCS continuation. Reference interpretation, Cranelift, and a fresh canonical VM artifact agree for a 600-token source across three page strides. This proves a selected kernel frontier, not the full kernel module or successor compiler stages."
     }
   },
-  "evidence_updated_at": "2026-10-17T16:41:28.856398Z",
+  "evidence_updated_at": "2026-10-17T16:49:55.734974Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -7036,16 +7043,16 @@
     "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
   },
   "current_campaign_frontier_update": {
-    "kind": "flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-frontier",
-    "observed_at": "2026-10-17T16:41:28.856398Z",
+    "kind": "flow-proven-unit-conditional-sequence-loop-stage0-shape-canonical-vm-frontier",
+    "observed_at": "2026-10-17T16:49:55.734974Z",
     "status": "passed_selected_callable_frontier",
     "compiler_branch": "campaign/native-application-readiness-20261013",
-    "compiler_head": "aeba7240f903e191bd1e5d819fc95fd911141154",
-    "tested_source_revision": "aeba7240f903e191bd1e5d819fc95fd911141154",
+    "compiler_head": "b0de1a15eb371a96a78e1ed215729c5fa1aa4154",
+    "tested_source_revision": "b0de1a15eb371a96a78e1ed215729c5fa1aa4154",
     "test_harness": "tools/test_vm_flow_proven_frontier.py",
-    "test_harness_sha256": "2132b7280cf27e103e3139c34c6a4ab2d2d5fdb7df2c7d0da14439219e39354e",
-    "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-20261017.json",
-    "evidence_sha256": "a4bcce892e2719d20eb684c59dac6d71d38ef5495ed1917065aaa9d28bc1bd18",
+    "test_harness_sha256": "f86f0d3c9cb2be4855e5447144a44450ed71e48a038d762cb4b2b6015430c77a",
+    "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-sequence-loop-stage0-shape-canonical-vm-20261017.json",
+    "evidence_sha256": "0c19b4d3e7c3fc84cc9ee23c4c8492a944efb591ce7af43f5adaa25bd8a9172c",
     "target_module": "mncs.compiler.flow.v1",
     "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
     "handoff_target": "lower_proven_unit",
@@ -7055,24 +7062,26 @@
       "bounded_iteration_counted",
       "bounded_iteration_sequence",
       "nested_bounded_iteration",
-      "conditional_return_counted_iteration"
+      "conditional_return_counted_iteration",
+      "conditional_return_sequence_iteration"
     ],
     "generic_specialization": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
-    "canonical_vm_case_count": 6,
+    "canonical_vm_case_count": 7,
     "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
-    "canonical_vm_semantic_digest": "fa0c210b9ad4b1515c75d327de6eb6dd3b907b1e9c171259bc611f3b68882f5a",
+    "canonical_vm_semantic_digest": "15429e6bcc0e96a44805e3a55af7c3116ff1fcb62cfbff76f519cc9cfc604dcf",
     "canonical_vm_execution_steps": [
-      1765844,
-      1738482,
-      1730457,
-      2690784,
-      2224183,
-      2078390
+      1774638,
+      1747276,
+      1739251,
+      2699578,
+      2231615,
+      2087184,
+      3198839
     ],
     "proof_handoff_verified": true,
     "stage0_diagnostic_agreement": true,
     "typed_proof_operation_agreement": true,
-    "stage0_bounded_iteration_cases": 4,
+    "stage0_bounded_iteration_cases": 5,
     "stage0_iteration_metadata_matches_vm": true,
     "stage0_ssa_shapes": [
       {
@@ -7099,20 +7108,25 @@
         "name": "conditional_return_counted_iteration",
         "branches": 2,
         "returns": 2
+      },
+      {
+        "name": "conditional_return_sequence_iteration",
+        "branches": 2,
+        "returns": 2
       }
     ],
     "language_verified_facts_reused": 0,
     "timing_seconds": {
-      "canonical_vm_batch": 30.503361,
-      "whole_frontier": 77.463219,
-      "child_cpu": 74.709854
+      "canonical_vm_batch": 35.956557,
+      "whole_frontier": 83.434546,
+      "child_cpu": 80.667016
     },
     "resource_measurements": {
-      "child_peak_rss_kib": 2621104,
-      "canonical_vm_peak_rss_kib": 461536,
+      "child_peak_rss_kib": 2620788,
+      "canonical_vm_peak_rss_kib": 461680,
       "host_memory_before": {
         "total_bytes": 33411579904,
-        "available_bytes": 24215883776
+        "available_bytes": 24212951040
       },
       "cgroup_memory_before": {
         "memory.current": null,
@@ -7129,12 +7143,12 @@
     "whole_flow_module_proven": false,
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "evidence_scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including conditional return inside a counted loop. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
+    "evidence_scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including conditional returns inside counted and sequence loops. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
     "previous_campaign_frontier_update": {
-      "kind": "flow-proven-unit-conditional-loop-canonical-vm-frontier",
+      "kind": "flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-frontier",
       "compiler_head": "aeba7240f903e191bd1e5d819fc95fd911141154",
-      "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-loop-canonical-vm-20261017.json",
-      "evidence_sha256": "d50ba603ade6e1632d33062998c5d069651b6d4ee41f714548e05a1e54d21648",
+      "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-20261017.json",
+      "evidence_sha256": "a4bcce892e2719d20eb684c59dac6d71d38ef5495ed1917065aaa9d28bc1bd18",
       "canonical_vm_case_count": 6
     }
   },
@@ -9322,6 +9336,116 @@
         "compiler_head": "aeba7240f903e191bd1e5d819fc95fd911141154",
         "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-loop-canonical-vm-20261017.json",
         "evidence_sha256": "d50ba603ade6e1632d33062998c5d069651b6d4ee41f714548e05a1e54d21648",
+        "canonical_vm_case_count": 6
+      }
+    },
+    {
+      "kind": "flow-proven-unit-conditional-sequence-loop-stage0-shape-canonical-vm-frontier",
+      "observed_at": "2026-10-17T16:49:55.734974Z",
+      "status": "passed_selected_callable_frontier",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "compiler_head": "b0de1a15eb371a96a78e1ed215729c5fa1aa4154",
+      "tested_source_revision": "b0de1a15eb371a96a78e1ed215729c5fa1aa4154",
+      "test_harness": "tools/test_vm_flow_proven_frontier.py",
+      "test_harness_sha256": "f86f0d3c9cb2be4855e5447144a44450ed71e48a038d762cb4b2b6015430c77a",
+      "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-sequence-loop-stage0-shape-canonical-vm-20261017.json",
+      "evidence_sha256": "0c19b4d3e7c3fc84cc9ee23c4c8492a944efb591ce7af43f5adaa25bd8a9172c",
+      "target_module": "mncs.compiler.flow.v1",
+      "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+      "handoff_target": "lower_proven_unit",
+      "selected_cases": [
+        "fallthrough_join",
+        "unreachable_join",
+        "bounded_iteration_counted",
+        "bounded_iteration_sequence",
+        "nested_bounded_iteration",
+        "conditional_return_counted_iteration",
+        "conditional_return_sequence_iteration"
+      ],
+      "generic_specialization": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+      "canonical_vm_case_count": 7,
+      "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
+      "canonical_vm_semantic_digest": "15429e6bcc0e96a44805e3a55af7c3116ff1fcb62cfbff76f519cc9cfc604dcf",
+      "canonical_vm_execution_steps": [
+        1774638,
+        1747276,
+        1739251,
+        2699578,
+        2231615,
+        2087184,
+        3198839
+      ],
+      "proof_handoff_verified": true,
+      "stage0_diagnostic_agreement": true,
+      "typed_proof_operation_agreement": true,
+      "stage0_bounded_iteration_cases": 5,
+      "stage0_iteration_metadata_matches_vm": true,
+      "stage0_ssa_shapes": [
+        {
+          "name": "fallthrough_join",
+          "branches": 1,
+          "returns": 2
+        },
+        {
+          "name": "bounded_iteration_counted",
+          "branches": 1,
+          "returns": 1
+        },
+        {
+          "name": "bounded_iteration_sequence",
+          "branches": 1,
+          "returns": 1
+        },
+        {
+          "name": "nested_bounded_iteration",
+          "branches": 2,
+          "returns": 1
+        },
+        {
+          "name": "conditional_return_counted_iteration",
+          "branches": 2,
+          "returns": 2
+        },
+        {
+          "name": "conditional_return_sequence_iteration",
+          "branches": 2,
+          "returns": 2
+        }
+      ],
+      "language_verified_facts_reused": 0,
+      "timing_seconds": {
+        "canonical_vm_batch": 35.956557,
+        "whole_frontier": 83.434546,
+        "child_cpu": 80.667016
+      },
+      "resource_measurements": {
+        "child_peak_rss_kib": 2620788,
+        "canonical_vm_peak_rss_kib": 461680,
+        "host_memory_before": {
+          "total_bytes": 33411579904,
+          "available_bytes": 24212951040
+        },
+        "cgroup_memory_before": {
+          "memory.current": null,
+          "memory.max": null,
+          "memory.peak": null
+        },
+        "cgroup_memory_after": {
+          "memory.current": null,
+          "memory.max": null,
+          "memory.peak": null
+        },
+        "cgroup_peak_attributable_to_test": false
+      },
+      "whole_flow_module_proven": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "evidence_scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including conditional returns inside counted and sequence loops. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
+      "previous_campaign_frontier_update": {
+        "kind": "flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-frontier",
+        "compiler_head": "aeba7240f903e191bd1e5d819fc95fd911141154",
+        "evidence_artifact": "evidence/self-host-flow-proven-unit-conditional-loop-stage0-shape-canonical-vm-20261017.json",
+        "evidence_sha256": "a4bcce892e2719d20eb684c59dac6d71d38ef5495ed1917065aaa9d28bc1bd18",
         "canonical_vm_case_count": 6
       }
     }

@@ -42,6 +42,18 @@ EXTRA_CASES = [
         None,
         1,
     ),
+    (
+        "conditional_return_sequence_iteration",
+        "mncs 0.18; module pressure.flow; fn f(source: [byte; up_to 8], needle: byte) -> (r: u64) { "
+        "iterate i over source carrying total: u64 = 0 { "
+        "let item: u64 = source[i] as u64; "
+        "if item == (needle as u64) { return total; } "
+        "next total = total + item; "
+        "} return total; }",
+        0,
+        None,
+        1,
+    ),
 ]
 CASES = [case for case in flow_test.CASES if case[0] in SELECTED] + EXTRA_CASES
 PROBE = Path(os.environ.get(
@@ -354,7 +366,7 @@ def main() -> None:
             "canonical VM graph preserves typed proof operations, matches selected Stage-0 "
             "diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and "
             "preserves counted, sequence, and nested iteration headers and backedges against "
-            "Stage-0 metadata, including conditional return inside a counted loop. "
+            "Stage-0 metadata, including conditional returns inside counted and sequence loops. "
             "It does not establish full flow-module proof, Language-owned verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
