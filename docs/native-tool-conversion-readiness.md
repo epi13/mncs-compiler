@@ -71,6 +71,26 @@ Environment session exposes Compiler capabilities only; it has no bound Forge
 application-execution capability. Language-owned verified-fact work also
 remains outside this Compiler campaign's write authority.
 
+The effectful `digest_app` proof and canonical VM artifact were subsequently
+published as one Environment verification invocation and read back through the
+authenticated Store artifact surface. The proof covers three successful
+structured read/write calls with Stage-0 agreement, seven calls in one retained
+VM process, and the recorded capability, artifact, typed-input, publication,
+and fuel failures. The exact report and VM artifact chunk hashes are in
+[`evidence/native-app-readiness-effectful-digest-store-readback-20261017.json`](../evidence/native-app-readiness-effectful-digest-store-readback-20261017.json).
+This remains verification-output publication through the bounded test file
+provider; it is not a Forge application-execution receipt.
+
+A fresh attempt to publish the `/4` application-build result through the
+selected Compiler campaign was refused by Control with
+`ENVIRONMENT_AUTHORITY_DENIED`. Control currently requires the separate
+`mncs-environment` project grant for this build invocation, while that project
+cannot resolve the Compiler campaign identity. The selected session's
+authenticated writable set contains only `mncs-compiler`, and the refused
+operation left no invocation artifact. Forge-routed `digest_app` execution
+therefore remains unproven until the authorized Environment/Control route can
+bind this campaign without widening its worktree scope.
+
 ## Retained-session batch follow-up (2026-10-16)
 
 Compiler commit `a6151ca832c29feeba110d7b3068464d31760bb2` extends the
