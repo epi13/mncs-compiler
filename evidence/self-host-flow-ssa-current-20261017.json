@@ -1,0 +1,172 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "flow-to-ssa-canonical-vm-frontier",
+  "observed_at": "2026-10-17T20:34:46.085778Z",
+  "status": "passed",
+  "compiler": {
+    "tested_source_revision": "1ce54286b40586bdad1a464c92748d782e3769de",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow",
+      "ssa"
+    ],
+    "module_source_sha256": {
+      "source": "52d68c0e5ab71f1badc996d7609dc6ae3d088051fea7cbbc9404d839efeec5bd",
+      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+      "parser": "3fb0695fa62c24d839a17ff51ac50f6399795a262ddd674c9fe80727d2b54ed5",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+      "flow": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+      "ssa": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545"
+    },
+    "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+    "test_harness_sha256": "72471a0b310b7114057ebd1a68642b33dfd1bf8484b018f5a94a585162938efa"
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "2ea79a274da826f46aeadce81b403e350a59d69ca10878db8f12ea37ce82e75f",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_repository": "/home/epi13/Documents/Projects/mncs-vm",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "workload": {
+    "module": "mncs.compiler.ssa.v1",
+    "function": "lower_flow_unit_value_ssa<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+    "cases": [
+      {
+        "name": "fallthrough_join",
+        "source_sha256": "f9dab71eb3ebb41e57622d6b6658e8d089aa78e5a3373ea7289080f06d0b33db",
+        "source_bytes": 107,
+        "stage0_ssa_shape": {
+          "functions": 1,
+          "branches": 1,
+          "returns": 2
+        },
+        "expected_iterations": 0,
+        "stage0_iteration_facts": []
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "source_sha256": "61e9c91e4e651cedffc7fa4847067aba715edbfe23abdfafe6e82dd032290a28",
+        "source_bytes": 175,
+        "stage0_ssa_shape": {
+          "functions": 1,
+          "branches": 2,
+          "returns": 2
+        },
+        "expected_iterations": 1,
+        "stage0_iteration_facts": [
+          {
+            "backedge": "mncs:0.4:ssa:block:f60154115be64244dfc5b09ac8c569f27fbe56640a3547dd3732ba16ab5dc839",
+            "body_blocks": [
+              "mncs:0.4:ssa:block:e0422151dfed6d1ca3751b92d4d61f14fd99517d3e4bbe20a79bcc4c79ffcfb5",
+              "mncs:0.4:ssa:block:b670a7eb546bb3d675243f3bb89dc1c78b4859599ed1f70fed9a930cb1184273",
+              "mncs:0.4:ssa:block:858db3b87e5d182e281b714559857e6febb1bdbd71b96b8c1ebd184512b44d92",
+              "mncs:0.4:ssa:block:f60154115be64244dfc5b09ac8c569f27fbe56640a3547dd3732ba16ab5dc839"
+            ],
+            "body_entry": "mncs:0.4:ssa:block:e0422151dfed6d1ca3751b92d4d61f14fd99517d3e4bbe20a79bcc4c79ffcfb5",
+            "bound": 4,
+            "callees": [],
+            "completion_modes": [
+              "early_return",
+              "exhausted",
+              "failure"
+            ],
+            "domain": "attempts",
+            "exit": "mncs:0.4:ssa:block:2e3b478d9c58cbf6c178eb4cc151076cf829ff1d82d4f3438f02d99f7ca5f2cd",
+            "header": "mncs:0.4:ssa:block:415cf11d3b7e5567572039a38dfde05fbf3382ebe16f93ad55531fc0c4c8f784",
+            "identity": "mncs:0.2:iteration:pressure.flow::f::i",
+            "obligations": [
+              "mncs:0.2:obligation:body:iteration-bound-valid:844fba5c92ac3e1a30678ea7054e29d3101baf5ae2282c961a01018f86767430",
+              "mncs:0.2:obligation:body:iteration-resource-ceiling:844fba5c92ac3e1a30678ea7054e29d3101baf5ae2282c961a01018f86767430",
+              "mncs:0.2:obligation:body:iteration-exact-resource-cost:844fba5c92ac3e1a30678ea7054e29d3101baf5ae2282c961a01018f86767430",
+              "mncs:0.2:obligation:body:iteration-authority-closure:844fba5c92ac3e1a30678ea7054e29d3101baf5ae2282c961a01018f86767430",
+              "mncs:0.2:obligation:body:iteration-state-preservation:844fba5c92ac3e1a30678ea7054e29d3101baf5ae2282c961a01018f86767430",
+              "mncs:0.2:obligation:body:iteration-completion-modes:844fba5c92ac3e1a30678ea7054e29d3101baf5ae2282c961a01018f86767430"
+            ],
+            "preheader": "mncs:0.4:ssa:block:6850c8c1b6d2ca1bb7a251a1222fc43fcc853b5ea883e660d39bcd195cfa51b0",
+            "required_capabilities": [],
+            "state_type": {
+              "integer": {
+                "bits": 64,
+                "signed": false
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "artifact_id": "sha256:78243a023ad969ed3242c93fdd86473818b89ccf61892a33078ec7b324591f92",
+    "artifact_cache_key": "8902d91d7dda0ccf223071f06d8f8149bfeafacef6edf0cd0337d4ed3e7ec6e7",
+    "artifact_cache_sha256": "ff7ccd2c33230c5a22feae9d2b1f6f3e32389cf8cc6d8349338bc37a8ed3f464"
+  },
+  "verification": {
+    "canonical_vm_calls": 2,
+    "canonical_vm_batch_case_count": 2,
+    "artifact_cache_hit": true,
+    "canonical_vm_semantic_digest": "caea6a8bf3bdd66536abd01257004c5276b95472fd7f02e4446e46ebad533c87",
+    "canonical_vm_execution_steps": {
+      "fallthrough_join": 4253994,
+      "conditional_return_counted_iteration": 7772803
+    },
+    "canonical_vm_ssa_shapes": [
+      {
+        "name": "fallthrough_join",
+        "functions": 1,
+        "branches": 1,
+        "returns": 2
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "functions": 1,
+        "branches": 2,
+        "returns": 2
+      }
+    ],
+    "source_to_flow_to_ssa_executed_in_one_vm_batch": true,
+    "flow_result_passed_to_value_ssa_by_mncs_source": true,
+    "verified_functions": 2,
+    "stage0_shape_matches_canonical_vm": true,
+    "stage0_loop_header_and_backedge_cases": 1,
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "canonical_vm_batch_seconds": 43.890511,
+    "whole_frontier_seconds": 48.905823,
+    "child_cpu_seconds": 44.539849,
+    "child_peak_rss_kib": 1247536,
+    "canonical_vm_peak_rss_kib": 617644,
+    "host_memory_before": {
+      "total_bytes": 33411579904,
+      "available_bytes": 24609619968
+    },
+    "cgroup_memory_before": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "cgroup_memory_after": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "canonical_vm_batch_bytes": {
+      "calls": 8220,
+      "results": 260520
+    },
+    "stage0_probe_stderr_sha256": "975c72114c4b0809416f860d514692652af61fbda587419dff0b08291ab268f6",
+    "cgroup_peak_attributable_to_test": false
+  },
+  "claim_boundary": "This selected current-source canonical VM batch starts each case from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. It includes a conditional return inside a counted loop; both verified SSA function shapes match pinned Stage-0. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
+  "evidence_artifact": "evidence/self-host-flow-ssa-current-20261017.json"
+}

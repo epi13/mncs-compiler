@@ -29,7 +29,23 @@ TYPE_ARGS = [
     {"kind": "nat", "value": test_flow.STRIDE_BOUND},
 ]
 STEP_BUDGET = 8_000_000
-SOURCE = next(case[1] for case in test_flow.CASES if case[0] == "fallthrough_join")
+CASES = [
+    (
+        "fallthrough_join",
+        next(case[1] for case in test_flow.CASES if case[0] == "fallthrough_join"),
+        {"functions": 1, "branches": 1, "returns": 2},
+        0,
+    ),
+    (
+        "conditional_return_counted_iteration",
+        "mncs 0.18; module pressure.flow; fn f(flag: bool) -> (r: u64) { "
+        "iterate i up_to 4 carrying state: u64 = 0 { "
+        "if flag { return state; } next state = state + 1; "
+        "} return state; }",
+        {"functions": 1, "branches": 2, "returns": 2},
+        1,
+    ),
+]
 PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
 ))
@@ -143,28 +159,45 @@ def main() -> None:
     cgroup_before = cgroup_snapshot()
     child_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     started = time.monotonic()
-    source = SOURCE
-    data = source.encode()
-    arguments = test_flow.logical_args(data)
-
     probe = Probe()
-    oracle = probe.send({"ssa": source})
-    if oracle.get("ssa") is None or oracle.get("diagnostics"):
-        raise AssertionError(f"Stage-0 SSA oracle rejected the selected source: {oracle}")
-    oracle_functions = oracle["ssa"]["functions"]
-    oracle_shape = {
-        "functions": len(oracle_functions),
-        "branches": sum(
-            "ConditionalBranch" in block["terminator"]
-            for function in oracle_functions for block in function["blocks"]
-        ),
-        "returns": sum(
-            "Return" in block["terminator"]
-            for function in oracle_functions for block in function["blocks"]
-        ),
-    }
-    if oracle_shape != {"functions": 1, "branches": 1, "returns": 2}:
-        raise AssertionError(f"Stage-0 SSA fixture changed: {oracle_shape}")
+    cases = []
+    for name, source, expected_shape, expected_iterations in CASES:
+        oracle = probe.send({"ssa": source})
+        if oracle.get("ssa") is None or oracle.get("diagnostics"):
+            raise AssertionError(f"Stage-0 SSA oracle rejected {name}: {oracle}")
+        oracle_functions = oracle["ssa"]["functions"]
+        oracle_shape = {
+            "functions": len(oracle_functions),
+            "branches": sum(
+                "ConditionalBranch" in block["terminator"]
+                for function in oracle_functions for block in function["blocks"]
+            ),
+            "returns": sum(
+                "Return" in block["terminator"]
+                for function in oracle_functions for block in function["blocks"]
+            ),
+        }
+        if oracle_shape != expected_shape:
+            raise AssertionError(f"Stage-0 SSA fixture changed for {name}: {oracle_shape}")
+        iterations = [
+            loop for function in oracle_functions
+            for loop in function.get("bounded_iterations", [])
+        ]
+        if len(iterations) != expected_iterations:
+            raise AssertionError(f"Stage-0 iteration facts changed for {name}: {iterations}")
+        if any(not loop.get("header") or not loop.get("backedge") for loop in iterations):
+            raise AssertionError(f"Stage-0 did not retain the counted-loop cycle for {name}: {iterations}")
+        data = source.encode()
+        cases.append({
+            "name": name,
+            "source": source,
+            "source_bytes": len(data),
+            "source_sha256": hashlib.sha256(data).hexdigest(),
+            "arguments": test_flow.logical_args(data),
+            "oracle_shape": oracle_shape,
+            "expected_iterations": expected_iterations,
+            "stage0_iterations": iterations,
+        })
 
     artifact_path, cache_manifest_path, cache_key, cache_inputs = artifact_cache_identity()
     artifact_cache_hit = False
@@ -203,48 +236,57 @@ def main() -> None:
         }, indent=2) + "\n")
     probe_stderr = probe.close()
 
-    batch_case = {
-        "id": "ssa.lower_flow_unit_value_ssa:fallthrough_join",
+    batch_cases = [{
+        "id": f"ssa.lower_flow_unit_value_ssa:{case['name']}",
         "function": FUNCTION,
-        "args": arguments,
+        "args": case["arguments"],
         "type_args": TYPE_ARGS,
         "step_budget": STEP_BUDGET,
-    }
+    } for case in cases]
     with tempfile.TemporaryDirectory(prefix="mncs-vm-flow-ssa-") as directory_name:
         directory = Path(directory_name)
         vm_artifact_path = directory / "flow-ssa-current.json"
         vm_artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n")
         document, vm_wall, vm_peak_kb, calls_bytes, results_bytes = run_batch(
-            vm_artifact_path, [batch_case], directory, module=MODULE
+            vm_artifact_path, batch_cases, directory, module=MODULE
         )
 
     if document.get("artifact_id") != artifact.get("artifact_id"):
         raise AssertionError("canonical VM admitted a different Flow-to-SSA artifact")
-    result = document.get("results", [None])[0]
-    if result is None or result.get("id") != batch_case["id"] or result.get("outcome") != {"kind": "completed"}:
-        raise AssertionError(f"canonical VM failed Flow-to-SSA execution: {result}")
-    returned = result["record"].get("returned", [])
-    if len(returned) != 1:
-        raise AssertionError(f"canonical VM returned the wrong value count: {result}")
-    summary_wire = vm_to_wire(returned[0])
-    summary = test_flow.decode(summary_wire)
-    if not summary["valid"] or summary["function_count"] != 1:
-        raise AssertionError(f"Flow-to-SSA summary is invalid: {summary}")
-    if summary["supported_function_count"] != 1 or summary["verified_function_count"] != 1:
-        raise AssertionError(f"Flow-to-SSA did not verify its selected function: {summary}")
-    functions = wire_linked(field(summary_wire, "functions"))
-    actual_shape = {
-        "functions": len(functions),
-        "branches": 0,
-        "returns": 0,
-    }
-    for function in functions:
-        for block in wire_linked(field(function, "blocks")):
-            terminator = field(block, "terminator")["finite"]["discriminant"]
-            actual_shape["branches"] += terminator == 0
-            actual_shape["returns"] += terminator == 2
-    if actual_shape != oracle_shape:
-        raise AssertionError(f"canonical VM SSA shape differs from Stage-0: {actual_shape} != {oracle_shape}")
+    results = document.get("results", [])
+    if len(results) != len(cases):
+        raise AssertionError(f"canonical VM returned {len(results)} results for {len(cases)} SSA cases")
+    native_values = []
+    for case, batch_case, result in zip(cases, batch_cases, results, strict=True):
+        if result.get("id") != batch_case["id"] or result.get("outcome") != {"kind": "completed"}:
+            raise AssertionError(f"canonical VM failed Flow-to-SSA case {case['name']}: {result}")
+        returned = result["record"].get("returned", [])
+        if len(returned) != 1:
+            raise AssertionError(f"canonical VM returned the wrong value count for {case['name']}: {result}")
+        summary_wire = vm_to_wire(returned[0])
+        summary = test_flow.decode(summary_wire)
+        if not summary["valid"] or summary["function_count"] != 1:
+            raise AssertionError(f"Flow-to-SSA summary is invalid for {case['name']}: {summary}")
+        if summary["supported_function_count"] != 1 or summary["verified_function_count"] != 1:
+            raise AssertionError(f"Flow-to-SSA did not verify {case['name']}: {summary}")
+        functions = wire_linked(field(summary_wire, "functions"))
+        actual_shape = {"functions": len(functions), "branches": 0, "returns": 0}
+        for function in functions:
+            for block in wire_linked(field(function, "blocks")):
+                terminator = field(block, "terminator")["finite"]["discriminant"]
+                actual_shape["branches"] += terminator == 0
+                actual_shape["returns"] += terminator == 2
+        if actual_shape != case["oracle_shape"]:
+            raise AssertionError(
+                f"canonical VM SSA shape differs from Stage-0 for {case['name']}: "
+                f"{actual_shape} != {case['oracle_shape']}"
+            )
+        native_values.append({
+            "name": case["name"],
+            "summary": summary,
+            "shape": actual_shape,
+            "execution_steps": result["record"]["usage"]["steps"],
+        })
 
     module_hashes = {
         name: hashlib.sha256((ROOT / "src/compiler" / f"{name}.mncs").read_bytes()).hexdigest()
@@ -255,11 +297,6 @@ def main() -> None:
     vm_revision = subprocess.check_output(["git", "-C", str(vm_repo), "rev-parse", "HEAD"], text=True).strip()
     child_after = resource.getrusage(resource.RUSAGE_CHILDREN)
     child_cpu = (child_after.ru_utime - child_before.ru_utime) + (child_after.ru_stime - child_before.ru_stime)
-    native_value = {
-        "summary": summary,
-        "shape": actual_shape,
-        "execution_steps": result["record"]["usage"]["steps"],
-    }
     report = {
         "schema_version": "mncs.compiler.self-consumption-frontier/1",
         "kind": "flow-to-ssa-canonical-vm-frontier",
@@ -286,23 +323,41 @@ def main() -> None:
         "workload": {
             "module": MODULE,
             "function": f"{FUNCTION}<1024,1024> -> flow.lower_unit -> lower_value_ssa",
-            "source_sha256": hashlib.sha256(data).hexdigest(),
-            "source_bytes": len(data),
+            "cases": [{
+                "name": case["name"],
+                "source_sha256": case["source_sha256"],
+                "source_bytes": case["source_bytes"],
+                "stage0_ssa_shape": case["oracle_shape"],
+                "expected_iterations": case["expected_iterations"],
+                "stage0_iteration_facts": case["stage0_iterations"],
+            } for case in cases],
             "artifact_id": artifact["artifact_id"],
             "artifact_cache_key": cache_key,
             "artifact_cache_sha256": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
-            "stage0_shape": oracle_shape,
         },
         "verification": {
-            "canonical_vm_calls": 1,
+            "canonical_vm_calls": len(native_values),
+            "canonical_vm_batch_case_count": len(native_values),
             "artifact_cache_hit": artifact_cache_hit,
-            "canonical_vm_semantic_digest": semantic_digest(native_value),
-            "canonical_vm_execution_steps": native_value["execution_steps"],
-            "canonical_vm_ssa_shape": actual_shape,
-            "source_to_flow_to_ssa_executed_in_one_vm_call": True,
+            "canonical_vm_semantic_digest": semantic_digest(native_values),
+            "canonical_vm_execution_steps": {
+                value["name"]: value["execution_steps"] for value in native_values
+            },
+            "canonical_vm_ssa_shapes": [
+                {"name": value["name"], **value["shape"]} for value in native_values
+            ],
+            "source_to_flow_to_ssa_executed_in_one_vm_batch": True,
             "flow_result_passed_to_value_ssa_by_mncs_source": True,
-            "verified_functions": summary["verified_function_count"],
-            "stage0_shape_matches_canonical_vm": True,
+            "verified_functions": sum(
+                value["summary"]["verified_function_count"] for value in native_values
+            ),
+            "stage0_shape_matches_canonical_vm": all(
+                value["shape"] == case["oracle_shape"]
+                for value, case in zip(native_values, cases, strict=True)
+            ),
+            "stage0_loop_header_and_backedge_cases": sum(
+                bool(case["stage0_iterations"]) for case in cases
+            ),
             "language_verified_facts_reused": 0,
             "stage1_claimed": False,
             "stage2_claimed": False,
@@ -321,15 +376,16 @@ def main() -> None:
             "cgroup_peak_attributable_to_test": False,
         },
         "claim_boundary": (
-            "This selected current-source canonical VM call starts from logical source pages, "
-            "runs flow.lower_unit, derives local nominal identities from the returned proof unit, "
-            "and passes that exact Flow result to value SSA. Its verified SSA function count and "
-            "branch/return shape match the pinned Stage-0 oracle. It does not establish full SSA "
-            "module proof, Language-owned verified-fact reuse, Cranelift differential coverage, "
-            "or compiler succession."
+            "This selected current-source canonical VM batch starts each case from logical source "
+            "pages, runs flow.lower_unit, derives local nominal identities from the returned proof "
+            "unit, and passes that exact Flow result to value SSA. It includes a conditional return "
+                "inside a counted loop; both "
+            "verified SSA function shapes match pinned Stage-0. It does not establish full SSA module "
+            "proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler "
+            "succession."
         ),
     }
-    report["evidence_artifact"] = "evidence/self-host-flow-ssa-canonical-vm-20261016.json"
+    report["evidence_artifact"] = "evidence/self-host-flow-ssa-current-20261017.json"
     output = ROOT / os.environ.get("MNCS_FLOW_SSA_FRONTIER_EVIDENCE_PATH", report["evidence_artifact"])
     output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
