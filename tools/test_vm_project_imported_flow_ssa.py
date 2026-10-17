@@ -111,13 +111,16 @@ def sample_process(pid: int) -> dict:
 class Probe:
     """One fresh protocol process; sample it while application-build runs."""
 
-    def __init__(self) -> None:
+    def __init__(self, application_cache_directory: Path | None = None) -> None:
         env = dict(os.environ)
         env.pop("MNCS_PROBE_BACKEND", None)
         env["MNCS_PROBE_MODULES"] = ""
         env["MNCS_PROBE_EXECUTION_MODULES"] = ""
         env["MNCS_PROBE_GENERIC_SEEDS"] = "[]"
         env["MNCS_PROBE_CACHE_DIR"] = str(ROOT / ".build/probe-cache")
+        env.pop("MNCS_PROBE_APPLICATION_CACHE_DIR", None)
+        if application_cache_directory is not None:
+            env["MNCS_PROBE_APPLICATION_CACHE_DIR"] = str(application_cache_directory)
         env["MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT"] = str(ROOT)
         self.stderr = tempfile.TemporaryFile(mode="w+t")
         self.proc = subprocess.Popen(

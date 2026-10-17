@@ -218,7 +218,34 @@ The VM batch took 18.19 seconds and peaked at 461,748 KiB; the whole frontier to
 
 The [current Flow-to-SSA handoff](self-host-flow-ssa-canonical-vm-20261016.json) runs a real MNCS source function through `flow.lower_unit`, derives local nominal identities from its proved unit, and passes that exact `flow.LoweredUnit` value into value SSA from one canonical VM call. The selected function is supported and verified; its one branch and two returns match the Stage-0 SSA oracle. Environment's registered verification capability passed with the exact-source artifact cache hit.
 
-The Environment verification took 32.53 seconds end to end, including a 25.29-second canonical VM batch. Child peak RSS was 1,242,372 KiB and VM peak RSS was 614,972 KiB; the cgroup counters were unavailable. Language-owned verified facts reused: zero. This selected pipeline handoff does not prove the whole SSA module, imported-interface invalidation, incremental semantic reuse, or compiler succession. The next compiler frontier is to carry imported nominal interfaces and generic specializations through this same Flow-to-SSA path.
+The Environment verification took 32.53 seconds end to end, including a 25.29-second canonical VM batch. Child peak RSS was 1,242,372 KiB and VM peak RSS was 614,972 KiB; the cgroup counters were unavailable. Language-owned verified facts reused: zero. This selected pipeline handoff does not prove the whole SSA module, imported-interface invalidation, incremental semantic reuse, or compiler succession. The imported nominal and generic path is now exercised below; Language-owned fact reuse remains the next semantic frontier.
+
+## Imported generic/schema application cache invalidation (2026-10-17)
+
+The [imported SSA cache report](self-host-imported-ssa-incremental-20261017.json)
+continues the real Compiler `ssa.lower_flow_unit_value_ssa_with_imported_schemas<4,64>`
+frontier through application-build/4. It compares a cold artifact, exact warm
+hit, an added uncalled callable, and a body-only edit to that uncalled callable.
+The exact warm hit reused the artifact with zero frontend invocations (1.36 s).
+Adding the callable changed the module interface and correctly generated a new
+artifact (142.77 s). Editing only its body then reused that artifact after the
+full frontend ran (54.96 s). The cold build took 140.47 s. The retained probe
+process peaked at 4.70 GB RSS; this is a process high-water mark, not a separate
+per-request memory delta. Cgroup measurements were unavailable.
+
+The body-edited artifact ran `demo.root::read<4>` in the canonical VM; both
+imported functions were verified and the result was valid. A `bool` imported
+field schema for the source's `u64` field returned an invalid summary. The two
+VM checks took 28.76 s and 22.67 s respectively and peaked near 597 MiB RSS.
+The whole frontier took 401.11 s. Changed snapshots still invoked the full
+Language frontend and reused zero Language verified facts. Artifact reuse here
+does not establish semantic-fact reuse or compiler succession.
+
+The Compiler application cache can now use
+`MNCS_PROBE_APPLICATION_CACHE_DIR` independently of
+`MNCS_PROBE_CACHE_DIR`, so this test isolates application artifacts while
+retaining the compiler program cache. The focused Rust cache-path unit test
+passed.
 
 ## Succession evidence
 

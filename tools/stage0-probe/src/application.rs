@@ -263,30 +263,44 @@ fn application_cache_index_key(
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
 
-fn application_cache_path(key: &str) -> Option<PathBuf> {
-    let root = std::env::var_os("MNCS_PROBE_CACHE_DIR")?;
-    if root.is_empty() {
-        return None;
-    }
+fn application_cache_root_from(
+    application_root: Option<std::ffi::OsString>,
+    probe_root: Option<std::ffi::OsString>,
+) -> Option<PathBuf> {
+    application_root
+        .filter(|root| !root.is_empty())
+        .or_else(|| probe_root.filter(|root| !root.is_empty()))
+        .map(PathBuf::from)
+}
+
+fn application_cache_root() -> Option<PathBuf> {
+    application_cache_root_from(
+        std::env::var_os("MNCS_PROBE_APPLICATION_CACHE_DIR"),
+        std::env::var_os("MNCS_PROBE_CACHE_DIR"),
+    )
+}
+
+fn application_cache_path_at(root: &Path, key: &str) -> Option<PathBuf> {
+    let hex = key.strip_prefix("sha256:")?;
+    Some(root.join("application-builds").join(format!("{hex}.json")))
+}
+
+fn application_cache_index_path_at(root: &Path, key: &str) -> Option<PathBuf> {
     let hex = key.strip_prefix("sha256:")?;
     Some(
-        PathBuf::from(root)
-            .join("application-builds")
+        root.join("application-build-indexes")
             .join(format!("{hex}.json")),
     )
 }
 
+fn application_cache_path(key: &str) -> Option<PathBuf> {
+    let root = application_cache_root()?;
+    application_cache_path_at(&root, key)
+}
+
 fn application_cache_index_path(key: &str) -> Option<PathBuf> {
-    let root = std::env::var_os("MNCS_PROBE_CACHE_DIR")?;
-    if root.is_empty() {
-        return None;
-    }
-    let hex = key.strip_prefix("sha256:")?;
-    Some(
-        PathBuf::from(root)
-            .join("application-build-indexes")
-            .join(format!("{hex}.json")),
-    )
+    let root = application_cache_root()?;
+    application_cache_index_path_at(&root, key)
 }
 
 fn annotate_cache(
@@ -1284,6 +1298,7 @@ fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -
 #[cfg(test)]
 mod tests {
     use super::{
+        application_cache_index_path_at, application_cache_path_at, application_cache_root_from,
         application_executable_closure_identity, application_semantic_identity, callable_interface,
         envelope, ApplicationSources,
     };
@@ -1292,6 +1307,37 @@ mod tests {
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
     use serde_json::json;
     use std::collections::BTreeMap;
+    use std::ffi::OsString;
+    use std::path::Path;
+
+    #[test]
+    fn application_cache_can_be_isolated_from_program_cache() {
+        let application_root = Some(OsString::from("/tmp/application-cache"));
+        let probe_root = Some(OsString::from("/tmp/program-cache"));
+        let root = application_cache_root_from(application_root, probe_root)
+            .expect("explicit application cache root");
+        assert_eq!(root, Path::new("/tmp/application-cache"));
+        assert_eq!(
+            application_cache_path_at(&root, "sha256:abc"),
+            Some(Path::new("/tmp/application-cache/application-builds/abc.json").to_path_buf())
+        );
+        assert_eq!(
+            application_cache_index_path_at(&root, "sha256:def"),
+            Some(
+                Path::new("/tmp/application-cache/application-build-indexes/def.json")
+                    .to_path_buf()
+            )
+        );
+
+        let fallback = application_cache_root_from(
+            Some(OsString::new()),
+            Some(OsString::from("/tmp/program-cache")),
+        )
+        .expect("program cache fallback");
+        assert_eq!(fallback, Path::new("/tmp/program-cache"));
+        assert_eq!(application_cache_root_from(None, None), None);
+        assert_eq!(application_cache_path_at(&root, "not-a-sha256-key"), None);
+    }
 
     fn interface_program() -> mncs_model::Program {
         let source = r#"

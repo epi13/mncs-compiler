@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 31,
+  "revision": 32,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1507,6 +1507,76 @@
         ],
         "working_directory": ".",
         "timeout_seconds": 600,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.imported-nominal-ssa-application-cache-invalidation",
+      "title": "Imported nominal generic Flow/SSA application cache reuses only after exact frontend closure and interface checks",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build-request/1",
+        "mncs.compiler.application-build/4",
+        "mncs.compiler.application-build-cache-observation/4",
+        "mncs.compiler.application-build-verification-work/1",
+        "mncs.compiler.application-executable-closure-identity/2",
+        "mncs.vm.artifact/1",
+        "mncs:0.2:function:demo.root::read",
+        "mncs:0.2:record-type:demo.dep::Box::value%3Au64%3B"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "tools/stage0-probe/src/application.rs",
+        "tools/stage0-probe/src/main.rs",
+        "tools/test_vm_project_imported_flow_ssa.py",
+        "tools/test_vm_project_imported_ssa_incremental.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_segment.py",
+        "tools/vm_emit.rs",
+        "tools/vm-artifact-codec/"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_project_imported_ssa_incremental.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_project_imported_ssa_incremental.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900,
         "effects": [
           "verify"
         ],
