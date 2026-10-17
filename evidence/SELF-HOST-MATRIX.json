@@ -975,7 +975,24 @@
         "page_bound": 1024,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "92ae7e8ec79b090ed74c99f7e9986a4a40429fe1ece7c12db72b652085d8b768"
+        "current_source_sha256": "92ae7e8ec79b090ed74c99f7e9986a4a40429fe1ece7c12db72b652085d8b768",
+        "selected_import_resolution_cache_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "target_module": "mncs.compiler.project.v1",
+          "target_function": "compile_project_target",
+          "candidate_header_comparisons": {
+            "module_limit": 1,
+            "project_limit": 4
+          },
+          "successful_lookup_cache_hits": {
+            "module_limit": 1023,
+            "project_limit": 4092
+          },
+          "missing_import_diagnostics_preserved": 3,
+          "evidence_artifact": "evidence/project-import-resolution-cache-20261017.json",
+          "evidence_sha256": "6bf29a3acf9f2977dc9fb87b5d847e4264415ecbb806721a6a06153554cae1f8",
+          "scope": "Cranelift-executed Project callable only; no Language verified facts, canonical VM, full-module proof, or succession claim."
+        }
       }
     }
   },
@@ -2634,6 +2651,14 @@
       "evidence_artifact": "evidence/compiler-project-import-link-total-boundary-4096-20261017.json",
       "evidence_sha256": "8434ce78b4d0319822a9ed1869ac4cb7890169cf5cf8d9980a29f4e9720344b4",
       "evidence_scope": "An end-to-end self-hosted Project target admits exactly 4096 resolved import links with valid target SSA. A 4097th use is rejected at its source span with one limit-4096 diagnostic while retaining 4096 links. The separate Stage-0 oracle remains limited to the dense six-source fixture; this is not full Project module proof, Language fact reuse, or native application execution."
+    },
+    {
+      "kind": "project-import-resolution-cache",
+      "status": "passed_with_bounded_frontier",
+      "evidence_artifact": "evidence/project-import-resolution-cache-20261017.json",
+      "target_module": "mncs.compiler.project.v1",
+      "target_function": "compile_project_target",
+      "scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
     }
   ],
   "whole_module_parse_snapshot": {
@@ -2840,7 +2865,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-17T07:58:20Z",
+    "updated_at": "2026-10-17T09:58:52Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -6558,67 +6583,48 @@
       "whole_project_module_proven": false,
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    "native_application_readiness_20261013_project_import_resolution_cache_20261017": {
+      "kind": "project-import-resolution-cache",
+      "observed_at": "2026-10-17T09:58:52Z",
+      "branch": "campaign/native-application-readiness-20261013",
+      "candidate_base_revision": "3b9d648a1b05c521801be8c8dfdd0ce0e236acbf",
+      "tested_source_revision": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+      "commit_containing_measured_source": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+      "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "target_module": "mncs.compiler.project.v1",
+      "target_function": "compile_project_target",
+      "backend": "cranelift",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "project_module_sha256": "bb3d40b68f7713fd058adb947a4086249587f7b44d11d275e5d9ee418924035d",
+      "test_harness": "tools/test_project_import_link_capacity.py",
+      "test_harness_sha256": "ae2a5e8aae190ab3507be1638acfe0d62789157eaa81c8a3287bb5fc2c08cb69",
+      "evidence_artifact": "evidence/project-import-resolution-cache-20261017.json",
+      "evidence_sha256": "6bf29a3acf9f2977dc9fb87b5d847e4264415ecbb806721a6a06153554cae1f8",
+      "verification_result_sha256": "c410f88f678ce157b3cda38e0c2eab5c9eb70f3252db8a36d6eb44485745022a",
+      "probe_request_count": 14,
+      "status": "passed_with_bounded_frontier",
+      "bounded_frontier": "Successful import target lookup is memoized within each consumer module and parsed snapshot; one candidate module-header comparison for 1024 repeated imports and four for 4096 project imports.",
+      "module_limit_candidate_header_comparisons": 1,
+      "module_limit_successful_lookup_cache_hits": 1023,
+      "project_limit_candidate_header_comparisons": 4,
+      "project_limit_successful_lookup_cache_hits": 4092,
+      "repeated_missing_import_diagnostics_preserved": true,
+      "negative_lookup_cache_hits": 0,
+      "language_verified_facts_reused": 0,
+      "canonical_vm_execution_performed": false,
+      "whole_project_module_proven": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "peak_rss_bytes": 4476182528,
+      "backend_compilation_ms": 155098.331166,
+      "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
     }
   },
-  "evidence_updated_at": "2026-10-17T08:35:10Z",
+  "evidence_updated_at": "2026-10-17T09:58:52Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
-    "kind": "project-import-link-capacity-1024",
-    "status": "passed_with_bounded_frontier",
-    "observed_at": "2026-10-17T07:46:40Z",
-    "compiler_head": "8039e4423f648428d7369b1e55cfdb6561f3e9a8",
-    "base_revision": "fd5cc2b479b6704fb9cdc2b3b84197902437f5d4",
-    "commit_containing_measured_source": "8039e4423f648428d7369b1e55cfdb6561f3e9a8",
-    "compiler_branch": "campaign/native-application-readiness-20261013",
-    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
-    "target_module": "mncs.compiler.project.v1",
-    "target_function": "compile_project_target",
-    "source_sha256": "9c28456430f9a487faf36aa7a09c98768428a7cec56280f59f303a0f3669e8a8",
-    "test_harness_sha256": "41a8d7ecde2918f67b6201ceaa81696f16f4ba4100fef6c24a148292abc0637b",
-    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
-    "backend": "cranelift",
-    "dense_project": {
-      "source_count": 6,
-      "expected_import_links": 15,
-      "observed_import_links": 15,
-      "link_set_matches_source_graph": true,
-      "all_transitive_record_schemas_verified": true,
-      "target_flow_and_ssa_valid": true,
-      "stage0_oracle_valid": true
-    },
-    "per_module_import_limit": 1024,
-    "native_accepts_65_imports": true,
-    "native_accepts_1024_imports": true,
-    "native_rejects_1025_imports": true,
-    "retained_import_count_at_limit": 1024,
-    "over_limit_diagnostic": {
-      "source_index": 1,
-      "start": 22475,
-      "end": 22483,
-      "limit": 1024
-    },
-    "project_import_link_limit": 4096,
-    "project_limit_guard_4095_false_4096_true": true,
-    "full_4096_link_project_fixture_run": false,
-    "verification_status": "passed",
-    "verification_job_id": "term-8fd8cbe9401093bce6b28313",
-    "result_sha256": "9afe1821b611ccfc236190ae60034071df4152d113a07f0f423ec1e1a1c7ec85",
-    "wall_seconds": 289.414,
-    "stage0_ready_seconds": 288.0,
-    "sampled_process_rss_kib_max": 5855824,
-    "rss_peak_measured": false,
-    "environment_verifier_attempts_timed_out": 2,
-    "language_verified_facts_reused": 0,
-    "canonical_vm_execution_performed": false,
-    "whole_project_module_proven": false,
-    "stage1_claimed": false,
-    "stage2_claimed": false,
-    "evidence_artifact": "evidence/compiler-project-import-link-capacity-1024-20261017.json",
-    "evidence_sha256": "bc3a3746de80f8781c50b72b2d6fd991e9a59c9d942608757ae2e349585904e5",
-    "evidence_scope": "Native Project target preserves a dense six-source import graph and admits 1024 uses per module; 1025 is rejected with one source-located diagnostic. The 4096-link guard predicate is covered at 4095/4096, but there is no full 4096-link fixture. Language facts reused: zero. This advances a bounded self-hosted Project frontier, not full module proof or native application execution."
-  },
-  "current_campaign_frontier_update": {
     "kind": "project-source-capacity-64-connected",
     "status": "passed_with_bounded_frontier",
     "observed_at": "2026-10-17T08:35:10Z",
@@ -6645,6 +6651,33 @@
     "whole_project_module_proven": false,
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_frontier_update": {
+    "kind": "project-import-resolution-cache",
+    "observed_at": "2026-10-17T09:58:52Z",
+    "status": "passed_with_bounded_frontier",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+    "commit_containing_measured_source": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+    "candidate_base_revision": "3b9d648a1b05c521801be8c8dfdd0ce0e236acbf",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target",
+    "backend": "cranelift",
+    "evidence_artifact": "evidence/project-import-resolution-cache-20261017.json",
+    "evidence_sha256": "6bf29a3acf9f2977dc9fb87b5d847e4264415ecbb806721a6a06153554cae1f8",
+    "verification_result_sha256": "c410f88f678ce157b3cda38e0c2eab5c9eb70f3252db8a36d6eb44485745022a",
+    "probe_request_count": 14,
+    "module_limit_candidate_header_comparisons": 1,
+    "module_limit_successful_lookup_cache_hits": 1023,
+    "project_limit_candidate_header_comparisons": 4,
+    "project_limit_successful_lookup_cache_hits": 4092,
+    "repeated_missing_import_diagnostics_preserved": true,
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_performed": false,
+    "whole_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
   },
   "campaign_frontier_history": [
     {
@@ -7924,6 +7957,33 @@
       "whole_project_module_proven": false,
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    {
+      "kind": "project-import-resolution-cache",
+      "observed_at": "2026-10-17T09:58:52Z",
+      "status": "passed_with_bounded_frontier",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "compiler_head": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+      "commit_containing_measured_source": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+      "candidate_base_revision": "3b9d648a1b05c521801be8c8dfdd0ce0e236acbf",
+      "target_module": "mncs.compiler.project.v1",
+      "target_function": "compile_project_target",
+      "backend": "cranelift",
+      "evidence_artifact": "evidence/project-import-resolution-cache-20261017.json",
+      "evidence_sha256": "6bf29a3acf9f2977dc9fb87b5d847e4264415ecbb806721a6a06153554cae1f8",
+      "verification_result_sha256": "c410f88f678ce157b3cda38e0c2eab5c9eb70f3252db8a36d6eb44485745022a",
+      "probe_request_count": 14,
+      "module_limit_candidate_header_comparisons": 1,
+      "module_limit_successful_lookup_cache_hits": 1023,
+      "project_limit_candidate_header_comparisons": 4,
+      "project_limit_successful_lookup_cache_hits": 4092,
+      "repeated_missing_import_diagnostics_preserved": true,
+      "language_verified_facts_reused": 0,
+      "canonical_vm_execution_performed": false,
+      "whole_project_module_proven": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {
