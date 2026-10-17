@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 36,
+  "revision": 37,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1073,6 +1073,69 @@
         "argv": [
           "python3",
           "tools/test_vm_parser_global_frontier.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 1800,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.parser-module-canonical-vm-frontier",
+      "title": "Direct parser module entrypoints agree across reference, Cranelift, and canonical VM",
+      "guarantee_domain": "parser_front_end",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.parser.v1::header",
+        "mncs:0.2:function:mncs.compiler.parser.v1::header_global"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/kernel.mncs",
+        "src/compiler/segment.mncs",
+        "tests/fixtures/frontend.json",
+        "tools/backend_policy.py",
+        "tools/test_frontend.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_segment.py",
+        "tools/test_vm_native_application.py",
+        "tools/test_vm_parser_module_frontier.py",
+        "tools/test_vm_parser_global_frontier.py"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_parser_module_frontier.py --ephemeral-output",
+        "argv": [
+          "python3",
+          "tools/test_vm_parser_module_frontier.py",
+          "--ephemeral-output"
         ],
         "working_directory": ".",
         "timeout_seconds": 1800,

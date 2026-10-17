@@ -144,6 +144,45 @@
             1024
           ],
           "candidate_lexer_source_sha256": "3bef8a5bbf0ac56b03811101e9c36215f4099fa5468be862c065d84ebe4562aa"
+        },
+        "selected_direct_module_canonical_vm_frontier": {
+          "status": "passed",
+          "target_module": "mncs.compiler.parser.v1",
+          "target_functions": [
+            "header",
+            "header_global"
+          ],
+          "cases": 110,
+          "bounded_cases": 22,
+          "global_cases": 88,
+          "artifact_identity": "sha256:a1b8b0ccd33370d0ad92b7c7646da688fbee6508f18ef973a9a3b196fbad7d70",
+          "semantic_digests": {
+            "bounded": {
+              "reference_interpreter": "8192ed5796680f73453544bdf4410bb52446f56f46a7aaa46eeb8f5736c08d14",
+              "cranelift": "8192ed5796680f73453544bdf4410bb52446f56f46a7aaa46eeb8f5736c08d14",
+              "canonical_vm": "8192ed5796680f73453544bdf4410bb52446f56f46a7aaa46eeb8f5736c08d14"
+            },
+            "global": {
+              "reference_interpreter": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+              "cranelift": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
+              "canonical_vm": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9"
+            }
+          },
+          "evidence_artifact": "evidence/self-host-parser-module-canonical-vm-frontier-20261017.json",
+          "evidence_sha256": "1256c764676aa2dbd0026f05b87486bb01f8117040e4a1a6a1cad9e1dda57b75",
+          "test_harness": "tools/test_vm_parser_module_frontier.py",
+          "test_harness_sha256": "f0943ec049003b40549b3576e505e0148f61eda7467d0d5e503d5a40d5859e41",
+          "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+          "vm_revision": "54c80d6a54bd4a702595f09acfda370715d043fc",
+          "environment_verification": {
+            "status": "ok",
+            "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+            "binding_id": "cap_d27713593a852319",
+            "inventory_revision": 37,
+            "returncode": 0,
+            "ephemeral_report": ".build/self-host-parser-module-canonical-vm-frontier.json"
+          },
+          "scope": "parser.header and parser.header_global are selected directly from the parser module, rather than through kernel wrappers. The bounded and paged forms agree with the Stage-0 project oracle where the 64-step global fuel limit permits completion, with Cranelift, and with a fresh canonical VM artifact across frontend header fixtures, long dotted module names, every page stride, non-ASCII input, and the global fuel boundary. This proves selected parser callables, not full module canonical-VM verification or Stage-1 succession."
         }
       }
     },
@@ -6315,9 +6354,61 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "delivery_status": "implementation committed on the campaign branch; checkpoint 127 published and read back; merge and publish remain Environment-escalation-gated"
+    },
+    "native_application_readiness_20261013_parser_module_canonical_vm_20261017": {
+      "observed_at": "2026-10-17T04:17:20.585296Z",
+      "candidate_base_revision": "54c80d6a54bd4a702595f09acfda370715d043fc",
+      "tested_source_revision": "54c80d6a54bd4a702595f09acfda370715d043fc",
+      "branch": "campaign/native-application-readiness-20261013",
+      "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "tested_tree_was_dirty": true,
+      "tested_source_identity": {
+        "kind": "per-module SHA-256 of selected compiler sources",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "kernel"
+        ],
+        "module_source_sha256": {
+          "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
+          "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+          "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+          "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+          "kernel": "433a9d30c7860688dfd1e5296697770ee3901a15269ea4a14b5d2004f4aebcf6"
+        }
+      },
+      "target_module": "mncs.compiler.parser.v1",
+      "target_functions": [
+        "header",
+        "header_global"
+      ],
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "54c80d6a54bd4a702595f09acfda370715d043fc",
+      "test_harness": "tools/test_vm_parser_module_frontier.py",
+      "test_harness_sha256": "f0943ec049003b40549b3576e505e0148f61eda7467d0d5e503d5a40d5859e41",
+      "evidence_artifact": "evidence/self-host-parser-module-canonical-vm-frontier-20261017.json",
+      "evidence_sha256": "1256c764676aa2dbd0026f05b87486bb01f8117040e4a1a6a1cad9e1dda57b75",
+      "environment_verification": {
+        "status": "ok",
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+        "binding_id": "cap_d27713593a852319",
+        "inventory_revision": 37,
+        "returncode": 0
+      },
+      "whole_frontier_seconds": 19.933148,
+      "child_cpu_seconds": 19.437684,
+      "child_peak_rss_kib": 585652,
+      "canonical_vm_peak_rss_kib": 72860,
+      "cgroup_measurements_available": false,
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "delivery_status": "verified on the campaign branch; campaign checkpoint pending; merge and publish remain Environment-escalation-gated"
     }
   },
-  "evidence_updated_at": "2026-10-17T02:31:39.180774Z",
+  "evidence_updated_at": "2026-10-17T04:17:20.585363+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {

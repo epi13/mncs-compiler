@@ -31,6 +31,15 @@ worktree fixture also rejects an unregistered lookalike and a symlink escape.
 This validates the Environment and Control continuation path; it does not
 provision Language write scope or a Forge application-execution binding.
 
+The [direct parser-module frontier](self-host-parser-module-canonical-vm-frontier-20261017.json)
+selects `parser.header` and `parser.header_global` as artifact roots instead
+of reaching them through kernel wrappers. All 22 bounded and 88 paged cases
+agree with the reference interpreter, Cranelift, and canonical VM; the
+registered Environment verifier also passed at inventory revision 37. This
+proves these selected parser callables, not full parser-module canonical VM
+verification or compiler succession. The parser module's overall canonical VM
+status remains `not-proven`.
+
 ## Compiler-parity snapshot (2026-09-29)
 
 This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,
