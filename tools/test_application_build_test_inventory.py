@@ -12,8 +12,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -41,13 +43,14 @@ def sha(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def request(source: str) -> dict:
+def request(source: str, callable_roots: list[dict] | None = None) -> dict:
     return {
         "schema_version": "mncs.compiler.application-build-request/3",
         "target": "mncs-vm-0.1",
         "root_source_id": SOURCE_ID,
         "root_source": source,
-        "callable_roots": [{"module": MODULE, "function": "selected_entry"}],
+        "callable_roots": ([{"module": MODULE, "function": "selected_entry"}]
+                            if callable_roots is None else callable_roots),
         "modules": {},
         "generic_seeds": [],
         "capabilities": [],
@@ -88,14 +91,54 @@ def frontend_invocations(response: dict) -> int | None:
             .get("front_end_invocations"))
 
 
+def execute_inventory_batch(artifact: dict, inventory: dict) -> tuple[dict, float, int | None]:
+    tests = inventory.get("tests", [])
+    calls = []
+    for row in tests:
+        if row.get("module") != MODULE or row.get("generic_params") or row.get("inputs"):
+            raise AssertionError(f"inventory test is outside the supported zero-argument slice: {row}")
+        calls.append({
+            "id": row["test_case_identity"],
+            "request": {
+                "schema_version": "0.1",
+                "target": {"module": row["module"], "function": row["name"]},
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 100_000,
+            },
+        })
+    with tempfile.TemporaryDirectory(prefix="mncs-test-inventory-batch-") as raw:
+        directory = Path(raw)
+        artifact_path = directory / "application.vm.json"
+        calls_path = directory / "calls.json"
+        output_path = directory / "results.json"
+        artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8")
+        calls_path.write_text(json.dumps(calls, sort_keys=True) + "\n", encoding="utf-8")
+        started = time.monotonic()
+        completed = subprocess.run(
+            ["/usr/bin/time", "-v", str(app.VM_BIN), "batch",
+             "--artifact", str(artifact_path), "--calls", str(calls_path),
+             "--output", str(output_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        wall = time.monotonic() - started
+        if completed.returncode != 0:
+            raise AssertionError(f"canonical VM inventory batch failed: {completed.stderr[-2500:]}")
+        match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", completed.stderr)
+        peak_rss = int(match.group(1)) if match else None
+        return json.loads(output_path.read_text(encoding="utf-8")), wall, peak_rss
+
+
 def main() -> None:
     global PROBE
     probe_build = None
     if not os.environ.get("MNCS_TEST_INVENTORY_PROBE_BIN"):
         probe_build = provider_tests.ensure_current_probe()
         PROBE = app.PROBE
-    if not PROBE.is_file():
-        raise SystemExit(f"Stage-0 application-build probe is missing: {PROBE}")
+    if not PROBE.is_file() or not app.VM_BIN.is_file():
+        raise SystemExit(f"Stage-0 probe or canonical VM is missing: {PROBE}, {app.VM_BIN}")
     expected_pairs = {
         "mncs.compiler.application-build-request/1": "mncs.compiler.application-build/4",
         "mncs.compiler.application-build-request/2": "mncs.compiler.application-build/5",
@@ -131,6 +174,91 @@ def main() -> None:
         if (cold.get("cache", {}).get("status") != "miss"
                 or frontend_invocations(cold) != 1):
             raise AssertionError("cold inventory build did not report one frontend invocation")
+
+        # The caller selects its production entry and a bounded set of Test
+        # declarations in one application-build/6 request. The returned
+        # Language inventory supplies the stable call identifiers for a single
+        # canonical VM batch over that exact artifact.
+        inventory_roots = [
+            {"module": MODULE, "function": "selected_entry"},
+            {"module": MODULE, "function": "first_case"},
+            {"module": MODULE, "function": "second_case"},
+        ]
+        runner_dir = directory / "inventory-runner"
+        runner_dir.mkdir()
+        runner_probe = app.Probe(
+            runner_dir / "program-cache",
+            executable=PROBE,
+            application_cache_dir=runner_dir / "application-cache",
+        )
+        try:
+            runner_build, runner_build_metrics = runner_probe.send(
+                {"compile_application": request(SOURCE, inventory_roots)}, timeout=180.0
+            )
+        finally:
+            runner_probe.close()
+        runner_inventory = require_inventory(runner_build)
+        runner_artifact = runner_build.get("artifact", {}).get("value")
+        if (runner_build.get("cache", {}).get("status") != "miss"
+                or frontend_invocations(runner_build) != 1
+                or not isinstance(runner_artifact, dict)):
+            raise AssertionError("inventory runner did not build one verified artifact with one frontend")
+        expected_test_names = {"first_case", "second_case"}
+        runner_tests = runner_inventory.get("tests", [])
+        if {row.get("name") for row in runner_tests} != expected_test_names:
+            raise AssertionError("runner inventory changed the selected source Test set")
+        artifact_callables = {
+            (row.get("module"), row.get("name"))
+            for row in runner_artifact.get("callables", [])
+        }
+        if not set((MODULE, name) for name in expected_test_names) <= artifact_callables:
+            raise AssertionError("selected inventory tests are missing from the verified artifact")
+
+        oracle_calls = [{
+            "schema_version": "0.1",
+            "target": {"module": row["module"], "function": row["name"]},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 100_000,
+        } for row in runner_tests]
+        oracle_probe = app.Probe(runner_dir / "oracle-cache", executable=PROBE)
+        try:
+            inventory_oracle, inventory_oracle_metrics = oracle_probe.send({"project_oracle": {
+                "root": SOURCE,
+                "modules": {},
+                "calls": oracle_calls,
+            }}, timeout=180.0)
+        finally:
+            oracle_probe.close()
+        if (not inventory_oracle.get("valid")
+                or len(inventory_oracle.get("executions", [])) != len(runner_tests)):
+            raise AssertionError("Stage-0 Test inventory oracle did not execute the selected cases")
+        inventory_vm, inventory_vm_wall, inventory_vm_peak_rss = execute_inventory_batch(
+            runner_artifact, runner_inventory
+        )
+        inventory_vm_rows = inventory_vm.get("results", [])
+        if (len(inventory_vm_rows) != len(runner_tests)
+                or inventory_vm.get("artifact_id") != runner_artifact.get("artifact_id")):
+            raise AssertionError("canonical VM batch did not retain the selected artifact and Test count")
+        inventory_results: dict[str, int] = {}
+        for test_row, vm_row, oracle_row in zip(
+            runner_tests, inventory_vm_rows, inventory_oracle["executions"]
+        ):
+            if (vm_row.get("id") != test_row["test_case_identity"]
+                    or vm_row.get("outcome") != {"kind": "completed"}
+                    or vm_row.get("record", {}).get("artifact_id") != runner_artifact.get("artifact_id")):
+                raise AssertionError(f"inventory-selected Test did not complete: {vm_row}")
+            actual_rows = vm_row.get("record", {}).get("returned", [])
+            expected_rows = oracle_row.get("returned", [])
+            if len(actual_rows) != 1 or len(expected_rows) != 1:
+                raise AssertionError(f"inventory-selected Test returned the wrong arity: {test_row['name']}")
+            actual = app.decode_wire(app.vm_to_wire(actual_rows[0]))
+            expected = app.decode_wire(expected_rows[0])
+            if actual != expected:
+                raise AssertionError(f"canonical VM differs from Stage-0 for {test_row['name']}")
+            inventory_results[test_row["name"]] = actual
+        if inventory_results != {"first_case": 1, "second_case": 2}:
+            raise AssertionError(f"selected inventory Test results were unexpected: {inventory_results}")
 
         warm_probe = app.Probe(program_cache, executable=PROBE,
                                application_cache_dir=application_cache)
@@ -284,6 +412,22 @@ def main() -> None:
                 "wall_seconds": round(provider_elapsed, 6),
                 "process_tree_metrics": provider_metrics,
             },
+            "inventory_selected_batch": {
+                "build_frontend_invocations": frontend_invocations(runner_build),
+                "inventory_test_count": len(runner_tests),
+                "inventory_test_case_identities": {
+                    row["name"]: row["test_case_identity"] for row in runner_tests
+                },
+                "verified_artifact_identity": runner_build["artifact"]["identity"],
+                "canonical_vm_artifact_identity": inventory_vm["artifact_id"],
+                "canonical_vm_batch_count": len(inventory_vm_rows),
+                "canonical_vm_results": inventory_results,
+                "stage0_equivalent": True,
+                "build_process_metrics": runner_build_metrics,
+                "stage0_oracle_metrics": inventory_oracle_metrics,
+                "canonical_vm_batch_wall_seconds": round(inventory_vm_wall, 6),
+                "canonical_vm_batch_peak_rss_kib": inventory_vm_peak_rss,
+            },
             "contract": {
                 "request_schema": "mncs.compiler.application-build-request/3",
                 "response_schema": cold["schema_version"],
@@ -339,6 +483,18 @@ def main() -> None:
                     == "mncs.compiler.application-build/6"
                     and provider_inventory == cold_inventory
                 ),
+                "one_build_emits_artifact_inventory_and_selected_test_callables": (
+                    frontend_invocations(runner_build) == 1
+                    and len(runner_tests) == 2
+                    and set((MODULE, name) for name in expected_test_names) <= artifact_callables
+                ),
+                "inventory_ids_drive_one_batch_on_same_artifact": (
+                    len(inventory_vm_rows) == len(runner_tests)
+                    and all(vm.get("id") == test["test_case_identity"]
+                            for vm, test in zip(inventory_vm_rows, runner_tests))
+                    and inventory_vm.get("artifact_id") == runner_artifact.get("artifact_id")
+                ),
+                "selected_test_batch_matches_stage0": True,
                 "language_verified_facts_reused": 0,
             },
             "measurements": {
@@ -364,8 +520,10 @@ def main() -> None:
                 "still runs the full frontend before executable-closure reuse. Exact fresh-process "
                 "reuse preserves the inventory; edits refresh source spans or the "
                 "affected test identity, and invalid input publishes neither inventory nor artifact. "
-                "This does not implement Language verification-fact reuse or change the production "
-                "mncs-test consumer."
+                "A selected zero-argument source Test subset can now be emitted with the production "
+                "entry, selected from the returned inventory, and executed in one canonical VM batch "
+                "with Stage-0 agreement. This does not implement Language verification-fact reuse "
+                "or change the production mncs-test consumer."
             ),
         }
         evidence = ROOT / "evidence/application-build-test-inventory-20261017.json"

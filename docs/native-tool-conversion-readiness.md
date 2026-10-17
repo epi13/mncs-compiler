@@ -200,6 +200,15 @@ Compiler API progress, not completion of the production `mncs-test` runner
 integration. Evidence is
 `evidence/application-build-test-inventory-20261017.json`.
 
+The follow-up now selects `selected_entry`, `first_case`, and `second_case` in
+one application-build/6 request. Its single frontend result supplies both the
+verified artifact and the Test inventory; the inventory's two stable case
+identities drive one `mncs-vm batch` invocation over that same artifact. Both
+typed results (`1` and `2`) match Stage-0. This selected zero-argument slice
+measured 0.116 s for the build and 0.006 s for the VM batch, with a 20,336 KiB
+VM peak RSS; cgroup memory was unavailable. It does not integrate the
+production `mncs-test` consumer or resolve generic test specializations.
+
 The real five-module `mncs-test` readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across
 five resolved modules and 24 functions; the selected executable closure,
