@@ -142,7 +142,7 @@ def vm_batch(artifact: dict, cases: list[dict]) -> tuple[dict, float, int | None
             "target": {"module": MODULE, "function": case["function"]},
             "arguments": case.get("arguments", []),
             "type_arguments": [],
-            "step_budget": 2_000_000,
+            "step_budget": case.get("step_budget", 2_000_000),
         },
     } for case in cases]
     with tempfile.TemporaryDirectory(prefix="mncs-test-core-batch-") as raw:
@@ -295,6 +295,12 @@ def main() -> None:
             {"integer": {"type": {"bits": 64, "signed": False}, "value": 97}},
         ]},
         {"id": "snapshot-witness", "function": "snapshot_witness"},
+        {"id": "budget-limited-suite", "function": "passed_suite", "step_budget": 1},
+        {"id": "invalid-property-case-type", "function": "property_case", "arguments": [
+            {"boolean": {"value": True}},
+            {"integer": {"type": {"bits": 64, "signed": False}, "value": 7}},
+        ]},
+        {"id": "suite-after-negative-calls", "function": "passed_suite"},
     ]
     oracle_probe = app.Probe(CACHE_DIR, executable=PROBE)
     try:
@@ -307,10 +313,14 @@ def main() -> None:
                 "arguments": case.get("arguments", []),
                 "type_arguments": [],
                 "step_budget": 2_000_000,
-            } for case in cases],
+            } for case in cases[:7]],
         }}, timeout=180.0)
-        if not oracle.get("valid") or len(oracle.get("executions", [])) != len(cases):
-            raise AssertionError(f"Stage-0 Test core oracle rejected the selected workload: {oracle}")
+        if not oracle.get("valid") or len(oracle.get("executions", [])) != 7:
+            raise AssertionError("Stage-0 Test core oracle failed: " + json.dumps({
+                "valid": oracle.get("valid"),
+                "execution_count": len(oracle.get("executions", [])),
+                "diagnostics": oracle.get("diagnostics"),
+            }))
         oracle_probe.close()
     except BaseException:
         if oracle_probe.proc.poll() is None:
@@ -322,10 +332,15 @@ def main() -> None:
     results = vm_result.get("results", [])
     if len(results) != len(cases):
         raise AssertionError(f"canonical VM returned the wrong batch length: {results}")
+    artifact_id = built.get("artifact", {}).get("value", {}).get("artifact_id")
+    if vm_result.get("artifact_id") != artifact_id:
+        raise AssertionError("canonical VM batch receipt does not bind the verified artifact")
     observed = []
     for case, actual_row, oracle_row in zip(cases, results, oracle["executions"]):
         if actual_row.get("id") != case["id"] or actual_row.get("outcome") != {"kind": "completed"}:
             raise AssertionError(f"native Test batch call did not complete: {actual_row}")
+        if actual_row.get("record", {}).get("artifact_id") != artifact_id:
+            raise AssertionError(f"Test call receipt is bound to a different artifact: {actual_row}")
         returned = actual_row.get("record", {}).get("returned", [])
         expected_values = oracle_row.get("returned", [])
         if len(returned) != 1 or len(expected_values) != 1:
@@ -335,6 +350,22 @@ def main() -> None:
         if actual != expected:
             raise AssertionError(f"canonical VM diverged from Stage-0 for {case['id']}: {actual} != {expected}")
         observed.append({"id": case["id"], "value": actual})
+
+    budget_row, invalid_row, recovery_row = results[-3:]
+    if (budget_row.get("id") != "budget-limited-suite"
+            or budget_row.get("outcome", {}).get("kind") != "budget_exhausted"
+            or budget_row.get("outcome", {}).get("dimension") != "steps"):
+        raise AssertionError(f"bounded Test call did not fail with its step limit: {budget_row}")
+    if (invalid_row.get("id") != "invalid-property-case-type"
+            or invalid_row.get("outcome", {}).get("kind") != "invalid_request"):
+        raise AssertionError(f"invalid typed Test input was not rejected at the call boundary: {invalid_row}")
+    recovery_values = recovery_row.get("record", {}).get("returned", [])
+    if (recovery_row.get("id") != "suite-after-negative-calls"
+            or recovery_row.get("outcome") != {"kind": "completed"}
+            or recovery_row.get("record", {}).get("artifact_id") != artifact_id
+            or len(recovery_values) != 1
+            or app.decode_wire(app.vm_to_wire(recovery_values[0])) != observed[0]["value"]):
+        raise AssertionError(f"negative calls contaminated the following native suite call: {recovery_row}")
 
     by_id = {row["id"]: row["value"] for row in observed}
     passed = by_id["passed-suite"]
@@ -364,7 +395,7 @@ def main() -> None:
     } for name, path in sorted(MODULE_FILES.items())]
     report = {
         "schema_version": 1,
-        "kind": "mncs.compiler.native-mncs-test-core-batch-proof",
+        "kind": "mncs.compiler.native-mncs-test-core-batch-isolation-proof",
         "observed_at": datetime.now(timezone.utc).isoformat(),
         "compiler": {
             "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
@@ -409,6 +440,9 @@ def main() -> None:
             "canonical_vm_batch_count": len(results),
             "stage0_oracle_execution_count": len(oracle.get("executions", [])),
             "execution_equivalent": True,
+            "budget_exhaustion_isolated": True,
+            "invalid_typed_input_isolated": True,
+            "post_failure_call_matches_prior_suite": True,
             "language_verified_facts_reused": 0,
             "semantics_executed_in_mncs": [
                 "assertion construction and projection",
@@ -428,12 +462,14 @@ def main() -> None:
         },
         "scope": (
             "Seven selected entrypoints from a multi-module production mncs-test core were compiled "
-            "into one canonical VM artifact and invoked in one VM batch. Stage-0 and VM typed results "
-            "matched. This is Compiler/VM workload evidence; it does not claim Forge, Environment, "
-            "Store publication, retained-session, or production CLI conversion."
+            "into one canonical VM artifact and invoked in one admitted VM session. Seven valid typed "
+            "results matched Stage-0. A one-step budget exhaustion and an invalid typed argument were "
+            "then isolated to their calls; the following valid suite call matched its earlier result. "
+            "This is Compiler/VM workload evidence; it does not claim Forge, Environment, Store "
+            "publication, or production CLI conversion."
         ),
     }
-    evidence_path = ROOT / "evidence/native-app-readiness-test-core-batch-20261017.json"
+    evidence_path = ROOT / "evidence/native-app-readiness-test-core-batch-isolation-20261017.json"
     evidence_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
 
