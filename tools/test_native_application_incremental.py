@@ -778,7 +778,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         },
         'cache_key_inputs': [
             'exact source snapshot identity, including root and every supplied module ID and byte hash',
-            'dependency-closure candidate index binds root source and build assumptions; every resolved module source hash must match before artifact reuse',
+            'dependency-closure candidate index binds root source ID and build assumptions; exact root and resolved dependency hashes permit pre-frontend reuse, while changed source requires a fresh frontend check before executable-closure artifact reuse',
             'canonical generic specialization seed identities',
             'Stage-0 toolchain identity and probe executable SHA-256',
             'compiler contract version, canonical VM backend, selected target, and entry',

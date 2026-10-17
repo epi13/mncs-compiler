@@ -238,7 +238,6 @@ fn application_cache_index_key(
     request: &Value,
     contract: &str,
     root_id: &str,
-    root_source: &str,
     generic_seeds: &[HostGenericSeedRequest],
     callable_roots: &[(String, String)],
     toolchain: Option<&ToolchainIdentity>,
@@ -251,10 +250,9 @@ fn application_cache_index_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-index-key/4",
+        "schema_version": "mncs.compiler.application-build-cache-index-key/5",
         "contract": contract,
         "root_source_id": root_id,
-        "root_source_sha256": format!("sha256:{}", mncs_model::sha256_hex(root_source.as_bytes())),
         "generic_seeds": generic_seed_keys,
         "callable_roots": callable_roots,
         "compiler_semantics": toolchain
@@ -268,7 +266,7 @@ fn application_cache_index_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache-index/4\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache-index/5\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -1477,7 +1475,6 @@ mod tests {
                     request,
                     CONTRACT_V2,
                     root_id,
-                    root_source,
                     &generic_seeds,
                     &callable_roots,
                     None,
@@ -1504,6 +1501,65 @@ mod tests {
         let optimization_keys = keys_for(&optimization_policy);
         assert_ne!(baseline_keys.0, optimization_keys.0);
         assert_ne!(baseline_keys.1, optimization_keys.1);
+    }
+
+    #[test]
+    fn application_cache_index_locates_candidates_across_root_snapshots() {
+        let request = json!({
+            "target": "mncs-vm-0.1",
+            "optimization_policy": "default",
+            "verification_policy": "semantic-check/1",
+            "entry": {"module": "policy.root", "function": "entry"},
+        });
+        let root_id = "root.mncs";
+        let first_snapshot = format!("sha256:{}", "1".repeat(64));
+        let second_snapshot = format!("sha256:{}", "2".repeat(64));
+        let modules = BTreeMap::new();
+        let generic_seeds = Vec::<HostGenericSeedRequest>::new();
+        let callable_roots = vec![("policy.root".to_owned(), "entry".to_owned())];
+        let first_artifact_key = application_cache_key(
+            &request,
+            CONTRACT_V2,
+            root_id,
+            &first_snapshot,
+            &modules,
+            &generic_seeds,
+            &callable_roots,
+            None,
+            "sha256:compiler-probe",
+        );
+        let second_artifact_key = application_cache_key(
+            &request,
+            CONTRACT_V2,
+            root_id,
+            &second_snapshot,
+            &modules,
+            &generic_seeds,
+            &callable_roots,
+            None,
+            "sha256:compiler-probe",
+        );
+        let first_index_key = application_cache_index_key(
+            &request,
+            CONTRACT_V2,
+            root_id,
+            &generic_seeds,
+            &callable_roots,
+            None,
+            "sha256:compiler-probe",
+        );
+        let second_index_key = application_cache_index_key(
+            &request,
+            CONTRACT_V2,
+            root_id,
+            &generic_seeds,
+            &callable_roots,
+            None,
+            "sha256:compiler-probe",
+        );
+
+        assert_ne!(first_artifact_key, second_artifact_key);
+        assert_eq!(first_index_key, second_index_key);
     }
 
     #[test]
@@ -2342,7 +2398,6 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         request,
         contract,
         root_id,
-        root_source,
         &generic_seeds,
         &callable_roots,
         toolchain,

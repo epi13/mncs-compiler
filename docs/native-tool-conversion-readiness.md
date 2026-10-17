@@ -191,9 +191,11 @@ fresh-process exact hit, comment-edit location refresh, unselected test-body
 identity update, and invalid-source checks. The cold build reported one
 frontend invocation; exact reuse reported zero. The unselected test-body edit
 preserved the selected executable closure while changing only that test's
-body-sensitive identity. The current full-snapshot frontend path still
-regenerated the artifact for the changed root source; Language verification
-facts reused: zero. This is
+body-sensitive identity. A comment edit and a fresh-process unselected body
+edit each ran the full frontend to refresh current inventory spans and
+diagnostics, then reused the existing verified VM artifact and skipped
+SSA/backend emission.
+Language verification facts reused: zero. This is
 Compiler API progress, not completion of the production `mncs-test` runner
 integration. Evidence is
 `evidence/application-build-test-inventory-20261017.json`.

@@ -109,15 +109,20 @@ non-application VM emitter continues to serialize its full verified module.
 
 This is a bounded bootstrap adapter with a content-addressed cache for complete
 verified application artifacts. An exact snapshot hit reuses its artifact
-directly. A second candidate index can reuse a prior artifact when the root
-source and build assumptions match and every module in the prior resolved
-dependency graph has the same source hash. The response still carries a newly
-computed identity and file list for the current full snapshot, so adding or
-editing an unreferenced module does not leave stale input provenance. A changed
-root or imported module rejects that candidate and recomputes the complete
-application closure. This does not yet reuse verified declarations or
-functions within a changed closure, and it makes no claim of Stage-1 or
-Stage-2 succession. The real consumer exercise is
+directly. A second candidate index is stable for the root source ID and build
+assumptions, so it can locate a candidate after root bytes change. Before
+frontend execution, reuse still requires the exact root hash and every module
+in the prior resolved dependency graph to match. If the root or a resolved
+dependency changed, the full Language frontend runs and the candidate is
+admitted only when the freshly verified executable closure, selected callable
+interfaces, and Language-owned artifact interface still match. The response
+then receives the current snapshot identity and file list, including current
+inventory spans. Thus an edit to an unselected root test can reuse the VM
+artifact and avoid SSA/backend emission, but it does not skip semantic
+verification or reuse Language verification facts. Adding or editing an
+unreferenced module also receives current input provenance. This does not yet
+reuse verified declarations or functions within a changed closure, and it
+makes no claim of Stage-1 or Stage-2 succession. The real consumer exercise is
 `python3 tools/test_vm_native_application.py`,
 which reads the selected `mncs-test` checkout without modifying it, requests
 `equals_bytes<4>` and `summarize<4>`, accepts a typed `ReadinessRequest`, returns

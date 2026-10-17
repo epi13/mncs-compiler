@@ -1,27 +1,27 @@
 {
   "schema_version": 1,
   "kind": "mncs.compiler.application-build-source-test-inventory-proof",
-  "observed_at": "2026-10-17T18:13:48.191098+00:00",
+  "observed_at": "2026-10-17T18:27:10.856963+00:00",
   "compiler": {
-    "revision": "b80eb8ac2939f31b4041d6b56dbc80ca2c0a0d8b",
+    "revision": "1d61efea3055276dd405cca95f947cf9906f4773",
     "branch": "campaign/native-application-readiness-20261013",
-    "probe_sha256": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9",
+    "probe_sha256": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e",
     "probe_build": {
       "built_from_selected_checkout": true,
       "target_directory": ".build/native-app-readiness/stage0-target",
-      "binary_sha256": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "binary_sha256": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     },
-    "harness_sha256": "sha256:b51359239eaece5ca427950e319e76ded6c336ce8ac04e67f48a86e0d7c604a0",
+    "harness_sha256": "sha256:1fc50950f86f39c18479ef042752bceb7ca3019f6fddcd5a7107da591c7ca410",
     "language_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
   },
   "provider_adapter": {
     "response_schema": "mncs.compiler.application-build/6",
     "source_test_count": 2,
-    "wall_seconds": 0.191101,
+    "wall_seconds": 0.189056,
     "process_tree_metrics": {
-      "wall_seconds": 0.191101,
-      "cpu_seconds": 0.12,
-      "peak_rss_bytes": 31830016,
+      "wall_seconds": 0.189056,
+      "cpu_seconds": 0.11,
+      "peak_rss_bytes": 34332672,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 9,
       "peak_threads": 2,
@@ -42,7 +42,7 @@
       "first_case": "mncs:0.2:test-case:tests.native_inventory_build::first_case::3a1e72528c666d3eacac0fb2367e16bc09c9554b5f4ff6acf2af59a6ce2a83ca",
       "second_case": "mncs:0.2:test-case:tests.native_inventory_build::second_case::665749f556fc9209b971311e2ce2a5b1e1302252f4bba8d3a847c584b2efdbc8"
     },
-    "selected_artifact_identity": "sha256:06930f28e0eb6279ba6ecc7bb751fbc61bc4750b7886405f18966f897fb1d930"
+    "selected_artifact_identity": "sha256:8d36b2e2f26290351b5f121768d98acb0c6ed703fc718714e7c24e78ef26679c"
   },
   "checks": {
     "one_frontend_supplies_build_and_inventory": true,
@@ -51,10 +51,15 @@
     "unselected_test_body_changes_only_its_case_identity": true,
     "unselected_test_edit_preserves_executable_closure": true,
     "unselected_root_test_edit_artifact_identity": {
-      "before": "sha256:06930f28e0eb6279ba6ecc7bb751fbc61bc4750b7886405f18966f897fb1d930",
-      "after": "sha256:d7d31c0d7da119cd6f9d7edc0c900ce7ea0d75d58482070266c1b7d9539bb509",
-      "reused": false
+      "before": "sha256:8d36b2e2f26290351b5f121768d98acb0c6ed703fc718714e7c24e78ef26679c",
+      "after": "sha256:8d36b2e2f26290351b5f121768d98acb0c6ed703fc718714e7c24e78ef26679c",
+      "reused": true,
+      "reuse_basis": "verified_application_executable_closure",
+      "ssa_verification": "reused_verified_vm_artifact",
+      "fresh_process": true
     },
+    "fresh_process_changed_root_reuses_verified_artifact": true,
+    "comment_edit_reuses_executable_closure": true,
     "invalid_source_suppresses_inventory_and_artifact": true,
     "valid_source_without_tests_returns_empty_inventory": true,
     "provider_adapter_publishes_inventory_response": true,
@@ -62,9 +67,9 @@
   },
   "measurements": {
     "cold_build": {
-      "wall_seconds": 0.134696,
-      "cpu_seconds": 0.09,
-      "peak_rss_bytes": 12488704,
+      "wall_seconds": 0.114129,
+      "cpu_seconds": 0.08,
+      "peak_rss_bytes": 6303744,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -72,9 +77,9 @@
       "request_sequence": 1
     },
     "fresh_process_exact_hit": {
-      "wall_seconds": 0.105566,
+      "wall_seconds": 0.102772,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 6459392,
+      "peak_rss_bytes": 6320128,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -82,9 +87,9 @@
       "request_sequence": 1
     },
     "comment_edit": {
-      "wall_seconds": 0.115842,
+      "wall_seconds": 0.110763,
       "cpu_seconds": 0.08,
-      "peak_rss_bytes": 6660096,
+      "peak_rss_bytes": 6578176,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 4,
       "peak_threads": 1,
@@ -92,34 +97,34 @@
       "request_sequence": 1
     },
     "unselected_test_body_edit": {
-      "wall_seconds": 0.008202,
+      "wall_seconds": 0.111532,
+      "cpu_seconds": 0.09,
+      "peak_rss_bytes": 6414336,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "invalid_source": {
+      "wall_seconds": 0.000816,
       "cpu_seconds": 0.0,
-      "peak_rss_bytes": 12943360,
+      "peak_rss_bytes": 12070912,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 3,
       "peak_threads": 1,
       "peak_child_processes": 0,
       "request_sequence": 2
     },
-    "invalid_source": {
-      "wall_seconds": 0.000499,
+    "valid_source_without_tests": {
+      "wall_seconds": 0.006179,
       "cpu_seconds": 0.0,
-      "peak_rss_bytes": 12996608,
+      "peak_rss_bytes": 12070912,
       "peak_cgroup_memory_bytes": null,
       "peak_open_file_descriptors": 3,
       "peak_threads": 1,
       "peak_child_processes": 0,
       "request_sequence": 3
-    },
-    "valid_source_without_tests": {
-      "wall_seconds": 0.004867,
-      "cpu_seconds": 0.0,
-      "peak_rss_bytes": 12996608,
-      "peak_cgroup_memory_bytes": null,
-      "peak_open_file_descriptors": 3,
-      "peak_threads": 1,
-      "peak_child_processes": 0,
-      "request_sequence": 4
     }
   },
   "verification_work": {
@@ -139,7 +144,7 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "recomputed",
-      "verification_engine_identity": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "verification_engine_identity": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     },
     "fresh_process_exact_hit": {
       "artifact_decision_reason": "verified_cached_application_artifact",
@@ -157,11 +162,11 @@
       "signature_verification": "not_run",
       "source_parsing": "not_run",
       "ssa_verification": "not_run",
-      "verification_engine_identity": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "verification_engine_identity": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     },
     "comment_edit": {
-      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
-      "backend_artifact": "generated",
+      "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+      "backend_artifact": "reused",
       "declaration_resolution": "recomputed_by_full_frontend",
       "front_end_invocations": 1,
       "front_end_outcome": "verified",
@@ -171,15 +176,15 @@
       "reused_semantic_facts": [],
       "schema_version": "mncs.compiler.application-build-verification-work/1",
       "semantic_dependency_closure": "recomputed_by_full_frontend",
-      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "semantic_reverification_reason": "source_snapshot_changed; full_frontend_required_before_artifact_reuse",
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
-      "ssa_verification": "recomputed",
-      "verification_engine_identity": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "ssa_verification": "reused_verified_vm_artifact",
+      "verification_engine_identity": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     },
     "unselected_test_body_edit": {
-      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
-      "backend_artifact": "generated",
+      "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+      "backend_artifact": "reused",
       "declaration_resolution": "recomputed_by_full_frontend",
       "front_end_invocations": 1,
       "front_end_outcome": "verified",
@@ -189,11 +194,11 @@
       "reused_semantic_facts": [],
       "schema_version": "mncs.compiler.application-build-verification-work/1",
       "semantic_dependency_closure": "recomputed_by_full_frontend",
-      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "semantic_reverification_reason": "source_snapshot_changed; full_frontend_required_before_artifact_reuse",
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
-      "ssa_verification": "recomputed",
-      "verification_engine_identity": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "ssa_verification": "reused_verified_vm_artifact",
+      "verification_engine_identity": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     },
     "invalid_source": {
       "artifact_decision_reason": "frontend_or_artifact_emission_did_not_produce_an_artifact",
@@ -211,7 +216,7 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "not_run",
-      "verification_engine_identity": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "verification_engine_identity": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     },
     "valid_source_without_tests": {
       "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
@@ -229,8 +234,8 @@
       "signature_verification": "recomputed_by_full_frontend",
       "source_parsing": "recomputed_by_full_frontend",
       "ssa_verification": "recomputed",
-      "verification_engine_identity": "sha256:2f109401447c86f2db89cc4e02ae576163ee7b26deef196d7696d963c528cce9"
+      "verification_engine_identity": "sha256:e1df29cb5ea5e3ef97bae0c62f048deecc1989cde6c2aa0d9945d7434bb15f3e"
     }
   },
-  "scope": "The Compiler returns the Language-owned source_module test inventory from the same frontend result used to verify callable roots and emit application-build/6. Exact fresh-process reuse preserves that inventory; edits refresh source spans or the affected test identity, and invalid input publishes neither inventory nor artifact. This does not implement Language verification-fact reuse or change the production mncs-test consumer."
+  "scope": "The Compiler returns the Language-owned source_module test inventory from the same frontend result used to verify callable roots and emit application-build/6. A fresh process can locate a prior artifact candidate across root snapshots; changed source still runs the full frontend before executable-closure reuse. Exact fresh-process reuse preserves the inventory; edits refresh source spans or the affected test identity, and invalid input publishes neither inventory nor artifact. This does not implement Language verification-fact reuse or change the production mncs-test consumer."
 }

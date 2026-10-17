@@ -2,9 +2,10 @@
 
 The inventory is derived by mncs-language during the same frontend invocation
 that verifies callable roots and emits the VM artifact. This exercises exact
-cache reuse, source-location refresh on a comment edit, body-sensitive test
-identity, and invalid-source suppression without reconstructing tests from
-source text in this harness.
+cache reuse, source-location refresh on a comment edit, fresh-process artifact
+reuse after an unselected root test body edit, body-sensitive test identity,
+and invalid-source suppression without reconstructing tests from source text
+in this harness.
 """
 from __future__ import annotations
 
@@ -166,15 +167,26 @@ def main() -> None:
                 raise AssertionError("comment-only edit changed semantic Test identities")
             if frontend_invocations(comment_response) != 1:
                 raise AssertionError("comment edit did not obtain a fresh root-source inventory")
+            comment_work = comment_response.get("cache", {}).get("verification_work", {})
+            if (comment_response.get("cache", {}).get("status") != "hit"
+                    or comment_response.get("cache", {}).get("reuse_basis")
+                    != "verified_application_executable_closure"
+                    or comment_work.get("backend_artifact") != "reused"):
+                raise AssertionError("comment edit did not reuse its unchanged executable closure")
 
             body_source = SOURCE.replace(
                 "test second_case() -> (result: u64) { return 2; }",
                 "test second_case() -> (result: u64) { return 9; }",
                 1,
             )
-            body_response, body_metrics = edit_probe.send(
-                {"compile_application": request(body_source)}, timeout=180.0
-            )
+            body_probe = app.Probe(program_cache, executable=PROBE,
+                                   application_cache_dir=application_cache)
+            try:
+                body_response, body_metrics = body_probe.send(
+                    {"compile_application": request(body_source)}, timeout=180.0
+                )
+            finally:
+                body_probe.close()
             body_inventory = require_inventory(body_response)
             body_tests = {row["name"]: row for row in body_inventory["tests"]}
             if (body_tests["second_case"]["test_case_identity"]
@@ -192,6 +204,17 @@ def main() -> None:
                 raise AssertionError("unselected Test body edit changed the selected executable closure")
             if frontend_invocations(body_response) != 1:
                 raise AssertionError("unselected root Test body edit did not run the frontend")
+            if body_metrics.get("request_sequence") != 1:
+                raise AssertionError("root Test body edit was not checked in a fresh process")
+            body_work = body_response.get("cache", {}).get("verification_work", {})
+            if (body_response.get("cache", {}).get("status") != "hit"
+                    or body_response.get("cache", {}).get("reuse_basis")
+                    != "verified_application_executable_closure"
+                    or body_work.get("backend_artifact") != "reused"
+                    or body_work.get("ssa_verification") != "reused_verified_vm_artifact"
+                    or body_response.get("artifact", {}).get("identity")
+                    != comment_response.get("artifact", {}).get("identity")):
+                raise AssertionError("unselected Test body edit did not reuse its verified VM artifact")
 
             invalid_source = body_source.replace("return 9;", "return missing_value;", 1)
             invalid_response, invalid_metrics = edit_probe.send(
@@ -295,7 +318,20 @@ def main() -> None:
                     "after": body_response.get("artifact", {}).get("identity"),
                     "reused": body_response.get("artifact", {}).get("identity")
                     == comment_response.get("artifact", {}).get("identity"),
+                    "reuse_basis": body_response.get("cache", {}).get("reuse_basis"),
+                    "ssa_verification": body_work.get("ssa_verification"),
+                    "fresh_process": body_metrics.get("request_sequence") == 1,
                 },
+                "fresh_process_changed_root_reuses_verified_artifact": (
+                    body_metrics.get("request_sequence") == 1
+                    and body_work.get("backend_artifact") == "reused"
+                    and body_work.get("ssa_verification") == "reused_verified_vm_artifact"
+                ),
+                "comment_edit_reuses_executable_closure": (
+                    comment_response.get("cache", {}).get("reuse_basis")
+                    == "verified_application_executable_closure"
+                    and comment_work.get("backend_artifact") == "reused"
+                ),
                 "invalid_source_suppresses_inventory_and_artifact": True,
                 "valid_source_without_tests_returns_empty_inventory": True,
                 "provider_adapter_publishes_inventory_response": (
@@ -323,8 +359,10 @@ def main() -> None:
             },
             "scope": (
                 "The Compiler returns the Language-owned source_module test inventory from the same "
-                "frontend result used to verify callable roots and emit application-build/6. Exact "
-                "fresh-process reuse preserves that inventory; edits refresh source spans or the "
+                "frontend result used to verify callable roots and emit application-build/6. A fresh "
+                "process can locate a prior artifact candidate across root snapshots; changed source "
+                "still runs the full frontend before executable-closure reuse. Exact fresh-process "
+                "reuse preserves the inventory; edits refresh source spans or the "
                 "affected test identity, and invalid input publishes neither inventory nor artifact. "
                 "This does not implement Language verification-fact reuse or change the production "
                 "mncs-test consumer."
