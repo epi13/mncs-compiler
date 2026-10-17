@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import stat
 import subprocess
 import sys
 import tempfile
@@ -80,6 +81,43 @@ def effect_summaries(record: dict) -> list[dict]:
         }
         for row in record.get('effects', [])
     ]
+
+
+def publish_environment_artifacts() -> list[dict]:
+    raw_root = os.environ.get('MNCS_ENV_SESSION_ARTIFACT_DIR')
+    if not raw_root:
+        return []
+    artifact_root = Path(raw_root)
+    try:
+        root_mode = artifact_root.lstat().st_mode
+    except OSError as error:
+        raise RuntimeError('Environment artifact directory is unavailable') from error
+    if not stat.S_ISDIR(root_mode):
+        raise RuntimeError('Environment artifact root must be a real directory')
+
+    sources = [
+        ('native-app-readiness-test-digest-app.json', EVIDENCE_PATH),
+        ('test-digest-app.vm.json', ARTIFACT_PATH),
+    ]
+    published = []
+    for name, source in sources:
+        if source.is_symlink() or not source.is_file():
+            raise RuntimeError(f'Environment artifact source is not a regular file: {source}')
+        payload = source.read_bytes()
+        destination = artifact_root / name
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0)
+        try:
+            descriptor = os.open(destination, flags, 0o600)
+        except OSError as error:
+            raise RuntimeError(f'cannot write bounded Environment artifact {name}') from error
+        with os.fdopen(descriptor, 'wb') as output:
+            output.write(payload)
+        published.append({
+            'path': name,
+            'byte_count': len(payload),
+            'sha256': sha(payload),
+        })
+    return published
 
 
 def git(path: Path, *args: str) -> str:
@@ -861,14 +899,16 @@ def main() -> None:
             'The file provider is a bounded test adapter for the canonical VM Provider API; it is not a production MNCS service provider.',
             'The pure digest body is compared to Stage-0; this does not prove full mncs-test command parity or compiler succession.',
             'The provider harness is a separate Rust test program in the Compiler repository; it performs bounded structured file transport and validates the capability mapping from admitted SSA.',
-            'This proof does not execute through Forge, Environment, or canonical Store; the selected Environment session exposes no Forge application-execution binding.',
+            'The digest application itself does not execute through Forge; Environment publication here stores verifier outputs, not a Forge application-execution receipt.',
         ],
     }
     EVIDENCE_PATH.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n',
                              encoding='utf-8')
+    environment_artifacts = publish_environment_artifacts()
     print(json.dumps({
         'status': 'passed',
         'evidence': str(EVIDENCE_PATH),
+        'environment_artifacts': environment_artifacts,
         'artifact_identity': artifact_id,
         'interface_identity': current_interface.get('identity'),
         'build_metrics': build_metrics,
