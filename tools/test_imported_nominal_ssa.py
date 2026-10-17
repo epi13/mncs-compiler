@@ -594,7 +594,7 @@ def run() -> dict:
 
                     built_wire, built = invoke_stage(
                         probe, "build_modules", "mncs.compiler.project.v1",
-                        [source_wires, flat_pages],
+                        [source_wires, flat_pages, integer(0), {"boolean": {"value": False}}],
                         [NOMINAL_MODULE_BOUND, NOMINAL_BYTE_BOUND],
                         stage_reports, stage_budget,
                     )

@@ -94,6 +94,8 @@ record ValueSsaSummary {
     has_call: bool,
     first_call_identity: decl.SemanticIdentity
 }
+record ValueSsaFunctionStatus { found: bool, supported: bool, verified: bool, identity: decl.SemanticIdentity }
+record FunctionStatusWalk { rest: FunctionList, index: u64, target: u64, status: ValueSsaFunctionStatus, done: bool }
 
 record ParamBuild { rest: decl.FieldList, env: Environment, inputs: ValueList, values: ValueList, next_value: u64, ok: bool }
 record Incoming { found: bool, ok: bool, count: u64, bindings: Environment }
@@ -260,6 +262,16 @@ fn lower_flow_unit_value_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
     return lower_value_ssa<P, N>(pages, stride, total, lowered, nominals);
 }
 
+// End-to-end imported-interface path. The caller supplies identities and
+// schemas resolved by the module layer; declaration proof, Flow lowering, and
+// value SSA all consume that same canonical context.
+fn lower_flow_unit_value_ssa_with_imported_schemas<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, imported: decl.SigTab, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList) -> (result: ValueSsaSummary) {
+    let unit: decl.Unit = decl.parse_unit<P, N>(pages, stride, total);
+    let proof: decl.UnitProve = decl.prove_parsed_unit_with_imported_schemas<P, N>(pages, stride, total, unit, imported, nominals, imported_records, imported_enums);
+    let lowered: flow.LoweredUnit = flow.lower_proven_unit<P, N>(pages, stride, total, proof);
+    return lower_value_ssa_with_imported_schemas<P, N>(pages, stride, total, lowered, nominals, imported_records, imported_enums);
+}
+
 fn lower_value_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList) -> (result: ValueSsaSummary) {
     return lower_value_ssa_with_imported_records<P, N>(pages, stride, total, lowered, nominals, decl.ImportedRecordList.IRNil);
 }
@@ -279,6 +291,27 @@ fn lower_value_ssa_with_imported_schemas<P: Nat, N: Nat>(pages: [[byte; up_to N]
 }
 fn empty_ssa_summary(valid: bool) -> (result: ValueSsaSummary) {
     return ValueSsaSummary { functions: FunctionList.FNil, valid: valid, function_count: 0, supported_function_count: 0, verified_function_count: 0, value_count: 0, instruction_count: 0, block_count: 0, block_parameter_count: 0, unsupported_block_count: 0, first_unsupported_function: 0, first_unsupported_block: 0, first_unsupported_kind: 0, call_count: 0, has_call: false, first_call_identity: invalid_identity() };
+}
+fn value_ssa_function_status(summary: ValueSsaSummary, target: u64) -> (result: ValueSsaFunctionStatus) {
+    let empty: ValueSsaFunctionStatus = ValueSsaFunctionStatus { found: false, supported: false, verified: false, identity: invalid_identity() };
+    iterate i up_to 1024 carrying st: FunctionStatusWalk = FunctionStatusWalk { rest: summary.functions, index: 0, target: target, status: empty, done: false } {
+        if st.done { return st.status; }
+        next st = value_ssa_function_status_step(st);
+    }
+    return st.status;
+}
+fn value_ssa_function_status_step(st: FunctionStatusWalk) -> (result: FunctionStatusWalk) {
+    return match st.rest {
+        FunctionList.FNil => FunctionStatusWalk { ..st, done: true },
+        FunctionList.FCons { head: function, tail: rest } => value_ssa_function_status_item(st, function, rest)
+    };
+}
+fn value_ssa_function_status_item(st: FunctionStatusWalk, function: Function, rest: FunctionList) -> (result: FunctionStatusWalk) {
+    if st.index == st.target {
+        let status: ValueSsaFunctionStatus = ValueSsaFunctionStatus { found: true, supported: function.supported, verified: function.verified, identity: function.identity };
+        return FunctionStatusWalk { ..st, status: status, done: true };
+    }
+    return FunctionStatusWalk { ..st, rest: rest, index: st.index + 1 };
 }
 fn function_list_ended<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionWalk) -> (result: bool) {
     return match st.fns { DNil => st.index == flow.ssa_function_count<P, N>(pages, stride, total, st.lowered), DCons { head: h, tail: t } => false };
@@ -2050,8 +2083,11 @@ fn project_declared_named_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
         return project_declared_imported_field<P, N>(pages, stride, total, function, type_start, type_end, fstart, fend, field_index, output_ty);
     }
     let unit: decl.Unit = decl.parse_unit<P, N>(pages, stride, total);
+    if !(unit.ok) { return false; }
     let found_record: decl.RecFind = decl.rec_lookup<P, N>(pages, stride, total, unit.records, type_start, type_end);
-    if !(unit.ok) || !(found_record.found) { return false; }
+    // Declaration proof follows this same source-span rule: resolve a local
+    // record first, then fall back to the exact imported nominal schema.
+    if !(found_record.found) { return project_declared_imported_field<P, N>(pages, stride, total, function, type_start, type_end, fstart, fend, field_index, output_ty); }
     let field: decl.FieldScan = decl.field_scan<P, N>(pages, stride, total, found_record.decl.fields, fstart, fend);
     if !(field.found) || field.index != field_index { return false; }
     let resolved: decl.TyRes = decl.resolve_type<P, N>(pages, stride, total, field.field.type_kind, field.field.type_start, field.field.type_end, unit.records, unit.enums, function.nominals);

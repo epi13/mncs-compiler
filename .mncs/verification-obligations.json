@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 26,
+  "revision": 30,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -773,7 +773,8 @@
         "src/compiler/project.mncs",
         "src/compiler/flow.mncs",
         "src/compiler/ssa.mncs",
-        "tools/test_imported_nominal_ssa.py"
+        "tools/test_imported_nominal_ssa.py",
+        "tools/test_vm_project_imported_flow_ssa.py"
       ],
       "executor": {
         "provider": "mncs-compiler",
@@ -1380,6 +1381,71 @@
         ],
         "working_directory": ".",
         "timeout_seconds": 120,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.imported-schema-flow-ssa-canonical-vm-frontier",
+      "title": "Imported nominal schemas and generic calls reach verified value SSA on canonical VM",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.decl.v1::prove_parsed_unit_with_imported_schemas",
+        "mncs.compiler.flow.v1::lower_proven_unit",
+        "mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas",
+        "mncs.compiler.ssa.v1::value_ssa_function_status"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "src/compiler/source.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/ssa.mncs",
+        "tools/test_project.py",
+        "tools/stage0-probe/src/application.rs",
+        "tools/stage0-probe/src/main.rs",
+        "tools/test_vm_project_imported_flow_ssa.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_segment.py",
+        "tools/vm_emit.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_project_imported_flow_ssa.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_project_imported_flow_ssa.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 600,
         "effects": [
           "verify"
         ],
