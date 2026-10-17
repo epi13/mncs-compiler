@@ -1,0 +1,119 @@
+{
+  "schema_version": "mncs.compiler.application-closure-identity-map-trace/1",
+  "recorded_at": "2026-10-17T14:58:58Z",
+  "campaign": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637"
+  },
+  "implementation": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "commit": "d4afd1a422c5a6aec5de0c9e83156919665335b3",
+    "source_file": "tools/stage0-probe/src/application.rs",
+    "source_sha256": "3044abebbb2a30afe5567e95ea00353a78ce433d9aabc5b3c2c87e85a4523092",
+    "behavior": "The application executable-closure identity trace reports whether the identity map supplied to closure fingerprinting came from the current frontend result. The event is separate from Language verified-fact reuse telemetry."
+  },
+  "provider_validation": {
+    "status": "passed",
+    "test_harness": "tools/test_application_build_provider.py",
+    "test_harness_sha256": "ca7542da00ffd9511fcf7c1febc032fd0fa0d498f038f975f00cb16d8a68410a",
+    "probe_binary_sha256": "sha256:935d2b4ad21b53b3c65548d7deea24b4422b740c41886dbcc03e3a4272bae814",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "response_schema": "mncs.compiler.application-build/4",
+    "application": {
+      "status": "verified",
+      "artifact_identity": "sha256:c2cfb350af9a4366f88ec4f7b80f1ee7ab5f7fa913fa7b881dfe755a08dcbf2a",
+      "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c"
+    },
+    "checks": {
+      "cold_cache_miss": true,
+      "corrupt_store_input_rejected": true,
+      "digest_app_capability_dispatch_verified": true,
+      "digest_app_fresh_process_warm_hit": true,
+      "digest_app_provider_verified": true,
+      "invalid_source_precise_rejection": ["MNE162"],
+      "invalid_success_publication": "not_published",
+      "provider_multi_callable_build_verified": true,
+      "provider_multi_callable_vm_batch_completed": true,
+      "store_input_artifact_reused": true,
+      "unsupported_request_schema_rejected": true
+    },
+    "wall_seconds": {
+      "cold": 0.599063,
+      "warm": 0.214017,
+      "digest_app_cold": 0.652437,
+      "digest_app_warm": 0.237577,
+      "multi_callable_provider": 0.193403,
+      "multi_callable_vm_batch": 0.00752
+    },
+    "sampled_resources": {
+      "digest_app_cold_cpu_seconds": 0.55,
+      "digest_app_cold_peak_rss_bytes": 87060480,
+      "digest_app_warm_cpu_seconds": 0.11,
+      "digest_app_warm_peak_rss_bytes": 32362496,
+      "cgroup_peak_memory_bytes": null,
+      "method": "10 ms /proc process-tree sampling; brief peaks may be missed"
+    },
+    "response_file": {
+      "name": "native-application-build.json",
+      "byte_count": 1011744,
+      "sha256": "0d05f3d8dfb8b14d34bb6c8ff1fd344be2fc0d4b48d445b7027f9552dd2d1485"
+    },
+    "local_provider_report": {
+      "path": ".build/native-app-readiness/identity-map-provider-digest-20261017-r2.json",
+      "byte_count": 19420,
+      "sha256": "5b4336983e5e2235ee50bdb1e465c190ff16d6b7e687ef3eb71bc86de972c207"
+    }
+  },
+  "identity_map_trace": {
+    "enabled": true,
+    "raw_trace_path": ".build/native-app-readiness/identity-map-trace-20261017-r2.jsonl",
+    "raw_trace_byte_count": 50666,
+    "raw_trace_sha256": "514e00879fbd62cb354fe77627243139cbbe59b615a627d02d804eaa976ee980",
+    "total_trace_events": 194,
+    "closure_identity_events": [
+      {
+        "identity_map_source": "current_frontend_result",
+        "identity_map_reused_in_this_build": true,
+        "closure_identity_available": true,
+        "callable_root_count": 1,
+        "generic_seed_count": 0,
+        "duration_ms": 0.195787
+      },
+      {
+        "identity_map_source": "current_frontend_result",
+        "identity_map_reused_in_this_build": true,
+        "closure_identity_available": true,
+        "callable_root_count": 2,
+        "generic_seed_count": 0,
+        "duration_ms": 0.019437
+      },
+      {
+        "identity_map_source": "current_frontend_result",
+        "identity_map_reused_in_this_build": true,
+        "closure_identity_available": true,
+        "callable_root_count": 1,
+        "generic_seed_count": 0,
+        "duration_ms": 0.192056
+      }
+    ]
+  },
+  "language_verified_fact_reuse": {
+    "reused_fact_count": 0,
+    "provider_verification_work_fact_sets": {
+      "cold": [],
+      "digest_app_cold": [],
+      "digest_app_warm_exact_snapshot": [],
+      "invalid_source": [],
+      "multi_callable_provider_build": [],
+      "store_input_exact_snapshot": [],
+      "warm_exact_snapshot": []
+    },
+    "interpretation": "The trace proves same-build SemanticIdentities map reuse for closure fingerprinting. It does not prove skipped Language verification units or cross-snapshot verified-fact reuse."
+  },
+  "limitations": [
+    "This provider harness compiles applications and runs its multi-callable canonical VM batch; it is not a Forge application-execution receipt.",
+    "The effectful digest application canonical VM and Store readback evidence is recorded separately.",
+    "Cgroup memory measurements were unavailable."
+  ]
+}
