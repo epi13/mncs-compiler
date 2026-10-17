@@ -2517,6 +2517,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &generic_seeds,
             )
         });
+    let closure_identity_started = Instant::now();
+    let identity_map_reused = !callable_roots.is_empty() && frontend.identities.is_some();
     let executable_closure_identity =
         frontend
             .identities
@@ -2529,6 +2531,21 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                     &generic_seeds,
                 )
             });
+    crate::trace_phase(
+        "application_executable_closure_identity",
+        closure_identity_started,
+        json!({
+            "identity_map_source": if identity_map_reused {
+                "current_frontend_result"
+            } else {
+                "unavailable"
+            },
+            "identity_map_reused_in_this_build": identity_map_reused,
+            "closure_identity_available": executable_closure_identity.is_some(),
+            "callable_root_count": callable_roots.len(),
+            "generic_seed_count": generic_seeds.len(),
+        }),
+    );
 
     let graph_value = json!({
         "root_module": program.module,
