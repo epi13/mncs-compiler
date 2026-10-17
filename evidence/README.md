@@ -107,6 +107,15 @@ the record makes no end-to-end timing claim. Language verified-fact reuse
 remains zero, and full parser-module canonical VM coverage and compiler
 succession remain unproven.
 
+The [current campaign-head parser rerun](self-host-parser-module-canonical-vm-frontier-20261017-4fbf53d.json)
+revalidates the same source hash at Compiler revision `4fbf53d`. All six parser
+functions again agree across the reference interpreter, Cranelift, and
+canonical VM for 23 bounded cases, 92 paged cases, and five helper calls
+(120 VM calls). The 1 KiB short-header case used 12,398 reference steps. The
+frontier took 40.35 seconds with 686 MiB peak child RSS; the VM batch peaked at
+72 MiB. Cgroup memory values were unavailable. This is selected current-source
+evidence; the full parser-module canonical VM status remains `not-proven`.
+
 ## Compiler-parity snapshot (2026-09-29)
 
 This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,
