@@ -74,7 +74,8 @@ def compile_request(root: str, modules: dict[str, str]) -> dict:
     }
 
 
-def application_context(interface: dict, current_dir: Path, *, valid_argv: bool = False) -> dict:
+def application_context(interface: dict, current_dir: Path, *, valid_argv: bool = False,
+                        artifact_paths: list[Path] | None = None) -> dict:
     context_type = next(
         row for row in interface["types"]["records"]
         if row.get("name") == "ApplicationContext"
@@ -87,11 +88,16 @@ def application_context(interface: dict, current_dir: Path, *, valid_argv: bool 
         # proves its invalid-argument boundary; valid_argv reaches capability
         # admission without needing any host files to exist.
         "argv": {"sequence": {"values": [
-            byte_sequence("request.json"),
-            byte_sequence("result.json"),
-            *([byte_sequence("check.json")] if valid_argv else []),
+            *([byte_sequence(str(path)) for path in artifact_paths]
+              if artifact_paths is not None else [
+                  byte_sequence("request.json"),
+                  byte_sequence("result.json"),
+                  *([byte_sequence("check.json")] if valid_argv else []),
+              ]),
         ]}},
-        "argv_count": unsigned(3 if valid_argv else 2),
+        "argv_count": unsigned(
+            len(artifact_paths) if artifact_paths is not None else (3 if valid_argv else 2)
+        ),
         "current_dir": byte_sequence(str(current_dir)),
         "environment": {"sequence": {"values": []}},
         "environment_count": unsigned(0),
@@ -196,6 +202,46 @@ def main() -> None:
                     "unresolved_obligations": built.get("unresolved_obligations"),
                     "diagnostics": built.get("diagnostics"),
                 }, indent=2)[:10000])
+
+            # The application entry takes ApplicationContext, so its callable
+            # interface intentionally does not expose ProviderRequest. Ask the
+            # same compiler to verify the actual protocol consumer as a second
+            # entry and take the nominal identity from that compiler interface.
+            protocol_request = json.loads(json.dumps(request))
+            protocol_request["entry"] = {
+                "module": ENTRY_MODULE,
+                "function": "run_selected_batch",
+            }
+            protocol_built, protocol_build_metrics = probe.send(
+                {"compile_application": protocol_request}, timeout=600,
+            )
+            protocol_interface = protocol_built.get("entry", {}).get("interface", {})
+            if (protocol_built.get("schema_version") != "mncs.compiler.application-build/4"
+                    or protocol_built.get("status") != "verified"
+                    or protocol_built.get("unresolved_obligations") != []
+                    or protocol_interface.get("status") != "verified"
+                    or protocol_interface.get("types", {}).get("status") != "verified"
+                    or protocol_interface.get("types", {}).get("unresolved_references") != []):
+                raise AssertionError(json.dumps({
+                    "schema_version": protocol_built.get("schema_version"),
+                    "status": protocol_built.get("status"),
+                    "interface_status": protocol_interface.get("status"),
+                    "types_status": protocol_interface.get("types", {}).get("status"),
+                    "unresolved_obligations": protocol_built.get("unresolved_obligations"),
+                    "diagnostics": protocol_built.get("diagnostics"),
+                }, indent=2)[:10000])
+            provider_request_type = next(
+                (row for row in protocol_interface["types"]["records"]
+                 if row.get("name") == "ProviderRequest"),
+                None,
+            )
+            if provider_request_type is None:
+                raise AssertionError("verified protocol callable interface omitted ProviderRequest")
+            provider_request_identity = provider_request_type.get("identity")
+            if isinstance(provider_request_identity, dict):
+                provider_request_identity = provider_request_identity.get("0")
+            if not isinstance(provider_request_identity, str):
+                raise AssertionError("verified protocol interface has no ProviderRequest identity")
             artifact = built.get("artifact", {}).get("value")
             if not isinstance(artifact, dict):
                 raise AssertionError("verified provider app build omitted its VM artifact")
@@ -341,6 +387,64 @@ def main() -> None:
                     "artifact_paths_exist": [path.exists() for path in missing_cap_paths],
                 }, indent=2)[:10000])
 
+            missing_digest_dir = call_dir / "missing-provider-digest"
+            missing_digest_dir.mkdir()
+            digest_input = missing_digest_dir / "request.json"
+            digest_output = missing_digest_dir / "result.json"
+            digest_check = missing_digest_dir / "check.json"
+            digest_request_value = wire_record("ProviderRequest", {
+                "compiler_callable_bindings": {"sequence": {"values": []}},
+                "selected_test_identities": {"sequence": {"values": []}},
+                "selected_test_executions": {"sequence": {"values": []}},
+                "selection_count": unsigned(0),
+                "interface_identity": byte_sequence("\x00" * 32),
+                "provider_revision_identity": byte_sequence("\x00" * 32),
+            }, provider_request_identity)
+            digest_input.write_text(
+                json.dumps(digest_request_value, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            digest_paths = [digest_input, digest_output, digest_check]
+            digest_context = application_context(
+                interface, missing_digest_dir, artifact_paths=digest_paths,
+            )
+            digest_call_path = missing_digest_dir / "execution.json"
+            digest_call_path.write_text(
+                json.dumps(call_request(digest_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            digest_process = subprocess.run([
+                str(binary), str(artifact_path), artifact_identity_for_files,
+                "provider_artifact", "single", str(digest_call_path),
+                str(digest_input), str(digest_output), "success",
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            if digest_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the single-capability provider probe before a typed result: "
+                    f"rc={digest_process.returncode}, stderr={digest_process.stderr[-3000:]}"
+                )
+            digest_document = json.loads(digest_process.stdout)
+            digest_record = digest_document.get("record", {})
+            digest_effects = digest_record.get("effects", [])
+            if (
+                digest_document.get("outcome", {}).get("kind") != "capability_denied"
+                or digest_document.get("outcome", {}).get("capability")
+                != "mncs:0.2:capability:mncs.test.provider::provider_batch_app::provider_digest"
+                or digest_document.get("outcome", {}).get("operation")
+                != "call mncs:0.2:function:mncs.test.provider::run_selected_batch"
+                or digest_record.get("admitted_capabilities") != ["provider_artifact"]
+                or len(digest_effects) != 1
+                or digest_effects[0].get("outcome_tag") != "completed"
+                or digest_effects[0].get("request", {}).get("operation") != "structured_read"
+                or digest_effects[0].get("request", {}).get("capability") != "provider_artifact"
+                or digest_output.exists() or digest_check.exists()
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": digest_document.get("outcome"),
+                    "record": digest_record,
+                    "published_outputs": [digest_output.exists(), digest_check.exists()],
+                }, indent=2)[:12000])
+
             oracle_cache = ROOT / ".build/native-app-readiness/provider-app-oracle-cache"
             oracle_cache.mkdir(parents=True, exist_ok=True)
             oracle_probe = support.Probe(oracle_cache)
@@ -370,7 +474,7 @@ def main() -> None:
             evidence = {
                 "schema_version": "mncs.compiler.native-application-proof/2",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary, invalid-argument behavior, and missing-capability denial",
+                "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary, invalid-argument behavior, and denial when only provider_artifact is admitted",
                 "application": {
                     "root_source_id": "native/mncs/test/provider.mncs",
                     "entry": f"{ENTRY_MODULE}::{ENTRY_FUNCTION}",
@@ -409,6 +513,12 @@ def main() -> None:
                     "artifact_bytes": len(artifact_bytes),
                     "unresolved_obligations": built.get("unresolved_obligations"),
                     "metrics": build_metrics,
+                    "provider_request_interface": {
+                        "identity": protocol_interface.get("identity"),
+                        "signature": protocol_interface.get("signature"),
+                        "provider_request_type_identity": provider_request_identity,
+                        "metrics": protocol_build_metrics,
+                    },
                 },
                 "execution": {
                     "outcome": outcome,
@@ -431,6 +541,13 @@ def main() -> None:
                     "admitted_capabilities": missing_cap_record.get("admitted_capabilities"),
                     "first_effect": missing_cap_effects[0],
                     "no_artifact_publication": not any(path.exists() for path in missing_cap_paths),
+                },
+                "missing_provider_digest": {
+                    "outcome": digest_document.get("outcome"),
+                    "admitted_capabilities": digest_record.get("admitted_capabilities"),
+                    "effects": digest_effects,
+                    "digest_operation_executed": False,
+                    "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
                     "Positive provider-batch execution still requires exact structured_read, structured_write, and structured_digest providers through the authorized Forge/Environment/Store route."

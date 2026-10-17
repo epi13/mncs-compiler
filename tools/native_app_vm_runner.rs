@@ -11,6 +11,7 @@ use mncs_vm::{
 
 const PROVIDER_ID: &str = "mncs.compiler.test-structured-file-provider/1";
 const INPUT_SCHEMA: &str = "mncs.test-digest-request/1";
+const PROVIDER_REQUEST_SCHEMA: &str = "mncs.test-provider-request/1";
 const OUTPUT_SCHEMA: &str = "mncs.test-digest/1";
 
 struct StructuredFileProvider {
@@ -60,7 +61,7 @@ impl Provider for StructuredFileProvider {
                 let schema = value_bytes(&request.inputs[1])
                     .and_then(|bytes| String::from_utf8(bytes).map_err(|e| e.to_string()))
                     .map_err(|e| self.provider_failure(format!("bad read schema: {e}")))?;
-                if schema != INPUT_SCHEMA {
+                if schema != INPUT_SCHEMA && schema != PROVIDER_REQUEST_SCHEMA {
                     return Err(self.provider_failure("unexpected structured read schema"));
                 }
                 let bytes = fs::read(&self.input_path)
