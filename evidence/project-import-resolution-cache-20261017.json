@@ -1,0 +1,93 @@
+{
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "change": {
+    "cache_scope": "one consumer module, one project invocation, successful names only",
+    "limitations": [
+      "This reuses import target lookup, not Language semantic verification facts.",
+      "The memo is ephemeral and is not reused across source snapshots or processes.",
+      "Missing import names are not memoized so each current declaration emits its own diagnostic."
+    ],
+    "semantic_verification_facts_reused": 0,
+    "summary": "Memoize successful repeated import module-name lookups within one consumer module and immutable parsed project snapshot. Reconstruct each ImportLink from its own current declaration spans. Preserve every missing-import diagnostic by fully reversing diagnostic lists beyond the number of project source files."
+  },
+  "compiler_worktree": {
+    "base_head": "3b9d648a1b05c521801be8c8dfdd0ce0e236acbf",
+    "branch": "campaign/native-application-readiness-20261013",
+    "repository": "mncs-compiler",
+    "source_files": {
+      "src/compiler/project.mncs": "bb3d40b68f7713fd058adb947a4086249587f7b44d11d275e5d9ee418924035d",
+      "tools/test_project_import_link_capacity.py": "ae2a5e8aae190ab3507be1638acfe0d62789157eaa81c8a3287bb5fc2c08cb69"
+    }
+  },
+  "identity": "ev_compiler_project_import_resolution_cache_20261017",
+  "interpretation": {
+    "candidate_header_comparisons_reduced": true,
+    "fresh_missing_import_diagnostics_correct": true,
+    "gate_b_status": "partial",
+    "language_fact_reuse_demonstrated": false
+  },
+  "observed_at": "2026-10-17T09:55:14.509115+00:00",
+  "resource_measurement": {
+    "backend_artifact_payload_bytes": 420063740,
+    "cold_backend_compilation_ms": 155098.33116600002,
+    "cold_stage0_frontend_elaboration_ms": 51728.755235000004,
+    "cpu_measurement_note": "Telemetry returned 0 for cpu_time_delta_ns; this is recorded as unavailable rather than interpreted as zero CPU usage.",
+    "cpu_time_delta_ns": null,
+    "sample_count": 3,
+    "test_process_elapsed_ms": 247600.823992,
+    "test_process_kernel_rss_high_water_bytes": 4913471488,
+    "test_process_peak_rss_bytes": 4476182528
+  },
+  "schema_version": "mncs.compiler.project-import-resolution-cache/1",
+  "session_id": "ses_164edc158d9b1637",
+  "verification": {
+    "command": "MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_GENERIC_SEEDS=[] MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "connected_source_capacity": {
+      "import_links": 63,
+      "module_count": 64,
+      "root_import_identity_matches_stage0": true,
+      "source_count": 64,
+      "stage0_oracle_valid": true,
+      "stage0_verified_function_count": 64,
+      "target_flow_valid": true,
+      "target_only_module_count": 1,
+      "target_ssa_valid": true
+    },
+    "dense_dag": {
+      "import_links": 15,
+      "native_project_valid": true,
+      "native_target_ssa_valid": true,
+      "stage0_oracle_valid": true,
+      "transitive_record_schemas_verified": true
+    },
+    "execution_equivalence": {
+      "exact_import_links_checked": true,
+      "import_location_and_alias_spans_checked": true,
+      "stage0_oracle_valid": true
+    },
+    "missing_imports": {
+      "cache_hits": 0,
+      "candidate_module_header_comparisons": 3,
+      "diagnostics_preserved": true
+    },
+    "module_limit": {
+      "candidate_module_header_comparisons": 1,
+      "import_links": true,
+      "per_import_source_alias_target_spans_preserved": true,
+      "successful_resolution_cache_hits": 1023
+    },
+    "probe_request_count": 14,
+    "project_limit": {
+      "candidate_module_header_comparisons": 4,
+      "import_links": 4096,
+      "overflow_diagnostic_count": 1,
+      "overflow_rejected_at_4096": true,
+      "successful_resolution_cache_hits": 4092
+    },
+    "stage0_artifact_cache_key": "2f84fc7b25ea1b7f76bb2eebb719c0072c0cbe0700a62af1df75c8dbf7fe3730",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "status": "verified",
+    "suite_result_identity": "eaa81744bfe5426368eaab15b07947051f3ae0292fc31d6ff297a4d64fc8ce5b",
+    "suite_result_sha256": "c410f88f678ce157b3cda38e0c2eab5c9eb70f3252db8a36d6eb44485745022a"
+  }
+}

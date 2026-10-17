@@ -171,6 +171,66 @@ def run():
         module_limit_imports = project.flist(module_limit_native["imports"])
         assert module_limit_native["valid"] and module_limit_native["value_ssa_valid"], module_limit_native
         assert module_limit_native["import_count"] == len(module_limit_imports) == 1024
+        assert module_limit_native["import_module_name_comparisons"] == 1, module_limit_native
+        assert module_limit_native["import_resolution_cache_hits"] == 1023, module_limit_native
+        expected_links = set()
+        cursor = 0
+        for index in range(1024):
+            use_start = _module_limit_root.index(f"use demo.dep as d{index};", cursor)
+            cursor = use_start + 1
+            module_start = use_start + len("use ")
+            module_end = module_start + len("demo.dep")
+            alias_start = module_end + len(" as ")
+            alias_end = alias_start + len(f"d{index}")
+            expected_links.add((module_start, module_end, alias_start, alias_end, 0))
+        observed_links = {
+            (
+                item["module_start"], item["module_end"],
+                item["alias_start"], item["alias_end"], item["target_index"],
+            )
+            for item in module_limit_imports
+        }
+        assert observed_links == expected_links, {
+            "observed_count": len(observed_links),
+            "expected_count": len(expected_links),
+            "missing": sorted(expected_links - observed_links)[:8],
+            "unexpected": sorted(observed_links - expected_links)[:8],
+        }
+        assert all(item["source_index"] == 1 and item["target_index"] == 0 for item in module_limit_imports)
+
+        missing_root = "mncs 0.18; module demo.missing_root;\n"
+        missing_root += "".join(
+            f"use demo.absent as m{index};\n" for index in range(3)
+        )
+        missing_root += "fn main() -> (result: u64) { return 1; }\n"
+        missing_sources = [
+            ("00-dep.mncs", Path("00-dep.mncs"), b"mncs 0.18; module demo.dep; fn value() -> (result: u64) { return 1; }"),
+            ("zz-missing.mncs", Path("zz-missing.mncs"), missing_root.encode()),
+        ]
+        missing_response = probe.send(_target_request(
+            project.request_value(identities, missing_sources), 1,
+        ))
+        assert missing_response.get("status") == "returned", missing_response
+        missing_native = project.decode(missing_response["returned"][0])
+        missing_diagnostics = project.flist(missing_native["diagnostics"])
+        expected_missing_spans = set()
+        cursor = 0
+        for index in range(3):
+            use_start = missing_root.index(f"use demo.absent as m{index};", cursor)
+            cursor = use_start + 1
+            module_start = use_start + len("use ")
+            expected_missing_spans.add((module_start, module_start + len("demo.absent")))
+        observed_missing_spans = {
+            (item.get("$p", {}).get("start"), item.get("$p", {}).get("end"))
+            for item in missing_diagnostics
+        }
+        assert not missing_native["valid"] and not missing_native["value_ssa_valid"], missing_native
+        assert missing_native["import_count"] == 0, missing_native
+        assert len(missing_diagnostics) == 3, missing_diagnostics
+        assert observed_missing_spans == expected_missing_spans, missing_diagnostics
+        assert missing_native["import_resolution_cache_hits"] == 0, missing_native
+        assert missing_native["import_module_name_comparisons"] == 3, missing_native
+
         # A 1025th use exceeds the module bound and reports the exact next
         # source span without dropping any of the admitted links.
         over_module_sources, over_module_root = _repeated_import_source(1025)
@@ -211,6 +271,8 @@ def run():
         assert at_project_limit_native["value_ssa_valid"], at_project_limit_native
         assert at_project_limit_native["import_count"] == 4096
         assert len(at_project_limit_imports) == 4096
+        assert at_project_limit_native["import_module_name_comparisons"] == 4, at_project_limit_native
+        assert at_project_limit_native["import_resolution_cache_hits"] == 4092, at_project_limit_native
 
         over_project_sources = _project_boundary_sources(True)
         over_project_request = _target_request(
@@ -308,9 +370,23 @@ def run():
             assert reached is expected_reached, (count, reached, expected_reached)
             limit_results[count] = reached
 
+        resource_measurements = [
+            {
+                "status": observation.get("status"),
+                "sample_count": summary.get("sample_count"),
+                "peak_rss_bytes": summary.get("peak_rss_bytes"),
+                "max_kernel_rss_high_water_bytes": summary.get("max_kernel_rss_high_water_bytes"),
+                "cpu_time_delta_ns": summary.get("cpu_time_delta_ns"),
+                "io_read_bytes_delta": summary.get("io_read_bytes_delta"),
+                "io_write_bytes_delta": summary.get("io_write_bytes_delta"),
+            }
+            for observation in probe.process_observations.values()
+            if (summary := observation.get("resource_summary")) is not None
+        ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/3",
+            "schema_version": "mncs.compiler.project-import-link-capacity/4",
             "status": "verified",
+            "resource_measurements": resource_measurements,
             "backend": execution["backend"],
             "source_count": len(sources),
             "expected_import_links": len(expected),
@@ -321,6 +397,11 @@ def run():
             "all_transitive_record_schemas_verified": True,
             "imports_above_old_limit_resolved": above_old_native["import_count"] == 65,
             "imports_at_module_limit_resolved": module_limit_native["import_count"] == 1024,
+            "module_limit_candidate_name_comparisons": module_limit_native["import_module_name_comparisons"],
+            "module_limit_resolution_cache_hits": module_limit_native["import_resolution_cache_hits"],
+            "module_limit_import_locations_preserved": len(observed_links) == 1024,
+            "repeated_missing_import_diagnostics_preserved": len(missing_diagnostics) == 3,
+            "repeated_missing_import_cache_hits": missing_native["import_resolution_cache_hits"],
             "per_module_import_limit": 1024,
             "over_module_limit_import_declaration_count": 1025,
             "over_module_limit_imports_rejected": not over_module_native["valid"],
@@ -328,6 +409,8 @@ def run():
             "project_boundary_source_count": len(at_project_limit_sources),
             "project_limit_links_accepted": len(at_project_limit_imports),
             "project_limit_project_valid": at_project_limit_native["valid"],
+            "project_limit_candidate_name_comparisons": at_project_limit_native["import_module_name_comparisons"],
+            "project_limit_resolution_cache_hits": at_project_limit_native["import_resolution_cache_hits"],
             "project_overflow_source_count": len(over_project_sources),
             "project_overflow_links_retained": len(over_project_imports),
             "project_overflow_rejected": not over_project_native["valid"],
