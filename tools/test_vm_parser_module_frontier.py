@@ -484,7 +484,7 @@ def main() -> None:
         ["git", "branch", "--show-current"], cwd=ROOT, text=True
     ).strip()
     stage0_revision = json.loads((ROOT / "mncs-language.lock.json").read_text())["revision"]
-    vm_repo = test_vm_emit.VM_BIN.parents[2]
+    vm_repo = test_vm_emit.VM_REPO
     vm_revision = subprocess.check_output(
         ["git", "-C", str(vm_repo), "rev-parse", "HEAD"], text=True
     ).strip()
