@@ -24,7 +24,13 @@ from test_vm_segment import run_batch, vm_to_wire, test_vm_emit
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.flow.v1"
-SELECTED = {"fallthrough_join", "unreachable_join", "bounded_iteration_counted"}
+SELECTED = {
+    "fallthrough_join",
+    "unreachable_join",
+    "bounded_iteration_counted",
+    "bounded_iteration_sequence",
+    "nested_bounded_iteration",
+}
 CASES = [case for case in flow_test.CASES if case[0] in SELECTED]
 PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
