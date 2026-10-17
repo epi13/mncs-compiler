@@ -71,6 +71,18 @@ fn lex_step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     return LexicalEvidence { ..evidence, code: 2, first_start: token.start, first_end: token.end };
 }
 
+// Bounded host continuation for logical sources. One call advances at most
+// 128 lexical facts, so callers can persist and resume this evidence without
+// making one interpreter/VM call per token. The host still owns only paging
+// and continuation; token classification and accumulation stay in MNCS.
+fn lex_evidence_batch_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, evidence: LexicalEvidence) -> (result: LexicalEvidence) {
+    iterate i up_to 128 carrying current: LexicalEvidence = evidence {
+        if current.cursor == total || current.code == 2 { return current; }
+        next current = lex_step_global<P, N>(pages, stride, total, current);
+    }
+    return current;
+}
+
 // Whole bounded-source coverage evidence, independently useful before parsing.
 // code: 0 complete; 1 lexical errors; 2 structural verification failure;
 // 3 unsupported non-ASCII source. Counts include trivia; EOF is not counted.

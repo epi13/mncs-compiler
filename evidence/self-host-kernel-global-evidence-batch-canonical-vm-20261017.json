@@ -1,0 +1,104 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "kernel-global-evidence-batch-canonical-vm-current-source",
+  "observed_at": "2026-10-17T15:44:54.823344Z",
+  "status": "passed",
+  "claim_boundary": "kernel.lex_evidence_batch_global advances at most 128 global lexical facts per call. Stage-0 token evidence, reference interpretation, Cranelift, and a fresh canonical VM artifact agree across every batch for a 600-token source and page strides 7, 64, and 1024. The host makes 15 continuation calls instead of 1800 one-token calls. This is a selected kernel frontier, not whole kernel-module proof or compiler succession.",
+  "compiler": {
+    "tested_source_revision": "f133543dee40a818d9233993628303b41288eba6",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "target_module": "mncs.compiler.kernel.v1",
+    "target_function": "lex_evidence_batch_global",
+    "kernel_source_sha256": "03fe2398d7e40eb35f62010403cc7cea14f339b7a6c962739be80e8250b148a2",
+    "harness_sha256": "313de4be7f896ab3fe21ddfb561150a4120e4109bcbc0909e957a65b61e89e17"
+  },
+  "stage0": {
+    "revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "probe_sha256": "2ea79a274da826f46aeadce81b403e350a59d69ca10878db8f12ea37ce82e75f"
+  },
+  "canonical_vm": {
+    "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "case_count": 15,
+    "artifact_sha256": "814b1f671752f5a250f345ca6ba09f9fa2bf2fc944d2c15bb0a7973a73c9707f",
+    "peak_rss_kib": 63304,
+    "execution_seconds": 2.993682,
+    "calls_bytes": 257304,
+    "results_bytes": 26892,
+    "fresh_process_batch": true
+  },
+  "verification": {
+    "token_count": 600,
+    "batch_size": 128,
+    "batch_calls_per_stride": {
+      "7": 5,
+      "64": 5,
+      "1024": 5
+    },
+    "single_step_calls_per_stride": {
+      "7": 600,
+      "64": 600,
+      "1024": 600
+    },
+    "total_batch_calls_across_backends": 45,
+    "semantic_digests": {
+      "reference_interpreter": "44a8b34b9c51a900a80dc593e760266eae61c11ae47cced9429547a7aa81c811",
+      "cranelift": "44a8b34b9c51a900a80dc593e760266eae61c11ae47cced9429547a7aa81c811",
+      "canonical_vm": "44a8b34b9c51a900a80dc593e760266eae61c11ae47cced9429547a7aa81c811"
+    },
+    "reference_interpreter_steps": [
+      78992,
+      79136,
+      79566,
+      79135,
+      54554,
+      65216,
+      65216,
+      65216,
+      65216,
+      45083,
+      63494,
+      63494,
+      63494,
+      63494,
+      44222
+    ],
+    "cranelift_reported_steps": [
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ]
+  },
+  "measurements": {
+    "phase_seconds": {
+      "reference_and_oracle": 9.158353,
+      "cranelift": 1.119643,
+      "canonical_vm": 3.087984
+    },
+    "whole_frontier_seconds": 13.694373,
+    "child_cpu_seconds": 13.127828,
+    "cgroup_memory_before": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "cgroup_memory_after": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    }
+  }
+}
