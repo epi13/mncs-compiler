@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 40,
+  "revision": 41,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1894,6 +1894,69 @@
         ],
         "ephemeral_roots": [
           ".build"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.native-test-provider-app-boundary",
+      "title": "Production MNCS Test provider app validates per-identity capability dispatch and matches its native pre-effect rejection",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build-request/1",
+        "mncs.compiler.application-build/4",
+        "mncs.compiler.capability-dispatch/1",
+        "mncs.compiler.native-application-proof/2",
+        "mncs.vm.artifact/1",
+        "mncs:0.2:function:mncs.test.provider::provider_batch_app"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "tools/native_app_vm_runner.rs",
+        "tools/test_vm_native_test_provider_app_boundary.py",
+        "tools/test_vm_test_digest_app.py",
+        "tools/test_vm_native_application.py",
+        "tools/stage0-probe/src/application.rs",
+        "tools/stage0-probe/src/main.rs",
+        "tools/vm_emit.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_native_test_provider_app_boundary.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_native_test_provider_app_boundary.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ],
+        "shareable_artifacts": [
+          "native-test-provider-app-boundary-20261017.json"
         ]
       },
       "evidence_identity": {

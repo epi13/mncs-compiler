@@ -710,3 +710,7 @@ VM call took 43 ms at 18 MiB peak RSS. Language verified facts remain unused.
 This covers an application boundary and fail-closed dispatch only; successful
 provider execution still needs the exact `structured_digest` provider and the
 authorized Forge/Environment/Store route.
+
+The check is registered as `mncs-compiler.native-test-provider-app-boundary`
+in verification inventory revision 41, with the JSON proof exported as a
+bounded Environment shareable artifact for fresh-process readback.

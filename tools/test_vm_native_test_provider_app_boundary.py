@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import subprocess
 import tempfile
 import time
@@ -106,6 +107,29 @@ def call_request(context: dict) -> dict:
     }
 
 
+def publish_environment_artifacts(payload: bytes) -> list[dict]:
+    raw_root = os.environ.get("MNCS_ENV_SESSION_ARTIFACT_DIR")
+    if not raw_root:
+        return []
+    artifact_root = Path(raw_root)
+    try:
+        root_mode = artifact_root.lstat().st_mode
+    except OSError as error:
+        raise RuntimeError("Environment artifact directory is unavailable") from error
+    if not stat.S_ISDIR(root_mode):
+        raise RuntimeError("Environment artifact root must be a real directory")
+    name = EVIDENCE_PATH.name
+    destination = artifact_root / name
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(destination, flags, 0o600)
+    except OSError as error:
+        raise RuntimeError(f"cannot write bounded Environment artifact {name}") from error
+    with os.fdopen(descriptor, "wb") as output:
+        output.write(payload)
+    return [{"path": name, "byte_count": len(payload), "sha256": sha(payload)}]
+
+
 def expect_runner_rejection(binary: Path, artifact_path: Path, identity: str,
                             alias: str, request_path: Path, input_path: Path,
                             output_path: Path, expected: str) -> str:
@@ -162,10 +186,14 @@ def main() -> None:
                 "provider_digest": {"structured_digest"},
             }
             actual_operations: dict[str, set[str]] = {}
+            canonical_identities: dict[str, set[str]] = {}
             for row in host_rows:
                 if row.get("runtime_key_kind") != "source-alias":
                     raise AssertionError(f"host operation lacks a source-alias binding: {row}")
                 actual_operations.setdefault(row.get("runtime_capability_key"), set()).add(row.get("operation"))
+                canonical_identities.setdefault(row.get("runtime_capability_key"), set()).add(
+                    row.get("capability_identity")
+                )
             if (dispatch.get("schema_version") != "mncs.compiler.capability-dispatch/1"
                     or dispatch.get("status") != "verified"
                     or actual_operations != expected_operations):
@@ -275,6 +303,10 @@ def main() -> None:
                         "host_operation_aliases": {
                             alias: sorted(operations) for alias, operations in sorted(actual_operations.items())
                         },
+                        "canonical_capability_identities": {
+                            alias: sorted(identities)
+                            for alias, identities in sorted(canonical_identities.items())
+                        },
                         "validated_artifact_identity": artifact_identity,
                     },
                 },
@@ -322,9 +354,12 @@ def main() -> None:
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,
             }
-            EVIDENCE_PATH.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            evidence_bytes = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+            EVIDENCE_PATH.write_bytes(evidence_bytes)
+            environment_artifacts = publish_environment_artifacts(evidence_bytes)
             print(json.dumps({
                 "evidence": str(EVIDENCE_PATH),
+                "environment_artifacts": environment_artifacts,
                 "artifact_identity": artifact_identity,
                 "vm_wall_seconds": evidence["execution"]["vm_wall_seconds"],
                 "vm_peak_rss_bytes": evidence["execution"]["vm_peak_rss_bytes"],
