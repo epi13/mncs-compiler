@@ -175,12 +175,12 @@ Environment publication, canonical Store readback, or full Test conversion.
 The same effectful application now has a permanent incremental artifact
 obligation, `mncs-compiler.native-test-digest-effectful-app-incremental-cache`.
 Its [updated report](native-app-readiness-test-digest-app.json) records a
-0.566-second cold build (0.51 CPU seconds, 65,593,344-byte peak RSS), a
-0.129-second fresh-process exact-snapshot hit with zero frontend invocations,
-and a 0.348-second comment-only imported-module edit with one frontend pass
+0.569-second cold build (0.53 CPU seconds, 65,454,080-byte peak RSS), a
+0.123-second fresh-process exact-snapshot hit with zero frontend invocations,
+and a 0.353-second comment-only imported-module edit with one frontend pass
 and the identical executable artifact bytes and callable interface. The edit
 refreshes the source snapshot and imported source hash. The retained canonical
-VM batch still completes seven isolated calls in 0.032 seconds at 11,792,384
+VM batch still completes seven isolated calls in 0.029 seconds at 11,702,272
 bytes peak RSS. These observations reused zero Language-owned verified facts;
 cgroup memory readings were unavailable. The result demonstrates Compiler
 artifact reuse for this workload, not incremental Language semantic checking.
