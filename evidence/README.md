@@ -185,6 +185,12 @@ each complete source unit and does not perform full type checking. It reused
 zero Language-owned verified facts; full declaration-module verification and
 Stage-1/Stage-2 succession remain unproven.
 
+## Current declaration proof-unit frontier (2026-10-16)
+
+The [current `decl.prove_unit` frontier](self-host-decl-prove-unit-canonical-vm-20261016.json) runs six selected current-source proof cases on one fresh canonical VM artifact. Stage-0 oracle/elaboration diagnostics match the VM FAIL obligations in both diagnostic cases, and UNKNOWN obligation kinds 13 and 14 remain explicit. The canonical VM digest is `ba9a750c…3ae538`; the batch took 24.57 seconds and peaked at 444,184 KiB. The whole frontier took 72.17 seconds and 69.53 child CPU seconds; host memory was sampled and cgroup readings were unavailable.
+
+This is a selected `decl.prove_unit<1024,1024>` function frontier. It establishes no Cranelift differential or full declaration-module proof, reused zero Language-owned verified facts, and does not claim Stage-1 or Stage-2 succession.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:
