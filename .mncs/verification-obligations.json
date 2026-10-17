@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 43,
+  "revision": 44,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -2015,6 +2015,68 @@
         ],
         "shareable_artifacts": [
           "native-test-provider-app-boundary-20261017.json"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.source-line-col-global-canonical-vm-frontier",
+      "title": "Source global line and column mapping matches the byte-based source span convention on the canonical VM",
+      "guarantee_domain": "parser_front_end",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.source.v1::line_col_global",
+        "mncs:0.2:function:mncs.compiler.source.v1::line_col_page_step",
+        "mncs:0.2:function:mncs.compiler.source.v1::line_step_at",
+        "mncs:0.2:record-type:mncs.compiler.source.v1::LineCol"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "src/compiler/source.mncs",
+        "tools/test_vm_source_line_col_frontier.py",
+        "tools/test_cp0001.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_segment.py",
+        "tools/test_vm_native_application.py",
+        "tools/vm_emit.rs",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_source_line_col_frontier.py --ephemeral-output",
+        "argv": [
+          "python3",
+          "tools/test_vm_source_line_col_frontier.py",
+          "--ephemeral-output"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build"
         ]
       },
       "evidence_identity": {
