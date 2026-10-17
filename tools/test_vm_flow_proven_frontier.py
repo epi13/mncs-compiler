@@ -310,8 +310,11 @@ def main() -> None:
             "Cranelift differential coverage, or compiler succession."
         ),
     }
-    report["evidence_artifact"] = "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json"
-    output = ROOT / os.environ.get("MNCS_FLOW_PROVEN_FRONTIER_EVIDENCE_PATH", report["evidence_artifact"])
+    output = ROOT / os.environ.get(
+        "MNCS_FLOW_PROVEN_FRONTIER_EVIDENCE_PATH",
+        "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+    )
+    report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
     output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
 
