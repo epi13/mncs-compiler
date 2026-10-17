@@ -279,8 +279,17 @@ fn fingerprint_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
 }
 fn fingerprint_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], index: u64, h: u64) -> (result: u64) {
     let page: [byte; up_to N] = pages[index];
-    iterate i over page carrying acc: u64 = h {
-        next acc = fnv_step(acc, page[i]);
+    let groups: u64 = page.len / 4;
+    iterate group over page[0..groups] carrying grouped: u64 = h {
+        let base: u64 = group * 4;
+        let h0: u64 = (grouped ^ (page[base + 0] as u64)) *% 1099511628211;
+        let h1: u64 = (h0 ^ (page[base + 1] as u64)) *% 1099511628211;
+        let h2: u64 = (h1 ^ (page[base + 2] as u64)) *% 1099511628211;
+        next grouped = (h2 ^ (page[base + 3] as u64)) *% 1099511628211;
+    }
+    let tail_count: u64 = page.len - groups * 4;
+    iterate tail_index over page[0..tail_count] carrying acc: u64 = grouped {
+        next acc = fnv_step(acc, page[groups * 4 + tail_index]);
     }
     return acc;
 }
