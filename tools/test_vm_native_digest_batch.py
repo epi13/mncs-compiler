@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Run the real MNCS Test digest callable set in one canonical VM batch.
+"""Run the real MNCS Test digest and suite operations in one VM workflow.
 
 The pinned Gate A fixture supplies Stage-0 oracle outputs for the current
-digest source snapshot. This test compiles three real digest callables into a
-single /5 artifact, checks a fresh-process cache hit, and runs the same
-artifact through one bounded VM batch.
+digest source snapshot. This test compiles the digest and schema callables
+alongside suite and assertion harness roots into one /5 artifact, checks a
+fresh-process cache hit, and runs it through bounded batch and retained VM
+sessions.
 """
 from __future__ import annotations
 
@@ -34,9 +35,10 @@ VM_BIN = Path(os.environ.get(
 CACHE_DIR = ROOT / ".build/native-app-readiness/digest-batch-cache" / (
     f"run-{os.getpid()}-{time.time_ns()}"
 )
-EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-digest-suite-specialization-20261016.json"
+EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-native-test-workflow-20261017.json"
 MODULE = "mncs.test.digest"
 SUITE_FIXTURE_FUNCTION = "native_suite_fixture"
+SUITE_EDGE_FIXTURE_FUNCTION = "native_suite_edge_fixture"
 SUITE_FIXTURE_SOURCE = """
 
 // Harness-only root that exercises the real Test suite's generic reducer.
@@ -48,12 +50,120 @@ fn native_suite_fixture() -> (result: SuiteSummary) {
     let tests: [TestResult; 4] = [passed, failed, skipped, unsupported_result];
     return summarize<4>(tests);
 }
+
+record NativeSuiteEdgeReport {
+    summary: SuiteSummary,
+    suite_projection: SuiteProjection,
+    passing_bytes: TestResult,
+    failing_bytes: TestResult,
+    failed_assertion_projection: TestProjection,
+    unsupported_projection: TestProjection
+}
+
+// Drive the real generic assertion and suite implementations through every
+// failure classification used by mncs-test. The fixed records are harness
+// inputs; summary and classification remain native MNCS results.
+fn native_suite_edge_fixture() -> (result: NativeSuiteEdgeReport) {
+    let passing_bytes: TestResult = from_assertion(
+        equals_bytes<4>([1, 2, 3, 4], [1, 2, 3, 4], 4101));
+    let failing_bytes: TestResult = from_assertion(
+        equals_bytes<4>([1, 2, 3, 4], [1, 2, 3, 5], 4102));
+    let setup_failure: TestResult = TestResult {
+        verdict: Verdict.FAIL,
+        verdict_code: 1,
+        failure_kind: FailureKind.Setup,
+        failure_code: 4103,
+        assertions: 0,
+        failures: 1,
+        expected: 0,
+        actual: 0,
+        assertion_code: 4103
+    };
+    let compile_failure: TestResult = TestResult {
+        verdict: Verdict.FAIL,
+        verdict_code: 1,
+        failure_kind: FailureKind.Compile,
+        failure_code: 4104,
+        assertions: 0,
+        failures: 1,
+        expected: 0,
+        actual: 0,
+        assertion_code: 4104
+    };
+    let runtime_failure: TestResult = TestResult {
+        verdict: Verdict.FAIL,
+        verdict_code: 1,
+        failure_kind: FailureKind.Runtime,
+        failure_code: 4105,
+        assertions: 0,
+        failures: 1,
+        expected: 0,
+        actual: 0,
+        assertion_code: 4105
+    };
+    let timeout_failure: TestResult = TestResult {
+        verdict: Verdict.FAIL,
+        verdict_code: 1,
+        failure_kind: FailureKind.Timeout,
+        failure_code: 4106,
+        assertions: 0,
+        failures: 1,
+        expected: 0,
+        actual: 0,
+        assertion_code: 4106
+    };
+    let unsupported_failure: TestResult = TestResult {
+        verdict: Verdict.FAIL,
+        verdict_code: 1,
+        failure_kind: FailureKind.Unsupported,
+        failure_code: 4107,
+        assertions: 0,
+        failures: 1,
+        expected: 0,
+        actual: 0,
+        assertion_code: 4107
+    };
+    let infrastructure_failure: TestResult = TestResult {
+        verdict: Verdict.FAIL,
+        verdict_code: 1,
+        failure_kind: FailureKind.Infrastructure,
+        failure_code: 4108,
+        assertions: 0,
+        failures: 1,
+        expected: 0,
+        actual: 0,
+        assertion_code: 4108
+    };
+    let unsupported_result: TestResult = unsupported(4110);
+    let tests: [TestResult; 10] = [
+        passing_bytes,
+        failing_bytes,
+        setup_failure,
+        compile_failure,
+        runtime_failure,
+        timeout_failure,
+        unsupported_failure,
+        infrastructure_failure,
+        skip(4109),
+        unsupported_result
+    ];
+    let summary: SuiteSummary = summarize<10>(tests);
+    return NativeSuiteEdgeReport {
+        summary: summary,
+        suite_projection: project(summary),
+        passing_bytes: passing_bytes,
+        failing_bytes: failing_bytes,
+        failed_assertion_projection: project_test(failing_bytes),
+        unsupported_projection: project_test(unsupported_result)
+    };
+}
 """
 ROOTS = [
     {"module": MODULE, "function": "build_digest"},
     {"module": MODULE, "function": "request_schema"},
     {"module": MODULE, "function": "result_schema"},
     {"module": MODULE, "function": SUITE_FIXTURE_FUNCTION},
+    {"module": MODULE, "function": SUITE_EDGE_FIXTURE_FUNCTION},
 ]
 
 
@@ -115,11 +225,23 @@ def build_request(root_source: str, modules: dict[str, str]) -> dict:
         "root_source": root_source,
         "callable_roots": ROOTS,
         "modules": modules,
-        "generic_seeds": [{
-            "module": "mncs.test.suite",
-            "function": "summarize",
-            "type_arguments": [{"kind": "nat", "value": 4}],
-        }],
+        "generic_seeds": [
+            {
+                "module": "mncs.test.suite",
+                "function": "summarize",
+                "type_arguments": [{"kind": "nat", "value": 4}],
+            },
+            {
+                "module": "mncs.test.suite",
+                "function": "summarize",
+                "type_arguments": [{"kind": "nat", "value": 10}],
+            },
+            {
+                "module": "mncs.test.assertions",
+                "function": "equals_bytes",
+                "type_arguments": [{"kind": "nat", "value": 4}],
+            },
+        ],
         "capabilities": [],
         "verification_policy": "native-callable-set/1",
     }
@@ -127,7 +249,7 @@ def build_request(root_source: str, modules: dict[str, str]) -> dict:
 
 def vm_batch(
     artifact: dict, inputs: list[dict], expected: list[list[dict]],
-    suite_expected: object,
+    suite_expected: dict[str, object],
 ) -> tuple[dict, dict, list[dict]]:
     calls = []
     for index, argument in enumerate(inputs):
@@ -163,16 +285,17 @@ def vm_batch(
             },
         },
     ])
-    calls.append({
-        "id": "native-suite-mixed-verdicts",
-        "request": {
-            "schema_version": "0.1",
-            "target": {"module": MODULE, "function": SUITE_FIXTURE_FUNCTION},
-            "arguments": [],
-            "type_arguments": [],
-            "step_budget": 2_000_000,
-        },
-    })
+    for function in suite_expected:
+        calls.append({
+            "id": f"native-suite-{function}",
+            "request": {
+                "schema_version": "0.1",
+                "target": {"module": MODULE, "function": function},
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 3_000_000,
+            },
+        })
 
     with tempfile.TemporaryDirectory(prefix="mncs-native-digest-batch-") as raw:
         directory = Path(raw)
@@ -237,15 +360,22 @@ def vm_batch(
                 sort_keys=True,
             )
         )
-    if normalized[-3:-1] != [
+    if normalized[len(expected_values):len(expected_values) + 2] != [
         list(b"mncs.test-digest-request/1"),
         list(b"mncs.test-digest/1"),
     ]:
-        raise AssertionError(f"digest schema callables returned unexpected bytes: {normalized[-3:-1]}")
-    if normalized[-1] != suite_expected:
         raise AssertionError(
-            "native Test suite specialization differs from the Stage-0 project oracle: "
-            + json.dumps(value_differences(normalized[-1], suite_expected), sort_keys=True)
+            "digest schema callables returned unexpected bytes: "
+            + json.dumps(normalized[len(expected_values):len(expected_values) + 2])
+        )
+    suite_values = normalized[len(expected_values) + 2:]
+    if suite_values != list(suite_expected.values()):
+        raise AssertionError(
+            "native Test workflow differs from the Stage-0 project oracle: "
+            + json.dumps(
+                value_differences(suite_values, list(suite_expected.values())),
+                sort_keys=True,
+            )
         )
     return document, {
         "wall_seconds": round(wall, 6),
@@ -258,7 +388,7 @@ def vm_batch(
 
 def vm_retained_session(
     artifact: dict, inputs: list[dict], expected: list[list[dict]],
-    suite_expected: object,
+    suite_expected: dict[str, object],
 ) -> tuple[dict, list[dict]]:
     """Run the digest callables over one long-lived canonical VM process."""
     calls = [
@@ -305,14 +435,17 @@ def vm_retained_session(
             "type_arguments": [],
             "step_budget": 10_000,
         }, "completed", list(b"mncs.test-digest/1")),
-        ("native-suite-mixed-verdicts", {
+    ])
+    calls.extend(
+        (f"native-suite-{function}", {
             "schema_version": "0.1",
-            "target": {"module": MODULE, "function": SUITE_FIXTURE_FUNCTION},
+            "target": {"module": MODULE, "function": function},
             "arguments": [],
             "type_arguments": [],
-            "step_budget": 2_000_000,
-        }, "completed", suite_expected),
-    ])
+            "step_budget": 3_000_000,
+        }, "completed", value)
+        for function, value in suite_expected.items()
+    )
 
     with tempfile.TemporaryDirectory(prefix="mncs-native-digest-session-") as raw:
         artifact_path = Path(raw) / "application.vm.json"
@@ -452,13 +585,16 @@ def main() -> None:
     root_source = base_root_source + SUITE_FIXTURE_SOURCE
     effective_source_hashes = dict(source_hashes)
     effective_source_hashes[MODULE] = sha(root_source.encode("utf-8"))
-    suite_oracle_call = {
-        "schema_version": "0.1",
-        "target": {"module": MODULE, "function": SUITE_FIXTURE_FUNCTION},
-        "arguments": [],
-        "type_arguments": [],
-        "step_budget": 2_000_000,
-    }
+    suite_fixture_calls = [
+        {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": function},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 3_000_000,
+        }
+        for function in (SUITE_FIXTURE_FUNCTION, SUITE_EDGE_FIXTURE_FUNCTION)
+    ]
     oracle_probe = digest_app.support.Probe(
         CACHE_DIR / "suite-oracle", executable=PROBE
     )
@@ -466,7 +602,7 @@ def main() -> None:
         suite_oracle, suite_oracle_metrics = oracle_probe.send({"project_oracle": {
             "root": root_source,
             "modules": modules,
-            "calls": [suite_oracle_call],
+            "calls": suite_fixture_calls,
         }}, timeout=180)
         oracle_probe.close()
     except BaseException:
@@ -474,20 +610,46 @@ def main() -> None:
             oracle_probe.proc.kill()
             oracle_probe.proc.wait(timeout=5)
         raise
-    if not suite_oracle.get("valid") or len(suite_oracle.get("executions", [])) != 1:
+    suite_oracle_executions = suite_oracle.get("executions", [])
+    if not suite_oracle.get("valid") or len(suite_oracle_executions) != len(suite_fixture_calls):
         raise AssertionError(
-            "Stage-0 could not execute the generic Test suite fixture: "
+            "Stage-0 could not execute the native Test workflow fixtures: "
             + json.dumps(suite_oracle.get("diagnostics"), sort_keys=True)
         )
-    suite_oracle_execution = suite_oracle["executions"][0]
-    if suite_oracle_execution.get("status") != "returned":
-        raise AssertionError(
-            "Stage-0 generic Test suite fixture did not return: "
-            + json.dumps(suite_oracle_execution, sort_keys=True)
+    suite_expected = {}
+    for call, execution in zip(suite_fixture_calls, suite_oracle_executions):
+        function = call["target"]["function"]
+        if execution.get("status") != "returned":
+            raise AssertionError(
+                f"Stage-0 Test workflow fixture {function} did not return: "
+                + json.dumps(execution, sort_keys=True)
+            )
+        suite_expected[function] = digest_app.support.decode_wire(
+            execution["returned"][0]
         )
-    suite_expected = digest_app.support.decode_wire(
-        suite_oracle_execution["returned"][0]
-    )
+
+    edge_summary = suite_expected[SUITE_EDGE_FIXTURE_FUNCTION].get("summary", {})
+    expected_edge_summary = {
+        "total": 10,
+        "passed": 1,
+        "failed": 7,
+        "skipped": 1,
+        "unsupported": 2,
+        "assertion_count": 2,
+        "failure_count": 7,
+        "assertion_failures": 1,
+        "setup_failures": 1,
+        "compile_failures": 1,
+        "runtime_failures": 1,
+        "timeout_failures": 1,
+        "infrastructure_failures": 1,
+        "verdict_code": 1,
+    }
+    if {key: edge_summary.get(key) for key in expected_edge_summary} != expected_edge_summary:
+        raise AssertionError(
+            "native Test suite summary does not match the declared 10-case oracle: "
+            + json.dumps(edge_summary, sort_keys=True)
+        )
 
     request = build_request(root_source, modules)
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -518,12 +680,21 @@ def main() -> None:
         if row.get("module") == "mncs.test.suite"
         and row.get("name", "").startswith("summarize__spec_")
     }
-    if len(suite_specializations) != 1:
+    assertion_specializations = {
+        (row.get("module"), row.get("name"))
+        for row in artifact.get("callables", [])
+        if row.get("module") == "mncs.test.assertions"
+        and row.get("name", "").startswith("equals_bytes__spec_")
+    }
+    if len(suite_specializations) != 2 or len(assertion_specializations) != 1:
         raise AssertionError(
-            "the real Test suite specialization was not selected exactly once: "
-            + json.dumps(sorted(suite_specializations), sort_keys=True)
+            "the Test suite and generic assertion specializations were not selected exactly: "
+            + json.dumps({
+                "suite": sorted(suite_specializations),
+                "assertions": sorted(assertion_specializations),
+            }, sort_keys=True)
         )
-    if artifact_callables != expected_roots | suite_specializations:
+    if artifact_callables != expected_roots | suite_specializations | assertion_specializations:
         raise AssertionError(
             f"artifact callable closure is wrong: {sorted(artifact_callables)}"
         )
@@ -715,7 +886,7 @@ def main() -> None:
         raise AssertionError("retained VM session failure handling changed later valid calls")
     report = {
         "schema_version": 1,
-        "kind": "mncs.compiler.native-test-digest-multi-callable-batch",
+        "kind": "mncs.compiler.native-test-workflow-batch",
         "compiler_revision": git(ROOT, "rev-parse", "HEAD"),
         "compiler_branch": git(ROOT, "branch", "--show-current"),
         "probe_sha256": sha(PROBE.read_bytes()),
@@ -730,12 +901,14 @@ def main() -> None:
         "source_hashes": source_hashes,
         "effective_source_hashes": effective_source_hashes,
         "harness_suite_overlay": {
-            "function": f"{MODULE}::{SUITE_FIXTURE_FUNCTION}",
+            "functions": [f"{MODULE}::{name}" for name in suite_expected],
             "sha256": sha(SUITE_FIXTURE_SOURCE.encode("utf-8")),
             "stage0_project_oracle_measurement": suite_oracle_metrics,
-            "expected_result": suite_expected,
-            "generic_specialization": sorted(
-                f"{module}::{name}" for module, name in suite_specializations
+            "expected_results": suite_expected,
+            "native_edge_summary_contract": expected_edge_summary,
+            "generic_specializations": sorted(
+                f"{module}::{name}"
+                for module, name in suite_specializations | assertion_specializations
             ),
         },
         "source_snapshot_identity": built.get("source_snapshot", {}).get("identity"),
@@ -822,15 +995,16 @@ def main() -> None:
         "scope": (
             "The real mncs.test.digest source was compiled into one multi-callable application-build/5 "
             "artifact. An imported comment edit reran the full frontend and reused the selected verified "
-            "VM closure while rebinding all four current callable interfaces. A semantics-preserving "
+            "VM closure while rebinding all five current callable interfaces. A semantics-preserving "
             "edit to reachable mncs.test.suite::empty invalidated the closure and regenerated the artifact. "
-            "Three Stage-0-backed build_digest inputs, both schema callables, and a harness-only root "
-            "that exercises the real mncs.test.suite::summarize<4> mixed-verdict specialization ran in one bounded "
-            "canonical VM batch and one retained VM session; the retained session recovered from a "
-            "low-fuel interruption and rejected typed input before completing the same oracle-backed "
-            "callable set in that process. A cache response with an altered artifact identity and stale "
-            "digest was rejected and recomputed from source. This does not reuse Language verified facts "
-            "and does not establish Forge/Environment/Store execution or full mncs-test conversion."
+            "Three Stage-0-backed build_digest inputs, both schema callables, and two harness roots "
+            "exercised the real Test suite's summarize<4> and summarize<10>, equals_bytes<4>, "
+            "all failure categories, and Test/Suite projections. They ran in one bounded canonical "
+            "VM batch and one retained VM session. The retained session recovered from low fuel and "
+            "rejected typed input before completing later calls. A cache response with an altered "
+            "artifact identity and stale digest was rejected and recomputed from source. This proves "
+            "a wider native Test semantic workflow, while Language verified-fact reuse remains zero; "
+            "it does not establish Forge/Environment/Store execution or full mncs-test conversion."
         ),
     }
     EVIDENCE_PATH.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
