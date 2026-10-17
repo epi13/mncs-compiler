@@ -431,6 +431,57 @@ def run():
         assert missing_native["import_resolution_negative_cache_hits"] == 2, missing_native
         assert missing_native["import_module_name_comparisons"] == 34, missing_native
 
+        # Resolution facts are local to one immutable Project snapshot. A
+        # previously present target must not survive a new request that omits
+        # that module, even when the consumer source and import name are equal.
+        snapshot_root = "mncs 0.18; module demo.snapshot_root;\n"
+        snapshot_root += "use demo.fresh as fresh;\n"
+        snapshot_root += "fn main() -> (result: u64) { return 1; }\n"
+        present_snapshot_sources = [
+            (
+                "00-fresh.mncs",
+                Path("00-fresh.mncs"),
+                b"mncs 0.18; module demo.fresh; fn value() -> (result: u64) { return 1; }",
+            ),
+            ("01-snapshot-root.mncs", Path("01-snapshot-root.mncs"), snapshot_root.encode()),
+        ]
+        present_snapshot_response = probe.send(_target_request(
+            project.request_value(identities, present_snapshot_sources), 1,
+        ))
+        assert present_snapshot_response.get("status") == "returned", present_snapshot_response
+        present_snapshot_native = project.decode(present_snapshot_response["returned"][0])
+        assert present_snapshot_native["valid"], present_snapshot_native
+        assert present_snapshot_native["import_count"] == 1, present_snapshot_native
+
+        missing_snapshot_sources = [
+            (
+                "00-unrelated.mncs",
+                Path("00-unrelated.mncs"),
+                b"mncs 0.18; module demo.unrelated; fn value() -> (result: u64) { return 1; }",
+            ),
+            ("01-snapshot-root.mncs", Path("01-snapshot-root.mncs"), snapshot_root.encode()),
+        ]
+        missing_snapshot_response = probe.send(_target_request(
+            project.request_value(identities, missing_snapshot_sources), 1,
+        ))
+        assert missing_snapshot_response.get("status") == "returned", missing_snapshot_response
+        missing_snapshot_native = project.decode(missing_snapshot_response["returned"][0])
+        missing_snapshot_diagnostics = project.flist(missing_snapshot_native["diagnostics"])
+        snapshot_use_start = snapshot_root.index("use demo.fresh as fresh;") + len("use ")
+        assert not missing_snapshot_native["valid"], missing_snapshot_native
+        assert missing_snapshot_native["import_count"] == 0, missing_snapshot_native
+        assert missing_snapshot_native["import_resolution_cache_hits"] == 0, missing_snapshot_native
+        assert missing_snapshot_native["import_resolution_negative_cache_hits"] == 0, missing_snapshot_native
+        assert len(missing_snapshot_diagnostics) == 1, missing_snapshot_diagnostics
+        assert (
+            missing_snapshot_diagnostics[0].get("$p", {}).get("start"),
+            missing_snapshot_diagnostics[0].get("$p", {}).get("end"),
+        ) == (snapshot_use_start, snapshot_use_start + len("demo.fresh")), missing_snapshot_diagnostics
+        assert present_snapshot_native["fingerprint"] != missing_snapshot_native["fingerprint"], {
+            "present": present_snapshot_native["fingerprint"],
+            "missing": missing_snapshot_native["fingerprint"],
+        }
+
         # A 1025th use exceeds the module bound and reports the exact next
         # source span without dropping any of the admitted links.
         over_module_sources, over_module_root = _repeated_import_source(1025)
@@ -584,7 +635,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/8",
+            "schema_version": "mncs.compiler.project-import-link-capacity/9",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -619,6 +670,16 @@ def run():
             "repeated_missing_import_negative_cache_hits": missing_native["import_resolution_negative_cache_hits"],
             "repeated_missing_import_candidate_header_comparisons": missing_native["import_module_name_comparisons"],
             "distinct_missing_names_same_length_preserved": len(set(missing_names)) == 2 and len(missing_names[0]) == len(missing_names[1]),
+            "previous_success_did_not_survive_changed_snapshot": (
+                present_snapshot_native["valid"]
+                and not missing_snapshot_native["valid"]
+                and present_snapshot_native["fingerprint"] != missing_snapshot_native["fingerprint"]
+            ),
+            "changed_snapshot_fresh_missing_diagnostic": (
+                len(missing_snapshot_diagnostics) == 1
+                and missing_snapshot_diagnostics[0].get("$p", {}).get("start") == snapshot_use_start
+                and missing_snapshot_diagnostics[0].get("$p", {}).get("end") == snapshot_use_start + len("demo.fresh")
+            ),
             "per_module_import_limit": 1024,
             "over_module_limit_import_declaration_count": 1025,
             "over_module_limit_imports_rejected": not over_module_native["valid"],

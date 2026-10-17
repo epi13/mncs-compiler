@@ -1,0 +1,76 @@
+{
+  "schema_version": "mncs.compiler.project-import-snapshot-isolation/1",
+  "identity": "ev_compiler_project_import_snapshot_isolation_20261017",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-17T11:04:30+00:00",
+  "status": "verified",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "candidate_branch_head_before_test_commit": "9566a9c26620b1c6d058dbedad1532a1f10b9093",
+    "implementation_revision": "5fbb7e0da62cbd2808182ee47681cc9df7f7f933",
+    "project_source_sha256": "d89471f0bd2a5815c883b250de974a29280e22879205bb1d0b17947b054668f7",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "bd8fec6ccf7c080e7600bfbca76a6876e81a2c5d4d3259e68a1296e09b79981e"
+  },
+  "verification": {
+    "route": "authenticated Environment verification capability",
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.project-import-link-capacity",
+    "binding_id": "cap_8d168014771c2662",
+    "schema_version": "mncs.compiler.project-import-link-capacity/9",
+    "result_sha256": "5c8251c57e28b56ae451deab224a07297292e4d379d3cd27c0011831f491e7ff",
+    "status": "verified",
+    "backend": "cranelift",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "probe_request_count": 24,
+    "stage0_ready_seconds": 34.2,
+    "backend_artifact_cache_hit": true,
+    "snapshot_transition": {
+      "first_snapshot_target_present": true,
+      "first_snapshot_valid": true,
+      "second_snapshot_same_consumer_import_name": "demo.fresh",
+      "second_snapshot_target_present": false,
+      "second_snapshot_valid": false,
+      "project_fingerprints_differ": true,
+      "successful_cache_hits_in_second_snapshot": 0,
+      "negative_cache_hits_in_second_snapshot": 0,
+      "import_links_in_second_snapshot": 0,
+      "fresh_missing_diagnostics": 1,
+      "current_import_span_preserved": true
+    },
+    "other_negative_cache_cases": {
+      "distinct_same_length_missing_names_preserved": true,
+      "repeated_negative_cache_hits": 2,
+      "repeated_missing_diagnostics": 4,
+      "candidate_header_comparisons": 34,
+      "repeated_missing_spans_preserved": true
+    },
+    "other_project_frontiers": {
+      "connected_sources": 64,
+      "connected_import_links": 63,
+      "per_module_import_limit": 1024,
+      "project_import_link_limit": 4096,
+      "overflow_diagnostics_preserved": true,
+      "stage0_oracle_valid": true,
+      "target_ssa_valid": true
+    }
+  },
+  "resource_measurement": {
+    "environment_resource_measurements": [],
+    "cpu_time": null,
+    "peak_rss": null,
+    "unavailable_reason": "The Environment verifier returned no resource measurement for this warm verification."
+  },
+  "interpretation": {
+    "prior_success_masks_missing_import": false,
+    "cache_persists_across_project_snapshots": false,
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_performed": false,
+    "forge_execution_receipt_published": false,
+    "whole_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "This proves Project import-resolution snapshot isolation and fresh diagnostics across two requests in a retained Stage-0 process. It is not Language semantic verification reuse or an application-build cross-process test."
+  }
+}
