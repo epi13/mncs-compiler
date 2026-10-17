@@ -32,9 +32,11 @@ struct ApplicationCacheEntry<'a> {
 
 const CONTRACT_V1: &str = "mncs.compiler.application-build/4";
 const CONTRACT_V2: &str = "mncs.compiler.application-build/5";
+const CONTRACT_V3: &str = "mncs.compiler.application-build/6";
 const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
 const REQUEST_V1: &str = "mncs.compiler.application-build-request/1";
 const REQUEST_V2: &str = "mncs.compiler.application-build-request/2";
+const REQUEST_V3: &str = "mncs.compiler.application-build-request/3";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
@@ -111,7 +113,7 @@ fn producer_identity() -> (String, Value) {
 }
 
 fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Value {
-    json!({
+    let mut response = json!({
         "schema_version": contract,
         "status": status,
         "error": { "code": code, "message": message },
@@ -125,7 +127,14 @@ fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Va
         "diagnostics": [],
         "unresolved_obligations": [],
         "unselected_unresolved_exports": [],
-    })
+    });
+    if contract == CONTRACT_V3 {
+        response
+            .as_object_mut()
+            .expect("application response object")
+            .insert("source_test_inventory".to_owned(), Value::Null);
+    }
+    response
 }
 
 fn has_exact_keys(value: &Value, keys: &[&str]) -> bool {
@@ -1088,6 +1097,7 @@ fn rebind_cached_application_response(
     multiple_callables: bool,
     callable_roots: &[(String, String)],
     callable_interfaces: &[Option<Value>],
+    source_test_inventory: Option<Value>,
 ) -> Option<Value> {
     response = rebind_cached_source_snapshot(response, source_identity, source_files)?;
     if multiple_callables {
@@ -1108,6 +1118,11 @@ fn rebind_cached_application_response(
     response
         .as_object_mut()?
         .insert("diagnostics".to_owned(), diagnostics);
+    if let Some(inventory) = source_test_inventory {
+        response
+            .as_object_mut()?
+            .insert("source_test_inventory".to_owned(), inventory);
+    }
     Some(response)
 }
 
@@ -2078,19 +2093,20 @@ mod tests {
 /// existing canonical VM artifact format. Inputs are explicit and immutable;
 /// source identities are derived from exact bytes, never paths or timestamps.
 pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainIdentity>) -> Value {
-    let (contract, multiple_callables) = match request.get("schema_version").and_then(Value::as_str)
-    {
-        Some(REQUEST_V1) => (CONTRACT_V1, false),
-        Some(REQUEST_V2) => (CONTRACT_V2, true),
-        _ => {
-            return error_contract(
-                CONTRACT_V1,
-                "unknown",
-                "MCA100",
-                "unsupported application build request schema",
-            )
-        }
-    };
+    let (contract, multiple_callables, include_source_test_inventory) =
+        match request.get("schema_version").and_then(Value::as_str) {
+            Some(REQUEST_V1) => (CONTRACT_V1, false, false),
+            Some(REQUEST_V2) => (CONTRACT_V2, true, false),
+            Some(REQUEST_V3) => (CONTRACT_V3, true, true),
+            _ => {
+                return error_contract(
+                    CONTRACT_V1,
+                    "unknown",
+                    "MCA100",
+                    "unsupported application build request schema",
+                )
+            }
+        };
     if request.get("target").and_then(Value::as_str) != Some(VM_TARGET) {
         return error_contract(
             contract,
@@ -2434,6 +2450,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         &resolver,
         &generic_seeds,
     );
+    let source_test_inventory = include_source_test_inventory
+        .then(|| serde_json::to_value(frontend.test_inventory.as_ref()).unwrap_or(Value::Null));
     let resolved_module_count = frontend.module_resolutions.len().saturating_add(1);
     let program_function_count = frontend
         .program
@@ -2485,6 +2503,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         }))
                         .collect::<Vec<_>>()),
                 );
+        }
+        if let Some(inventory) = source_test_inventory.clone() {
+            rejected_response
+                .as_object_mut()
+                .expect("response object")
+                .insert("source_test_inventory".to_owned(), inventory);
         }
         let response = annotate_cache(
             rejected_response,
@@ -2610,6 +2634,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 multiple_callables,
                 &callable_roots,
                 &callable_interfaces,
+                source_test_inventory.clone(),
             )
         } else {
             None
@@ -2734,6 +2759,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         }))
                         .collect::<Vec<_>>()),
                 );
+        }
+        if let Some(inventory) = source_test_inventory.clone() {
+            unsupported_response
+                .as_object_mut()
+                .expect("response object")
+                .insert("source_test_inventory".to_owned(), inventory);
         }
         return annotate_artifact_emission_failure(
             unsupported_response,
@@ -2938,6 +2969,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         "unresolved_obligations": unresolved,
         "unselected_unresolved_exports": unselected_unresolved,
     });
+    if let Some(inventory) = source_test_inventory {
+        response
+            .as_object_mut()
+            .expect("response object")
+            .insert("source_test_inventory".to_owned(), inventory);
+    }
     if multiple_callables {
         response
             .as_object_mut()

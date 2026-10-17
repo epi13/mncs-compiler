@@ -20,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RESPONSE_SCHEMA_BY_REQUEST = {
     "mncs.compiler.application-build-request/1": "mncs.compiler.application-build/4",
     "mncs.compiler.application-build-request/2": "mncs.compiler.application-build/5",
+    "mncs.compiler.application-build-request/3": "mncs.compiler.application-build/6",
 }
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 INPUT_ARTIFACT_SCHEMA = "mncs.environment.provider-input-artifacts/1"

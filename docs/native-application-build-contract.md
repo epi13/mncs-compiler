@@ -31,7 +31,23 @@ top-level `entry` field names the first canonical callable for clients that
 need one primary target. A selected callable without an admitted executable
 body makes the full request unsupported.
 
-An exact `/5` source-snapshot hit skips the frontend. A changed snapshot always
+`mncs.compiler.application-build-request/3` keeps the `/2` callable selection
+and returns `mncs.compiler.application-build/6`. Alongside the artifact, `/6`
+carries `source_test_inventory`, the Language-owned `mncs.test-inventory/1`
+for first-class `test` declarations in the root source module. The inventory
+comes from the same frontend invocation as callable verification and artifact
+emission; it retains declaration, test, function, and subject identities plus
+current source spans. Its scope remains `source_module` and does not imply a
+repository-wide inventory. A valid source with no tests returns an empty
+inventory; rejected or unavailable builds return `null`. On an exact cache hit
+the source snapshot is identical. When a changed root source is reverified,
+the response uses its fresh inventory and spans even if the selected
+executable artifact remains reusable. This gives the production Test runner a
+single compiler result from which to obtain both an artifact and the root
+module's test inventory; consuming that response in `mncs-test` is a separate
+integration step.
+
+An exact `/5` or `/6` source-snapshot hit skips the frontend. A changed snapshot always
 runs the full Language frontend; if the selected executable closure and
 callable interfaces still match a verified artifact, the Compiler reuses that
 VM artifact, otherwise it rebuilds the selected SSA closure and artifact. This
@@ -39,14 +55,22 @@ does not reuse Language-owned verified facts. The
 `tools/test_vm_native_digest_unreachable_body_reuse.py` workload verifies that
 an uncalled imported body edit takes the full-frontend path while preserving
 the digest executable artifact. The Environment provider accepts request `/1`
-with response `/4` and request `/2` with response `/5`; its bounded stdout
-summary preserves each selected callable identity when it fits the 12 KiB
+with response `/4`, request `/2` with response `/5`, and request `/3` with
+response `/6`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
 bound. For large selections it reports the root count and points to the
 shareable result artifact, which retains the complete typed interfaces. The
 focused direct compiler proof is
 `python3 tools/test_vm_native_application_batch.py`; the provider regression
-also sends `/2` through the adapter and calls both exports in one canonical VM
-batch.
+also sends `/2` through the adapter and calls `snapshot_witness` from its
+seven-callable Test-core artifact in one canonical VM batch.
+
+The Environment descriptor advertises request `/3` and response `/6` as
+current while retaining all three request-response pairs.
+`python3 tools/test_application_build_test_inventory.py` checks that the
+response carries the root module's Language-issued inventory, fresh-process
+reuse preserves it, comment edits refresh spans, test-body edits refresh only
+the affected test identity, invalid source publishes neither inventory nor
+artifact, and the provider adapter publishes the `/6` response artifact.
 
 `mncs.compiler.application-build/4` records framed source-snapshot identity,
 source hashes, resolved dependency identity, Stage-0 and producer identities,
@@ -152,10 +176,9 @@ interface is implemented and consumed.
 
 ## Environment capability
 
-The Compiler manifest declares revision 5 of the contract as
-`mncs-compiler:native-application-build`, advertises request `/2` and response
-`/5` as current, and retains request `/1` and response `/4` as a supported
-compatibility pair. The provider accepts a request from the selected
+The Compiler manifest declares revision 6 of the contract as
+`mncs-compiler:native-application-build`, advertises request `/3` and response
+`/6` as current, and retains the `/1` to `/4` and `/2` to `/5` pairs. The provider accepts a request from the selected
 Compiler checkout with `--request-file PATH`, or from a canonical Store input
 artifact with `--request-artifact NAME`. It writes the complete response as
 the shareable `native-application-build.json` invocation artifact and keeps
@@ -176,7 +199,7 @@ are preserved as structured outcomes. Provider transport errors remain
 invocation errors and do not produce a result artifact.
 
 The provider regression is `python3 tools/test_application_build_provider.py`.
-It checks the manifest revision and both compatible request/response pairs, a
+It checks the manifest revision and all supported request/response pairs, a
 cold build, a fresh-process warm hit, Store-input byte/hash
 validation, the exact canonical artifact identity, precise invalid-source
 diagnostics, suppression of successful cache publication for rejected input,
@@ -189,7 +212,7 @@ The probe keeps exact executable SHA-256 as its producer identity. It now hashes
 the executable in 64 KiB streaming chunks, and optimizes `sha2` in the debug
 profile used by the Stage-0 development probe. This avoids loading the full
 binary into memory and prevents an unoptimized digest from dominating fresh
-process cache hits; it does not change application-build/5 or cache identity
+process cache hits; it does not change application-build/5 or /6 cache identity
 semantics. The workload-specific measurement is recorded in
 `evidence/native-app-readiness-probe-cache-identity-20261016.json`.
 

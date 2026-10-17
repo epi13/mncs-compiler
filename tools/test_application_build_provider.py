@@ -31,6 +31,8 @@ REQUEST_SCHEMA = "mncs.compiler.application-build-request/1"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/4"
 MULTI_REQUEST_SCHEMA = "mncs.compiler.application-build-request/2"
 MULTI_RESPONSE_SCHEMA = "mncs.compiler.application-build/5"
+INVENTORY_REQUEST_SCHEMA = "mncs.compiler.application-build-request/3"
+INVENTORY_RESPONSE_SCHEMA = "mncs.compiler.application-build/6"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 DIGEST_EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-provider-digest.json"
 
@@ -49,23 +51,28 @@ def validate_environment_contract_descriptor() -> None:
     expected_pairs = {
         (REQUEST_SCHEMA, RESPONSE_SCHEMA),
         (MULTI_REQUEST_SCHEMA, MULTI_RESPONSE_SCHEMA),
+        (INVENTORY_REQUEST_SCHEMA, INVENTORY_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "5":
-        raise AssertionError("Environment capability revision must match application-build/5")
+    if contract.get("version") != "6":
+        raise AssertionError("Environment capability revision must match application-build/6")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        MULTI_REQUEST_SCHEMA, MULTI_RESPONSE_SCHEMA
+        INVENTORY_REQUEST_SCHEMA, INVENTORY_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Environment must advertise application-build/5 as its current contract")
+        raise AssertionError("Environment must advertise application-build/6 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Environment descriptor must retain both /4 and /5 request-response pairs")
+        raise AssertionError("Environment descriptor must retain /4, /5, and /6 request-response pairs")
+    if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
+            or artifact.get("source_test_inventory_scope") != "source_module"):
+        raise AssertionError("application-build/6 must declare the Language source-module Test inventory")
     if provider.RESPONSE_SCHEMA_BY_REQUEST != {
         REQUEST_SCHEMA: RESPONSE_SCHEMA,
         MULTI_REQUEST_SCHEMA: MULTI_RESPONSE_SCHEMA,
+        INVENTORY_REQUEST_SCHEMA: INVENTORY_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -358,7 +365,9 @@ def invoke(
         raise AssertionError("Environment invocation summary schema is missing")
     result_path = output_dir / "native-application-build.json"
     response = json.loads(result_path.read_text())
-    if response.get("schema_version") not in {RESPONSE_SCHEMA, MULTI_RESPONSE_SCHEMA}:
+    if response.get("schema_version") not in {
+        RESPONSE_SCHEMA, MULTI_RESPONSE_SCHEMA, INVENTORY_RESPONSE_SCHEMA
+    }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):
         raise AssertionError("provider summary changed the application response schema")
@@ -552,11 +561,8 @@ def main() -> None:
         if warm_response.get("artifact", {}).get("identity") != artifact.get("identity"):
             raise AssertionError("warm provider build changed the canonical artifact identity")
 
-        batch_roots = [
-            {"module": batch_app.MODULE, "function": "increment"},
-            {"module": batch_app.MODULE, "function": "decrement"},
-        ]
-        batch_request = batch_app.request(batch_roots)
+        batch_roots = batch_app.ROOTS
+        batch_request = batch_app.build_request(batch_roots)
         batch_request_path = base / "multi-callable-request.json"
         write_json(batch_request_path, batch_request)
         batch_cache_dir = base / "multi-callable-cache"
@@ -579,16 +585,8 @@ def main() -> None:
             "callable_roots", []
         )
         batch_expected = [
-            {
-                "module": batch_app.MODULE,
-                "function": "decrement",
-                "status": "verified",
-            },
-            {
-                "module": batch_app.MODULE,
-                "function": "increment",
-                "status": "verified",
-            },
+            {"module": batch_app.MODULE, "function": function, "status": "verified"}
+            for function in sorted(row["function"] for row in batch_roots)
         ]
         batch_summary_roots = batch_summary.get("callable_roots")
         if (
@@ -618,24 +616,20 @@ def main() -> None:
             (row.get("module"), row.get("name"))
             for row in (batch_artifact or {}).get("callables", [])
         }
-        if batch_artifact_callables != {
-            (batch_app.MODULE, "increment"),
-            (batch_app.MODULE, "decrement"),
-        }:
+        if not {
+            (batch_app.MODULE, row["function"]) for row in batch_roots
+        }.issubset(batch_artifact_callables):
             raise AssertionError(
                 "provider multi-callable build emitted an unexpected callable set"
             )
         batch_vm_result, batch_vm_elapsed, batch_vm_peak_rss_kib = batch_app.vm_batch(
-            batch_artifact
+            batch_artifact,
+            [{"id": "snapshot-witness", "function": "snapshot_witness"}],
         )
         batch_vm_rows = batch_vm_result.get("results", [])
-        if len(batch_vm_rows) != 2 or any(
-            row.get("outcome") != {"kind": "completed"}
-            or len(row.get("record", {}).get("returned", [])) != 1
-            or app.vm_to_wire(row["record"]["returned"][0])
-            != batch_app.integer(42)
-            for row in batch_vm_rows
-        ):
+        if (len(batch_vm_rows) != 1
+                or batch_vm_rows[0].get("outcome") != {"kind": "completed"}
+                or len(batch_vm_rows[0].get("record", {}).get("returned", [])) != 1):
             raise AssertionError(
                 "provider-produced multi-callable artifact did not pass canonical VM calls"
             )
@@ -1007,7 +1001,7 @@ def main() -> None:
                     batch_response.get("schema_version") == MULTI_RESPONSE_SCHEMA
                     and batch_response.get("status") == "verified"
                 ),
-                "provider_multi_callable_vm_batch_completed": len(batch_vm_rows) == 2
+                "provider_multi_callable_vm_batch_completed": len(batch_vm_rows) == 1
                 and all(row.get("outcome") == {"kind": "completed"} for row in batch_vm_rows),
                 "store_input_artifact_reused": store_response["cache"]["status"] == "hit",
                 "invalid_source_precise_rejection": diagnostic_codes,

@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 20,
+  "revision": 21,
   "manifest_location": "in-repository",
   "authority": {
     "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
@@ -125,7 +125,7 @@
       },
       {
         "contract": "native-application-build",
-        "version": "5",
+        "version": "6",
         "kind": "compiler-application-build-provider",
         "stability": "experimental",
         "effects": [
@@ -136,8 +136,8 @@
         ],
         "output_limit_bytes": 16384,
         "artifact_contract": {
-          "request_schema": "mncs.compiler.application-build-request/2",
-          "response_schema": "mncs.compiler.application-build/5",
+          "request_schema": "mncs.compiler.application-build-request/3",
+          "response_schema": "mncs.compiler.application-build/6",
           "supported_request_response_pairs": [
             {
               "request_schema": "mncs.compiler.application-build-request/1",
@@ -146,6 +146,10 @@
             {
               "request_schema": "mncs.compiler.application-build-request/2",
               "response_schema": "mncs.compiler.application-build/5"
+            },
+            {
+              "request_schema": "mncs.compiler.application-build-request/3",
+              "response_schema": "mncs.compiler.application-build/6"
             }
           ],
           "callable_root_maximum_count": 256,
@@ -156,6 +160,8 @@
           ],
           "generic_seed_schema": "mncs.compiler.application-generic-seed/1",
           "generic_seed_maximum_count": 256,
+          "source_test_inventory_schema": "mncs.test-inventory/1",
+          "source_test_inventory_scope": "source_module",
           "result_artifact": "native-application-build.json",
           "execution_artifact": "mncs.vm.artifact/1",
           "status_values": [
@@ -169,6 +175,7 @@
         "fingerprint_sources": [
           "tools/application_build_provider.py",
           "tools/test_application_build_provider.py",
+          "tools/test_application_build_test_inventory.py",
           "tools/test_vm_native_application_batch.py",
           "tools/test_vm_native_application.py",
           "tools/test_native_application_incremental.py",

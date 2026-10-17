@@ -175,6 +175,29 @@ Forge/Environment/Store `digest_app` route. Evidence is
 `evidence/native-app-readiness-digest-multi-callable-reuse-20261016.json`,
 SHA-256 `05cd710cae196905fca285c3843ee73f67df1556697e27510e3386db56d69b37`.
 
+## Application artifact and Test inventory co-result (2026-10-17)
+
+Application-build request `/3` and response `/6` return the Language-owned
+`mncs.test-inventory/1` for first-class tests in the root source module next to
+the selected callable artifact. The inventory comes from the same frontend
+result, retaining its source and semantic identities, test identities, and
+current source spans. This removes the need for an additional frontend pass
+when a consumer needs both products. The scope is deliberately
+`source_module`; repository-wide inventory and consumer migration remain
+separate work.
+
+`tools/test_application_build_test_inventory.py` passed the cold build,
+fresh-process exact hit, comment-edit location refresh, unselected test-body
+identity update, and invalid-source checks. The cold build reported one
+frontend invocation; exact reuse reported zero. The unselected test-body edit
+preserved the selected executable closure while changing only that test's
+body-sensitive identity. The current full-snapshot frontend path still
+regenerated the artifact for the changed root source; Language verification
+facts reused: zero. This is
+Compiler API progress, not completion of the production `mncs-test` runner
+integration. Evidence is
+`evidence/application-build-test-inventory-20261017.json`.
+
 ## Native Automation evaluation workload and alias identity fix (2026-10-17)
 
 The Compiler now includes both requested import identities and resolved
@@ -352,7 +375,7 @@ consumption, Monitor correlation, and Automation eligibility remain unproven.
 | Assertion meanings, failure categories, finite results, suite summaries, bounded generation, replay inputs, snapshots, and digest aggregation | **Convertible now; native modules already own these semantics** | `native/mncs/test/assertions.mncs`, `suite.mncs`, `generative.mncs`, `snapshot.mncs`, and `digest.mncs` are compiled and executed. The Stage-0 oracle agrees with canonical VM output. The effectful digest application also proves a bounded `test_artifact` structured-read/write capability path. |
 | Python manifest runner, external-result fallback, and legacy `discover`/`run` entrypoints | **Temporary bootstrap implementation awaiting a verified replacement** | `tools/mncs_test.py::run_manifest` carries native `TestResult` values through `mncs.test.suite::empty` and `observe`; host projections remain for external fixtures and failures. `AGENTS.md` designates `mncs test`, `bin/mncs-test-*`, and `bin/mncs-test-verify` as canonical entrypoints and `bin/mncs-test-compat` as compatibility-only. Caller population and the full parity corpus are still needed before removal. |
 | TOML manifest parsing, controlled file discovery, source reads, and repository inventory | **Intentionally retained operating-system mechanism** | `validate_manifest`, `load_manifest`, `discover_manifests`, `read_source`, and repository inventory in `tools/mncs_test.py` use host filesystem and process state. A native replacement needs explicit bounded filesystem capabilities and stable inventory data. |
-| Compiler admission, generic inventory resolution, retained sessions, and batch callable execution | **Requires compiler/backend execution work** | Current proof selects and executes a callable application artifact. It does not prove the canonical Test runner's compile-once retained-session path, generic inventory resolution across a full corpus, or batch receipts. |
+| Compiler admission, generic inventory resolution, retained sessions, and batch callable execution | **Partially available** | The Compiler can now return a selected application artifact and its root module's first-class Test inventory from one frontend invocation, and the canonical VM has a retained-session batch contract. The production Test consumer still performs separate selection/preparation and does not yet prove the complete compile-once retained-session path, generic inventory resolution across a corpus, or batch receipts. |
 | General JSON/TOML decoding and typed service argument/result schemas | **Requires a concrete Language/Stdlib/runtime capability** | The harness supplied a typed `ApplicationContext`; the native app itself did not parse JSON/TOML or discover files. The tested `test_artifact` operation is a bounded provider contract, not a general service transport layer. |
 | Process start, argument/environment transport, timeout, stdout/stderr capture, and temporary request/result files | **Intentionally retained operating-system mechanism** | `tools/mncs_test_native.py::run_native_app` uses `subprocess.run`, temporary files, OS timeout, and schema validation. These remain approved host-provider responsibilities until a bounded process capability has measured parity. |
 | Store persistence, Forge admission, Monitor correlation, and Automation eligibility | **Partially integrated** | The selected native `build_digest` workload now runs through Forge and canonical Store, with fresh-process readback of the app result and Forge receipt. Monitor correlation, Automation eligibility, and the full production `mncs test` service loop remain unproven. Reuse the existing service owners and infrastructure. |
@@ -363,7 +386,7 @@ No production host implementation is safe to remove from this evidence. The nati
 
 ## Prioritized next steps
 
-1. Feed application-build/4 into the production `mncs-test` native runner and prove its retained-session and batch path with the existing provider receipt checks; the current integrated call invokes the selected application through Environment but does not yet prove that full command workflow.
+1. Feed application-build/6 into the production `mncs-test` native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the current compiler result can now carry both the executable artifact and root-module inventory, but the production consumer has not yet integrated it.
 2. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
 3. Run the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
 4. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
