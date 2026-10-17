@@ -1,0 +1,54 @@
+{
+  "schema_version": "mncs.environment.checkout-continuation-regression/1",
+  "identity": "ev_environment_checkout_continuation_regressions_20261017",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-17T10:46:01+00:00",
+  "status": "passed",
+  "environment": {
+    "repository": "mncs-environment",
+    "branch": "main",
+    "revision": "c587bc12ff5997b34451a75d489cac9fed992fd8",
+    "remote_ref": "origin/main",
+    "remote_head": "c587bc12ff5997b34451a75d489cac9fed992fd8"
+  },
+  "test_command": "PYTHONPATH=tests python3 -m unittest <9 exact test names>",
+  "test_result": {
+    "run": 9,
+    "passed": 9,
+    "failed": 0,
+    "elapsed_seconds": 1.464
+  },
+  "tests": [
+    "test_entry.EntryContractTests.test_selected_repository_roots_require_exact_contained_checkouts",
+    "test_entry.EntryContractTests.test_legacy_campaign_reference_matches_only_exact_verified_checkout",
+    "test_entry.EntryContractTests.test_authenticated_campaign_selection_is_scoped_to_registered_checkout",
+    "test_entry.EntryContractTests.test_registered_checkout_identity_rejects_symlinks_and_unrelated_clones",
+    "test_environment.EntryFrictionTests.test_legacy_continuation_keeps_checkout_path_for_stale_head_selection",
+    "test_environment.EntryFrictionTests.test_authenticated_entry_discovers_unique_campaign_without_campaign_id",
+    "test_environment.EntryFrictionTests.test_authenticated_entry_refuses_ambiguous_campaign_discovery",
+    "test_environment.EntryFrictionTests.test_exact_context_selection_does_not_override_foreign_campaign_owner",
+    "test_environment.ClaimTests.test_disjoint_worktree_owners_coexist_but_same_checkout_is_fenced"
+  ],
+  "live_continuation_readback": {
+    "campaign_identity": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "lifecycle": "active",
+    "persistence": "store",
+    "workspace_root": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013",
+    "selected_checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_branch": "campaign/native-application-readiness-20261013",
+    "campaign_checkpoint": "chk_cb1f08e52f59f106",
+    "checkpoint_sequence": 173,
+    "campaign_evidence_count": 213
+  },
+  "scope": {
+    "registered_nested_checkout_accepted": true,
+    "independent_worktrees_coexist": true,
+    "duplicate_same_checkout_refused": true,
+    "symlink_and_unrelated_checkout_refused": true,
+    "foreign_campaign_owner_not_adopted": true,
+    "language_write_scope_available": false,
+    "language_write_scope_note": "The live session context grants write authority only to mncs-compiler."
+  }
+}
