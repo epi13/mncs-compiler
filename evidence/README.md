@@ -705,8 +705,8 @@ capabilities in the same artifact. It rejects a mismatched identity and a
 mismatched alias. The canonical VM then executes the application's native
 invalid-argument branch with no capabilities admitted; its typed exit code 2
 and message match the Stage-0 oracle, and no effects or output publication
-occur. The cold application build took 1.27 seconds at 110 MiB peak RSS; the
-VM call took 43 ms at 18 MiB peak RSS. Language verified facts remain unused.
+occur. The cold application build took 1.03 seconds at 109 MiB peak RSS; the
+VM call took 42 ms at 18 MiB peak RSS. Language verified facts remain unused.
 This covers an application boundary and fail-closed dispatch only; successful
 provider execution still needs the exact `structured_digest` provider and the
 authorized Forge/Environment/Store route.

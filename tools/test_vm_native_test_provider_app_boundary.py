@@ -113,20 +113,45 @@ def publish_environment_artifacts(payload: bytes) -> list[dict]:
         return []
     artifact_root = Path(raw_root)
     try:
-        root_mode = artifact_root.lstat().st_mode
+        root_descriptor = os.open(
+            artifact_root,
+            os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
     except OSError as error:
         raise RuntimeError("Environment artifact directory is unavailable") from error
-    if not stat.S_ISDIR(root_mode):
-        raise RuntimeError("Environment artifact root must be a real directory")
-    name = EVIDENCE_PATH.name
-    destination = artifact_root / name
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     try:
-        descriptor = os.open(destination, flags, 0o600)
-    except OSError as error:
-        raise RuntimeError(f"cannot write bounded Environment artifact {name}") from error
-    with os.fdopen(descriptor, "wb") as output:
-        output.write(payload)
+        if not stat.S_ISDIR(os.fstat(root_descriptor).st_mode):
+            raise RuntimeError("Environment artifact root must be a real directory")
+        name = EVIDENCE_PATH.name
+        try:
+            existing = os.stat(name, dir_fd=root_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            if not stat.S_ISREG(existing.st_mode):
+                raise RuntimeError("Environment artifact destination must be a regular file")
+
+        temporary_name = f".{name}.{os.getpid()}.{time.monotonic_ns()}.tmp"
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(temporary_name, flags, 0o600, dir_fd=root_descriptor)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(payload)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(
+                temporary_name, name,
+                src_dir_fd=root_descriptor, dst_dir_fd=root_descriptor,
+            )
+            os.fsync(root_descriptor)
+        except OSError as error:
+            try:
+                os.unlink(temporary_name, dir_fd=root_descriptor)
+            except OSError:
+                pass
+            raise RuntimeError(f"cannot write bounded Environment artifact {name}") from error
+    finally:
+        os.close(root_descriptor)
     return [{"path": name, "byte_count": len(payload), "sha256": sha(payload)}]
 
 
@@ -185,6 +210,14 @@ def main() -> None:
                 "provider_artifact": {"structured_read", "structured_write"},
                 "provider_digest": {"structured_digest"},
             }
+            expected_canonical_identities = {
+                "provider_artifact": {
+                    "mncs:0.2:capability:mncs.test.provider::provider_batch_app::provider_artifact",
+                },
+                "provider_digest": {
+                    "mncs:0.2:capability:mncs.test.provider::run_selected_batch::provider_digest",
+                },
+            }
             actual_operations: dict[str, set[str]] = {}
             canonical_identities: dict[str, set[str]] = {}
             for row in host_rows:
@@ -196,7 +229,8 @@ def main() -> None:
                 )
             if (dispatch.get("schema_version") != "mncs.compiler.capability-dispatch/1"
                     or dispatch.get("status") != "verified"
-                    or actual_operations != expected_operations):
+                    or actual_operations != expected_operations
+                    or canonical_identities != expected_canonical_identities):
                 raise AssertionError(f"provider app capability dispatch differs from source contract: {dispatch}")
             artifact_identity_for_files = next(
                 row["capability_identity"] for row in host_rows
