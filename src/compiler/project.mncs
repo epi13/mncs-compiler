@@ -779,10 +779,21 @@ fn span_compare_step<N: Nat>(left_pages: [[byte; up_to N]; up_to 1024], left_str
 }
 
 fn reverse_imports<M: Nat>(sources: [ProjectSource; up_to M], imports: ImportList) -> (result: ImportList) {
-    iterate i over sources carrying st: ImportReverse = ImportReverse { rest: imports, acc: ImportList.INil } {
+    // Each of at most 64 source modules resolves at most 64 uses. The
+    // aggregate edge bound is therefore 4096; source count alone is not an
+    // import-list bound for a dense project.
+    let first: ImportReverse = reverse_import_part(ImportReverse { rest: imports, acc: ImportList.INil });
+    let second: ImportReverse = reverse_import_part(first);
+    let third: ImportReverse = reverse_import_part(second);
+    let fourth: ImportReverse = reverse_import_part(third);
+    return fourth.acc;
+}
+fn reverse_import_part(initial: ImportReverse) -> (result: ImportReverse) {
+    iterate i up_to 1024 carrying st: ImportReverse = initial {
+        if import_list_empty(st.rest) { return st; }
         next st = reverse_import_step(st);
     }
-    return st.acc;
+    return st;
 }
 record ImportReverse { rest: ImportList, acc: ImportList }
 fn reverse_import_step(st: ImportReverse) -> (result: ImportReverse) {

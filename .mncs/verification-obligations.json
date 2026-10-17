@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 37,
+  "revision": 38,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1783,6 +1783,59 @@
         ],
         "ephemeral_roots": [
           ".build/native-app-readiness"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.project-import-link-capacity",
+      "title": "Dense project import links retain exact transitive dependencies",
+      "guarantee_domain": "semantic",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.project.v1::compile_project_target",
+        "mncs:0.2:function:mncs.compiler.project.v1::project_import_closure"
+      ],
+      "invalidation_dependencies": [
+        "src/compiler/project.mncs",
+        "tools/test_project_import_link_capacity.py",
+        "tools/test_project.py",
+        "tools/test_project_target_module.py",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_project_import_link_capacity.py",
+        "argv": [
+          "python3",
+          "tools/test_project_import_link_capacity.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 900,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build"
         ]
       },
       "evidence_identity": {
