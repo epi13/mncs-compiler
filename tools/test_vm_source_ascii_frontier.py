@@ -330,11 +330,22 @@ def main() -> None:
     }
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
     evidence_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    large_case_ids = ("ascii-64k", "ascii-256k", "nonascii-last-256k",
+                      "nonascii-first-256k")
     print(json.dumps({
         "evidence": str(evidence_path.relative_to(ROOT)),
-        "reference": results["reference_interpreter"],
-        "cranelift": results["cranelift"],
-        "canonical_vm": report["canonical_vm"],
+        "compiler_revision_tested": report["compiler_revision_tested"],
+        "source_sha256": report["source_sha256"],
+        "reference_large_cases": [row for row in results["reference_interpreter"]
+                                  if row["id"] in large_case_ids],
+        "cranelift_large_cases": [row for row in results["cranelift"]
+                                  if row["id"] in large_case_ids],
+        "canonical_vm": {
+            "artifact_identity": artifact["artifact_id"],
+            "case_count": len(vm_results),
+            "wall_seconds": round(vm_wall, 6),
+            "peak_rss_kib": vm_peak_rss_kib,
+        },
         "performance_comparison_vs_previous_eight_byte_frontier": performance_comparison,
         "performance_comparison_vs_previous_sixteen_byte_frontier": sixteen_byte_comparison,
         "resource_observation": report["resource_observation"],
