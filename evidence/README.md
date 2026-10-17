@@ -142,18 +142,35 @@ root that explicitly selects and executes
 matches the Stage-0 project oracle in both a six-call canonical VM batch and an
 eight-call retained VM session, including recovery after exhausted fuel and a
 rejected typed request. The artifact also preserves fresh-process cache reuse
-and invalidation after a reachable imported function edit. The Environment
-verification operation passed again at compiler revision `a95b9df`; the
-updated [digest suite report](native-app-readiness-digest-suite-specialization-20261016.json)
-records a 3.950-second cold build (3.91 CPU seconds, 81,408,000-byte peak RSS),
-a 0.555-second fresh-process hit (0.52 CPU seconds, 38,461,440-byte peak RSS),
-a six-call VM batch at 0.208 seconds and 27,524 KiB peak RSS, and an eight-call
-retained session at 0.224 seconds and 27,956 KiB peak RSS. Cgroup memory
-measurements were unavailable. The cold build and changed-source check still
-run the full frontend; the exact-snapshot hit avoids it. The run reused zero
-Language verified facts. Environment returned the passing verification result
-without a separate Store artifact; this does not establish Forge execution of
+and invalidation after a reachable imported function edit. The refreshed
+[digest suite report](native-app-readiness-digest-suite-specialization-20261016.json)
+was produced at Compiler revision `54d8e9d`. It records a 3.959-second cold
+build (3.91 CPU seconds, 81,825,792-byte peak RSS), a 0.559-second
+fresh-process hit (0.53 CPU seconds, 36,691,968-byte peak RSS), a six-call VM
+batch at 0.208 seconds and 27,460 KiB peak RSS, and an eight-call retained
+session at 0.222 seconds and 27,520 KiB peak RSS. Cgroup memory measurements
+were unavailable. The cold build and changed-source check still run the full
+frontend; the exact-snapshot hit avoids it. The run reused zero Language
+verified facts. The Environment-bound verification passed without producing a
+separate Store artifact; this does not establish Forge execution of
 `digest_app` or full `mncs-test` conversion.
+
+## Effectful digest application in a retained canonical VM session (2026-10-16)
+
+The [effectful digest application report](native-app-readiness-test-digest-app.json)
+executes the real `mncs.test.digest::digest_app` artifact with the exact
+`test_artifact` capability identity through the canonical VM Provider API.
+Three successful structured read/write cases match the pinned Stage-0 outputs
+in one retained process. Missing or mismatched capability admission, a
+mismatched dispatch alias, incorrect artifact identity, invalid typed input,
+rejected output publication, and exhausted execution fuel all fail with the
+recorded typed outcomes; subsequent calls remain isolated and can complete.
+This proof is now the permanent Compiler obligation
+`mncs-compiler.native-test-digest-effectful-app-canonical-vm`. The local build
+took 0.568 seconds and 65,712,128-byte peak RSS; the seven-call
+retained session took 0.033 seconds and 11,857,920-byte peak RSS. This is a
+local bounded VM provider proof. It does not establish Forge invocation,
+Environment publication, canonical Store readback, or full Test conversion.
 
 ## Current declaration parser frontier (2026-10-16)
 
