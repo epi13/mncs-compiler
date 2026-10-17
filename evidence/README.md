@@ -46,6 +46,31 @@ frontier. The report records zero Language verified facts reused. This does
 not prove the complete SSA module, imported-interface lowering, compiler
 succession, or Language fact reuse.
 
+## Imported nominal schemas and generic calls through Flow/SSA (2026-10-17)
+
+The [current Environment report](self-host-imported-nominal-generic-flow-ssa-current-20261017.json)
+and [cold run record](self-host-imported-nominal-generic-flow-ssa-cold-20261017.json)
+exercise an imported `Box { value: u64 }` schema and the `read<4>` generic call
+through declaration checking, Flow, and verified value SSA. The positive case
+verifies both functions and retains the same generic callable identity as
+Stage-0, while Stage-0 independently resolves its `<4>` specialization. Three
+negative cases reject a mismatched nominal identity, a wrong field schema, and
+missing import context. The registered Environment verifier passed all four
+calls on a fresh canonical VM batch.
+
+The cold application build took 140.83 seconds at 4.39 GiB peak child RSS;
+the canonical VM batch took 42.14 seconds. A fresh Environment run then reused
+the exact verified application artifact in 1.83 seconds, invoked no frontend,
+and completed its VM batch in 41.87 seconds (49.96 seconds for the full
+frontier, 1.51 GiB peak child RSS). This is executable artifact reuse after
+semantic verification: `reused_semantic_facts` remains empty. Cgroup memory
+measurements were unavailable. The first registered cold attempt hit the
+bridge's effective 120-second invocation limit even though the capability
+declares 600 seconds; the warm exact-cache run passed. That timeout mismatch
+remains an Environment integration issue. This slice does not establish
+project-wide module resolution, native generic specialization cloning, full
+SSA-module proof, Language fact reuse, or compiler succession.
+
 ## Native `mncs-test` core batch isolation (2026-10-17)
 
 The [batch isolation record](native-app-readiness-test-core-batch-isolation-20261017.json)
