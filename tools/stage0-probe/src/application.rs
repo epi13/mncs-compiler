@@ -40,6 +40,7 @@ const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_GENERIC_SEEDS: usize = 256;
 const MAX_CALLABLE_ROOTS: usize = 256;
+const MAX_APPLICATION_CACHE_INDEX_BYTES: usize = 8 * 1024;
 
 struct ApplicationSources(BTreeMap<String, SourceEnvelope>);
 
@@ -661,7 +662,19 @@ fn cached_application_matches_dependency_closure(
 }
 
 fn read_application_cache_index(path: &PathBuf, key: &str) -> Option<String> {
-    let entry: Value = serde_json::from_slice(&fs::read(path).ok()?).ok()?;
+    // Index records contain only a key and one candidate identity. Bound the
+    // read itself so a corrupted or replaced index cannot consume unbounded
+    // memory before JSON validation runs.
+    let mut bytes = Vec::with_capacity(MAX_APPLICATION_CACHE_INDEX_BYTES + 1);
+    fs::File::open(path)
+        .ok()?
+        .take(MAX_APPLICATION_CACHE_INDEX_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if bytes.len() > MAX_APPLICATION_CACHE_INDEX_BYTES {
+        return None;
+    }
+    let entry: Value = serde_json::from_slice(&bytes).ok()?;
     if entry.get("schema_version").and_then(Value::as_str)
         != Some("mncs.compiler.application-build-cache-index/2")
         || entry.get("key").and_then(Value::as_str) != Some(key)
@@ -1390,7 +1403,7 @@ mod tests {
     }
 
     #[test]
-    fn application_cache_index_rejects_non_digest_candidate_paths() {
+    fn application_cache_index_rejects_malformed_and_oversized_candidates() {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("clock is after Unix epoch")
@@ -1415,6 +1428,12 @@ mod tests {
             .expect("write malformed cache index");
             assert_eq!(super::read_application_cache_index(&path, &key), None);
         }
+        fs::write(
+            &path,
+            vec![b' '; super::MAX_APPLICATION_CACHE_INDEX_BYTES + 1],
+        )
+        .expect("write oversized cache index");
+        assert_eq!(super::read_application_cache_index(&path, &key), None);
         fs::remove_dir_all(&root).expect("remove isolated cache index directory");
     }
 

@@ -1,0 +1,41 @@
+{
+  "schema_version": "mncs.compiler.application-cache-index-read-bound/1",
+  "identity": "ev_compiler_application_cache_index_read_bound_20261017",
+  "observed_at": "2026-10-17T13:36:44Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "base_revision": "d3345dcd595f1c182c9186cd847585d2dcea0530",
+    "tested_tree_was_dirty": true
+  },
+  "implementation": {
+    "path": "tools/stage0-probe/src/application.rs",
+    "sha256": "6392de39cc1c45fe78600c4abbafbaabf69f02ff84ecf1e410b509c9851a31e9",
+    "maximum_cache_index_bytes": 8192,
+    "summary": "read_application_cache_index reads at most 8193 bytes, rejects inputs exceeding 8192 bytes before JSON parsing, and continues to return None for malformed schema, mismatched digest keys, and unsafe candidate identities."
+  },
+  "verification": {
+    "command": "CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=.bootstrap/target-verification cargo test --locked --manifest-path tools/stage0-probe/Cargo.toml --release application_cache_index_rejects_malformed_and_oversized_candidates",
+    "tests_run": 1,
+    "passed": 1,
+    "failed": 0,
+    "test_runtime_seconds": 0.0,
+    "release_profile_build_seconds": 28.19,
+    "cargo_fmt_check": "passed",
+    "git_diff_check": "passed"
+  },
+  "resource_measurements": {
+    "host_available_memory_bytes_before_test": 24143048704,
+    "peak_process_rss_measured": false,
+    "cgroup_measurements": "not collected"
+  },
+  "limitations": [
+    "This change bounds application cache index reads only; it does not impose a cap on application artifact cache entries.",
+    "No application build performance improvement was measured.",
+    "No Language-owned verified facts were reused."
+  ],
+  "delivery_status": "implementation and evidence committed locally; campaign checkpoint pending"
+}
