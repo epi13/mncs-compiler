@@ -176,6 +176,7 @@ def run():
         assert module_limit_native["import_count"] == len(module_limit_imports) == 1024
         assert module_limit_native["import_module_name_comparisons"] == 1, module_limit_native
         assert module_limit_native["import_resolution_cache_hits"] == 1023, module_limit_native
+        assert module_limit_native["import_resolution_cache_entries_max"] == 1, module_limit_native
         expected_links = set()
         cursor = 0
         for index in range(1024):
@@ -431,6 +432,63 @@ def run():
         assert missing_native["import_resolution_negative_cache_hits"] == 2, missing_native
         assert missing_native["import_module_name_comparisons"] == 34, missing_native
 
+        # Import-resolution lookup examines at most 64 facts. Once that
+        # bounded snapshot-local cache rolls over, an evicted name is resolved
+        # again and each use still receives its own fresh diagnostic.
+        rollover_names = [f"demo.absent{index:03d}" for index in range(65)]
+        rollover_names.extend([rollover_names[0], rollover_names[0]])
+        rollover_root = "mncs 0.18; module demo.rollover_root;\n"
+        rollover_root += "".join(
+            f"use {name} as r{index};\n"
+            for index, name in enumerate(rollover_names)
+        )
+        rollover_root += "fn main() -> (result: u64) { return 1; }\n"
+        rollover_sources = [
+            (
+                f"{index:02d}-rollover-decoy-{index:03d}.mncs",
+                Path(f"{index:02d}-rollover-decoy-{index:03d}.mncs"),
+                (
+                    f"mncs 0.18; module demo.rollover_decoy{index:03d}; "
+                    f"fn value() -> (result: u64) {{ return {index}; }}"
+                ).encode(),
+            )
+            for index in range(16)
+        ]
+        rollover_sources.append((
+            "16-rollover-root.mncs",
+            Path("16-rollover-root.mncs"),
+            rollover_root.encode(),
+        ))
+        rollover_response = probe.send(_target_request(
+            project.request_value(identities, rollover_sources),
+            len(rollover_sources) - 1,
+        ))
+        assert rollover_response.get("status") == "returned", rollover_response
+        rollover_native = project.decode(rollover_response["returned"][0])
+        rollover_diagnostics = project.flist(rollover_native["diagnostics"])
+        expected_rollover_spans = set()
+        cursor = 0
+        for index, name in enumerate(rollover_names):
+            use_start = rollover_root.index(
+                f"use {name} as r{index};", cursor,
+            )
+            cursor = use_start + 1
+            module_start = use_start + len("use ")
+            expected_rollover_spans.add(
+                (module_start, module_start + len(name))
+            )
+        observed_rollover_spans = {
+            (item.get("$p", {}).get("start"), item.get("$p", {}).get("end"))
+            for item in rollover_diagnostics
+        }
+        assert not rollover_native["valid"] and not rollover_native["value_ssa_valid"], rollover_native
+        assert rollover_native["import_count"] == 0, rollover_native
+        assert len(rollover_diagnostics) == len(rollover_names) == 67, rollover_diagnostics
+        assert observed_rollover_spans == expected_rollover_spans, rollover_diagnostics
+        assert rollover_native["import_resolution_cache_entries_max"] == 64, rollover_native
+        assert rollover_native["import_resolution_negative_cache_hits"] == 1, rollover_native
+        assert rollover_native["import_module_name_comparisons"] == 66 * 16, rollover_native
+
         # Resolution facts are local to one immutable Project snapshot. A
         # previously present target must not survive a new request that omits
         # that module, even when the consumer source and import name are equal.
@@ -524,6 +582,7 @@ def run():
         assert len(at_project_limit_imports) == 4096
         assert at_project_limit_native["import_module_name_comparisons"] == 4, at_project_limit_native
         assert at_project_limit_native["import_resolution_cache_hits"] == 4092, at_project_limit_native
+        assert at_project_limit_native["import_resolution_cache_entries_max"] == 1, at_project_limit_native
 
         over_project_sources = _project_boundary_sources(True)
         over_project_request = _target_request(
@@ -635,7 +694,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/9",
+            "schema_version": "mncs.compiler.project-import-link-capacity/10",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -669,6 +728,12 @@ def run():
             "repeated_missing_import_cache_hits": missing_native["import_resolution_cache_hits"],
             "repeated_missing_import_negative_cache_hits": missing_native["import_resolution_negative_cache_hits"],
             "repeated_missing_import_candidate_header_comparisons": missing_native["import_module_name_comparisons"],
+            "rollover_import_uses": len(rollover_names),
+            "rollover_cache_entries_max": rollover_native["import_resolution_cache_entries_max"],
+            "rollover_negative_cache_hits": rollover_native["import_resolution_negative_cache_hits"],
+            "rollover_candidate_header_comparisons": rollover_native["import_module_name_comparisons"],
+            "rollover_missing_diagnostics_preserved": len(rollover_diagnostics) == len(rollover_names),
+            "rollover_distinct_diagnostic_spans_preserved": observed_rollover_spans == expected_rollover_spans,
             "distinct_missing_names_same_length_preserved": len(set(missing_names)) == 2 and len(missing_names[0]) == len(missing_names[1]),
             "previous_success_did_not_survive_changed_snapshot": (
                 present_snapshot_native["valid"]
