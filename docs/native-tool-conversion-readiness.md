@@ -237,6 +237,28 @@ owned verified-fact reuse or the Forge/Store application route. Evidence is
 `evidence/native-app-readiness-automation-incremental-invalidation-20261017.json`
 (SHA-256 `fe0a450f22f2a3840a776287f6d67858755ffe921b8e5e52bf300c6e24f26a2e`).
 
+## Imported interface invalidation (2026-10-17)
+
+The Automation application harness now changes the imported
+`mncs.automation.schedule::next_after` signature. With callers unchanged,
+application-build/5 ran the frontend, returned fresh `MNE172` diagnostics, and
+emitted no artifact. Updating the imported module's six internal calls and the
+three application callers produced a new artifact
+`sha256:908dd61ac6648153eda442759f7d52c9e19c487085e19002d280532336f5d8ef`;
+all 18 results matched Stage-0 in the canonical VM. The stale-consumer check
+took 0.073 s; the updated build took 1.454 s, followed by a 2.209 s Stage-0
+oracle and 0.445 s VM batch. Peak RSS was 105.0 MiB for the stale edit and
+128.5 MiB for the updated build; cgroup memory was unavailable.
+
+This establishes imported function-interface invalidation and fresh
+diagnostics on the real Automation/Test source closure. The Compiler still
+rechecked the full frontend, and Language facts reused remained zero. Evidence
+[`evidence/native-app-readiness-automation-interface-invalidation-20261017.json`](../evidence/native-app-readiness-automation-interface-invalidation-20261017.json)
+has SHA-256 `b25d5d47d9ff658aab578898fc37bf22f62bb633228d787e990834f27bacf2b6`
+and records the exact application harness hash. This does not prove
+generic-specialization invalidation, nominal type invalidation, Forge routing,
+or Language-owned fact reuse.
+
 ## Evidence boundary
 
 This assessment uses the read-only `mncs-test` checkout at `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM `1c19a94732c9d24029dd00e2d5af13710f481d02`, and Compiler producer commit `24dda63ae59e0505969c490604e14348dab1f7d7`. The Stage-0 reference revision is `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, release probe SHA-256 `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`; the VM binary SHA-256 is `2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5`.

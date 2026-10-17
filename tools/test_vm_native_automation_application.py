@@ -209,6 +209,30 @@ def replace_once(source: str, before: str, after: str, description: str) -> str:
     return source.replace(before, after, 1)
 
 
+def append_call_argument(source: str, function: str, old_arity: int,
+                         expression: str, expected_calls: int) -> str:
+    """Update simple single-line calls while leaving the function declaration alone."""
+    pattern = re.compile(rf"(?<!fn )\b{re.escape(function)}\(([^()\r\n]*)\)")
+    matches = list(pattern.finditer(source))
+    if len(matches) != expected_calls:
+        raise AssertionError(
+            f"expected {expected_calls} {function} call sites, found {len(matches)}"
+        )
+    pieces = []
+    offset = 0
+    for match in matches:
+        arguments = match.group(1)
+        if arguments.count(",") + 1 != old_arity:
+            raise AssertionError(
+                f"{function} call arity changed unexpectedly: {arguments}"
+            )
+        pieces.append(source[offset:match.start(1)])
+        pieces.append(f"{arguments}, {expression}")
+        offset = match.end(1)
+    pieces.append(source[offset:])
+    return "".join(pieces)
+
+
 def main() -> None:
     if not PROBE.is_file() or not VM_BIN.is_file():
         raise SystemExit(f"missing Stage-0 probe or canonical VM binary: {PROBE}, {VM_BIN}")
@@ -328,6 +352,128 @@ def main() -> None:
                 != "verified_application_executable_closure"):
             raise AssertionError("uncalled Automation test-body edit did not preserve the "
                                  "selected executable closure and reuse its artifact")
+
+        schedule_source = modules["mncs.automation.schedule"]
+        old_next_after_signature = (
+            "fn next_after(kind_code: u64, p1: i64, p2: i64, after_ms: i64) "
+            "-> (result: NextOccurrence)"
+        )
+        new_next_after_signature = (
+            "fn next_after(kind_code: u64, p1: i64, p2: i64, after_ms: i64, "
+            "interface_epoch: u64) -> (result: NextOccurrence)"
+        )
+        signature_only_modules = dict(modules)
+        signature_only_modules["mncs.automation.schedule"] = replace_once(
+            schedule_source, old_next_after_signature, new_next_after_signature,
+            "imported next_after signature",
+        )
+        signature_only, signature_only_metrics = probe.send({
+            "compile_application": build_request(root_source, signature_only_modules),
+        }, timeout=240)
+        signature_only_work = signature_only.get("cache", {}).get(
+            "verification_work", {}
+        )
+        signature_only_diagnostics = sorted({
+            item.get("code") for item in signature_only.get("diagnostics", [])
+            if isinstance(item, dict) and isinstance(item.get("code"), str)
+        })
+        if (signature_only.get("status") != "rejected"
+                or signature_only.get("artifact") is not None
+                or signature_only.get("source_snapshot", {}).get("identity")
+                == cold.get("source_snapshot", {}).get("identity")
+                or signature_only_work.get("front_end_invocations") != 1
+                or not signature_only_diagnostics
+                or signature_only_work.get("backend_artifact") == "reused"):
+            raise AssertionError(
+                "an imported signature edit with stale consumers was not freshly rejected: "
+                + json.dumps({
+                    "status": signature_only.get("status"),
+                    "diagnostic_codes": signature_only_diagnostics,
+                    "cache": signature_only.get("cache"),
+                }, sort_keys=True)
+            )
+
+        updated_interface_modules = dict(signature_only_modules)
+        updated_interface_modules["mncs.automation.schedule"] = append_call_argument(
+            updated_interface_modules["mncs.automation.schedule"],
+            "next_after", old_arity=4, expression="0", expected_calls=6,
+        )
+        updated_root_source = append_call_argument(
+            root_source, "next_after", old_arity=4, expression="0",
+            expected_calls=3,
+        )
+        interface_updated, interface_updated_metrics = probe.send({
+            "compile_application": build_request(
+                updated_root_source, updated_interface_modules,
+            ),
+        }, timeout=240)
+        interface_updated_work = interface_updated.get("cache", {}).get(
+            "verification_work", {}
+        )
+        interface_artifact = (interface_updated.get("artifact") or {}).get("value")
+        interface_artifact_identity = (interface_updated.get("artifact") or {}).get(
+            "identity"
+        )
+        if (interface_updated.get("status") != "verified"
+                or interface_updated_work.get("front_end_invocations") != 1
+                or interface_updated_work.get("backend_artifact") != "generated"
+                or interface_artifact_identity == artifact_identity
+                or not isinstance(interface_artifact, dict)):
+            raise AssertionError(
+                "updating the imported-interface consumers did not regenerate the artifact: "
+                + json.dumps({
+                    "status": interface_updated.get("status"),
+                    "cache": interface_updated.get("cache"),
+                    "artifact_identity": interface_artifact_identity,
+                }, sort_keys=True)
+            )
+
+        interface_oracle, interface_oracle_metrics = probe.send({
+            "project_oracle": {
+                "root": updated_root_source,
+                "modules": updated_interface_modules,
+                "calls": calls,
+            },
+        }, timeout=240)
+        interface_executions = interface_oracle.get("executions", [])
+        if (interface_oracle.get("valid") is not True
+                or len(interface_executions) != len(rows)
+                or any(item.get("status") != "returned"
+                       for item in interface_executions)):
+            raise AssertionError(
+                "Stage-0 rejected the updated imported-interface Automation source"
+            )
+        interface_expected = [support.decode_wire(item["returned"][0])
+                              for item in interface_executions]
+        interface_vm_results, interface_vm_metrics = run_vm_batch(
+            interface_artifact, rows,
+        )
+        if len(interface_vm_results) != len(rows):
+            raise AssertionError(
+                "canonical VM omitted imported-interface update results"
+            )
+        interface_actual = []
+        for row, vm_row, expected_value in zip(
+                rows, interface_vm_results, interface_expected):
+            if (vm_row.get("id") != row["id"]
+                    or vm_row.get("outcome") != {"kind": "completed"}):
+                raise AssertionError(
+                    f"imported-interface VM call failed for {row['id']}: {vm_row}"
+                )
+            returned = vm_row.get("record", {}).get("returned", [])
+            if len(returned) != 1:
+                raise AssertionError(
+                    f"imported-interface result malformed for {row['id']}"
+                )
+            value = support.decode_wire(support.vm_to_wire(returned[0]))
+            if value != expected_value:
+                raise AssertionError(
+                    "imported-interface Stage-0/VM disagreement for "
+                    f"{row['id']}: "
+                    + json.dumps({"vm": value, "stage0": expected_value},
+                                 sort_keys=True)
+                )
+            interface_actual.append(value)
 
         reachable_root_source = replace_once(
             root_source,
@@ -493,6 +639,32 @@ def main() -> None:
                 "reuse_basis": uncalled.get("cache", {}).get("reuse_basis"),
                 "artifact_identity": uncalled.get("artifact", {}).get("identity"),
             },
+            "imported_signature_edit_with_stale_consumers": {
+                "changed_module": "mncs.automation.schedule",
+                "changed_function": "next_after",
+                "source_snapshot_identity": signature_only.get(
+                    "source_snapshot", {}).get("identity"),
+                "status": signature_only.get("status"),
+                "diagnostic_codes": signature_only_diagnostics,
+                "frontend_invocations": signature_only_work.get(
+                    "front_end_invocations"),
+                "artifact_present": signature_only.get("artifact") is not None,
+                "backend_artifact": signature_only_work.get("backend_artifact"),
+                "cache_status": signature_only.get("cache", {}).get("status"),
+            },
+            "imported_signature_with_updated_consumers": {
+                "changed_module": "mncs.automation.schedule",
+                "changed_function": "next_after",
+                "source_snapshot_identity": interface_updated.get(
+                    "source_snapshot", {}).get("identity"),
+                "frontend_invocations": interface_updated_work.get(
+                    "front_end_invocations"),
+                "backend_artifact": interface_updated_work.get("backend_artifact"),
+                "artifact_identity": interface_artifact_identity,
+                "prior_artifact_identity": artifact_identity,
+                "stage0_vm_agreement": interface_actual == interface_expected,
+                "exact_stage0_vm_agreement": True,
+            },
             "reachable_body_edit": {
                 "source_snapshot_identity": reachable.get("source_snapshot", {}).get("identity"),
                 "semantic_identity": reachable.get("dependency_graph", {}).get("semantic_identity"),
@@ -530,6 +702,10 @@ def main() -> None:
             "fresh_process_exact_snapshot": warm_metrics,
             "comment_only_dependency_edit": changed_metrics,
             "uncalled_body_edit": uncalled_metrics,
+            "imported_signature_edit_with_stale_consumers": signature_only_metrics,
+            "imported_signature_with_updated_consumers": interface_updated_metrics,
+            "imported_signature_stage0_oracle": interface_oracle_metrics,
+            "imported_signature_canonical_vm_batch": interface_vm_metrics,
             "reachable_body_edit": reachable_metrics,
             "reachable_stage0_oracle": reachable_oracle_metrics,
             "reachable_canonical_vm_batch": reachable_vm_metrics,
@@ -542,7 +718,7 @@ def main() -> None:
         "forge_execution_performed": False,
         "canonical_store_publication_performed": False,
         "production_automation_orchestration_replaced": False,
-        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit and an uncalled test-body edit each received fresh full frontend verification and reused the executable-closure artifact. Editing reachable reason_cond_false changed the selected caller result, regenerated the artifact, and matched Stage-0 in the canonical VM. An unresolved function body was freshly rejected without artifact fallback. Language verified facts remained zero, so each changed valid snapshot still rechecked whole-program semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
+        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit and an uncalled test-body edit each received fresh full frontend verification and reused the executable-closure artifact. An imported schedule signature change with unchanged callers was freshly rejected without artifact reuse; updating the imported call sites and callers regenerated the artifact, and all 18 Stage-0 results matched the canonical VM. Editing reachable reason_cond_false changed the selected caller result, regenerated the artifact, and matched Stage-0 in the canonical VM. An unresolved function body was freshly rejected without artifact fallback. Language verified facts remained zero, so each changed valid snapshot still rechecked whole-program semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
     }
     default_evidence_name = (
         "evidence/native-app-readiness-automation-evaluation-"
