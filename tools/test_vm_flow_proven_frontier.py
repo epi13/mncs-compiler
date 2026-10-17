@@ -31,7 +31,19 @@ SELECTED = {
     "bounded_iteration_sequence",
     "nested_bounded_iteration",
 }
-CASES = [case for case in flow_test.CASES if case[0] in SELECTED]
+EXTRA_CASES = [
+    (
+        "conditional_return_counted_iteration",
+        "mncs 0.18; module pressure.flow; fn f(flag: bool) -> (r: u64) { "
+        "iterate i up_to 4 carrying state: u64 = 0 { "
+        "if flag { return state; } next state = state + 1; "
+        "} return state; }",
+        0,
+        None,
+        1,
+    ),
+]
+CASES = [case for case in flow_test.CASES if case[0] in SELECTED] + EXTRA_CASES
 PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
 ))
@@ -132,11 +144,13 @@ def main() -> None:
                 f"Stage-0 diagnostic count for {name}: {expected_diagnostics} != {expected_mnb_count}"
             )
         stage0_ssa_shape = None
-        if expected_shape is not None:
+        stage0_ssa = None
+        if expected_shape is not None or expected_iterations:
             stage0 = probe.send({"ssa": source})
             if stage0.get("ssa") is None:
-                raise AssertionError(f"Stage-0 did not provide SSA shape for {name}: {stage0}")
-            functions = stage0["ssa"]["functions"]
+                raise AssertionError(f"Stage-0 did not provide SSA facts for {name}: {stage0}")
+            stage0_ssa = stage0["ssa"]
+            functions = stage0_ssa["functions"]
             stage0_ssa_shape = {
                 "branches": sum(
                     "ConditionalBranch" in block["terminator"]
@@ -147,16 +161,13 @@ def main() -> None:
                     for function in functions for block in function["blocks"]
                 ),
             }
-            if tuple(stage0_ssa_shape.values()) != expected_shape:
+            if expected_shape is not None and tuple(stage0_ssa_shape.values()) != expected_shape:
                 raise AssertionError(f"Stage-0 SSA fixture changed for {name}: {stage0_ssa_shape}")
         stage0_iterations = []
         if expected_iterations:
-            stage0 = probe.send({"ssa": source})
-            if stage0.get("ssa") is None:
-                raise AssertionError(f"Stage-0 did not provide bounded-iteration facts for {name}: {stage0}")
             stage0_iterations = [
                 loop
-                for function in stage0["ssa"]["functions"]
+                for function in stage0_ssa["functions"]
                 for loop in function.get("bounded_iterations", [])
             ]
             if len(stage0_iterations) != expected_iterations:
@@ -342,7 +353,8 @@ def main() -> None:
             "implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh "
             "canonical VM graph preserves typed proof operations, matches selected Stage-0 "
             "diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and "
-            "preserves a counted-iteration header and backedge against Stage-0 metadata. "
+            "preserves counted, sequence, and nested iteration headers and backedges against "
+            "Stage-0 metadata, including conditional return inside a counted loop. "
             "It does not establish full flow-module proof, Language-owned verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
