@@ -300,15 +300,32 @@ fn fingerprint_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], inde
 // end-of-source position.
 fn line_col_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64) -> (result: LineCol) {
     let end: u64 = select(offset <= total, offset, total);
-    iterate p over pages carrying st: LineCol = LineCol { line: 1, col: 1 } {
+    if stride == 0 {
+        iterate p over pages carrying st: LineCol = LineCol { line: 1, col: 1 } {
+            next st = line_col_page_step<P, N>(pages, stride, p, end, st);
+        }
+        return st;
+    }
+    let required_pages: u64 = page_count_for(stride, end);
+    let scanned_pages: u64 = select(required_pages <= pages.len, required_pages, pages.len);
+    iterate p over pages[0..scanned_pages] carrying st: LineCol = LineCol { line: 1, col: 1 } {
         next st = line_col_page_step<P, N>(pages, stride, p, end, st);
     }
     return st;
 }
 fn line_col_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, index: u64, end: u64, st: LineCol) -> (result: LineCol) {
     let page: [byte; up_to N] = pages[index];
+    if stride == 0 {
+        iterate i over page carrying cur: LineCol = st {
+            next cur = line_step_at(i, end, page[i] as u64, cur);
+        }
+        return cur;
+    }
     let base: u64 = index * stride;
-    iterate i over page carrying cur: LineCol = st {
+    if base >= end { return st; }
+    let remaining: u64 = end - base;
+    let scanned_bytes: u64 = select(page.len <= remaining, page.len, remaining);
+    iterate i over page[0..scanned_bytes] carrying cur: LineCol = st {
         next cur = line_step_at(base + i, end, page[i] as u64, cur);
     }
     return cur;
