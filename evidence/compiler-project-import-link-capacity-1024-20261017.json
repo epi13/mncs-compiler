@@ -1,0 +1,117 @@
+{
+  "schema_version": "mncs.compiler.project-import-link-capacity/2",
+  "identity": "ev_compiler_project_import_link_capacity_1024_20261017",
+  "kind": "self-hosted-project-import-link-capacity",
+  "observed_at": "2026-10-17T07:46:40Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "environment_claim": {
+    "identity": "clm_b1b245991e6a7569",
+    "repository": "mncs-compiler",
+    "checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "status": "held",
+    "scope": "worktree"
+  },
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "base_revision": "fd5cc2b479b6704fb9cdc2b3b84197902437f5d4",
+    "working_tree_dirty_during_verification": true,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "14ec929f81b749cac496cfab197dd2e98b926f5e682bdd3a763e1e8b31b94a07",
+    "project_module_sha256": "9c28456430f9a487faf36aa7a09c98768428a7cec56280f59f303a0f3669e8a8",
+    "test_harness_sha256": "41a8d7ecde2918f67b6201ceaa81696f16f4ba4100fef6c24a148292abc0637b"
+  },
+  "change": {
+    "summary": "Project import resolution now admits 1024 uses per module while preserving the existing 4096 resolved-link project bound. At the project bound it emits one source-located diagnostic and stops resolving further modules.",
+    "previous_behavior": "The resolver stopped after 64 uses per module even though the declaration parser and downstream linked-list traversals supported 1024 uses and 4096 total links.",
+    "per_module_import_limit": 1024,
+    "project_import_link_limit": 4096,
+    "over_limit_diagnostic": {
+      "variant": "ImportLimitExceeded",
+      "fields": [
+        "source_index",
+        "start",
+        "end",
+        "limit"
+      ],
+      "module_bound": 1024,
+      "project_bound": 4096
+    },
+    "project_resolution_stops_after_project_bound": true
+  },
+  "verification": {
+    "status": "passed",
+    "backend": "cranelift",
+    "executor": "mncs-control-terminal tracked asynchronous project job",
+    "control_job_id": "term-8fd8cbe9401093bce6b28313",
+    "control_scope": "project",
+    "network": false,
+    "returncode": 0,
+    "wall_seconds": 289.414,
+    "stage0_ready_seconds": 288.0,
+    "result_sha256": "9afe1821b611ccfc236190ae60034071df4152d113a07f0f423ec1e1a1c7ec85",
+    "probe_request_count": 9,
+    "dense_project": {
+      "source_count": 6,
+      "expected_import_links": 15,
+      "observed_import_links": 15,
+      "link_set_matches_source_graph": true,
+      "all_transitive_record_schemas_verified": true,
+      "target_flow_and_ssa_valid": true,
+      "stage0_oracle_valid": true
+    },
+    "module_boundary": {
+      "native_accepts_65_imports": true,
+      "native_accepts_1024_imports": true,
+      "returned_import_count": 1024,
+      "retained_import_list_count": 1024,
+      "native_rejects_1025_imports": true,
+      "diagnostic": {
+        "source_index": 1,
+        "start": 22475,
+        "end": 22483,
+        "limit": 1024
+      },
+      "value_ssa_valid_after_rejection": false
+    },
+    "project_boundary_guard": {
+      "count_4095_reached": false,
+      "count_4096_reached": true,
+      "full_4096_link_project_fixture_run": false
+    },
+        "environment_verifier_attempts": {
+            "count": 2,
+      "status": "timed_out",
+      "declared_timeout_seconds": 900,
+            "elapsed_seconds_approx": 120,
+      "detached_probe_cleanup": "terminated after each timeout"
+    }
+  },
+  "resource_observations": {
+    "sampled_process_rss_kib_max": 5855824,
+    "rss_peak_measured": false,
+    "cgroup_memory_measurement": "unavailable",
+    "host_available_memory_gib_observed_range": [
+      17.0,
+      22.6
+    ],
+    "orphan_probe_after_successful_job": false
+  },
+  "scope": {
+    "compiler_self_consumption_frontier_advanced": true,
+    "whole_project_module_proven": false,
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_performed": false,
+    "native_application_execution_changed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "limitations": [
+    "The 4096 guard predicate was tested immediately below and at its boundary; a full 4096-link integration fixture was not run.",
+    "The 1025-use case verifies exact module-bound rejection but does not test invalid-source diagnostics beyond the first rejected use.",
+    "Stage-0 startup dominated the 289-second job; per-request CPU time and true peak RSS were not measured."
+  ]
+}

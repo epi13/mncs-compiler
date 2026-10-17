@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep every bounded project import link available to target closure."""
+"""Check per-module and project-wide import bounds against Stage 0."""
 
 from __future__ import annotations
 
@@ -95,53 +95,74 @@ def run():
         assert oracle.get("valid") is True, oracle
         assert oracle.get("program") is not None and oracle.get("ssa") is not None, oracle
 
-        # Import traversal admits up to the bounded 64-use limit, independent
-        # of the number of loaded modules.
-        many_sources, many_root = _repeated_import_source(64)
-        many_request = _target_request(
-            project.request_value(identities, many_sources), 1,
+        # Preserve compatibility with Stage 0 immediately above the old 64
+        # bound while confirming the native resolver now accepts it.
+        above_old_sources, _above_old_root = _repeated_import_source(65)
+        above_old_request = _target_request(
+            project.request_value(identities, above_old_sources), 1,
         )
-        many_response = probe.send(many_request)
-        assert many_response.get("status") == "returned", many_response
-        many_native = project.decode(many_response["returned"][0])
-        many_imports = project.flist(many_native["imports"])
-        assert many_native["valid"] and many_native["value_ssa_valid"], many_native
-        assert many_native["import_count"] == len(many_imports) == 64, many_native
-        many_oracle = probe.send({"project_oracle": {
-            "root": many_root,
-            "modules": {"demo.dep": "mncs 0.18; module demo.dep; record R { value: u64 }"},
-        }})
-        assert many_oracle.get("valid") is True, many_oracle
+        above_old_response = probe.send(above_old_request)
+        assert above_old_response.get("status") == "returned", above_old_response
+        above_old_native = project.decode(above_old_response["returned"][0])
+        above_old_imports = project.flist(above_old_native["imports"])
+        assert above_old_native["valid"] and above_old_native["value_ssa_valid"], above_old_native
+        assert above_old_native["import_count"] == len(above_old_imports) == 65
+        # The declaration parser and linked-list passes support 1024 imports
+        # per module. The native resolver now admits that entire bound.
+        module_limit_sources, _module_limit_root = _repeated_import_source(1024)
+        module_limit_request = _target_request(
+            project.request_value(identities, module_limit_sources), 1,
+        )
+        module_limit_response = probe.send(module_limit_request)
+        assert module_limit_response.get("status") == "returned", module_limit_response
+        module_limit_native = project.decode(module_limit_response["returned"][0])
+        module_limit_imports = project.flist(module_limit_native["imports"])
+        assert module_limit_native["valid"] and module_limit_native["value_ssa_valid"], module_limit_native
+        assert module_limit_native["import_count"] == len(module_limit_imports) == 1024
+        # A 1025th use exceeds the module bound and reports the exact next
+        # source span without dropping any of the admitted links.
+        over_module_sources, over_module_root = _repeated_import_source(1025)
+        over_module_request = _target_request(
+            project.request_value(identities, over_module_sources), 1,
+        )
+        over_module_response = probe.send(over_module_request)
+        assert over_module_response.get("status") == "returned", over_module_response
+        over_module_native = project.decode(over_module_response["returned"][0])
+        over_module_imports = project.flist(over_module_native["imports"])
+        over_module_diagnostics = project.flist(over_module_native["diagnostics"])
+        assert not over_module_native["valid"], over_module_native
+        assert not over_module_native["value_ssa_valid"], over_module_native
+        assert over_module_native["import_count"] == len(over_module_imports) == 1024
+        assert len(over_module_diagnostics) == 1, over_module_diagnostics
+        module_diagnostic = over_module_diagnostics[0].get("$p", {})
+        module_expected_start = over_module_root.rfind("use demo.dep as d1024;") + len("use ")
+        assert module_diagnostic.get("source_index") == 1, over_module_diagnostics
+        assert module_diagnostic.get("limit") == 1024, over_module_diagnostics
+        assert module_diagnostic.get("start") == module_expected_start, over_module_diagnostics
+        assert module_diagnostic.get("end") == module_expected_start + len("demo.dep"), over_module_diagnostics
 
-        # A 65th declaration exceeds the per-module bound. Fail at its source
-        # span rather than accepting truncation.
-        over_sources, over_root = _repeated_import_source(65)
-        over_request = _target_request(
-            project.request_value(identities, over_sources), 1,
-        )
-        over_response = probe.send(over_request)
-        assert over_response.get("status") == "returned", over_response
-        over_native = project.decode(over_response["returned"][0])
-        over_imports = project.flist(over_native["imports"])
-        over_diagnostics = project.flist(over_native["diagnostics"])
-        assert not over_native["valid"], over_native
-        assert not over_native["value_ssa_valid"], over_native
-        assert over_native["import_count"] == len(over_imports) == 64, over_native
-        assert len(over_diagnostics) == 1, over_diagnostics
-        diagnostic = over_diagnostics[0].get("$p", {})
-        expected_start = over_root.rfind("use demo.dep as d64;") + len("use ")
-        assert diagnostic.get("source_index") == 1, over_diagnostics
-        assert diagnostic.get("limit") == 64, over_diagnostics
-        assert diagnostic.get("start") == expected_start, over_diagnostics
-        assert diagnostic.get("end") == expected_start + len("demo.dep"), over_diagnostics
-        over_oracle = probe.send({"project_oracle": {
-            "root": over_root,
-            "modules": {"demo.dep": "mncs 0.18; module demo.dep; record R { value: u64 }"},
-        }})
-        assert over_oracle.get("valid") is True, over_oracle
+        # The global guard is directly checked on both sides of its threshold;
+        # integration traversal continues to use the pre-existing four-chunk
+        # 4096-link retention bound.
+        limit_results = {}
+        for count, expected_reached in ((4095, False), (4096, True)):
+            result = probe.send({
+                "schema_version": "0.1",
+                "target": {
+                    "module": project.PROJECT_MODULE,
+                    "function": "project_import_limit_reached",
+                },
+                "arguments": [project.integer(count)],
+                "type_arguments": [],
+                "step_budget": 8_000_000,
+            })
+            assert result.get("status") == "returned", result
+            reached = project.decode(result["returned"][0])
+            assert reached is expected_reached, (count, reached, expected_reached)
+            limit_results[count] = reached
 
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/1",
+            "schema_version": "mncs.compiler.project-import-link-capacity/2",
             "status": "verified",
             "backend": execution["backend"],
             "source_count": len(sources),
@@ -151,13 +172,15 @@ def run():
             "native_target_ssa_valid": target_module["value_ssa"]["valid"],
             "stage0_oracle_valid": oracle["valid"],
             "all_transitive_record_schemas_verified": True,
-            "imports_at_module_limit_resolved": many_native["import_count"] == 64,
-            "stage0_accepts_64_imports": many_oracle["valid"],
-            "per_module_import_limit": 64,
-            "over_limit_import_declaration_count": 65,
-            "over_limit_imports_rejected": not over_native["valid"],
-            "over_limit_diagnostic": over_diagnostics[0],
-            "stage0_accepts_65_imports": over_oracle["valid"],
+            "imports_above_old_limit_resolved": above_old_native["import_count"] == 65,
+            "imports_at_module_limit_resolved": module_limit_native["import_count"] == 1024,
+            "per_module_import_limit": 1024,
+            "over_module_limit_import_declaration_count": 1025,
+            "over_module_limit_imports_rejected": not over_module_native["valid"],
+            "over_module_limit_diagnostic": over_module_diagnostics[0],
+            "project_import_link_limit": 4096,
+            "global_limit_guard_below_boundary": not limit_results[4095],
+            "global_limit_guard_at_boundary": limit_results[4096],
             "probe_request_count": probe.requests,
             "result_sha256": probe.digest.hexdigest(),
         }

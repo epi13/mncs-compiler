@@ -353,7 +353,8 @@ record ResolveModules {
     imports: ImportList,
     diagnostics: DiagnosticList,
     valid: bool,
-    count: u64
+    count: u64,
+    limit_reached: bool
 }
 fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: Resolution) {
     iterate i over sources carrying st: ResolveModules = ResolveModules {
@@ -362,7 +363,8 @@ fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_page
         imports: ImportList.INil,
         diagnostics: DiagnosticList.DiagNil,
         valid: true,
-        count: 0
+        count: 0,
+        limit_reached: false
     } {
         next st = resolve_module_step<M, N>(sources, flat_pages, st);
     }
@@ -374,6 +376,7 @@ fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_page
     };
 }
 fn resolve_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ResolveModules) -> (result: ResolveModules) {
+    if st.limit_reached { return st; }
     return match st.rest {
         MNil => st,
         MCons { head: current, tail: tail } => resolve_module_uses<M, N>(sources, flat_pages, st, current, tail)
@@ -388,10 +391,11 @@ fn resolve_module_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_
         imports: resolved.imports,
         diagnostics: resolved.diagnostics,
         valid: resolved.valid,
-        count: resolved.count
+        count: resolved.count,
+        limit_reached: resolved.limit_reached
     };
 }
-record UseResolution { imports: ImportList, diagnostics: DiagnosticList, valid: bool, count: u64 }
+record UseResolution { imports: ImportList, diagnostics: DiagnosticList, valid: bool, count: u64, limit_reached: bool }
 record ResolveUses {
     rest: decl.UseList,
     imports: ImportList,
@@ -410,26 +414,36 @@ fn resolve_use_list<M: Nat, N: Nat>(
     valid: bool,
     count: u64
 ) -> (result: UseResolution) {
-    iterate i up_to 64 carrying st: ResolveUses = ResolveUses {
+    iterate i up_to 1024 carrying st: ResolveUses = ResolveUses {
         rest: uses,
         imports: imports,
         diagnostics: diagnostics,
         valid: valid,
         count: count
     } {
-        if decl.use_list_empty(st.rest) { return finish_use_resolution(st, current.source_index, 64); }
+        if decl.use_list_empty(st.rest) { return finish_use_resolution(st, current.source_index, 1024); }
+        if project_import_limit_reached(st.count) {
+            return finish_global_import_limit(st, current.source_index);
+        }
         next st = resolve_use_step<M, N>(sources, flat_pages, all, current, st);
     }
-    return finish_use_resolution(st, current.source_index, 64);
+    return finish_use_resolution(st, current.source_index, 1024);
+}
+fn project_import_limit_reached(count: u64) -> (result: bool) {
+    return count >= 4096;
+}
+fn finish_global_import_limit(st: ResolveUses, source_index: u64) -> (result: UseResolution) {
+    return finish_use_resolution(st, source_index, 4096);
 }
 fn finish_use_resolution(st: ResolveUses, source_index: u64, limit: u64) -> (result: UseResolution) {
     return match st.rest {
-        UNil => UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count },
+        UNil => UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count, limit_reached: false },
         UCons { head: usage, tail: rest } => UseResolution {
             imports: st.imports,
             diagnostics: DiagnosticList.DiagCons { head: ProjectDiagnostic.ImportLimitExceeded { source_index: source_index, start: usage.module_start, end: usage.module_end, limit: limit }, tail: st.diagnostics },
             valid: false,
-            count: st.count
+            count: st.count,
+            limit_reached: limit == 4096
         }
     };
 }
@@ -792,8 +806,7 @@ fn span_compare_step<N: Nat>(left_pages: [[byte; up_to N]; up_to 1024], left_str
 }
 
 fn reverse_imports<M: Nat>(sources: [ProjectSource; up_to M], imports: ImportList) -> (result: ImportList) {
-    // Each of at most 64 source modules admits at most 64 uses; four chunks
-    // retain the complete project import list (4096 links).
+    // Four 1024-link chunks retain the complete project-wide bound.
     let first: ImportReverse = reverse_import_part(ImportReverse { rest: imports, acc: ImportList.INil });
     let second: ImportReverse = reverse_import_part(first);
     let third: ImportReverse = reverse_import_part(second);
@@ -1512,9 +1525,9 @@ fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_
 // Resolve the target's transitive import closure for schema construction.
 // Import signatures and source diagnostics still use the complete project;
 // only record and enum schemas are restricted to modules that can affect the
-// selected module. Each module admits at most 64 uses, and the project has at
-// most 64 sources, which bounds the link walk below to 4096 entries. Repeated
-// passes handle source ordering and cycles.
+// selected module. Each module admits at most 1024 uses, while the project
+// retains at most 4096 resolved links. Repeated passes handle source ordering
+// and cycles within that project-wide bound.
 fn project_import_closure(imports: ImportList, target_source_index: u64) -> (result: ProjectIndexList) {
     let first: ProjectImportClosure = ProjectImportClosure { indices: ProjectIndexList.PICons { head: target_source_index, tail: ProjectIndexList.PINil }, changed: true };
     iterate i up_to 64 carrying st: ProjectImportClosure = first {
