@@ -198,6 +198,34 @@ real workload harness is `tools/test_vm_native_automation_application.py`.
 Evidence is `evidence/native-app-readiness-automation-evaluation-executable-reuse-verified-20261017.json`
 (SHA-256 `0ea6816e3fb3af1bf80b7e634dc95e264961cbc635beaa7b38d8acd35f2fb000`).
 
+## Automation executable-closure invalidation checks (2026-10-17)
+
+The Automation harness now tests three changed-source paths on the same
+application. A comment-only Assertions edit and an uncalled schedule test-body
+edit each ran the full frontend and reused artifact
+`sha256:8412ca93ef536d7a583eccd3a4a679628009538634436a919e88fa9347b4332a`.
+Changing the reachable `reason_cond_false` body changed the
+`watch-cond-false` result, regenerated the artifact as
+`sha256:cf7c3eca8408651bd65ff68f36dd3f07c5e38c68f95dd925c1dc957776f67219`,
+and matched the fresh Stage-0 oracle in the canonical VM. Replacing that body
+with an unresolved function produced a fresh `MNE131` rejection with no
+artifact; the cache reported `bypass`.
+
+The 18-case baseline matched Stage-0 and the canonical VM. The cold build took
+1.600 s / 1.540 CPU s / 127.9 MiB peak RSS; exact-source fresh-process reuse
+took 0.148 s / 0.130 CPU s / 46.1 MiB; the comment and uncalled-body edits
+took 0.784 s / 0.730 CPU s / 101.4 MiB and 0.740 s / 0.730 CPU s / 105.4
+MiB. The reachable edit build took 1.470 s / 1.440 CPU s / 128.5 MiB, its
+Stage-0 oracle took 2.238 s, and its VM batch took 0.453 s / 0.440 CPU s with
+36,316 KiB peak RSS. cgroup memory counters were unavailable.
+
+Each changed valid snapshot still received a full frontend invocation and
+`reused_semantic_facts` stayed empty. This verifies Compiler executable
+closure invalidation and fresh diagnostics; it does not implement Language-
+owned verified-fact reuse or the Forge/Store application route. Evidence is
+`evidence/native-app-readiness-automation-incremental-invalidation-20261017.json`
+(SHA-256 `fe0a450f22f2a3840a776287f6d67858755ffe921b8e5e52bf300c6e24f26a2e`).
+
 ## Evidence boundary
 
 This assessment uses the read-only `mncs-test` checkout at `f9575e09ec3481c0ded52bb9e3ec72940725aff6`, Stdlib `6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c`, Language `3cfbc094f1a1770fc2409b990f3f7d8912f49bc7`, VM `1c19a94732c9d24029dd00e2d5af13710f481d02`, and Compiler producer commit `24dda63ae59e0505969c490604e14348dab1f7d7`. The Stage-0 reference revision is `e8f8a5f8659c71b33cd32c964d4982bec1a9668e`, release probe SHA-256 `190d0bf1128f24962fbf56b6d5701ac60ffbe04bceda4c59064671f103714c58`; the VM binary SHA-256 is `2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5`.

@@ -114,6 +114,7 @@ def workloads() -> list[dict]:
         ("interval-wait", (1, 0, 1000, 0, 0, 0, 0, 0, 0, 100, 0, 10, 0)),
         ("watch-rising-edge", (0, 0, 0, 1, 0, 0, 1, 4, 0, 9000, 0, 10, 0)),
         ("watch-unknown", (0, 0, 0, 1, 0, 0, 2, 4, 0, 9000, 0, 10, 0)),
+        ("watch-cond-false", (0, 0, 0, 1, 0, 0, 0, 4, 0, 9000, 0, 10, 0)),
         ("daily-utc-first-align", (2, 18000000, 0, 0, 0, 0, 0, 0, 0, 21600000, 0, 10, 1)),
         ("daily-local-defers", (3, 300, 0, 0, 0, 0, 0, 0, 0, 0, 0, 10, 0)),
     ]
@@ -199,6 +200,13 @@ def run_vm_batch(artifact: dict, rows: list[dict]) -> tuple[list[dict], dict]:
             "result_schema_version": document.get("schema_version"),
             "artifact_id": document.get("artifact_id"),
         }
+
+
+def replace_once(source: str, before: str, after: str, description: str) -> str:
+    count = source.count(before)
+    if count != 1:
+        raise AssertionError(f"expected one {description} source anchor, found {count}")
+    return source.replace(before, after, 1)
 
 
 def main() -> None:
@@ -295,6 +303,119 @@ def main() -> None:
                 != "verified_application_executable_closure"):
             raise AssertionError("comment-only Automation dependency edit failed fresh full "
                                  "verification with executable-closure artifact reuse")
+
+        uncalled_modules = dict(comment_modules)
+        schedule_source = uncalled_modules["mncs.automation.schedule"]
+        test_assertion = "return from_assertion(equals_i64(2500, third.at_ms, 5102));"
+        if schedule_source.count(test_assertion) != 2:
+            raise AssertionError("Automation schedule test body anchor changed")
+        uncalled_modules["mncs.automation.schedule"] = schedule_source.replace(
+            test_assertion,
+            "return from_assertion(equals_i64(2500, third.at_ms, 5192));",
+        )
+        uncalled, uncalled_metrics = probe.send({
+            "compile_application": build_request(root_source, uncalled_modules),
+        }, timeout=240)
+        uncalled_work = uncalled.get("cache", {}).get("verification_work", {})
+        if (uncalled.get("status") != "verified"
+                or uncalled.get("source_snapshot", {}).get("identity")
+                == changed.get("source_snapshot", {}).get("identity")
+                or uncalled.get("artifact", {}).get("identity") != artifact_identity
+                or uncalled_work.get("front_end_invocations") != 1
+                or uncalled_work.get("reused_semantic_facts") != []
+                or uncalled_work.get("backend_artifact") != "reused"
+                or uncalled.get("cache", {}).get("reuse_basis")
+                != "verified_application_executable_closure"):
+            raise AssertionError("uncalled Automation test-body edit did not preserve the "
+                                 "selected executable closure and reuse its artifact")
+
+        reachable_root_source = replace_once(
+            root_source,
+            "fn reason_cond_false() -> (code: u64) {\n    return 3;\n}",
+            "fn reason_cond_false() -> (code: u64) {\n    return 30;\n}",
+            "reachable reason_cond_false body",
+        )
+        reachable, reachable_metrics = probe.send({
+            "compile_application": build_request(reachable_root_source, modules),
+        }, timeout=240)
+        reachable_work = reachable.get("cache", {}).get("verification_work", {})
+        reachable_artifact = (reachable.get("artifact") or {}).get("value")
+        reachable_artifact_identity = (reachable.get("artifact") or {}).get("identity")
+        if (reachable.get("status") != "verified"
+                or reachable_work.get("front_end_invocations") != 1
+                or reachable_work.get("backend_artifact") != "generated"
+                or reachable_artifact_identity == artifact_identity
+                or not isinstance(reachable_artifact, dict)):
+            raise AssertionError("reachable Automation policy edit reused stale executable code")
+
+        reachable_oracle, reachable_oracle_metrics = probe.send({
+            "project_oracle": {
+                "root": reachable_root_source,
+                "modules": modules,
+                "calls": calls,
+            },
+        }, timeout=240)
+        reachable_executions = reachable_oracle.get("executions", [])
+        if (reachable_oracle.get("valid") is not True
+                or len(reachable_executions) != len(rows)
+                or any(item.get("status") != "returned"
+                       for item in reachable_executions)):
+            raise AssertionError("Stage-0 oracle rejected reachable-edit Automation source")
+        reachable_expected = [support.decode_wire(item["returned"][0])
+                              for item in reachable_executions]
+        reachable_vm_results, reachable_vm_metrics = run_vm_batch(
+            reachable_artifact, rows
+        )
+        if len(reachable_vm_results) != len(rows):
+            raise AssertionError("canonical VM omitted reachable-edit Automation results")
+        reachable_actual = []
+        for row, vm_row, expected_value in zip(
+                rows, reachable_vm_results, reachable_expected):
+            if (vm_row.get("id") != row["id"]
+                    or vm_row.get("outcome") != {"kind": "completed"}):
+                raise AssertionError(f"reachable-edit VM call failed for {row['id']}: {vm_row}")
+            returned = vm_row.get("record", {}).get("returned", [])
+            if len(returned) != 1:
+                raise AssertionError(f"reachable-edit result malformed for {row['id']}")
+            value = support.decode_wire(support.vm_to_wire(returned[0]))
+            if value != expected_value:
+                raise AssertionError("reachable-edit Stage-0/VM disagreement for "
+                                     f"{row['id']}: "
+                                     + json.dumps({"vm": value, "stage0": expected_value},
+                                                  sort_keys=True))
+            reachable_actual.append(value)
+        false_case = next(value for row, value in zip(rows, actual)
+                          if row["id"] == "watch-cond-false")
+        changed_false_case = next(value for row, value in zip(rows, reachable_actual)
+                                  if row["id"] == "watch-cond-false")
+        if false_case == changed_false_case:
+            raise AssertionError("reachable policy body edit did not affect its selected caller")
+
+        invalid_root_source = replace_once(
+            root_source,
+            "fn reason_cond_false() -> (code: u64) {\n    return 3;\n}",
+            "fn reason_cond_false() -> (code: u64) {\n    return missing_reason();\n}",
+            "invalid unresolved reason function",
+        )
+        invalid, invalid_metrics = probe.send({
+            "compile_application": build_request(invalid_root_source, modules),
+        }, timeout=240)
+        invalid_work = invalid.get("cache", {}).get("verification_work", {})
+        invalid_diagnostic_codes = sorted({
+            item.get("code") for item in invalid.get("diagnostics", [])
+            if isinstance(item, dict) and isinstance(item.get("code"), str)
+        })
+        if (invalid.get("status") != "rejected"
+                or invalid.get("artifact") is not None
+                or invalid_work.get("front_end_invocations") != 1
+                or not invalid_diagnostic_codes
+                or (invalid.get("cache") or {}).get("reuse_basis")
+                == "verified_application_executable_closure"):
+            raise AssertionError("invalid Automation source was not freshly rejected: "
+                                 + json.dumps({"status": invalid.get("status"),
+                                               "diagnostic_codes": invalid_diagnostic_codes,
+                                               "cache": invalid.get("cache")},
+                                              sort_keys=True))
         probe.close()
     except BaseException:
         try:
@@ -363,6 +484,31 @@ def main() -> None:
                 "artifact_decision": changed_work.get("backend_artifact"),
                 "artifact_identity": changed.get("artifact", {}).get("identity"),
             },
+            "uncalled_body_edit": {
+                "source_snapshot_identity": uncalled.get("source_snapshot", {}).get("identity"),
+                "semantic_identity": uncalled.get("dependency_graph", {}).get("semantic_identity"),
+                "frontend_invocations": uncalled_work.get("front_end_invocations"),
+                "reused_semantic_facts": uncalled_work.get("reused_semantic_facts"),
+                "artifact_decision": uncalled_work.get("backend_artifact"),
+                "reuse_basis": uncalled.get("cache", {}).get("reuse_basis"),
+                "artifact_identity": uncalled.get("artifact", {}).get("identity"),
+            },
+            "reachable_body_edit": {
+                "source_snapshot_identity": reachable.get("source_snapshot", {}).get("identity"),
+                "semantic_identity": reachable.get("dependency_graph", {}).get("semantic_identity"),
+                "frontend_invocations": reachable_work.get("front_end_invocations"),
+                "backend_artifact": reachable_work.get("backend_artifact"),
+                "artifact_identity": reachable_artifact_identity,
+                "prior_artifact_identity": artifact_identity,
+                "selected_caller_result_changed": True,
+            },
+            "invalid_source": {
+                "status": invalid.get("status"),
+                "diagnostic_codes": invalid_diagnostic_codes,
+                "frontend_invocations": invalid_work.get("front_end_invocations"),
+                "artifact_present": invalid.get("artifact") is not None,
+                "cache_status": invalid.get("cache", {}).get("status"),
+            },
         },
         "execution": {
             "oracle": "Stage-0 project_oracle",
@@ -383,6 +529,11 @@ def main() -> None:
             "canonical_vm_batch": vm_metrics,
             "fresh_process_exact_snapshot": warm_metrics,
             "comment_only_dependency_edit": changed_metrics,
+            "uncalled_body_edit": uncalled_metrics,
+            "reachable_body_edit": reachable_metrics,
+            "reachable_stage0_oracle": reachable_oracle_metrics,
+            "reachable_canonical_vm_batch": reachable_vm_metrics,
+            "invalid_source": invalid_metrics,
             "host_memory_before": host_memory_before,
             "host_memory_after": host_memory_after,
             "cgroup_memory_measurement": "unavailable",
@@ -391,7 +542,7 @@ def main() -> None:
         "forge_execution_performed": False,
         "canonical_store_publication_performed": False,
         "production_automation_orchestration_replaced": False,
-        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Seventeen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit received a fresh full frontend check, reused the verified executable-closure artifact, and preserved the canonical VM artifact identity. Language verified facts remained zero, so changed snapshots still rechecked all source semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
+        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit and an uncalled test-body edit each received fresh full frontend verification and reused the executable-closure artifact. Editing reachable reason_cond_false changed the selected caller result, regenerated the artifact, and matched Stage-0 in the canonical VM. An unresolved function body was freshly rejected without artifact fallback. Language verified facts remained zero, so each changed valid snapshot still rechecked whole-program semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
     }
     default_evidence_name = (
         "evidence/native-app-readiness-automation-evaluation-"
