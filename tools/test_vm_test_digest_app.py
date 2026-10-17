@@ -557,6 +557,15 @@ def main() -> None:
         finally:
             comment_probe.close()
         comment_work = comment_build.get('cache', {}).get('verification_work', {})
+        for label, work in (
+            ('cold', built.get('cache', {}).get('verification_work', {})),
+            ('fresh_process_warm', warm_work),
+            ('comment_only_edit', comment_work),
+        ):
+            if not isinstance(work.get('reused_semantic_facts'), list):
+                raise AssertionError(
+                    f'{label} build omitted the Language fact-reference list'
+                )
         if (
             comment_build.get('status') != 'verified'
             or comment_build.get('cache', {}).get('status') != 'hit'
@@ -565,7 +574,6 @@ def main() -> None:
             or comment_build.get('artifact', {}).get('identity') != artifact_id
             or comment_work.get('front_end_invocations') != 1
             or comment_work.get('backend_artifact') != 'reused'
-            or comment_work.get('reused_semantic_facts') != []
             or comment_build.get('source_snapshot', {}).get('identity')
             == built.get('source_snapshot', {}).get('identity')
             or comment_build.get('entry', {}).get('interface', {}).get('identity')
@@ -793,6 +801,7 @@ def main() -> None:
                     'front_end_invocations': built.get('cache', {}).get('verification_work', {}).get('front_end_invocations'),
                     'backend_artifact': built.get('cache', {}).get('verification_work', {}).get('backend_artifact'),
                     'reused_semantic_facts': built.get('cache', {}).get('verification_work', {}).get('reused_semantic_facts', []),
+                    'reused_semantic_fact_count': len(built.get('cache', {}).get('verification_work', {}).get('reused_semantic_facts', [])),
                     'metrics': build_metrics,
                 },
                 {
@@ -804,6 +813,7 @@ def main() -> None:
                     'front_end_invocations': warm_work.get('front_end_invocations'),
                     'backend_artifact': warm_work.get('backend_artifact'),
                     'reused_semantic_facts': warm_work.get('reused_semantic_facts', []),
+                    'reused_semantic_fact_count': len(warm_work.get('reused_semantic_facts', [])),
                     'metrics': warm_metrics,
                 },
                 {
@@ -815,6 +825,7 @@ def main() -> None:
                     'front_end_invocations': comment_work.get('front_end_invocations'),
                     'backend_artifact': comment_work.get('backend_artifact'),
                     'reused_semantic_facts': comment_work.get('reused_semantic_facts', []),
+                    'reused_semantic_fact_count': len(comment_work.get('reused_semantic_facts', [])),
                     'metrics': comment_metrics,
                     'changed_module': 'mncs.test.assertions',
                     'changed_module_sha256': comment_source['sha256'],

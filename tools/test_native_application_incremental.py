@@ -114,11 +114,12 @@ def require_verification_work(
                   'function_body_verification'):
         if work.get(stage) != expected_stage:
             raise AssertionError(f'{label} has an unexpected {stage} state: {work}')
+    if not isinstance(work.get('reused_semantic_facts'), list):
+        raise AssertionError(f'{label} omitted the Language fact-reference list: {work}')
     if (work.get('semantic_dependency_closure') != dependency_closure
             or work.get('ssa_verification') != ssa_verification
-            or work.get('backend_artifact') != backend_artifact
-            or work.get('reused_semantic_facts') != []):
-        raise AssertionError(f'{label} reports inaccurate reuse or backend work: {work}')
+            or work.get('backend_artifact') != backend_artifact):
+        raise AssertionError(f'{label} reports inaccurate cache or backend work: {work}')
     if frontend_invocations:
         if type(work.get('resolved_module_count')) is not int or work['resolved_module_count'] < 1:
             raise AssertionError(f'{label} omitted resolved module work count: {work}')
@@ -1066,6 +1067,8 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         'cold_program_functions': cold_work['program_function_count'],
         'changed_snapshot_frontend_invocations': small['cache']['verification_work']['front_end_invocations'],
         'changed_snapshot_semantic_facts_reused': small['cache']['verification_work']['reused_semantic_facts'],
+        'changed_snapshot_semantic_fact_count': len(
+            small['cache']['verification_work']['reused_semantic_facts']),
         'evidence': str(EVIDENCE.relative_to(ROOT)),
     }, indent=2))
 

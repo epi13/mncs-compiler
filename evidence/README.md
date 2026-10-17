@@ -570,3 +570,15 @@ same key while a reader verifies every visible cache response digest and
 index. The targeted test passed, and the complete Stage-0 probe release unit
 suite passed 23/23 tests. The check covers in-process threads; it is not a
 multi-process stress run or a canonical Store concurrency test.
+
+## Language fact reuse telemetry acceptance (2026-10-17)
+
+The [semantic fact telemetry report](semantic-fact-telemetry-acceptance-20261017.json)
+removes the Compiler incremental tests' fixed-zero assertion for
+`reused_semantic_facts`. They still require the field to be an explicit list,
+and record counts from that list rather than from cache-hit observations. Both
+the multi-module incremental verifier and effectful digest incremental verifier
+passed. The current runs returned zero facts, so Gate B remains partial. The
+effectful digest verifier's refreshed report and both VM chunks were returned
+by authenticated Environment `artifact_read`; this remains verifier output,
+not a Forge execution receipt.
