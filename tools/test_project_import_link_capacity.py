@@ -380,38 +380,56 @@ def run():
             "expected": sorted(expected_oversized_links),
         }
 
+        missing_names = ["demo.absent", "demo.hidden", "demo.absent", "demo.hidden"]
+        assert len(set(missing_names)) == 2 and len(missing_names[0]) == len(missing_names[1])
         missing_root = "mncs 0.18; module demo.missing_root;\n"
         missing_root += "".join(
-            f"use demo.absent as m{index};\n" for index in range(3)
+            f"use {name} as m{index};\n" for index, name in enumerate(missing_names)
         )
         missing_root += "fn main() -> (result: u64) { return 1; }\n"
         missing_sources = [
-            ("00-dep.mncs", Path("00-dep.mncs"), b"mncs 0.18; module demo.dep; fn value() -> (result: u64) { return 1; }"),
-            ("zz-missing.mncs", Path("zz-missing.mncs"), missing_root.encode()),
+            (
+                f"{index:02d}-missing-decoy-{index:03d}.mncs",
+                Path(f"{index:02d}-missing-decoy-{index:03d}.mncs"),
+                (
+                    f"mncs 0.18; module demo.missing_decoy{index:03d}; "
+                    f"fn value() -> (result: u64) {{ return {index}; }}"
+                ).encode(),
+            )
+            for index in range(16)
         ]
+        missing_sources.extend([
+            (
+                "16-dep.mncs",
+                Path("16-dep.mncs"),
+                b"mncs 0.18; module demo.dep; fn value() -> (result: u64) { return 1; }",
+            ),
+            ("17-missing.mncs", Path("17-missing.mncs"), missing_root.encode()),
+        ])
         missing_response = probe.send(_target_request(
-            project.request_value(identities, missing_sources), 1,
+            project.request_value(identities, missing_sources), len(missing_sources) - 1,
         ))
         assert missing_response.get("status") == "returned", missing_response
         missing_native = project.decode(missing_response["returned"][0])
         missing_diagnostics = project.flist(missing_native["diagnostics"])
         expected_missing_spans = set()
         cursor = 0
-        for index in range(3):
-            use_start = missing_root.index(f"use demo.absent as m{index};", cursor)
+        for index, name in enumerate(missing_names):
+            use_start = missing_root.index(f"use {name} as m{index};", cursor)
             cursor = use_start + 1
             module_start = use_start + len("use ")
-            expected_missing_spans.add((module_start, module_start + len("demo.absent")))
+            expected_missing_spans.add((module_start, module_start + len(name)))
         observed_missing_spans = {
             (item.get("$p", {}).get("start"), item.get("$p", {}).get("end"))
             for item in missing_diagnostics
         }
         assert not missing_native["valid"] and not missing_native["value_ssa_valid"], missing_native
         assert missing_native["import_count"] == 0, missing_native
-        assert len(missing_diagnostics) == 3, missing_diagnostics
+        assert len(missing_diagnostics) == len(missing_names), missing_diagnostics
         assert observed_missing_spans == expected_missing_spans, missing_diagnostics
         assert missing_native["import_resolution_cache_hits"] == 0, missing_native
-        assert missing_native["import_module_name_comparisons"] == 3, missing_native
+        assert missing_native["import_resolution_negative_cache_hits"] == 2, missing_native
+        assert missing_native["import_module_name_comparisons"] == 34, missing_native
 
         # A 1025th use exceeds the module bound and reports the exact next
         # source span without dropping any of the admitted links.
@@ -566,7 +584,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/7",
+            "schema_version": "mncs.compiler.project-import-link-capacity/8",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -596,8 +614,11 @@ def run():
             "oversized_module_name_cache_hits": oversized_native["import_resolution_cache_hits"],
             "oversized_module_name_header_comparisons": oversized_native["import_module_name_comparisons"],
             "oversized_module_name_import_locations_preserved": observed_oversized_links == expected_oversized_links,
-            "repeated_missing_import_diagnostics_preserved": len(missing_diagnostics) == 3,
+            "repeated_missing_import_diagnostics_preserved": len(missing_diagnostics) == len(missing_names),
             "repeated_missing_import_cache_hits": missing_native["import_resolution_cache_hits"],
+            "repeated_missing_import_negative_cache_hits": missing_native["import_resolution_negative_cache_hits"],
+            "repeated_missing_import_candidate_header_comparisons": missing_native["import_module_name_comparisons"],
+            "distinct_missing_names_same_length_preserved": len(set(missing_names)) == 2 and len(missing_names[0]) == len(missing_names[1]),
             "per_module_import_limit": 1024,
             "over_module_limit_import_declaration_count": 1025,
             "over_module_limit_imports_rejected": not over_module_native["valid"],

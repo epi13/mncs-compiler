@@ -118,11 +118,12 @@ record ImportLink {
     has_alias: bool
 }
 enum ImportList { INil, ICons { head: ImportLink, tail: ImportList } }
-// This successful-name memo belongs to one consumer module in one immutable
-// parsed snapshot. It carries no semantic verification evidence.
-record ModuleResolutionFact { module_start: u64, module_end: u64, target_index: u64 }
+// These name-resolution results belong to one consumer module in one
+// immutable parsed snapshot. They carry no semantic verification evidence;
+// missing results still produce a fresh diagnostic for each current use.
+record ModuleResolutionFact { module_start: u64, module_end: u64, target_found: bool, target_index: u64 }
 enum ModuleResolutionFactList { MRNil, MRCons { head: ModuleResolutionFact, tail: ModuleResolutionFactList } }
-record ModuleResolutionCacheLookup { rest: ModuleResolutionFactList, source_index: u64, module_start: u64, module_end: u64, found: bool, target_index: u64 }
+record ModuleResolutionCacheLookup { rest: ModuleResolutionFactList, source_index: u64, module_start: u64, module_end: u64, found: bool, target_found: bool, target_index: u64 }
 enum ProjectIndexList { PINil, PICons { head: u64, tail: ProjectIndexList } }
 record ProjectIndexContains { rest: ProjectIndexList, wanted: u64, found: bool }
 record ProjectImportClosure { indices: ProjectIndexList, changed: bool }
@@ -153,6 +154,7 @@ record ProjectResult {
     import_count: u64,
     import_module_name_comparisons: u64,
     import_resolution_cache_hits: u64,
+    import_resolution_negative_cache_hits: u64,
     modules: ProjectModuleList,
     imports: ImportList,
     diagnostics: DiagnosticList
@@ -353,7 +355,7 @@ fn duplicate_diagnostic(current: ParsedModule, found: DuplicateCheck, diagnostic
     };
 }
 
-record Resolution { valid: bool, count: u64, imports: ImportList, diagnostics: DiagnosticList, import_module_name_comparisons: u64, import_resolution_cache_hits: u64 }
+record Resolution { valid: bool, count: u64, imports: ImportList, diagnostics: DiagnosticList, import_module_name_comparisons: u64, import_resolution_cache_hits: u64, import_resolution_negative_cache_hits: u64 }
 record ResolveModules {
     rest: ModuleList,
     all: ModuleList,
@@ -363,6 +365,7 @@ record ResolveModules {
     count: u64,
     import_module_name_comparisons: u64,
     import_resolution_cache_hits: u64,
+    import_resolution_negative_cache_hits: u64,
     limit_reached: bool
 }
 fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList) -> (result: Resolution) {
@@ -375,6 +378,7 @@ fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_page
         count: 0,
         import_module_name_comparisons: 0,
         import_resolution_cache_hits: 0,
+        import_resolution_negative_cache_hits: 0,
         limit_reached: false
     } {
         next st = resolve_module_step<M, N>(sources, flat_pages, st);
@@ -385,7 +389,8 @@ fn resolve_imports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_page
         imports: reverse_imports(sources, st.imports),
         diagnostics: reverse_diagnostics(sources, st.diagnostics),
         import_module_name_comparisons: st.import_module_name_comparisons,
-        import_resolution_cache_hits: st.import_resolution_cache_hits
+        import_resolution_cache_hits: st.import_resolution_cache_hits,
+        import_resolution_negative_cache_hits: st.import_resolution_negative_cache_hits
     };
 }
 fn resolve_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ResolveModules) -> (result: ResolveModules) {
@@ -407,10 +412,11 @@ fn resolve_module_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_
         count: resolved.count,
         import_module_name_comparisons: st.import_module_name_comparisons + resolved.import_module_name_comparisons,
         import_resolution_cache_hits: st.import_resolution_cache_hits + resolved.import_resolution_cache_hits,
+        import_resolution_negative_cache_hits: st.import_resolution_negative_cache_hits + resolved.import_resolution_negative_cache_hits,
         limit_reached: resolved.limit_reached
     };
 }
-record UseResolution { imports: ImportList, diagnostics: DiagnosticList, valid: bool, count: u64, import_module_name_comparisons: u64, import_resolution_cache_hits: u64, limit_reached: bool }
+record UseResolution { imports: ImportList, diagnostics: DiagnosticList, valid: bool, count: u64, import_module_name_comparisons: u64, import_resolution_cache_hits: u64, import_resolution_negative_cache_hits: u64, limit_reached: bool }
 record ResolveUses {
     rest: decl.UseList,
     imports: ImportList,
@@ -419,7 +425,8 @@ record ResolveUses {
     count: u64,
     facts: ModuleResolutionFactList,
     import_module_name_comparisons: u64,
-    import_resolution_cache_hits: u64
+    import_resolution_cache_hits: u64,
+    import_resolution_negative_cache_hits: u64
 }
 fn resolve_use_list<M: Nat, N: Nat>(
     sources: [ProjectSource; up_to 64],
@@ -433,7 +440,7 @@ fn resolve_use_list<M: Nat, N: Nat>(
     count: u64
 ) -> (result: UseResolution) {
     if decl.use_list_empty(uses) {
-        return UseResolution { imports: imports, diagnostics: diagnostics, valid: valid, count: count, import_module_name_comparisons: 0, import_resolution_cache_hits: 0, limit_reached: false };
+        return UseResolution { imports: imports, diagnostics: diagnostics, valid: valid, count: count, import_module_name_comparisons: 0, import_resolution_cache_hits: 0, import_resolution_negative_cache_hits: 0, limit_reached: false };
     }
     iterate i up_to 1024 carrying st: ResolveUses = ResolveUses {
         rest: uses,
@@ -443,7 +450,8 @@ fn resolve_use_list<M: Nat, N: Nat>(
         count: count,
         facts: ModuleResolutionFactList.MRNil,
         import_module_name_comparisons: 0,
-        import_resolution_cache_hits: 0
+        import_resolution_cache_hits: 0,
+        import_resolution_negative_cache_hits: 0
     } {
         if decl.use_list_empty(st.rest) { return finish_use_resolution(st, current.source_index, 1024); }
         if project_import_limit_reached(st.count) {
@@ -461,7 +469,7 @@ fn finish_global_import_limit(st: ResolveUses, source_index: u64) -> (result: Us
 }
 fn finish_use_resolution(st: ResolveUses, source_index: u64, limit: u64) -> (result: UseResolution) {
     return match st.rest {
-        UNil => UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count, import_module_name_comparisons: st.import_module_name_comparisons, import_resolution_cache_hits: st.import_resolution_cache_hits, limit_reached: false },
+        UNil => UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count, import_module_name_comparisons: st.import_module_name_comparisons, import_resolution_cache_hits: st.import_resolution_cache_hits, import_resolution_negative_cache_hits: st.import_resolution_negative_cache_hits, limit_reached: false },
         UCons { head: usage, tail: rest } => UseResolution {
             imports: st.imports,
             diagnostics: DiagnosticList.DiagCons { head: ProjectDiagnostic.ImportLimitExceeded { source_index: source_index, start: usage.module_start, end: usage.module_end, limit: limit }, tail: st.diagnostics },
@@ -469,6 +477,7 @@ fn finish_use_resolution(st: ResolveUses, source_index: u64, limit: u64) -> (res
             count: st.count,
             import_module_name_comparisons: st.import_module_name_comparisons,
             import_resolution_cache_hits: st.import_resolution_cache_hits,
+            import_resolution_negative_cache_hits: st.import_resolution_negative_cache_hits,
             limit_reached: limit == 4096
         }
     };
@@ -481,13 +490,15 @@ fn resolve_use_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pag
 }
 fn resolve_one_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, usage: decl.UseDecl, tail: decl.UseList, st: ResolveUses) -> (result: ResolveUses) {
     let cached: ModuleResolutionCacheLookup = module_resolution_cache_lookup<M, N>(sources, flat_pages, current, usage, st.facts);
-    if cached.found { return resolve_one_use_result(current, usage, tail, st, true, true, cached.target_index, 0); }
+    let cacheable: bool = module_resolution_cache_name_cacheable<M, N>(sources, flat_pages, current.source_index, usage.module_start, usage.module_end);
+    if cached.found { return resolve_one_use_result(current, usage, tail, st, true, cached.target_found, cached.target_index, 0, cacheable); }
     let found: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, current, usage);
-    return resolve_one_use_result(current, usage, tail, st, false, found.found, found.index, found.name_comparisons);
+    return resolve_one_use_result(current, usage, tail, st, false, found.found, found.index, found.name_comparisons, cacheable);
 }
-fn resolve_one_use_result(current: ParsedModule, usage: decl.UseDecl, tail: decl.UseList, st: ResolveUses, cache_hit: bool, target_found: bool, target_index: u64, name_comparisons: u64) -> (result: ResolveUses) {
-    let facts: ModuleResolutionFactList = module_resolution_cache_add(st.facts, usage, target_found, target_index, cache_hit);
-    let cache_hits: u64 = st.import_resolution_cache_hits + select(cache_hit, 1, 0);
+fn resolve_one_use_result(current: ParsedModule, usage: decl.UseDecl, tail: decl.UseList, st: ResolveUses, cache_hit: bool, target_found: bool, target_index: u64, name_comparisons: u64, cacheable: bool) -> (result: ResolveUses) {
+    let facts: ModuleResolutionFactList = module_resolution_cache_add(st.facts, usage, target_found, target_index, cache_hit, cacheable);
+    let cache_hits: u64 = st.import_resolution_cache_hits + select(cache_hit && target_found, 1, 0);
+    let negative_cache_hits: u64 = st.import_resolution_negative_cache_hits + select(cache_hit && !(target_found), 1, 0);
     if !(target_found) { return ResolveUses {
         rest: tail,
         imports: st.imports,
@@ -503,7 +514,8 @@ fn resolve_one_use_result(current: ParsedModule, usage: decl.UseDecl, tail: decl
         count: st.count,
         facts: facts,
         import_module_name_comparisons: st.import_module_name_comparisons + name_comparisons,
-        import_resolution_cache_hits: cache_hits
+        import_resolution_cache_hits: cache_hits,
+        import_resolution_negative_cache_hits: negative_cache_hits
     }; }
     return ResolveUses {
         rest: tail,
@@ -524,11 +536,12 @@ fn resolve_one_use_result(current: ParsedModule, usage: decl.UseDecl, tail: decl
         count: st.count + 1,
         facts: facts,
         import_module_name_comparisons: st.import_module_name_comparisons + name_comparisons,
-        import_resolution_cache_hits: cache_hits
+        import_resolution_cache_hits: cache_hits,
+        import_resolution_negative_cache_hits: negative_cache_hits
     };
 }
 fn module_resolution_cache_lookup<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, usage: decl.UseDecl, facts: ModuleResolutionFactList) -> (result: ModuleResolutionCacheLookup) {
-    iterate i up_to 64 carrying st: ModuleResolutionCacheLookup = ModuleResolutionCacheLookup { rest: facts, source_index: current.source_index, module_start: usage.module_start, module_end: usage.module_end, found: false, target_index: 0 } {
+    iterate i up_to 64 carrying st: ModuleResolutionCacheLookup = ModuleResolutionCacheLookup { rest: facts, source_index: current.source_index, module_start: usage.module_start, module_end: usage.module_end, found: false, target_found: false, target_index: 0 } {
         next st = module_resolution_cache_step<M, N>(sources, flat_pages, current.source_index, st);
     }
     return st;
@@ -542,9 +555,9 @@ fn module_resolution_cache_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 6
 }
 fn module_resolution_cache_fact<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, st: ModuleResolutionCacheLookup, fact: ModuleResolutionFact, rest: ModuleResolutionFactList) -> (result: ModuleResolutionCacheLookup) {
     if module_resolution_cache_key_equal<M, N>(sources, flat_pages, source_index, st.module_start, st.module_end, fact.module_start, fact.module_end) {
-        return ModuleResolutionCacheLookup { rest: ModuleResolutionFactList.MRNil, source_index: st.source_index, module_start: st.module_start, module_end: st.module_end, found: true, target_index: fact.target_index };
+        return ModuleResolutionCacheLookup { rest: ModuleResolutionFactList.MRNil, source_index: st.source_index, module_start: st.module_start, module_end: st.module_end, found: true, target_found: fact.target_found, target_index: fact.target_index };
     }
-    return ModuleResolutionCacheLookup { rest: rest, source_index: st.source_index, module_start: st.module_start, module_end: st.module_end, found: false, target_index: 0 };
+    return ModuleResolutionCacheLookup { rest: rest, source_index: st.source_index, module_start: st.module_start, module_end: st.module_end, found: false, target_found: false, target_index: 0 };
 }
 record ModuleResolutionNameCompare { length: u64, left_start: u64, right_start: u64, offset: u64, equal: bool }
 fn module_resolution_cache_key_equal<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, left_start: u64, left_end: u64, right_start: u64, right_end: u64) -> (result: bool) {
@@ -568,6 +581,13 @@ fn module_resolution_cache_key_equal<M: Nat, N: Nat>(sources: [ProjectSource; up
     }
     return st.equal && st.offset >= st.length;
 }
+fn module_resolution_cache_name_cacheable<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, name_start: u64, name_end: u64) -> (result: bool) {
+    if source_index >= sources.len || name_end < name_start || name_end - name_start > 64 { return false; }
+    let meta: ProjectSource = sources[source_index];
+    if meta.stride == 0 || name_end > meta.total { return false; }
+    if meta.page_start > flat_pages.len || meta.page_count > flat_pages.len - meta.page_start { return false; }
+    return true;
+}
 fn module_resolution_name_compare_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, st: ModuleResolutionNameCompare) -> (result: ModuleResolutionNameCompare) {
     if !(st.equal) || st.offset >= st.length { return st; }
     let left: u64 = project_source_byte_at<M, N>(sources, flat_pages, source_index, st.left_start + st.offset);
@@ -585,9 +605,9 @@ fn project_source_byte_at<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], fl
     if within_page >= page.len { return 256; }
     return page[within_page] as u64;
 }
-fn module_resolution_cache_add(facts: ModuleResolutionFactList, usage: decl.UseDecl, target_found: bool, target_index: u64, cache_hit: bool) -> (result: ModuleResolutionFactList) {
-    if cache_hit || !(target_found) { return facts; }
-    return ModuleResolutionFactList.MRCons { head: ModuleResolutionFact { module_start: usage.module_start, module_end: usage.module_end, target_index: target_index }, tail: facts };
+fn module_resolution_cache_add(facts: ModuleResolutionFactList, usage: decl.UseDecl, target_found: bool, target_index: u64, cache_hit: bool, cacheable: bool) -> (result: ModuleResolutionFactList) {
+    if cache_hit || !(cacheable) { return facts; }
+    return ModuleResolutionFactList.MRCons { head: ModuleResolutionFact { module_start: usage.module_start, module_end: usage.module_end, target_found: target_found, target_index: target_index }, tail: facts };
 }
 record ModuleLookup { found: bool, index: u64, name_comparisons: u64 }
 record ModuleLookupState { rest: ModuleList, current: ParsedModule, usage: decl.UseDecl, found: bool, index: u64, name_comparisons: u64 }
@@ -1855,6 +1875,7 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte
         import_count: resolved.count,
         import_module_name_comparisons: resolved.import_module_name_comparisons,
         import_resolution_cache_hits: resolved.import_resolution_cache_hits,
+        import_resolution_negative_cache_hits: resolved.import_resolution_negative_cache_hits,
         modules: lowered.acc,
         imports: resolved.imports,
         diagnostics: diagnostics
@@ -1891,6 +1912,7 @@ fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages:
         import_count: resolved.count,
         import_module_name_comparisons: resolved.import_module_name_comparisons,
         import_resolution_cache_hits: resolved.import_resolution_cache_hits,
+        import_resolution_negative_cache_hits: resolved.import_resolution_negative_cache_hits,
         modules: lowered.acc,
         imports: resolved.imports,
         diagnostics: diagnostics
