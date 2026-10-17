@@ -253,11 +253,21 @@ The [current `decl.prove_unit` frontier](self-host-decl-prove-unit-canonical-vm-
 
 This is a selected `decl.prove_unit<1024,1024>` function frontier. It establishes no Cranelift differential or full declaration-module proof, reused zero Language-owned verified facts, and does not claim Stage-1 or Stage-2 succession.
 
-## Current proof-to-Flow frontier (2026-10-16)
+## Current proof-to-Flow frontier (2026-10-17)
 
-The [current Flow proof handoff](self-host-flow-proven-unit-canonical-vm-20261016.json) executes two current-source fixtures through one fresh canonical VM artifact. `flow.lower_unit` calls `decl.prove_unit` and passes its result to `flow.lower_proven_unit`; the graph verifier confirms that typed proof operations match the lowered expression operations. The `fallthrough_join` fixture matches Stage-0 SSA shape (one branch, two returns). The `unreachable_join` fixture returns the matching `MNB038` diagnostic and span.
+The [current Flow proof handoff](self-host-flow-proven-unit-multiple-loop-exits-stage0-shape-canonical-vm-20261017.json) runs ten selected fixtures through one fresh canonical VM artifact. It includes multiple conditional returns in counted and sequence loops, and checks loop headers/backedges against Stage-0 metadata. Nine cases match Stage-0 diagnostics exactly. The negative `unreachable_loop_join` case exposes one retained diagnostic divergence: Stage-0 emits two `MNB010` and two `MNB017` generated-state errors plus `MNB038`, while native Flow reports `MNB038`. The evidence records this as a compiler pressure and does not claim diagnostic parity for that case.
 
-The VM batch took 18.19 seconds and peaked at 461,748 KiB; the whole frontier took 69.23 seconds and 66.90 child CPU seconds. Host memory was sampled and cgroup readings were unavailable. This bounded Flow function frontier reused zero Language-owned verified facts and does not establish full module proof or compiler succession.
+The VM batch took 50.60 seconds and peaked at 461,544 KiB; the whole frontier took 98.32 seconds and 95.43 child CPU seconds. Host memory was sampled and cgroup readings were unavailable. This bounded Flow function frontier reused zero Language-owned verified facts and does not establish full module proof or compiler succession.
+
+### Flow diagnostic pressure: unreachable loop join
+
+The smallest reproduction is the `unreachable_loop_join` fixture in `tools/test_vm_flow_proven_frontier.py`. Run it with:
+
+```sh
+MNCS_FLOW_PROVEN_FRONTIER_EVIDENCE_PATH=evidence/self-host-flow-proven-unit-multiple-loop-exits-stage0-shape-canonical-vm-20261017.json python tools/test_vm_flow_proven_frontier.py
+```
+
+The current workaround is to retain both diagnostic sets in the evidence and treat only the canonical Flow `MNB038` as its emitted result; this does not satisfy the Stage-0 parity contract. The mismatch affects diagnostic stability for unreachable generated loop state. The likely ownership is shared between Language's Stage-0 diagnostic path and Compiler's Flow diagnostic contract. Desired behavior is a deterministic, source-located diagnostic for the unreachable loop join without additional undefined-value/type errors, or an explicitly aligned contract. Status: observed and open; no upstream issue is recorded. Language-owned verified facts reused: zero.
 
 ## Current Flow-to-SSA frontier (2026-10-16)
 

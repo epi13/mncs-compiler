@@ -54,8 +54,46 @@ EXTRA_CASES = [
         None,
         1,
     ),
+    (
+        "multiple_conditional_exits_counted_iteration",
+        "mncs 0.18; module pressure.flow; fn f(first: bool, second: bool) -> (r: u64) { "
+        "iterate i up_to 4 carrying state: u64 = 0 { "
+        "if first { return state; } if second { return state + 1; } "
+        "next state = state + 2; } return state; }",
+        0,
+        (3, 3),
+        1,
+    ),
+    (
+        "multiple_conditional_exits_sequence_iteration",
+        "mncs 0.18; module pressure.flow; fn f(source: [byte; up_to 8], first: byte, second: byte) -> (r: u64) { "
+        "iterate i over source carrying total: u64 = 0 { "
+        "let item: u64 = source[i] as u64; "
+        "if item == (first as u64) { return total; } "
+        "if item == (second as u64) { return total + item; } "
+        "next total = total + item; } return total; }",
+        0,
+        (3, 3),
+        1,
+    ),
+    (
+        "unreachable_loop_join",
+        "mncs 0.18; module pressure.flow; fn f(flag: bool) -> (r: u64) { "
+        "iterate i up_to 4 carrying state: u64 = 0 { "
+        "if flag { return state; } else { return state + 1; } "
+        "next state = state + 2; } return state; }",
+        5,
+        None,
+        None,
+    ),
 ]
 CASES = [case for case in flow_test.CASES if case[0] in SELECTED] + EXTRA_CASES
+KNOWN_DIAGNOSTIC_DIVERGENCES = {
+    "unreachable_loop_join": {
+        "stage0_codes": ["MNB010", "MNB010", "MNB017", "MNB017", "MNB038"],
+        "canonical_vm_codes": ["MNB038"],
+    },
+}
 PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
 ))
@@ -231,6 +269,7 @@ def main() -> None:
         raise AssertionError("canonical VM admitted a different Flow artifact")
     vm_values = []
     vm_steps = []
+    diagnostic_divergences = []
     for case, batch_case, result in zip(cases, batch_cases, document.get("results", [])):
         if result.get("id") != batch_case["id"] or result.get("outcome") != {"kind": "completed"}:
             raise AssertionError(f"canonical VM failed {case['name']}: {result}")
@@ -240,10 +279,28 @@ def main() -> None:
         value = flow_test.decode(wire[0])
         native_diagnostics = flow_test.native_diagnostics(value["diagnostics"])
         if native_diagnostics != case["expected_diagnostics"]:
-            raise AssertionError(
-                f"{case['name']} Flow diagnostics differ from Stage-0: "
-                f"{native_diagnostics} != {case['expected_diagnostics']}"
-            )
+            expected_divergence = KNOWN_DIAGNOSTIC_DIVERGENCES.get(case["name"])
+            expected_codes = [item[0] for item in case["expected_diagnostics"]]
+            native_codes = [item[0] for item in native_diagnostics]
+            if (expected_divergence is None
+                    or expected_codes != expected_divergence["stage0_codes"]
+                    or native_codes != expected_divergence["canonical_vm_codes"]
+                    or any(item[1:] != (0, case["source_bytes"])
+                           for item in case["expected_diagnostics"] + native_diagnostics)):
+                raise AssertionError(
+                    f"{case['name']} Flow diagnostics differ from Stage-0: "
+                    f"{native_diagnostics} != {case['expected_diagnostics']}"
+                )
+            diagnostic_divergences.append({
+                "case": case["name"],
+                "stage0_diagnostics": [list(item) for item in case["expected_diagnostics"]],
+                "canonical_vm_diagnostics": [list(item) for item in native_diagnostics],
+                "reason": (
+                    "Stage-0 emits two MNB010 and two MNB017 diagnostics for the generated "
+                    "next-state block after an unreachable loop join; native Flow reports MNB038. "
+                    "This mismatch is retained as a compiler pressure, not counted as parity."
+                ),
+            })
         if value["graph_ok"] is not True or value["valid"] is not (case["expected_mnb_count"] == 0):
             raise AssertionError(f"{case['name']} returned inconsistent Flow validity: {value}")
         shape = flow_test.graph_shape(value)
@@ -255,7 +312,8 @@ def main() -> None:
             shape["branches"], shape["returns"]
         ) != (case["stage0_ssa_shape"]["branches"], case["stage0_ssa_shape"]["returns"]):
             raise AssertionError(f"{case['name']} CFG shape differs from Stage-0 SSA")
-        if shape["iteration_headers"] != case["expected_iterations"]:
+        if (case["expected_iterations"] is not None
+                and shape["iteration_headers"] != case["expected_iterations"]):
             raise AssertionError(f"{case['name']} iteration headers differ: {shape}")
         vm_values.append({
             "name": case["name"],
@@ -283,7 +341,10 @@ def main() -> None:
         "schema_version": "mncs.compiler.self-consumption-frontier/1",
         "kind": "flow-proven-unit-canonical-vm-frontier",
         "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "status": "passed",
+        "status": (
+            "completed_with_known_diagnostic_divergence"
+            if diagnostic_divergences else "passed"
+        ),
         "compiler": {
             "tested_source_revision": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], text=True
@@ -327,12 +388,20 @@ def main() -> None:
         },
         "verification": {
             "stage0_diagnostic_cases": len(cases),
+            "unreachable_loop_join_cases": sum(
+                case["name"] == "unreachable_loop_join" for case in cases
+            ),
+            "diagnostic_exact_match_cases": len(cases) - len(diagnostic_divergences),
+            "known_diagnostic_divergences": diagnostic_divergences,
             "canonical_vm_flow_cases": len(vm_values),
             "stage0_bounded_iteration_cases": sum(bool(case["stage0_iterations"]) for case in cases),
             "stage0_iteration_metadata_matches_vm": all(
-                len(case["stage0_iterations"]) == case["expected_iterations"]
-                and vm_values[index]["graph_shape"]["iteration_headers"] == case["expected_iterations"]
-                and vm_values[index]["graph_shape"]["iteration_backedges"] == case["expected_iterations"]
+                case["expected_iterations"] is None
+                or (
+                    len(case["stage0_iterations"]) == case["expected_iterations"]
+                    and vm_values[index]["graph_shape"]["iteration_headers"] == case["expected_iterations"]
+                    and vm_values[index]["graph_shape"]["iteration_backedges"] == case["expected_iterations"]
+                )
                 for index, case in enumerate(cases)
             ),
             "canonical_vm_semantic_digest": semantic_digest(vm_values),
@@ -341,7 +410,7 @@ def main() -> None:
                 {"name": item["name"], **item["graph_shape"]} for item in vm_values
             ],
             "proof_passed_to_lower_proven_unit_by_mncs_source": True,
-            "stage0_diagnostics_match_vm_flow_diagnostics": True,
+            "stage0_diagnostics_match_vm_flow_diagnostics": not diagnostic_divergences,
             "typed_proof_ops_match_lowered_expression_ops": True,
             "language_verified_facts_reused": 0,
             "stage1_claimed": False,
@@ -366,7 +435,9 @@ def main() -> None:
             "canonical VM graph preserves typed proof operations, matches selected Stage-0 "
             "diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and "
             "preserves counted, sequence, and nested iteration headers and backedges against "
-            "Stage-0 metadata, including conditional returns inside counted and sequence loops. "
+            "Stage-0 metadata, including multiple conditional exits in counted and sequence loops. "
+            "The unreachable loop-join negative case completes on the canonical VM but has one "
+            "recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. "
             "It does not establish full flow-module proof, Language-owned verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
