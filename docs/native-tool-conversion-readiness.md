@@ -224,13 +224,14 @@ Evidence is evidence/application-build-test-inventory-20261017.json.
 
 The actual seven-case mncs-test self-suite now runs through the same
 application-build/6 and canonical VM batch contract. It compiles
-tests/self_suite.mncs with the five Test library modules and the task module
-from the Compiler-pinned Language revision, returns all seven
-compiler-issued Test identities from one frontend invocation, then executes
-the same artifact in one VM batch. Six cases return passing typed TestResult
-values and skipped returns the expected typed skip; all seven match Stage-0.
-The build measured 0.582 s and 56.6 MiB peak RSS. The VM batch measured
-0.166 s and 26,460 KiB peak RSS. Cgroup memory was unavailable. Language
+tests/self_suite.mncs with five Test library modules and task from the
+Compiler-pinned Language revision e8f8a5f8659c71b33cd32c964d4982bec1a9668e.
+One frontend resolves seven modules and 41 functions, returns all seven
+compiler-issued Test identities, and emits the selected artifact. One VM
+batch runs that artifact. Six cases return passing typed TestResult values
+and skipped returns the expected typed skip; all seven match Stage-0. The
+build measured 0.577 s and 57.0 MiB peak RSS. The VM batch measured 0.167 s
+and 26,332 KiB peak RSS. Cgroup memory was unavailable. Language
 verification facts reused: zero. The production host runner and Forge
 execution remain separate integration work. Exact Test and Language source
 identities are recorded in
