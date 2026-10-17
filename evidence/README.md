@@ -31,6 +31,19 @@ worktree fixture also rejects an unregistered lookalike and a symlink escape.
 This validates the Environment and Control continuation path; it does not
 provision Language write scope or a Forge application-execution binding.
 
+## Native `mncs-test` core batch isolation (2026-10-17)
+
+The [batch isolation record](native-app-readiness-test-core-batch-isolation-20261017.json)
+compiles the production assertions, suite, generative, and snapshot modules
+into one selected-callable VM artifact. Seven valid MNCS calls match the
+Stage-0 oracle. In the same admitted VM session, a one-step budget exhaustion
+and an invalid typed argument are isolated to their calls; a later valid suite
+call returns the same typed result as before. Fresh-process exact artifact
+reuse, selected-callable isolation, invalid-source rejection, and unknown
+callable rejection also pass. This is a Compiler/VM workflow slice; it records
+zero Language verified-fact reuse and does not establish Forge, Store, or full
+production CLI conversion.
+
 The [direct parser-module frontier](self-host-parser-module-canonical-vm-frontier-20261017.json)
 selects `parser.header` and `parser.header_global` as artifact roots instead
 of reaching them through kernel wrappers. All 22 bounded and 88 paged cases
