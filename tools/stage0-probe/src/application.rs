@@ -1320,10 +1320,11 @@ fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -
 #[cfg(test)]
 mod tests {
     use super::{
-        annotate_artifact_emission_failure, application_cache_index_path_at,
-        application_cache_path_at, application_cache_root_from,
-        application_executable_closure_identity, application_semantic_identity, callable_interface,
-        envelope, ApplicationSources,
+        annotate_artifact_emission_failure, application_cache_index_key,
+        application_cache_index_path_at, application_cache_key, application_cache_path_at,
+        application_cache_root_from, application_executable_closure_identity,
+        application_semantic_identity, callable_interface, envelope, ApplicationSources,
+        CONTRACT_V2,
     };
     use mncs_compiler::ReferenceCompiler;
     use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
@@ -1365,6 +1366,59 @@ mod tests {
         assert_eq!(fallback, Path::new("/tmp/program-cache"));
         assert_eq!(application_cache_root_from(None, None), None);
         assert_eq!(application_cache_path_at(&root, "not-a-sha256-key"), None);
+    }
+
+    #[test]
+    fn application_cache_keys_bind_verification_and_optimization_policies() {
+        let root_id = "root.mncs";
+        let root_source = "mncs 0.18; module policy.root; fn entry() -> (r: u64) { return 1; }";
+        let modules = BTreeMap::from([("policy.root".to_owned(), root_source.to_owned())]);
+        let generic_seeds = Vec::<HostGenericSeedRequest>::new();
+        let callable_roots = Vec::<(String, String)>::new();
+        let keys_for = |request: &serde_json::Value| {
+            (
+                application_cache_key(
+                    request,
+                    CONTRACT_V2,
+                    root_id,
+                    "sha256:source-snapshot",
+                    &modules,
+                    &generic_seeds,
+                    &callable_roots,
+                    None,
+                    "sha256:compiler-probe",
+                ),
+                application_cache_index_key(
+                    request,
+                    CONTRACT_V2,
+                    root_id,
+                    root_source,
+                    &generic_seeds,
+                    &callable_roots,
+                    None,
+                    "sha256:compiler-probe",
+                ),
+            )
+        };
+
+        let baseline = json!({
+            "target": "mncs-vm-0.1",
+            "optimization_policy": "default",
+            "verification_policy": "semantic-check/1",
+        });
+        let baseline_keys = keys_for(&baseline);
+
+        let mut verification_policy = baseline.clone();
+        verification_policy["verification_policy"] = json!("semantic-check/2");
+        let verification_keys = keys_for(&verification_policy);
+        assert_ne!(baseline_keys.0, verification_keys.0);
+        assert_ne!(baseline_keys.1, verification_keys.1);
+
+        let mut optimization_policy = baseline;
+        optimization_policy["optimization_policy"] = json!("size/1");
+        let optimization_keys = keys_for(&optimization_policy);
+        assert_ne!(baseline_keys.0, optimization_keys.0);
+        assert_ne!(baseline_keys.1, optimization_keys.1);
     }
 
     #[test]

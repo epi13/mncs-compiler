@@ -1,0 +1,71 @@
+{
+  "schema_version": "mncs.compiler.application-cache-policy-identity/1",
+  "identity": "ev_compiler_application_cache_policy_identity_20261017",
+  "kind": "compiler-application-cache-policy-isolation",
+  "observed_at": "2026-10-17T08:44:19Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "tested_base_revision": "840a4e0fa610659b887d8373f921469183ab69c1",
+    "test_source_path": "tools/stage0-probe/src/application.rs",
+    "test_source_sha256": "e936b332a6569a63bce5897e333fa03cdb81cd2d0e7b0fc618c37a4039197a86",
+    "worktree_dirty_during_verification": true
+  },
+  "contract": {
+    "artifact_cache_key_schema": "mncs.compiler.application-build-cache-key/5",
+    "root_index_key_schema": "mncs.compiler.application-build-cache-index-key/4",
+    "tested_policy_dimensions": [
+      "verification_policy",
+      "optimization_policy"
+    ],
+    "required_behavior": "Changing either policy changes both cache keys so results admitted under another policy cannot be reused."
+  },
+  "verification": {
+    "status": "passed",
+    "executor": "mncs-control-terminal tracked asynchronous project job",
+    "control_job_id": "term-c2a0a8e0ea915d46f21b9a54",
+    "control_scope": "project",
+    "network": false,
+    "command": "cargo fmt --manifest-path tools/stage0-probe/Cargo.toml --check && cargo test --release --manifest-path tools/stage0-probe/Cargo.toml application::tests::application_cache_keys_bind_verification_and_optimization_policies -- --exact",
+    "returncode": 0,
+    "started_at": "2026-10-17T08:42:14.770209Z",
+    "completed_at": "2026-10-17T08:44:19.067106Z",
+    "wall_seconds": 124.296897,
+    "formatting_check": "passed",
+    "targeted_tests": {
+      "passed": 1,
+      "failed": 0,
+      "name": "application::tests::application_cache_keys_bind_verification_and_optimization_policies"
+    },
+    "assertions": {
+      "verification_policy_changes_artifact_key": true,
+      "verification_policy_changes_root_index_key": true,
+      "optimization_policy_changes_artifact_key": true,
+      "optimization_policy_changes_root_index_key": true
+    }
+  },
+  "resource_observations": {
+    "host_available_memory_after_bytes": 24340496384,
+    "host_memory_sampled_at": "2026-10-17T08:44:32Z",
+    "cgroup_memory_measurement": "unavailable",
+    "peak_rss_measured": false,
+    "test_release_target_cache_bytes_rounded": "4.5G",
+    "test_release_target_cache_path": "tools/stage0-probe/target"
+  },
+  "scope": {
+    "application_provider_execution_performed": false,
+    "application_artifact_execution_changed": false,
+    "language_verified_facts_reused": 0,
+    "compiler_identity_integration_regression_changed": false,
+    "policy_key_construction_isolation_tested": true
+  },
+  "limitations": [
+    "This regression tests cache-key construction directly; it does not execute a full application provider request under each policy.",
+    "The application cache implementation and its schema versions are unchanged; this commit adds a regression test only.",
+    "Peak RSS and cgroup memory measurements were unavailable.",
+    "Language-owned verified-fact reuse remains unimplemented."
+  ]
+}
