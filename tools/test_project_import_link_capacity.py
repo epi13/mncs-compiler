@@ -198,6 +198,105 @@ def run():
         }
         assert all(item["source_index"] == 1 and item["target_index"] == 0 for item in module_limit_imports)
 
+        # Equal-length module names with a shared prefix must retain distinct
+        # targets when imports alternate within the same consumer module.
+        alpha_name = "demo.alpha"
+        bravo_name = "demo.bravo"
+        assert len(alpha_name) == len(bravo_name)
+        interleaved_root = "mncs 0.18; module demo.interleaved;\n"
+        interleaved_targets = []
+        for index in range(6):
+            module_name = alpha_name if index % 2 == 0 else bravo_name
+            interleaved_targets.append(0 if index % 2 == 0 else 1)
+            interleaved_root += f"use {module_name} as m{index};\n"
+        interleaved_root += "fn main() -> (result: u64) { return 1; }\n"
+        alpha_source = "mncs 0.18; module demo.alpha; fn value() -> (result: u64) { return 1; }"
+        bravo_source = "mncs 0.18; module demo.bravo; fn value() -> (result: u64) { return 2; }"
+        interleaved_sources = [
+            ("00-alpha.mncs", Path("00-alpha.mncs"), alpha_source.encode()),
+            ("01-bravo.mncs", Path("01-bravo.mncs"), bravo_source.encode()),
+            ("zz-interleaved.mncs", Path("zz-interleaved.mncs"), interleaved_root.encode()),
+        ]
+        interleaved_response = probe.send(_target_request(
+            project.request_value(identities, interleaved_sources), 2,
+        ))
+        assert interleaved_response.get("status") == "returned", interleaved_response
+        interleaved_native = project.decode(interleaved_response["returned"][0])
+        interleaved_imports = project.flist(interleaved_native["imports"])
+        expected_interleaved_links = set()
+        cursor = 0
+        for index, target_index in enumerate(interleaved_targets):
+            module_name = alpha_name if index % 2 == 0 else bravo_name
+            use_start = interleaved_root.index(f"use {module_name} as m{index};", cursor)
+            cursor = use_start + 1
+            module_start = use_start + len("use ")
+            module_end = module_start + len(module_name)
+            alias_start = module_end + len(" as ")
+            alias_end = alias_start + len(f"m{index}")
+            expected_interleaved_links.add((module_start, module_end, alias_start, alias_end, target_index))
+        observed_interleaved_links = {
+            (item["module_start"], item["module_end"], item["alias_start"], item["alias_end"], item["target_index"])
+            for item in interleaved_imports
+        }
+        assert interleaved_native["valid"] and interleaved_native["value_ssa_valid"], interleaved_native
+        assert interleaved_native["import_count"] == len(interleaved_imports) == 6
+        assert interleaved_native["import_module_name_comparisons"] == 3, interleaved_native
+        assert interleaved_native["import_resolution_cache_hits"] == 4, interleaved_native
+        assert observed_interleaved_links == expected_interleaved_links, {
+            "observed": sorted(observed_interleaved_links),
+            "expected": sorted(expected_interleaved_links),
+        }
+        interleaved_oracle = probe.send({
+            "project_oracle": {
+                "root": interleaved_root,
+                "modules": {alpha_name: alpha_source, bravo_name: bravo_source},
+            }
+        })
+        assert interleaved_oracle.get("valid") is True, interleaved_oracle
+        assert interleaved_oracle.get("program") is not None and interleaved_oracle.get("ssa") is not None, interleaved_oracle
+
+        # Longer names fall back to the uncached resolver and still link each
+        # current declaration to its target with exact source locations.
+        long_module_name = "demo." + ("a" * 32) + "." + ("b" * 32)
+        assert len(long_module_name) > 64
+        long_root = "mncs 0.18; module demo.long_root;\n"
+        long_root += "".join(
+            f"use {long_module_name} as l{index};\n" for index in range(3)
+        )
+        long_root += "fn main() -> (result: u64) { return 1; }\n"
+        long_sources = [
+            ("00-long.mncs", Path("00-long.mncs"), f"mncs 0.18; module {long_module_name}; fn value() -> (result: u64) {{ return 1; }}".encode()),
+            ("zz-long-root.mncs", Path("zz-long-root.mncs"), long_root.encode()),
+        ]
+        long_response = probe.send(_target_request(
+            project.request_value(identities, long_sources), 1,
+        ))
+        assert long_response.get("status") == "returned", long_response
+        long_native = project.decode(long_response["returned"][0])
+        long_imports = project.flist(long_native["imports"])
+        expected_long_links = set()
+        cursor = 0
+        for index in range(3):
+            use_start = long_root.index(f"use {long_module_name} as l{index};", cursor)
+            cursor = use_start + 1
+            module_start = use_start + len("use ")
+            module_end = module_start + len(long_module_name)
+            alias_start = module_end + len(" as ")
+            alias_end = alias_start + len(f"l{index}")
+            expected_long_links.add((module_start, module_end, alias_start, alias_end, 0))
+        observed_long_links = {
+            (item["module_start"], item["module_end"], item["alias_start"], item["alias_end"], item["target_index"])
+            for item in long_imports
+        }
+        assert long_native["valid"] and long_native["value_ssa_valid"], long_native
+        assert long_native["import_count"] == len(long_imports) == 3
+        assert long_native["import_module_name_comparisons"] == 3, long_native
+        assert long_native["import_resolution_cache_hits"] == 0, long_native
+        assert observed_long_links == expected_long_links, {
+            "observed": sorted(observed_long_links),
+            "expected": sorted(expected_long_links),
+        }
+
         missing_root = "mncs 0.18; module demo.missing_root;\n"
         missing_root += "".join(
             f"use demo.absent as m{index};\n" for index in range(3)
@@ -384,7 +483,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/4",
+            "schema_version": "mncs.compiler.project-import-link-capacity/5",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -400,6 +499,13 @@ def run():
             "module_limit_candidate_name_comparisons": module_limit_native["import_module_name_comparisons"],
             "module_limit_resolution_cache_hits": module_limit_native["import_resolution_cache_hits"],
             "module_limit_import_locations_preserved": len(observed_links) == 1024,
+            "interleaved_distinct_target_header_comparisons": interleaved_native["import_module_name_comparisons"],
+            "interleaved_distinct_target_cache_hits": interleaved_native["import_resolution_cache_hits"],
+            "interleaved_target_indices_preserved": observed_interleaved_links == expected_interleaved_links,
+            "long_module_name_bytes": len(long_module_name),
+            "long_module_name_cache_hits": long_native["import_resolution_cache_hits"],
+            "long_module_name_fallback_header_comparisons": long_native["import_module_name_comparisons"],
+            "long_module_name_import_locations_preserved": observed_long_links == expected_long_links,
             "repeated_missing_import_diagnostics_preserved": len(missing_diagnostics) == 3,
             "repeated_missing_import_cache_hits": missing_native["import_resolution_cache_hits"],
             "per_module_import_limit": 1024,

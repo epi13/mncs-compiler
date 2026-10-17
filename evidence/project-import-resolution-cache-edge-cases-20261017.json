@@ -1,0 +1,104 @@
+{
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "change": {
+    "cache_scope": "successful import-target lookups within one consumer module and one parsed project snapshot",
+    "limitations": [
+      "No Language verified facts are cached.",
+      "The per-invocation memo is not persisted across source snapshots or processes.",
+      "Missing imports remain uncached so each declaration emits a fresh diagnostic."
+    ],
+    "semantic_verification_facts_reused": 0,
+    "summary": "Extend native Project import-resolution cache coverage for interleaved same-length names and the long-name uncached fallback."
+  },
+  "compiler_worktree": {
+    "branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+    "repository": "mncs-compiler",
+    "source_sha256": "bb3d40b68f7713fd058adb947a4086249587f7b44d11d275e5d9ee418924035d",
+    "test_harness_sha256": "7eb0fd93c3b1b43756007e82ba8f553a3412cf6a77405596586db466362c29db",
+    "tested_base_head": "dcc06fc6578088e49102ad74d70f05fdcb9bfae0"
+  },
+  "identity": "ev_compiler_project_import_resolution_cache_edge_cases_20261017",
+  "interpretation": {
+    "cache_key_distinguishes_same_length_names": true,
+    "canonical_vm_execution_performed": false,
+    "fresh_diagnostics_are_preserved": true,
+    "language_verified_facts_reused": false,
+    "long_names_take_uncached_fallback": true,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "whole_project_module_proven": false
+  },
+  "observed_at": "2026-10-17T10:06:22+00:00",
+  "resource_measurement": {
+    "probe_process_elapsed_ms": 37325.167317,
+    "reported_cpu_time_delta_ns": 10000000,
+    "reported_io_read_bytes_delta": 0,
+    "reported_io_write_bytes_delta": 8192,
+    "sample_count": 3,
+    "test_process_kernel_rss_high_water_bytes": 3409956864,
+    "test_process_peak_rss_bytes": 2945814528
+  },
+  "schema_version": "mncs.compiler.project-import-resolution-cache-edge-cases/1",
+  "session_id": "ses_164edc158d9b1637",
+  "verification": {
+    "backend_artifact_cache_decode_ms": 10439.109852,
+    "backend_artifact_reused": true,
+    "command": "MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_GENERIC_SEEDS=[] MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "connected_source_capacity": {
+      "import_links": 63,
+      "module_count": 64,
+      "root_import_identity_matches_stage0": true,
+      "source_count": 64,
+      "stage0_oracle_valid": true,
+      "stage0_verified_function_count": 64,
+      "target_flow_valid": true,
+      "target_only_module_count": 1,
+      "target_ssa_valid": true
+    },
+    "dense_stage0_oracle_valid": true,
+    "interleaved_same_length_targets": {
+      "candidate_header_comparisons": 3,
+      "different_target_indices_preserved": true,
+      "expected_import_count": 6,
+      "same_length_names": [
+        "demo.alpha",
+        "demo.bravo"
+      ],
+      "stage0_oracle_valid": true,
+      "successful_lookup_cache_hits": 4
+    },
+    "long_module_name_fallback": {
+      "all_import_spans_preserved": true,
+      "candidate_header_comparisons": 3,
+      "imports": 3,
+      "module_name_bytes": 70,
+      "successful_lookup_cache_hits": 0
+    },
+    "missing_imports": {
+      "diagnostics_preserved": true,
+      "negative_lookup_cache_hits": 0
+    },
+    "module_limit": {
+      "all_source_alias_target_spans_preserved": true,
+      "candidate_header_comparisons": 1,
+      "import_links": 1024,
+      "successful_lookup_cache_hits": 1023
+    },
+    "native_project_valid": true,
+    "probe_request_count": 17,
+    "project_limit": {
+      "candidate_header_comparisons": 4,
+      "import_links": 4096,
+      "overflow_rejected": true,
+      "successful_lookup_cache_hits": 4092
+    },
+    "schema_version": "mncs.compiler.project-import-link-capacity/5",
+    "stage0_backend_artifact_cache_key": "2f84fc7b25ea1b7f76bb2eebb719c0072c0cbe0700a62af1df75c8dbf7fe3730",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "status": "verified",
+    "suite_result_identity": "a202e3af05de60272074e454ee574dfc54048cfeae47f95e95103e8a5c273a71",
+    "suite_result_sha256": "f683a0ee47f2c582e397b3b2328fe79994414ab4b4cef4890f428d43d2447b0b",
+    "target_ssa_valid": true
+  }
+}
