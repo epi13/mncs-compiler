@@ -783,15 +783,17 @@ fn collect_nominal_type_identities(
 /// still verifies the complete source snapshot before this value is used;
 /// this identity only decides whether the canonical VM artifact can be
 /// reused without repeating closure emission and verification.
+/// The identity map comes from that same frontend result, avoiding a second
+/// full `Program::semantic_identities` traversal.
 fn application_executable_closure_identity(
     program: &mncs_model::Program,
+    semantic_identities: &mncs_model::SemanticIdentities,
     callable_roots: &[(String, String)],
     generic_seeds: &[HostGenericSeedRequest],
 ) -> Option<String> {
     if callable_roots.is_empty() {
         return None;
     }
-    let semantic_facts = program.semantic_identities();
     let mut functions_by_identity = BTreeMap::new();
     for function in &program.functions {
         let identity =
@@ -803,7 +805,6 @@ fn application_executable_closure_identity(
             return None;
         }
     }
-
     let mut callable_roots = callable_roots
         .iter()
         .map(|(module, function)| mncs_model::function_id(module, function).0)
@@ -827,7 +828,7 @@ fn application_executable_closure_identity(
         }
         let function = functions_by_identity.get(&identity)?;
         let semantic_id = mncs_model::SemanticId(identity.clone());
-        let fingerprint = semantic_facts.fingerprint(&semantic_id)?.to_owned();
+        let fingerprint = semantic_identities.fingerprint(&semantic_id)?.to_owned();
         function_facts.insert(identity.clone(), fingerprint);
 
         for value in function.inputs.iter().chain(&function.outputs) {
@@ -902,7 +903,7 @@ fn application_executable_closure_identity(
         if type_facts.contains_key(identity.as_str()) {
             continue;
         }
-        let fingerprint = semantic_facts.fingerprint(&identity)?.to_owned();
+        let fingerprint = semantic_identities.fingerprint(&identity)?.to_owned();
         if let Some(record) = program
             .record_types
             .iter()
@@ -1850,6 +1851,7 @@ mod tests {
             let program = frontend.program.as_ref().expect("valid root Program");
             let closure_identity = application_executable_closure_identity(
                 program,
+                frontend.identities.as_ref().expect("semantic identity map"),
                 &[("semantic.root".to_owned(), "entry".to_owned())],
                 &[],
             )
@@ -1895,6 +1897,7 @@ mod tests {
             );
             application_executable_closure_identity(
                 frontend.program.as_ref().expect("valid root Program"),
+                frontend.identities.as_ref().expect("semantic identity map"),
                 roots,
                 &[],
             )
@@ -1938,6 +1941,7 @@ mod tests {
             );
             application_executable_closure_identity(
                 frontend.program.as_ref().expect("valid generic Program"),
+                frontend.identities.as_ref().expect("semantic identity map"),
                 &[("semantic.generic".to_owned(), "identity".to_owned())],
                 &seeds,
             )
@@ -1976,6 +1980,7 @@ mod tests {
             );
             application_executable_closure_identity(
                 frontend.program.as_ref().expect("valid generic Program"),
+                frontend.identities.as_ref().expect("semantic identity map"),
                 &[("semantic.generic".to_owned(), "identity".to_owned())],
                 &seeds,
             )
@@ -1985,6 +1990,87 @@ mod tests {
         let baseline = compile("return value;");
         let changed_body = compile("return value +% 1;");
         assert_ne!(baseline, changed_body);
+    }
+
+    #[test]
+    fn executable_closure_identity_scales_across_many_generic_roots() {
+        const CALLER_COUNT: usize = 1024;
+        const SEED_COUNT: usize = 256;
+        let mut source = String::from("mncs 0.18; module semantic.closure_stress; ");
+        source.push_str("fn entry() -> (result: u64) { return caller_0(); }");
+        for index in 0..CALLER_COUNT {
+            if index + 1 == CALLER_COUNT {
+                source.push_str(&format!(
+                    "fn caller_{index}() -> (result: u64) {{ return 1; }}"
+                ));
+            } else {
+                source.push_str(&format!(
+                    "fn caller_{index}() -> (result: u64) {{ return caller_{}(); }}",
+                    index + 1
+                ));
+            }
+        }
+        for index in 0..SEED_COUNT {
+            source.push_str(&format!(
+                "fn generic_{index}<T>(value: T) -> (result: T) {{ return value; }}"
+            ));
+        }
+
+        let seeds = (0..SEED_COUNT)
+            .map(|index| {
+                HostGenericSeedRequest::from_request(
+                    "semantic.closure_stress",
+                    &format!("generic_{index}"),
+                    &[ExecutionTypeArgument::Type {
+                        ty: "u64".to_owned(),
+                    }],
+                )
+            })
+            .collect::<Vec<_>>();
+        let frontend = ReferenceCompiler::default().front_end_with_seeds(envelope(&source), &seeds);
+        assert!(
+            frontend.is_valid(),
+            "closure stress source: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend
+            .program
+            .as_ref()
+            .expect("valid closure stress Program");
+        assert_eq!(program.generic_specializations.len(), SEED_COUNT);
+        let roots = [("semantic.closure_stress".to_owned(), "entry".to_owned())];
+        let baseline_started = std::time::Instant::now();
+        let baseline_facts = program.semantic_identities();
+        let fresh_identity_elapsed = baseline_started.elapsed();
+        assert_eq!(
+            &baseline_facts,
+            frontend.identities.as_ref().expect("semantic identity map")
+        );
+        let baseline_closure_started = std::time::Instant::now();
+        let baseline_identity =
+            application_executable_closure_identity(program, &baseline_facts, &roots, &seeds)
+                .expect("verified executable closure identity with a fresh identity map");
+        let fresh_identity_plus_closure_elapsed =
+            fresh_identity_elapsed + baseline_closure_started.elapsed();
+
+        let started = std::time::Instant::now();
+        let identity = application_executable_closure_identity(
+            program,
+            frontend.identities.as_ref().expect("semantic identity map"),
+            &roots,
+            &seeds,
+        )
+        .expect("verified executable closure identity");
+        let reused_elapsed = started.elapsed().as_nanos();
+        assert_eq!(baseline_identity, identity);
+        eprintln!(
+            "application_closure_stress functions={} specializations={} fresh_identity_plus_closure_elapsed_ns={} frontend_identity_map_closure_elapsed_ns={}",
+            program.functions.len(),
+            program.generic_specializations.len(),
+            fresh_identity_plus_closure_elapsed.as_nanos(),
+            reused_elapsed,
+        );
+        assert!(identity.starts_with("sha256:"));
     }
 }
 
@@ -2432,7 +2518,17 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             )
         });
     let executable_closure_identity =
-        application_executable_closure_identity(program, &callable_roots, &generic_seeds);
+        frontend
+            .identities
+            .as_ref()
+            .and_then(|semantic_identities| {
+                application_executable_closure_identity(
+                    program,
+                    semantic_identities,
+                    &callable_roots,
+                    &generic_seeds,
+                )
+            });
 
     let graph_value = json!({
         "root_module": program.module,
