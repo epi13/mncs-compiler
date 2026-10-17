@@ -236,6 +236,65 @@ def main() -> None:
         if warm['artifact']['identity'] != cold['artifact']['identity']:
             raise AssertionError('warm reuse changed the artifact identity')
 
+        # A root-only source edit must find the candidate from the previous
+        # process, verify the current source, then reuse the same executable
+        # artifact when the selected closure and interfaces remain unchanged.
+        root_comment_source = app.APP_SOURCE + (
+            '\n// source-only root edit: preserve the verified application semantics\n'
+        )
+        root_comment_request = request_for(root_comment_source, modules)
+        root_comment_cache_dir = CACHE_DIR / 'root-comment-isolated'
+        root_seed_probe, root_seed_startup_metrics = ready_probe(root_comment_cache_dir)
+        try:
+            root_seed, root_seed_metrics = compile_one(root_seed_probe, original_request)
+            if (root_seed.get('cache', {}).get('status') != 'miss'
+                    or root_seed.get('cache', {}).get('publication') != 'stored'):
+                raise AssertionError('root snapshot fixture did not seed a fresh artifact')
+            root_seed_probe_tail = root_seed_probe.close()
+        except BaseException:
+            if root_seed_probe.proc.poll() is None:
+                root_seed_probe.proc.kill()
+                root_seed_probe.proc.wait(timeout=5)
+            raise
+
+        root_comment_probe, root_comment_startup_metrics = ready_probe(root_comment_cache_dir)
+        try:
+            root_comment_oracle, root_comment_exec, root_comment_oracle_metrics = oracle_one(
+                root_comment_probe, root_comment_source, modules)
+            root_comment, root_comment_metrics = compile_one(
+                root_comment_probe, root_comment_request)
+            root_comment_work = root_comment.get('cache', {}).get('verification_work', {})
+            if (root_comment.get('status') != 'verified'
+                    or root_comment.get('cache', {}).get('status') != 'hit'
+                    or root_comment.get('cache', {}).get('reuse_basis')
+                    != 'verified_application_executable_closure'
+                    or root_comment.get('artifact', {}).get('identity')
+                    != root_seed.get('artifact', {}).get('identity')
+                    or root_comment.get('source_snapshot', {}).get('identity')
+                    == root_seed.get('source_snapshot', {}).get('identity')):
+                raise AssertionError(
+                    'fresh-process root comment edit did not reuse the verified executable closure')
+            if (root_comment.get('cache', {}).get('recomputed_units') != [
+                    'source_semantic_check', 'application_executable_closure_verification']
+                    or root_comment_work.get('front_end_invocations') != 1
+                    or root_comment_work.get('backend_artifact') != 'reused'
+                    or root_comment_work.get('ssa_verification')
+                    != 'reused_verified_vm_artifact'
+                    or root_comment.get('dependency_graph', {}).get('semantic_identity')
+                    != cold.get('dependency_graph', {}).get('semantic_identity')):
+                raise AssertionError(
+                    'root comment reuse did not preserve fresh semantic verification work')
+            _root_comment_vm, root_comment_vm_metrics, root_comment_actual = run_and_compare(
+                root_comment['artifact']['value'], root_comment_exec)
+            if compact_oracle(root_comment_exec) != compact_result(root_comment_actual[0]):
+                raise AssertionError('fresh-process root comment reuse changed VM behavior')
+            root_comment_probe_tail = root_comment_probe.close()
+        except BaseException:
+            if root_comment_probe.proc.poll() is None:
+                root_comment_probe.proc.kill()
+                root_comment_probe.proc.wait(timeout=5)
+            raise
+
         # A byte-distinct compiler executable is a different producer even
         # when it contains the same code. Sharing a cache directory must not
         # let it reuse a result admitted under the old compiler identity.
@@ -796,6 +855,31 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
                 'wall_speedup': round(cache_speedup, 2),
                 'cpu_speedup': round(cold_metrics['cpu_seconds'] /
                                      max(warm_metrics['cpu_seconds'], 1e-9), 2),
+            },
+            'fresh_process_root_comment_edit': {
+                'root_source_sha256_before': app.sha(app.APP_SOURCE.encode()),
+                'root_source_sha256_after': app.sha(root_comment_source.encode()),
+                'source_snapshot_identity_before': root_seed.get('source_snapshot', {}).get('identity'),
+                'source_snapshot_identity_after': root_comment.get('source_snapshot', {}).get('identity'),
+                'semantic_identity_before': root_seed.get('dependency_graph', {}).get('semantic_identity'),
+                'semantic_identity_after': root_comment.get('dependency_graph', {}).get('semantic_identity'),
+                'cache': root_comment.get('cache'),
+                'verification_work': root_comment_work,
+                'artifact_identity_before': root_seed.get('artifact', {}).get('identity'),
+                'artifact_identity_after': root_comment.get('artifact', {}).get('identity'),
+                'oracle_valid': root_comment_oracle.get('valid'),
+                'oracle_result': compact_oracle(root_comment_exec),
+                'vm_result': compact_result(root_comment_actual[0]),
+                'oracle_matches_vm': compact_oracle(root_comment_exec)
+                == compact_result(root_comment_actual[0]),
+                'compile_metrics': root_comment_metrics,
+                'vm_metrics': root_comment_vm_metrics,
+                'oracle_metrics': root_comment_oracle_metrics,
+                'process_startup_metrics': root_comment_startup_metrics,
+                'seed_compile_metrics': root_seed_metrics,
+                'seed_process_startup_metrics': root_seed_startup_metrics,
+                'seed_producer_stderr_tail': root_seed_probe_tail[-1200:],
+                'producer_stderr_tail': root_comment_probe_tail[-1200:],
             },
             'different_compiler_executable_identity': different_compiler_identity,
             'unreferenced_module_addition_and_edit': {

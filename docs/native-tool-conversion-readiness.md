@@ -200,6 +200,16 @@ Compiler API progress, not completion of the production `mncs-test` runner
 integration. Evidence is
 `evidence/application-build-test-inventory-20261017.json`.
 
+The real five-module `mncs-test` readiness application also now verifies a
+comment-only root edit from a fresh process. The full frontend ran once across
+five resolved modules and 24 functions; the selected executable closure,
+callable interfaces, semantic identity, and artifact identity remained stable,
+so SSA/backend artifact work was reused. Canonical VM output matched the
+independent Stage-0 oracle. This run measured 0.279 s for the changed-root
+request. Language verification facts reused: zero. The full cold and warm
+workload measurements and verification telemetry are in
+`evidence/application-cache-index-root-edit-20261017.json`.
+
 ## Native Automation evaluation workload and alias identity fix (2026-10-17)
 
 The Compiler now includes both requested import identities and resolved

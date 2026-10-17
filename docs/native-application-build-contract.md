@@ -133,8 +133,10 @@ constructs its argument using the callable interface emitted by the compiler.
 `python3 tools/test_native_application_incremental.py`
 measures cold and warm builds, reuses the artifact across added and edited
 unreferenced modules, checks invalidation for a changed root and imported
-module, and verifies that rejected or interrupted requests do not publish
-successful results. Its cache observation is now
+module, and verifies that a fresh process can reuse the artifact after a
+comment-only root edit while still running the full frontend and matching the
+Stage-0 execution oracle. It also verifies that rejected or interrupted
+requests do not publish successful results. Its cache observation is now
 `mncs.compiler.application-build-cache-observation/4`; the nested
 `mncs.compiler.application-build-verification-work/1` reports whether the
 full Language frontend ran, counts resolved modules and verified program
