@@ -205,7 +205,7 @@ one application-build/6 request. Its single frontend result supplies both the
 verified artifact and the Test inventory; the inventory's two stable case
 identities drive one `mncs-vm batch` invocation over that same artifact. Both
 typed results (`1` and `2`) match Stage-0. This selected zero-argument slice
-measured 0.116 s for the build and 0.006 s for the VM batch, with a 20,336 KiB
+measured 0.114 s for the build and 0.006 s for the VM batch, with a 20,292 KiB
 VM peak RSS; cgroup memory was unavailable. It does not integrate the
 production `mncs-test` consumer or resolve generic test specializations.
 
