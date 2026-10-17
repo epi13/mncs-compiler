@@ -61,17 +61,17 @@
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
       "peak_open_file_descriptors": 4,
-      "peak_rss_bytes": 115048448,
+      "peak_rss_bytes": 114368512,
       "peak_threads": 1,
       "request_sequence": 1,
-      "wall_seconds": 1.007215
+      "wall_seconds": 1.005992
     },
     "request_schema": "mncs.compiler.application-build-request/1",
     "result_schema": "mncs.compiler.application-build/4",
     "status": "verified",
     "unresolved_obligations": []
   },
-  "created_at": "2026-10-17T21:17:05.523074+00:00",
+  "created_at": "2026-10-17T21:32:27.762138+00:00",
   "execution": {
     "admitted_capabilities": [],
     "application_exit": {
@@ -101,7 +101,7 @@
       ],
       "stdout": []
     },
-    "capability_admission": "none; the application rejects argv_count=2 before any host call",
+    "capability_admission": "none; invalid arguments return before host calls, while valid bounded arguments are denied at the first structured_read",
     "effects": [],
     "no_output_publication": true,
     "outcome": {
@@ -112,31 +112,183 @@
       "cpu_seconds": 0.63,
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
-      "peak_open_file_descriptors": 3,
-      "peak_rss_bytes": 64167936,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 64176128,
       "peak_threads": 1,
       "request_sequence": 1,
-      "wall_seconds": 0.668705
+      "wall_seconds": 0.666525
     },
-    "vm_peak_rss_bytes": 18853888,
+    "vm_peak_rss_bytes": 18997248,
     "vm_system_seconds": 0.0,
     "vm_user_seconds": 0.03,
-    "vm_wall_seconds": 0.042336,
+    "vm_wall_seconds": 0.042646,
     "wrong_alias_rejected": "application contract dispatch alias differs from admitted SSA",
     "wrong_identity_rejected": "artifact does not require authorized capability"
   },
   "language_verified_facts_reused": 0,
   "limitations": [
-    "This verifies only the native invalid-argument path. The positive provider batch still requires an exact structured_digest provider and the authorized Forge/Environment/Store route."
+    "Positive provider-batch execution still requires exact structured_read, structured_write, and structured_digest providers through the authorized Forge/Environment/Store route."
   ],
-  "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary and native invalid-argument behavior",
+  "missing_capability": {
+    "admitted_capabilities": [],
+    "first_effect": {
+      "outcome_tag": "capability_denied",
+      "request": {
+        "capability": "provider_artifact",
+        "inputs": [
+          {
+            "Sequence": {
+              "elements": [
+                {
+                  "Byte": 114
+                },
+                {
+                  "Byte": 101
+                },
+                {
+                  "Byte": 113
+                },
+                {
+                  "Byte": 117
+                },
+                {
+                  "Byte": 101
+                },
+                {
+                  "Byte": 115
+                },
+                {
+                  "Byte": 116
+                },
+                {
+                  "Byte": 46
+                },
+                {
+                  "Byte": 106
+                },
+                {
+                  "Byte": 115
+                },
+                {
+                  "Byte": 111
+                },
+                {
+                  "Byte": 110
+                }
+              ]
+            }
+          },
+          {
+            "Sequence": {
+              "elements": [
+                {
+                  "Byte": 109
+                },
+                {
+                  "Byte": 110
+                },
+                {
+                  "Byte": 99
+                },
+                {
+                  "Byte": 115
+                },
+                {
+                  "Byte": 46
+                },
+                {
+                  "Byte": 116
+                },
+                {
+                  "Byte": 101
+                },
+                {
+                  "Byte": 115
+                },
+                {
+                  "Byte": 116
+                },
+                {
+                  "Byte": 45
+                },
+                {
+                  "Byte": 112
+                },
+                {
+                  "Byte": 114
+                },
+                {
+                  "Byte": 111
+                },
+                {
+                  "Byte": 118
+                },
+                {
+                  "Byte": 105
+                },
+                {
+                  "Byte": 100
+                },
+                {
+                  "Byte": 101
+                },
+                {
+                  "Byte": 114
+                },
+                {
+                  "Byte": 45
+                },
+                {
+                  "Byte": 114
+                },
+                {
+                  "Byte": 101
+                },
+                {
+                  "Byte": 113
+                },
+                {
+                  "Byte": 117
+                },
+                {
+                  "Byte": 101
+                },
+                {
+                  "Byte": 115
+                },
+                {
+                  "Byte": 116
+                },
+                {
+                  "Byte": 47
+                },
+                {
+                  "Byte": 49
+                }
+              ]
+            }
+          }
+        ],
+        "operation": "structured_read"
+      },
+      "response": null,
+      "sequence": 1
+    },
+    "no_artifact_publication": true,
+    "outcome": {
+      "capability": "provider_artifact",
+      "kind": "capability_denied",
+      "operation": "structured_read"
+    }
+  },
+  "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary, invalid-argument behavior, and missing-capability denial",
   "producer": {
-    "compiler_revision": "b7eb0659efa7af6673121f8ced5f52848861fc6d",
+    "compiler_revision": "fd5cc5e393f84a8ebc17d3672816e0b36075ae9f",
     "language_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
     "stage0_probe_sha256": "e032a402ea56f30187f8a4eebd3db8f1850b535fca656a07dd24aec15d61bbe0",
     "stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
     "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
-    "verification_harness_sha256": "d5988c127c65b637b9d33ff70af2fd734838f597893e6b1960309bf7c4c99982",
+    "verification_harness_sha256": "4887cca7b7f487f03a50a13019a2d38e40f762b36433d57c393efd237b918dbf",
     "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
     "vm_runner_binary_sha256": "2002cbbe690a44dfa2c8752634f7a31390b6eabebb0b9816afd4b75b183fb547",
     "vm_runner_lockfile_sha256": "8fb0c17ce84946c50888c31b13dd50a82e5d821a818b0520c9c6f1a8ae6ca1ee",

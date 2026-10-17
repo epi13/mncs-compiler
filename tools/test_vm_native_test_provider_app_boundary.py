@@ -74,7 +74,7 @@ def compile_request(root: str, modules: dict[str, str]) -> dict:
     }
 
 
-def application_context(interface: dict, current_dir: Path) -> dict:
+def application_context(interface: dict, current_dir: Path, *, valid_argv: bool = False) -> dict:
     context_type = next(
         row for row in interface["types"]["records"]
         if row.get("name") == "ApplicationContext"
@@ -83,13 +83,15 @@ def application_context(interface: dict, current_dir: Path) -> dict:
         "application_identity": {"sequence": {"values": [
             {"byte": {"value": 0}} for _ in range(32)
         ]}},
-        # The production entry requires three artifact paths. Two are enough
-        # to prove its boundary rejects the context before any host effect.
+        # The production entry requires three artifact paths. The default
+        # proves its invalid-argument boundary; valid_argv reaches capability
+        # admission without needing any host files to exist.
         "argv": {"sequence": {"values": [
             byte_sequence("request.json"),
             byte_sequence("result.json"),
+            *([byte_sequence("check.json")] if valid_argv else []),
         ]}},
-        "argv_count": unsigned(2),
+        "argv_count": unsigned(3 if valid_argv else 2),
         "current_dir": byte_sequence(str(current_dir)),
         "environment": {"sequence": {"values": []}},
         "environment_count": unsigned(0),
@@ -297,6 +299,48 @@ def main() -> None:
                     "output_exists": absent_output.exists(),
                 }, indent=2)[:10000])
 
+            missing_cap_dir = call_dir / "missing-capability"
+            missing_cap_dir.mkdir()
+            missing_cap_context = application_context(
+                interface, missing_cap_dir, valid_argv=True,
+            )
+            missing_cap_request_path = missing_cap_dir / "execution.json"
+            missing_cap_request_path.write_text(
+                json.dumps(call_request(missing_cap_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            missing_cap_paths = [
+                missing_cap_dir / "request.json",
+                missing_cap_dir / "result.json",
+                missing_cap_dir / "check.json",
+            ]
+            missing_cap_process = subprocess.run([
+                str(binary), str(artifact_path), artifact_identity_for_files,
+                "provider_artifact", "single", str(missing_cap_request_path),
+                str(missing_cap_paths[0]), str(missing_cap_paths[1]), "none",
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            if missing_cap_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the missing-capability probe before returning a typed result: "
+                    f"rc={missing_cap_process.returncode}, stderr={missing_cap_process.stderr[-3000:]}"
+                )
+            missing_cap_document = json.loads(missing_cap_process.stdout)
+            missing_cap_record = missing_cap_document.get("record", {})
+            missing_cap_effects = missing_cap_record.get("effects", [])
+            if (
+                missing_cap_document.get("outcome", {}).get("kind") != "capability_denied"
+                or missing_cap_record.get("admitted_capabilities") != []
+                or len(missing_cap_effects) != 1
+                or missing_cap_effects[0].get("outcome_tag") != "capability_denied"
+                or missing_cap_effects[0].get("request", {}).get("operation") != "structured_read"
+                or any(path.exists() for path in missing_cap_paths)
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": missing_cap_document.get("outcome"),
+                    "record": missing_cap_record,
+                    "artifact_paths_exist": [path.exists() for path in missing_cap_paths],
+                }, indent=2)[:10000])
+
             oracle_cache = ROOT / ".build/native-app-readiness/provider-app-oracle-cache"
             oracle_cache.mkdir(parents=True, exist_ok=True)
             oracle_probe = support.Probe(oracle_cache)
@@ -326,7 +370,7 @@ def main() -> None:
             evidence = {
                 "schema_version": "mncs.compiler.native-application-proof/2",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary and native invalid-argument behavior",
+                "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary, invalid-argument behavior, and missing-capability denial",
                 "application": {
                     "root_source_id": "native/mncs/test/provider.mncs",
                     "entry": f"{ENTRY_MODULE}::{ENTRY_FUNCTION}",
@@ -378,12 +422,18 @@ def main() -> None:
                     "vm_user_seconds": float(user_match.group(1)) if user_match else None,
                     "vm_system_seconds": float(sys_match.group(1)) if sys_match else None,
                     "vm_peak_rss_bytes": int(rss_match.group(1)) * 1024 if rss_match else None,
-                    "capability_admission": "none; the application rejects argv_count=2 before any host call",
+                    "capability_admission": "none; invalid arguments return before host calls, while valid bounded arguments are denied at the first structured_read",
                     "wrong_identity_rejected": wrong_identity_diagnostic,
                     "wrong_alias_rejected": wrong_alias_diagnostic,
                 },
+                "missing_capability": {
+                    "outcome": missing_cap_document.get("outcome"),
+                    "admitted_capabilities": missing_cap_record.get("admitted_capabilities"),
+                    "first_effect": missing_cap_effects[0],
+                    "no_artifact_publication": not any(path.exists() for path in missing_cap_paths),
+                },
                 "limitations": [
-                    "This verifies only the native invalid-argument path. The positive provider batch still requires an exact structured_digest provider and the authorized Forge/Environment/Store route."
+                    "Positive provider-batch execution still requires exact structured_read, structured_write, and structured_digest providers through the authorized Forge/Environment/Store route."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,
@@ -399,6 +449,7 @@ def main() -> None:
                 "vm_peak_rss_bytes": evidence["execution"]["vm_peak_rss_bytes"],
                 "capability_aliases": evidence["application"]["capability_dispatch"]["host_operation_aliases"],
                 "stage0_exact_return_match": True,
+                "missing_capability_outcome": evidence["missing_capability"]["outcome"].get("kind"),
             }, indent=2))
     finally:
         artifact_path.unlink(missing_ok=True)
