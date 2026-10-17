@@ -1,0 +1,106 @@
+{
+  "schema_version": "mncs.compiler.project-import-negative-lookup-cache/1",
+  "identity": "ev_compiler_project_import_negative_lookup_cache_20261017",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-17T10:58:43+00:00",
+  "status": "verified",
+  "change": {
+    "summary": "Memoize exact short-name missing-module lookups within one consumer module and immutable parsed Project snapshot. Reuse is reported separately from successful import resolution.",
+    "scope": "per consumer module, current parsed source snapshot only, exact byte-span key, module names of at most 64 bytes",
+    "diagnostic_behavior": "A negative hit still constructs a new MissingImport diagnostic from the current use declaration span.",
+    "invalid_source_behavior": "Negative facts do not create import links or make the Project valid."
+  },
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "5fbb7e0da62cbd2808182ee47681cc9df7f7f933",
+    "project_source": "src/compiler/project.mncs",
+    "project_source_sha256": "d89471f0bd2a5815c883b250de974a29280e22879205bb1d0b17947b054668f7",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "5b7ba51dd88c9c26f1c29617b5297cce7c8e79e26ce937dd54623ad2a354471a",
+    "bootstrap_link_preserved": true
+  },
+  "verification": {
+    "schema_version": "mncs.compiler.project-import-link-capacity/8",
+    "result_sha256": "bb0e5cfeabfca07de37da401b3ac933c0cf2aa2da9eef548ddb8093e8d1d8645",
+    "direct_harness_exit_status": 0,
+    "environment_capability": "mncs-compiler:verification-executor/mncs-compiler.project-import-link-capacity",
+    "environment_binding_id": "cap_8d168014771c2662",
+    "environment_final_status": "ok",
+    "environment_stage0_ready_seconds": 34.4,
+    "backend": "cranelift",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "fresh_frontend_program_cache": true,
+    "stage0_backend_artifact_reused_on_final_verify": true,
+    "repeated_missing_name_case": {
+      "source_count": 18,
+      "decoy_module_count": 16,
+      "non_root_candidate_module_count": 17,
+      "imports": 4,
+      "distinct_missing_names": [
+        "demo.absent",
+        "demo.hidden"
+      ],
+      "distinct_names_have_equal_byte_length": true,
+      "successful_cache_hits": 0,
+      "negative_cache_hits": 2,
+      "candidate_header_comparisons": 34,
+      "fresh_diagnostics": 4,
+      "all_current_source_spans_preserved": true,
+      "project_remained_invalid": true,
+      "import_links_created": 0,
+      "uncached_comparison_count_for_this_fixture": 68,
+      "uncached_count_note": "Derived as four uncached lookups times 17 candidate modules; this counterfactual was not separately executed."
+    },
+    "other_project_regressions": {
+      "connected_sources": 64,
+      "connected_import_links": 63,
+      "target_ssa_valid": true,
+      "interleaved_successful_lookup_hits": 4,
+      "per_module_limit": 1024,
+      "project_limit": 4096,
+      "overflow_diagnostics_preserved": true,
+      "70_byte_module_name_remains_uncached": true,
+      "135_byte_module_name_remains_uncached": true,
+      "stage0_oracle_valid": true
+    }
+  },
+  "resource_measurement": {
+    "whole_test_wall_seconds": 198.15,
+    "process_user_seconds": 195.26,
+    "process_system_seconds": 2.69,
+    "process_cpu_percent": 99,
+    "process_max_rss_bytes": 4983025664,
+    "probe_sample_peak_rss_bytes": 4513603584,
+    "probe_sample_kernel_rss_high_water_bytes": 4983025664,
+    "cpu_time_delta_ns": null,
+    "cpu_delta_note": "The probe telemetry returned zero, recorded as unavailable. Process CPU came from /usr/bin/time -v.",
+    "cold_backend_compile_ms": 156635.102,
+    "backend_artifact_payload_bytes": 420492655,
+    "uncompressed_program_artifact_bytes": 1024803079,
+    "compressed_program_artifact_bytes": 44773049,
+    "available_memory_before_run_bytes_approx": 21474836480,
+    "cgroup_memory_measurement": null
+  },
+  "environment_route": {
+    "first_cold_attempt": {
+      "status": "timeout",
+      "elapsed_limit_seconds": 120,
+      "reason": "The fixed Environment verifier timeout expired while compiling the changed cold Project artifact."
+    },
+    "completion": "The targeted harness then passed directly with a 300-second request timeout, and the authorized Environment binding passed after the backend artifact cache was warm."
+  },
+  "interpretation": {
+    "exact_negative_lookups_reused": 2,
+    "candidate_header_scans_skipped": 2,
+    "language_verified_facts_reused": 0,
+    "canonical_vm_application_execution_performed": false,
+    "forge_execution_receipt_published": false,
+    "whole_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "Compiler Project import-resolution memoization only. This is not Language semantic verification fact reuse and does not establish native application execution."
+  }
+}
