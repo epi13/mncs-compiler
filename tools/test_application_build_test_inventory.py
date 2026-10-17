@@ -43,22 +43,32 @@ def sha(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def request(source: str, callable_roots: list[dict] | None = None) -> dict:
+def request(
+    source: str,
+    callable_roots: list[dict] | None = None,
+    *,
+    root_source_id: str = SOURCE_ID,
+    modules: dict[str, str] | None = None,
+) -> dict:
     return {
         "schema_version": "mncs.compiler.application-build-request/3",
         "target": "mncs-vm-0.1",
-        "root_source_id": SOURCE_ID,
+        "root_source_id": root_source_id,
         "root_source": source,
         "callable_roots": ([{"module": MODULE, "function": "selected_entry"}]
                             if callable_roots is None else callable_roots),
-        "modules": {},
+        "modules": {} if modules is None else modules,
         "generic_seeds": [],
         "capabilities": [],
         "verification_policy": "application-build-source-test-inventory/1",
     }
 
 
-def require_inventory(response: dict, expected_names: set[str] | None = None) -> dict:
+def require_inventory(
+    response: dict,
+    expected_names: set[str] | None = None,
+    expected_module: str = MODULE,
+) -> dict:
     if (response.get("schema_version") != "mncs.compiler.application-build/6"
             or response.get("status") != "verified"):
         raise AssertionError("application-build/6 did not verify: " + json.dumps({
@@ -71,7 +81,7 @@ def require_inventory(response: dict, expected_names: set[str] | None = None) ->
         raise TypeError("verified build omitted its compiler-issued source Test inventory")
     if (inventory.get("schema_version") != "mncs.test-inventory/1"
             or inventory.get("scope") != "source_module"
-            or inventory.get("module") != MODULE):
+            or inventory.get("module") != expected_module):
         raise AssertionError("application-build inventory has the wrong Language contract")
     tests = inventory.get("tests")
     expected_names = {"first_case", "second_case"} if expected_names is None else expected_names
@@ -93,9 +103,14 @@ def frontend_invocations(response: dict) -> int | None:
 
 def execute_inventory_batch(artifact: dict, inventory: dict) -> tuple[dict, float, int | None]:
     tests = inventory.get("tests", [])
+    inventory_module = inventory.get("module")
+    if not isinstance(inventory_module, str) or not inventory_module:
+        raise AssertionError("source Test inventory omitted its module identity")
     calls = []
     for row in tests:
-        if row.get("module") != MODULE or row.get("generic_params") or row.get("inputs"):
+        if (row.get("module") != inventory_module
+                or row.get("generic_params")
+                or row.get("inputs")):
             raise AssertionError(f"inventory test is outside the supported zero-argument slice: {row}")
         calls.append({
             "id": row["test_case_identity"],
@@ -129,6 +144,151 @@ def execute_inventory_batch(artifact: dict, inventory: dict) -> tuple[dict, floa
         match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", completed.stderr)
         peak_rss = int(match.group(1)) if match else None
         return json.loads(output_path.read_text(encoding="utf-8")), wall, peak_rss
+
+
+def run_real_mncs_test_suite() -> dict:
+    module = "tests.closure_suite"
+    root_path = app.TEST_ROOT / "tests/closure_suite.mncs"
+    module_paths = {
+        "mncs.test.assertions": app.TEST_ROOT / "native/mncs/test/assertions.mncs",
+        "mncs.test.suite": app.TEST_ROOT / "native/mncs/test/suite.mncs",
+    }
+    if not root_path.is_file() or any(not path.is_file() for path in module_paths.values()):
+        raise FileNotFoundError("the selected mncs-test source suite or its declared MNCS libraries are missing")
+    source = root_path.read_text(encoding="utf-8")
+    module_sources = {
+        name: path.read_text(encoding="utf-8") for name, path in module_paths.items()
+    }
+    callable_roots = [
+        {"module": module, "function": "independent_arithmetic"},
+        {"module": module, "function": "independent_boolean"},
+    ]
+
+    with tempfile.TemporaryDirectory(prefix="mncs-test-real-suite-") as raw:
+        directory = Path(raw)
+        probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            built, build_metrics = probe.send(
+                {"compile_application": request(
+                    source,
+                    callable_roots,
+                    root_source_id="mncs-test/tests/closure_suite.mncs",
+                    modules=module_sources,
+                )},
+                timeout=180.0,
+            )
+        finally:
+            probe.close()
+
+        inventory = require_inventory(
+            built,
+            {"independent_arithmetic", "independent_boolean"},
+            expected_module=module,
+        )
+        artifact = built.get("artifact", {}).get("value")
+        if (built.get("cache", {}).get("status") != "miss"
+                or frontend_invocations(built) != 1
+                or not isinstance(artifact, dict)):
+            raise AssertionError("real mncs-test suite did not produce one fresh verified artifact")
+        artifact_callables = {
+            (row.get("module"), row.get("name"))
+            for row in artifact.get("callables", [])
+        }
+        selected = {
+            (module, "independent_arithmetic"),
+            (module, "independent_boolean"),
+        }
+        if not selected <= artifact_callables:
+            raise AssertionError("real Test inventory roots are absent from the verified artifact")
+
+        oracle_calls = [{
+            "schema_version": "0.1",
+            "target": {"module": row["module"], "function": row["name"]},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 200_000,
+        } for row in inventory["tests"]]
+        oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
+        try:
+            oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
+                "root": source,
+                "modules": module_sources,
+                "calls": oracle_calls,
+            }}, timeout=180.0)
+        finally:
+            oracle_probe.close()
+        if not oracle.get("valid") or len(oracle.get("executions", [])) != len(inventory["tests"]):
+            raise AssertionError("Stage-0 did not execute every real mncs-test source inventory entry")
+
+        vm, vm_wall, vm_peak_rss = execute_inventory_batch(artifact, inventory)
+        rows = vm.get("results", [])
+        if (vm.get("artifact_id") != artifact.get("artifact_id")
+                or len(rows) != len(inventory["tests"])):
+            raise AssertionError("real Test inventory batch changed artifact identity or selection count")
+
+        results: dict[str, dict] = {}
+        for test, actual_row, expected_row in zip(
+            inventory["tests"], rows, oracle["executions"]
+        ):
+            if (actual_row.get("id") != test["test_case_identity"]
+                    or actual_row.get("outcome") != {"kind": "completed"}
+                    or actual_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
+                raise AssertionError(f"real mncs-test case did not complete under its inventory identity: {actual_row}")
+            actual_values = actual_row.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if len(actual_values) != 1 or len(expected_values) != 1:
+                raise AssertionError(f"real TestResult returned the wrong arity: {test['name']}")
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected:
+                raise AssertionError(f"canonical VM TestResult differs from Stage-0 for {test['name']}")
+            if (not isinstance(actual, dict)
+                    or not {"verdict", "verdict_code", "failure_kind", "assertions", "failures"} <= set(actual)
+                    or actual["verdict_code"] != 0
+                    or actual["failures"] != 0
+                    or actual["assertions"] != 1):
+                raise AssertionError(f"real Test case did not return one typed passing TestResult: {actual}")
+            results[test["name"]] = actual
+
+        git_revision = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
+        ).strip()
+        return {
+            "test_repository_revision": git_revision,
+            "root_source": {
+                "path": "tests/closure_suite.mncs",
+                "sha256": sha(source.encode("utf-8")),
+                "module": module,
+            },
+            "dependency_sources": {
+                name: {
+                    "path": str(path.relative_to(app.TEST_ROOT)),
+                    "sha256": sha(module_sources[name].encode("utf-8")),
+                }
+                for name, path in module_paths.items()
+            },
+            "request_schema": "mncs.compiler.application-build-request/3",
+            "response_schema": built.get("schema_version"),
+            "inventory_schema": inventory.get("schema_version"),
+            "frontend_invocations": frontend_invocations(built),
+            "test_case_identities": {
+                row["name"]: row["test_case_identity"] for row in inventory["tests"]
+            },
+            "selected_artifact_identity": built["artifact"]["identity"],
+            "canonical_vm_artifact_identity": vm["artifact_id"],
+            "canonical_vm_batch_count": len(rows),
+            "canonical_vm_results": results,
+            "stage0_equivalent": True,
+            "build_process_metrics": build_metrics,
+            "stage0_oracle_metrics": oracle_metrics,
+            "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
+            "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
+            "language_verified_facts_reused": 0,
+        }
 
 
 def main() -> None:
@@ -259,6 +419,8 @@ def main() -> None:
             inventory_results[test_row["name"]] = actual
         if inventory_results != {"first_case": 1, "second_case": 2}:
             raise AssertionError(f"selected inventory Test results were unexpected: {inventory_results}")
+
+        real_mncs_test_suite = run_real_mncs_test_suite()
 
         warm_probe = app.Probe(program_cache, executable=PROBE,
                                application_cache_dir=application_cache)
@@ -412,6 +574,7 @@ def main() -> None:
                 "wall_seconds": round(provider_elapsed, 6),
                 "process_tree_metrics": provider_metrics,
             },
+            "real_mncs_test_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
                 "inventory_test_count": len(runner_tests),
@@ -495,6 +658,17 @@ def main() -> None:
                     and inventory_vm.get("artifact_id") == runner_artifact.get("artifact_id")
                 ),
                 "selected_test_batch_matches_stage0": True,
+                "real_mncs_test_source_runs_from_compiler_inventory": (
+                    real_mncs_test_suite["frontend_invocations"] == 1
+                    and real_mncs_test_suite["canonical_vm_batch_count"] == 2
+                    and real_mncs_test_suite["stage0_equivalent"]
+                ),
+                "real_mncs_test_returns_typed_test_results": all(
+                    result.get("verdict_code") == 0
+                    and result.get("assertions") == 1
+                    and result.get("failures") == 0
+                    for result in real_mncs_test_suite["canonical_vm_results"].values()
+                ),
                 "language_verified_facts_reused": 0,
             },
             "measurements": {
@@ -523,7 +697,10 @@ def main() -> None:
                 "A selected zero-argument source Test subset can now be emitted with the production "
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
                 "with Stage-0 agreement. This does not implement Language verification-fact reuse "
-                "or change the production mncs-test consumer."
+                "or change the production mncs-test consumer. A second workload reads the real "
+                "mncs-test closure_suite sources, emits its two compiler-inventoried TestResult "
+                "callables in one verified artifact, and runs both through one canonical VM batch "
+                "with Stage-0 agreement; production runner and Forge integration remain separate."
             ),
         }
         evidence = ROOT / "evidence/application-build-test-inventory-20261017.json"

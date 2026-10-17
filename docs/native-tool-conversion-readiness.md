@@ -207,9 +207,22 @@ identities drive one `mncs-vm batch` invocation over that same artifact. Both
 typed results (`1` and `2`) match Stage-0. This selected zero-argument slice
 measured 0.114 s for the build and 0.006 s for the VM batch, with a 20,292 KiB
 VM peak RSS; cgroup memory was unavailable. It does not integrate the
-production `mncs-test` consumer or resolve generic test specializations.
+production mncs-test consumer or resolve generic test specializations.
 
-The real five-module `mncs-test` readiness application also now verifies a
+The follow-up also compiles the real mncs-test/tests/closure_suite.mncs
+source together with its mncs.test.assertions and mncs.test.suite
+dependencies. One application-build/6 frontend result returned both
+compiler-issued Test identities and the selected artifact for
+independent_arithmetic and independent_boolean; one canonical VM batch
+returned their typed passing TestResult records, matching Stage-0. This run
+measured 0.410 s for the build, 0.094 s for the batch, and 23,744 KiB VM peak
+RSS; cgroup memory was unavailable. The source came from mncs-test revision
+57802fba4dea04ad50004d3e1e6768b507b889bb. Language verification facts reused:
+zero. This exercises the Compiler/VM contract on real Test sources; production
+runner migration, Forge integration, and generic selection remain open.
+Evidence is evidence/application-build-test-inventory-20261017.json.
+
+The real five-module mncs-test readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across
 five resolved modules and 24 functions; the selected executable closure,
 callable interfaces, semantic identity, and artifact identity remained stable,
