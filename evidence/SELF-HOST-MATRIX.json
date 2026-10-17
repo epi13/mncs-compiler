@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "kind": "mncs-compiler-self-host-matrix",
-  "observed_at": "2026-10-08T15:06:29.523545+00:00",
+  "observed_at": "2026-10-17T23:11:06Z",
   "compiler_head": "44fe937dca0cecaf5cc562a4b3e18127e6399d1c",
   "compiler_head_role": "Historical compiler candidate/base identity captured at observed_at; it is not the current tested candidate or delivered main revision. Current tested-source and delivery identities are recorded in identity_ledger.",
   "compiler_branch": "campaign/qualified-finite-patterns-20261006",
@@ -311,7 +311,7 @@
         "ssa_verified_function_count": 20,
         "ssa_value_count": 693,
         "ssa_instruction_count": 198,
-        "current_source_sha256": "becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
+        "current_source_sha256": "f9f5d1558579716014f73a9626430feb22256da2ceadf591637c37b52b8feb12",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_ascii_global_four_byte_frontier": {
@@ -549,14 +549,30 @@
           ],
           "input_count": 23,
           "request_count_per_executor": 85,
-          "source_sha256": "becce61a7f36e9216b78b407e9da52b79de991bff7adfa584fe7b777e84cf0d0",
+          "source_sha256": "f9f5d1558579716014f73a9626430feb22256da2ceadf591637c37b52b8feb12",
+          "compiler_revision_tested": "3685d2086ac62e2bc106296832b709e744402e5b",
           "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
-          "canonical_vm_artifact_identity": "sha256:a69caf8461493220a6ad5570c74d06d9cf1dc503a1dee60bd04ef35b588c2c98",
-          "canonical_vm_wall_seconds": 11.379269,
-          "canonical_vm_peak_rss_kib": 102184,
-          "maximum_steps_per_call": 2032971,
+          "canonical_vm_artifact_identity": "sha256:731f582512a228223843844875e1b9a00ae507ba32fea269f260b605e3a910d8",
+          "canonical_vm_wall_seconds": 9.320808,
+          "canonical_vm_peak_rss_kib": 103244,
+          "maximum_steps_per_call": 2034155,
+          "performance_comparison": {
+            "reference_interpreter_total_steps_change_percent": -19.64,
+            "canonical_vm_total_steps_change_percent": -19.57,
+            "canonical_vm_wall_change_percent": -18.09,
+            "maximum_steps_per_call_change_percent": 0.06,
+            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+            "canonical_vm_candidate_wall_seconds_samples": [
+              9.22781,
+              9.320808
+            ],
+            "reference_and_cranelift_child_cpu_seconds_candidate_samples": [
+              33.435382,
+              33.03464
+            ]
+          },
           "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
-          "evidence_sha256": "69fa3a85b713a84edd60d0c7ab341666a1a03daf9a798615f44eabe6e0b86407",
+          "evidence_sha256": "a9b95469020444be0be743768d8ee808d9929157b6f817e759933147b74d4068",
           "environment_verification": {
             "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
             "binding_id": "cap_97d3c4286c601232",
@@ -566,10 +582,12 @@
             "returncode": 0,
             "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
             "session_id": "ses_164edc158d9b1637",
-            "checkpoint_before_verification": "chk_497c5d551196d612"
+            "checkpoint_before_verification": "chk_b043378d7ed49224"
           },
           "language_verified_facts_reused": 0,
-          "scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "The selected Source line_col_global implementation scans only the page and byte prefix through the clamped offset, while preserving the existing zero-stride fallback. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention over newline/page edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Aggregate interpreter and VM step counts fell about 19.6% on the same 85 requests; the maximum single call remains the end-of-source scan. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
         }
       }
     },
@@ -7771,39 +7789,58 @@
       "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
       "evidence_sha256": "69fa3a85b713a84edd60d0c7ab341666a1a03daf9a798615f44eabe6e0b86407",
       "evidence_scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
+    },
+    "native_application_readiness_20261013_source_line_col_prefix_scan_20261017": {
+      "observed_at": "2026-10-17T23:11:06Z",
+      "branch": "campaign/native-application-readiness-20261013",
+      "commit": "3685d2086ac62e2bc106296832b709e744402e5b",
+      "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "source_module_sha256": "f9f5d1558579716014f73a9626430feb22256da2ceadf591637c37b52b8feb12",
+      "test_harness": "tools/test_vm_source_line_col_frontier.py",
+      "test_harness_sha256": "dc5e312ded8174603b1a76ae2a1ed809fb3e46984edfd9e4a4bd7f68ce1cb26a",
+      "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
+      "evidence_sha256": "a9b95469020444be0be743768d8ee808d9929157b6f817e759933147b74d4068",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "target_module": "mncs.compiler.source.v1",
+      "target_function": "line_col_global",
+      "canonical_vm_artifact_identity": "sha256:731f582512a228223843844875e1b9a00ae507ba32fea269f260b605e3a910d8",
+      "canonical_vm_request_count": 85,
+      "performance_comparison": {
+        "reference_interpreter_total_steps_change_percent": -19.64,
+        "canonical_vm_total_steps_change_percent": -19.57,
+        "canonical_vm_wall_change_percent": -18.09,
+        "maximum_steps_per_call_change_percent": 0.06,
+        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+        "canonical_vm_candidate_wall_seconds_samples": [
+          9.22781,
+          9.320808
+        ],
+        "reference_and_cranelift_child_cpu_seconds_candidate_samples": [
+          33.435382,
+          33.03464
+        ]
+      },
+      "environment_verification": {
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+        "binding_id": "cap_97d3c4286c601232",
+        "contract_revision": "56127bce0b54b0a7",
+        "inventory_revision": 44,
+        "status": "ok",
+        "returncode": 0,
+        "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+        "session_id": "ses_164edc158d9b1637",
+        "checkpoint_before_verification": "chk_b043378d7ed49224"
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-17T23:02:05Z",
+  "evidence_updated_at": "2026-10-17T23:11:06Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
-    "kind": "project-import-resolution-cache",
-    "observed_at": "2026-10-17T09:58:52Z",
-    "status": "passed_with_bounded_frontier",
-    "compiler_branch": "campaign/native-application-readiness-20261013",
-    "compiler_head": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
-    "commit_containing_measured_source": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
-    "candidate_base_revision": "3b9d648a1b05c521801be8c8dfdd0ce0e236acbf",
-    "target_module": "mncs.compiler.project.v1",
-    "target_function": "compile_project_target",
-    "backend": "cranelift",
-    "evidence_artifact": "evidence/project-import-resolution-cache-20261017.json",
-    "evidence_sha256": "6bf29a3acf9f2977dc9fb87b5d847e4264415ecbb806721a6a06153554cae1f8",
-    "verification_result_sha256": "c410f88f678ce157b3cda38e0c2eab5c9eb70f3252db8a36d6eb44485745022a",
-    "probe_request_count": 14,
-    "module_limit_candidate_header_comparisons": 1,
-    "module_limit_successful_lookup_cache_hits": 1023,
-    "project_limit_candidate_header_comparisons": 4,
-    "project_limit_successful_lookup_cache_hits": 4092,
-    "repeated_missing_import_diagnostics_preserved": true,
-    "language_verified_facts_reused": 0,
-    "canonical_vm_execution_performed": false,
-    "whole_project_module_proven": false,
-    "stage1_claimed": false,
-    "stage2_claimed": false,
-    "evidence_scope": "The current MNCS Project target function executes its successful-name memoization under Cranelift, preserves every ImportLink source/alias/target span, and retains all three fresh diagnostics for repeated missing imports. This is bounded Project-function evidence; it does not establish Language verified-fact reuse, canonical VM execution, full project-module proof, or compiler succession."
-  },
-  "current_campaign_frontier_update": {
     "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
     "status": "passed_with_bounded_frontier",
     "observed_at": "2026-10-17T23:02:05Z",
@@ -7847,6 +7884,65 @@
     "stage2_claimed": false,
     "next_frontier": "Execute mncs.test.digest::digest_app through the authorized Forge/Environment/Store route; implement Language-owned verified-fact reuse when its authenticated Language writable scope is available.",
     "evidence_scope": "The selected Source line_col_global callable maps byte offsets across canonical page layouts. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
+  },
+  "current_campaign_frontier_update": {
+    "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
+    "status": "passed_with_bounded_frontier",
+    "observed_at": "2026-10-17T23:11:06Z",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head": "3685d2086ac62e2bc106296832b709e744402e5b",
+    "tested_source_revision": "3685d2086ac62e2bc106296832b709e744402e5b",
+    "commit_containing_measured_source": "3685d2086ac62e2bc106296832b709e744402e5b",
+    "test_harness": "tools/test_vm_source_line_col_frontier.py",
+    "test_harness_sha256": "dc5e312ded8174603b1a76ae2a1ed809fb3e46984edfd9e4a4bd7f68ce1cb26a",
+    "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
+    "evidence_sha256": "a9b95469020444be0be743768d8ee808d9929157b6f817e759933147b74d4068",
+    "target_module": "mncs.compiler.source.v1",
+    "target_function": "line_col_global",
+    "source_sha256": "f9f5d1558579716014f73a9626430feb22256da2ceadf591637c37b52b8feb12",
+    "page_strides": [
+      1,
+      7,
+      64,
+      1024
+    ],
+    "input_count": 23,
+    "request_count_per_executor": 85,
+    "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
+    "canonical_vm_artifact_identity": "sha256:731f582512a228223843844875e1b9a00ae507ba32fea269f260b605e3a910d8",
+    "canonical_vm_wall_seconds": 9.320808,
+    "canonical_vm_peak_rss_kib": 103244,
+    "maximum_steps_per_call": 2034155,
+    "performance_comparison": {
+      "reference_interpreter_total_steps_change_percent": -19.64,
+      "canonical_vm_total_steps_change_percent": -19.57,
+      "canonical_vm_wall_change_percent": -18.09,
+      "maximum_steps_per_call_change_percent": 0.06,
+      "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+      "canonical_vm_candidate_wall_seconds_samples": [
+        9.22781,
+        9.320808
+      ],
+      "reference_and_cranelift_child_cpu_seconds_candidate_samples": [
+        33.435382,
+        33.03464
+      ]
+    },
+    "environment_verification": {
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+      "binding_id": "cap_97d3c4286c601232",
+      "contract_revision": "56127bce0b54b0a7",
+      "inventory_revision": 44,
+      "status": "ok",
+      "returncode": 0,
+      "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+      "session_id": "ses_164edc158d9b1637",
+      "checkpoint_before_verification": "chk_b043378d7ed49224"
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "The selected Source line_col_global implementation scans only the page and byte prefix through the clamped offset, while preserving the existing zero-stride fallback. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention over newline/page edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Aggregate interpreter and VM step counts fell about 19.6% on the same 85 requests; the maximum single call remains the end-of-source scan. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
   },
   "campaign_frontier_history": [
     {

@@ -487,16 +487,22 @@ or compiler succession.
 
 The [line/column frontier](self-host-source-line-col-global-20261017.json)
 checks `source.line_col_global` for empty input, newline and page-edge offsets,
-clamped offsets, CRLF bytes, UTF-8 byte columns, and a 64 KiB source. The
+clamped offsets, CRLF bytes, UTF-8 byte columns, and a 64 KiB source. The MNCS
+implementation now scans only pages and bytes before the clamped offset. The
 reference interpreter, Cranelift, and one fresh canonical VM artifact agree
-with the byte-based SourceSpan convention over 85 requests per executor and
-strides 1, 7, 64, and 1024. The canonical VM batch took 11.38 seconds, peaked
-at 102,184 KiB RSS, and used at most 2,032,971 steps in one call; cgroup
-measurements were unavailable. Language verified facts remain unreused, and
-this selected callable does not prove Unicode-scalar columns or the full Source
-module. An initial larger test set hit Environment's effective 120-second
-limit despite a 900-second verifier descriptor; the 85-request committed
-frontier passed through the same Environment verifier.
+over 85 requests per executor and strides 1, 7, 64, and 1024. Aggregate
+reference-interpreter and canonical-VM steps fell 19.64% and 19.57% on the
+same requests; two candidate canonical-VM batch samples took 9.23 and 9.32
+seconds versus one 11.38-second baseline sample. Peak VM RSS was 103,056–
+103,244 KiB versus 102,184 KiB; the maximum individual call stayed effectively
+flat because the end-of-source cases scan the full input. CPU samples include
+different compiler cache state, so no CPU speedup is claimed. Cgroup measurements
+were unavailable.
+Language verified facts remain unreused, and this selected callable does not
+prove Unicode-scalar columns, the full Source module, or compiler succession.
+The verifier descriptor allows 900 seconds, while the effective invocation
+limit observed was 120 seconds; the bounded 85-request suite passed through the
+same authenticated Environment verifier.
 
 ## Current real-Flow resource profile (2026-10-09)
 
