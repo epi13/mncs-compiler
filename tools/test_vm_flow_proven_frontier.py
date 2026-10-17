@@ -24,7 +24,7 @@ from test_vm_segment import run_batch, vm_to_wire, test_vm_emit
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.flow.v1"
-SELECTED = {"fallthrough_join", "unreachable_join"}
+SELECTED = {"fallthrough_join", "unreachable_join", "bounded_iteration_counted"}
 CASES = [case for case in flow_test.CASES if case[0] in SELECTED]
 PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
@@ -143,6 +143,21 @@ def main() -> None:
             }
             if tuple(stage0_ssa_shape.values()) != expected_shape:
                 raise AssertionError(f"Stage-0 SSA fixture changed for {name}: {stage0_ssa_shape}")
+        stage0_iterations = []
+        if expected_iterations:
+            stage0 = probe.send({"ssa": source})
+            if stage0.get("ssa") is None:
+                raise AssertionError(f"Stage-0 did not provide bounded-iteration facts for {name}: {stage0}")
+            stage0_iterations = [
+                loop
+                for function in stage0["ssa"]["functions"]
+                for loop in function.get("bounded_iterations", [])
+            ]
+            if len(stage0_iterations) != expected_iterations:
+                raise AssertionError(
+                    f"Stage-0 bounded-iteration count for {name}: "
+                    f"{stage0_iterations} != {expected_iterations}"
+                )
         data = source.encode()
         cases.append({
             "name": name,
@@ -154,6 +169,7 @@ def main() -> None:
             "expected_shape": expected_shape,
             "stage0_ssa_shape": stage0_ssa_shape,
             "expected_iterations": expected_iterations,
+            "stage0_iterations": stage0_iterations,
             "arguments": flow_test.logical_args(data),
             "type_arguments": [
                 {"kind": "nat", "value": flow_test.PAGE_BOUND},
@@ -271,11 +287,25 @@ def main() -> None:
                 "stage0_diagnostics": [list(item) for item in case["expected_diagnostics"]],
                 "expected_mnb_count": case["expected_mnb_count"],
                 "stage0_ssa_shape": case["stage0_ssa_shape"],
+                "expected_iterations": case["expected_iterations"],
+                "stage0_bounded_iterations": [{
+                    "bound": loop.get("bound"),
+                    "domain": loop.get("domain"),
+                    "has_header": bool(loop.get("header")),
+                    "has_backedge": bool(loop.get("backedge")),
+                } for loop in case["stage0_iterations"]],
             } for case in cases],
         },
         "verification": {
             "stage0_diagnostic_cases": len(cases),
             "canonical_vm_flow_cases": len(vm_values),
+            "stage0_bounded_iteration_cases": sum(bool(case["stage0_iterations"]) for case in cases),
+            "stage0_iteration_metadata_matches_vm": all(
+                len(case["stage0_iterations"]) == case["expected_iterations"]
+                and vm_values[index]["graph_shape"]["iteration_headers"] == case["expected_iterations"]
+                and vm_values[index]["graph_shape"]["iteration_backedges"] == case["expected_iterations"]
+                for index, case in enumerate(cases)
+            ),
             "canonical_vm_semantic_digest": semantic_digest(vm_values),
             "canonical_vm_execution_steps": vm_steps,
             "canonical_vm_graph_shapes": [
@@ -305,7 +335,8 @@ def main() -> None:
             "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS "
             "implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh "
             "canonical VM graph preserves typed proof operations, matches selected Stage-0 "
-            "diagnostics and SSA shape, and reports the bounded unreachable-join diagnostic. "
+            "diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and "
+            "preserves a counted-iteration header and backedge against Stage-0 metadata. "
             "It does not establish full flow-module proof, Language-owned verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
