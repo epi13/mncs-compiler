@@ -155,7 +155,7 @@ verified facts. The Environment-bound verification passed without producing a
 separate Store artifact; this does not establish Forge execution of
 `digest_app` or full `mncs-test` conversion.
 
-## Effectful digest application in a retained canonical VM session (2026-10-16)
+## Effectful digest application, incremental cache, and Environment artifacts (2026-10-17)
 
 The [effectful digest application report](native-app-readiness-test-digest-app.json)
 executes the real `mncs.test.digest::digest_app` artifact with the exact
@@ -165,25 +165,30 @@ in one retained process. Missing or mismatched capability admission, a
 mismatched dispatch alias, incorrect artifact identity, invalid typed input,
 rejected output publication, and exhausted execution fuel all fail with the
 recorded typed outcomes; subsequent calls remain isolated and can complete.
-This proof is now the permanent Compiler obligation
-`mncs-compiler.native-test-digest-effectful-app-canonical-vm`. The local build
-took 0.568 seconds and 65,712,128-byte peak RSS; the seven-call
-retained session took 0.033 seconds and 11,857,920-byte peak RSS. This is a
-local bounded VM provider proof. It does not establish Forge invocation,
-Environment publication, canonical Store readback, or full Test conversion.
+This proof is the permanent Compiler obligation
+`mncs-compiler.native-test-digest-effectful-app-canonical-vm`. The latest
+Environment-bound run cold-built in 0.568 seconds (0.52 CPU seconds,
+65,712,128-byte peak RSS); its seven-call retained session took 0.029 seconds
+and peaked at 11,845,632 bytes. It still does not establish Forge invocation
+or full Test conversion.
 
 The same effectful application now has a permanent incremental artifact
 obligation, `mncs-compiler.native-test-digest-effectful-app-incremental-cache`.
-Its [updated report](native-app-readiness-test-digest-app.json) records a
-0.569-second cold build (0.53 CPU seconds, 65,454,080-byte peak RSS), a
-0.123-second fresh-process exact-snapshot hit with zero frontend invocations,
-and a 0.353-second comment-only imported-module edit with one frontend pass
-and the identical executable artifact bytes and callable interface. The edit
-refreshes the source snapshot and imported source hash. The retained canonical
-VM batch still completes seven isolated calls in 0.029 seconds at 11,702,272
-bytes peak RSS. These observations reused zero Language-owned verified facts;
-cgroup memory readings were unavailable. The result demonstrates Compiler
-artifact reuse for this workload, not incremental Language semantic checking.
+Its [report](native-app-readiness-test-digest-app.json) records a 0.568-second
+cold build (0.52 CPU seconds, 65,712,128-byte peak RSS), a 0.122-second
+fresh-process exact-snapshot hit with zero frontend invocations, and a
+0.350-second comment-only imported-module edit with one frontend pass and the
+identical executable artifact bytes and callable interface. The edit refreshes
+the source snapshot and imported source hash. These observations reused zero
+Language-owned verified facts; cgroup memory readings were unavailable.
+
+The registered Environment verifier stored the report and canonical VM
+artifact in a 1,136,512-byte Store bundle. A fresh Store read returned the
+28,118-byte report with matching SHA-256. The 1,108,394-byte VM artifact
+exceeds Environment's 1-MiB per-file read bound, so the first full-artifact
+read was rejected at that exact limit. The next Compiler change will split it
+into ordered bounded pieces; full artifact readback remains pending. This is
+verifier-output publication, not a Forge application-execution receipt.
 
 ## Current declaration parser frontier (2026-10-16)
 
