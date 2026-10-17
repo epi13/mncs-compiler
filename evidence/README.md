@@ -191,6 +191,12 @@ The [current `decl.prove_unit` frontier](self-host-decl-prove-unit-canonical-vm-
 
 This is a selected `decl.prove_unit<1024,1024>` function frontier. It establishes no Cranelift differential or full declaration-module proof, reused zero Language-owned verified facts, and does not claim Stage-1 or Stage-2 succession.
 
+## Current proof-to-Flow frontier (2026-10-16)
+
+The [current Flow proof handoff](self-host-flow-proven-unit-canonical-vm-20261016.json) executes two current-source fixtures through one fresh canonical VM artifact. `flow.lower_unit` calls `decl.prove_unit` and passes its result to `flow.lower_proven_unit`; the graph verifier confirms that typed proof operations match the lowered expression operations. The `fallthrough_join` fixture matches Stage-0 SSA shape (one branch, two returns). The `unreachable_join` fixture returns the matching `MNB038` diagnostic and span.
+
+The VM batch took 18.19 seconds and peaked at 461,748 KiB; the whole frontier took 69.23 seconds and 66.90 child CPU seconds. Host memory was sampled and cgroup readings were unavailable. This bounded Flow function frontier reused zero Language-owned verified facts and does not establish full module proof or compiler succession.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:

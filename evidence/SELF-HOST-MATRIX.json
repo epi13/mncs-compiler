@@ -757,7 +757,51 @@
         "page_bound": 1024,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+        "current_source_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "selected_proven_unit_canonical_vm_frontier": {
+          "status": "passed",
+          "target_module": "mncs.compiler.flow.v1",
+          "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+          "tested_source_revision": "5fe60231dda7fa7d8367bb20298b34bfe399d7af",
+          "selected_modules": [
+            "source",
+            "lexer",
+            "parser",
+            "segment",
+            "decl",
+            "flow"
+          ],
+          "module_source_sha256": {
+            "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
+            "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+            "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+            "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+            "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+            "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+          },
+          "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+          "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+          "cases": 2,
+          "valid_cases": 1,
+          "diagnostic_cases": 1,
+          "canonical_vm_cases": 2,
+          "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+          "stage0_diagnostics_match_vm_flow_diagnostics": true,
+          "typed_proof_ops_match_lowered_expression_ops": true,
+          "semantic_digest_sha256": "5b5687a542ac66387354f0e407a7de91cf7b2dc55b0ae75a93b2d03d61d4c6ed",
+          "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
+          "evidence_artifact": "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+          "evidence_sha256": "5955b8dba34046e100e86586218538b9e3450af9b8499eddb966fa6101248691",
+          "whole_frontier_seconds": 69.23485,
+          "canonical_vm_batch_seconds": 18.185148,
+          "child_cpu_seconds": 66.901382,
+          "child_peak_rss_kib": 2623848,
+          "canonical_vm_peak_rss_kib": 461748,
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, and reports the bounded unreachable-join diagnostic. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+        }
       }
     },
     "ssa": {
@@ -841,7 +885,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Carry the selected prove_unit result into flow.lower_proven_unit on a bounded current-source fixture, then resume Language-owned fact reuse once its scoped grant is provisioned.",
+  "next_frontier": "Carry the verified Flow graph into a bounded current-source value-SSA canonical VM frontier; implement Language-owned fact reuse when the owner-managed Language write grant is provisioned.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -2197,6 +2241,53 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "evidence_scope": "This is a selected current-source decl.prove_unit semantic frontier: Stage-0 MNE diagnostics match canonical VM FAIL obligations, UNKNOWN obligations stay explicit, and the proof implementation runs on a fresh canonical VM artifact. It does not claim Cranelift differential coverage, full decl-module verification, Language-owned verified-fact reuse, or compiler succession."
+    },
+    {
+      "kind": "flow-proven-unit-canonical-vm-frontier",
+      "status": "passed_with_bounded_frontier",
+      "observed_at": "2026-10-17T00:20:58.453322Z",
+      "compiler_head": "5fe60231dda7fa7d8367bb20298b34bfe399d7af",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "target_module": "mncs.compiler.flow.v1",
+      "target_functions": [
+        "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>"
+      ],
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "module_source_sha256": {
+        "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
+        "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "cases": 2,
+      "valid_cases": 1,
+      "diagnostic_cases": 1,
+      "canonical_vm_case_count": 2,
+      "semantic_digest_sha256": "5b5687a542ac66387354f0e407a7de91cf7b2dc55b0ae75a93b2d03d61d4c6ed",
+      "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
+      "evidence_artifact": "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+      "evidence_sha256": "5955b8dba34046e100e86586218538b9e3450af9b8499eddb966fa6101248691",
+      "whole_frontier_seconds": 69.23485,
+      "canonical_vm_batch_seconds": 18.185148,
+      "canonical_vm_peak_rss_kib": 461748,
+      "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+      "stage0_diagnostics_match_vm_flow_diagnostics": true,
+      "typed_proof_ops_match_lowered_expression_ops": true,
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "evidence_scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, and reports the bounded unreachable-join diagnostic. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
     }
   ],
   "whole_module_parse_snapshot": {
@@ -5957,7 +6048,7 @@
       "delivery_status": "implementation committed on campaign branch; merge and publish require Environment escalation"
     }
   },
-  "evidence_updated_at": "2026-10-17T00:12:21.752911Z",
+  "evidence_updated_at": "2026-10-17T00:20:58.453322Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -6612,59 +6703,57 @@
     }
   },
   "current_campaign_frontier_update": {
-    "kind": "decl-prove-unit-canonical-vm-frontier",
+    "kind": "flow-proven-unit-canonical-vm-frontier",
     "status": "passed_with_bounded_frontier",
-    "observed_at": "2026-10-17T00:12:21.752911Z",
-    "compiler_head": "71f21590378e21200a4bc8478b953299ee2e2254",
+    "observed_at": "2026-10-17T00:20:58.453322Z",
+    "compiler_head": "5fe60231dda7fa7d8367bb20298b34bfe399d7af",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "working_tree_dirty_at_test": true,
     "source_tree_changes_at_test": false,
-    "target_module": "mncs.compiler.decl.v1",
+    "target_module": "mncs.compiler.flow.v1",
     "target_functions": [
-      "prove_unit<1024,1024>"
+      "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>"
     ],
     "selected_modules": [
       "source",
       "lexer",
       "parser",
       "segment",
-      "decl"
+      "decl",
+      "flow"
     ],
     "module_source_sha256": {
       "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
       "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
       "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
       "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
-      "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0"
+      "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+      "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
     },
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
-    "cases": 6,
-    "valid_cases": 4,
-    "diagnostic_cases": 2,
-    "canonical_vm_case_count": 6,
-    "unknown_obligation_kinds": [
-      13,
-      14
-    ],
-    "semantic_digest_sha256": "ba9a750cd8982358186d035d2172821bb673018bc047588386de12d2233ae538",
-    "artifact_identity": "sha256:f6b192a9ca1aa292818618d6ba7015d00dcf3d6fb530127623383c08f0b709a7",
-    "evidence_artifact": "evidence/self-host-decl-prove-unit-canonical-vm-20261016.json",
-    "evidence_sha256": "28fa2297df8a1c381b0bcf46580aa258fedf0010acbc0ac31d6a83ca6a6e6b12",
-    "performance_evidence": "evidence/self-host-decl-prove-unit-canonical-vm-20261016.json",
-    "performance_evidence_sha256": "28fa2297df8a1c381b0bcf46580aa258fedf0010acbc0ac31d6a83ca6a6e6b12",
+    "cases": 2,
+    "valid_cases": 1,
+    "diagnostic_cases": 1,
+    "canonical_vm_case_count": 2,
+    "semantic_digest_sha256": "5b5687a542ac66387354f0e407a7de91cf7b2dc55b0ae75a93b2d03d61d4c6ed",
+    "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
+    "evidence_artifact": "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+    "evidence_sha256": "5955b8dba34046e100e86586218538b9e3450af9b8499eddb966fa6101248691",
+    "performance_evidence": "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+    "performance_evidence_sha256": "5955b8dba34046e100e86586218538b9e3450af9b8499eddb966fa6101248691",
     "timing_seconds": {
-      "canonical_vm_batch": 24.570428,
-      "whole_frontier": 72.173132
+      "canonical_vm_batch": 18.185148,
+      "whole_frontier": 69.23485
     },
-    "whole_frontier_seconds": 72.173132,
-    "canonical_vm_batch_seconds": 24.570428,
+    "whole_frontier_seconds": 69.23485,
+    "canonical_vm_batch_seconds": 18.185148,
     "resource_measurements": {
-      "child_cpu_seconds": 69.527726,
-      "child_peak_rss_kib": 2509864,
+      "child_cpu_seconds": 66.901382,
+      "child_peak_rss_kib": 2623848,
       "host_memory_before": {
         "total_bytes": 33411579904,
-        "available_bytes": 24712212480
+        "available_bytes": 24848711680
       },
       "cgroup_memory_before": {
         "memory.current": null,
@@ -6678,13 +6767,15 @@
       },
       "cgroup_peak_attributable_to_test": false
     },
-    "canonical_vm_peak_rss_kib": 444184,
-    "stage0_diagnostics_match_fail_obligations": true,
+    "canonical_vm_peak_rss_kib": 461748,
+    "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+    "stage0_diagnostics_match_vm_flow_diagnostics": true,
+    "typed_proof_ops_match_lowered_expression_ops": true,
     "language_verified_facts_reused": 0,
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "evidence_scope": "This is a selected current-source decl.prove_unit semantic frontier: Stage-0 MNE diagnostics match canonical VM FAIL obligations, UNKNOWN obligations stay explicit, and the proof implementation runs on a fresh canonical VM artifact. It does not claim Cranelift differential coverage, full decl-module verification, Language-owned verified-fact reuse, or compiler succession.",
-    "next_frontier": "Carry the selected prove_unit result into flow.lower_proven_unit on a bounded current-source fixture, then resume Language-owned fact reuse once its scoped grant is provisioned."
+    "evidence_scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, and reports the bounded unreachable-join diagnostic. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
+    "next_frontier": "Carry the verified Flow graph into a bounded current-source value-SSA canonical VM frontier; implement Language-owned fact reuse when the owner-managed Language write grant is provisioned."
   },
   "campaign_frontier_history": [
     {
@@ -7473,6 +7564,81 @@
       "stage2_claimed": false,
       "evidence_scope": "This is a selected current-source decl.prove_unit semantic frontier: Stage-0 MNE diagnostics match canonical VM FAIL obligations, UNKNOWN obligations stay explicit, and the proof implementation runs on a fresh canonical VM artifact. It does not claim Cranelift differential coverage, full decl-module verification, Language-owned verified-fact reuse, or compiler succession.",
       "next_frontier": "Carry the selected prove_unit result into flow.lower_proven_unit on a bounded current-source fixture, then resume Language-owned fact reuse once its scoped grant is provisioned."
+    },
+    {
+      "kind": "flow-proven-unit-canonical-vm-frontier",
+      "status": "passed_with_bounded_frontier",
+      "observed_at": "2026-10-17T00:20:58.453322Z",
+      "compiler_head": "5fe60231dda7fa7d8367bb20298b34bfe399d7af",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "working_tree_dirty_at_test": true,
+      "source_tree_changes_at_test": false,
+      "target_module": "mncs.compiler.flow.v1",
+      "target_functions": [
+        "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>"
+      ],
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow"
+      ],
+      "module_source_sha256": {
+        "source": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
+        "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+        "parser": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+        "flow": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "cases": 2,
+      "valid_cases": 1,
+      "diagnostic_cases": 1,
+      "canonical_vm_case_count": 2,
+      "semantic_digest_sha256": "5b5687a542ac66387354f0e407a7de91cf7b2dc55b0ae75a93b2d03d61d4c6ed",
+      "artifact_identity": "sha256:b7617919d388bf3f54d200b605abed266ed7a6daf6b918225055004ead073e94",
+      "evidence_artifact": "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+      "evidence_sha256": "5955b8dba34046e100e86586218538b9e3450af9b8499eddb966fa6101248691",
+      "performance_evidence": "evidence/self-host-flow-proven-unit-canonical-vm-20261016.json",
+      "performance_evidence_sha256": "5955b8dba34046e100e86586218538b9e3450af9b8499eddb966fa6101248691",
+      "timing_seconds": {
+        "canonical_vm_batch": 18.185148,
+        "whole_frontier": 69.23485
+      },
+      "whole_frontier_seconds": 69.23485,
+      "canonical_vm_batch_seconds": 18.185148,
+      "resource_measurements": {
+        "child_cpu_seconds": 66.901382,
+        "child_peak_rss_kib": 2623848,
+        "host_memory_before": {
+          "total_bytes": 33411579904,
+          "available_bytes": 24848711680
+        },
+        "cgroup_memory_before": {
+          "memory.current": null,
+          "memory.max": null,
+          "memory.peak": null
+        },
+        "cgroup_memory_after": {
+          "memory.current": null,
+          "memory.max": null,
+          "memory.peak": null
+        },
+        "cgroup_peak_attributable_to_test": false
+      },
+      "canonical_vm_peak_rss_kib": 461748,
+      "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+      "stage0_diagnostics_match_vm_flow_diagnostics": true,
+      "typed_proof_ops_match_lowered_expression_ops": true,
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "evidence_scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, and reports the bounded unreachable-join diagnostic. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
+      "next_frontier": "Carry the verified Flow graph into a bounded current-source value-SSA canonical VM frontier; implement Language-owned fact reuse when the owner-managed Language write grant is provisioned."
     }
   ]
 }
