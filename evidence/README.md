@@ -174,21 +174,22 @@ or full Test conversion.
 
 The same effectful application now has a permanent incremental artifact
 obligation, `mncs-compiler.native-test-digest-effectful-app-incremental-cache`.
-Its [report](native-app-readiness-test-digest-app.json) records a 0.568-second
-cold build (0.52 CPU seconds, 65,712,128-byte peak RSS), a 0.122-second
+Its [report](native-app-readiness-test-digest-app.json) records a 0.575-second
+cold build (0.52 CPU seconds, 65,699,840-byte peak RSS), a 0.123-second
 fresh-process exact-snapshot hit with zero frontend invocations, and a
-0.350-second comment-only imported-module edit with one frontend pass and the
+0.351-second comment-only imported-module edit with one frontend pass and the
 identical executable artifact bytes and callable interface. The edit refreshes
 the source snapshot and imported source hash. These observations reused zero
 Language-owned verified facts; cgroup memory readings were unavailable.
 
 The registered Environment verifier stored the report and canonical VM
-artifact in a 1,136,512-byte Store bundle. A fresh Store read returned the
-28,118-byte report with matching SHA-256. The 1,108,394-byte VM artifact
-exceeds Environment's 1-MiB per-file read bound, so the first full-artifact
-read was rejected at that exact limit. The next Compiler change will split it
-into ordered bounded pieces; full artifact readback remains pending. This is
-verifier-output publication, not a Forge application-execution receipt.
+artifact in a 1,136,512-byte Store bundle. Fresh Store reads returned the
+28,118-byte report and both ordered VM artifact chunks with matching SHA-256
+values. The two chunks total 1,108,394 bytes and reconstruct the verifier's
+artifact file (`efb6411d21c968f625e7b299b1994ec1be753a48ae23209b7a0afc33ecd1f047`)
+within Environment's 1-MiB per-file read bound. Exact readback metadata is in
+the [Environment artifact readback evidence](native-app-readiness-environment-artifact-readback-20261017.json).
+This is verifier-output publication, not a Forge application-execution receipt.
 
 ## Current declaration parser frontier (2026-10-16)
 
