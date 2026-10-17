@@ -51,6 +51,32 @@ def _repeated_import_source(import_count: int) -> tuple[list, str]:
     return sources, root
 
 
+def _project_boundary_sources(with_overflow: bool) -> list:
+    dependency = "mncs 0.18; module demo.dep; record R { value: u64 }\n"
+    sources = [("00-dep.mncs", Path("00-dep.mncs"), dependency.encode())]
+    imports = "".join(
+        f"use demo.dep as d{index};\n" for index in range(1024)
+    )
+    for index in range(4):
+        module_name = f"demo.batch{index}"
+        source_id = f"0{index + 1}-batch{index}.mncs"
+        source = (
+            f"mncs 0.18; module {module_name};\n"
+            f"{imports}"
+            "fn main() -> (result: u64) { return 1; }\n"
+        )
+        sources.append((source_id, Path(source_id), source.encode()))
+    if with_overflow:
+        source_id = "05-overflow.mncs"
+        source = (
+            "mncs 0.18; module demo.overflow;\n"
+            "use demo.dep as extra;\n"
+            "fn main() -> (result: u64) { return 1; }\n"
+        )
+        sources.append((source_id, Path(source_id), source.encode()))
+    return sources
+
+
 def run():
     _seed_target_specialization()
     probe = project.Probe()
@@ -141,9 +167,57 @@ def run():
         assert module_diagnostic.get("start") == module_expected_start, over_module_diagnostics
         assert module_diagnostic.get("end") == module_expected_start + len("demo.dep"), over_module_diagnostics
 
-        # The global guard is directly checked on both sides of its threshold;
-        # integration traversal continues to use the pre-existing four-chunk
-        # 4096-link retention bound.
+        # Four independently resolved module lists fill the project-wide
+        # allowance exactly. One additional use is rejected with a single
+        # diagnostic while retaining all 4096 admitted links.
+        at_project_limit_sources = _project_boundary_sources(False)
+        at_project_limit_request = _target_request(
+            project.request_value(identities, at_project_limit_sources),
+            len(at_project_limit_sources) - 1,
+        )
+        at_project_limit_response = probe.send(at_project_limit_request)
+        assert at_project_limit_response.get("status") == "returned", at_project_limit_response
+        at_project_limit_native = project.decode(
+            at_project_limit_response["returned"][0]
+        )
+        at_project_limit_imports = project.flist(at_project_limit_native["imports"])
+        assert at_project_limit_native["valid"], at_project_limit_native
+        assert at_project_limit_native["value_ssa_valid"], at_project_limit_native
+        assert at_project_limit_native["import_count"] == 4096
+        assert len(at_project_limit_imports) == 4096
+
+        over_project_sources = _project_boundary_sources(True)
+        over_project_request = _target_request(
+            project.request_value(identities, over_project_sources),
+            len(over_project_sources) - 1,
+        )
+        over_project_response = probe.send(over_project_request)
+        assert over_project_response.get("status") == "returned", over_project_response
+        over_project_native = project.decode(
+            over_project_response["returned"][0]
+        )
+        over_project_imports = project.flist(over_project_native["imports"])
+        over_project_diagnostics = project.flist(
+            over_project_native["diagnostics"]
+        )
+        assert not over_project_native["valid"], over_project_native
+        assert not over_project_native["value_ssa_valid"], over_project_native
+        assert over_project_native["import_count"] == 4096
+        assert len(over_project_imports) == 4096
+        assert len(over_project_diagnostics) == 1, over_project_diagnostics
+        project_diagnostic = over_project_diagnostics[0].get("$p", {})
+        assert project_diagnostic.get("limit") == 4096, over_project_diagnostics
+        project_source_index = project_diagnostic.get("source_index")
+        assert isinstance(project_source_index, int), over_project_diagnostics
+        project_source = over_project_sources[project_source_index][2].decode()
+        project_start = project_diagnostic.get("start")
+        project_end = project_diagnostic.get("end")
+        assert project_source[project_start:project_end] == "demo.dep", (
+            project_diagnostic,
+            over_project_sources[project_source_index][0],
+        )
+
+        # Keep the guard predicate covered at the threshold as a focused check.
         limit_results = {}
         for count, expected_reached in ((4095, False), (4096, True)):
             result = probe.send({
@@ -162,7 +236,7 @@ def run():
             limit_results[count] = reached
 
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/2",
+            "schema_version": "mncs.compiler.project-import-link-capacity/3",
             "status": "verified",
             "backend": execution["backend"],
             "source_count": len(sources),
@@ -178,6 +252,14 @@ def run():
             "over_module_limit_import_declaration_count": 1025,
             "over_module_limit_imports_rejected": not over_module_native["valid"],
             "over_module_limit_diagnostic": over_module_diagnostics[0],
+            "project_boundary_source_count": len(at_project_limit_sources),
+            "project_limit_links_accepted": len(at_project_limit_imports),
+            "project_limit_project_valid": at_project_limit_native["valid"],
+            "project_overflow_source_count": len(over_project_sources),
+            "project_overflow_links_retained": len(over_project_imports),
+            "project_overflow_rejected": not over_project_native["valid"],
+            "project_overflow_diagnostic_count": len(over_project_diagnostics),
+            "project_overflow_diagnostic": over_project_diagnostics[0],
             "project_import_link_limit": 4096,
             "global_limit_guard_below_boundary": not limit_results[4095],
             "global_limit_guard_at_boundary": limit_results[4096],
