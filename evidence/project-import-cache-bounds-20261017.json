@@ -1,0 +1,81 @@
+{
+  "schema_version": "mncs.compiler.project-import-cache-bounds/1",
+  "identity": "ev_compiler_project_import_cache_bounds_20261017",
+  "kind": "self-hosted-project-import-resolution-cache-bound",
+  "observed_at": "2026-10-17T11:23:04Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "environment_claim": {
+    "identity": "clm_b1b245991e6a7569",
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "scope": "worktree",
+    "status": "held"
+  },
+  "implementation": {
+    "revision": "8b0a5711b08e2169114944312fe9fcf9e2c021d1",
+    "branch": "campaign/native-application-readiness-20261013",
+    "source": "src/compiler/project.mncs",
+    "source_sha256": "2b1494666c170bb9eefdc2e50044ec701fc185ad0c840aceb0a73efcd3e3c659",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "ce1a32acb915a5495d1e5266f7c659cf5d80a0f4fea341948c1a541a30323a34",
+    "probe_sha256": "14ec929f81b749cac496cfab197dd2e98b926f5e682bdd3a763e1e8b31b94a07"
+  },
+  "verification": {
+    "route": "direct regression and authenticated Environment verification capability",
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.project-import-link-capacity",
+    "binding_id": "cap_8d168014771c2662",
+    "environment_status": "ok",
+    "environment_ready_seconds": 34.3,
+    "environment_resource_measurements": [],
+    "result_schema_version": "mncs.compiler.project-import-link-capacity/10",
+    "result_sha256": "afe5bca5385e53fa87f2a015ba6a13cc1dd0afb4f86c352745a85f88a1305bcb",
+    "probe_requests": 25,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "backend": "cranelift",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target",
+    "target_project_valid": true,
+    "target_ssa_valid": true,
+    "stage0_oracle_valid": true
+  },
+  "bounded_import_cache": {
+    "scope": "one consumer module in one immutable parsed snapshot",
+    "lookup_bound": 64,
+    "rollover_import_uses": 67,
+    "retained_entries_high_water": 64,
+    "negative_cache_hits_after_eviction": 1,
+    "candidate_header_comparisons": 1056,
+    "fresh_missing_diagnostics": 67,
+    "distinct_current_source_spans_preserved": true,
+    "1024_repeated_successful_imports": {
+      "cache_entries_high_water": 1,
+      "cache_hits": 1023,
+      "candidate_header_comparisons": 1
+    },
+    "4096_project_import_boundary": {
+      "accepted_links": 4096,
+      "cache_entries_high_water": 1,
+      "cache_hits": 4092,
+      "candidate_header_comparisons": 4
+    },
+    "changed_snapshot_revalidates_missing_import": true
+  },
+  "resource_measurement": {
+    "source": "/usr/bin/time -v around the direct regression from the selected claimed checkout",
+    "cold_probe_ready_seconds": 188.3,
+    "wall_seconds": 192.2,
+    "user_cpu_seconds": 188.98,
+    "system_cpu_seconds": 2.62,
+    "peak_rss_bytes": 4986228736,
+    "peak_rss_kib": 4869364,
+    "swap_out_kib": 0
+  },
+  "language_verification_facts_reused": 0,
+  "canonical_vm_execution_performed": false,
+  "forge_execution_performed": false,
+  "stage1_claimed": false,
+  "stage2_claimed": false,
+  "scope": "The Compiler's self-hosted Project resolver now caps its snapshot-local import-resolution fact list at the 64 entries its lookup examines. This proves bounded Project name-resolution reuse, rollover behavior, unchanged fresh diagnostics, target-only Project SSA validity, and Stage-0 oracle validity. These are not Language-owned semantic verification facts and do not establish canonical VM execution, Forge execution, whole-module verification, or compiler succession. The existing .bootstrap.control-workspace-link was preserved."
+}
