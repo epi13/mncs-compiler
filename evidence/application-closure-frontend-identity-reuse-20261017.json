@@ -1,0 +1,126 @@
+{
+  "schema_version": "mncs.compiler.application-closure-frontend-identity-reuse/1",
+  "recorded_at": "2026-10-17T14:35:15Z",
+  "campaign": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "checkpoint_before": "chk_5d7b577fb87f13bd",
+    "checkpoint_sequence_before": 192
+  },
+  "repository": {
+    "name": "mncs-compiler",
+    "checkout": ".worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "base_revision": "c2f5ca429b3b0f660155a8497d98500f86105e15",
+    "implementation_revision": "b179af82df880a25ea5af164718ae7c82a05e607",
+    "origin_main_at_checkout": "97b7d7b2331c52f10fbd2ba84d885183cc13cccf"
+  },
+  "implementation": {
+    "file": "tools/stage0-probe/src/application.rs",
+    "file_sha256": "cb38b2ff0098015c915b5782ea96d8e073d5c3a02eea600b9d3ee7e501adb839",
+    "change": "Executable closure identity calculation consumes the SemanticIdentities map already produced by the current frontend result. If that map is unavailable, the caller omits the closure identity and conservatively loses closure-based artifact reuse.",
+    "scope": "Avoids a second semantic-identity traversal within one frontend invocation. The frontend still verifies the full source snapshot; this does not reuse verified Language facts across source snapshots."
+  },
+  "validation": {
+    "release_tests": {
+      "command": "CARGO_TARGET_DIR=.bootstrap/target CARGO_BUILD_JOBS=1 cargo test --release --manifest-path tools/stage0-probe/Cargo.toml",
+      "passed": 28,
+      "failed": 0,
+      "duration_seconds": 1.55
+    },
+    "identity_map_stress": {
+      "test": "application::tests::executable_closure_identity_scales_across_many_generic_roots",
+      "passed": true,
+      "program_functions": 1537,
+      "generic_specializations": 256,
+      "fresh_identity_plus_closure_nanoseconds": 116797727,
+      "frontend_identity_map_closure_nanoseconds": 15603002,
+      "measured_reduction_percent": 86.64,
+      "identity_maps_equal": true,
+      "closure_identities_equal": true,
+      "note": "Synthetic closure stress measurement in one release test process. It measures the avoided identity-map traversal plus closure fingerprinting versus closure fingerprinting with the already-produced map; it is not an end-to-end application build benchmark."
+    },
+    "format_and_diff_checks": {
+      "cargo_fmt_check": "passed",
+      "git_diff_check": "passed",
+      "evidence_json_parse": "passed"
+    }
+  },
+  "real_workload_verification": {
+    "native_application_provider": {
+      "status": "verified",
+      "artifact_identity": "sha256:1a356e9a65c0f7fec2e77d794cc9c37d8c301b1843c9ce86ebc8543ce42605f5",
+      "checks": [
+        "real mncs-test digest_app application build",
+        "digest_app capability-dispatch identity validation",
+        "fresh-process warm artifact hit",
+        "multi-callable build and canonical VM batch",
+        "invalid source rejected with a fresh MNE162 diagnostic",
+        "corrupt Store input rejected"
+      ],
+      "resource_sample": {
+        "digest_app_cold_wall_seconds": 0.663446,
+        "digest_app_cold_cpu_seconds": 0.53,
+        "digest_app_cold_peak_rss_bytes": 86863872,
+        "digest_app_warm_wall_seconds": 0.220331,
+        "digest_app_warm_cpu_seconds": 0.12,
+        "digest_app_warm_peak_rss_bytes": 43143168,
+        "peak_cgroup_memory_bytes": null,
+        "method": "10 ms /proc process-tree sampling; brief peaks may be missed"
+      }
+    },
+    "effectful_digest_application": {
+      "status": "verified_by_environment_verifier",
+      "application": "mncs.test.digest::digest_app",
+      "artifact_identity": "sha256:1345a1ad5b851a6f2d4b56ef52d5a954d79fe35ac9099f022a106f596f6dc94c",
+      "capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+      "canonical_vm_result_agreement": true,
+      "negative_cases": [
+        "missing capability admission",
+        "mismatched capability identity",
+        "mismatched dispatch alias",
+        "incorrect artifact identity",
+        "invalid typed input",
+        "step-budget interruption",
+        "structured write failure"
+      ],
+      "execution_boundary": "The verifier executed the compiled MNCS application in the canonical VM with a bounded structured-file capability. Environment stored the verifier outputs; this is not a Forge application-execution receipt or a production MNCS service provider."
+    }
+  },
+  "canonical_store_readback": {
+    "session_id": "ses_164edc158d9b1637",
+    "binding_id": "cap_b3eb938eade20eb4",
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.native-test-digest-effectful-app-canonical-vm",
+    "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:6516f7168b363538cf4624349c09de67f8f65e8fdf628d3276e8a1f5d5b0a1a3",
+    "total_bytes": 1136740,
+    "artifacts": [
+      {
+        "path": "native-app-readiness-test-digest-app.json",
+        "byte_count": 28346,
+        "sha256": "97589d0c342cf0b7f867c733c9c13006d7fe0802fc667ae43cc9f492b795ca69"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-00",
+        "byte_count": 786432,
+        "sha256": "0c93052b84150a2942b60acbe26dda3808194f6cf91a2fde0aecb26b08d317c2"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-01",
+        "byte_count": 321962,
+        "sha256": "85c009e2be8a16be51b4378b49edc4de48e7a45bcd7956dbd0c8aba64ebc0117"
+      }
+    ]
+  },
+  "semantic_reuse_status": {
+    "reused_language_verification_facts": 0,
+    "comment_edit_frontend_invocations": 1,
+    "comment_edit_reused_semantic_fact_count": 0,
+    "interpretation": "Compiler artifact reuse remains effective, but Language-owned cross-snapshot verification-fact reuse is not implemented."
+  },
+  "limitations": [
+    "Language repository write scope was not granted to this session; no Language source was changed.",
+    "The digest application was not invoked through Forge. Direct Forge provider inspection was unavailable under the current resource policy, and no Forge capability binding is present in the Compiler session.",
+    "This does not prove full mncs-test command parity, Stage-1 or Stage-2 succession, or native replacement of production host orchestration.",
+    "The canonical VM digest verifier uses a bounded test adapter rather than a production MNCS service provider."
+  ]
+}
