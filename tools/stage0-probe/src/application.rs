@@ -456,6 +456,28 @@ fn annotate_frontend_work(
     response
 }
 
+fn annotate_artifact_emission_failure(
+    response: Value,
+    key: &str,
+    resolved_module_count: usize,
+    program_function_count: Option<usize>,
+) -> Value {
+    let response = annotate_cache(
+        response,
+        key,
+        "bypass",
+        "not_published",
+        &[],
+        &["source_semantic_check", "verified_vm_artifact"],
+    );
+    annotate_frontend_work(
+        response,
+        resolved_module_count,
+        program_function_count,
+        "verified",
+    )
+}
+
 fn read_application_cache(
     path: &PathBuf,
     key: &str,
@@ -1298,7 +1320,8 @@ fn callable_interface(program: &mncs_model::Program, module: &str, name: &str) -
 #[cfg(test)]
 mod tests {
     use super::{
-        application_cache_index_path_at, application_cache_path_at, application_cache_root_from,
+        annotate_artifact_emission_failure, application_cache_index_path_at,
+        application_cache_path_at, application_cache_root_from,
         application_executable_closure_identity, application_semantic_identity, callable_interface,
         envelope, ApplicationSources,
     };
@@ -1342,6 +1365,51 @@ mod tests {
         assert_eq!(fallback, Path::new("/tmp/program-cache"));
         assert_eq!(application_cache_root_from(None, None), None);
         assert_eq!(application_cache_path_at(&root, "not-a-sha256-key"), None);
+    }
+
+    #[test]
+    fn artifact_emission_failure_reports_completed_frontend_work() {
+        let response = annotate_artifact_emission_failure(
+            json!({
+                "status": "unsupported",
+                "artifact": null,
+                "producer": {
+                    "probe": { "probe_executable_sha256": "sha256:compiler" }
+                },
+                "unresolved_obligations": ["selected callable has no admitted SSA function"]
+            }),
+            "sha256:cache-key",
+            4,
+            Some(31),
+        );
+        let work = response
+            .pointer("/cache/verification_work")
+            .expect("verification work observation");
+
+        assert_eq!(work["front_end_invocations"], json!(1));
+        assert_eq!(work["front_end_outcome"], json!("verified"));
+        assert_eq!(work["resolved_module_count"], json!(4));
+        assert_eq!(work["program_function_count"], json!(31));
+        assert_eq!(work["source_parsing"], json!("recomputed_by_full_frontend"));
+        assert_eq!(
+            work["declaration_resolution"],
+            json!("recomputed_by_full_frontend")
+        );
+        assert_eq!(
+            work["signature_verification"],
+            json!("recomputed_by_full_frontend")
+        );
+        assert_eq!(
+            work["function_body_verification"],
+            json!("recomputed_by_full_frontend")
+        );
+        assert_eq!(
+            work["semantic_dependency_closure"],
+            json!("recomputed_by_full_frontend")
+        );
+        assert_eq!(work["ssa_verification"], json!("attempted"));
+        assert_eq!(work["backend_artifact"], json!("not_generated"));
+        assert_eq!(work["reused_semantic_facts"], json!([]));
     }
 
     #[test]
@@ -2353,19 +2421,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         .collect::<Vec<_>>()),
                 );
         }
-        let response = annotate_cache(
+        return annotate_artifact_emission_failure(
             unsupported_response,
             &cache_key,
-            "bypass",
-            "not_published",
-            &[],
-            &["verified_vm_artifact"],
-        );
-        return annotate_frontend_work(
-            response,
             resolved_module_count,
             program_function_count,
-            "verified",
         );
     };
 
