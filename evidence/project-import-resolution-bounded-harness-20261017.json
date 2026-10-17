@@ -1,0 +1,95 @@
+{
+  "schema_version": "mncs.compiler.project-import-resolution-verification/1",
+  "identity": "ev_compiler_project_import_resolution_bounded_harness_20261017",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-17T10:41:38+00:00",
+  "status": "verified",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "verified_commit": "31c35608bdad7c5f4f5b2caa43f9fd24d29c95a4",
+    "measured_project_source_revision": "1e0170ae634e1e16118591f2faeb4b210e4065f1",
+    "project_source_sha256": "bb3d40b68f7713fd058adb947a4086249587f7b44d11d275e5d9ee418924035d",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "7b783795a419c13e29c2b0705ed798896b58d70e66fdc3a95b9b32183ffb352d",
+    "bootstrap_link_preserved": true
+  },
+  "verification": {
+    "route": "authenticated Environment verification capability",
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.project-import-link-capacity",
+    "binding_id": "cap_8d168014771c2662",
+    "backend": "cranelift",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "schema_version": "mncs.compiler.project-import-link-capacity/7",
+    "result_sha256": "b1042ebf36017a98acdc8f253579818beb51c5b2348eccd8e25c528ee2bc86d8",
+    "probe_request_count": 22,
+    "target_only_project_callable_valid": true,
+    "target_ssa_valid": true,
+    "connected_source_capacity": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "stage0_oracle_valid": true
+    },
+    "interleaved_same_length_targets": {
+      "candidate_header_comparisons": 3,
+      "successful_lookup_cache_hits": 4,
+      "distinct_target_indices_preserved": true
+    },
+    "long_module_name_fallback": {
+      "module_name_bytes": 70,
+      "source_count": 18,
+      "imports": 4,
+      "candidate_header_comparisons": 68,
+      "successful_lookup_cache_hits": 0,
+      "all_import_spans_preserved": true,
+      "request_latency_median_ms": 36.852,
+      "latency_sample_count": 5
+    },
+    "oversized_module_name_fallback": {
+      "module_name_bytes": 135,
+      "imports": 3,
+      "candidate_header_comparisons": 3,
+      "successful_lookup_cache_hits": 0,
+      "all_import_spans_preserved": true
+    },
+    "repeated_missing_import_diagnostics_preserved": true,
+    "module_import_limit": {
+      "limit": 1024,
+      "successful_lookup_cache_hits": 1023,
+      "overflow_rejected": true
+    },
+    "project_import_limit": {
+      "limit": 4096,
+      "successful_lookup_cache_hits": 4092,
+      "overflow_rejected": true
+    },
+    "backend_artifact_cache_reused": true,
+    "frontend_program_cache_reused": false
+  },
+  "resource_measurement": {
+    "request_latency_median_ms": 36.852,
+    "request_latency_sample_count": 5,
+    "whole_suite_wall_time_ms": null,
+    "cpu_time": null,
+    "peak_rss_bytes": null,
+    "unavailable_reason": "Environment verifier resource_measurements was empty; unavailable fields are not interpreted as zero.",
+    "comparison_note": "This is a repeated-call latency sample for the long-name fallback, not an end-to-end application-build benchmark."
+  },
+  "continuation": {
+    "campaign_checkpoint_before_publication": "chk_cb03f671c958488d",
+    "environment_main_head": "c587bc12ff5997b34451a75d489cac9fed992fd8",
+    "nested_registered_worktree_selected_by_project_relative_path": true
+  },
+  "interpretation": {
+    "language_verified_facts_reused": 0,
+    "canonical_vm_application_execution_performed": false,
+    "forge_execution_receipt_published": false,
+    "whole_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The committed harness limits retained JIT setup to the Project target, adds repeated long-name fallback coverage with 16 decoy headers, and exercises the 135-byte fallback. This validates bounded Project-callable behavior and import spans; it does not establish Language fact reuse or native application execution."
+  }
+}
