@@ -965,7 +965,7 @@
         "page_bound": 1024,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "a1272fcd280b201c6f8de16df0935b7ec61e929408d906860c36aabc19f0612d",
+        "current_source_sha256": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
         "selected_proven_unit_canonical_vm_frontier": {
           "status": "completed_with_known_diagnostic_divergence",
           "target_module": "mncs.compiler.flow.v1",
@@ -1120,6 +1120,25 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph preserves typed proof operations, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including multiple conditional exits in counted and sequence loops. The unreachable loop-join negative case completes on the canonical VM but has one recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+        },
+        "selected_current_source_frontier": {
+          "status": "completed_with_known_diagnostic_divergence",
+          "tested_compiler_revision": "bca39a83c9dbfeb36c38d2b44a7adc8f97b11599",
+          "target_module": "mncs.compiler.flow.v1",
+          "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+          "cases": 10,
+          "diagnostic_exact_match_cases": 9,
+          "known_diagnostic_divergences": 1,
+          "canonical_vm_semantic_digest": "e6002b288f01a4e91834f9a7502d61f738aaf4a09aa57a657cf424e975d90b60",
+          "evidence_artifact": "evidence/self-host-flow-proven-unit-current-20261017.json",
+          "evidence_sha256": "6872c87fe55bf58e268c88fe64cec00c8b075ead1587e5d6989f99b60bff9a7e",
+          "test_harness": "tools/test_vm_flow_proven_frontier.py",
+          "test_harness_sha256": "b8f0cfaf53e68ab9fae342029c1c506da057bbc12fb120fc949c157cce066e94",
+          "whole_frontier_seconds": 97.144537,
+          "child_peak_rss_kib": 2629780,
+          "canonical_vm_peak_rss_kib": 462972,
+          "cgroup_peak_attributable_to_test": false,
+          "scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph accounts for every typed proof operation in executable blocks or explicit elided-expression records, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including multiple conditional exits in counted and sequence loops. The unreachable loop-join negative case completes on the canonical VM, retains its verified next-state operations without adding an unreachable backedge, and has one recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
         }
       }
     },
@@ -1141,7 +1160,7 @@
         "page_bound": 314,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "b14ae76b50b947dde05ce0f76be2837a63527efa87c414c7b84f8dd6ddade938",
+        "current_source_sha256": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545",
         "selected_flow_to_ssa_canonical_vm_frontier": {
           "kind": "flow-to-ssa-canonical-vm-frontier",
           "status": "passed_with_bounded_frontier",
@@ -1412,6 +1431,25 @@
           "stage2_claimed": false,
           "next_frontier": "Extend the native Test/application workflow with repeated retained-session calls. Repair the Environment invoke timeout default through its authorized owner context. Implement Language-owned verified-fact reuse once the Language writable grant is available.",
           "evidence_scope": "This current-source canonical VM call proves declaration checking, Flow lowering, and verified value SSA consume explicit imported Box identity and field schema inputs, including rejection of mismatched or absent imported context. Stage-0 independently resolves read<4>; this selected SSA path retains the generic callable identity and does not prove native specialization cloning, Project-wide module resolution, Language verified-fact reuse, native Test conversion, or compiler succession."
+        },
+        "selected_current_source_frontier": {
+          "status": "passed",
+          "tested_compiler_revision": "1ce54286b40586bdad1a464c92748d782e3769de",
+          "target_module": "mncs.compiler.ssa.v1",
+          "target_function": "lower_flow_unit_value_ssa<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+          "cases": 2,
+          "canonical_vm_semantic_digest": "caea6a8bf3bdd66536abd01257004c5276b95472fd7f02e4446e46ebad533c87",
+          "source_to_flow_to_ssa_executed_in_one_vm_batch": true,
+          "verified_functions": 2,
+          "evidence_artifact": "evidence/self-host-flow-ssa-current-20261017.json",
+          "evidence_sha256": "fa44ad0f1e72b2057eb8b7828e9aa5a5e40e759eb94e54a4dcaff5d02041d9ef",
+          "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+          "test_harness_sha256": "72471a0b310b7114057ebd1a68642b33dfd1bf8484b018f5a94a585162938efa",
+          "whole_frontier_seconds": 48.905823,
+          "child_peak_rss_kib": 1247536,
+          "canonical_vm_peak_rss_kib": 617644,
+          "cgroup_peak_attributable_to_test": false,
+          "scope": "This selected current-source canonical VM batch starts each case from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. It includes a conditional return inside a counted loop; both verified SSA function shapes match pinned Stage-0. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
         }
       }
     },
@@ -3368,7 +3406,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-17T19:33:37Z",
+    "updated_at": "2026-10-17T21:58:25Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -7415,9 +7453,31 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "delivery_status": "verified on the campaign branch; Environment checkpoint pending; merge and publish remain escalation-required"
+    },
+    "selected_flow_ssa_frontiers_refresh_20261017": {
+      "observed_at": "2026-10-17T21:58:25Z",
+      "candidate_head": "cd01e5efaf5e4e17ba284cd6eb74e4d8934c3b71",
+      "branch": "campaign/native-application-readiness-20261013",
+      "module_source_sha256": {
+        "flow": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+        "ssa": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545"
+      },
+      "evidence": [
+        {
+          "artifact": "evidence/self-host-flow-proven-unit-current-20261017.json",
+          "sha256": "6872c87fe55bf58e268c88fe64cec00c8b075ead1587e5d6989f99b60bff9a7e",
+          "status": "completed_with_known_diagnostic_divergence"
+        },
+        {
+          "artifact": "evidence/self-host-flow-ssa-current-20261017.json",
+          "sha256": "fa44ad0f1e72b2057eb8b7828e9aa5a5e40e759eb94e54a4dcaff5d02041d9ef",
+          "status": "passed"
+        }
+      ],
+      "claim_boundary": "These source identities match the selected current-source Flow and SSA canonical VM evidence. Flow retains one known diagnostic divergence; both records establish selected callables only, not full module verification, Language-owned verified-fact reuse, or Stage-1/Stage-2 succession."
     }
   },
-  "evidence_updated_at": "2026-10-17T20:46:59.162517Z",
+  "evidence_updated_at": "2026-10-17T21:58:25.000000Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
