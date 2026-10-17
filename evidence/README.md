@@ -156,11 +156,11 @@ eight-call retained VM session, including recovery after exhausted fuel and a
 rejected typed request. The artifact also preserves fresh-process cache reuse
 and invalidation after a reachable imported function edit. The refreshed
 [digest suite report](native-app-readiness-digest-suite-specialization-20261016.json)
-was produced at Compiler revision `54d8e9d`. It records a 3.959-second cold
-build (3.91 CPU seconds, 81,825,792-byte peak RSS), a 0.559-second
-fresh-process hit (0.53 CPU seconds, 36,691,968-byte peak RSS), a six-call VM
-batch at 0.208 seconds and 27,460 KiB peak RSS, and an eight-call retained
-session at 0.222 seconds and 27,520 KiB peak RSS. Cgroup memory measurements
+was refreshed at Compiler revision `3c02556`. It records a 4.120-second cold
+build (4.04 CPU seconds, 81,629,184-byte peak RSS), a 0.584-second
+fresh-process hit (0.55 CPU seconds, 37,031,936-byte peak RSS), a six-call VM
+batch at 0.216 seconds and 27,512 KiB peak RSS, and an eight-call retained
+session at 0.236 seconds and 27,460 KiB peak RSS. Cgroup memory measurements
 were unavailable. The cold build and changed-source check still run the full
 frontend; the exact-snapshot hit avoids it. The run reused zero Language
 verified facts. The Environment-bound verification passed without producing a
@@ -194,13 +194,18 @@ identical executable artifact bytes and callable interface. The edit refreshes
 the source snapshot and imported source hash. These observations reused zero
 Language-owned verified facts; cgroup memory readings were unavailable.
 
-The registered Environment verifier stored the report and canonical VM
-artifact in a 1,136,512-byte Store bundle. Fresh Store reads returned the
-28,118-byte report and both ordered VM artifact chunks with matching SHA-256
-values. The two chunks total 1,108,394 bytes and reconstruct the verifier's
-artifact file (`efb6411d21c968f625e7b299b1994ec1be753a48ae23209b7a0afc33ecd1f047`)
-within Environment's 1-MiB per-file read bound. Exact readback metadata is in
-the [Environment artifact readback evidence](native-app-readiness-environment-artifact-readback-20261017.json).
+The latest registered Environment verifier run cold-built in 0.567 seconds
+(0.52 CPU seconds, 65,642,496-byte peak RSS); its seven-call retained session
+took 0.029 seconds (0.01 CPU seconds, 11,796,480-byte peak RSS). Cgroup memory
+measurements were unavailable. The verifier stored the report and canonical
+VM artifact in a 1,136,512-byte Store bundle. Fresh authenticated Store reads
+returned the 28,118-byte report and both ordered VM artifact chunks with exact
+matching SHA-256 values. The two chunks total 1,108,394 bytes and reconstruct
+the verifier's artifact file
+(`efb6411d21c968f625e7b299b1994ec1be753a48ae23209b7a0afc33ecd1f047`) within
+Environment's 1-MiB per-file read bound. Exact readback metadata is in the
+[earlier Environment artifact readback evidence](native-app-readiness-environment-artifact-readback-20261017.json)
+and [effectful digest Store readback evidence](native-app-readiness-effectful-digest-store-readback-20261017.json).
 This is verifier-output publication, not a Forge application-execution receipt.
 
 ## Current declaration parser frontier (2026-10-16)
