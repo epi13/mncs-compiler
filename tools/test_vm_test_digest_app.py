@@ -365,8 +365,11 @@ def main() -> None:
     request = compile_request(root, modules)
     cache_root = ROOT / '.build/native-app-readiness'
     cache_root.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix='digest-app-cold-', dir=cache_root) as cache:
-        probe = support.Probe(Path(cache))
+    with tempfile.TemporaryDirectory(prefix='digest-app-cache-', dir=cache_root) as cache:
+        cache_directory = Path(cache)
+        program_cache = cache_directory / 'program-cache'
+        application_cache = cache_directory / 'application-cache'
+        probe = support.Probe(program_cache, application_cache_dir=application_cache)
         try:
             built, build_metrics = probe.send({'compile_application': request}, timeout=90)
             current_interface = built.get('entry', {}).get('interface', {})
@@ -460,6 +463,73 @@ def main() -> None:
             expected = [support.decode_wire(value) for value in expected_wires]
         finally:
             probe.close()
+
+        warm_probe = support.Probe(
+            program_cache, application_cache_dir=application_cache,
+        )
+        try:
+            warm_build, warm_metrics = warm_probe.send(
+                {'compile_application': request}, timeout=90,
+            )
+        finally:
+            warm_probe.close()
+        warm_work = warm_build.get('cache', {}).get('verification_work', {})
+        if (
+            warm_build.get('status') != 'verified'
+            or warm_build.get('cache', {}).get('status') != 'hit'
+            or warm_build.get('cache', {}).get('reuse_basis') != 'exact_source_snapshot'
+            or warm_build.get('artifact', {}).get('identity') != artifact_id
+            or warm_work.get('front_end_invocations') != 0
+            or warm_work.get('backend_artifact') != 'reused'
+        ):
+            raise AssertionError('fresh-process digest application reuse changed or rebuilt the artifact')
+
+        comment_modules = dict(modules)
+        comment_modules['mncs.test.assertions'] += (
+            '\n// source-only edit for effectful digest application closure reuse\n'
+        )
+        comment_request = compile_request(root, comment_modules)
+        comment_probe = support.Probe(
+            program_cache, application_cache_dir=application_cache,
+        )
+        try:
+            comment_build, comment_metrics = comment_probe.send(
+                {'compile_application': comment_request}, timeout=90,
+            )
+        finally:
+            comment_probe.close()
+        comment_work = comment_build.get('cache', {}).get('verification_work', {})
+        if (
+            comment_build.get('status') != 'verified'
+            or comment_build.get('cache', {}).get('status') != 'hit'
+            or comment_build.get('cache', {}).get('reuse_basis')
+            != 'verified_application_executable_closure'
+            or comment_build.get('artifact', {}).get('identity') != artifact_id
+            or comment_work.get('front_end_invocations') != 1
+            or comment_work.get('backend_artifact') != 'reused'
+            or comment_work.get('reused_semantic_facts') != []
+            or comment_build.get('source_snapshot', {}).get('identity')
+            == built.get('source_snapshot', {}).get('identity')
+            or comment_build.get('entry', {}).get('interface', {}).get('identity')
+            != current_interface.get('identity')
+        ):
+            raise AssertionError(
+                'comment-only digest app edit did not refresh its source snapshot and reuse the unchanged artifact'
+            )
+        comment_source = next((
+            row for row in comment_build.get('source_snapshot', {}).get('files', [])
+            if row.get('source_id') == 'mncs.test.assertions'
+        ), None)
+        if comment_source is None or comment_source.get('sha256') != (
+            'sha256:' + sha(comment_modules['mncs.test.assertions'].encode('utf-8'))
+        ):
+            raise AssertionError('comment-only reuse retained the old assertions source identity')
+        comment_artifact_bytes = json.dumps(
+            comment_build['artifact']['value'], sort_keys=True, separators=(',', ':')
+        ).encode()
+        if comment_artifact_bytes != APP_ARTIFACT_BYTES:
+            raise AssertionError('comment-only artifact reuse changed canonical artifact bytes')
+        ARTIFACT_PATH.write_bytes(comment_artifact_bytes)
 
     binary, runner_sha, runner_lock_sha = build_runner()
     batch_plans = [
@@ -655,6 +725,45 @@ def main() -> None:
             'diagnostics': built.get('diagnostics', []),
             'cache': built.get('cache'),
             'metrics': build_metrics,
+            'incremental_cache_observations': [
+                {
+                    'label': 'cold',
+                    'source_snapshot_identity': built.get('source_snapshot', {}).get('identity'),
+                    'artifact_identity': built['artifact'].get('identity'),
+                    'cache_status': built.get('cache', {}).get('status'),
+                    'reuse_basis': built.get('cache', {}).get('reuse_basis'),
+                    'front_end_invocations': built.get('cache', {}).get('verification_work', {}).get('front_end_invocations'),
+                    'backend_artifact': built.get('cache', {}).get('verification_work', {}).get('backend_artifact'),
+                    'reused_semantic_facts': built.get('cache', {}).get('verification_work', {}).get('reused_semantic_facts', []),
+                    'metrics': build_metrics,
+                },
+                {
+                    'label': 'fresh_process_warm',
+                    'source_snapshot_identity': warm_build.get('source_snapshot', {}).get('identity'),
+                    'artifact_identity': warm_build.get('artifact', {}).get('identity'),
+                    'cache_status': warm_build.get('cache', {}).get('status'),
+                    'reuse_basis': warm_build.get('cache', {}).get('reuse_basis'),
+                    'front_end_invocations': warm_work.get('front_end_invocations'),
+                    'backend_artifact': warm_work.get('backend_artifact'),
+                    'reused_semantic_facts': warm_work.get('reused_semantic_facts', []),
+                    'metrics': warm_metrics,
+                },
+                {
+                    'label': 'comment_only_edit',
+                    'source_snapshot_identity': comment_build.get('source_snapshot', {}).get('identity'),
+                    'artifact_identity': comment_build.get('artifact', {}).get('identity'),
+                    'cache_status': comment_build.get('cache', {}).get('status'),
+                    'reuse_basis': comment_build.get('cache', {}).get('reuse_basis'),
+                    'front_end_invocations': comment_work.get('front_end_invocations'),
+                    'backend_artifact': comment_work.get('backend_artifact'),
+                    'reused_semantic_facts': comment_work.get('reused_semantic_facts', []),
+                    'metrics': comment_metrics,
+                    'changed_module': 'mncs.test.assertions',
+                    'changed_module_sha256': comment_source['sha256'],
+                },
+            ],
+            'application_cache_environment': 'MNCS_PROBE_APPLICATION_CACHE_DIR',
+            'program_cache_environment': 'MNCS_PROBE_CACHE_DIR',
             'artifact_identity': artifact_id,
             'artifact_file_sha256': sha(APP_ARTIFACT_BYTES),
             'artifact_bytes': len(APP_ARTIFACT_BYTES),
@@ -737,6 +846,8 @@ def main() -> None:
         },
         'feature_evidence': [
             'real mncs-test source module with three imported modules',
+            'the effectful digest application artifact is reused from a fresh probe process without invoking the frontend',
+            'a comment-only edit in an imported Test module reruns the frontend and reuses identical executable artifact bytes',
             'nominal structured request and result with bounded nested sequences',
             'native pass/fail/skip aggregation and bounded first-failure selection',
             'explicit structured_read and structured_write effects through the VM Provider API',

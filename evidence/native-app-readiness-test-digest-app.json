@@ -43,6 +43,7 @@
     "target": "mncs-vm-0.1"
   },
   "build": {
+    "application_cache_environment": "MNCS_PROBE_APPLICATION_CACHE_DIR",
     "application_ssa_provenance": {
       "full_selected_ssa_fingerprint": "48298c387342c7132fca9f04e07a964e690dc565a0c0af838c746dbbec119b77",
       "full_selected_ssa_identity": "mncs:compiler:compiler-artifact:47688ba51cd9767878f1b8ab0e6befdd91a930615cca850e10cbd61be03fb7eb",
@@ -231,22 +232,87 @@
       "unresolved_obligations": []
     },
     "diagnostics": [],
+    "incremental_cache_observations": [
+      {
+        "artifact_identity": "sha256:fff98e04569923d235cae2c4787e8a613b65324f0c78fb1d652fec600d8269c4",
+        "backend_artifact": "generated",
+        "cache_status": "miss",
+        "front_end_invocations": 1,
+        "label": "cold",
+        "metrics": {
+          "cpu_seconds": 0.51,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 65593344,
+          "peak_threads": 1,
+          "request_sequence": 1,
+          "wall_seconds": 0.565718
+        },
+        "reuse_basis": "none",
+        "reused_semantic_facts": [],
+        "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f"
+      },
+      {
+        "artifact_identity": "sha256:fff98e04569923d235cae2c4787e8a613b65324f0c78fb1d652fec600d8269c4",
+        "backend_artifact": "reused",
+        "cache_status": "hit",
+        "front_end_invocations": 0,
+        "label": "fresh_process_warm",
+        "metrics": {
+          "cpu_seconds": 0.1,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 20250624,
+          "peak_threads": 1,
+          "request_sequence": 1,
+          "wall_seconds": 0.129152
+        },
+        "reuse_basis": "exact_source_snapshot",
+        "reused_semantic_facts": [],
+        "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f"
+      },
+      {
+        "artifact_identity": "sha256:fff98e04569923d235cae2c4787e8a613b65324f0c78fb1d652fec600d8269c4",
+        "backend_artifact": "reused",
+        "cache_status": "hit",
+        "changed_module": "mncs.test.assertions",
+        "changed_module_sha256": "sha256:86292b76323721875cdcbe07a002ae0a049aea7ff80a63453915a4e843380ef5",
+        "front_end_invocations": 1,
+        "label": "comment_only_edit",
+        "metrics": {
+          "cpu_seconds": 0.31,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 53981184,
+          "peak_threads": 1,
+          "request_sequence": 1,
+          "wall_seconds": 0.347608
+        },
+        "reuse_basis": "verified_application_executable_closure",
+        "reused_semantic_facts": [],
+        "source_snapshot_identity": "sha256:0db8873bac86e261f38a2b18703c3cea2e278f17ff0e50332c159966eda791d4"
+      }
+    ],
     "metrics": {
-      "cpu_seconds": 0.53,
+      "cpu_seconds": 0.51,
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
       "peak_open_file_descriptors": 4,
-      "peak_rss_bytes": 65712128,
+      "peak_rss_bytes": 65593344,
       "peak_threads": 1,
       "request_sequence": 1,
-      "wall_seconds": 0.567812
+      "wall_seconds": 0.565718
     },
+    "program_cache_environment": "MNCS_PROBE_CACHE_DIR",
     "request_schema": "mncs.compiler.application-build-request/1",
     "result_schema": "mncs.compiler.application-build/4",
     "status": "verified",
     "unresolved_obligations": []
   },
-  "created_at": "2026-10-17T02:05:07.702009+00:00",
+  "created_at": "2026-10-17T02:50:06.519830+00:00",
   "execution": {
     "canonical_vm_cases": [
       {
@@ -272,7 +338,7 @@
           "completed",
           "completed"
         ],
-        "effects_digest": "sha256:90dd60445bf88a4aa2473d04c291b0bba28bcd4343e064ac61f32cd89e248e5d",
+        "effects_digest": "sha256:6080e67f76cbf0ca3ba7a04cdda00659136834c46f93edef4bd0fb782ddc85e7",
         "input_sha256": "fd77eaf8bf7feaee0118b41c6520432f0482e9bd4c7dab762e025194cfde64e1",
         "output_sha256": "2ca00e51a81463179f409d295148de136d10e6cea66da96aa997a357032f98db",
         "resource_limits": [
@@ -332,7 +398,7 @@
           "completed",
           "completed"
         ],
-        "effects_digest": "sha256:5a179cf7c8b557576af5b362e6bcfe9c34847f40f1ab9627423c558703ced628",
+        "effects_digest": "sha256:fd2ad29f57b9add187309158b3a7d19cd10b1479c117b10bc342890795684f14",
         "input_sha256": "b6dafde6b4e930d9fca2d07374c5638216e673851f40f5e9f0ba657ccda785d8",
         "output_sha256": "56d7e4d761bfa18dbb624429652591c96bea851dcc31594a01d8587e0db09c93",
         "resource_limits": [
@@ -392,7 +458,7 @@
           "completed",
           "completed"
         ],
-        "effects_digest": "sha256:91b3be7aa92422cc22ab09210476852d179259b19e7ea08e5e923f0cd1e19818",
+        "effects_digest": "sha256:f4e607312ca5e7426096a05e574a1b370e7a5f4c96ada4c18b639d4a242c6e48",
         "input_sha256": "78e51a847982d01b3c86a805e77df5e607688f83fe642995b27a28afc4480ffc",
         "output_sha256": "df3b93e72b0a55b9213705c6c142f48ae0b66a684c57752b8e3f1b3916f37afa",
         "resource_limits": [
@@ -503,10 +569,10 @@
         "peak_cgroup_memory_bytes": null,
         "peak_child_processes": 0,
         "peak_open_file_descriptors": 4,
-        "peak_rss_bytes": 11857920,
+        "peak_rss_bytes": 11792384,
         "peak_threads": 1,
         "process_count": 1,
-        "wall_seconds": 0.032514
+        "wall_seconds": 0.031547
       },
       "per_call_resource_usage": [
         {
@@ -610,6 +676,8 @@
   },
   "feature_evidence": [
     "real mncs-test source module with three imported modules",
+    "the effectful digest application artifact is reused from a fresh probe process without invoking the frontend",
+    "a comment-only edit in an imported Test module reruns the frontend and reuses identical executable artifact bytes",
     "nominal structured request and result with bounded nested sequences",
     "native pass/fail/skip aggregation and bounded first-failure selection",
     "explicit structured_read and structured_write effects through the VM Provider API",
@@ -627,19 +695,19 @@
   ],
   "objective": "Execute the real mncs.test.digest application through the verified compiler artifact and canonical VM provider boundary",
   "producer": {
-    "compiler_revision": "54d8e9d265e18409c35988d2f523c1f03a61e50f",
-    "compiler_status": "M .mncs/verification-obligations.json\n M evidence/README.md\n M evidence/native-app-readiness-digest-suite-specialization-20261016.json\n M evidence/native-app-readiness-test-digest-app.json\n?? .bootstrap.control-workspace-link",
+    "compiler_revision": "d75997aad779ebba3b2e3b276a4384f6eaeca45b",
+    "compiler_status": "M tools/test_vm_native_application.py\n M tools/test_vm_test_digest_app.py\n?? .bootstrap.control-workspace-link",
     "language_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
     "stage0_probe_sha256": "1d5fb718cc36be6acf009bb85aa6aaa8547b997046451b407616ad02f1c98d45",
     "stage0_project_oracle_metrics": {
-      "cpu_seconds": 0.34,
+      "cpu_seconds": 0.32,
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
       "peak_open_file_descriptors": 3,
-      "peak_rss_bytes": 66027520,
+      "peak_rss_bytes": 65933312,
       "peak_threads": 1,
       "request_sequence": 2,
-      "wall_seconds": 0.3605
+      "wall_seconds": 0.348325
     },
     "stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
     "stdlib_status": "",

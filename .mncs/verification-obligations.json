@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 33,
+  "revision": 34,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1496,6 +1496,69 @@
         "tools/test_vm_native_application.py",
         "tools/native_app_vm_runner.rs",
         "tools/vm_emit.rs"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_test_digest_app.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_test_digest_app.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 600,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.native-test-digest-effectful-app-incremental-cache",
+      "title": "Fresh-process and comment-only reuse preserve the effectful MNCS Test digest application artifact and refresh source identity",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build/5",
+        "mncs.compiler.application-build-cache-observation/4",
+        "mncs.compiler.application-build-verification-work/1",
+        "mncs.compiler.native-application-proof/2",
+        "mncs.vm.artifact/1",
+        "mncs:0.2:function:mncs.test.digest::digest_app",
+        "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "tools/stage0-probe/src/application.rs",
+        "tools/stage0-probe/src/main.rs",
+        "tools/stage0-probe/Cargo.toml",
+        "tools/stage0-probe/Cargo.lock",
+        "tools/test_vm_test_digest_app.py",
+        "tools/test_vm_native_application.py",
+        "tools/native_app_vm_runner.rs",
+        "tools/vm_emit.rs",
+        "evidence/native-app-readiness-test-digest-app.json"
       ],
       "executor": {
         "provider": "mncs-compiler",

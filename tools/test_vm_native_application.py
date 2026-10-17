@@ -192,13 +192,17 @@ def summarize_samples(samples: list[dict], wall_seconds: float, cpu_start: float
 
 
 class Probe:
-    def __init__(self, cache_dir: Path | None = None, executable: Path | None = None):
+    def __init__(self, cache_dir: Path | None = None, executable: Path | None = None,
+                 *, application_cache_dir: Path | None = None):
         env = os.environ.copy()
         env['MNCS_PROBE_MODULES'] = ''
         env['MNCS_PROBE_EXECUTION_MODULES'] = ''
         env['MNCS_PROBE_GENERIC_SEEDS'] = '[]'
         env.pop('MNCS_PROBE_BACKEND', None)
         env['MNCS_PROBE_CACHE_DIR'] = str(cache_dir or ROOT / '.build/native-app-readiness/probe-cache')
+        env.pop('MNCS_PROBE_APPLICATION_CACHE_DIR', None)
+        if application_cache_dir is not None:
+            env['MNCS_PROBE_APPLICATION_CACHE_DIR'] = str(application_cache_dir)
         env['MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT'] = str(ROOT)
         self.executable = executable or PROBE
         self.stderr = tempfile.TemporaryFile(mode='w+t')

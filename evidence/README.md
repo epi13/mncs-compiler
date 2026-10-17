@@ -172,6 +172,19 @@ retained session took 0.033 seconds and 11,857,920-byte peak RSS. This is a
 local bounded VM provider proof. It does not establish Forge invocation,
 Environment publication, canonical Store readback, or full Test conversion.
 
+The same effectful application now has a permanent incremental artifact
+obligation, `mncs-compiler.native-test-digest-effectful-app-incremental-cache`.
+Its [updated report](native-app-readiness-test-digest-app.json) records a
+0.566-second cold build (0.51 CPU seconds, 65,593,344-byte peak RSS), a
+0.129-second fresh-process exact-snapshot hit with zero frontend invocations,
+and a 0.348-second comment-only imported-module edit with one frontend pass
+and the identical executable artifact bytes and callable interface. The edit
+refreshes the source snapshot and imported source hash. The retained canonical
+VM batch still completes seven isolated calls in 0.032 seconds at 11,792,384
+bytes peak RSS. These observations reused zero Language-owned verified facts;
+cgroup memory readings were unavailable. The result demonstrates Compiler
+artifact reuse for this workload, not incremental Language semantic checking.
+
 ## Current declaration parser frontier (2026-10-16)
 
 The [current `decl.parse_unit` frontier](self-host-decl-parse-expanded-canonical-vm-current-8817cdb-20261016.json)
