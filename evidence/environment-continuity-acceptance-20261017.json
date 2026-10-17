@@ -1,0 +1,71 @@
+{
+  "schema_version": "mncs.compiler.environment-continuity-acceptance/1",
+  "observed_at": "2026-10-17T03:25:48Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "environment_checkpoint_id": "chk_0f4e17ec705ac58e",
+  "compiler_worktree": {
+    "path": ".worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "head_before_evidence_commit": "fa84795b0d4f2705944c3c5359edcdd8067a31b7",
+    "resumed_lifecycle": "active",
+    "writable_repositories": [
+      "mncs-compiler"
+    ]
+  },
+  "repository_revisions": {
+    "mncs-compiler_main": "97b7d7b2331c52f10fbd2ba84d885183cc13cccf",
+    "mncs-environment": "c587bc12ff5997b34451a75d489cac9fed992fd8",
+    "mncs-control-mcp": "a4a716fee2173e03716ef9530ca6ed4adeab188a",
+    "mncs-language": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "mncs-forge": "3f2f295917e96a5b18512b120f0f94ed3221ba1b",
+    "mncs-test": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "mncs-vm": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "compiler_branch_relationship": {
+    "campaign_head": "fa84795b0d4f2705944c3c5359edcdd8067a31b7",
+    "main_head": "97b7d7b2331c52f10fbd2ba84d885183cc13cccf",
+    "main_is_ancestor_of_campaign": true
+  },
+  "live_resume": {
+    "project": "mncs-compiler",
+    "selected_cwd": ".worktrees/native-app-readiness-20261013/mncs-compiler",
+    "session_id": "ses_164edc158d9b1637",
+    "lifecycle": "active",
+    "authority_writable": [
+      "mncs-compiler"
+    ],
+    "escalation_required": [
+      "delegate",
+      "delete",
+      "merge",
+      "publish"
+    ]
+  },
+  "regression_run": {
+    "repository": "mncs-control-mcp",
+    "revision": "a4a716fee2173e03716ef9530ca6ed4adeab188a",
+    "test_file": "tests/test_environment_rpc.py",
+    "test_file_sha256": "b29b1c3bdc9406326ca5a1f872add211614fe5dc5af90bfe2e8b5a712b3d2c09",
+    "command": "PYTHONDONTWRITEBYTECODE=1 pytest -q -p no:cacheprovider tests/test_environment_rpc.py::test_registered_nested_worktree_drives_project_profile_selection tests/test_environment_rpc.py::test_registered_checkout_selects_one_campaign_and_scoped_claims tests/test_environment_rpc.py::test_explicit_campaign_selection_does_not_bind_ambiguous_or_unlinked_rows",
+    "result": "5 passed",
+    "wall_seconds": 0.710111,
+    "test_cases": [
+      "test_registered_nested_worktree_drives_project_profile_selection",
+      "test_registered_checkout_selects_one_campaign_and_scoped_claims",
+      "test_explicit_campaign_selection_does_not_bind_ambiguous_or_unlinked_rows"
+    ]
+  },
+  "verified_behavior": [
+    "The active Compiler campaign resumes from the exact registered nested checkout.",
+    "Among multiple sessions in one campaign, the selected registered worktree determines the matching continuation.",
+    "Among multiple campaigns, the registered checkout selects its matching campaign.",
+    "Two sessions attached to the same checkout remain ambiguous and return both candidate identities.",
+    "A conflicting repository-wide claim blocks selection for an overlapping checkout scope.",
+    "An unregistered lookalike repository and a symlink escape are rejected."
+  ],
+  "limitations": [
+    "The Control regression fixtures use mncs-environment paths; the live resume independently verifies this campaign's nested Compiler worktree.",
+    "This acceptance does not establish Language write authority or Forge application execution."
+  ]
+}

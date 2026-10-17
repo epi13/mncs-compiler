@@ -19,6 +19,18 @@ Examples include:
 
 Do not describe a compiler capability as complete because source code for it exists. Link or store executable evidence showing that the behavior works with the pinned toolchain revision.
 
+## Environment continuation and registered worktree acceptance (2026-10-17)
+
+The [continuity acceptance record](environment-continuity-acceptance-20261017.json)
+captures a fresh resume of the authenticated Compiler campaign in its nested
+registered worktree and five passing Control regression cases. The cases cover
+nested checkout recognition, selection by exact registered checkout across
+multiple sessions and campaigns, refusal of duplicate sessions for one
+checkout, and preservation of repository-wide claim conflicts. The nested
+worktree fixture also rejects an unregistered lookalike and a symlink escape.
+This validates the Environment and Control continuation path; it does not
+provision Language write scope or a Forge application-execution binding.
+
 ## Compiler-parity snapshot (2026-09-29)
 
 This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,
