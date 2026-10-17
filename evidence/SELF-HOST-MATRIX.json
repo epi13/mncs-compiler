@@ -298,7 +298,7 @@
         "ssa_verified_function_count": 20,
         "ssa_value_count": 693,
         "ssa_instruction_count": 198,
-        "current_source_sha256": "6bd8f0ea920ae21c6405b574fa32b356156be383e44eb22560ec67b392b2a1a1",
+        "current_source_sha256": "52d68c0e5ab71f1badc996d7609dc6ae3d088051fea7cbbc9404d839efeec5bd",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_ascii_global_four_byte_frontier": {
@@ -419,6 +419,46 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "source.ascii_global and its bounded source.ascii helper inspect eight bytes per MNCS loop transition and return immediately at the first non-ASCII byte. ASCII tails from zero through seventeen bytes and every non-ASCII position in a two-page seventeen-byte view are checked alongside 64 KiB and 256 KiB cases. The selected source callable agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a bounded source-scanner frontier, not full source-module verification or compiler succession."
+        },
+        "selected_ascii_global_first_invalid_page_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "target_module": "mncs.compiler.source.v1",
+          "target_function": "ascii_global",
+          "candidate_source_sha256": "52d68c0e5ab71f1badc996d7609dc6ae3d088051fea7cbbc9404d839efeec5bd",
+          "evidence_artifact": "evidence/self-host-source-ascii-global-early-exit-20261017.json",
+          "evidence_sha256": "3626420d338f4e473e7cda7918caa349c781aba5296e6dcc44f525a725913fe6",
+          "compiler_revision_tested": "2afb6ae79a8cab94c8bbdf81b2a0a2ae39f0e130",
+          "canonical_vm_cases": 71,
+          "artifact_identity": "sha256:60f8a563b843742d8a3f94d8307aaf88070dae6dba8e4b416360a3853e5ffa0e",
+          "page_strides": [
+            9,
+            1024
+          ],
+          "reference_interpreter_steps_candidate": {
+            "ascii-64k": 585230,
+            "ascii-256k": 2340878,
+            "nonascii-last-256k": 2340774,
+            "nonascii-first-256k": 51
+          },
+          "performance_summary": {
+            "reference_interpreter_step_change_percent_vs_sixteen_byte": {
+              "ascii-64k": 0.03,
+              "ascii-256k": 0.03,
+              "nonascii-last-256k": 0.03,
+              "nonascii-first-256k": -98.36
+            },
+            "reference_interpreter_wall_seconds_candidate": {
+              "ascii-64k": 1.803091,
+              "ascii-256k": 6.947023,
+              "nonascii-last-256k": 6.869855,
+              "nonascii-first-256k": 0.344687
+            },
+            "interpretation": "The first-invalid-byte case fell from 3,114 to 51 reference steps (98.36%). Full ASCII and last-byte scans changed by +0.03% steps. Wall-time results are single-run observations and do not establish a general speedup."
+          },
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "The selected source.ascii_global callable short-circuits the page walk after the first page reports a non-ASCII byte. It agrees across the reference interpreter, Cranelift, and one fresh canonical VM artifact for 71 inputs. This bounded callable frontier does not establish full Source module verification or compiler succession."
         }
       }
     },

@@ -392,6 +392,16 @@ Cranelift wall times for the large scans were about 2% to 3% higher, so this
 record does not claim a wall-time speedup. The full source module remains
 unproven; Language verified facts remain unreused.
 
+The [first-invalid-page frontier](self-host-source-ascii-global-early-exit-20261017.json)
+keeps the same 71 cases and returns from the page walk after the first page
+reports a non-ASCII byte. For a 256 KiB input with a non-ASCII first byte,
+reference interpreter work fell from 3,114 to 51 steps (98.36%). Full ASCII
+and last-byte scans changed by 0.03% in steps; single-run wall times do not
+establish a general speedup. The callable agreed across the reference
+interpreter, Cranelift, and canonical VM. Language verified facts remain
+unreused, and full Source module verification and compiler succession remain
+unproven.
+
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)
