@@ -309,7 +309,8 @@ fn capability_dispatch_binding(
     let ssa = admitted
         .ssa_module()
         .ok_or_else(|| "admitted artifact does not contain selected SSA".to_owned())?;
-    let mut aliases = std::collections::BTreeMap::<String, usize>::new();
+    let mut identities_by_alias = std::collections::BTreeMap::<String, BTreeSet<String>>::new();
+    let mut selected_aliases = std::collections::BTreeMap::<String, usize>::new();
     let mut host_call_count = 0usize;
     for instruction in ssa
         .functions
@@ -319,30 +320,57 @@ fn capability_dispatch_binding(
     {
         if let mncs_model::SsaInstructionKind::HostCall { capability, .. } = &instruction.kind {
             host_call_count += 1;
-            let matches = instruction
-                .capability_uses
-                .iter()
-                .filter(|usage| usage.capability.0 == authorized_identity)
-                .count();
-            if matches != 1 {
+            if instruction.capability_uses.len() != 1 {
                 return Err(format!(
-                    "HostCall {capability:?} has {matches} uses of authorized identity {authorized_identity}"
+                    "HostCall {capability:?} has {} canonical capability uses; expected exactly one",
+                    instruction.capability_uses.len()
                 ));
             }
-            *aliases.entry(capability.clone()).or_default() += 1;
+            let identity = instruction.capability_uses[0].capability.0.clone();
+            if !admitted
+                .artifact
+                .requirements
+                .capabilities
+                .iter()
+                .any(|required| required == &identity)
+            {
+                return Err(format!(
+                    "HostCall {capability:?} uses capability identity {identity} absent from artifact requirements"
+                ));
+            }
+            identities_by_alias
+                .entry(capability.clone())
+                .or_default()
+                .insert(identity.clone());
+            if identity == authorized_identity {
+                *selected_aliases.entry(capability.clone()).or_default() += 1;
+            }
         }
     }
-    if host_call_count == 0 || aliases.len() != 1 {
+    if host_call_count == 0 || selected_aliases.is_empty() {
         return Err(format!(
-            "expected HostCalls to resolve one runtime alias, found {host_call_count} HostCalls and {} aliases",
-            aliases.len()
+            "expected HostCalls for authorized identity {authorized_identity}, found {host_call_count} total HostCalls"
         ));
     }
-    let (alias, mapped_calls) = aliases.into_iter().next().expect("one alias checked");
-    if mapped_calls != host_call_count {
-        return Err("not every HostCall maps to the same authorized capability".to_owned());
+    if selected_aliases.len() != 1 {
+        return Err(format!(
+            "authorized identity {authorized_identity} maps to {} runtime aliases",
+            selected_aliases.len()
+        ));
     }
-    Ok((alias, host_call_count))
+    let (alias, mapped_calls) = selected_aliases
+        .into_iter()
+        .next()
+        .expect("selected alias checked");
+    let aliases_for_identity = identities_by_alias
+        .get(&alias)
+        .expect("selected alias recorded");
+    if aliases_for_identity.len() != 1 || !aliases_for_identity.contains(authorized_identity) {
+        return Err(format!(
+            "runtime alias {alias:?} maps to multiple canonical capability identities"
+        ));
+    }
+    Ok((alias, mapped_calls))
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
