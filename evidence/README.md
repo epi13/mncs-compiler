@@ -247,6 +247,23 @@ The Compiler application cache can now use
 retaining the compiler program cache. The focused Rust cache-path unit test
 passed.
 
+## Imported nominal field application-cache invalidation (2026-10-17)
+
+The [imported nominal cache report](self-host-imported-nominal-app-cache-invalidation-20261017.json)
+uses a real two-module application. An unchanged request reuses its exact
+artifact in 0.4 ms with no frontend invocation. Changing only the imported
+`Box.padding` field from `bool` to `u8` changes the canonical record identity,
+runs the frontend, and emits a different artifact. Both artifacts return the
+same `u64` value from `demo.root::read` in the canonical VM. Changing the
+projected `Box.value` field to `bool` is rejected with the same `MNE163` and
+`MNE103` diagnostics as the independent Stage-0 oracle; the cache bypasses and
+emits no artifact. The entire frontier took 0.50 seconds and peaked at about
+12.6 MB in the retained probe process; cgroup measurements were unavailable.
+
+These changed-source builds still rerun the full frontend and reuse zero
+Language-owned verified facts. This proves imported nominal artifact
+invalidation and fresh diagnostics, not semantic-fact reuse.
+
 ## Succession evidence
 
 As `mncs-compiler` approaches canonical status, maintain a succession matrix covering at minimum:

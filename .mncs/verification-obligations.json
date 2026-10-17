@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 32,
+  "revision": 33,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -1577,6 +1577,69 @@
         ],
         "working_directory": ".",
         "timeout_seconds": 900,
+        "effects": [
+          "verify"
+        ],
+        "ephemeral_roots": [
+          ".build/native-app-readiness"
+        ]
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "subject_identity",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.imported-nominal-application-cache-invalidation",
+      "title": "Imported nominal interface edits invalidate application artifacts and invalid source cannot reuse prior success",
+      "guarantee_domain": "native_application_execution",
+      "evidence_role": "differential_oracle",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs.compiler.application-build-request/1",
+        "mncs.compiler.application-build/4",
+        "mncs.compiler.application-build-cache-observation/4",
+        "mncs.compiler.application-build-verification-work/1",
+        "mncs.compiler.application-executable-closure-identity/2",
+        "mncs.vm.artifact/1",
+        "mncs:0.2:function:demo.root::read",
+        "mncs:0.2:record-type:demo.dep::Box::padding%3Abool%3Bvalue%3Au64%3B",
+        "mncs:0.2:record-type:demo.dep::Box::padding%3Au8%3Bvalue%3Au64%3B"
+      ],
+      "invalidation_dependencies": [
+        ".mncs/project.json",
+        ".mncs/verification-obligations.json",
+        "mncs-language.lock.json",
+        "tools/stage0-probe/src/application.rs",
+        "tools/stage0-probe/src/main.rs",
+        "tools/test_vm_project_imported_flow_ssa.py",
+        "tools/test_vm_application_cache_imported_nominal.py",
+        "tools/test_vm_emit.py",
+        "tools/test_vm_segment.py",
+        "tools/vm-artifact-codec/"
+      ],
+      "executor": {
+        "provider": "mncs-compiler",
+        "kind": "external_integration",
+        "entrypoint": "python3 tools/test_vm_application_cache_imported_nominal.py",
+        "argv": [
+          "python3",
+          "tools/test_vm_application_cache_imported_nominal.py"
+        ],
+        "working_directory": ".",
+        "timeout_seconds": 300,
         "effects": [
           "verify"
         ],
