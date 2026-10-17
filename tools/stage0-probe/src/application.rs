@@ -1885,6 +1885,39 @@ mod tests {
         let selected_type_edit = compile("value: u64, next: u64", "left: u64");
         assert_ne!(baseline, selected_type_edit);
     }
+
+    #[test]
+    fn executable_closure_identity_invalidates_a_changed_selected_generic_body() {
+        let compile = |body: &str| {
+            let source = format!(
+                "mncs 0.18; module semantic.generic; \
+                 fn identity<T>(tag: T, value: u64) -> (result: u64) {{ {body} }}"
+            );
+            let seed = HostGenericSeedRequest::from_request(
+                "semantic.generic",
+                "identity",
+                &[ExecutionTypeArgument::Type { ty: "u64".to_owned() }],
+            );
+            let seeds = [seed];
+            let frontend =
+                ReferenceCompiler::default().front_end_with_seeds(envelope(&source), &seeds);
+            assert!(
+                frontend.is_valid(),
+                "generic body source: {:?}",
+                frontend.diagnostics
+            );
+            application_executable_closure_identity(
+                frontend.program.as_ref().expect("valid generic Program"),
+                &[("semantic.generic".to_owned(), "identity".to_owned())],
+                &seeds,
+            )
+            .expect("verified generic executable closure identity")
+        };
+
+        let baseline = compile("return value;");
+        let changed_body = compile("return value +% 1;");
+        assert_ne!(baseline, changed_body);
+    }
 }
 
 /// Compile a bounded module snapshot with the pinned compiler and emit the

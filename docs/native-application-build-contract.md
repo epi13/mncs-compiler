@@ -116,6 +116,18 @@ report one full frontend invocation and an empty `reused_semantic_facts` list,
 even when a compatible executable artifact is reused after verification.
 This is the measured baseline for integrating a Language-owned fact cache.
 
+The real `mncs-test` readiness application also exercises an edit to the body
+of the selected `mncs.test.suite::summarize<N=4>` specialization. A semantic
+change to the generic body produced a different executable artifact, and the
+Stage-0 result matched canonical VM execution. The changed source still ran
+the full frontend; fresh-process reuse of that exact result then skipped it.
+The regression is
+`tools/test_vm_native_generic_specialization_invalidation.py`, with exact
+provenance and measurements in
+`evidence/native-app-readiness-test-generic-specialization-invalidation-20261017.json`.
+It proves Compiler artifact invalidation for this specialization, not
+Language-owned verified-fact reuse.
+
 ## Language incremental-fact handoff
 
 The first Language-owned slice should let the Compiler submit a fresh source

@@ -255,9 +255,8 @@ diagnostics on the real Automation/Test source closure. The Compiler still
 rechecked the full frontend, and Language facts reused remained zero. Evidence
 [`evidence/native-app-readiness-automation-interface-invalidation-20261017.json`](../evidence/native-app-readiness-automation-interface-invalidation-20261017.json)
 has SHA-256 `b25d5d47d9ff658aab578898fc37bf22f62bb633228d787e990834f27bacf2b6`
-and records the exact application harness hash. This does not prove
-generic-specialization invalidation, nominal type invalidation, Forge routing,
-or Language-owned fact reuse.
+and records the exact application harness hash. This does not prove nominal
+type invalidation, Forge routing, or Language-owned fact reuse.
 
 A combined follow-up also renamed the imported `NextOccurrence.at_ms` field.
 The stale constructor and projection set was freshly rejected with `MNE172`
@@ -271,8 +270,32 @@ cgroup memory was unavailable. The combined evidence also repeats the imported
 function-signature case and records the exact harness hash:
 [`evidence/native-app-readiness-automation-dependency-invalidation-20261017.json`](../evidence/native-app-readiness-automation-dependency-invalidation-20261017.json)
 (SHA-256 `0538e424a111d64ca820d8c64989d2c74b153b619f485375f9c2704623bd908b`).
-The frontend still rechecks every changed snapshot, Language facts reused are
-zero, and generic-specialization invalidation remains unproven.
+The frontend still rechecks every changed snapshot and Language facts reused
+are zero.
+
+## Test generic-specialization invalidation (2026-10-17)
+
+The native Test readiness application now has a focused generic-body
+invalidation regression. The harness changes only the imported
+`mncs.test.suite::summarize<N=4>` body so that its returned total increments by
+one. The Compiler rebuilt the specialized artifact from
+`sha256:55c18fc3ffe204e9c6326e4675e233d524d67d93facb3ccbe76562541f5b68e7` to
+`sha256:1a3f36febec108e0c3218728e5c2cea71ebd9ae902a8ae10d69bbb5e1f73e2ac`.
+The Stage-0 oracle and canonical VM both returned the changed total of 5
+(baseline 4). The changed source used one full frontend invocation; a fresh
+process then reused the exact artifact with zero frontend invocations. Build
+times were 0.526 s cold, 0.441 s after the generic edit, and 0.125 s for the
+fresh-process hit. Peak RSS was 56.8 MiB, 58.1 MiB, and 23.6 MiB respectively;
+cgroup memory counters were unavailable.
+
+This verifies generic-specialization artifact invalidation and current
+execution behavior, while Language facts reused remained zero. A Compiler unit
+test also asserts that a semantically changed selected generic body changes the
+executable-closure identity. The `mncs-test` checkout remained read-only. Evidence
+[`evidence/native-app-readiness-test-generic-specialization-invalidation-20261017.json`](../evidence/native-app-readiness-test-generic-specialization-invalidation-20261017.json)
+has SHA-256
+`cdcde90d6cb328e3c40aa670fbe2029cdcc5510ad1d0fb64f0bf230d90c554f0` and records
+the exact Compiler, Stage-0, VM, Test, and harness identities.
 
 ## Evidence boundary
 
