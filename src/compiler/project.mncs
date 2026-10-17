@@ -132,7 +132,8 @@ enum ProjectDiagnostic {
     ParseFailed { source_index: u64, start: u64, end: u64 },
     ProofFailed { source_index: u64, start: u64, end: u64 },
     FlowFailed { source_index: u64, code: u64, start: u64, end: u64 },
-    TargetModuleMissing { source_index: u64 }
+    TargetModuleMissing { source_index: u64 },
+    ImportLimitExceeded { source_index: u64, start: u64, end: u64, limit: u64 }
 }
 enum DiagnosticList { DiagNil, DiagCons { head: ProjectDiagnostic, tail: DiagnosticList } }
 record DiagnosticReverse { rest: DiagnosticList, acc: DiagnosticList }
@@ -409,16 +410,28 @@ fn resolve_use_list<M: Nat, N: Nat>(
     valid: bool,
     count: u64
 ) -> (result: UseResolution) {
-    iterate i over sources carrying st: ResolveUses = ResolveUses {
+    iterate i up_to 64 carrying st: ResolveUses = ResolveUses {
         rest: uses,
         imports: imports,
         diagnostics: diagnostics,
         valid: valid,
         count: count
     } {
+        if decl.use_list_empty(st.rest) { return finish_use_resolution(st, current.source_index, 64); }
         next st = resolve_use_step<M, N>(sources, flat_pages, all, current, st);
     }
-    return UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count };
+    return finish_use_resolution(st, current.source_index, 64);
+}
+fn finish_use_resolution(st: ResolveUses, source_index: u64, limit: u64) -> (result: UseResolution) {
+    return match st.rest {
+        UNil => UseResolution { imports: st.imports, diagnostics: st.diagnostics, valid: st.valid, count: st.count },
+        UCons { head: usage, tail: rest } => UseResolution {
+            imports: st.imports,
+            diagnostics: DiagnosticList.DiagCons { head: ProjectDiagnostic.ImportLimitExceeded { source_index: source_index, start: usage.module_start, end: usage.module_end, limit: limit }, tail: st.diagnostics },
+            valid: false,
+            count: st.count
+        }
+    };
 }
 fn resolve_use_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: ResolveUses) -> (result: ResolveUses) {
     return match st.rest {
@@ -779,9 +792,8 @@ fn span_compare_step<N: Nat>(left_pages: [[byte; up_to N]; up_to 1024], left_str
 }
 
 fn reverse_imports<M: Nat>(sources: [ProjectSource; up_to M], imports: ImportList) -> (result: ImportList) {
-    // Each of at most 64 source modules resolves at most 64 uses. The
-    // aggregate edge bound is therefore 4096; source count alone is not an
-    // import-list bound for a dense project.
+    // Each of at most 64 source modules admits at most 64 uses; four chunks
+    // retain the complete project import list (4096 links).
     let first: ImportReverse = reverse_import_part(ImportReverse { rest: imports, acc: ImportList.INil });
     let second: ImportReverse = reverse_import_part(first);
     let third: ImportReverse = reverse_import_part(second);
@@ -1500,8 +1512,9 @@ fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_
 // Resolve the target's transitive import closure for schema construction.
 // Import signatures and source diagnostics still use the complete project;
 // only record and enum schemas are restricted to modules that can affect the
-// selected module. Up to 64 sources and 64 resolved uses per source bound the
-// import list at 4096 links. Repeated passes handle source ordering and cycles.
+// selected module. Each module admits at most 64 uses, and the project has at
+// most 64 sources, which bounds the link walk below to 4096 entries. Repeated
+// passes handle source ordering and cycles.
 fn project_import_closure(imports: ImportList, target_source_index: u64) -> (result: ProjectIndexList) {
     let first: ProjectImportClosure = ProjectImportClosure { indices: ProjectIndexList.PICons { head: target_source_index, tail: ProjectIndexList.PINil }, changed: true };
     iterate i up_to 64 carrying st: ProjectImportClosure = first {
@@ -1702,7 +1715,7 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte
         valid: valid,
         fingerprint: snapshot.fingerprint,
         fingerprint_authenticated: false,
-        value_ssa_valid: lowered.ssa_valid,
+        value_ssa_valid: lowered.ssa_valid && resolved.valid,
         source_count: snapshot.sources.len,
         module_count: built.count,
         import_count: resolved.count,
@@ -1736,7 +1749,7 @@ fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages:
         valid: valid,
         fingerprint: snapshot.fingerprint,
         fingerprint_authenticated: false,
-        value_ssa_valid: lowered.ssa_valid && !(lowered.target_missing),
+        value_ssa_valid: lowered.ssa_valid && resolved.valid && !(lowered.target_missing),
         source_count: snapshot.sources.len,
         module_count: built.count,
         import_count: resolved.count,

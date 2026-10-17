@@ -1,0 +1,107 @@
+{
+  "schema_version": "mncs.compiler.project-import-overflow-rejection/1",
+  "identity": "ev_compiler_project_import_overflow_rejection_20261017",
+  "kind": "self-hosted-project-import-limit-regression",
+  "observed_at": "2026-10-17T07:02:01Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "base_revision": "29a7b4e041fc2686d98b720123f4a58f180a360a",
+    "working_tree_dirty_during_verification": true,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "14ec929f81b749cac496cfab197dd2e98b926f5e682bdd3a763e1e8b31b94a07",
+    "changed_sources": {
+      "src/compiler/project.mncs": "793cd75b8e461c962aae58d12e8d8a992bd82fd235b042570b60abc73c11e1c7",
+      "tools/test_project_import_link_capacity.py": "6c1a3fe7757d8c6c522843cf5656478606c2d5633362389e359778f7fcaa2a24"
+    }
+  },
+  "change": {
+    "summary": "Project import traversal now processes the explicit 64-use per-module bound, reports ImportLimitExceeded at the first unprocessed import, and makes the project SSA-valid flag depend on complete successful import resolution.",
+    "previous_failure": "resolve_use_list iterated once per source module; any remaining uses after that loop were dropped without a diagnostic, allowing valid=true with an incomplete import list.",
+    "per_module_import_limit": 64,
+    "maximum_project_import_links": 4096,
+    "diagnostic": {
+      "variant": "ImportLimitExceeded",
+      "fields": ["source_index", "start", "end", "limit"],
+      "source_location": "module-name span of the first use beyond the bound"
+    },
+    "verified_ssa_requires_complete_resolution": true
+  },
+  "verification": {
+    "status": "passed",
+    "backend": "cranelift",
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.project-import-link-capacity",
+    "binding_id": "cap_8d168014771c2662",
+    "provider_request_id": "req_54e0b215bf45740521ad812427da21850dee35aafe0f8a9e",
+    "environment_events": [
+      {
+        "sequence": 1611,
+        "identity": "evt_c3ab942d865ef2e0",
+        "type": "capability.invoked",
+        "observed_at": "2026-10-17T06:55:09+00:00"
+      },
+      {
+        "sequence": 1612,
+        "identity": "evt_b5941b1bec6d0dc1",
+        "type": "invocation.completed",
+        "observed_at": "2026-10-17T07:01:01+00:00",
+        "status": "ok",
+        "returncode": 0,
+        "artifact_store_ref": null
+      }
+    ],
+    "native_project_valid": true,
+    "native_target_ssa_valid": true,
+    "all_transitive_record_schemas_verified": true,
+    "dense_project": {
+      "source_count": 6,
+      "expected_import_links": 15,
+      "observed_import_links": 15,
+      "link_set_matches_source_graph": true,
+      "target_flow_proof_passed": true,
+      "verified_target_functions": 1,
+      "stage0_oracle_valid": true
+    },
+    "boundary_cases": {
+      "loaded_module_count": 2,
+      "native_and_stage0_accept_64_imports": true,
+      "native_rejects_65th_import": true,
+      "stage0_accepts_65_imports": true,
+      "native_import_count_before_rejection": 64,
+      "diagnostic_payload": {
+        "source_index": 1,
+        "start": 1367,
+        "end": 1375,
+        "limit": 64
+      },
+      "value_ssa_valid_after_rejection": false
+    },
+    "probe_request_count": 8,
+    "result_sha256": "3c93973e85e16a4e3521faccfb6efdc196268e343ad649f9bd93833f69e01beb"
+  },
+  "resource_observations": {
+    "invocation_wall_seconds": 352,
+    "stage0_probe_ready_seconds": 350.1,
+    "sampled_process_rss_kib_max": 5605704,
+    "rss_peak_measured": false,
+    "cgroup_memory_measurement": "unavailable",
+    "host_available_memory_gib_observed_range": [16, 22],
+    "orphan_probe_after_completion": false
+  },
+  "scope": {
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_performed": false,
+    "native_application_execution_changed": false,
+    "full_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "limitations": [
+    "The explicit 64-use bound is a compiler resource limit; this regression does not claim unbounded import support.",
+    "The Stage-0 differential proves this selected import-bound behavior only, not whole Project module succession.",
+    "No Language facts were reused because the current authenticated campaign grants writable scope only to mncs-compiler."
+  ]
+}

@@ -37,6 +37,20 @@ def _dense_dag():
     return sources, modules, root
 
 
+def _repeated_import_source(import_count: int) -> tuple[list, str]:
+    dependency = "mncs 0.18; module demo.dep; record R { value: u64 }"
+    root = "mncs 0.18; module demo.root;\n"
+    root += "".join(
+        f"use demo.dep as d{index};\n" for index in range(import_count)
+    )
+    root += "fn main() -> (result: u64) { return 1; }\n"
+    sources = [
+        ("00-dep.mncs", Path("00-dep.mncs"), dependency.encode()),
+        ("zz-root.mncs", Path("zz-root.mncs"), root.encode()),
+    ]
+    return sources, root
+
+
 def run():
     _seed_target_specialization()
     probe = project.Probe()
@@ -80,6 +94,52 @@ def run():
         oracle = probe.send({"project_oracle": {"root": root, "modules": modules}})
         assert oracle.get("valid") is True, oracle
         assert oracle.get("program") is not None and oracle.get("ssa") is not None, oracle
+
+        # Import traversal admits up to the bounded 64-use limit, independent
+        # of the number of loaded modules.
+        many_sources, many_root = _repeated_import_source(64)
+        many_request = _target_request(
+            project.request_value(identities, many_sources), 1,
+        )
+        many_response = probe.send(many_request)
+        assert many_response.get("status") == "returned", many_response
+        many_native = project.decode(many_response["returned"][0])
+        many_imports = project.flist(many_native["imports"])
+        assert many_native["valid"] and many_native["value_ssa_valid"], many_native
+        assert many_native["import_count"] == len(many_imports) == 64, many_native
+        many_oracle = probe.send({"project_oracle": {
+            "root": many_root,
+            "modules": {"demo.dep": "mncs 0.18; module demo.dep; record R { value: u64 }"},
+        }})
+        assert many_oracle.get("valid") is True, many_oracle
+
+        # A 65th declaration exceeds the per-module bound. Fail at its source
+        # span rather than accepting truncation.
+        over_sources, over_root = _repeated_import_source(65)
+        over_request = _target_request(
+            project.request_value(identities, over_sources), 1,
+        )
+        over_response = probe.send(over_request)
+        assert over_response.get("status") == "returned", over_response
+        over_native = project.decode(over_response["returned"][0])
+        over_imports = project.flist(over_native["imports"])
+        over_diagnostics = project.flist(over_native["diagnostics"])
+        assert not over_native["valid"], over_native
+        assert not over_native["value_ssa_valid"], over_native
+        assert over_native["import_count"] == len(over_imports) == 64, over_native
+        assert len(over_diagnostics) == 1, over_diagnostics
+        diagnostic = over_diagnostics[0].get("$p", {})
+        expected_start = over_root.rfind("use demo.dep as d64;") + len("use ")
+        assert diagnostic.get("source_index") == 1, over_diagnostics
+        assert diagnostic.get("limit") == 64, over_diagnostics
+        assert diagnostic.get("start") == expected_start, over_diagnostics
+        assert diagnostic.get("end") == expected_start + len("demo.dep"), over_diagnostics
+        over_oracle = probe.send({"project_oracle": {
+            "root": over_root,
+            "modules": {"demo.dep": "mncs 0.18; module demo.dep; record R { value: u64 }"},
+        }})
+        assert over_oracle.get("valid") is True, over_oracle
+
         return {
             "schema_version": "mncs.compiler.project-import-link-capacity/1",
             "status": "verified",
@@ -91,6 +151,13 @@ def run():
             "native_target_ssa_valid": target_module["value_ssa"]["valid"],
             "stage0_oracle_valid": oracle["valid"],
             "all_transitive_record_schemas_verified": True,
+            "imports_at_module_limit_resolved": many_native["import_count"] == 64,
+            "stage0_accepts_64_imports": many_oracle["valid"],
+            "per_module_import_limit": 64,
+            "over_limit_import_declaration_count": 65,
+            "over_limit_imports_rejected": not over_native["valid"],
+            "over_limit_diagnostic": over_diagnostics[0],
+            "stage0_accepts_65_imports": over_oracle["valid"],
             "probe_request_count": probe.requests,
             "result_sha256": probe.digest.hexdigest(),
         }
