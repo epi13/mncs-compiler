@@ -1,0 +1,97 @@
+{
+  "schema_version": "mncs.compiler.project-source-capacity/1",
+  "identity": "ev_compiler_project_source_capacity_64_connected_20261017",
+  "kind": "self-hosted-project-source-capacity",
+  "observed_at": "2026-10-17T08:35:10Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "environment_claim": {
+    "identity": "clm_b1b245991e6a7569",
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "scope": "worktree",
+    "status": "held"
+  },
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "tested_base_revision": "30ed963541045864c1942674a4f055b43b113b03",
+    "project_source_commit": "8039e4423f648428d7369b1e55cfdb6561f3e9a8",
+    "project_module_sha256": "9c28456430f9a487faf36aa7a09c98768428a7cec56280f59f303a0f3669e8a8",
+    "test_harness_path": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "041e11ce88929fa2f148890d4ac8359c6c33348a7b130d0d027788a871ca6f47",
+    "worktree_dirty_during_verification": true,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "14ec929f81b749cac496cfab197dd2e98b926f5e682bdd3a763e1e8b31b94a07"
+  },
+  "change": {
+    "summary": "Extended the Project import-capacity verification with a fully connected 64-source chain. The Compiler source is unchanged; the test now exercises the existing source-count maximum through target-only Flow/SSA and an independent Stage-0 oracle.",
+    "previous_gap": "The 4096-link integration fixture used five sources, while the independent Stage-0 fixture used six. Neither exercised the Project maximum of 64 source modules.",
+    "source_count_limit": 64,
+    "tested_source_count": 64,
+    "connected_import_links": 63,
+    "target_only_semantic_units": 1
+  },
+  "verification": {
+    "status": "passed",
+    "executor": "mncs-control-terminal tracked asynchronous project job",
+    "control_job_id": "term-35350864304bb82207dfa8b4",
+    "control_scope": "project",
+    "network": false,
+    "backend": "cranelift",
+    "returncode": 0,
+    "started_at": "2026-10-17T08:33:24.426467Z",
+    "completed_at": "2026-10-17T08:34:22.819273Z",
+    "wall_seconds": 58.392806,
+    "stage0_ready_seconds": 54.1,
+    "probe_request_count": 13,
+    "result_sha256": "7bb619fdfbc0fc913e0229d11f44763d72f6e816a8ac468ab67b01593c24c143",
+    "connected_source_capacity": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "native_project_valid": true,
+      "target_only_module_count": 1,
+      "target_flow_valid": true,
+      "target_ssa_valid": true,
+      "stage0_oracle_valid": true,
+      "stage0_verified_function_count": 64,
+      "root_import_identity_matches_stage0": true
+    },
+    "import_link_capacity_regression": {
+      "per_module_limit": 1024,
+      "accepts_1024": true,
+      "rejects_1025": true,
+      "project_link_limit": 4096,
+      "accepts_4096": true,
+      "rejects_4097": true,
+      "retained_overflow_links": 4096,
+      "source_located_overflow_diagnostic_count": 1
+    }
+  },
+  "resource_observations": {
+    "host_available_memory_after_bytes": 24279576576,
+    "host_memory_sampled_at": "2026-10-17T08:34:48Z",
+    "cgroup_memory_measurement": "unavailable",
+    "process_cpu_time": "unavailable",
+    "peak_rss_measured": false,
+    "orphan_probe_after_completion": false
+  },
+  "scope": {
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_performed": false,
+    "native_application_execution_changed": false,
+    "whole_project_module_proven": false,
+    "compiler_self_consumption_frontier_advanced": true,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "limitations": [
+    "The test proves the maximum 64-source connected import chain; it does not test rejection of a 65th source.",
+    "Native target-only Flow and SSA cover the selected root module; Stage 0 verifies the full 64-function dependency program.",
+    "This advances a bounded Project admission frontier, not full Project module proof, Language-owned verified-fact reuse, or application execution.",
+    "Peak RSS, per-process CPU time, and cgroup memory were unavailable."
+  ]
+}

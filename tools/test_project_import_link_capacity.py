@@ -77,6 +77,32 @@ def _project_boundary_sources(with_overflow: bool) -> list:
     return sources
 
 
+def _connected_source_capacity_project(source_count: int = 64) -> tuple[list, dict, str]:
+    """Build a fully connected import chain at the Project source bound."""
+    sources = []
+    modules = {}
+    for index in range(source_count):
+        module_name = f"demo.chain{index:03d}"
+        source_id = f"{index:03d}-chain{index:03d}.mncs"
+        if index == 0:
+            source = (
+                f"mncs 0.18; module {module_name};\n"
+                "fn value(x: u64) -> (result: u64) { return x; }\n"
+            )
+        else:
+            prior = f"demo.chain{index - 1:03d}"
+            source = (
+                f"mncs 0.18; module {module_name};\n"
+                f"use {prior} as prior;\n"
+                "fn value(x: u64) -> (result: u64) { "
+                "return prior.value(x) + 1; }\n"
+            )
+        sources.append((source_id, Path(source_id), source.encode()))
+        if index + 1 < source_count:
+            modules[module_name] = source
+    return sources, modules, sources[-1][2].decode()
+
+
 def run():
     _seed_target_specialization()
     probe = project.Probe()
@@ -217,6 +243,53 @@ def run():
             over_project_sources[project_source_index][0],
         )
 
+        # Exercise the maximum source count through a connected resolver
+        # closure. Stage 0 independently checks every imported function while
+        # native target-only Flow/SSA checks the selected root call.
+        capacity_sources, capacity_modules, capacity_root = (
+            _connected_source_capacity_project()
+        )
+        capacity_target_index = len(capacity_sources) - 1
+        capacity_request = _target_request(
+            project.request_value(identities, capacity_sources),
+            capacity_target_index,
+        )
+        capacity_response = probe.send(capacity_request)
+        assert capacity_response.get("status") == "returned", capacity_response
+        capacity_native = project.decode(capacity_response["returned"][0])
+        capacity_imports = project.flist(capacity_native["imports"])
+        assert capacity_native["valid"] and capacity_native["value_ssa_valid"], capacity_native
+        assert capacity_native["source_count"] == 64, capacity_native
+        assert capacity_native["module_count"] == 64, capacity_native
+        assert capacity_native["import_count"] == 63, capacity_native
+        assert len(capacity_imports) == 63, capacity_imports
+        capacity_target = project.flist(capacity_native["modules"])
+        assert len(capacity_target) == 1, capacity_target
+        assert capacity_target[0]["source_index"] == capacity_target_index
+        assert capacity_target[0]["flow"]["proof"]["ok"] is True
+        assert capacity_target[0]["value_ssa"]["valid"] is True
+        capacity_oracle = probe.send({
+            "project_oracle": {
+                "root": capacity_root,
+                "modules": capacity_modules,
+            }
+        })
+        assert capacity_oracle.get("valid") is True, capacity_oracle
+        assert len(capacity_oracle["program"]["functions"]) == 64, capacity_oracle
+        stage0_chain_calls = {
+            (function.get("home_module"), function.get("name")): function.get("identity")
+            for function in capacity_oracle["program"]["functions"]
+        }
+        native_chain_calls = [
+            project.identity_text(op["$p"]["identity"])
+            for body in project.flist(capacity_target[0]["flow"]["proof"]["tops"])
+            for op in project.flist(body)
+            if "identity" in op.get("$p", {})
+        ]
+        assert native_chain_calls == [
+            stage0_chain_calls[("demo.chain062", "value")]
+        ], (native_chain_calls, stage0_chain_calls)
+
         # Keep the guard predicate covered at the threshold as a focused check.
         limit_results = {}
         for count, expected_reached in ((4095, False), (4096, True)):
@@ -260,6 +333,17 @@ def run():
             "project_overflow_rejected": not over_project_native["valid"],
             "project_overflow_diagnostic_count": len(over_project_diagnostics),
             "project_overflow_diagnostic": over_project_diagnostics[0],
+            "connected_source_capacity": {
+                "source_count": capacity_native["source_count"],
+                "module_count": capacity_native["module_count"],
+                "import_links": capacity_native["import_count"],
+                "target_only_module_count": len(capacity_target),
+                "target_flow_valid": capacity_target[0]["flow"]["proof"]["ok"],
+                "target_ssa_valid": capacity_target[0]["value_ssa"]["valid"],
+                "stage0_oracle_valid": capacity_oracle["valid"],
+                "stage0_verified_function_count": len(capacity_oracle["program"]["functions"]),
+                "root_import_identity_matches_stage0": True,
+            },
             "project_import_link_limit": 4096,
             "global_limit_guard_below_boundary": not limit_results[4095],
             "global_limit_guard_at_boundary": limit_results[4096],
