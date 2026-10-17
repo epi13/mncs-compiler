@@ -310,6 +310,17 @@ Environment's 1-MiB per-file read bound. Exact readback metadata is in the
 and [effectful digest Store readback evidence](native-app-readiness-effectful-digest-store-readback-20261017.json).
 This is verifier-output publication, not a Forge application-execution receipt.
 
+A further Environment-bound rerun at 23:43 UTC refreshed the report against
+Compiler revision `a366a08`. The cold build took 0.529 seconds (0.48 CPU
+seconds, 65,245,184-byte peak RSS); the fresh-process unchanged build took
+0.123 seconds, and the comment-only imported-module edit took 0.317 seconds.
+The retained seven-call VM batch took 0.030 seconds and peaked at 11,882,496
+bytes. It again reused zero Language verification facts. Its 1,136,646-byte
+Store bundle was read through the selected authenticated session; the report
+and both ordered VM artifact chunks are recorded with their exact Store
+reference and SHA-256 values in the [latest readback evidence](native-app-readiness-digest-app-store-readback-20261017.json).
+This remains Compiler verifier output, not a Forge execution receipt.
+
 ## Current declaration parser frontier (2026-10-16)
 
 The [current `decl.parse_unit` frontier](self-host-decl-parse-expanded-canonical-vm-current-8817cdb-20261016.json)

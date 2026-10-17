@@ -1,0 +1,73 @@
+{
+  "schema_version": "mncs.compiler.native-test-digest-store-readback/1",
+  "identity": "ev_mncs_compiler_digest_store_readback_20261017_2348",
+  "observed_at": "2026-10-17T23:48:30Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "compiler": {
+    "revision": "a366a081dad9f98dddc37d58835e8f92fa002fad",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": ".worktrees/native-app-readiness-20261013/mncs-compiler"
+  },
+  "verification": {
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.native-test-digest-effectful-app-canonical-vm",
+    "binding_id": "cap_1d9c6205b431c144",
+    "status": "passed",
+    "exit_code": 0,
+    "artifact_store_ref": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:ff5715cc9b95079acb79c6545ee2733b04269821f763b424bb6d696f88b89ce9",
+    "artifact_file_count": 3,
+    "artifact_byte_count": 1136646,
+    "report_path": "native-app-readiness-test-digest-app.json",
+    "report_sha256": "9884f27b1c903a192120fbbd67d04f63e347552bccd056cf327a0c409e444bc2"
+  },
+  "store_readback": {
+    "operation": "artifact_read",
+    "authenticated_session": "ses_164edc158d9b1637",
+    "files": [
+      {
+        "path": "native-app-readiness-test-digest-app.json",
+        "byte_count": 28252,
+        "sha256": "9884f27b1c903a192120fbbd67d04f63e347552bccd056cf327a0c409e444bc2"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-00",
+        "byte_count": 786432,
+        "sha256": "3e6cbd312d8e11d538c7bb657104b677737d5aa3be57d9474afa08470a7c21ee"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-01",
+        "byte_count": 321962,
+        "sha256": "95afadf73980bfffbbc72b59bade02d5254e10e388f8baf6fd5b28ff6525c9a2"
+      }
+    ],
+    "report_hash_matches_local_evidence": true,
+    "vm_part_bytes_sum_to_reported_artifact_bytes": true
+  },
+  "application": {
+    "entry": "mncs.test.digest::digest_app",
+    "artifact_identity": "sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+    "artifact_file_sha256": "85de56258e67b2a56bcf9efb73d336ced308332634992671b856a330f75d9286",
+    "artifact_bytes": 1108394,
+    "successful_canonical_vm_cases": 3,
+    "retained_session_calls": 7,
+    "stage0_result_agreement": true,
+    "language_verified_facts_reused": 0
+  },
+  "performance": {
+    "cold_build_wall_seconds": 0.528972,
+    "cold_build_cpu_seconds": 0.48,
+    "cold_build_peak_rss_bytes": 65245184,
+    "fresh_process_warm_build_wall_seconds": 0.122982,
+    "comment_only_edit_wall_seconds": 0.316589,
+    "retained_session_wall_seconds": 0.03025,
+    "retained_session_cpu_seconds": 0.01,
+    "retained_session_peak_rss_bytes": 11882496,
+    "cgroup_memory_bytes": null
+  },
+  "limitations": [
+    "The run used the Compiler canonical VM test provider, not Forge native-application execution.",
+    "The Store bundle contains verification outputs and is not a Forge execution receipt.",
+    "Language-owned verified-fact reuse remains unimplemented; the report records zero reused facts.",
+    "The Environment artifact_read binding exposes only declared shareable paths; the three returned files were within that exact list."
+  ]
+}
