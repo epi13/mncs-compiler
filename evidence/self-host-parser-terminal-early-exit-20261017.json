@@ -1,0 +1,173 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-performance/1",
+  "kind": "self-hosted-parser-terminal-state-early-exit",
+  "observed_at": "2026-10-17T19:33:37Z",
+  "campaign": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "checkpoint_before": "chk_fdf19d56b10c62f5",
+    "checkpoint_sequence_before": 224,
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler"
+  },
+  "implementation": {
+    "repository": "mncs-compiler",
+    "implementation_commit": "25c435e484bc73951bce669e9b1bdb01ce175089",
+    "tested_compiler_revision": "ac23237fbaa9c67ed8e5bfffca8c3d51b11a2019",
+    "source": "src/compiler/parser.mncs",
+    "source_sha256_before": "094ceef2f80e52402c7944407eca2c877db382b541e68b821a0baebc6355cbcc",
+    "source_sha256_after": "3fb0695fa62c24d839a17ff51ac50f6399795a262ddd674c9fe80727d2b54ed5",
+    "test_harness": "tools/test_vm_parser_module_frontier.py",
+    "test_harness_sha256_before": "b6e9f267ebe6c75a5c4a1ad3df27e79fa3849512ca0606055ae80699efc7536c",
+    "test_harness_commit": "ac23237fbaa9c67ed8e5bfffca8c3d51b11a2019",
+    "test_harness_sha256_after": "dba6030e9b6a2d0cd594f461eeff3fc69b96e43abe9e25f7a5200228cfe9f27c"
+  },
+  "toolchains": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "2ea79a274da826f46aeadce81b403e350a59d69ca10878db8f12ea37ce82e75f",
+    "canonical_vm_repository": "/home/epi13/Documents/Projects/mncs-vm",
+    "canonical_vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "canonical_vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "workload": {
+    "fixture_id": "short-header-long-ascii-source",
+    "input_bytes": 1024,
+    "input_sha256": "48fff56e9dd3734855d3c287737bc345ea7bc8f56d182547d61bb9364e30f845",
+    "header_bytes": 20,
+    "trailing_ascii_bytes": 1004,
+    "specialization": "parser.header<1024>; parser.header_global<1024,1024>",
+    "preserved_behavior": "The entire input is still checked for ASCII before parsing; terminal diagnostics and spans remain unchanged."
+  },
+  "measured_work": {
+    "bounded_reference_interpreter_steps": {
+      "before": 29667,
+      "after": 12398,
+      "steps_avoided": 17269,
+      "reduction_percent": 58.209
+    },
+    "global_reference_interpreter_steps_by_stride": {
+      "strides": [
+        1,
+        7,
+        64,
+        1024
+      ],
+      "before": [
+        133701,
+        31775,
+        15809,
+        14054
+      ],
+      "after": [
+        132752,
+        30826,
+        14860,
+        13105
+      ],
+      "steps_avoided": [
+        949,
+        949,
+        949,
+        949
+      ]
+    },
+    "global_canonical_vm_steps_by_stride": {
+      "strides": [
+        1,
+        7,
+        64,
+        1024
+      ],
+      "before": [
+        176760,
+        41057,
+        19640,
+        17315
+      ],
+      "after": [
+        175586,
+        39883,
+        18466,
+        16141
+      ],
+      "steps_avoided": [
+        1174,
+        1174,
+        1174,
+        1174
+      ]
+    },
+    "regression_budget": {
+      "direct_bounded_steps_must_be_below": 20000,
+      "observed": 12398
+    }
+  },
+  "equivalence": {
+    "status": "passed",
+    "bounded_case_count": 23,
+    "global_case_count": 92,
+    "helper_case_count": 5,
+    "canonical_vm_case_count": 120,
+    "stage0_oracle_checked_fixture_count": 23,
+    "semantic_digests": {
+      "bounded": {
+        "reference_interpreter": "3da93f51c256d54fc15a02d516843fab627db200dded30a9420b973cf658f577",
+        "cranelift": "3da93f51c256d54fc15a02d516843fab627db200dded30a9420b973cf658f577",
+        "canonical_vm": "3da93f51c256d54fc15a02d516843fab627db200dded30a9420b973cf658f577"
+      },
+      "global": {
+        "reference_interpreter": "c18547542daccd9f168f84f6ea151ecf9de49301fd0fe7bdb384e850810f134d",
+        "cranelift": "c18547542daccd9f168f84f6ea151ecf9de49301fd0fe7bdb384e850810f134d",
+        "canonical_vm": "c18547542daccd9f168f84f6ea151ecf9de49301fd0fe7bdb384e850810f134d"
+      },
+      "helpers": {
+        "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+        "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+        "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+      }
+    },
+    "artifact_identity": "sha256:b61c7da7efe79563cdf9e230747a655c7e2f8d0a4c74335208d68b0ca350d7dc",
+    "all_reference_cranelift_canonical_vm_digests_match": true,
+    "known_diagnostic_divergences": 0
+  },
+  "environment_verification": {
+    "operation": "verify",
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+    "binding_id": "cap_475699f46e6ec83e",
+    "status": "passed",
+    "returncode": 0
+  },
+  "timing_seconds": {
+    "baseline_frontier_run": 37.849302,
+    "first_post_change_run": 38.337133,
+    "warm_post_change_repeat": 20.182513,
+    "committed_revision_run": 20.068892,
+    "interpretation": "Toolchain cache state was not held constant; these whole-frontier timings do not support an end-to-end speedup claim. The deterministic execution-step reduction is the measured result."
+  },
+  "resource_measurements": {
+    "committed_run_child_cpu_seconds": 19.567396,
+    "committed_run_child_peak_rss_kib": 590208,
+    "committed_run_canonical_vm_peak_rss_kib": 73276,
+    "cgroup_before": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "cgroup_after": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "cgroup_measurements_are_ambient": true,
+    "host_memory_available_after_run": "approximately 23 GiB"
+  },
+  "claim_boundaries": {
+    "language_verified_facts_reused": 0,
+    "full_parser_module_canonical_vm_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "All six parser callables were exercised at the selected 1024-byte specializations and selected states. This does not prove all type arguments, full parser-module canonical VM coverage, Language fact reuse, or compiler succession."
+  },
+  "frontier_report_artifact": "evidence/self-host-parser-module-canonical-vm-frontier-20261017-current.json",
+  "frontier_report_sha256": "33546d9f2694ab9d021da3f7c425fa70247959bef4125007291b20fb349dd141"
+}

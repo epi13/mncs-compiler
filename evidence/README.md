@@ -53,6 +53,20 @@ proves these selected parser callables, not full parser-module canonical VM
 verification or compiler succession. The parser module's overall canonical VM
 status remains `not-proven`.
 
+The [current parser-module rerun](self-host-parser-module-canonical-vm-frontier-20261017-current.json)
+tests all six parser callables at the selected 1024-byte specializations in 23
+bounded cases, 92 paged cases, and five helper calls. It records the exact
+Compiler revision `ac23237` and VM source revision `1c19a94`; the Environment
+verification passed. The [terminal-state early-exit measurement](self-host-parser-terminal-early-exit-20261017.json)
+adds a 1 KiB source with a 20-byte header. Bounded header parsing drops from
+29,667 to 12,398 reference-interpreter steps (58.2%); global reference and VM
+work also falls modestly because whole-source ASCII validation remains. All
+semantic digests match across the reference interpreter, Cranelift, and
+canonical VM. Whole-frontier wall times varied with warm toolchain caches, so
+the record makes no end-to-end timing claim. Language verified-fact reuse
+remains zero, and full parser-module canonical VM coverage and compiler
+succession remain unproven.
+
 ## Compiler-parity snapshot (2026-09-29)
 
 This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,
