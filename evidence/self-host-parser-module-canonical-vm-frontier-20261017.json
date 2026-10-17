@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
   "kind": "mncs.compiler.parser-module-direct-canonical-vm-frontier",
-  "compiler_revision_tested": "54c80d6a54bd4a702595f09acfda370715d043fc",
+  "compiler_revision_tested": "423e60c29a6c420e8f7770b8def9c884e1505f45",
   "compiler_branch": "campaign/native-application-readiness-20261013",
   "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
-  "stage0_probe_sha256": "14ec929f81b749cac496cfab197dd2e98b926f5e682bdd3a763e1e8b31b94a07",
-  "vm_revision": "54c80d6a54bd4a702595f09acfda370715d043fc",
+  "stage0_probe_sha256": "2ea79a274da826f46aeadce81b403e350a59d69ca10878db8f12ea37ce82e75f",
+  "vm_revision": "423e60c29a6c420e8f7770b8def9c884e1505f45",
   "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
   "selected_modules": [
     "source",
@@ -24,15 +24,33 @@
   "target_module": "mncs.compiler.parser.v1",
   "target_functions": [
     "header",
-    "header_global"
+    "finish",
+    "step",
+    "header_global",
+    "finish_global",
+    "step_global"
   ],
-  "test_harness_sha256": "f0943ec049003b40549b3576e505e0148f61eda7467d0d5e503d5a40d5859e41",
-  "artifact_identity": "sha256:a1b8b0ccd33370d0ad92b7c7646da688fbee6508f18ef973a9a3b196fbad7d70",
+  "test_harness_sha256": "59d91fb2fbc090b42368e99fb21ee1e119e76184c383489be564034d9b450a00",
+  "artifact_identity": "sha256:b795dcf7f3e38a92190d6ef3ac9ab9b310eea2cb135e7a3924c3ed7a875b6d2e",
   "specializations": {
     "header": [
       "1024"
     ],
+    "finish": [
+      "1024"
+    ],
+    "step": [
+      "1024"
+    ],
     "header_global": [
+      "1024",
+      "1024"
+    ],
+    "finish_global": [
+      "1024",
+      "1024"
+    ],
+    "step_global": [
       "1024",
       "1024"
     ]
@@ -217,7 +235,154 @@
   ],
   "bounded_case_count": 22,
   "global_case_count": 88,
-  "canonical_vm_case_count": 110,
+  "helper_cases": [
+    {
+      "id": "helper/step-bounded-first-token",
+      "function": "step",
+      "reference_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 0,
+        "module_start": 0,
+        "next_offset": 4,
+        "start": 0,
+        "state": 1,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "reference_steps": 462,
+      "cranelift_steps": 1,
+      "canonical_vm_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 0,
+        "module_start": 0,
+        "next_offset": 4,
+        "start": 0,
+        "state": 1,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "canonical_vm_steps": 551
+    },
+    {
+      "id": "helper/finish-bounded-semicolon",
+      "function": "finish",
+      "reference_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 23,
+        "module_start": 18,
+        "next_offset": 24,
+        "start": 0,
+        "state": 8,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "reference_steps": 222,
+      "cranelift_steps": 1,
+      "canonical_vm_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 23,
+        "module_start": 18,
+        "next_offset": 24,
+        "start": 0,
+        "state": 8,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "canonical_vm_steps": 276
+    },
+    {
+      "id": "helper/step-global-first-token",
+      "function": "step_global",
+      "reference_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 0,
+        "module_start": 0,
+        "next_offset": 4,
+        "start": 0,
+        "state": 1,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "reference_steps": 538,
+      "cranelift_steps": 1,
+      "canonical_vm_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 0,
+        "module_start": 0,
+        "next_offset": 4,
+        "start": 0,
+        "state": 1,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "canonical_vm_steps": 618
+    },
+    {
+      "id": "helper/finish-global-complete",
+      "function": "finish_global",
+      "reference_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 23,
+        "module_start": 18,
+        "next_offset": 24,
+        "start": 0,
+        "state": 8,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "reference_steps": 382,
+      "cranelift_steps": 1,
+      "canonical_vm_result": {
+        "code": 0,
+        "end": 0,
+        "module_end": 23,
+        "module_start": 18,
+        "next_offset": 24,
+        "start": 0,
+        "state": 8,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "canonical_vm_steps": 487
+    },
+    {
+      "id": "helper/finish-global-fuel-boundary",
+      "function": "finish_global",
+      "reference_result": {
+        "code": 9,
+        "end": 0,
+        "module_end": 0,
+        "module_start": 0,
+        "next_offset": 4,
+        "start": 0,
+        "state": 1,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "reference_steps": 568,
+      "cranelift_steps": 1,
+      "canonical_vm_result": {
+        "code": 9,
+        "end": 0,
+        "module_end": 0,
+        "module_start": 0,
+        "next_offset": 4,
+        "start": 0,
+        "state": 1,
+        "version_end": 0,
+        "version_start": 0
+      },
+      "canonical_vm_steps": 653
+    }
+  ],
+  "canonical_vm_case_count": 115,
   "strides": [
     1,
     7,
@@ -234,6 +399,11 @@
       "reference_interpreter": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
       "cranelift": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9",
       "canonical_vm": "2cf4643fd6694d44cfced374200fd8915bb1b83fb928c78998c710e7e93ef4f9"
+    },
+    "helpers": {
+      "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+      "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+      "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
     }
   },
   "step_observations": {
@@ -506,21 +676,42 @@
       760,
       358,
       358
-    ]
+    ],
+    "reference_helpers": {
+      "helper/step-bounded-first-token": 462,
+      "helper/finish-bounded-semicolon": 222,
+      "helper/step-global-first-token": 538,
+      "helper/finish-global-complete": 382,
+      "helper/finish-global-fuel-boundary": 568
+    },
+    "cranelift_helpers": {
+      "helper/step-bounded-first-token": 1,
+      "helper/finish-bounded-semicolon": 1,
+      "helper/step-global-first-token": 1,
+      "helper/finish-global-complete": 1,
+      "helper/finish-global-fuel-boundary": 1
+    },
+    "canonical_vm_helpers": {
+      "helper/step-bounded-first-token": 551,
+      "helper/finish-bounded-semicolon": 276,
+      "helper/step-global-first-token": 618,
+      "helper/finish-global-complete": 487,
+      "helper/finish-global-fuel-boundary": 653
+    }
   },
   "timing_seconds": {
-    "stage0_oracles_and_reference_execution": 9.583061,
-    "direct_vm_emission": 2.414909,
-    "cranelift_execution": 0.040735,
-    "canonical_vm_batch": 3.364714,
-    "whole_frontier": 19.933148
+    "stage0_oracles_and_reference_execution": 9.618801,
+    "direct_vm_emission": 2.468827,
+    "cranelift_execution": 0.041946,
+    "canonical_vm_batch": 3.353952,
+    "whole_frontier": 36.213035
   },
   "resource_measurements": {
-    "child_cpu_seconds": 19.437684,
-    "child_peak_rss_kib": 585652,
-    "canonical_vm_peak_rss_kib": 72860,
-    "canonical_vm_calls_bytes": 286749,
-    "canonical_vm_results_bytes": 213072,
+    "child_cpu_seconds": 35.650162,
+    "child_peak_rss_kib": 715104,
+    "canonical_vm_peak_rss_kib": 72864,
+    "canonical_vm_calls_bytes": 296998,
+    "canonical_vm_results_bytes": 222678,
     "cgroup_before": {
       "memory.current": null,
       "memory.max": null,
@@ -533,7 +724,7 @@
     },
     "cgroup_measurements_are_ambient": true
   },
-  "scope": "parser.header and parser.header_global are selected directly from the parser module, rather than through kernel wrappers. The bounded and paged forms agree with the Stage-0 project oracle where the 64-step global fuel limit permits completion, with Cranelift, and with a fresh canonical VM artifact across frontend header fixtures, long dotted module names, every page stride, non-ASCII input, and the global fuel boundary. This proves selected parser callables, not full module canonical-VM verification or Stage-1 succession.",
+  "scope": "All six current parser functions have executable selected specializations and are called directly in a fresh canonical VM batch. header and header_global agree with Stage-0 project checks where the bounded global fuel policy permits completion, Cranelift, and canonical VM across frontend header fixtures, long dotted module names, all tested page strides, non-ASCII input, and the fuel boundary. Direct finish/step helper calls use typed Header states and agree across the reference interpreter, Cranelift, and canonical VM. This covers every parser function at the listed specializations and selected states; it does not prove all type arguments, full compiler succession, Stage-1, or Stage-2.",
   "stage1_claimed": false,
   "stage2_claimed": false
 }

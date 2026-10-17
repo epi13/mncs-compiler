@@ -25,7 +25,11 @@ frontend = prior.frontend
 test_vm_emit = prior.test_vm_emit
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.parser.v1"
-FUNCTIONS = ("header", "header_global")
+FUNCTIONS = ("header", "finish", "step", "header_global", "finish_global", "step_global")
+HEADER_FIELDS = (
+    "code", "start", "end", "version_start", "version_end",
+    "module_start", "module_end", "next_offset", "state",
+)
 BOUND = 1024
 PAGE_BOUND = 1024
 STRIDES = prior.STRIDES
@@ -35,18 +39,23 @@ BASE_GLOBAL_SEEDS = prior.global_seeds
 
 
 def module_seeds() -> list[dict]:
+    bounded = ("header", "finish", "step")
+    global_functions = ("header_global", "finish_global", "step_global")
     return BASE_GLOBAL_SEEDS() + [
         {
             "module": MODULE,
-            "function": "header",
+            "function": function,
             "type_arguments": [frontend.nat_arg(BOUND)],
-        },
+        }
+        for function in bounded
+    ] + [
         {
             "module": MODULE,
-            "function": "header_global",
+            "function": function,
             "type_arguments": [frontend.nat_arg(PAGE_BOUND),
                                frontend.nat_arg(BOUND)],
-        },
+        }
+        for function in global_functions
     ]
 
 
@@ -74,6 +83,82 @@ def request_global(raw: bytes, stride: int, *, module: str = MODULE) -> dict:
                                  frontend.nat_arg(BOUND)]
     request["step_budget"] = STEP_BUDGET
     return request
+
+
+def header_value(identity: str, **changes: int) -> dict:
+    values = {field: 0 for field in HEADER_FIELDS}
+    values.update(changes)
+    return {
+        "record": {
+            "type_identity": identity,
+            "name": "Header",
+            "fields": [[field, frontend.integer(values[field])] for field in HEADER_FIELDS],
+        }
+    }
+
+
+def request_helper(case: dict) -> dict:
+    return {
+        "schema_version": "0.1",
+        "target": {"module": MODULE, "function": case["function"]},
+        "arguments": case["args"],
+        "type_arguments": case["type_args"],
+        "step_budget": case["step_budget"],
+    }
+
+
+def helper_cases(probe, raw: bytes) -> list[dict]:
+    records = probe.send({"record_types": MODULE})
+    header_rows = [row for row in records if row.get("name") == "Header"]
+    if len(header_rows) != 1:
+        raise AssertionError(f"parser.Header identity is not unique: {header_rows}")
+    identity = header_rows[0]["identity"]
+    bounded_seed = header_value(identity)
+    after_name = header_value(
+        identity, module_start=18, module_end=23, next_offset=23, state=5
+    )
+    pages = prior.pages_wire(prior.pages_for(raw, 7))
+    base = {
+        "schema_version": "0.1",
+        "step_budget": STEP_BUDGET,
+    }
+    return [
+        {
+            **base,
+            "id": "helper/step-bounded-first-token",
+            "function": "step",
+            "args": [frontend.blob(raw), bounded_seed],
+            "type_args": [frontend.nat_arg(BOUND)],
+        },
+        {
+            **base,
+            "id": "helper/finish-bounded-semicolon",
+            "function": "finish",
+            "args": [frontend.blob(raw), after_name],
+            "type_args": [frontend.nat_arg(BOUND)],
+        },
+        {
+            **base,
+            "id": "helper/step-global-first-token",
+            "function": "step_global",
+            "args": [pages, frontend.integer(7), frontend.integer(len(raw)), bounded_seed],
+            "type_args": [frontend.nat_arg(PAGE_BOUND), frontend.nat_arg(BOUND)],
+        },
+        {
+            **base,
+            "id": "helper/finish-global-complete",
+            "function": "finish_global",
+            "args": [pages, frontend.integer(7), frontend.integer(len(raw)), after_name],
+            "type_args": [frontend.nat_arg(PAGE_BOUND), frontend.nat_arg(BOUND)],
+        },
+        {
+            **base,
+            "id": "helper/finish-global-fuel-boundary",
+            "function": "finish_global",
+            "args": [pages, frontend.integer(7), frontend.integer(len(raw)), bounded_seed],
+            "type_args": [frontend.nat_arg(PAGE_BOUND), frontend.nat_arg(BOUND)],
+        },
+    ]
 
 
 def semantic_digest(rows: list[tuple[str, dict]]) -> str:
@@ -129,11 +214,16 @@ def main() -> None:
     global_reference: list[tuple[str, dict]] = []
     global_steps: list[int] = []
     oracle_checks = []
+    helper_source = b"mncs 0.18; module alpha;"
+    helpers: list[dict] = []
+    helper_reference: dict[str, dict] = {}
+    helper_reference_steps: dict[str, int] = {}
     artifact = None
 
     reference = open_probe(None)
     try:
         reference.send({"execution_status": True})
+        helpers = helper_cases(reference, helper_source)
         phase_started = time.monotonic()
         for item in inputs:
             raw = item["raw"]
@@ -195,6 +285,13 @@ def main() -> None:
                 )
             global_reference.append((case["id"], value))
             global_steps.append(steps)
+
+        for case in helpers:
+            value, steps = prior.decode_result(
+                reference.send(request_helper(case)), case["id"]
+            )
+            helper_reference[case["id"]] = value
+            helper_reference_steps[case["id"]] = steps
         phases["stage0_oracles_and_reference_execution"] = round(
             time.monotonic() - phase_started, 6
         )
@@ -204,8 +301,15 @@ def main() -> None:
         artifact = emitted.get("artifact")
         if not isinstance(artifact, dict) or artifact.get("schema_version") != "mncs.vm.artifact/1":
             raise AssertionError(f"direct parser module emission failed: {emitted}")
-        for function, spellings in (("header", ("1024",)),
-                                    ("header_global", ("1024", "1024"))):
+        specialization_spellings = {
+            "header": ("1024",),
+            "finish": ("1024",),
+            "step": ("1024",),
+            "header_global": ("1024", "1024"),
+            "finish_global": ("1024", "1024"),
+            "step_global": ("1024", "1024"),
+        }
+        for function, spellings in specialization_spellings.items():
             rows = [row for row in artifact.get("generic_entrypoints", [])
                     if row.get("generic_function") == function]
             if not any(tuple(row.get("args_spellings", [])) == spellings for row in rows):
@@ -218,6 +322,8 @@ def main() -> None:
     bounded_cranelift: dict[str, dict] = {}
     global_cranelift: list[tuple[str, dict]] = []
     global_cranelift_steps: list[int] = []
+    helper_cranelift: dict[str, dict] = {}
+    helper_cranelift_steps: dict[str, int] = {}
     try:
         status = cranelift.send({"execution_status": True})
         if status.get("backend") != "cranelift":
@@ -239,6 +345,14 @@ def main() -> None:
                 raise AssertionError(f"{case['id']}: Cranelift parser.header_global differs")
             global_cranelift.append((case["id"], value))
             global_cranelift_steps.append(steps)
+        for case in helpers:
+            value, steps = prior.decode_result(
+                cranelift.send(request_helper(case)), case["id"]
+            )
+            if value != helper_reference[case["id"]]:
+                raise AssertionError(f"{case['id']}: Cranelift helper differs from Stage-0")
+            helper_cranelift[case["id"]] = value
+            helper_cranelift_steps[case["id"]] = steps
         phases["cranelift_execution"] = round(time.monotonic() - phase_started, 6)
     finally:
         cranelift.close()
@@ -247,6 +361,7 @@ def main() -> None:
     for item in inputs:
         vm_cases.append({
             "id": f"bounded/{item['id']}",
+            "kind": "bounded",
             "function": "header",
             "args": [frontend.blob(item["raw"])],
             "type_args": [frontend.nat_arg(BOUND)],
@@ -255,6 +370,7 @@ def main() -> None:
     for case in global_cases:
         vm_cases.append({
             "id": f"global/{case['id']}",
+            "kind": "global",
             "function": "header_global",
             "args": [
                 prior.pages_wire(prior.pages_for(case["raw"], case["stride"])),
@@ -264,9 +380,20 @@ def main() -> None:
             "type_args": [frontend.nat_arg(PAGE_BOUND), frontend.nat_arg(BOUND)],
             "step_budget": STEP_BUDGET,
         })
+    for case in helpers:
+        vm_cases.append({
+            "id": case["id"],
+            "kind": "helper",
+            "function": case["function"],
+            "args": case["args"],
+            "type_args": case["type_args"],
+            "step_budget": case["step_budget"],
+        })
     vm_bounded: dict[str, dict] = {}
     vm_global: list[tuple[str, dict]] = []
     vm_steps: list[int] = []
+    vm_helpers: dict[str, dict] = {}
+    vm_helper_steps: dict[str, int] = {}
     with tempfile.TemporaryDirectory(prefix="mncs-vm-parser-module-frontier-") as directory:
         temp = Path(directory)
         artifact_path = temp / "parser-module.vm.json"
@@ -285,7 +412,11 @@ def main() -> None:
             if len(returned) != 1:
                 raise AssertionError(f"{call['id']}: canonical VM returned the wrong value count")
             value = frontend.decode(test_vm_segment.vm_to_wire(returned[0]))
-            if call["function"] == "header":
+            if call["kind"] == "helper":
+                expected = helper_reference[call["id"]]
+                vm_helpers[call["id"]] = value
+                vm_helper_steps[call["id"]] = result["record"]["usage"]["steps"]
+            elif call["kind"] == "bounded":
                 identity = call["id"].removeprefix("bounded/")
                 expected = bounded_reference[identity]
                 vm_bounded[identity] = value
@@ -314,9 +445,22 @@ def main() -> None:
         "cranelift": semantic_digest(global_cranelift),
         "canonical_vm": semantic_digest(vm_global),
     }
-    if len(set(bounded_digests.values())) != 1 or len(set(global_digests.values())) != 1:
+    helper_rows = [(case["id"], helper_reference[case["id"]]) for case in helpers]
+    helper_digests = {
+        "reference_interpreter": semantic_digest(helper_rows),
+        "cranelift": semantic_digest(
+            [(case["id"], helper_cranelift[case["id"]]) for case in helpers]
+        ),
+        "canonical_vm": semantic_digest(
+            [(case["id"], vm_helpers[case["id"]]) for case in helpers]
+        ),
+    }
+    if (len(set(bounded_digests.values())) != 1
+            or len(set(global_digests.values())) != 1
+            or len(set(helper_digests.values())) != 1):
         raise AssertionError(
-            f"direct parser executor digests differ: bounded={bounded_digests}, global={global_digests}"
+            "direct parser executor digests differ: "
+            f"bounded={bounded_digests}, global={global_digests}, helpers={helper_digests}"
         )
 
     compiler_revision = subprocess.check_output(
@@ -354,17 +498,43 @@ def main() -> None:
         "target_functions": list(FUNCTIONS),
         "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "artifact_identity": artifact["artifact_id"],
-        "specializations": {"header": ["1024"], "header_global": ["1024", "1024"]},
+        "specializations": {
+            "header": ["1024"],
+            "finish": ["1024"],
+            "step": ["1024"],
+            "header_global": ["1024", "1024"],
+            "finish_global": ["1024", "1024"],
+            "step_global": ["1024", "1024"],
+        },
         "bounded_cases": oracle_checks,
         "bounded_case_count": len(inputs),
         "global_case_count": len(global_cases),
-        "canonical_vm_case_count": len(vm_bounded) + len(vm_global),
+        "helper_cases": [
+            {
+                "id": case["id"],
+                "function": case["function"],
+                "reference_result": helper_reference[case["id"]],
+                "reference_steps": helper_reference_steps[case["id"]],
+                "cranelift_steps": helper_cranelift_steps[case["id"]],
+                "canonical_vm_result": vm_helpers[case["id"]],
+                "canonical_vm_steps": vm_helper_steps[case["id"]],
+            }
+            for case in helpers
+        ],
+        "canonical_vm_case_count": len(vm_bounded) + len(vm_global) + len(vm_helpers),
         "strides": list(STRIDES),
-        "semantic_digests": {"bounded": bounded_digests, "global": global_digests},
+        "semantic_digests": {
+            "bounded": bounded_digests,
+            "global": global_digests,
+            "helpers": helper_digests,
+        },
         "step_observations": {
             "reference_global": global_steps,
             "cranelift_global": global_cranelift_steps,
             "canonical_vm_global": vm_steps,
+            "reference_helpers": helper_reference_steps,
+            "cranelift_helpers": helper_cranelift_steps,
+            "canonical_vm_helpers": vm_helper_steps,
         },
         "timing_seconds": {**phases, "whole_frontier": round(time.monotonic() - whole_started, 6)},
         "resource_measurements": {
@@ -378,13 +548,15 @@ def main() -> None:
             "cgroup_measurements_are_ambient": True,
         },
         "scope": (
-            "parser.header and parser.header_global are selected directly from the parser module, "
-            "rather than through kernel wrappers. The bounded and paged forms agree with the "
-            "Stage-0 project oracle where the 64-step global fuel limit permits completion, "
-            "with Cranelift, and with a fresh canonical VM artifact across frontend header "
-            "fixtures, long dotted module names, every page stride, non-ASCII input, and the "
-            "global fuel boundary. This proves selected parser callables, not full module "
-            "canonical-VM verification or Stage-1 succession."
+            "All six current parser functions have executable selected specializations and are "
+            "called directly in a fresh canonical VM batch. header and header_global agree with "
+            "Stage-0 project checks where the bounded global fuel policy permits completion, "
+            "Cranelift, and canonical VM across frontend header fixtures, long dotted module "
+            "names, all tested page strides, non-ASCII input, and the fuel boundary. Direct "
+            "finish/step helper calls use typed Header states and agree across the reference "
+            "interpreter, Cranelift, and canonical VM. This covers every parser function at the "
+            "listed specializations and selected states; it does not prove all type arguments, "
+            "full compiler succession, Stage-1, or Stage-2."
         ),
         "stage1_claimed": False,
         "stage2_claimed": False,
@@ -402,6 +574,7 @@ def main() -> None:
         "artifact_identity": artifact["artifact_id"],
         "bounded_semantic_digest": bounded_digests["canonical_vm"],
         "global_semantic_digest": global_digests["canonical_vm"],
+        "helper_semantic_digest": helper_digests["canonical_vm"],
         "timing_seconds": report["timing_seconds"],
         "resource_measurements": report["resource_measurements"],
     }, indent=2))
