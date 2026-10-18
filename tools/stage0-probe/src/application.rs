@@ -1166,8 +1166,6 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
             .map_err(|error| format!("hash cached response: {error}"))?,
         response,
     };
-    let encoded =
-        serde_json::to_vec(&entry).map_err(|error| format!("encode cache entry: {error}"))?;
     let nonce = CACHE_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -1186,7 +1184,7 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
             .create_new(true)
             .open(&temp)
             .map_err(|error| format!("create temporary cache entry: {error}"))?;
-        file.write_all(&encoded)
+        serde_json::to_writer(&mut file, &entry)
             .map_err(|error| format!("write temporary cache entry: {error}"))?;
         file.sync_all()
             .map_err(|error| format!("sync temporary cache entry: {error}"))?;
