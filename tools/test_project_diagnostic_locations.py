@@ -37,7 +37,8 @@ def line_col(source: bytes, offset: int) -> tuple[int, int]:
 
 
 def run_project(probe, source: bytes, source_id: str, *, page_count_override=None,
-                append_orphan_page=False, source_index_override=None):
+                append_orphan_page=False, source_index_override=None,
+                span_override=None):
     request = project.request_value(
         project.identity_map(probe),
         [(source_id, source_id, source)],
@@ -59,6 +60,10 @@ def run_project(probe, source: bytes, source_id: str, *, page_count_override=Non
         first = project.wire_flist(diagnostics)[0]
         project.set_wire_variant_field(
             first, "source_index", project.integer(source_index_override))
+    if span_override is not None:
+        first = project.wire_flist(diagnostics)[0]
+        project.set_wire_variant_field(first, "start", project.integer(span_override[0]))
+        project.set_wire_variant_field(first, "end", project.integer(span_override[1]))
     locate_request = {
         "schema_version": "0.1",
         "target": {"module": PROJECT_MODULE,
@@ -204,6 +209,25 @@ def main():
         invalid_index = next(row for row in invalid_index_rows if row["has_span"])
         assert invalid_index["source_index"] == 64 and invalid_index["mapped"] is False, invalid_index
 
+        span_start = missing.index(b"demo.absent")
+        invalid_end_rows, invalid_end_compile_steps, invalid_end_location_steps = run_project(
+            probe, missing, "invalid-end-span.mncs",
+            span_override=(span_start, len(missing) + 1))
+        invalid_end = next(row for row in invalid_end_rows if row["has_span"])
+        assert invalid_end["mapped"] is False, invalid_end
+        assert span(invalid_end) == (span_start, len(missing) + 1), invalid_end
+        assert invalid_end["start"] == {"line": 1, "col": 1}
+        assert invalid_end["end"] == {"line": 1, "col": 1}
+
+        reversed_rows, reversed_compile_steps, reversed_location_steps = run_project(
+            probe, missing, "reversed-span.mncs",
+            span_override=(span_start + 1, span_start))
+        reversed_span = next(row for row in reversed_rows if row["has_span"])
+        assert reversed_span["mapped"] is False, reversed_span
+        assert span(reversed_span) == (span_start + 1, span_start), reversed_span
+        assert reversed_span["start"] == {"line": 1, "col": 1}
+        assert reversed_span["end"] == {"line": 1, "col": 1}
+
         print(json.dumps({
             "schema_version": 1,
             "kind": "project-diagnostic-source-locations",
@@ -217,6 +241,8 @@ def main():
             "malformed_source_pages_fail_closed": True,
             "location_free_diagnostic_preserved": True,
             "invalid_span_source_index_fails_closed": True,
+            "out_of_range_span_fails_closed": True,
+            "reversed_span_fails_closed": True,
             "diagnostic_order_and_identity_preserved": True,
             "backend": "cranelift",
             "workspace_head": subprocess.run(
@@ -241,6 +267,10 @@ def main():
                 "locate_orphan_page": no_span_location_steps,
                 "compile_invalid_index": invalid_index_compile_steps,
                 "locate_invalid_index": invalid_index_location_steps,
+                "compile_invalid_end_span": invalid_end_compile_steps,
+                "locate_invalid_end_span": invalid_end_location_steps,
+                "compile_reversed_span": reversed_compile_steps,
+                "locate_reversed_span": reversed_location_steps,
             },
             "elapsed_seconds": round(time.monotonic() - started, 3),
         }, indent=2))

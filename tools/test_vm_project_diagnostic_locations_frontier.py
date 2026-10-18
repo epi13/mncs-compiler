@@ -169,6 +169,26 @@ def main():
                 "expected_spans": [(start, end)],
                 "expect_mapped": False,
             },
+            {
+                "id": "out-of-range-span",
+                "raw": raw,
+                "request": source_request(
+                    identities, raw,
+                    diagnostics=[diagnostic("MissingImport", 3, 0, start, len(raw) + 1)],
+                ),
+                "expected_spans": [(start, len(raw) + 1)],
+                "expect_mapped": False,
+            },
+            {
+                "id": "reversed-span",
+                "raw": raw,
+                "request": source_request(
+                    identities, raw,
+                    diagnostics=[diagnostic("MissingImport", 3, 0, start + 1, start)],
+                ),
+                "expected_spans": [(start + 1, start)],
+                "expect_mapped": False,
+            },
         ]
 
         references = []
@@ -231,6 +251,8 @@ def main():
                     continue
                 if not case.get("expect_mapped", True):
                     assert location["has_span"] is True and location["mapped"] is False, location
+                    assert location["start"] == {"line": 1, "col": 1}, location
+                    assert location["end"] == {"line": 1, "col": 1}, location
                     continue
                 assert location["mapped"] is True, location
                 span_start, span_end = byte_span

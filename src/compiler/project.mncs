@@ -194,6 +194,9 @@ fn project_diagnostic_location<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
     if source.validate_pages<1024, N>(pages, meta.stride, meta.total) != 0 {
         return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: true, mapped: false, start: initial, end: initial };
     }
+    if !source.span_valid_global(meta.total, span.start, span.end) {
+        return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: true, mapped: false, start: initial, end: initial };
+    }
     let positions: source.LineColSpan = source.line_col_span_global<1024, N>(pages, meta.stride, meta.total, span.start, span.end);
     return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: true, mapped: true, start: positions.start, end: positions.end };
 }
