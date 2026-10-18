@@ -124,6 +124,22 @@ def main():
             missing.index(b"demo.absent") + len(b"demo.absent"),
         ), missing_row
 
+        multi_page = (
+            b"mncs 0.18;\nmodule demo.multi_page;\n"
+            + b"\n" * 1100
+            + b"use demo.absent as absent;\n"
+            + b"fn main() -> (r: u64) { return 1; }\n"
+        )
+        assert len(multi_page) > 1024
+        multi_page_rows, multi_page_compile_steps, multi_page_location_steps = run_project(
+            probe, multi_page, "multi-page.mncs")
+        multi_page_row = verify_span(multi_page_rows, multi_page)
+        assert multi_page_row["diagnostic"]["$v"] == 3, multi_page_row
+        assert span(multi_page_row) == (
+            multi_page.index(b"demo.absent"),
+            multi_page.index(b"demo.absent") + len(b"demo.absent"),
+        ), multi_page_row
+
         broken = (
             b"mncs 0.18;\nmodule demo.broken;\n"
             b"fn main( -> (r: u64) { return 1; }\n"
@@ -154,6 +170,9 @@ def main():
             "kind": "project-diagnostic-source-locations",
             "status": "passed",
             "missing_import_span_matches_source": True,
+            "multi_page_span_matches_source": True,
+            "multi_page_source_bytes": len(multi_page),
+            "multi_page_span_line": multi_page_row["start"]["line"],
             "parse_failure_span_matches_source": True,
             "malformed_source_pages_fail_closed": True,
             "location_free_diagnostic_preserved": True,
@@ -171,6 +190,8 @@ def main():
             "steps": {
                 "compile_missing": missing_compile_steps,
                 "locate_missing": missing_location_steps,
+                "compile_multi_page": multi_page_compile_steps,
+                "locate_multi_page": multi_page_location_steps,
                 "compile_parse_failure": broken_compile_steps,
                 "locate_parse_failure": broken_location_steps,
                 "compile_malformed_pages": malformed_compile_steps,
