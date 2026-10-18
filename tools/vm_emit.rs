@@ -368,13 +368,160 @@ fn application_ssa_closure(
         }
     }
 
-    let mut projected = ssa.clone();
-    projected
+    let functions: Vec<_> = ssa
         .functions
-        .retain(|function| reachable.contains(&function.semantic_identity.0));
-    if projected.functions.len() != reachable.len() {
+        .iter()
+        .filter(|function| reachable.contains(&function.semantic_identity.0))
+        .cloned()
+        .collect();
+    if functions.len() != reachable.len() {
         return Err("application SSA closure did not resolve every selected function".to_owned());
     }
+
+    // The executable closure must not carry the source program's unrelated
+    // semantic index and lowering history. ArtifactSource binds the original
+    // selected-SSA fingerprint; this module retains only source correlation,
+    // obligations, and specializations attached to executable functions.
+    let mut reachable_ssa_ids = BTreeSet::<String>::new();
+    let mut reachable_semantic_ids = BTreeSet::<String>::new();
+    let mut reachable_hir_ids = BTreeSet::<String>::new();
+    let mut obligation_ids = BTreeSet::<String>::new();
+    for function in &functions {
+        reachable_ssa_ids.insert(function.identity.0.clone());
+        reachable_semantic_ids.insert(function.semantic_identity.0.clone());
+        for value in function.inputs.iter().chain(&function.outputs) {
+            reachable_ssa_ids.insert(value.identity.0.clone());
+            if let Some(identity) = &value.semantic_identity {
+                reachable_semantic_ids.insert(identity.0.clone());
+            }
+        }
+        for iteration in &function.bounded_iterations {
+            reachable_ssa_ids.insert(iteration.identity.0.clone());
+            reachable_ssa_ids.insert(iteration.preheader.0.clone());
+            reachable_ssa_ids.insert(iteration.header.0.clone());
+            reachable_ssa_ids.insert(iteration.body_entry.0.clone());
+            reachable_ssa_ids.insert(iteration.backedge.0.clone());
+            reachable_ssa_ids.insert(iteration.exit.0.clone());
+            reachable_ssa_ids.extend(iteration.body_blocks.iter().map(|id| id.0.clone()));
+            obligation_ids.extend(iteration.obligations.iter().map(|id| id.0.clone()));
+        }
+        for block in &function.blocks {
+            reachable_ssa_ids.insert(block.identity.0.clone());
+            if let Some(identity) = &block.semantic_identity {
+                reachable_semantic_ids.insert(identity.0.clone());
+            }
+            for value in &block.parameters {
+                reachable_ssa_ids.insert(value.identity.0.clone());
+                if let Some(identity) = &value.semantic_identity {
+                    reachable_semantic_ids.insert(identity.0.clone());
+                }
+            }
+            for instruction in &block.instructions {
+                reachable_ssa_ids.insert(instruction.identity.0.clone());
+                if let Some(identity) = &instruction.semantic_identity {
+                    reachable_semantic_ids.insert(identity.0.clone());
+                }
+                if let Some(identity) = &instruction.hir_identity {
+                    reachable_hir_ids.insert(identity.0.clone());
+                }
+                obligation_ids.extend(instruction.obligations.iter().map(|id| id.0.clone()));
+                for value in &instruction.outputs {
+                    reachable_ssa_ids.insert(value.identity.0.clone());
+                    if let Some(identity) = &value.semantic_identity {
+                        reachable_semantic_ids.insert(identity.0.clone());
+                    }
+                }
+            }
+        }
+    }
+
+    // Preserve the obligation dependency closure for every retained
+    // instruction and bounded iteration, while excluding unrelated source
+    // obligations. Dependencies that are not obligations remain provenance
+    // references and do not cause unrelated obligation records to be copied.
+    let obligations_by_id: BTreeMap<_, _> = ssa
+        .obligations
+        .iter()
+        .map(|obligation| (obligation.identity.0.clone(), obligation))
+        .collect();
+    let mut pending_obligations: Vec<_> = obligation_ids.iter().cloned().collect();
+    while let Some(identity) = pending_obligations.pop() {
+        let Some(obligation) = obligations_by_id.get(&identity) else {
+            continue;
+        };
+        for dependency in obligation
+            .dependencies
+            .iter()
+            .chain(&obligation.assumptions)
+        {
+            if obligations_by_id.contains_key(&dependency.0)
+                && obligation_ids.insert(dependency.0.clone())
+            {
+                pending_obligations.push(dependency.0.clone());
+            }
+        }
+    }
+    let obligations = ssa
+        .obligations
+        .iter()
+        .filter(|obligation| obligation_ids.contains(&obligation.identity.0))
+        .cloned()
+        .collect();
+
+    let trace = mncs_model::SsaTraceMap {
+        entries: ssa
+            .trace
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                let semantic_is_reachable =
+                    reachable_semantic_ids.contains(&entry.semantic_identity.0);
+                let mut projected = entry.clone();
+                projected
+                    .ssa_identities
+                    .retain(|identity| reachable_ssa_ids.contains(&identity.0));
+                projected
+                    .hir_identities
+                    .retain(|identity| reachable_hir_ids.contains(&identity.0));
+                (semantic_is_reachable
+                    || !projected.ssa_identities.is_empty()
+                    || !projected.hir_identities.is_empty())
+                .then_some(projected)
+            })
+            .collect(),
+    };
+    let transformations = ssa
+        .transformations
+        .iter()
+        .filter(|transformation| {
+            reachable_semantic_ids.contains(&transformation.operation.0)
+                || reachable_ssa_ids.contains(&transformation.operation.0)
+                || reachable_ssa_ids.contains(&transformation.output_identity.0)
+        })
+        .cloned()
+        .collect();
+    let generic_specializations = ssa
+        .generic_specializations
+        .iter()
+        .filter(|specialization| reachable.contains(&specialization.specialization_function.0))
+        .cloned()
+        .collect();
+    let projected = SsaModule {
+        schema_version: ssa.schema_version.clone(),
+        identity: ssa.identity.clone(),
+        semantic_identity: ssa.semantic_identity.clone(),
+        hir_fingerprint: ssa.hir_fingerprint.clone(),
+        // The VM executor does not consult the whole-program binding index;
+        // its full content remains bound by ArtifactSource's SSA fingerprint.
+        binding_table: None,
+        record_types: ssa.record_types.clone(),
+        functions,
+        obligations,
+        trace,
+        transformations,
+        generic_specializations,
+        proof_relationships: Vec::new(),
+    };
     let validation = projected.validate_lowering_boundary(program);
     if !validation.valid {
         return Err(format!(
@@ -887,6 +1034,10 @@ mod application_closure_tests {
         let module = application["code"]["mncs-selected-ssa"]["module"].clone();
         let projected: SsaModule = mncs_vm_artifact_codec::deserialize(module)
             .expect("decode projected canonical SSA closure");
+        let full_module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            full["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode full canonical SSA module");
         let functions: BTreeSet<String> = projected
             .functions
             .iter()
@@ -905,6 +1056,9 @@ mod application_closure_tests {
             "projected SSA diagnostics: {:?}",
             projected.validate().errors
         );
+        assert!(projected.binding_table.is_none());
+        assert!(projected.trace.entries.len() < full_module.trace.entries.len());
+        assert!(projected.transformations.len() < full_module.transformations.len());
         assert!(application["source"]["lowering_refs"]
             .as_array()
             .is_some_and(|refs| refs.iter().any(|row| {
