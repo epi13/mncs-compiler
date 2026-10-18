@@ -1,0 +1,124 @@
+{
+  "schema_version": "mncs.compiler.project-module-name-comparison-early-exit/1",
+  "identity": "ev_compiler_project_module_name_comparison_early_exit_20261018",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-18T03:47:42Z",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "fedfaaa209c14960a3d68d74d9d5ace4ea701bf0",
+    "source_file": "src/compiler/project.mncs",
+    "source_sha256": "51e3fb0ec4381b25e9d715ac216dbc01299e375760add90eff84a597b1be00b3",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "1bf485f4464d5ab76f421f286d8f86d3ed618eb7abea9d109422eb810ac94588",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "change": {
+    "summary": "module_resolution_cache_key_equal now returns once it has compared every byte of an equal cached module name, avoiding the unchanged tail of its fixed 64-iteration loop.",
+    "target_function": "module_resolution_cache_key_equal",
+    "fixture_module_name": "demo.dep",
+    "fixture_module_name_bytes": 8,
+    "cache_hit_comparator_step_calls_avoided_per_hit_model": 56,
+    "modeled_avoided_noop_step_calls": {
+      "module_limit_1024": 57288,
+      "project_limit_4096": 229152
+    },
+    "model_basis": "The capacity fixture reports 1,023 and 4,092 successful resolution-cache hits. With one cached fact and the 8-byte name demo.dep, each hit compares eight bytes; the old loop then called the unchanged compare-step helper 56 more times. This is derived from source control flow and fixture counters, not an instrumented VM instruction count.",
+    "semantic_result_preserved": true,
+    "language_verified_facts_reused": 0
+  },
+  "verification": {
+    "command": "MNCS_PROBE_BIN=tools/stage0-probe/target/release/mncs-compiler-stage0-probe MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_GENERIC_SEEDS='[]' MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "schema_version": "mncs.compiler.project-import-link-capacity/12",
+    "cold_status": "verified",
+    "warm_fresh_process_status": "verified",
+    "backend": "cranelift",
+    "cold_probe_pid": 1511277,
+    "warm_probe_pid": 1512434,
+    "fresh_process_distinct_pid": true,
+    "cold_and_warm_result_sha256": "7c6924bcbfd3c83394ca5da9a5c7eac9c21009d7b5bd5b1bba4d24528091301",
+    "cold_probe_request_count": 25,
+    "warm_probe_request_count": 25,
+    "stage0_oracle_valid": true,
+    "native_project_valid": true,
+    "target_flow_valid": true,
+    "target_ssa_valid": true,
+    "connected_chain": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "target_only_module_count": 1,
+      "stage0_verified_function_count": 64,
+      "cold_request_seconds": 0.413822,
+      "warm_request_seconds": 0.410048
+    },
+    "capacity_cases": {
+      "module_limit_1024": {
+        "accepted": true,
+        "successful_lookup_cache_hits": 1023,
+        "cold_request_seconds": 0.190863,
+        "warm_request_seconds": 0.179129
+      },
+      "project_limit_4096": {
+        "accepted": true,
+        "successful_lookup_cache_hits": 4092,
+        "cold_request_seconds": 0.563831,
+        "warm_request_seconds": 0.536732
+      },
+      "overflow_diagnostics_preserved": true,
+      "import_spans_preserved": true,
+      "missing_import_diagnostics_preserved": true,
+      "changed_snapshot_stale_success_reused": false,
+      "long_name_uncached_fallback_preserved": true
+    },
+    "measurement_limits": {
+      "before_after_speedup_measured": false,
+      "vm_instruction_count_measured": false,
+      "canonical_vm_execution": false,
+      "language_verified_facts_reused": false,
+      "full_project_module_proof": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    }
+  },
+  "resource_measurement": {
+    "cold": {
+      "probe_process_elapsed_seconds": 250.888,
+      "frontend_elaboration_seconds": 54.288497,
+      "cranelift_backend_compilation_seconds": 155.829094,
+      "retained_session_admission_seconds": 23.338867,
+      "backend_artifact_reused": false,
+      "peak_rss_bytes": 4529168384,
+      "kernel_rss_high_water_bytes": 4971536384,
+      "sample_count": 3,
+      "cpu_time_delta_ns": null,
+      "cpu_measurement_note": "Telemetry returned 0 for the CPU delta; recorded as unavailable, not zero CPU usage.",
+      "cgroup_memory_bytes": null,
+      "cgroup_memory_note": "The cgroup memory counter was unavailable."
+    },
+    "warm_fresh_process": {
+      "probe_process_elapsed_seconds": 37.33,
+      "artifact_cache_read_decode_seconds": 10.820138,
+      "retained_session_admission_seconds": 23.081419,
+      "backend_artifact_reused": true,
+      "backend_compilation_phase_observed": false,
+      "peak_rss_bytes": 3020161024,
+      "kernel_rss_high_water_bytes": 3448991744,
+      "sample_count": 3,
+      "cpu_time_delta_ns": null,
+      "cpu_measurement_note": "Telemetry returned 0 for the CPU delta; recorded as unavailable, not zero CPU usage.",
+      "cgroup_memory_bytes": null,
+      "cgroup_memory_note": "The cgroup memory counter was unavailable."
+    }
+  },
+  "interpretation": {
+    "incremental_project_self_consumption_frontier_advanced": true,
+    "overall_project_module_status_remains": "parse+signatures",
+    "language_owned_fact_reuse_demonstrated": false,
+    "effectful_native_application_execution_changed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}

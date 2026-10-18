@@ -678,7 +678,7 @@
             "canonical_vm_total_steps_change_percent": -19.57,
             "canonical_vm_wall_change_percent": -18.09,
             "maximum_steps_per_call_change_percent": 0.06,
-            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
             "canonical_vm_candidate_wall_seconds_samples": [
               9.22781,
               9.320808
@@ -8132,7 +8132,7 @@
         "canonical_vm_total_steps_change_percent": -19.57,
         "canonical_vm_wall_change_percent": -18.09,
         "maximum_steps_per_call_change_percent": 0.06,
-        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
         "canonical_vm_candidate_wall_seconds_samples": [
           9.22781,
           9.320808
@@ -8318,7 +8318,7 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-18T01:46:58Z",
+  "evidence_updated_at": "2026-10-18T03:47:42Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -12292,5 +12292,43 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "evidence_scope": "Selected Project signature scan and connected-chain workload. No canonical VM, Language verification fact reuse, full Project module proof, or before/after speedup claim."
+  },
+  "current_campaign_project_module_name_comparison_early_exit_20261018": {
+    "kind": "mncs.compiler.project-module-name-comparison-early-exit-frontier",
+    "status": "passed_with_bounded_frontier",
+    "observed_at": "2026-10-18T03:47:42Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "fedfaaa209c14960a3d68d74d9d5ace4ea701bf0",
+    "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "module_resolution_cache_key_equal",
+    "source_sha256": "51e3fb0ec4381b25e9d715ac216dbc01299e375760add90eff84a597b1be00b3",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "1bf485f4464d5ab76f421f286d8f86d3ed618eb7abea9d109422eb810ac94588",
+    "evidence_artifact": "evidence/project-module-name-comparison-early-exit-20261018.json",
+    "evidence_sha256": "556cf60a9f5cf092c40b14ef21da8d4dc49c125a9fe3afd3cfc603e1a78ef7b2",
+    "backend": "cranelift",
+    "stage0_oracle_valid": true,
+    "canonical_vm_tested": false,
+    "cold_and_warm_result_sha256": "7c6924bcbfd3c83394ca5da9a5c7eac9c21009d7b5bd5b1bba4d24528091301",
+    "module_name_bytes": 8,
+    "successful_lookup_cache_hits": {
+      "module_limit": 1023,
+      "project_limit": 4092
+    },
+    "modeled_avoided_noop_compare_step_calls": {
+      "module_limit": 57288,
+      "project_limit": 229152
+    },
+    "cold_probe_process_seconds": 250.888,
+    "warm_probe_process_seconds": 37.33,
+    "warm_fresh_process_backend_artifact_reused": true,
+    "cold_peak_rss_bytes": 4529168384,
+    "warm_peak_rss_bytes": 3020161024,
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "Cold and fresh-process warm Cranelift/Stage-0 capacity tests preserve the same Project result and diagnostics. Comparator iteration savings are a source-derived model from cache-hit counts and the eight-byte fixture name; no direct VM instruction count, before/after speedup, canonical VM proof, full Project module proof, or Language fact reuse is claimed."
   }
 }
