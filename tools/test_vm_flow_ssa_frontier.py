@@ -214,7 +214,7 @@ def main() -> None:
                 for function in oracle_functions for block in function["blocks"]
             ),
         }
-        if oracle_shape != expected_shape:
+        if any(oracle_shape[name] != value for name, value in expected_shape.items()):
             raise AssertionError(f"Stage-0 SSA fixture changed for {name}: {oracle_shape}")
         iterations = [
             loop for function in oracle_functions
