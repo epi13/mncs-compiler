@@ -35,7 +35,10 @@ MODULE_PATHS = {
     "mncs.core.sequences.v1": STDLIB_ROOT / "library/core/sequences.mncs",
     "mncs.std.application.v1": STDLIB_ROOT / "library/std/application.mncs",
 }
-EVIDENCE_PATH = ROOT / "evidence/native-test-provider-app-boundary-20261017.json"
+EVIDENCE_PATH = ROOT / os.environ.get(
+    "MNCS_NATIVE_TEST_PROVIDER_APP_EVIDENCE_PATH",
+    "evidence/native-test-provider-app-boundary-20261017.json",
+)
 
 
 def sha(data: bytes) -> str:
@@ -726,6 +729,8 @@ def main() -> None:
                 "self_consumption_frontier_advanced": False,
             }
             evidence_bytes = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
+            if EVIDENCE_PATH.exists():
+                raise SystemExit(f"refusing to overwrite immutable evidence: {EVIDENCE_PATH}")
             EVIDENCE_PATH.write_bytes(evidence_bytes)
             environment_artifacts = publish_environment_artifacts(evidence_bytes)
             print(json.dumps({
