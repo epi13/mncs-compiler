@@ -1,0 +1,132 @@
+{
+  "schema_version": "mncs.compiler.vm-runtime-checked-sequence-copy-zero-constant-offsets/1",
+  "kind": "compiler-zero-length-constant-offset-copy-canonical-vm-frontier",
+  "observed_at": "2026-10-18T12:35:44.586400Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler": {
+    "revision": "26abd2712cf68d709b3f5dcdd3c4b9f3da1b5a24",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "emitter_sha256": "9053767987f5393306bd85686f48483049e641b1b2ec7dbaba9fe7ff3f784ef0",
+    "test_harness": "tools/test_vm_runtime_checked_sequence_copy_zero_constant_offsets.py",
+    "test_harness_sha256": "9514d8a18f0b3ca8499311dfda4bd8b1ce57d084004ab7897bf7ce8c3311d4c6",
+    "probe_binary": "tools/stage0-probe/target/release/mncs-compiler-stage0-probe",
+    "probe_binary_sha256": "e63d2ea0663ef9725ede3188c63d202e0b6137a1708bb2d0bb87af22dcac4aaf",
+    "canonical_vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "canonical_vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "verification": {
+    "application_artifact_identity": "sha256:47520c7f51585c42df6ab3ae9292fc21d5a735fbe0002f87b555a248b1324d95",
+    "lowering_rule": "vm-runtime-checked-sequence-copy-zero-length-to-checked-empty-views/1",
+    "constant_offsets": [
+      3,
+      4
+    ],
+    "stage0_cases": [
+      {
+        "case": "interior-source-offset",
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": "source-boundary-offset",
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": "source-offset-out-of-bounds",
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "view range end exceeds the source length",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "case": "empty-source",
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "view range end exceeds the source length",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      }
+    ],
+    "stage0_match_count": 4,
+    "case_count": 4,
+    "language_verified_facts_reused": 0
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 0.122915,
+      "cpu_seconds": 0.1,
+      "peak_rss_bytes": 12398592,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 5,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 0.003722,
+      "cpu_seconds": 0.0,
+      "peak_rss_bytes": 12402688,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "canonical_vm": [
+      {
+        "wall_seconds": 0.007111,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 20910080
+      },
+      {
+        "wall_seconds": 0.006463,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21233664
+      },
+      {
+        "wall_seconds": 0.006141,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21315584
+      },
+      {
+        "wall_seconds": 0.006414,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21143552
+      }
+    ],
+    "probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8"
+  },
+  "claim_boundary": "A constant zero-length SequenceCopy with constant destination/source offsets 3 and 4 lowers to checked empty views. The source offset at the sequence boundary returns the unchanged destination; source lengths below four produce runtime failures matching Stage-0. This does not establish Language-owned verified-fact reuse.",
+  "evidence_artifact": "evidence/vm-runtime-checked-sequence-copy-zero-constant-offsets-20261018.json"
+}

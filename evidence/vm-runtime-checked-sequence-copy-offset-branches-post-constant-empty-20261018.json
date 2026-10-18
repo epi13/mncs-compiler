@@ -1,0 +1,485 @@
+{
+  "schema_version": "mncs.compiler.vm-runtime-checked-sequence-copy-offset-branches/1",
+  "kind": "compiler-dynamic-source-and-destination-offset-sequence-copy-canonical-vm-frontier",
+  "observed_at": "2026-10-18T12:36:01.433977Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler": {
+    "revision": "26abd2712cf68d709b3f5dcdd3c4b9f3da1b5a24",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "emitter_sha256": "9053767987f5393306bd85686f48483049e641b1b2ec7dbaba9fe7ff3f784ef0",
+    "test_harness": "tools/test_vm_runtime_checked_sequence_copy_offset_branches.py",
+    "test_harness_sha256": "1a70c21d45eb8baa33b6e598d38f04e28aa6dcaa8b4a9e384ebb6d7f9d80cd57",
+    "probe_binary": "tools/stage0-probe/target/release/mncs-compiler-stage0-probe",
+    "probe_binary_sha256": "e63d2ea0663ef9725ede3188c63d202e0b6137a1708bb2d0bb87af22dcac4aaf",
+    "canonical_vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "canonical_vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "verification": {
+    "variants": {
+      "dynamic_source_only": {
+        "source_sha256": "ea6ced50a0a56724b063f3b9922e4193270d10426a1f08d549ef5331a4fb552b",
+        "application_artifact_identity": "sha256:491bcf29f3967f54113ebb7833e2c2159fbbcfdcdcf498ee9e3934c77ac39423",
+        "checked_add_count": 2,
+        "unknown_checked_add_obligation_count": 2,
+        "runtime_checked_projection_count": 3,
+        "runtime_checked_replacement_count": 3,
+        "application_build_metrics": {
+          "wall_seconds": 0.125843,
+          "cpu_seconds": 0.09,
+          "peak_rss_bytes": 12812288,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 4,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 1
+        },
+        "stage0_oracle_metrics": {
+          "wall_seconds": 0.003459,
+          "cpu_seconds": 0.0,
+          "peak_rss_bytes": 12812288,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 3,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 2
+        },
+        "canonical_vm_metrics": [
+          {
+            "wall_seconds": 0.006745,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21258240
+          },
+          {
+            "wall_seconds": 0.00864,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21180416
+          }
+        ],
+        "cases": [
+          {
+            "case": 0,
+            "status": "returned",
+            "matches_stage0": true,
+            "result": [
+              0,
+              11,
+              12,
+              13,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "case": 1,
+            "status": "runtime_failure",
+            "matches_stage0": true,
+            "outcome": {
+              "detail": "sequence projection index out of bounds",
+              "kind": "program_failure",
+              "mode": "runtime-failure"
+            }
+          }
+        ]
+      },
+      "dynamic_destination_only": {
+        "source_sha256": "728835e23b569247796c4fc96072b109f9d28032a51d5ae513a6abfe2632c3fa",
+        "application_artifact_identity": "sha256:d089dab506f43ee2be26ae8af2449243e9b435b284a136581388fa5df1f81a8e",
+        "checked_add_count": 2,
+        "unknown_checked_add_obligation_count": 2,
+        "runtime_checked_projection_count": 3,
+        "runtime_checked_replacement_count": 3,
+        "application_build_metrics": {
+          "wall_seconds": 0.018279,
+          "cpu_seconds": 0.0,
+          "peak_rss_bytes": 13008896,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 3,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 3
+        },
+        "stage0_oracle_metrics": {
+          "wall_seconds": 0.003569,
+          "cpu_seconds": 0.0,
+          "peak_rss_bytes": 13053952,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 3,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 4
+        },
+        "canonical_vm_metrics": [
+          {
+            "wall_seconds": 0.006636,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21221376
+          },
+          {
+            "wall_seconds": 0.006305,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 20942848
+          }
+        ],
+        "cases": [
+          {
+            "case": 0,
+            "status": "returned",
+            "matches_stage0": true,
+            "result": [
+              0,
+              1,
+              12,
+              13,
+              14,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "case": 1,
+            "status": "runtime_failure",
+            "matches_stage0": true,
+            "outcome": {
+              "detail": "sequence replace outside declared bound",
+              "kind": "program_failure",
+              "mode": "runtime-failure"
+            }
+          }
+        ]
+      },
+      "both_offsets_dynamic": {
+        "source_sha256": "7e69605225804f20a342e43bf1b3a437a0471b8e3beb14e8923a57b2edaf007d",
+        "application_artifact_identity": "sha256:e2931814b6580a44f046b5bd4eab2bfa73a55fba87887bb8a5307d6c4c465ad5",
+        "checked_add_count": 4,
+        "unknown_checked_add_obligation_count": 4,
+        "runtime_checked_projection_count": 3,
+        "runtime_checked_replacement_count": 3,
+        "application_build_metrics": {
+          "wall_seconds": 0.020222,
+          "cpu_seconds": 0.0,
+          "peak_rss_bytes": 13053952,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 3,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 5
+        },
+        "stage0_oracle_metrics": {
+          "wall_seconds": 0.004982,
+          "cpu_seconds": 0.0,
+          "peak_rss_bytes": 13115392,
+          "peak_cgroup_memory_bytes": null,
+          "peak_open_file_descriptors": 3,
+          "peak_threads": 1,
+          "peak_child_processes": 0,
+          "request_sequence": 6
+        },
+        "canonical_vm_metrics": [
+          {
+            "wall_seconds": 0.006929,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21663744
+          },
+          {
+            "wall_seconds": 0.006852,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21258240
+          },
+          {
+            "wall_seconds": 0.006977,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21549056
+          },
+          {
+            "wall_seconds": 0.007931,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21544960
+          },
+          {
+            "wall_seconds": 0.010395,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21204992
+          },
+          {
+            "wall_seconds": 0.007362,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21184512
+          },
+          {
+            "wall_seconds": 0.007543,
+            "user_seconds": 0.0,
+            "system_seconds": 0.0,
+            "peak_rss_bytes": 21528576
+          }
+        ],
+        "cases": [
+          {
+            "case": 0,
+            "status": "returned",
+            "matches_stage0": true,
+            "result": [
+              0,
+              1,
+              11,
+              12,
+              13,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "case": 1,
+            "status": "returned",
+            "matches_stage0": true,
+            "result": [
+              0,
+              1,
+              2,
+              14,
+              15,
+              16,
+              6,
+              7
+            ]
+          },
+          {
+            "case": 2,
+            "status": "returned",
+            "matches_stage0": true,
+            "result": [
+              0,
+              0,
+              1,
+              2,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "case": 3,
+            "status": "returned",
+            "matches_stage0": true,
+            "result": [
+              1,
+              2,
+              3,
+              3,
+              4,
+              5,
+              6,
+              7
+            ]
+          },
+          {
+            "case": 4,
+            "status": "runtime_failure",
+            "matches_stage0": true,
+            "outcome": {
+              "detail": "sequence replace outside declared bound",
+              "kind": "program_failure",
+              "mode": "runtime-failure"
+            }
+          },
+          {
+            "case": 5,
+            "status": "runtime_failure",
+            "matches_stage0": true,
+            "outcome": {
+              "detail": "sequence projection index out of bounds",
+              "kind": "program_failure",
+              "mode": "runtime-failure"
+            }
+          },
+          {
+            "case": 6,
+            "status": "runtime_failure",
+            "matches_stage0": true,
+            "outcome": {
+              "detail": "sequence projection index out of bounds",
+              "kind": "program_failure",
+              "mode": "runtime-failure"
+            }
+          }
+        ]
+      }
+    },
+    "cases": [
+      {
+        "variant": "dynamic_source_only",
+        "case": 0,
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          11,
+          12,
+          13,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "variant": "dynamic_source_only",
+        "case": 1,
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "sequence projection index out of bounds",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "variant": "dynamic_destination_only",
+        "case": 0,
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          12,
+          13,
+          14,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "variant": "dynamic_destination_only",
+        "case": 1,
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "sequence replace outside declared bound",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 0,
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          11,
+          12,
+          13,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 1,
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          2,
+          14,
+          15,
+          16,
+          6,
+          7
+        ]
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 2,
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          0,
+          1,
+          2,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 3,
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          1,
+          2,
+          3,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 4,
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "sequence replace outside declared bound",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 5,
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "sequence projection index out of bounds",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "variant": "both_offsets_dynamic",
+        "case": 6,
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "sequence projection index out of bounds",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      }
+    ],
+    "case_count": 11,
+    "stage0_matches": true,
+    "language_verified_facts_reused": 0
+  },
+  "measurements": {
+    "probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8"
+  },
+  "claim_boundary": "Single-dynamic-source-offset, single-dynamic-destination-offset, and both-dynamic-offset lowering paths each emit three runtime-checked projections and replacements. The one-offset paths retain two checked u64 additions; the both-offset path retains four, with UNKNOWN obligations and runtime fallbacks. All valid, overlapping-window, bounds-failure, and extreme-offset cases match Stage-0 on the canonical VM. This does not establish Language-owned verified-fact reuse or an authenticated Forge/Environment/Store execution.",
+  "evidence_artifact": "evidence/vm-runtime-checked-sequence-copy-offset-branches-post-constant-empty-20261018.json"
+}

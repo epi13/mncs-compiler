@@ -1505,7 +1505,7 @@ fn lower_vm_runtime_checked_dynamic_offset_sequence_copies(
                 let src_at = constants.get(&instruction.inputs[3]).copied();
                 if dst_at.is_some_and(|value| value < 0)
                     || src_at.is_some_and(|value| value < 0)
-                    || (dst_at.is_some() && src_at.is_some())
+                    || (dst_at.is_some() && src_at.is_some() && length != 0)
                 {
                     rewritten.push(instruction);
                     continue;
@@ -3449,6 +3449,108 @@ mod application_closure_tests {
                     value.starts_with("vm-runtime-checked-sequence-copy-dynamic-offset-lowering/1:")
                 })
             })));
+    }
+
+    #[test]
+    fn canonical_vm_checks_nonzero_constant_source_offset_for_empty_copy() {
+        let source = r#"
+            mncs 0.18;
+            module closure.constant_empty_offset_copy;
+            fn copy_window(
+                destination: [byte; 8],
+                source: [byte; up_to 8]
+            ) -> (result: [byte; 8]) {
+                return copy_span(destination, 3, source, 4, 0);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-constant-empty-offset-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact with checked constant empty offsets");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        let validation = module.validate();
+        assert!(
+            validation.valid,
+            "VM-lowered SSA diagnostics: {:?}",
+            validation.errors
+        );
+        let instructions = module
+            .functions
+            .iter()
+            .flat_map(|function| function.blocks.iter())
+            .flat_map(|block| block.instructions.iter())
+            .collect::<Vec<_>>();
+        assert!(instructions.iter().all(|instruction| !matches!(
+            instruction.kind,
+            SsaInstructionKind::SequenceCopy { .. }
+        )));
+        let constant_values = instructions
+            .iter()
+            .filter_map(|instruction| match &instruction.kind {
+                SsaInstructionKind::Constant { value, ty }
+                    if ty
+                        == &BodyType::Integer(mncs_model::IntegerType {
+                            bits: 64,
+                            signed: false,
+                        }) =>
+                {
+                    instruction
+                        .outputs
+                        .first()
+                        .map(|output| (output.identity.clone(), *value))
+                }
+                _ => None,
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let empty_views = instructions
+            .iter()
+            .filter(|instruction| {
+                matches!(
+                    instruction.kind,
+                    SsaInstructionKind::ViewConstruct {
+                        view_bound: SequenceBound::UpTo(0),
+                        ..
+                    }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(empty_views.len(), 2);
+        assert!(empty_views.iter().all(|instruction| {
+            instruction.failure == Some(mncs_model::FailureMode::Isolated)
+                && instruction.inputs.len() == 3
+                && instruction.inputs[1] == instruction.inputs[2]
+        }));
+        assert_eq!(
+            empty_views
+                .iter()
+                .map(|instruction| constant_values.get(&instruction.inputs[1]).copied())
+                .collect::<Vec<_>>(),
+            [Some(3), Some(4)]
+        );
+        assert_eq!(
+            module
+                .transformations
+                .iter()
+                .filter(|record| {
+                    record.rule
+                        == "vm-runtime-checked-sequence-copy-zero-length-to-checked-empty-views/1"
+                })
+                .count(),
+            1
+        );
     }
 
     #[test]
