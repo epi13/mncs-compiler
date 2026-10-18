@@ -88,10 +88,29 @@ fn fold_status_scenario(scenario: byte) -> (result: TestResult) {
     let invalid: protocol.ProviderTestExecution = execution(9, protocol.CallableExecutionStatus.INVALID_REQUEST, pass());
     return provider.native_result(provider.fold_selected([invalid]));
 }
+
+test mixed_statuses() -> (result: TestResult) {
+    return fold_status_scenario(0);
+}
+
+test failure_precedence() -> (result: TestResult) {
+    return fold_status_scenario(1);
+}
+
+test unsupported_only() -> (result: TestResult) {
+    return fold_status_scenario(2);
+}
+
+test invalid_request() -> (result: TestResult) {
+    return fold_status_scenario(3);
+}
 """
 
 CALLABLE = {"module": MODULE, "function": "fold_status_scenario"}
-ROOTS = [CALLABLE]
+TEST_NAMES = ("mixed_statuses", "failure_precedence", "unsupported_only", "invalid_request")
+ROOTS = [CALLABLE] + [
+    {"module": MODULE, "function": name} for name in TEST_NAMES
+]
 SCENARIOS = [
     {"id": "mixed_statuses", "scenario": 0},
     {"id": "failure_precedence", "scenario": 1},
@@ -100,11 +119,20 @@ SCENARIOS = [
 ]
 
 
-def call_request(scenario: dict) -> dict:
+def call_request(call: dict) -> dict:
+    if call["kind"] == "inventory_test":
+        test = call["test"]
+        return {
+            "schema_version": "0.1",
+            "target": {"module": test["module"], "function": test["name"]},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 2_000_000,
+        }
     return {
         "schema_version": "0.1",
         "target": CALLABLE,
-        "arguments": [{"byte": {"value": scenario["scenario"]}}],
+        "arguments": [{"byte": {"value": call["scenario"]}}],
         "type_arguments": [],
         "step_budget": 2_000_000,
     }
@@ -117,7 +145,7 @@ def sha(data: bytes) -> str:
 def request(roots: list[dict] | None = None) -> dict:
     modules = {name: path.read_text(encoding="utf-8") for name, path in MODULE_FILES.items()}
     return {
-        "schema_version": "mncs.compiler.application-build-request/2",
+        "schema_version": "mncs.compiler.application-build-request/3",
         "target": "mncs-vm-0.1",
         "root_source_id": SOURCE_ID,
         "root_source": SOURCE,
@@ -168,7 +196,7 @@ def main() -> None:
         built, build_metrics = probe.send(
             {"compile_application": build_request}, timeout=180.0
         )
-        if (built.get("schema_version") != "mncs.compiler.application-build/5"
+        if (built.get("schema_version") != "mncs.compiler.application-build/6"
                 or built.get("status") != "verified"
                 or built.get("cache", {}).get("status") != "miss"):
             raise AssertionError("provider fold application failed its cold build: " + json.dumps({
@@ -180,10 +208,31 @@ def main() -> None:
         if not isinstance(artifact, dict):
             raise TypeError("provider fold build omitted its canonical VM artifact")
         rows = built.get("callable_scope", {}).get("callable_roots", [])
-        if ([(row.get("module"), row.get("function")) for row in rows]
-                != [(CALLABLE["module"], CALLABLE["function"])]
+        selected_roots = {
+            (row.get("module"), row.get("function")) for row in rows
+        }
+        expected_roots = {
+            (row["module"], row["function"]) for row in ROOTS
+        }
+        if (selected_roots != expected_roots
+                or len(rows) != len(ROOTS)
                 or any(row.get("status") != "verified" for row in rows)):
             raise AssertionError(f"provider fold callables were not all verified: {rows}")
+        inventory = built.get("source_test_inventory")
+        if (not isinstance(inventory, dict)
+                or inventory.get("schema_version") != "mncs.test-inventory/1"
+                or inventory.get("scope") != "source_module"
+                or inventory.get("module") != MODULE):
+            raise AssertionError(f"provider fold build omitted its current Test inventory: {inventory}")
+        inventory_tests = inventory.get("tests", [])
+        if (not isinstance(inventory_tests, list)
+                or {row.get("name") for row in inventory_tests} != set(TEST_NAMES)
+                or any(not row.get("test_case_identity")
+                       or not row.get("declaration_identity")
+                       or not row.get("function_identity")
+                       or not row.get("semantic_fingerprint")
+                       for row in inventory_tests)):
+            raise AssertionError(f"provider fold Test inventory lost stable case identities: {inventory_tests}")
 
         warm_probe = app.Probe(CACHE_DIR, executable=PROBE)
         try:
@@ -192,7 +241,8 @@ def main() -> None:
             )
             if (warm.get("cache", {}).get("status") != "hit"
                     or warm.get("artifact", {}).get("identity") != built["artifact"]["identity"]
-                    or warm.get("cache", {}).get("verification_work", {}).get("front_end_invocations") != 0):
+                    or warm.get("cache", {}).get("verification_work", {}).get("front_end_invocations") != 0
+                    or warm.get("source_test_inventory") != inventory):
                 raise AssertionError("provider fold fresh-process artifact reuse was not exact")
         finally:
             warm_probe.close()
@@ -203,7 +253,13 @@ def main() -> None:
             probe.proc.wait(timeout=5)
         raise
 
-    calls = SCENARIOS
+    calls = [
+        {**row, "kind": "scenario", "id": f"scenario:{row['id']}"}
+        for row in SCENARIOS
+    ] + [
+        {"kind": "inventory_test", "id": row["test_case_identity"], "test": row}
+        for row in inventory_tests
+    ]
     oracle_probe = app.Probe(CACHE_DIR, executable=PROBE)
     try:
         oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
@@ -230,6 +286,7 @@ def main() -> None:
             or vm_result.get("artifact_id") != artifact.get("artifact_id")):
         raise AssertionError("canonical VM provider batch lost its call count or artifact identity")
     observed: dict[str, dict] = {}
+    observed_inventory_tests: dict[str, dict] = {}
     for call, vm_row, oracle_row in zip(calls, results, oracle["executions"]):
         if (vm_row.get("id") != call["id"]
                 or vm_row.get("outcome") != {"kind": "completed"}
@@ -243,7 +300,13 @@ def main() -> None:
         expected = app.decode_wire(expected_rows[0])
         if actual != expected:
             raise AssertionError(f"canonical VM diverged from Stage-0 for {call['id']}")
-        observed[call["id"]] = actual
+        if call["kind"] == "scenario":
+            observed[call["id"].removeprefix("scenario:")] = actual
+        else:
+            test_name = call["test"]["name"]
+            if actual != observed[test_name]:
+                raise AssertionError(f"inventory Test {test_name} changed its provider result")
+            observed_inventory_tests[test_name] = actual
 
     mixed = observed["mixed_statuses"]
     precedence = observed["failure_precedence"]
@@ -297,6 +360,20 @@ def main() -> None:
             "contract_schema": built.get("schema_version"),
             "artifact_identity": built.get("artifact", {}).get("identity"),
             "artifact_sha256": sha(json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode()),
+            "source_test_inventory": {
+                "schema_version": inventory.get("schema_version"),
+                "scope": inventory.get("scope"),
+                "module": inventory.get("module"),
+                "subject_fingerprint": inventory.get("subject_fingerprint"),
+                "source_artifact_identity": inventory.get("source_artifact_identity"),
+                "test_cases": [{
+                    "name": row.get("name"),
+                    "test_case_identity": row.get("test_case_identity"),
+                    "declaration_identity": row.get("declaration_identity"),
+                    "function_identity": row.get("function_identity"),
+                    "semantic_fingerprint": row.get("semantic_fingerprint"),
+                } for row in inventory_tests],
+            },
             "selected_roots": [{
                 "module": row.get("module"),
                 "function": row.get("function"),
@@ -310,7 +387,9 @@ def main() -> None:
             "stage0_oracle_results": len(oracle.get("executions", [])),
             "canonical_vm_results": len(results),
             "selected_callable_count": len(rows),
-            "repeated_callable_invocations": len(calls),
+            "repeated_callable_invocations": len(SCENARIOS),
+            "inventory_test_invocations": len(observed_inventory_tests),
+            "source_test_inventory_count": len(inventory_tests),
             "typed_input_kind": "byte scenario selector",
             "typed_results_match": True,
             "fresh_process_cache_hit": warm.get("cache", {}).get("status"),
@@ -333,13 +412,16 @@ def main() -> None:
             "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
             "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
             "canonical_vm_batch_invocations": 1,
+            "canonical_vm_session_model": "one artifact admission and one retained VM Session for all calls",
         },
         "scope": (
-            "One selected callable in one application artifact was invoked four times in one canonical "
-            "VM batch with distinct typed byte scenario inputs. Each invocation reached the production "
-            "mncs.test.provider::fold_selected policy and its status-to-TestResult mapping; all four "
-            "results matched Stage-0. This does not execute provider_batch_app, admit provider_digest, "
-            "invoke Forge, publish Store evidence, or establish full provider/CLI conversion."
+            "One application-build/6 result supplied a Compiler-issued source Test inventory and one "
+            "artifact exporting the repeated provider callable plus all four Test declarations. One "
+            "canonical VM batch invoked fold_status_scenario four times with distinct typed byte inputs "
+            "and invoked each inventory-selected Test once. The calls reached production "
+            "mncs.test.provider::fold_selected policy and all eight results matched Stage-0; each Test "
+            "result also matched its direct scenario call. This does not execute provider_batch_app, "
+            "admit provider_digest, invoke Forge, publish Store evidence, or establish production CLI integration."
         ),
     }
     evidence_path = ROOT / os.environ.get(
