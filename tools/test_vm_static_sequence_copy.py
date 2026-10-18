@@ -20,9 +20,18 @@ MODULE = "mncs.test.vm_static_copy"
 FUNCTION = "copy_window"
 SOURCE = """mncs 0.18;
 module mncs.test.vm_static_copy;
-fn copy_window(destination: [byte; 8], source: [byte; 8]) -> (result: [byte; 8]) {
+record CopyResult { small: [byte; 8], large: [byte; 320] }
+fn copy_window(
+    destination: [byte; 8],
+    source: [byte; 8],
+    large_destination: [byte; 320],
+    large_source: [byte; 320]
+) -> (result: CopyResult) {
     let unchanged: [byte; 8] = copy_span(destination, 8, source, 8, 0);
-    return copy_span(unchanged, 2, source, 1, 3);
+    let small: [byte; 8] = copy_span(unchanged, 2, source, 1, 3);
+    let large_unchanged: [byte; 320] = copy_span(large_destination, 320, large_source, 320, 0);
+    let large: [byte; 320] = copy_span(large_unchanged, 10, large_source, 5, 300);
+    return CopyResult { small: small, large: large };
 }
 """
 EVIDENCE_PATH = ROOT / os.environ.get(
@@ -72,16 +81,31 @@ def main() -> None:
         module = artifact.get("code", {}).get("mncs-selected-ssa", {}).get("module", {})
         frozen_module_text = json.dumps(module, sort_keys=True)
         refs = artifact.get("source", {}).get("lowering_refs", [])
-        lowering_ref = next((row for row in refs if row.startswith("vm-static-exact-sequence-copy-lowering/1:")), None)
+        lowering_ref = next((row for row in refs if row.startswith("vm-static-exact-sequence-copy-lowering/2:")), None)
         if lowering_ref is None:
             raise AssertionError("VM artifact omitted its lowered-SSA fingerprint")
-        if "vm-static-exact-sequence-copy-to-project-replace/1" not in frozen_module_text:
-            raise AssertionError("VM artifact omitted the exact lowering transformation record")
+        if any(
+            rule not in frozen_module_text
+            for rule in (
+                "vm-static-exact-sequence-copy-to-project-replace/1",
+                "vm-static-exact-sequence-copy-to-project-construct/1",
+            )
+        ):
+            raise AssertionError("VM artifact omitted an exact lowering transformation record")
 
         destination = [10, 11, 12, 13, 14, 15, 16, 17]
         source = [30, 31, 32, 33, 34, 35, 36, 37]
-        expected = destination[:2] + source[1:4] + destination[5:]
-        arguments = [byte_sequence(destination), byte_sequence(source)]
+        large_destination = [index % 256 for index in range(320)]
+        large_source = [(255 - index) % 256 for index in range(320)]
+        expected_small = destination[:2] + source[1:4] + destination[5:]
+        expected_large = large_destination[:10] + large_source[5:305] + large_destination[310:]
+        expected = {"small": expected_small, "large": expected_large}
+        arguments = [
+            byte_sequence(destination),
+            byte_sequence(source),
+            byte_sequence(large_destination),
+            byte_sequence(large_source),
+        ]
         artifact_path = directory / "application.vm.json"
         arguments_path = directory / "arguments.json"
         type_arguments_path = directory / "type-arguments.json"
@@ -112,7 +136,7 @@ def main() -> None:
             raise AssertionError("VM execution receipt is not bound to the compiled artifact")
         returned = support.decode_wire(support.vm_to_wire(document["record"]["returned"][0]))
         if returned != expected:
-            raise AssertionError(f"copy result differs from source semantics: {returned} != {expected}")
+            raise AssertionError("copy result differs from source semantics")
 
         revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
         vm_revision = subprocess.check_output(["git", "-C", str(support.VM_ROOT), "rev-parse", "HEAD"], text=True).strip()
@@ -145,9 +169,15 @@ def main() -> None:
                 "sequence_copy_operations": [
                     {"destination_offset": 8, "source_offset": 8, "length": 0},
                     {"destination_offset": 2, "source_offset": 1, "length": 3},
+                    {"destination_offset": 320, "source_offset": 320, "length": 0},
+                    {"destination_offset": 10, "source_offset": 5, "length": 300},
                 ],
-                "expected": expected,
-                "actual": returned,
+                "large_destination_length": len(large_destination),
+                "large_source_length": len(large_source),
+                "large_expected_sha256": sha(bytes(expected_large)),
+                "large_actual_sha256": sha(bytes(returned["large"])),
+                "small_expected": expected_small,
+                "small_actual": returned["small"],
             },
             "verification": {
                 "application_build_status": built.get("status"),
@@ -161,6 +191,7 @@ def main() -> None:
                 "result_matches_source_semantics": returned == expected,
                 "language_verified_facts_reused": 0,
                 "runtime_checked_sequencecopy_transformed": False,
+                "large_exact_span_rebuilt_from_projections": True,
             },
             "measurements": {
                 "application_build": build_metrics,
@@ -170,9 +201,11 @@ def main() -> None:
             },
             "claim_boundary": (
                 "The compiler lowered two static exact-bound byte span copies, including an empty copy at "
-                "the end of both exact sequences, into canonical-VM-supported operations. The exact artifact "
-                "completed on the canonical VM and returned the expected functional-copy result. "
-                "Runtime-checked and over-limit copies remain explicit SequenceCopy instructions, so this "
+                "the end of both exact sequences, into canonical-VM-supported operations. It also lowered a "
+                "300-byte exact copy into bounded projections and one sequence construction. The exact "
+                "artifact completed on the canonical VM and returned the expected functional-copy result. "
+                "Runtime-checked and copies with destinations above the reconstruction limit remain explicit "
+                "SequenceCopy instructions, so this "
                 "does not complete the dynamic provider application path or add Language-owned "
                 "verified-fact reuse."
             ),

@@ -27,6 +27,7 @@ use mncs_model::{
 };
 
 const VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT: u32 = 256;
+const VM_STATIC_SEQUENCE_COPY_REBUILD_BOUND_LIMIT: u32 = 512;
 
 /// Must match `mncs_vm::artifact::ARTIFACT_SCHEMA_VERSION`.
 pub const VM_ARTIFACT_SCHEMA_VERSION: &str = "mncs.vm.artifact/1";
@@ -741,22 +742,27 @@ fn application_lowering_program(
 }
 
 /// Lower statically proven exact-bound span copies into VM-supported
-/// projections and replacements. The canonical VM deliberately refuses the
-/// `SequenceCopy` instruction today; for literal windows, the compiler can
-/// express the same total operation using its existing `SequenceProject` and
-/// `SequenceReplace` subset without adding runtime checks or changing the
-/// source-level proof. Dynamic windows and large copies remain untouched and
-/// retain the VM's explicit unsupported outcome.
+/// projections, replacements, or bounded reconstruction. The canonical VM
+/// deliberately refuses the `SequenceCopy` instruction today; for literal
+/// windows, the compiler can express the same total operation using its
+/// existing sequence subset without adding runtime checks or changing the
+/// source-level proof. Dynamic windows and copies whose destination is too
+/// large to reconstruct remain untouched and retain the VM's explicit
+/// unsupported outcome.
 fn lower_vm_static_sequence_copies(ssa: &mut SsaModule) -> Result<usize, String> {
     let target = TargetIdentity {
         identity: mncs_model::SemanticId("mncs:0.2:target:mncs-vm-0.1".to_owned()),
         family: "mncs-vm".to_owned(),
-        features: vec!["sequence-project".to_owned(), "sequence-replace".to_owned()],
+        features: vec![
+            "sequence-construct".to_owned(),
+            "sequence-project".to_owned(),
+            "sequence-replace".to_owned(),
+        ],
         integer_widths: vec![64],
         abi: None,
     };
     let implementation =
-        mncs_model::SemanticId("mncs:0.2:compiler:vm-static-exact-sequence-copy/1".to_owned());
+        mncs_model::SemanticId("mncs:0.2:compiler:vm-static-exact-sequence-copy/2".to_owned());
     let mut lowered_count = 0usize;
     let mut transformations = Vec::new();
 
@@ -842,7 +848,12 @@ fn lower_vm_static_sequence_copies(ssa: &mut SsaModule) -> Result<usize, String>
                         instruction.identity.0
                     ));
                 }
-                if length > u128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT) {
+                let reconstruct_bounded_destination = length
+                    > u128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT)
+                    && *dst_length <= VM_STATIC_SEQUENCE_COPY_REBUILD_BOUND_LIMIT;
+                if length > u128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT)
+                    && !reconstruct_bounded_destination
+                {
                     rewritten.push(instruction);
                     continue;
                 }
@@ -921,6 +932,79 @@ fn lower_vm_static_sequence_copies(ssa: &mut SsaModule) -> Result<usize, String>
                         output_id,
                         &target,
                         &implementation,
+                        "vm-static-exact-sequence-copy-to-project-replace/1",
+                    );
+                    lowered_count += 1;
+                    continue;
+                }
+
+                if reconstruct_bounded_destination {
+                    let mut projected_elements = Vec::with_capacity(*dst_length as usize);
+                    let copied_end = dst_at + length;
+                    for destination_offset in 0..*dst_length {
+                        let destination_offset = u128::from(destination_offset);
+                        let (sequence, bound, source_offset) =
+                            if destination_offset >= dst_at && destination_offset < copied_end {
+                                (
+                                    instruction.inputs[2].clone(),
+                                    src_bound.clone(),
+                                    src_at + (destination_offset - dst_at),
+                                )
+                            } else {
+                                (
+                                    instruction.inputs[0].clone(),
+                                    dst_bound.clone(),
+                                    destination_offset,
+                                )
+                            };
+                        let index = push_vm_sequence_copy_constant(
+                            &mut rewritten,
+                            &owner,
+                            &mut ordinal,
+                            &block_identity,
+                            u64::try_from(source_offset)
+                                .expect("validated exact sequence index fits u64"),
+                        );
+                        let project_id = vm_sequence_copy_id(&owner, "rebuild-project", ordinal);
+                        ordinal += 1;
+                        let projected = SsaValue {
+                            identity: vm_sequence_copy_id(&owner, "rebuild-project-value", ordinal),
+                            semantic_identity: None,
+                            ty: element_type.clone(),
+                            producer: Some(project_id.clone()),
+                            block: block_identity.clone(),
+                        };
+                        projected_elements.push(projected.identity.clone());
+                        rewritten.push(vm_sequence_copy_instruction(
+                            project_id,
+                            SsaInstructionKind::SequenceProject {
+                                bound,
+                                evidence: BoundsEvidence::StaticExact,
+                            },
+                            vec![sequence, index],
+                            vec![projected],
+                        ));
+                    }
+
+                    let construct_id = vm_sequence_copy_id(&owner, "rebuild-result", ordinal);
+                    let mut output = instruction.outputs[0].clone();
+                    output.producer = Some(construct_id.clone());
+                    let mut construct = instruction.clone();
+                    construct.identity = construct_id.clone();
+                    construct.kind = SsaInstructionKind::SequenceConstruct {
+                        element_type: Box::new(element_type.clone()),
+                        length: *dst_length,
+                    };
+                    construct.inputs = projected_elements;
+                    construct.outputs = vec![output];
+                    rewritten.push(construct);
+                    record_vm_sequence_copy_lowering(
+                        &mut transformations,
+                        &instruction,
+                        construct_id,
+                        &target,
+                        &implementation,
+                        "vm-static-exact-sequence-copy-to-project-construct/1",
                     );
                     lowered_count += 1;
                     continue;
@@ -1024,6 +1108,7 @@ fn lower_vm_static_sequence_copies(ssa: &mut SsaModule) -> Result<usize, String>
                     final_identity,
                     &target,
                     &implementation,
+                    "vm-static-exact-sequence-copy-to-project-replace/1",
                 );
                 lowered_count += 1;
             }
@@ -1108,6 +1193,7 @@ fn record_vm_sequence_copy_lowering(
     output: mncs_model::SemanticId,
     target: &TargetIdentity,
     implementation: &mncs_model::SemanticId,
+    rule: &str,
 ) {
     let operation = input
         .semantic_identity
@@ -1116,7 +1202,7 @@ fn record_vm_sequence_copy_lowering(
     let mut record = mncs_model::TransformationRecord::new(
         input.identity.clone(),
         output,
-        "vm-static-exact-sequence-copy-to-project-replace/1".to_owned(),
+        rule.to_owned(),
         operation,
         target.clone(),
         implementation.clone(),
@@ -1392,7 +1478,7 @@ fn emit_vm_artifact_scoped(
     }
     if let Some(vm_lowering_fingerprint) = vm_lowering_fingerprint {
         lowering_refs.push(format!(
-            "vm-static-exact-sequence-copy-lowering/1:{vm_lowering_fingerprint}"
+            "vm-static-exact-sequence-copy-lowering/2:{vm_lowering_fingerprint}"
         ));
     }
 
@@ -2009,7 +2095,143 @@ mod application_closure_tests {
             .as_array()
             .is_some_and(|refs| refs.iter().any(|row| {
                 row.as_str().is_some_and(|value| {
-                    value.starts_with("vm-static-exact-sequence-copy-lowering/1:")
+                    value.starts_with("vm-static-exact-sequence-copy-lowering/2:")
+                })
+            })));
+    }
+
+    #[test]
+    fn canonical_vm_rebuilds_bounded_large_static_exact_sequence_copies() {
+        let source = r#"
+            mncs 0.18;
+            module closure.large_static_copy;
+            fn copy_window(
+                destination: [byte; 320],
+                source: [byte; 320]
+            ) -> (result: [byte; 320]) {
+                return copy_span(destination, 10, source, 5, 300);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-large-static-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact with bounded large span-copy reconstruction");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        assert!(
+            module.validate().valid,
+            "VM-lowered SSA diagnostics: {:?}",
+            module.validate().errors
+        );
+        let instructions = module
+            .functions
+            .iter()
+            .flat_map(|function| function.blocks.iter())
+            .flat_map(|block| block.instructions.iter())
+            .collect::<Vec<_>>();
+        assert!(instructions.iter().all(|instruction| !matches!(
+            instruction.kind,
+            SsaInstructionKind::SequenceCopy { .. }
+        )));
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceProject { .. }
+                ))
+                .count(),
+            320
+        );
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceConstruct { .. }
+                ))
+                .count(),
+            1
+        );
+        assert_eq!(
+            module
+                .transformations
+                .iter()
+                .filter(|record| {
+                    record.rule == "vm-static-exact-sequence-copy-to-project-construct/1"
+                })
+                .count(),
+            1
+        );
+        assert!(artifact["source"]["lowering_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|row| {
+                row.as_str().is_some_and(|value| {
+                    value.starts_with("vm-static-exact-sequence-copy-lowering/2:")
+                })
+            })));
+    }
+
+    #[test]
+    fn canonical_vm_keeps_oversized_static_sequence_copies_explicit() {
+        let source = r#"
+            mncs 0.18;
+            module closure.oversized_static_copy;
+            fn copy_window(
+                destination: [byte; 1024],
+                source: [byte; 1024]
+            ) -> (result: [byte; 1024]) {
+                return copy_span(destination, 10, source, 5, 300);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-oversized-static-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact retains an oversized exact span copy");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        assert!(module.validate().valid);
+        assert!(module.functions.iter().any(|function| {
+            function.blocks.iter().any(|block| {
+                block.instructions.iter().any(|instruction| {
+                    matches!(instruction.kind, SsaInstructionKind::SequenceCopy { .. })
+                })
+            })
+        }));
+        assert!(!module.transformations.iter().any(|record| {
+            record
+                .rule
+                .starts_with("vm-static-exact-sequence-copy-to-project-")
+        }));
+        assert!(!artifact["source"]["lowering_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|row| {
+                row.as_str().is_some_and(|value| {
+                    value.starts_with("vm-static-exact-sequence-copy-lowering/")
                 })
             })));
     }
