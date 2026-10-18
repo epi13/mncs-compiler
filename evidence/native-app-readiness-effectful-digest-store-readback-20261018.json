@@ -1,0 +1,283 @@
+{
+  "schema_version": "mncs.compiler.native-test-digest-store-readback/1",
+  "identity": "ev_native_test_digest_app_store_readback_20261018",
+  "observed_at": "2026-10-18T09:15:09.881378+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "checkpoint_before": "chk_63164607054fa5ce",
+  "compiler_commit": "8120c4fa60aea29f5851fb9c0ee28a7b96a2c491",
+  "session_id": "ses_164edc158d9b1637",
+  "verification": {
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.native-test-digest-effectful-app-canonical-vm",
+    "binding_id": "cap_1d9c6205b431c144",
+    "status": "passed",
+    "application": "mncs.test.digest::digest_app",
+    "compiler_probe_sha256": "e032a402ea56f30187f8a4eebd3db8f1850b535fca656a07dd24aec15d61bbe0",
+    "artifact_identity": "sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+    "artifact_bytes": 1108394,
+    "callable_interface_identity": "sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2",
+    "capability_admission": {
+      "authorized_capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+      "mapped_host_call_count": 2,
+      "mapping_source": "mncs.compiler.capability-dispatch/1, cross-checked against admitted SSA",
+      "runtime_dispatch_alias": "test_artifact"
+    },
+    "canonical_vm_case_count": 3,
+    "exact_result_agreement": true,
+    "retained_session_batch": {
+      "admitted_artifact_count": 1,
+      "artifact_identity": "sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+      "call_order": [
+        "success-0",
+        "missing-capability",
+        "invalid-typed-input",
+        "write-failure",
+        "step-budget-interruption",
+        "success-1",
+        "success-2"
+      ],
+      "calls_in_one_process": 7,
+      "host_metrics": {
+        "cpu_seconds": 0.02,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 15020032,
+        "peak_threads": 1,
+        "process_count": 1,
+        "wall_seconds": 0.03672
+      },
+      "per_call_resource_usage": [
+        {
+          "call_depth": 0,
+          "effects": 2,
+          "max_call_depth": 5,
+          "max_memory_cells": 1116,
+          "memory_cells": 0,
+          "steps": 875
+        },
+        {
+          "call_depth": 0,
+          "effects": 1,
+          "max_call_depth": 2,
+          "max_memory_cells": 404,
+          "memory_cells": 23,
+          "steps": 55
+        },
+        {
+          "call_depth": 0,
+          "effects": 1,
+          "max_call_depth": 2,
+          "max_memory_cells": 404,
+          "memory_cells": 23,
+          "steps": 56
+        },
+        {
+          "call_depth": 0,
+          "effects": 2,
+          "max_call_depth": 5,
+          "max_memory_cells": 1116,
+          "memory_cells": 0,
+          "steps": 894
+        },
+        {
+          "call_depth": 1,
+          "effects": 0,
+          "max_call_depth": 2,
+          "max_memory_cells": 404,
+          "memory_cells": 404,
+          "steps": 2
+        },
+        {
+          "call_depth": 0,
+          "effects": 2,
+          "max_call_depth": 5,
+          "max_memory_cells": 876,
+          "memory_cells": 0,
+          "steps": 863
+        },
+        {
+          "call_depth": 0,
+          "effects": 2,
+          "max_call_depth": 4,
+          "max_memory_cells": 876,
+          "memory_cells": 0,
+          "steps": 482
+        }
+      ],
+      "runtime_identity": "mncs-vm-runtime:sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+      "schema_version": "mncs.compiler.native-application-batch-result/1",
+      "unique_request_input_output_paths": true
+    },
+    "negative_cases": {
+      "missing_capability": {
+        "artifact_identity": "sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+        "effects": [
+          {
+            "capability": "test_artifact",
+            "operation": "structured_read",
+            "outcome_tag": "capability_denied",
+            "sequence": 1
+          }
+        ],
+        "outcome": {
+          "capability": "test_artifact",
+          "kind": "capability_denied",
+          "operation": "structured_read"
+        },
+        "output_published": false,
+        "runtime_identity": "mncs-vm-runtime:sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+        "session_call_index": 1
+      },
+      "mismatched_capability_identity": {
+        "diagnostic": "artifact does not require authorized capability",
+        "rejected": true
+      },
+      "mismatched_dispatch_alias": {
+        "diagnostic": "application contract dispatch alias differs from admitted SSA",
+        "rejected": true
+      },
+      "invalid_typed_input": {
+        "artifact_identity": "sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+        "effects": [
+          {
+            "capability": "test_artifact",
+            "operation": "structured_read",
+            "outcome_tag": "completed",
+            "sequence": 1
+          }
+        ],
+        "outcome": {
+          "kind": "invalid_request",
+          "reason": "call argument does not match input type"
+        },
+        "output_published": false,
+        "session_call_index": 2
+      },
+      "structured_write_failure": {
+        "application_exit_code": 3,
+        "effects": [
+          {
+            "capability": "test_artifact",
+            "operation": "structured_read",
+            "outcome_tag": "completed",
+            "sequence": 1
+          },
+          {
+            "capability": "test_artifact",
+            "operation": "structured_write",
+            "outcome_tag": "completed",
+            "sequence": 2
+          }
+        ],
+        "outcome": {
+          "kind": "completed"
+        },
+        "output_published": false,
+        "runtime_identity": "mncs-vm-runtime:sha256:a61182250a6f460aaf76292f3b37f4f990ee0563c5b60171b5b047550e51a948",
+        "session_call_index": 3
+      },
+      "step_budget_interruption": {
+        "effects": [],
+        "outcome": {
+          "dimension": "steps",
+          "kind": "budget_exhausted"
+        },
+        "output_published": false,
+        "session_call_index": 4
+      },
+      "incorrect_artifact_identity": {
+        "diagnostic": "IdentityMismatch",
+        "rejected": true
+      }
+    },
+    "application_build_cache": {
+      "key": "sha256:ef499829a73ee8297f0787baa64984d38e5287c4ccbec1163ef26da6b8c9d2e6",
+      "publication": "stored",
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "reuse_basis": "none",
+      "reused_from_key": null,
+      "reused_units": [],
+      "schema_version": "mncs.compiler.application-build-cache-observation/4",
+      "status": "miss",
+      "verification_work": {
+        "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+        "backend_artifact": "generated",
+        "declaration_resolution": "recomputed_by_full_frontend",
+        "front_end_invocations": 1,
+        "front_end_outcome": "verified",
+        "function_body_verification": "recomputed_by_full_frontend",
+        "program_function_count": 30,
+        "resolved_module_count": 4,
+        "reused_semantic_facts": [],
+        "schema_version": "mncs.compiler.application-build-verification-work/1",
+        "semantic_dependency_closure": "recomputed_by_full_frontend",
+        "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+        "signature_verification": "recomputed_by_full_frontend",
+        "source_parsing": "recomputed_by_full_frontend",
+        "ssa_verification": "recomputed",
+        "verification_engine_identity": "sha256:e032a402ea56f30187f8a4eebd3db8f1850b535fca656a07dd24aec15d61bbe0"
+      }
+    },
+    "resource_metrics": {
+      "build": {
+        "cpu_seconds": 0.49,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 65904640,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.526133
+      },
+      "retained_session": {
+        "cpu_seconds": 0.02,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 15020032,
+        "peak_threads": 1,
+        "process_count": 1,
+        "wall_seconds": 0.03672
+      }
+    }
+  },
+  "store_readback": {
+    "operation": "artifact_read",
+    "fresh_authenticated_reads": true,
+    "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:1ac1fbbf903921b81abb01a1d8648841ab31290ce217808648fea2b132a6469c",
+    "authenticated_session": "ses_164edc158d9b1637",
+    "files": [
+      {
+        "path": "native-app-readiness-test-digest-app.json",
+        "byte_count": 29581,
+        "sha256": "ccf212357cfbc06fbeca37cb8ff16ba3dff49927810255bec673b266ad147e5e"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-00",
+        "byte_count": 786432,
+        "sha256": "3e6cbd312d8e11d538c7bb657104b677737d5aa3be57d9474afa08470a7c21ee"
+      },
+      {
+        "path": "test-digest-app.vm.json.part-01",
+        "byte_count": 321962,
+        "sha256": "95afadf73980bfffbbc72b59bade02d5254e10e388f8baf6fd5b28ff6525c9a2"
+      }
+    ],
+    "all_sha256_values_match_invocation_manifest": true,
+    "all_byte_counts_match_invocation_manifest": true
+  },
+  "provider_route": {
+    "canonical_vm_verifier": "passed",
+    "forge_native_application_execution": "not_invoked",
+    "missing_selected_session_capability": "mncs-forge:native-application-execution"
+  },
+  "limitations": [
+    "This is effectful canonical-VM verification with a bounded test_artifact provider; it does not establish a Forge execution receipt.",
+    "The application-build verification-work record reports zero reused Language verified facts.",
+    "Full native Test conversion and Stage-1/Stage-2 succession remain unproven."
+  ]
+}
