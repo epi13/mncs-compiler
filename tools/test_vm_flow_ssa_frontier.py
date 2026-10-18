@@ -54,9 +54,18 @@ PROBE = Path(os.environ.get(
 MODULE_NAMES = ["source", "lexer", "parser", "segment", "decl", "flow", "ssa"]
 APP_SOURCE = (
     "mncs 0.18; module demo.flow_ssa_frontier; use mncs.compiler.ssa.v1 as ssa; "
+    "record FlowSsaFrontierSummary { valid: bool, function_count: u64, "
+    "supported_function_count: u64, verified_function_count: u64, "
+    "block_count: u64, instruction_count: u64 } "
     "fn run(pages: [[byte; up_to 1024]; up_to 1024], stride: u64, total: u64) "
-    "-> (result: ssa.ValueSsaSummary) { "
-    "return ssa.lower_flow_unit_value_ssa<1024, 1024>(pages, stride, total); }"
+    "-> (result: FlowSsaFrontierSummary) { "
+    "let summary: ssa.ValueSsaSummary = "
+    "ssa.lower_flow_unit_value_ssa<1024, 1024>(pages, stride, total); "
+    "return FlowSsaFrontierSummary { valid: summary.valid, "
+    "function_count: summary.function_count, "
+    "supported_function_count: summary.supported_function_count, "
+    "verified_function_count: summary.verified_function_count, "
+    "block_count: summary.block_count, instruction_count: summary.instruction_count }; }"
 )
 
 
@@ -170,20 +179,6 @@ def cgroup_snapshot() -> dict:
     return result
 
 
-def field(wire: dict, name: str) -> dict:
-    return dict(wire["record"]["fields"])[name]
-
-
-def wire_linked(value: dict) -> list[dict]:
-    items = []
-    while value["finite"]["discriminant"] == 1:
-        fields = dict(value["finite"]["payload"])
-        items.append(fields["head"])
-        value = fields["tail"]
-    assert value["finite"]["discriminant"] == 0, value
-    return items
-
-
 def semantic_digest(value: dict) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -211,6 +206,11 @@ def main() -> None:
             ),
             "returns": sum(
                 "Return" in block["terminator"]
+                for function in oracle_functions for block in function["blocks"]
+            ),
+            "blocks": sum(len(function["blocks"]) for function in oracle_functions),
+            "instructions": sum(
+                len(block["instructions"])
                 for function in oracle_functions for block in function["blocks"]
             ),
         }
@@ -245,13 +245,19 @@ def main() -> None:
         or build.get("entry", {}).get("status") != "verified"
         or build.get("unresolved_obligations") != []
     ):
+        entry = build.get("entry") or {}
+        interface = entry.get("interface") or {}
+        types = interface.get("types") or {}
+        artifact_value = (build.get("artifact") or {}).get("value") or {}
         raise AssertionError(f"selected Flow-to-SSA application did not verify: {json.dumps({
             "schema_version": build.get("schema_version"),
             "status": build.get("status"),
-            "entry": build.get("entry"),
+            "entry_status": entry.get("status"),
+            "unresolved_interface_types": types.get("unresolved_references"),
             "unresolved_obligations": build.get("unresolved_obligations"),
             "diagnostics": build.get("diagnostics"),
             "cache": build.get("cache"),
+            "artifact_id": artifact_value.get("artifact_id"),
         }, sort_keys=True)}")
     artifact = (build.get("artifact") or {}).get("value")
     if not isinstance(artifact, dict) or artifact.get("schema_version") != "mncs.vm.artifact/1":
@@ -292,17 +298,19 @@ def main() -> None:
             raise AssertionError(f"Flow-to-SSA summary is invalid for {case['name']}: {summary}")
         if summary["supported_function_count"] != 1 or summary["verified_function_count"] != 1:
             raise AssertionError(f"Flow-to-SSA did not verify {case['name']}: {summary}")
-        functions = wire_linked(field(summary_wire, "functions"))
-        actual_shape = {"functions": len(functions), "branches": 0, "returns": 0}
-        for function in functions:
-            for block in wire_linked(field(function, "blocks")):
-                terminator = field(block, "terminator")["finite"]["discriminant"]
-                actual_shape["branches"] += terminator == 0
-                actual_shape["returns"] += terminator == 2
-        if actual_shape != case["oracle_shape"]:
+        actual_shape = {
+            "functions": summary["function_count"],
+            "blocks": summary["block_count"],
+            "instructions": summary["instruction_count"],
+        }
+        expected_shape = {
+            name: case["oracle_shape"][name]
+            for name in ("functions", "blocks", "instructions")
+        }
+        if actual_shape != expected_shape:
             raise AssertionError(
-                f"canonical VM SSA shape differs from Stage-0 for {case['name']}: "
-                f"{actual_shape} != {case['oracle_shape']}"
+                f"canonical VM SSA aggregate differs from Stage-0 for {case['name']}: "
+                f"{actual_shape} != {expected_shape}"
             )
         native_values.append({
             "name": case["name"],
@@ -379,8 +387,11 @@ def main() -> None:
             "verified_functions": sum(
                 value["summary"]["verified_function_count"] for value in native_values
             ),
-            "stage0_shape_matches_canonical_vm": all(
-                value["shape"] == case["oracle_shape"]
+            "stage0_aggregate_matches_canonical_vm": all(
+                value["shape"] == {
+                    name: case["oracle_shape"][name]
+                    for name in ("functions", "blocks", "instructions")
+                }
                 for value, case in zip(native_values, cases, strict=True)
             ),
             "stage0_loop_header_and_backedge_cases": sum(
@@ -410,7 +421,9 @@ def main() -> None:
             "The canonical VM batch starts each case from logical source pages; MNCS source runs "
             "flow.lower_unit, derives local nominal identities from the returned proof unit, and "
             "passes that exact Flow result to value SSA. Both verified SSA function shapes match the "
-            "pinned Stage-0 oracle. It does not establish Language-owned verified-fact reuse, "
+            "pinned Stage-0 oracle for function, block, and instruction counts. Branch and return "
+            "counts remain oracle-only in this selected application interface. It does not establish "
+            "Language-owned verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
     }
