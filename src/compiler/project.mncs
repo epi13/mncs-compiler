@@ -717,6 +717,8 @@ fn module_resolution_cache_key_equal<M: Nat, N: Nat>(sources: [ProjectSource; up
         offset: 0,
         equal: true
     } {
+        // Stop on a mismatch or once all name bytes have been compared.
+        if !(st.equal) || st.offset >= st.length { return st.equal && st.offset >= st.length; }
         next st = module_resolution_name_compare_step<M, N>(sources, flat_pages, source_index, st);
     }
     return st.equal && st.offset >= st.length;
