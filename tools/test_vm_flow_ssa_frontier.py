@@ -56,16 +56,45 @@ APP_SOURCE = (
     "mncs 0.18; module demo.flow_ssa_frontier; use mncs.compiler.ssa.v1 as ssa; "
     "record FlowSsaFrontierSummary { valid: bool, function_count: u64, "
     "supported_function_count: u64, verified_function_count: u64, "
-    "block_count: u64, instruction_count: u64 } "
+    "block_count: u64, instruction_count: u64, branch_count: u64, return_count: u64 } "
+    "record FlowSsaTermCounts { branches: u64, returns: u64 } "
+    "record FlowSsaBlockScan { rest: ssa.SsaBlockList, branches: u64, returns: u64 } "
+    "record FlowSsaFunctionScan { rest: ssa.FunctionList, branches: u64, returns: u64 } "
+    "fn flow_ssa_count_blocks(blocks: ssa.SsaBlockList) -> (result: FlowSsaTermCounts) { "
+    "let initial: FlowSsaBlockScan = FlowSsaBlockScan { rest: blocks, branches: 0, returns: 0 }; "
+    "iterate i up_to 1024 carrying st: FlowSsaBlockScan = initial { "
+    "next st = match st.rest { "
+    "ssa.SsaBlockList.LNil => st, "
+    "ssa.SsaBlockList.LCons { head: block, tail: rest } => { "
+    "let counts: FlowSsaTermCounts = match block.terminator { "
+    "ssa.Terminator.Branch { condition: condition, yes: yes, no: no, yes_args: yes_args, no_args: no_args } "
+    "=> FlowSsaTermCounts { branches: 1, returns: 0 }, "
+    "ssa.Terminator.Return { value: value } => FlowSsaTermCounts { branches: 0, returns: 1 }, "
+    "_ => FlowSsaTermCounts { branches: 0, returns: 0 } }; "
+    "FlowSsaBlockScan { rest: rest, branches: st.branches + counts.branches, "
+    "returns: st.returns + counts.returns } } }; } "
+    "return FlowSsaTermCounts { branches: st.branches, returns: st.returns }; } "
+    "fn flow_ssa_count_functions(functions: ssa.FunctionList) -> (result: FlowSsaTermCounts) { "
+    "let initial: FlowSsaFunctionScan = FlowSsaFunctionScan { rest: functions, branches: 0, returns: 0 }; "
+    "iterate i up_to 1024 carrying st: FlowSsaFunctionScan = initial { "
+    "next st = match st.rest { "
+    "ssa.FunctionList.FNil => st, "
+    "ssa.FunctionList.FCons { head: function, tail: rest } => { "
+    "let counts: FlowSsaTermCounts = flow_ssa_count_blocks(function.blocks); "
+    "FlowSsaFunctionScan { rest: rest, branches: st.branches + counts.branches, "
+    "returns: st.returns + counts.returns } } }; } "
+    "return FlowSsaTermCounts { branches: st.branches, returns: st.returns }; } "
     "fn run(pages: [[byte; up_to 1024]; up_to 1024], stride: u64, total: u64) "
     "-> (result: FlowSsaFrontierSummary) { "
     "let summary: ssa.ValueSsaSummary = "
     "ssa.lower_flow_unit_value_ssa<1024, 1024>(pages, stride, total); "
+    "let terms: FlowSsaTermCounts = flow_ssa_count_functions(summary.functions); "
     "return FlowSsaFrontierSummary { valid: summary.valid, "
     "function_count: summary.function_count, "
     "supported_function_count: summary.supported_function_count, "
     "verified_function_count: summary.verified_function_count, "
-    "block_count: summary.block_count, instruction_count: summary.instruction_count }; }"
+    "block_count: summary.block_count, instruction_count: summary.instruction_count, "
+    "branch_count: terms.branches, return_count: terms.returns }; }"
 )
 
 
@@ -303,21 +332,26 @@ def main() -> None:
             "blocks": summary["block_count"],
             "instructions": summary["instruction_count"],
         }
-        actual_semantic_totals = {
-            name: actual_shape[name] for name in ("functions", "instructions")
+        actual_control_flow_shape = {
+            "functions": actual_shape["functions"],
+            "branches": summary["branch_count"],
+            "returns": summary["return_count"],
         }
-        expected_semantic_totals = {
-            name: case["oracle_shape"][name] for name in ("functions", "instructions")
+        expected_control_flow_shape = {
+            name: case["oracle_shape"][name]
+            for name in ("functions", "branches", "returns")
         }
-        if actual_semantic_totals != expected_semantic_totals:
+        if actual_control_flow_shape != expected_control_flow_shape:
             raise AssertionError(
-                f"canonical VM SSA function/instruction totals differ from Stage-0 "
-                f"for {case['name']}: {actual_semantic_totals} != {expected_semantic_totals}"
+                f"canonical VM SSA function/branch/return counts differ from Stage-0 "
+                f"for {case['name']}: {actual_control_flow_shape} != {expected_control_flow_shape}"
             )
         native_values.append({
             "name": case["name"],
             "summary": summary,
             "shape": actual_shape,
+            "branch_count": summary["branch_count"],
+            "return_count": summary["return_count"],
             "execution_steps": result["record"]["usage"]["steps"],
         })
 
@@ -382,20 +416,34 @@ def main() -> None:
                 value["name"]: value["execution_steps"] for value in native_values
             },
             "canonical_vm_ssa_shapes": [
-                {"name": value["name"], **value["shape"]} for value in native_values
+                {
+                    "name": value["name"],
+                    **value["shape"],
+                    "branches": value["branch_count"],
+                    "returns": value["return_count"],
+                }
+                for value in native_values
             ],
             "source_to_flow_to_ssa_executed_in_one_vm_batch": True,
             "flow_result_passed_to_value_ssa_by_mncs_source": True,
             "verified_functions": sum(
                 value["summary"]["verified_function_count"] for value in native_values
             ),
-            "stage0_function_and_instruction_totals_match_canonical_vm": all(
-                {name: value["shape"][name] for name in ("functions", "instructions")}
-                == {name: case["oracle_shape"][name] for name in ("functions", "instructions")}
+            "stage0_control_flow_shape_matches_canonical_vm": all(
+                {
+                    "functions": value["shape"]["functions"],
+                    "branches": value["branch_count"],
+                    "returns": value["return_count"],
+                }
+                == {name: case["oracle_shape"][name]
+                    for name in ("functions", "branches", "returns")}
                 for value, case in zip(native_values, cases, strict=True)
             ),
-            "ssa_block_count_deltas_by_case": {
-                value["name"]: value["shape"]["blocks"] - case["oracle_shape"]["blocks"]
+            "ssa_metric_deltas_by_case": {
+                value["name"]: {
+                    metric: value["shape"][metric] - case["oracle_shape"][metric]
+                    for metric in ("blocks", "instructions")
+                }
                 for value, case in zip(native_values, cases, strict=True)
             },
             "stage0_loop_header_and_backedge_cases": sum(
@@ -424,10 +472,9 @@ def main() -> None:
             "callable closure, and the explicit lower_flow_unit_value_ssa<1024,1024> specialization. "
             "The canonical VM batch starts each case from logical source pages; MNCS source runs "
             "flow.lower_unit, derives local nominal identities from the returned proof unit, and "
-            "passes that exact Flow result to value SSA. Returned function and instruction totals "
-            "match the pinned Stage-0 oracle. Per-case block-count deltas are recorded and are not "
-            "treated as parity; branch and return counts remain oracle-only in this selected "
-            "application interface. This does not establish full CFG parity or Language-owned "
+            "passes that exact Flow result to value SSA. Function, branch, and return counts match "
+            "the pinned Stage-0 oracle. Per-case block and instruction deltas are recorded and are "
+            "not treated as parity. This does not establish full CFG/IR parity or Language-owned "
             "verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
