@@ -1,0 +1,100 @@
+{
+  "schema_version": "mncs.compiler.project-module-name-comparison-canonical-vm/1",
+  "identity": "ev_compiler_project_module_name_comparison_canonical_vm_20261018",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-18T03:58:07Z",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "tested_worktree_head": "eb4a4ded0a79621b2cc1be39b523f69e8e8c4319",
+    "implementation_commit": "fedfaaa209c14960a3d68d74d9d5ace4ea701bf0",
+    "source_file": "src/compiler/project.mncs",
+    "source_sha256": "51e3fb0ec4381b25e9d715ac216dbc01299e375760add90eff84a597b1be00b3",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "test": {
+    "harness": "tools/test_vm_project_import_name_cache_frontier.py",
+    "harness_sha256": "1d653aa71038f93ba4d8976cb7843c2b184c529df237e16d9827a8aad8de3af2",
+    "schema_version": "mncs.compiler.project-import-name-cache-vm-frontier/1",
+    "status": "passed",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "module_resolution_cache_key_equal",
+    "type_arguments": [
+      "1024",
+      "1024"
+    ],
+    "step_budget_per_case": 8000000,
+    "stage0_probe_pid": 1515768,
+    "stage0_probe_execution_mode": "The reference values came from the Stage-0 probe executing the Project MNCS function; execution_status reported no retained backend.",
+    "canonical_vm_artifact_identity": "sha256:cdb7deec75756fbf8cde2d45ddab042c04ee8d91b635a2f80f7c467c11f2375c",
+    "generic_entrypoint_count": 1,
+    "cases": [
+      {
+        "id": "equal-short-module-name",
+        "name_bytes": 8,
+        "expected": true
+      },
+      {
+        "id": "mismatch-at-sixth-byte",
+        "name_bytes": 8,
+        "expected": false
+      },
+      {
+        "id": "equal-empty-name",
+        "expected": true
+      },
+      {
+        "id": "different-length-names",
+        "expected": false
+      },
+      {
+        "id": "out-of-range-name-span",
+        "expected": false
+      }
+    ],
+    "stage0_values": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "canonical_vm_values": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "stage0_vm_equivalent": true,
+    "semantic_digest_sha256": "72c83532a904274802f205a1bf87a7739ab5b8dc79b917d8d961b8e3d8a7b7aa",
+    "canonical_vm_wall_seconds": 9.982541,
+    "canonical_vm_peak_rss_kib": 359348,
+    "canonical_vm_calls_bytes": 16239,
+    "canonical_vm_results_bytes": 5917
+  },
+  "resource_measurement": {
+    "stage0_probe_process_elapsed_seconds": 79.526,
+    "stage0_frontend_specialization_seconds": 45.831243,
+    "vm_artifact_emission_seconds": 25.045609,
+    "stage0_probe_rss_sample": {
+      "rss_kib": 1578716,
+      "elapsed_seconds_approx": 67,
+      "is_peak": false
+    },
+    "canonical_vm_peak_rss_kib": 359348,
+    "cgroup_memory_bytes": null,
+    "cgroup_memory_note": "No cgroup peak was available for this run."
+  },
+  "interpretation": {
+    "selected_project_callable_frontier_advanced": true,
+    "full_project_module_canonical_vm_proof": false,
+    "project_module_status_remains": "parse+signatures",
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "Direct canonical VM execution of the changed bounded name-comparison helper, compared case-for-case with Stage-0. The capacity suite separately validates integrated cache-hit behavior. This is a selected helper frontier, not full Project module proof, application execution, Language fact reuse, or compiler succession."
+  }
+}
