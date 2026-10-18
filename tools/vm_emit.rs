@@ -1412,7 +1412,7 @@ fn lower_vm_runtime_checked_sequence_copies(ssa: &mut SsaModule) -> Result<usize
 /// Lower runtime-checked copies whose length is constant but whose source or
 /// destination offset is dynamic. Each index is formed with checked u64
 /// addition, and the source read and destination update retain runtime bounds
-/// checks. Dynamic lengths and empty copies stay on the conservative fallback.
+/// checks. Empty copies use checked empty views so both offsets remain bounded.
 fn lower_vm_runtime_checked_dynamic_offset_sequence_copies(
     ssa: &mut SsaModule,
 ) -> Result<usize, String> {
@@ -1423,12 +1423,17 @@ fn lower_vm_runtime_checked_dynamic_offset_sequence_copies(
             "integer-add-checked".to_owned(),
             "sequence-project".to_owned(),
             "sequence-replace".to_owned(),
+            "view-construct".to_owned(),
+            "sequence-length".to_owned(),
+            "integer-compare".to_owned(),
+            "boolean-op".to_owned(),
+            "select".to_owned(),
         ],
         integer_widths: vec![64],
         abi: None,
     };
     let implementation = mncs_model::SemanticId(
-        "mncs:0.2:compiler:vm-runtime-checked-sequence-copy-dynamic-offsets/1".to_owned(),
+        "mncs:0.2:compiler:vm-runtime-checked-sequence-copy-dynamic-offsets/2".to_owned(),
     );
     let u64_type = BodyType::Integer(mncs_model::IntegerType {
         bits: 64,
@@ -1492,7 +1497,7 @@ fn lower_vm_runtime_checked_dynamic_offset_sequence_copies(
                     rewritten.push(instruction);
                     continue;
                 };
-                if length <= 0 || length > i128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT) {
+                if length < 0 || length > i128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT) {
                     rewritten.push(instruction);
                     continue;
                 }
@@ -1552,6 +1557,184 @@ fn lower_vm_runtime_checked_dynamic_offset_sequence_copies(
                     .unwrap_or(&instruction.identity)
                     .clone();
                 let block_identity = block.identity.clone();
+                if length == 0 {
+                    let mut ordinal = 0u64;
+                    let empty_bound = SequenceBound::UpTo(0);
+                    let empty_view_type = BodyType::Sequence {
+                        element: Box::new(element_type.clone()),
+                        bound: empty_bound.clone(),
+                    };
+                    let mut empty_lengths = Vec::with_capacity(2);
+                    for (role, sequence, offset, source_bound) in [
+                        (
+                            "destination",
+                            instruction.inputs[0].clone(),
+                            instruction.inputs[1].clone(),
+                            dst_bound,
+                        ),
+                        (
+                            "source",
+                            instruction.inputs[2].clone(),
+                            instruction.inputs[3].clone(),
+                            src_bound,
+                        ),
+                    ] {
+                        let view_identity =
+                            vm_sequence_copy_id(&owner, &format!("empty-{role}-view"), ordinal);
+                        ordinal += 1;
+                        let view_value = SsaValue {
+                            identity: vm_sequence_copy_id(
+                                &owner,
+                                &format!("empty-{role}-view-value"),
+                                ordinal,
+                            ),
+                            semantic_identity: None,
+                            ty: empty_view_type.clone(),
+                            producer: Some(view_identity.clone()),
+                            block: block_identity.clone(),
+                        };
+                        let view_value_identity = view_value.identity.clone();
+                        let mut view = vm_sequence_copy_instruction(
+                            view_identity,
+                            SsaInstructionKind::ViewConstruct {
+                                source_bound: (*source_bound).clone(),
+                                view_bound: empty_bound.clone(),
+                            },
+                            vec![sequence, offset.clone(), offset],
+                            vec![view_value],
+                        );
+                        view.failure = Some(failure.clone());
+                        rewritten.push(view);
+
+                        let length_identity =
+                            vm_sequence_copy_id(&owner, &format!("empty-{role}-length"), ordinal);
+                        ordinal += 1;
+                        let length_value = SsaValue {
+                            identity: vm_sequence_copy_id(
+                                &owner,
+                                &format!("empty-{role}-length-value"),
+                                ordinal,
+                            ),
+                            semantic_identity: None,
+                            ty: u64_type.clone(),
+                            producer: Some(length_identity.clone()),
+                            block: block_identity.clone(),
+                        };
+                        let length_value_identity = length_value.identity.clone();
+                        rewritten.push(vm_sequence_copy_instruction(
+                            length_identity,
+                            SsaInstructionKind::SequenceLength {
+                                bound: empty_bound.clone(),
+                            },
+                            vec![view_value_identity],
+                            vec![length_value],
+                        ));
+                        empty_lengths.push(length_value_identity);
+                    }
+
+                    let zero = push_vm_sequence_copy_constant(
+                        &mut rewritten,
+                        &owner,
+                        &mut ordinal,
+                        &block_identity,
+                        0,
+                    );
+                    let mut valid_views = Vec::with_capacity(2);
+                    for (role, length_value) in [
+                        ("destination", empty_lengths[0].clone()),
+                        ("source", empty_lengths[1].clone()),
+                    ] {
+                        let compare_identity = vm_sequence_copy_id(
+                            &owner,
+                            &format!("empty-{role}-length-check"),
+                            ordinal,
+                        );
+                        ordinal += 1;
+                        let compare_value = SsaValue {
+                            identity: vm_sequence_copy_id(
+                                &owner,
+                                &format!("empty-{role}-length-check-value"),
+                                ordinal,
+                            ),
+                            semantic_identity: None,
+                            ty: BodyType::Bool,
+                            producer: Some(compare_identity.clone()),
+                            block: block_identity.clone(),
+                        };
+                        let compare_value_identity = compare_value.identity.clone();
+                        rewritten.push(vm_sequence_copy_instruction(
+                            compare_identity,
+                            SsaInstructionKind::IntegerCompare {
+                                predicate: "eq".to_owned(),
+                                operand_type: mncs_model::IntegerType {
+                                    bits: 64,
+                                    signed: false,
+                                },
+                            },
+                            vec![length_value, zero.clone()],
+                            vec![compare_value],
+                        ));
+                        valid_views.push(compare_value_identity);
+                    }
+
+                    let condition_identity =
+                        vm_sequence_copy_id(&owner, "empty-views-condition", ordinal);
+                    ordinal += 1;
+                    let condition = SsaValue {
+                        identity: vm_sequence_copy_id(
+                            &owner,
+                            "empty-views-condition-value",
+                            ordinal,
+                        ),
+                        semantic_identity: None,
+                        ty: BodyType::Bool,
+                        producer: Some(condition_identity.clone()),
+                        block: block_identity.clone(),
+                    };
+                    let condition_value = condition.identity.clone();
+                    rewritten.push(vm_sequence_copy_instruction(
+                        condition_identity,
+                        SsaInstructionKind::BooleanOp {
+                            operator: "and".to_owned(),
+                        },
+                        valid_views,
+                        vec![condition],
+                    ));
+
+                    let output_identity =
+                        vm_sequence_copy_id(&owner, "empty-views-result", ordinal);
+                    let mut output = instruction.outputs[0].clone();
+                    output.producer = Some(output_identity.clone());
+                    let mut lowered = instruction.clone();
+                    lowered.identity = output_identity.clone();
+                    lowered.kind = SsaInstructionKind::Select {
+                        operand_type: expected_type.clone(),
+                    };
+                    lowered.inputs = vec![
+                        condition_value,
+                        instruction.inputs[0].clone(),
+                        instruction.inputs[0].clone(),
+                    ];
+                    lowered.outputs = vec![output];
+                    lowered.failure = None;
+                    rewritten.push(lowered);
+
+                    record_vm_sequence_copy_lowering(
+                        &mut transformations,
+                        &instruction,
+                        output_identity,
+                        &target,
+                        &implementation,
+                        "vm-runtime-checked-sequence-copy-zero-length-to-checked-empty-views/1",
+                    );
+                    if let Some(record) = transformations.last_mut() {
+                        record.backend_promises_permitted =
+                            vec!["functional-runtime-checked-empty-span-copy".to_owned()];
+                    }
+                    lowered_count += 1;
+                    continue;
+                }
+
                 let copy_length = u64::try_from(length).expect("length is bounded by 256");
                 let mut ordinal = 0u64;
                 let mut current_sequence = instruction.inputs[0].clone();
@@ -2386,7 +2569,7 @@ mod application_closure_tests {
         emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer,
     };
     use mncs_compiler::ReferenceCompiler;
-    use mncs_model::{BoundsEvidence, SsaInstructionKind, SsaModule};
+    use mncs_model::{BodyType, BoundsEvidence, SequenceBound, SsaInstructionKind, SsaModule};
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
     use std::collections::BTreeSet;
 
@@ -3133,6 +3316,132 @@ mod application_closure_tests {
                     .is_some_and(|fallback| fallback.contains("checked u64 addition"))
                 && lowering.obligations_required.contains(&obligation.identity)
         }));
+        assert!(artifact["source"]["lowering_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|row| {
+                row.as_str().is_some_and(|value| {
+                    value.starts_with("vm-runtime-checked-sequence-copy-dynamic-offset-lowering/1:")
+                })
+            })));
+    }
+
+    #[test]
+    fn canonical_vm_lowers_dynamic_zero_length_copies_with_checked_empty_views() {
+        let source = r#"
+            mncs 0.18;
+            module closure.dynamic_empty_offset_copy;
+            fn copy_window(
+                destination: [byte; 8],
+                destination_at: u64,
+                source: [byte; up_to 8],
+                source_at: u64
+            ) -> (result: [byte; 8]) {
+                return copy_span(destination, destination_at, source, source_at, 0);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-dynamic-empty-offset-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact with checked empty views");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        let validation = module.validate();
+        assert!(
+            validation.valid,
+            "VM-lowered SSA diagnostics: {:?}",
+            validation.errors
+        );
+        let instructions = module
+            .functions
+            .iter()
+            .flat_map(|function| function.blocks.iter())
+            .flat_map(|block| block.instructions.iter())
+            .collect::<Vec<_>>();
+        assert!(instructions.iter().all(|instruction| !matches!(
+            instruction.kind,
+            SsaInstructionKind::SequenceCopy { .. }
+        )));
+        let empty_views = instructions
+            .iter()
+            .filter(|instruction| {
+                matches!(
+                    instruction.kind,
+                    SsaInstructionKind::ViewConstruct {
+                        view_bound: SequenceBound::UpTo(0),
+                        ..
+                    }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(empty_views.len(), 2);
+        assert!(empty_views.iter().all(|instruction| {
+            instruction.failure == Some(mncs_model::FailureMode::Isolated)
+                && instruction.inputs.len() == 3
+                && instruction.inputs[1] == instruction.inputs[2]
+                && instruction.outputs[0].ty
+                    == BodyType::Sequence {
+                        element: Box::new(BodyType::Byte),
+                        bound: SequenceBound::UpTo(0),
+                    }
+        }));
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceLength {
+                        bound: SequenceBound::UpTo(0)
+                    }
+                ))
+                .count(),
+            2
+        );
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::IntegerCompare { ref predicate, .. }
+                        if predicate == "eq"
+                ))
+                .count(),
+            2
+        );
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::BooleanOp { ref operator }
+                        if operator == "and"
+                ))
+                .count(),
+            1
+        );
+        let lowering = module
+            .transformations
+            .iter()
+            .find(|record| {
+                record.rule
+                    == "vm-runtime-checked-sequence-copy-zero-length-to-checked-empty-views/1"
+            })
+            .expect("checked empty-view lowering provenance");
+        assert_eq!(
+            lowering.backend_promises_permitted,
+            ["functional-runtime-checked-empty-span-copy".to_owned()]
+        );
         assert!(artifact["source"]["lowering_refs"]
             .as_array()
             .is_some_and(|refs| refs.iter().any(|row| {

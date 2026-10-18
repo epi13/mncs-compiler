@@ -1,0 +1,167 @@
+{
+  "schema_version": "mncs.compiler.vm-runtime-checked-sequence-copy-zero-dynamic-offsets/1",
+  "kind": "compiler-zero-length-dynamic-offset-copy-canonical-vm-frontier",
+  "observed_at": "2026-10-18T12:23:34.065318Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler": {
+    "revision": "9dc15a0c3254d93da81193a33bc8789cc5437b96",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "emitter_sha256": "d1f112315419b6dc8cd936ead1e67242ff4e53296cd5ed9a27f35a5b3a52fc52",
+    "test_harness": "tools/test_vm_runtime_checked_sequence_copy_zero_dynamic_offsets.py",
+    "test_harness_sha256": "b398112de519d95ae0082015e3d0d139b6144a4d8cfb3218d51d48d1849cefcd",
+    "probe_binary": "tools/stage0-probe/target/release/mncs-compiler-stage0-probe",
+    "probe_binary_sha256": "443360a2cca96cb23822b6ce33871d204f1b80e860a67d720e12f3781a3b1206",
+    "canonical_vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "canonical_vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "verification": {
+    "application_artifact_identity": "sha256:e185dd1fab03721c37fd1753244889138cf3c3ce18310f634e06aaa4049d4cfa",
+    "lowering_rule": "vm-runtime-checked-sequence-copy-zero-length-to-checked-empty-views/1",
+    "checked_empty_view_count": 2,
+    "empty_view_length_check_count": 2,
+    "stage0_cases": [
+      {
+        "case": "interior-offsets",
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": "both-boundaries",
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": "empty-source-at-zero",
+        "status": "returned",
+        "matches_stage0": true,
+        "result": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": "destination-out-of-bounds",
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "view range end exceeds the source length",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "case": "source-out-of-bounds",
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "view range end exceeds the source length",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "case": "extreme-source-offset",
+        "status": "runtime_failure",
+        "matches_stage0": true,
+        "outcome": {
+          "detail": "view range end exceeds the source length",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      }
+    ],
+    "stage0_match_count": 6,
+    "case_count": 6,
+    "language_verified_facts_reused": 0
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 0.120181,
+      "cpu_seconds": 0.08,
+      "peak_rss_bytes": 6914048,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 0.004773,
+      "cpu_seconds": 0.0,
+      "peak_rss_bytes": 12644352,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "canonical_vm": [
+      {
+        "wall_seconds": 0.006069,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21508096
+      },
+      {
+        "wall_seconds": 0.006051,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21397504
+      },
+      {
+        "wall_seconds": 0.00554,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 20692992
+      },
+      {
+        "wall_seconds": 0.005409,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21532672
+      },
+      {
+        "wall_seconds": 0.005872,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21413888
+      },
+      {
+        "wall_seconds": 0.005607,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21520384
+      }
+    ],
+    "probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8"
+  },
+  "claim_boundary": "A constant zero-length SequenceCopy with dynamic source and destination offsets lowers to two checked empty views and returns the original destination. Both sequence boundaries, empty-source offset zero, out-of-range destination/source offsets, and an extreme u64 source offset match Stage-0 on the canonical VM. This does not establish Language-owned verified-fact reuse or authenticated Forge execution.",
+  "evidence_artifact": "evidence/vm-runtime-checked-sequence-copy-zero-dynamic-offsets-20261018.json"
+}
