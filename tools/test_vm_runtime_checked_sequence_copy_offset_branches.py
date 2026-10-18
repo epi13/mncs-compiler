@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify the single-dynamic-offset SequenceCopy lowering branches."""
+"""Verify SequenceCopy lowering with dynamic source and destination offsets."""
 from __future__ import annotations
 
 import hashlib
@@ -47,6 +47,17 @@ fn copy_window(
     return copy_span(destination, destination_at, source, 2, 3);
 }
 """,
+    "both_offsets_dynamic": """mncs 0.18;
+module mncs.test.runtime_dynamic_offset_copy;
+fn copy_window(
+    destination: [byte; 8],
+    destination_at: u64,
+    source: [byte; up_to 8],
+    source_at: u64
+) -> (result: [byte; 8]) {
+    return copy_span(destination, destination_at, source, source_at, 3);
+}
+""",
 }
 
 
@@ -70,6 +81,20 @@ def main() -> None:
             (list(range(8)), 2, list(range(10, 18)), 0),
             (list(range(8)), 6, list(range(10, 18)), 0),
         ],
+        "both_offsets_dynamic": [
+            (list(range(8)), 2, list(range(10, 18)), 1),
+            (list(range(8)), 3, list(range(10, 18)), 4),
+            (list(range(8)), 1, list(range(8)), 0),
+            (list(range(8)), 0, list(range(8)), 1),
+            (list(range(8)), 6, list(range(10, 18)), 0),
+            (list(range(8)), 0, list(range(10, 18)), 6),
+            (list(range(8)), 0, list(range(10, 18)), (1 << 64) - 1),
+        ],
+    }
+    expected_checked_adds = {
+        "dynamic_source_only": 2,
+        "dynamic_destination_only": 2,
+        "both_offsets_dynamic": 4,
     }
     reports: dict[str, dict] = {}
     all_cases: list[dict] = []
@@ -159,8 +184,10 @@ def main() -> None:
                         f"replacements={len(replacements)} sequence_copies={sequence_copies} "
                         f"constants={constants}"
                     )
-                if len(checked_adds) != 2:
-                    raise AssertionError(f"{variant} must use two checked offset increments")
+                if len(checked_adds) != expected_checked_adds[variant]:
+                    raise AssertionError(
+                        f"{variant} must use {expected_checked_adds[variant]} checked offset increments"
+                    )
                 if any(name == "SequenceCopy" for _, name, _ in variants):
                     raise AssertionError(f"{variant} retained SequenceCopy in the selected artifact")
 
@@ -168,7 +195,8 @@ def main() -> None:
                     row for row in module.get("obligations", [])
                     if row.get("method") == "runtime-checked-copy-index-offset"
                 ]
-                if len(obligations) != 2 or any(row.get("status") != "UNKNOWN" for row in obligations):
+                if (len(obligations) != expected_checked_adds[variant]
+                        or any(row.get("status") != "UNKNOWN" for row in obligations)):
                     raise AssertionError(f"{variant} lost explicit checked-add obligations")
                 if any(row["identity"] not in lowerings[0].get("obligations_required", [])
                        for row in obligations):
@@ -224,7 +252,7 @@ def main() -> None:
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     report = {
         "schema_version": "mncs.compiler.vm-runtime-checked-sequence-copy-offset-branches/1",
-        "kind": "compiler-single-dynamic-offset-sequence-copy-canonical-vm-frontier",
+        "kind": "compiler-dynamic-source-and-destination-offset-sequence-copy-canonical-vm-frontier",
         "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
         "compiler": {
@@ -248,11 +276,13 @@ def main() -> None:
         },
         "measurements": {"probe_stderr_sha256": sha(probe_stderr.encode())},
         "claim_boundary": (
-            "The single-dynamic-source-offset and single-dynamic-destination-offset lowering paths each emit "
-            "three runtime-checked projections and replacements, plus two checked u64 additions whose "
-            "obligations remain UNKNOWN with runtime fallbacks. Four valid and invalid cases match Stage-0 "
-            "on the canonical VM. This does not establish Language-owned verified-fact reuse or an "
-            "authenticated Forge/Environment/Store execution."
+            "Single-dynamic-source-offset, single-dynamic-destination-offset, and both-dynamic-offset "
+            "lowering paths each emit three runtime-checked projections and replacements. The one-offset "
+            "paths retain two checked u64 additions; the both-offset path retains four, with UNKNOWN "
+            "obligations and runtime fallbacks. All valid, overlapping-window, bounds-failure, and "
+            "extreme-offset cases match Stage-0 on the canonical VM. This does not establish "
+            "Language-owned verified-fact reuse or "
+            "an authenticated Forge/Environment/Store execution."
         ),
     }
     report["evidence_artifact"] = EVIDENCE_PATH.relative_to(ROOT).as_posix()
