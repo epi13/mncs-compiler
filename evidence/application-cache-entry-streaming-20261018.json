@@ -1,0 +1,197 @@
+{
+  "schema_version": "mncs.compiler.application-cache-entry-streaming-publication/1",
+  "kind": "mncs.compiler.application-cache-entry-streaming-publication",
+  "observed_at": "2026-10-18T08:23:03.654568+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "commit": "5e2bb523be942b88ad86f79abaf9821cde61eeeb",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "path": "tools/stage0-probe/src/application.rs",
+    "source_sha256": "d8bff0c8d244fa214a58c2b4e184cc33b6f5f6affc1ba492c88bdce9a4717992",
+    "cache_entry_contract": "mncs.compiler.application-build-cache-entry/3"
+  },
+  "change": {
+    "previous": "Serialized the entire cache entry into a temporary byte vector before writing it.",
+    "current": "Streams JSON serialization directly to the atomically created temporary cache file.",
+    "response_sized_publication_buffer_removed": true,
+    "response_hashing_remains_streamed": true,
+    "atomic_tempfile_sync_and_rename_preserved": true,
+    "cache_schema_changed": false
+  },
+  "cold_build_comparison": {
+    "workload": "mncs.compiler.project.v1::compile_project_target_with_diagnostic_locations with Nat<1024>, Nat<1024>",
+    "application_artifact_bytes": 68344562,
+    "artifact_identity": "sha256:3b5d9b4bdec161accb513f577631ab78fbcded98d2cc70c2480e2e7d167ac03d",
+    "cache_status": "miss",
+    "baseline": {
+      "evidence": "evidence/application-cache-streaming-publication-20261018.json",
+      "commit": "fe1e5d14deafd585cc470f6e43a1331bd43356c4",
+      "wall_seconds": 163.35113,
+      "cpu_seconds": 161.41,
+      "peak_rss_bytes": 2780872704
+    },
+    "current": {
+      "commit": "5e2bb523be942b88ad86f79abaf9821cde61eeeb",
+      "wall_seconds": 160.563967,
+      "cpu_seconds": 158.78,
+      "peak_rss_bytes": 2781196288,
+      "peak_cgroup_memory_bytes": null
+    },
+    "delta_current_minus_baseline": {
+      "wall_seconds": -2.787163,
+      "cpu_seconds": -2.63,
+      "peak_rss_bytes": 323584,
+      "peak_rss_percent": 0.01164
+    },
+    "interpretation": "The measured peak RSS is effectively unchanged; this workload provides no peak-memory or speedup claim for streaming the final cache-entry encoding."
+  },
+  "fresh_process_cache_readback": {
+    "status": "hit",
+    "reuse_basis": "exact_source_snapshot",
+    "front_end_invocations": 0,
+    "reused_units": [
+      "verified_application_artifact"
+    ],
+    "reused_semantic_facts": [],
+    "artifact_identity": "sha256:3b5d9b4bdec161accb513f577631ab78fbcded98d2cc70c2480e2e7d167ac03d",
+    "wall_seconds": 2.111072489002254,
+    "peak_rss_bytes": 1099530240
+  },
+  "verification": {
+    "command": "cargo test --release --offline --manifest-path tools/stage0-probe/Cargo.toml application_cache",
+    "result": "7 passed; 25 filtered",
+    "canonical_vm_cases": 5,
+    "canonical_vm_cranelift_exact_result_agreement": true,
+    "stage0_oracle_checked_cases": 4
+  },
+  "language_verified_facts_reused": 0,
+  "project_application_execution": {
+    "schema_version": "mncs.compiler.project-target-integrated-diagnostic-locations-canonical-vm/1",
+    "status": "passed_with_selected_frontier",
+    "observed_at": "2026-10-18T08:22:12.848056+00:00",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head": "5e2bb523be942b88ad86f79abaf9821cde61eeeb",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target_with_diagnostic_locations",
+    "type_arguments": [
+      1024,
+      1024
+    ],
+    "application_build_request_schema": "mncs.compiler.application-build-request/2",
+    "application_build_response_schema": "mncs.compiler.application-build/5",
+    "application_build_identity": "sha256:3b5d9b4bdec161accb513f577631ab78fbcded98d2cc70c2480e2e7d167ac03d",
+    "application_artifact_identity": "sha256:3b5d9b4bdec161accb513f577631ab78fbcded98d2cc70c2480e2e7d167ac03d",
+    "application_artifact_json_bytes": 68344562,
+    "application_artifact_json_sha256": "4acbf5410867d2b4be588d6c3801e89cdc704c66ad3a0e037f87c5d85fbd8e4a",
+    "application_callable_count": 4,
+    "generic_entrypoints": [
+      "compile_project_target",
+      "compile_project_target_with_diagnostic_locations",
+      "locate_project_diagnostics_global"
+    ],
+    "application_build_cache_status": "miss",
+    "application_build_wall_seconds": 160.563967,
+    "application_build_metrics": {
+      "wall_seconds": 159.641818,
+      "cpu_seconds": 158.78,
+      "peak_rss_bytes": 2781196288,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "application_build_probe_stderr_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n",
+    "cranelift_backend": "cranelift",
+    "case_count": 5,
+    "case_results": [
+      {
+        "id": "valid-project",
+        "valid": true,
+        "diagnostic_count": 0
+      },
+      {
+        "id": "missing-import",
+        "valid": false,
+        "diagnostic_variant": 3,
+        "byte_span": [
+          33,
+          44
+        ],
+        "start": {
+          "line": 3,
+          "col": 5
+        },
+        "end": {
+          "line": 3,
+          "col": 16
+        },
+        "mapped": true
+      },
+      {
+        "id": "multi-page-missing-import",
+        "valid": false,
+        "diagnostic_variant": 3,
+        "byte_span": [
+          1139,
+          1150
+        ],
+        "start": {
+          "line": 1103,
+          "col": 5
+        },
+        "end": {
+          "line": 1103,
+          "col": 16
+        },
+        "mapped": true
+      },
+      {
+        "id": "parse-failure",
+        "valid": false,
+        "diagnostic_variant": 4,
+        "byte_span": [
+          40,
+          42
+        ],
+        "start": {
+          "line": 3,
+          "col": 10
+        },
+        "end": {
+          "line": 3,
+          "col": 12
+        },
+        "mapped": true
+      },
+      {
+        "id": "invalid-page-count",
+        "valid": false,
+        "diagnostic_variants": [
+          4,
+          1
+        ],
+        "mapped": [
+          false,
+          false
+        ]
+      }
+    ],
+    "canonical_vm_batch_wall_seconds": 24.029526,
+    "canonical_vm_batch_peak_rss_kib": 406364,
+    "canonical_vm_calls_json_bytes": 50375,
+    "canonical_vm_results_json_bytes": 218696,
+    "canonical_vm_returned_all_cases": true,
+    "canonical_vm_cranelift_exact_result_agreement": true,
+    "stage0_oracle_checked_case_count": 4,
+    "cranelift_request_total_seconds": 0.048757,
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "One compile-once Project application artifact executed five typed requests in one canonical VM batch: valid input, missing import, a multi-page missing import, parse failure, and an invalid page descriptor. Every canonical VM result exactly matched the Cranelift result; Stage-0 oracle validity and diagnostic counts matched for four source-validity cases, and mapped byte spans produced the current source line/column. This is a selected integrated Project entrypoint frontier, not full Project-module proof, Language fact reuse, Forge execution, Stage-1, or Stage-2 succession."
+  }
+}
