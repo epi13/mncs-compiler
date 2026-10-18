@@ -2522,6 +2522,88 @@ def run_imported_sequence(_run=None):
         }
 
 
+def _sec_loop_affinity(probe, identities, project_root):
+    """Bind loop SSA operations to the exact source Flow block that emitted them."""
+    source = (
+        "mncs 0.18; module frontier.loop_affinity; "
+        "fn plain() -> (r: u64) { return 7; } "
+        "fn looped() -> (r: u64) { "
+        "iterate i up_to 2 carrying total: u64 = 0 { next total = total + 1; } "
+        "iterate i up_to 4 carrying other: u64 = 0 { next other = other + 1; } "
+        "return total + other; }"
+    )
+    for path in project_root.glob("*.mncs"):
+        path.unlink()
+    (project_root / "a-loop-affinity.mncs").write_text(source)
+    native = probe.native(request_value(identities, discover_sources(project_root)))
+    assert native["valid"] is True, native["diagnostics"]
+    assert native["value_ssa_valid"] is True, native["value_ssa"]
+    project_wire = copy.deepcopy(probe.last_response["returned"][0])
+    modules = wire_flist(wire_field(project_wire, "modules"))
+    module = next(item for item in modules if wire_number(wire_field(item, "source_index")) == 0)
+    ssa = wire_field(module, "value_ssa")
+    functions = wire_flist(wire_field(ssa, "functions"))
+    plain = next(item for item in functions
+                 if identity_text(decode(wire_field(item, "identity"))).endswith("::plain"))
+    looped = next(item for item in functions
+                  if identity_text(decode(wire_field(item, "identity"))).endswith("::looped"))
+    assert verify_ssa_function(probe, source, plain) is True
+    assert verify_ssa_function(probe, source, looped) is True
+
+    blocks = wire_flist(wire_field(looped, "blocks"))
+    guards = []
+    for block in blocks:
+        for instruction in wire_flist(wire_field(block, "instructions")):
+            if wire_number(wire_field(instruction, "kind")) == 13:
+                guards.append((block, instruction))
+    assert len(guards) == 2, len(guards)
+    first_block, first_guard = guards[0]
+    _, second_guard = guards[1]
+    original_index = (
+        wire_number(wire_field(first_guard, "binding_start")),
+        wire_number(wire_field(first_guard, "binding_end")),
+    )
+    guard_spans = ("start", "end", "binding_start", "binding_end", "variant_start", "variant_end")
+    for name in guard_spans:
+        set_wire_field(first_guard, name, copy.deepcopy(wire_field(second_guard, name)))
+
+    def environment_bindings(value):
+        result = []
+        while value["finite"]["discriminant"] != 0:
+            assert value["finite"]["discriminant"] == 1, value["finite"]
+            payload = {key: item for key, item in value["finite"].get("payload", [])}
+            result.append(payload["head"])
+            value = payload["tail"]
+        return result
+
+    bindings = environment_bindings(wire_field(first_block, "parameter_bindings"))
+    second_index = (
+        wire_number(wire_field(second_guard, "binding_start")),
+        wire_number(wire_field(second_guard, "binding_end")),
+    )
+    index_binding = next(binding for binding in bindings
+                         if (wire_number(wire_field(binding, "name_start")),
+                             wire_number(wire_field(binding, "name_end"))) == original_index)
+    assert original_index != second_index
+    # The first guard now points to the second loop's source spans. Move its
+    # block-local index binding too, reproducing the cross-loop reassociation
+    # that the structural-only verifier previously accepted.
+    set_wire_field(index_binding, "name_start", copy.deepcopy(wire_field(second_guard, "binding_start")))
+    set_wire_field(index_binding, "name_end", copy.deepcopy(wire_field(second_guard, "binding_end")))
+    accepted = verify_ssa_function(probe, source, looped)
+    assert accepted is False, {"case": "cross_loop_guard_reassociation", "accepted": accepted}
+    return {
+        "native_project_valid": native["valid"],
+        "native_value_ssa_valid": native["value_ssa_valid"],
+        "verified_functions": wire_number(wire_field(ssa, "verified_function_count")),
+        "function_index_checked": 1,
+        "loop_guards": len(guards),
+        "positive_verification": True,
+        "cross_loop_reassociation_rejected": True,
+        "covered": ["function locator selects exact nonzero function index", "counted-loop guard stays bound to its generating Flow block"],
+    }
+
+
 def run_match_ssa(_run=None):
     """Match/aggregate value-SSA closure: merge, enum, scalar, projection, nested."""
     with _maybe_run(_run) as run:
@@ -2530,6 +2612,7 @@ def run_match_ssa(_run=None):
         scalar = _sec_scalar(run.probe, run.identities, run.project_root)
         projection = _sec_projection(run.probe, run.identities, run.project_root)
         nested = _sec_nested(run.probe, run.identities, run.project_root)
+        loop_affinity = _sec_loop_affinity(run.probe, run.identities, run.project_root)
         return {
             **_mode_common(run),
             **merge,
@@ -2537,6 +2620,7 @@ def run_match_ssa(_run=None):
             **scalar,
             **projection,
             **nested,
+            "flow_bound_loop_ssa_verification": loop_affinity,
         }
 
 
