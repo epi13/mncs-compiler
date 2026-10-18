@@ -1,0 +1,117 @@
+{
+  "schema_version": "mncs.compiler.project-imported-signature-scan-early-exit/1",
+  "identity": "ev_compiler_project_imported_signature_scan_early_exit_20261018",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-18T03:38:31Z",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "acec78abf196c440b6557d7fba574157d3f18026",
+    "source_file": "src/compiler/project.mncs",
+    "source_sha256": "262225e1a4c8854d15b292d8a56457e8c73e60f40c8d0c4d5511cce488353c28",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "1bf485f4464d5ab76f421f286d8f86d3ed618eb7abea9d109422eb810ac94588",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "change": {
+    "summary": "Imported signature resolution now returns when the current module use list is exhausted instead of running the unused tail of its fixed 1,024-iteration loop.",
+    "target_function": "signatures_from_uses",
+    "semantic_result_preserved": true,
+    "scope": "The 64-module connected chain has one use declaration and one imported call in its target module. The model counts 1,023 bounded no-op iterations avoided after that use is processed; this count is derived from the source control flow and fixture shape, not instrumented instructions.",
+    "language_verified_facts_reused": 0
+  },
+  "verification": {
+    "command": "MNCS_PROBE_BIN=tools/stage0-probe/target/release/mncs-compiler-stage0-probe MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_GENERIC_SEEDS='[]' MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "schema_version": "mncs.compiler.project-import-link-capacity/12",
+    "status": "verified",
+    "backend": "cranelift",
+    "canonical_vm_tested": false,
+    "cold_and_warm_result_sha256": "7c6924bcbfdc3d83394ca5da9a5c7eac9c21009d7b5bd5b1bba4d24528091301",
+    "probe_request_count": 25,
+    "stage0_oracle_valid": true,
+    "native_project_valid": true,
+    "target_ssa_valid": true,
+    "module_limit_1024": {
+      "successful_lookup_cache_hits": 1023,
+      "cold_request_seconds": 0.225029,
+      "warm_request_seconds": 0.188923
+    },
+    "project_limit_4096": {
+      "successful_lookup_cache_hits": 4092,
+      "cold_request_seconds": 0.615436,
+      "warm_request_seconds": 0.565973
+    },
+    "connected_chain": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "target_only_module_count": 1,
+      "target_flow_valid": true,
+      "target_ssa_valid": true,
+      "stage0_oracle_valid": true,
+      "root_import_identity_matches_stage0": true,
+      "cold_request_seconds": 0.433286,
+      "warm_request_seconds": 0.417514,
+      "scan_bound": 1024,
+      "uses_in_target_module": 1,
+      "no_op_iterations_avoided_model": 1023
+    },
+    "capacity_and_diagnostic_regressions_passed": {
+      "imports_1024_per_module": true,
+      "imports_4096_per_project": true,
+      "overflow_diagnostics_preserved": true,
+      "import_spans_preserved": true,
+      "missing_import_diagnostics_preserved": true,
+      "changed_snapshot_stale_success_reused": false,
+      "dense_dag_schemas_verified": true,
+      "interleaved_distinct_targets_preserved": true,
+      "long_name_uncached_fallback_preserved": true
+    },
+    "measurement_limits": {
+      "measured_before_after_speedup": false,
+      "vm_instruction_count_measurement": false,
+      "algorithmic_noop_model_is_measured": false,
+      "canonical_vm_execution": false,
+      "language_verified_facts_reused": false,
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    }
+  },
+  "resource_measurement": {
+    "cold": {
+      "process_elapsed_seconds": 265.194966,
+      "stage0_frontend_elaboration_seconds": 53.434828,
+      "cranelift_compilation_seconds": 167.956226,
+      "retained_session_admission_seconds": 25.22672,
+      "backend_artifact_reused": false,
+      "peak_rss_bytes": 4528418816,
+      "kernel_rss_high_water_bytes": 4971003904,
+      "sample_count": 3
+    },
+    "warm_fresh_process": {
+      "process_elapsed_seconds": 39.429966,
+      "artifact_cache_read_decode_seconds": 11.337195,
+      "retained_session_admission_seconds": 24.513849,
+      "backend_artifact_reused": true,
+      "backend_cache_key": null,
+      "distinct_process_pid": true,
+      "peak_rss_bytes": 2992500736,
+      "kernel_rss_high_water_bytes": 3442864128,
+      "sample_count": 3
+    },
+    "cpu_time_delta_ns": null,
+    "cpu_measurement_note": "Telemetry returned 0 for CPU deltas; they are recorded as unavailable, not zero CPU usage.",
+    "cgroup_memory_bytes": null,
+    "cgroup_memory_note": "The cgroup memory counter was unavailable; no zero usage is inferred."
+  },
+  "interpretation": {
+    "incremental_project_self_consumption_frontier_advanced": true,
+    "overall_project_module_status_remains": "parse+signatures",
+    "language_owned_fact_reuse_demonstrated": false,
+    "effectful_native_application_execution_changed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
