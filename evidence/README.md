@@ -116,6 +116,12 @@ frontier took 40.35 seconds with 686 MiB peak child RSS; the VM batch peaked at
 72 MiB. Cgroup memory values were unavailable. This is selected current-source
 evidence; the full parser-module canonical VM status remains `not-proven`.
 
+## Parser diagnostic source locations (2026-10-18)
+
+The [current direct parser-module frontier](self-host-parser-module-canonical-vm-frontier-20261018.json) adds `parser.header_with_locations_global`. It preserves the existing `Header` result and maps each diagnostic's byte start and end through `Source.line_col_span_global` in one scan. A byte-based oracle, the reference interpreter, Cranelift, and the canonical VM agree across 61 diagnostic cases, including a multiline failure and the zero-stride page path. The harness also exercises all seven current parser functions at selected specializations: 24 bounded inputs, 96 paged inputs, and 186 direct canonical-VM calls. The authenticated Environment verifier passed at inventory revision 44.
+
+The full frontier took 25.41 seconds, with 24.75 seconds child CPU, 650,032 KiB peak child RSS, and 76,596 KiB canonical-VM peak RSS. Cgroup measurements were unavailable. Language verified facts remain unreused, and this selected specialization frontier does not establish full parser-module coverage, Stage-1, or Stage-2 succession.
+
 ## Compiler-parity snapshot (2026-09-29)
 
 This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,
