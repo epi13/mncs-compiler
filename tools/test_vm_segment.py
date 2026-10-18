@@ -239,7 +239,11 @@ def run_batch(artifact_path, cases, tmp, module=MODULE, envelope=None):
     started = time.monotonic()
     completed = subprocess.run(command, capture_output=True, text=True)
     wall = time.monotonic() - started
-    assert completed.returncode == 0, completed.stderr[-2000:]
+    assert completed.returncode == 0, (
+        f"canonical VM batch exited {completed.returncode}; "
+        f"stdout tail: {completed.stdout[-2000:]!r}; "
+        f"stderr tail: {completed.stderr[-2000:]!r}"
+    )
     peak_kb = None
     for line in completed.stderr.splitlines():
         if 'Maximum resident set size' in line:
