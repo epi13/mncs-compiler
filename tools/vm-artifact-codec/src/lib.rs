@@ -404,6 +404,23 @@ pub fn deserialize<'de, T: DeserializeOwned, D: Deserializer<'de>>(d: D) -> Resu
 }
 impl Graph {
     fn validate(&self) -> Result<(), String> {
+        fn account_ref(
+            reference: u32,
+            node_index: usize,
+            sizes: &[u64],
+            depths: &[u32],
+            size: &mut u64,
+            depth: &mut u32,
+        ) -> Result<(), String> {
+            if reference as usize >= node_index {
+                return Err("DAG references must point backward".into());
+            }
+            let reference = reference as usize;
+            *size = size.saturating_add(sizes[reference]);
+            *depth = (*depth).max(depths[reference] + 1);
+            Ok(())
+        }
+
         if self.nodes.is_empty() || self.root as usize != self.nodes.len() - 1 {
             return Err("DAG root must be the final node".into());
         }
@@ -415,19 +432,21 @@ impl Graph {
         let mut reached = vec![false; self.nodes.len()];
         reached[self.root as usize] = true;
         for (i, n) in self.nodes.iter().enumerate() {
-            let refs: Vec<u32> = match n {
-                Node::A(a) => a.clone(),
-                Node::O(o) => o.iter().flat_map(|(k, v)| [*k, *v]).collect(),
-                _ => Vec::new(),
-            };
             let mut size = 1u64;
             let mut depth = 1;
-            for r in refs {
-                if r as usize >= i {
-                    return Err("DAG references must point backward".into());
+            match n {
+                Node::A(refs) => {
+                    for &reference in refs {
+                        account_ref(reference, i, &sizes, &depths, &mut size, &mut depth)?;
+                    }
                 }
-                size = size.saturating_add(sizes[r as usize]);
-                depth = depth.max(depths[r as usize] + 1);
+                Node::O(refs) => {
+                    for &(key, value) in refs {
+                        account_ref(key, i, &sizes, &depths, &mut size, &mut depth)?;
+                        account_ref(value, i, &sizes, &depths, &mut size, &mut depth)?;
+                    }
+                }
+                _ => {}
             }
             if depth > 128 || size > MAX_EXPANDED_NODES {
                 return Err("DAG expansion exceeds decoder limits".into());
