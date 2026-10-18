@@ -3,10 +3,12 @@
 import hashlib
 import json
 import os
-from pathlib import Path
+import select
+import signal
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 from test_vm_segment import run_batch, vm_to_wire
 
@@ -17,6 +19,8 @@ SSA_MODULE = "mncs.compiler.ssa.v1"
 TYPE_ARGS = [{"kind": "nat", "value": 1024}, {"kind": "nat", "value": 1024}]
 STRIDE = 1024
 STEP_BUDGET = 8_000_000
+# A compiler probe must not wait indefinitely for a frontend or VM response.
+PROBE_TIMEOUT_SECONDS = 120
 BASE_SOURCE = (
     "mncs 0.18; module frontier.ssa; "
     "fn index<N: Nat>(s: [byte; up_to N], offset: u64) -> (r: byte) { return s[offset]; } "
@@ -113,7 +117,7 @@ def wire_linked(value):
 
 
 class Probe:
-    def __init__(self, module, functions, backend=None):
+    def __init__(self, module, functions, backend=None, *, timeout_seconds=PROBE_TIMEOUT_SECONDS):
         env = dict(os.environ)
         if backend is None or backend == "reference_interpreter":
             env.pop("MNCS_PROBE_BACKEND", None)
@@ -127,15 +131,65 @@ class Probe:
         ])
         env.setdefault("MNCS_PROBE_CACHE_DIR", str(ROOT / ".build" / "probe-cache"))
         self.stderr_file = tempfile.TemporaryFile(mode="w+t")
+        self.timeout_seconds = timeout_seconds
+        self._stdout_pending = bytearray()
         self.proc = subprocess.Popen(
             [str(PROBE)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=self.stderr_file, text=True, env=env, cwd=ROOT,
+            start_new_session=True,
         )
 
     def stderr_text(self):
         self.stderr_file.flush()
         self.stderr_file.seek(0)
         return self.stderr_file.read()
+
+    def _terminate(self):
+        if self.proc.poll() is not None:
+            return
+        try:
+            os.killpg(self.proc.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            self.proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(self.proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            self.proc.wait(timeout=5)
+
+    def _raise_timeout(self, phase):
+        self._terminate()
+        stderr = self.stderr_text()[-8000:]
+        self.stderr_file.close()
+        raise TimeoutError(
+            f"probe {phase} exceeded {self.timeout_seconds}s; stderr={stderr[-4000:]!r}"
+        )
+
+    def _readline(self):
+        deadline = time.monotonic() + self.timeout_seconds
+        while b"\n" not in self._stdout_pending:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return None
+            ready, _, _ = select.select([self.proc.stdout], [], [], remaining)
+            if not ready:
+                return None
+            chunk = os.read(self.proc.stdout.fileno(), 4096)
+            if not chunk:
+                break
+            self._stdout_pending.extend(chunk)
+        if b"\n" not in self._stdout_pending:
+            if not self._stdout_pending:
+                return ""
+            line = bytes(self._stdout_pending)
+            self._stdout_pending.clear()
+            return line.decode("utf-8")
+        line, _, rest = self._stdout_pending.partition(b"\n")
+        self._stdout_pending = bytearray(rest)
+        return line.decode("utf-8")
 
     def send(self, request):
         try:
@@ -146,15 +200,20 @@ class Probe:
                 self.proc.stdin.close()
             except BrokenPipeError:
                 pass
-            status = self.proc.wait(timeout=120)
+            if self.proc.poll() is None:
+                self._terminate()
+            status = self.proc.wait(timeout=5)
             stderr = self.stderr_text()
-            stdout = self.proc.stdout.read()
+            stdout = self._stdout_pending.decode("utf-8", errors="replace")
+            stdout += self.proc.stdout.read()
             self.stderr_file.close()
             raise AssertionError(
                 f"probe exited {status} before request completed; "
                 f"stdout={stdout[-4000:]!r}; stderr={stderr[-8000:]!r}"
             ) from error
-        line = self.proc.stdout.readline()
+        line = self._readline()
+        if line is None:
+            self._raise_timeout("response")
         if not line:
             status = self.proc.poll()
             stderr = self.stderr_text()
@@ -164,7 +223,10 @@ class Probe:
 
     def close(self):
         self.proc.stdin.close()
-        status = self.proc.wait(timeout=120)
+        try:
+            status = self.proc.wait(timeout=self.timeout_seconds)
+        except subprocess.TimeoutExpired:
+            self._raise_timeout("shutdown")
         stderr = self.stderr_text()
         self.stderr_file.close()
         assert status == 0, f"probe exited {status}; stderr={stderr[-8000:]!r}"
