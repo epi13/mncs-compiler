@@ -141,8 +141,8 @@ def _cases() -> list[dict]:
         {"id": "parse-failure", "source_id": "broken.mncs", "source": parse_failure,
          "expected_valid": False, "expected_variant": 4},
         {"id": "invalid-page-count", "source_id": "invalid-pages.mncs",
-         "source": missing, "expected_valid": False, "expected_variant": 1,
-         "invalid_page_count": True},
+         "source": missing, "expected_valid": False,
+         "expected_variants": [4, 1], "invalid_page_count": True},
     ]
 
 
@@ -190,17 +190,22 @@ def _validate_case(case: dict, decoded: dict, oracle: dict | None) -> dict:
         assert len(oracle_diagnostics) == len(diagnostics), (
             case["id"], oracle_diagnostics, diagnostics,
         )
-    if case["expected_variant"] is None:
+    if case["expected_valid"]:
         assert diagnostics == [] and locations == [], (case["id"], decoded)
         return {"id": case["id"], "valid": True, "diagnostic_count": 0}
-    assert diagnostics, (case["id"], decoded)
-    assert diagnostics[0]["$v"] == case["expected_variant"], (case["id"], diagnostics)
+    expected_variants = case.get("expected_variants")
+    if expected_variants is None:
+        expected_variants = [case["expected_variant"]]
+    assert [row["$v"] for row in diagnostics] == expected_variants, (
+        case["id"], diagnostics,
+    )
     assert len(locations) == len(diagnostics), (case["id"], locations, diagnostics)
-    if case["expected_variant"] == 1:
-        assert locations[0]["has_span"] is False
-        assert locations[0]["mapped"] is False
+    if case.get("invalid_page_count"):
+        assert [row["has_span"] for row in locations] == [True, False]
+        assert all(row["mapped"] is False for row in locations)
         return {"id": case["id"], "valid": False,
-                "diagnostic_variant": case["expected_variant"], "mapped": False}
+                "diagnostic_variants": expected_variants,
+                "mapped": [row["mapped"] for row in locations]}
     assert locations[0]["has_span"] is True and locations[0]["mapped"] is True
     diag_payload = diagnostics[0]["$p"]
     start, end = diag_payload["start"], diag_payload["end"]
