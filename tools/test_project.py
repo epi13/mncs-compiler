@@ -1237,7 +1237,7 @@ def _sec_merge(probe, identities, project_root):
     assert identity_text(merge_calls[0]["identity"]) == merge_ssa_identity_text
     terminator_kinds = [block["terminator"]["$v"] for block in merge_blocks]
     assert 0 in terminator_kinds and 1 in terminator_kinds and 2 in terminator_kinds
-    assert 3 not in terminator_kinds, terminator_kinds
+    assert terminator_kinds.count(3) == 1, terminator_kinds
 
     # Check verifier rejection paths using the exact wire graph emitted
     # by project compilation. These mutations isolate definition,
@@ -1375,7 +1375,8 @@ def _sec_merge(probe, identities, project_root):
         and function["name"] == "main"
     )
     assert merge_oracle["program"] is not None
-    assert len(merge_oracle_normal_blocks) == merge_ssa["block_count"], merge_oracle_root
+    assert len(merge_oracle_blocks) == merge_ssa["block_count"], merge_oracle_root
+    assert sum(next(iter(block["terminator"])) == "Failure" for block in merge_oracle_blocks) == 1, merge_oracle_root
     assert "Branch" in merge_oracle_terminators, merge_oracle_root
     assert "Return" in merge_oracle_terminators, merge_oracle_root
     assert merge_stage0_callable["identity"] == merge_ssa_identity_text
@@ -1394,7 +1395,7 @@ def _sec_merge(probe, identities, project_root):
         "ssa_verifier_positive": verifier_positive,
         "ssa_verifier_negative_checks": verifier_rejections,
         "stage0_project_valid": merge_oracle["valid"],
-        "stage0_root_blocks": len(merge_oracle_normal_blocks),
+        "stage0_root_blocks": len(merge_oracle_blocks),
         "stage0_root_terminators": merge_oracle_terminators,
         "stage0_imported_callable_identity": merge_stage0_callable["identity"],
         "stage0_root_callable_identity": merge_stage0_root_callable["identity"],

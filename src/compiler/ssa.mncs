@@ -58,7 +58,7 @@ enum Terminator {
     FiniteSwitch { subject: u64, subject_ty: decl.SemType, nominal_identity: decl.SemanticIdentity, result_type: decl.SemType, source_start: u64, source_end: u64, arm_count: u64, join_target: u64, cases: FiniteMatchCaseList },
     ScalarSwitch { subject: u64, subject_ty: decl.SemType, result_type: decl.SemType, source_start: u64, source_end: u64, arm_count: u64, default_target: u64, join_target: u64, cases: ScalarMatchCaseList }
 }
-record SsaBlock { id: u64, parameters: ValueList, parameter_bindings: Environment, instructions: InstructionList, terminator: Terminator, reachable: bool, lowering_ok: bool, lowering_failure_kind: u64 }
+record SsaBlock { id: u64, parameters: ValueList, parameter_bindings: Environment, instructions: InstructionList, terminator: Terminator, reachable: bool, has_failure_target: bool, failure_target: u64, lowering_ok: bool, lowering_failure_kind: u64 }
 enum SsaBlockList { LNil, LCons { head: SsaBlock, tail: SsaBlockList } }
 record SsaBlockRev { rest: SsaBlockList, acc: SsaBlockList }
 
@@ -487,9 +487,15 @@ fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     };
     let block_walk: SsaBlockWalk = lower_flow_blocks<P, N>(pages, stride, total, cfg.block_count, initial);
     let st: SsaBuild = block_walk.build;
-    let block_count: u64 = select(st.next_block_id <= 1024, st.next_block_id, 0);
-    let blocks_complete: bool = block_walk.processed == cfg.block_count && flow_block_list_empty(st.rest) && ssa_block_list_exact(st.blocks, block_count);
-    let blocks: SsaBlockList = reverse_blocks<P, N>(pages, stride, total, st.blocks, block_count);
+    let normal_block_count: u64 = st.next_block_id;
+    let block_count: u64 = select(normal_block_count < 1024, normal_block_count + 1, 0);
+    let blocks_complete: bool = block_count > 0 && block_walk.processed == cfg.block_count && flow_block_list_empty(st.rest) && ssa_block_list_exact(st.blocks, normal_block_count);
+    let normal_blocks: SsaBlockList = reverse_blocks<P, N>(pages, stride, total, st.blocks, normal_block_count);
+    let failure_id: u64 = normal_block_count;
+    let failure_block: SsaBlock = SsaBlock { id: failure_id, parameters: ValueList.VNil, parameter_bindings: Environment.EnvNil, instructions: InstructionList.QNil, terminator: Terminator.Fail, reachable: false, has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0 };
+    let bound_reversed: SsaBlockList = bind_failure_targets<P, N>(normal_blocks, failure_id);
+    let all_reversed: SsaBlockList = SsaBlockList.LCons { head: failure_block, tail: bound_reversed };
+    let blocks: SsaBlockList = reverse_blocks<P, N>(pages, stride, total, all_reversed, block_count);
     let candidate: Function = Function {
         identity: st.identity, nominals: st.nominals, imported_records: imported_records, imported_enums: imported_enums, inputs: st.inputs, result_type: st.result_type,
         blocks: blocks, block_count: block_count, values: st.values, value_count: st.next_value,
@@ -673,7 +679,7 @@ fn lower_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     let block_ok: bool = exprs.ok && terminator_shape(block, term);
     let local_failure: u64 = classify_block_failure(block, st.entry, incoming, exprs, term, st.supported);
     let failure_kind: u64 = select(st.initial_failure_kind > 0, st.initial_failure_kind, local_failure);
-    let ssa_block: SsaBlock = SsaBlock { id: exprs.block, parameters: exprs.parameters, parameter_bindings: actual_env, instructions: instructions, terminator: term, reachable: block.reachable, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
+    let ssa_block: SsaBlock = SsaBlock { id: exprs.block, parameters: exprs.parameters, parameter_bindings: actual_env, instructions: instructions, terminator: term, reachable: block.reachable, has_failure_target: false, failure_target: 0, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
     let prior_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, exprs.generated_blocks, st.blocks);
     return SsaBuild {
         rest: rest, edges: edges, blocks: SsaBlockList.LCons { head: ssa_block, tail: prior_blocks },
@@ -943,7 +949,7 @@ fn lower_finite_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     iterate i up_to 1024 carrying built: FiniteArmBuild = initial { next built = finite_arm_step<P, N>(pages, stride, total, built); }
     let ordered_cases: FiniteMatchCaseList = reverse_finite_match_cases<P, N>(pages, stride, total, built.cases);
     let source_term: Terminator = Terminator.FiniteSwitch { subject: subject.id, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, join_target: join_id, cases: ordered_cases };
-    let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, parameter_bindings: st.env, instructions: reverse_instructions<P, N>(pages, stride, total, st.instructions), terminator: source_term, reachable: true, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
+    let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, parameter_bindings: st.env, instructions: reverse_instructions<P, N>(pages, stride, total, st.instructions), terminator: source_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
     let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: built.arm_blocks };
     let all_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, fresh_blocks, st.generated_blocks);
     return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: built.next_block, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 4)) };
@@ -976,7 +982,7 @@ fn lower_finite_arm<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     let jump: ArmJumpArguments = arm_jump_args<P, N>(pages, stride, total, lowered.block != arm_id, prepared.ok && lowered.ok && result_ok, lowered.env, lowered.stack, result.id, prepared.env, prepared.stack);
     let arm_ok: bool = lowered.ok && result_ok && prepared.ok && jump.ok;
     let arm_term: Terminator = Terminator.Jump { target: st.join_id, arguments: jump.arguments };
-    let arm_block: SsaBlock = SsaBlock { id: lowered.block, parameters: lowered.parameters, parameter_bindings: lowered.env, instructions: reverse_instructions<P, N>(pages, stride, total, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
+    let arm_block: SsaBlock = SsaBlock { id: lowered.block, parameters: lowered.parameters, parameter_bindings: lowered.env, instructions: reverse_instructions<P, N>(pages, stride, total, lowered.instructions), terminator: arm_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
     let edge_case: FiniteMatchCase = FiniteMatchCase { variant_start: arm.pattern.variant_start, variant_end: arm.pattern.variant_end, target: arm_id, arguments: st.source_arguments };
     let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
     let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: lowered.generated_blocks };
@@ -1005,7 +1011,7 @@ fn lower_scalar_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     iterate i up_to 1024 carrying built: ScalarArmBuild = initial { next built = scalar_arm_step<P, N>(pages, stride, total, built); }
     let ordered_cases: ScalarMatchCaseList = reverse_scalar_match_cases<P, N>(pages, stride, total, built.cases);
     let source_term: Terminator = Terminator.ScalarSwitch { subject: subject.id, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: arm_count, default_target: built.default_target, join_target: join_id, cases: ordered_cases };
-    let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, parameter_bindings: st.env, instructions: reverse_instructions<P, N>(pages, stride, total, st.instructions), terminator: source_term, reachable: true, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
+    let source_block: SsaBlock = SsaBlock { id: st.block, parameters: st.parameters, parameter_bindings: st.env, instructions: reverse_instructions<P, N>(pages, stride, total, st.instructions), terminator: source_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: st.ok && built.ok, lowering_failure_kind: select(st.ok && built.ok, 0, 9) };
     let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: built.arm_blocks };
     let all_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, fresh_blocks, st.generated_blocks);
     return ExprBuild { rest: rest, env: built.join_env, stack: ValueStack.WCons { head: built.join_result, tail: built.join_stack }, instructions: InstructionList.QNil, values: built.source.values, next_value: built.next_value, next_instruction: built.next_instruction, sequence: 0, block: join_id, parameters: built.join_params, generated_blocks: all_blocks, next_block_id: built.next_block, nominals: st.nominals, ok: st.ok && built.ok, failure_op: select(st.failure_op > 0, st.failure_op, select(built.ok, 0, 2)) };
@@ -1038,7 +1044,7 @@ fn lower_scalar_arm<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     let jump: ArmJumpArguments = arm_jump_args<P, N>(pages, stride, total, lowered.block != arm_id, prepared.ok && lowered.ok && result_ok, lowered.env, lowered.stack, result.id, prepared.env, prepared.stack);
     let arm_ok: bool = lowered.ok && result_ok && prepared.ok && jump.ok;
     let arm_term: Terminator = Terminator.Jump { target: st.join_id, arguments: jump.arguments };
-    let arm_block: SsaBlock = SsaBlock { id: lowered.block, parameters: lowered.parameters, parameter_bindings: lowered.env, instructions: reverse_instructions<P, N>(pages, stride, total, lowered.instructions), terminator: arm_term, reachable: true, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
+    let arm_block: SsaBlock = SsaBlock { id: lowered.block, parameters: lowered.parameters, parameter_bindings: lowered.env, instructions: reverse_instructions<P, N>(pages, stride, total, lowered.instructions), terminator: arm_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
     let edge_case: ScalarMatchCase = ScalarMatchCase { is_default: arm.is_default, negative: arm.negative, value: arm.value, overflow: arm.overflow, pattern_start: arm.pattern_start, pattern_end: arm.pattern_end, target: arm_id, arguments: st.source_arguments };
     let source_next: ExprBuild = ExprBuild { ..st.source, values: lowered.values, next_value: lowered.next_value, next_instruction: lowered.next_instruction };
     let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: lowered.generated_blocks };
@@ -1129,7 +1135,7 @@ fn nest_finite_arm_done<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     let jump: ArmJumpArguments = arm_jump_args<P, N>(pages, stride, total, build.block != entry_id, build.ok && result_ok, build.env, build.stack, result.id, frame.prepared_env, frame.prepared_stack);
     let arm_ok: bool = build.ok && result_ok && jump.ok;
     let arm_term: Terminator = Terminator.Jump { target: frame.match_ctx.join_id, arguments: jump.arguments };
-    let arm_block: SsaBlock = SsaBlock { id: build.block, parameters: build.parameters, parameter_bindings: build.env, instructions: reverse_instructions<P, N>(pages, stride, total, build.instructions), terminator: arm_term, reachable: true, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
+    let arm_block: SsaBlock = SsaBlock { id: build.block, parameters: build.parameters, parameter_bindings: build.env, instructions: reverse_instructions<P, N>(pages, stride, total, build.instructions), terminator: arm_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
     let edge_case: FiniteMatchCase = FiniteMatchCase { variant_start: frame.arm.pattern.variant_start, variant_end: frame.arm.pattern.variant_end, target: entry_id, arguments: frame.match_ctx.source_arguments };
     let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: build.generated_blocks };
     let arm_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, fresh_arm, frame.match_ctx.arm_blocks);
@@ -1144,7 +1150,7 @@ fn nest_finite_arm_done<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
 fn nest_finite_assemble<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, build: ExprBuild, ctx: FiniteArmBuild, rest_frames: NestFrameList) -> (result: NestDriver) {
     let ordered_cases: FiniteMatchCaseList = reverse_finite_match_cases<P, N>(pages, stride, total, ctx.cases);
     let source_term: Terminator = Terminator.FiniteSwitch { subject: ctx.subject.id, subject_ty: ctx.subject_ty, nominal_identity: ctx.nominal, result_type: ctx.result_ty, source_start: ctx.match_start, source_end: ctx.match_end, arm_count: ctx.arm_count, join_target: ctx.join_id, cases: ordered_cases };
-    let source_block: SsaBlock = SsaBlock { id: ctx.source.block, parameters: ctx.source.parameters, parameter_bindings: ctx.source.env, instructions: reverse_instructions<P, N>(pages, stride, total, ctx.source.instructions), terminator: source_term, reachable: true, lowering_ok: ctx.source.ok && ctx.ok, lowering_failure_kind: select(ctx.source.ok && ctx.ok, 0, 9) };
+    let source_block: SsaBlock = SsaBlock { id: ctx.source.block, parameters: ctx.source.parameters, parameter_bindings: ctx.source.env, instructions: reverse_instructions<P, N>(pages, stride, total, ctx.source.instructions), terminator: source_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: ctx.source.ok && ctx.ok, lowering_failure_kind: select(ctx.source.ok && ctx.ok, 0, 9) };
     let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: ctx.arm_blocks };
     let all_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, fresh_blocks, ctx.source.generated_blocks);
     let cont: ExprBuild = ExprBuild { rest: ctx.source.rest, env: ctx.join_env, stack: ValueStack.WCons { head: ctx.join_result, tail: ctx.join_stack }, instructions: InstructionList.QNil, values: ctx.source.values, next_value: ctx.next_value, next_instruction: ctx.next_instruction, sequence: 0, block: ctx.join_id, parameters: ctx.join_params, generated_blocks: all_blocks, next_block_id: ctx.next_block, nominals: ctx.source.nominals, ok: ctx.source.ok && ctx.ok, failure_op: select(ctx.source.failure_op > 0, ctx.source.failure_op, select(ctx.ok, 0, 4)) };
@@ -1188,7 +1194,7 @@ fn nest_scalar_arm_done<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     let jump: ArmJumpArguments = arm_jump_args<P, N>(pages, stride, total, build.block != entry_id, build.ok && result_ok, build.env, build.stack, result.id, frame.prepared_env, frame.prepared_stack);
     let arm_ok: bool = build.ok && result_ok && jump.ok;
     let arm_term: Terminator = Terminator.Jump { target: frame.match_ctx.join_id, arguments: jump.arguments };
-    let arm_block: SsaBlock = SsaBlock { id: build.block, parameters: build.parameters, parameter_bindings: build.env, instructions: reverse_instructions<P, N>(pages, stride, total, build.instructions), terminator: arm_term, reachable: true, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
+    let arm_block: SsaBlock = SsaBlock { id: build.block, parameters: build.parameters, parameter_bindings: build.env, instructions: reverse_instructions<P, N>(pages, stride, total, build.instructions), terminator: arm_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: arm_ok, lowering_failure_kind: select(arm_ok, 0, 9) };
     let edge_case: ScalarMatchCase = ScalarMatchCase { is_default: frame.arm.is_default, negative: frame.arm.negative, value: frame.arm.value, overflow: frame.arm.overflow, pattern_start: frame.arm.pattern_start, pattern_end: frame.arm.pattern_end, target: entry_id, arguments: frame.match_ctx.source_arguments };
     let fresh_arm: SsaBlockList = SsaBlockList.LCons { head: arm_block, tail: build.generated_blocks };
     let arm_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, fresh_arm, frame.match_ctx.arm_blocks);
@@ -1203,7 +1209,7 @@ fn nest_scalar_arm_done<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
 fn nest_scalar_assemble<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, build: ExprBuild, ctx: ScalarArmBuild, rest_frames: NestFrameList) -> (result: NestDriver) {
     let ordered_cases: ScalarMatchCaseList = reverse_scalar_match_cases<P, N>(pages, stride, total, ctx.cases);
     let source_term: Terminator = Terminator.ScalarSwitch { subject: ctx.subject.id, subject_ty: ctx.subject_ty, result_type: ctx.result_ty, source_start: ctx.match_start, source_end: ctx.match_end, arm_count: ctx.arm_count, default_target: ctx.default_target, join_target: ctx.join_id, cases: ordered_cases };
-    let source_block: SsaBlock = SsaBlock { id: ctx.source.block, parameters: ctx.source.parameters, parameter_bindings: ctx.source.env, instructions: reverse_instructions<P, N>(pages, stride, total, ctx.source.instructions), terminator: source_term, reachable: true, lowering_ok: ctx.source.ok && ctx.ok, lowering_failure_kind: select(ctx.source.ok && ctx.ok, 0, 9) };
+    let source_block: SsaBlock = SsaBlock { id: ctx.source.block, parameters: ctx.source.parameters, parameter_bindings: ctx.source.env, instructions: reverse_instructions<P, N>(pages, stride, total, ctx.source.instructions), terminator: source_term, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: ctx.source.ok && ctx.ok, lowering_failure_kind: select(ctx.source.ok && ctx.ok, 0, 9) };
     let fresh_blocks: SsaBlockList = SsaBlockList.LCons { head: source_block, tail: ctx.arm_blocks };
     let all_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, fresh_blocks, ctx.source.generated_blocks);
     let cont: ExprBuild = ExprBuild { rest: ctx.source.rest, env: ctx.join_env, stack: ValueStack.WCons { head: ctx.join_result, tail: ctx.join_stack }, instructions: InstructionList.QNil, values: ctx.source.values, next_value: ctx.next_value, next_instruction: ctx.next_instruction, sequence: 0, block: ctx.join_id, parameters: ctx.join_params, generated_blocks: all_blocks, next_block_id: ctx.next_block, nominals: ctx.source.nominals, ok: ctx.source.ok && ctx.ok, failure_op: select(ctx.source.failure_op > 0, ctx.source.failure_op, select(ctx.ok, 0, 2)) };
@@ -1639,6 +1645,21 @@ fn reverse_block_step(st: SsaBlockRev) -> (result: SsaBlockRev) {
     return match st.rest { LNil => st, LCons { head: h, tail: t } => SsaBlockRev { rest: t, acc: SsaBlockList.LCons { head: h, tail: st.acc } } };
 }
 
+record FailureTargetBind { rest: SsaBlockList, acc: SsaBlockList, target: u64 }
+fn bind_failure_targets<P: Nat, N: Nat>(blocks: SsaBlockList, target: u64) -> (result: SsaBlockList) {
+    iterate i up_to 1024 carrying st: FailureTargetBind = FailureTargetBind { rest: blocks, acc: SsaBlockList.LNil, target: target } {
+        if block_list_empty(st.rest) { return st.acc; }
+        next st = bind_failure_target_step(st);
+    }
+    return st.acc;
+}
+fn bind_failure_target_step(st: FailureTargetBind) -> (result: FailureTargetBind) {
+    return match st.rest {
+        LNil => st,
+        LCons { head: block, tail: rest } => FailureTargetBind { rest: rest, acc: SsaBlockList.LCons { head: SsaBlock { ..block, has_failure_target: true, failure_target: st.target }, tail: st.acc }, target: st.target }
+    };
+}
+
 fn make_terminator<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, block: flow.Block, exprs: ExpressionBuild, edges: EdgeList) -> (result: Terminator) {
     if block.kind == 1 {
         let no_env: Environment = select_loop_exit_env<P, N>(pages, stride, total, block, exprs.env);
@@ -1872,7 +1893,14 @@ fn verify_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     let params_ok: bool = verify_parameters<P, N>(pages, stride, total, function, block.id, block.parameters);
     let instructions_ok: bool = verify_instructions<P, N>(pages, stride, total, function, block, block.instructions);
     let term_ok: bool = verify_terminator<P, N>(pages, stride, total, function, block, block.terminator, block.instructions);
-    return block.lowering_ok && params_ok && instructions_ok && term_ok;
+    return block.lowering_ok && params_ok && instructions_ok && term_ok && verify_failure_target(function, block);
+}
+fn verify_failure_target(function: Function, block: SsaBlock) -> (result: bool) {
+    let failure_id: u64 = function.block_count - 1;
+    if block.id == failure_id {
+        return !(block.has_failure_target) && !(block.reachable) && value_list_empty(block.parameters) && instruction_list_empty(block.instructions) && block.lowering_ok && block.lowering_failure_kind == 0;
+    }
+    return block.has_failure_target && block.failure_target == failure_id;
 }
 record BlockIdCheck { rest: SsaBlockList, total: u64, seen: u64, ok: bool }
 record BlockIdLookup { rest: SsaBlockList, id: u64, found: bool, limit: u64, seen: u64 }
@@ -2705,7 +2733,7 @@ fn verify_terminator<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_type, source_start: start, source_end: end, arm_count: arm_count, join_target: join_target, cases: cases } => verify_finite_switch<P, N>(pages, stride, total, function, block, subject, subject_ty, nominal, result_type, start, end, arm_count, join_target, cases, instruction_total),
         ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_type, source_start: start, source_end: end, arm_count: arm_count, default_target: default_target, join_target: join_target, cases: cases } => verify_scalar_switch<P, N>(pages, stride, total, function, block, subject, subject_ty, result_type, start, end, arm_count, default_target, join_target, cases, instruction_total),
         Return { value: value } => verify_return_term<P, N>(pages, stride, total, function, block.id, value, instruction_total),
-        Fail => false
+        Fail => block.id == function.block_count - 1 && !(block.reachable) && !(block.has_failure_target) && value_list_empty(block.parameters) && instruction_list_empty(instructions) && block.lowering_ok && block.lowering_failure_kind == 0
     };
 }
 record FiniteCaseCount { rest: FiniteMatchCaseList, count: u64 }
@@ -3007,7 +3035,7 @@ fn verify_edge<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
 record BlockLookup { found: bool, block: SsaBlock }
 record BlockScan { rest: SsaBlockList, id: u64, found: bool, block: SsaBlock }
 fn find_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, id: u64) -> (result: BlockLookup) {
-    iterate i up_to 1024 carrying st: BlockScan = BlockScan { rest: blocks, id: id, found: false, block: SsaBlock { id: 0, parameters: ValueList.VNil, parameter_bindings: Environment.EnvNil, instructions: InstructionList.QNil, terminator: Terminator.Fail, reachable: false, lowering_ok: false, lowering_failure_kind: 0 } } { next st = block_scan_step(st); }
+    iterate i up_to 1024 carrying st: BlockScan = BlockScan { rest: blocks, id: id, found: false, block: SsaBlock { id: 0, parameters: ValueList.VNil, parameter_bindings: Environment.EnvNil, instructions: InstructionList.QNil, terminator: Terminator.Fail, reachable: false, has_failure_target: false, failure_target: 0, lowering_ok: false, lowering_failure_kind: 0 } } { next st = block_scan_step(st); }
     return BlockLookup { found: st.found, block: st.block };
 }
 fn block_scan_step(st: BlockScan) -> (result: BlockScan) {
