@@ -60,16 +60,37 @@ fn sha256_serialized<T: serde::Serialize>(value: &T) -> Result<String, serde_jso
 const CONTRACT_V1: &str = "mncs.compiler.application-build/4";
 const CONTRACT_V2: &str = "mncs.compiler.application-build/5";
 const CONTRACT_V3: &str = "mncs.compiler.application-build/6";
+const CONTRACT_V4: &str = "mncs.compiler.application-build/7";
 const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
 const REQUEST_V1: &str = "mncs.compiler.application-build-request/1";
 const REQUEST_V2: &str = "mncs.compiler.application-build-request/2";
 const REQUEST_V3: &str = "mncs.compiler.application-build-request/3";
+const REQUEST_V4: &str = "mncs.compiler.application-build-request/4";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_GENERIC_SEEDS: usize = 256;
 const MAX_CALLABLE_ROOTS: usize = 256;
+const MAX_SELECTED_TEST_CASES: usize = 256;
 const MAX_APPLICATION_CACHE_INDEX_BYTES: usize = 8 * 1024;
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum SourceTestSelection {
+    AllSourceCases,
+    CaseIdentities(Vec<String>),
+}
+
+impl SourceTestSelection {
+    fn value(&self) -> Value {
+        match self {
+            Self::AllSourceCases => json!({ "kind": "all_source_cases" }),
+            Self::CaseIdentities(identities) => json!({
+                "kind": "case_identities",
+                "test_case_identities": identities,
+            }),
+        }
+    }
+}
 
 struct ApplicationSources(BTreeMap<String, SourceEnvelope>);
 
@@ -155,11 +176,17 @@ fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Va
         "unresolved_obligations": [],
         "unselected_unresolved_exports": [],
     });
-    if contract == CONTRACT_V3 {
+    if contract == CONTRACT_V3 || contract == CONTRACT_V4 {
         response
             .as_object_mut()
             .expect("application response object")
             .insert("source_test_inventory".to_owned(), Value::Null);
+    }
+    if contract == CONTRACT_V4 {
+        response
+            .as_object_mut()
+            .expect("application response object")
+            .insert("test_case_selection".to_owned(), Value::Null);
     }
     response
 }
@@ -211,6 +238,90 @@ fn parse_generic_seeds(value: &Value) -> Result<Vec<HostGenericSeedRequest>, ()>
     rows.iter().map(parse_generic_seed).collect()
 }
 
+fn parse_source_test_selection(value: &Value) -> Result<SourceTestSelection, ()> {
+    let kind = value.get("kind").and_then(Value::as_str).ok_or(())?;
+    match kind {
+        "all_source_cases" if has_exact_keys(value, &["kind"]) => {
+            Ok(SourceTestSelection::AllSourceCases)
+        }
+        "case_identities" if has_exact_keys(value, &["kind", "test_case_identities"]) => {
+            let identities = value
+                .get("test_case_identities")
+                .and_then(Value::as_array)
+                .ok_or(())?;
+            if identities.is_empty() || identities.len() > MAX_SELECTED_TEST_CASES {
+                return Err(());
+            }
+            let mut selected = BTreeSet::new();
+            for identity in identities {
+                let identity = identity.as_str().ok_or(())?;
+                if identity.is_empty() || !selected.insert(identity.to_owned()) {
+                    return Err(());
+                }
+            }
+            Ok(SourceTestSelection::CaseIdentities(
+                selected.into_iter().collect(),
+            ))
+        }
+        _ => Err(()),
+    }
+}
+
+fn resolve_source_test_selection(
+    selection: &SourceTestSelection,
+    inventory: &Value,
+) -> Result<Vec<Value>, String> {
+    let tests = inventory
+        .get("tests")
+        .and_then(Value::as_array)
+        .ok_or_else(|| {
+            "Language frontend did not return a valid source Test inventory".to_owned()
+        })?;
+    match selection {
+        SourceTestSelection::AllSourceCases => {
+            if tests.len() > MAX_SELECTED_TEST_CASES {
+                return Err(format!(
+                    "source Test inventory contains {} cases; the bounded selection limit is {}",
+                    tests.len(),
+                    MAX_SELECTED_TEST_CASES,
+                ));
+            }
+            Ok(tests.clone())
+        }
+        SourceTestSelection::CaseIdentities(identities) => {
+            let mut selected = Vec::with_capacity(identities.len());
+            for identity in identities {
+                let matches = tests
+                    .iter()
+                    .filter(|test| {
+                        test.get("test_case_identity").and_then(Value::as_str)
+                            == Some(identity.as_str())
+                    })
+                    .collect::<Vec<_>>();
+                match matches.as_slice() {
+                    [test] => selected.push((*test).clone()),
+                    [] => {
+                        return Err(format!(
+                            "selected test_case_identity is not present in the current Language inventory: {identity}"
+                        ));
+                    }
+                    _ => {
+                        return Err(format!(
+                            "selected test_case_identity is not unique in the current Language inventory: {identity}"
+                        ));
+                    }
+                }
+            }
+            selected.sort_by(|left, right| {
+                left.get("declaration_identity")
+                    .and_then(Value::as_str)
+                    .cmp(&right.get("declaration_identity").and_then(Value::as_str))
+            });
+            Ok(selected)
+        }
+    }
+}
+
 fn application_cache_key(
     request: &Value,
     contract: &str,
@@ -219,6 +330,7 @@ fn application_cache_key(
     modules: &BTreeMap<String, String>,
     generic_seeds: &[HostGenericSeedRequest],
     callable_roots: &[(String, String)],
+    source_test_selection: Option<&Value>,
     toolchain: Option<&ToolchainIdentity>,
     probe_identity: &str,
 ) -> String {
@@ -238,13 +350,14 @@ fn application_cache_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-key/5",
+        "schema_version": "mncs.compiler.application-build-cache-key/6",
         "contract": contract,
         "source_snapshot_identity": source_identity,
         "root_source_id": root_id,
         "module_sources": module_sources,
         "generic_seeds": generic_seed_keys,
         "callable_roots": callable_roots,
+        "source_test_selection": source_test_selection,
         "compiler_semantics": toolchain
             .and_then(|identity| serde_json::to_value(identity).ok()),
         "compiler_implementation": probe_identity,
@@ -256,7 +369,7 @@ fn application_cache_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache/5\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache/6\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -267,6 +380,7 @@ fn application_cache_index_key(
     root_id: &str,
     generic_seeds: &[HostGenericSeedRequest],
     callable_roots: &[(String, String)],
+    source_test_selection: Option<&Value>,
     toolchain: Option<&ToolchainIdentity>,
     probe_identity: &str,
 ) -> String {
@@ -277,11 +391,12 @@ fn application_cache_index_key(
     generic_seed_keys.sort();
     generic_seed_keys.dedup();
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-cache-index-key/5",
+        "schema_version": "mncs.compiler.application-build-cache-index-key/6",
         "contract": contract,
         "root_source_id": root_id,
         "generic_seeds": generic_seed_keys,
         "callable_roots": callable_roots,
+        "source_test_selection": source_test_selection,
         "compiler_semantics": toolchain
             .and_then(|identity| serde_json::to_value(identity).ok()),
         "compiler_implementation": probe_identity,
@@ -293,7 +408,7 @@ fn application_cache_index_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or_else(|| json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-cache-index/5\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-cache-index/6\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -496,6 +611,58 @@ fn annotate_frontend_work(
     );
     work.insert("front_end_outcome".to_owned(), json!(frontend_outcome));
     response
+}
+
+fn source_test_selection_error_response(
+    status: &str,
+    code: &str,
+    message: &str,
+    source_identity: &str,
+    source_files: &[Value],
+    source_test_inventory: Option<Value>,
+    selection: &Value,
+    cache_key: &str,
+    resolved_module_count: usize,
+    program_function_count: Option<usize>,
+) -> Value {
+    let mut response = error_contract(CONTRACT_V4, status, code, message);
+    let object = response
+        .as_object_mut()
+        .expect("application response object");
+    object.insert(
+        "source_snapshot".to_owned(),
+        json!({ "identity": source_identity, "files": source_files }),
+    );
+    object.insert(
+        "test_case_selection".to_owned(),
+        json!({
+            "schema_version": "mncs.compiler.source-test-case-selection/1",
+            "status": status,
+            "selection": selection,
+            "cases": null,
+        }),
+    );
+    if let Some(inventory) = source_test_inventory {
+        object.insert("source_test_inventory".to_owned(), inventory);
+    }
+    let response = annotate_cache(
+        response,
+        cache_key,
+        "bypass",
+        "not_published",
+        &[],
+        &["source_semantic_check"],
+    );
+    annotate_frontend_work(
+        response,
+        resolved_module_count,
+        program_function_count,
+        if status == "rejected" {
+            "rejected"
+        } else {
+            "verified"
+        },
+    )
 }
 
 fn annotate_artifact_emission_failure(
@@ -1126,6 +1293,7 @@ fn rebind_cached_application_response(
     callable_roots: &[(String, String)],
     callable_interfaces: &[Option<Value>],
     source_test_inventory: Option<Value>,
+    test_case_selection: Option<Value>,
 ) -> Option<Value> {
     response = rebind_cached_source_snapshot(response, source_identity, source_files)?;
     if multiple_callables {
@@ -1150,6 +1318,11 @@ fn rebind_cached_application_response(
         response
             .as_object_mut()?
             .insert("source_test_inventory".to_owned(), inventory);
+    }
+    if let Some(selection) = test_case_selection {
+        response
+            .as_object_mut()?
+            .insert("test_case_selection".to_owned(), selection);
     }
     Some(response)
 }
@@ -1384,8 +1557,9 @@ mod tests {
         annotate_artifact_emission_failure, application_cache_index_key,
         application_cache_index_path_at, application_cache_key, application_cache_path_at,
         application_cache_root_from, application_executable_closure_identity,
-        application_semantic_identity, callable_interface, envelope, sha256_serialized,
-        ApplicationSources, CONTRACT_V2,
+        application_semantic_identity, callable_interface, envelope, parse_source_test_selection,
+        resolve_source_test_selection, sha256_serialized, ApplicationSources, CONTRACT_V2,
+        CONTRACT_V4, VM_TARGET,
     };
     use mncs_compiler::ReferenceCompiler;
     use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
@@ -1510,6 +1684,7 @@ mod tests {
                     &generic_seeds,
                     &callable_roots,
                     None,
+                    None,
                     "sha256:compiler-probe",
                 ),
                 application_cache_index_key(
@@ -1518,6 +1693,7 @@ mod tests {
                     root_id,
                     &generic_seeds,
                     &callable_roots,
+                    None,
                     None,
                     "sha256:compiler-probe",
                 ),
@@ -1545,6 +1721,101 @@ mod tests {
     }
 
     #[test]
+    fn source_test_selection_is_canonical_and_bound_into_cache_keys() {
+        let first = parse_source_test_selection(&json!({
+            "kind": "case_identities",
+            "test_case_identities": ["case-b", "case-a"],
+        }))
+        .expect("valid identity selection");
+        let second = parse_source_test_selection(&json!({
+            "kind": "case_identities",
+            "test_case_identities": ["case-a", "case-b"],
+        }))
+        .expect("valid reordered identity selection");
+        assert_eq!(first, second);
+        assert!(parse_source_test_selection(&json!({
+            "kind": "case_identities",
+            "test_case_identities": ["case-a", "case-a"],
+        }))
+        .is_err());
+
+        let request = json!({ "target": VM_TARGET });
+        let roots = vec![("tests.root".to_owned(), "helper".to_owned())];
+        let selection = first.value();
+        let without_selection = application_cache_key(
+            &request,
+            CONTRACT_V4,
+            "root.mncs",
+            "sha256:source",
+            &BTreeMap::new(),
+            &[],
+            &roots,
+            None,
+            None,
+            "sha256:compiler",
+        );
+        let with_selection = application_cache_key(
+            &request,
+            CONTRACT_V4,
+            "root.mncs",
+            "sha256:source",
+            &BTreeMap::new(),
+            &[],
+            &roots,
+            Some(&selection),
+            None,
+            "sha256:compiler",
+        );
+        assert_ne!(without_selection, with_selection);
+        let without_selection_index = application_cache_index_key(
+            &request,
+            CONTRACT_V4,
+            "root.mncs",
+            &[],
+            &roots,
+            None,
+            None,
+            "sha256:compiler",
+        );
+        let with_selection_index = application_cache_index_key(
+            &request,
+            CONTRACT_V4,
+            "root.mncs",
+            &[],
+            &roots,
+            Some(&selection),
+            None,
+            "sha256:compiler",
+        );
+        assert_ne!(without_selection_index, with_selection_index);
+
+        let inventory = json!({
+            "tests": [
+                {
+                    "test_case_identity": "case-b",
+                    "declaration_identity": "decl-b",
+                    "name": "second",
+                },
+                {
+                    "test_case_identity": "case-a",
+                    "declaration_identity": "decl-a",
+                    "name": "first",
+                },
+            ],
+        });
+        let selected = resolve_source_test_selection(&first, &inventory)
+            .expect("resolve exact current case identities");
+        assert_eq!(selected[0]["name"], "first");
+        assert_eq!(selected[1]["name"], "second");
+        let stale = parse_source_test_selection(&json!({
+            "kind": "case_identities",
+            "test_case_identities": ["stale-case"],
+        }))
+        .expect("parse a well-shaped stale identity");
+        assert!(resolve_source_test_selection(&stale, &inventory).is_err());
+    }
+
+    #[test]
     fn application_cache_index_locates_candidates_across_root_snapshots() {
         let request = json!({
             "target": "mncs-vm-0.1",
@@ -1567,6 +1838,7 @@ mod tests {
             &generic_seeds,
             &callable_roots,
             None,
+            None,
             "sha256:compiler-probe",
         );
         let second_artifact_key = application_cache_key(
@@ -1578,6 +1850,7 @@ mod tests {
             &generic_seeds,
             &callable_roots,
             None,
+            None,
             "sha256:compiler-probe",
         );
         let first_index_key = application_cache_index_key(
@@ -1587,6 +1860,7 @@ mod tests {
             &generic_seeds,
             &callable_roots,
             None,
+            None,
             "sha256:compiler-probe",
         );
         let second_index_key = application_cache_index_key(
@@ -1595,6 +1869,7 @@ mod tests {
             root_id,
             &generic_seeds,
             &callable_roots,
+            None,
             None,
             "sha256:compiler-probe",
         );
@@ -2251,11 +2526,12 @@ mod tests {
 /// existing canonical VM artifact format. Inputs are explicit and immutable;
 /// source identities are derived from exact bytes, never paths or timestamps.
 pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainIdentity>) -> Value {
-    let (contract, multiple_callables, include_source_test_inventory) =
+    let (contract, multiple_callables, include_source_test_inventory, select_test_cases) =
         match request.get("schema_version").and_then(Value::as_str) {
-            Some(REQUEST_V1) => (CONTRACT_V1, false, false),
-            Some(REQUEST_V2) => (CONTRACT_V2, true, false),
-            Some(REQUEST_V3) => (CONTRACT_V3, true, true),
+            Some(REQUEST_V1) => (CONTRACT_V1, false, false, false),
+            Some(REQUEST_V2) => (CONTRACT_V2, true, false, false),
+            Some(REQUEST_V3) => (CONTRACT_V3, true, true, false),
+            Some(REQUEST_V4) => (CONTRACT_V4, true, true, true),
             _ => {
                 return error_contract(
                     CONTRACT_V1,
@@ -2265,6 +2541,32 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 )
             }
         };
+    let source_test_selection = if select_test_cases {
+        let Some(value) = request.get("test_selection") else {
+            return error_contract(
+                contract,
+                "unknown",
+                "MCA113",
+                "test_selection is required for application-build-request/4",
+            );
+        };
+        match parse_source_test_selection(value) {
+            Ok(selection) => Some(selection),
+            Err(()) => {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA113",
+                    "test_selection must select all source cases or a bounded unique set of test_case_identity values",
+                );
+            }
+        }
+    } else {
+        None
+    };
+    let source_test_selection_value = source_test_selection
+        .as_ref()
+        .map(SourceTestSelection::value);
     if request.get("target").and_then(Value::as_str) != Some(VM_TARGET) {
         return error_contract(
             contract,
@@ -2311,29 +2613,43 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let Some(root_source) = request.get("root_source").and_then(Value::as_str) else {
         return error_contract(contract, "unknown", "MCA103", "root_source is required");
     };
-    let callable_roots = if multiple_callables {
+    let mut callable_roots = if multiple_callables {
         if request.get("entry").is_some() {
             return error_contract(
                 contract,
                 "unknown",
                 "MCA104",
-                "version 2 requests use callable_roots instead of entry",
+                "multi-callable requests use callable_roots instead of entry",
             );
         }
-        let Some(rows) = request.get("callable_roots").and_then(Value::as_array) else {
-            return error_contract(
-                contract,
-                "unknown",
-                "MCA104",
-                "callable_roots must be an array of module and function identities",
-            );
+        let rows: &[Value] = match request.get("callable_roots") {
+            Some(value) => match value.as_array() {
+                Some(rows) => rows.as_slice(),
+                None => {
+                    return error_contract(
+                        contract,
+                        "unknown",
+                        "MCA104",
+                        "callable_roots must be an array of module and function identities",
+                    );
+                }
+            },
+            None if select_test_cases => &[],
+            None => {
+                return error_contract(
+                    contract,
+                    "unknown",
+                    "MCA104",
+                    "callable_roots must be an array of module and function identities",
+                );
+            }
         };
-        if rows.is_empty() || rows.len() > MAX_CALLABLE_ROOTS {
+        if rows.len() > MAX_CALLABLE_ROOTS || (rows.is_empty() && !select_test_cases) {
             return error_contract(
                 contract,
                 "unsupported",
                 "MCA111",
-                "callable root count is outside the bounded application input",
+                "callable root count is outside the bounded application input or no test selection can supply roots",
             );
         }
         let mut roots = BTreeSet::new();
@@ -2407,10 +2723,10 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         };
         vec![(module.to_owned(), function.to_owned())]
     };
-    let (entry_module, entry_function) = callable_roots
+    let (mut entry_module, mut entry_function) = callable_roots
         .first()
         .cloned()
-        .expect("validated callable roots are non-empty");
+        .unwrap_or_else(|| (String::new(), String::new()));
     let Some(raw_modules) = request.get("modules").and_then(Value::as_object) else {
         return error_contract(
             contract,
@@ -2493,6 +2809,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         &modules,
         &generic_seeds,
         &callable_roots,
+        source_test_selection_value.as_ref(),
         toolchain,
         &probe_identity,
     );
@@ -2502,6 +2819,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         root_id,
         &generic_seeds,
         &callable_roots,
+        source_test_selection_value.as_ref(),
         toolchain,
         &probe_identity,
     );
@@ -2648,7 +2966,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                     .and_then(|identity| serde_json::to_value(identity).ok()),
                 "probe": probe_details,
             },
-            "entry": { "module": entry_module, "function": entry_function },
+            "entry": if entry_module.is_empty() {
+                Value::Null
+            } else {
+                json!({ "module": entry_module, "function": entry_function })
+            },
             "artifact": null,
             "capability_dispatch": {
                 "schema_version": CAPABILITY_DISPATCH_SCHEMA,
@@ -2681,6 +3003,20 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 .expect("response object")
                 .insert("source_test_inventory".to_owned(), inventory);
         }
+        if let Some(selection) = source_test_selection_value.clone() {
+            rejected_response
+                .as_object_mut()
+                .expect("response object")
+                .insert(
+                    "test_case_selection".to_owned(),
+                    json!({
+                        "schema_version": "mncs.compiler.source-test-case-selection/1",
+                        "status": "rejected",
+                        "selection": selection,
+                        "cases": null,
+                    }),
+                );
+        }
         let response = annotate_cache(
             rejected_response,
             &cache_key,
@@ -2707,6 +3043,202 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     else {
         unreachable!("valid frontend results contain a semantic program");
     };
+
+    let mut test_case_selection_output = None;
+    if let (Some(selection), Some(selection_value)) = (
+        source_test_selection.as_ref(),
+        source_test_selection_value.as_ref(),
+    ) {
+        let Some(inventory) = source_test_inventory.as_ref() else {
+            return source_test_selection_error_response(
+                "rejected",
+                "MCA115",
+                "Language frontend did not return a source Test inventory for the current valid program",
+                &source_identity,
+                &source_files,
+                source_test_inventory.clone(),
+                selection_value,
+                &cache_key,
+                resolved_module_count,
+                program_function_count,
+            );
+        };
+        if inventory.get("schema_version").and_then(Value::as_str) != Some("mncs.test-inventory/1")
+            || inventory.get("scope").and_then(Value::as_str) != Some("source_module")
+            || inventory.get("module").and_then(Value::as_str) != Some(program.module.as_str())
+        {
+            return source_test_selection_error_response(
+                "rejected",
+                "MCA115",
+                "Language source Test inventory does not match the verified root module",
+                &source_identity,
+                &source_files,
+                source_test_inventory.clone(),
+                selection_value,
+                &cache_key,
+                resolved_module_count,
+                program_function_count,
+            );
+        }
+        if matches!(selection, SourceTestSelection::AllSourceCases)
+            && inventory
+                .get("tests")
+                .and_then(Value::as_array)
+                .is_some_and(|tests| tests.len() > MAX_SELECTED_TEST_CASES)
+        {
+            return source_test_selection_error_response(
+                "unsupported",
+                "MCA114",
+                "source Test inventory exceeds the bounded test selection count",
+                &source_identity,
+                &source_files,
+                source_test_inventory.clone(),
+                selection_value,
+                &cache_key,
+                resolved_module_count,
+                program_function_count,
+            );
+        }
+        let selected_cases = match resolve_source_test_selection(selection, inventory) {
+            Ok(cases) => cases,
+            Err(message) => {
+                return source_test_selection_error_response(
+                    "rejected",
+                    "MCA115",
+                    &message,
+                    &source_identity,
+                    &source_files,
+                    source_test_inventory.clone(),
+                    selection_value,
+                    &cache_key,
+                    resolved_module_count,
+                    program_function_count,
+                );
+            }
+        };
+        let mut roots = callable_roots.iter().cloned().collect::<BTreeSet<_>>();
+        let mut selected_test_roots = BTreeSet::new();
+        for test in &selected_cases {
+            let Some(module) = test.get("module").and_then(Value::as_str) else {
+                return source_test_selection_error_response(
+                    "rejected",
+                    "MCA115",
+                    "Language Test inventory entry is missing its module identity",
+                    &source_identity,
+                    &source_files,
+                    source_test_inventory.clone(),
+                    selection_value,
+                    &cache_key,
+                    resolved_module_count,
+                    program_function_count,
+                );
+            };
+            let Some(function) = test.get("name").and_then(Value::as_str) else {
+                return source_test_selection_error_response(
+                    "rejected",
+                    "MCA115",
+                    "Language Test inventory entry is missing its function name",
+                    &source_identity,
+                    &source_files,
+                    source_test_inventory.clone(),
+                    selection_value,
+                    &cache_key,
+                    resolved_module_count,
+                    program_function_count,
+                );
+            };
+            let expected_function_identity = mncs_model::function_id(module, function).to_string();
+            if test.get("function_identity").and_then(Value::as_str)
+                != Some(expected_function_identity.as_str())
+            {
+                return source_test_selection_error_response(
+                    "rejected",
+                    "MCA115",
+                    "Language Test inventory function identity does not match its module and name",
+                    &source_identity,
+                    &source_files,
+                    source_test_inventory.clone(),
+                    selection_value,
+                    &cache_key,
+                    resolved_module_count,
+                    program_function_count,
+                );
+            }
+            let has_generic_params = test
+                .get("generic_params")
+                .and_then(Value::as_array)
+                .is_some_and(|params| !params.is_empty());
+            if has_generic_params
+                && !generic_seed_functions.contains(&(module.to_owned(), function.to_owned()))
+            {
+                return source_test_selection_error_response(
+                    "unsupported",
+                    "MCA114",
+                    &format!(
+                        "selected generic Test {}::{} requires an explicit matching generic_seeds specialization",
+                        module, function
+                    ),
+                    &source_identity,
+                    &source_files,
+                    source_test_inventory.clone(),
+                    selection_value,
+                    &cache_key,
+                    resolved_module_count,
+                    program_function_count,
+                );
+            }
+            let root = (module.to_owned(), function.to_owned());
+            roots.insert(root.clone());
+            selected_test_roots.insert(root);
+        }
+        if roots.is_empty() {
+            return source_test_selection_error_response(
+                "unsupported",
+                "MCA114",
+                "test_selection resolved no callable roots",
+                &source_identity,
+                &source_files,
+                source_test_inventory.clone(),
+                selection_value,
+                &cache_key,
+                resolved_module_count,
+                program_function_count,
+            );
+        }
+        if roots.len() > MAX_CALLABLE_ROOTS {
+            return source_test_selection_error_response(
+                "unsupported",
+                "MCA114",
+                "combined callable roots and selected source tests exceed the bounded callable count",
+                &source_identity,
+                &source_files,
+                source_test_inventory.clone(),
+                selection_value,
+                &cache_key,
+                resolved_module_count,
+                program_function_count,
+            );
+        }
+        callable_roots = roots.into_iter().collect();
+        (entry_module, entry_function) = callable_roots
+            .first()
+            .cloned()
+            .expect("a verified test selection has callable roots");
+        test_case_selection_output = Some(json!({
+            "schema_version": "mncs.compiler.source-test-case-selection/1",
+            "status": "verified",
+            "selection": selection_value,
+            "selected_test_case_identities": selected_cases
+                .iter()
+                .filter_map(|test| test.get("test_case_identity").cloned())
+                .collect::<Vec<_>>(),
+            "selected_test_roots": selected_test_roots
+                .iter()
+                .map(|(module, function)| json!({ "module": module, "function": function }))
+                .collect::<Vec<_>>(),
+            "cases": selected_cases,
+        }));
+    }
 
     let callable_interfaces = callable_roots
         .iter()
@@ -2817,6 +3349,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &callable_roots,
                 &callable_interfaces,
                 source_test_inventory.clone(),
+                test_case_selection_output.clone(),
             )
         } else {
             None
@@ -2959,6 +3492,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 .expect("response object")
                 .insert("source_test_inventory".to_owned(), inventory);
         }
+        if let Some(selection) = test_case_selection_output.clone() {
+            unsupported_response
+                .as_object_mut()
+                .expect("response object")
+                .insert("test_case_selection".to_owned(), selection);
+        }
         return annotate_artifact_emission_failure(
             unsupported_response,
             &cache_key,
@@ -3072,7 +3611,14 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             })
         })
         .collect::<Vec<_>>();
-    let callable_scope = if multiple_callables {
+    let callable_scope = if select_test_cases {
+        json!({
+            "kind": "source_test_case_selection_and_explicit_callable_roots_and_generic_seeds",
+            "callable_roots": callable_entries.clone(),
+            "generic_seed_functions": generic_seed_functions,
+            "test_case_selection": test_case_selection_output.clone(),
+        })
+    } else if multiple_callables {
         json!({
             "kind": "selected_callable_roots_and_explicit_generic_seeds",
             "callable_roots": callable_entries.clone(),
@@ -3167,6 +3713,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             .as_object_mut()
             .expect("response object")
             .insert("source_test_inventory".to_owned(), inventory);
+    }
+    if let Some(selection) = test_case_selection_output {
+        response
+            .as_object_mut()
+            .expect("response object")
+            .insert("test_case_selection".to_owned(), selection);
     }
     if multiple_callables {
         response

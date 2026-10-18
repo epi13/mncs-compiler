@@ -33,8 +33,18 @@ MULTI_REQUEST_SCHEMA = "mncs.compiler.application-build-request/2"
 MULTI_RESPONSE_SCHEMA = "mncs.compiler.application-build/5"
 INVENTORY_REQUEST_SCHEMA = "mncs.compiler.application-build-request/3"
 INVENTORY_RESPONSE_SCHEMA = "mncs.compiler.application-build/6"
+TEST_SELECTION_REQUEST_SCHEMA = "mncs.compiler.application-build-request/4"
+TEST_SELECTION_RESPONSE_SCHEMA = "mncs.compiler.application-build/7"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
-DIGEST_EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-provider-digest.json"
+_DIGEST_EVIDENCE_PATH = Path(os.environ.get(
+    "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
+    ROOT / "evidence/native-app-readiness-provider-digest.json",
+))
+DIGEST_EVIDENCE_PATH = (
+    _DIGEST_EVIDENCE_PATH
+    if _DIGEST_EVIDENCE_PATH.is_absolute()
+    else ROOT / _DIGEST_EVIDENCE_PATH
+)
 
 
 def validate_environment_contract_descriptor() -> None:
@@ -52,27 +62,32 @@ def validate_environment_contract_descriptor() -> None:
         (REQUEST_SCHEMA, RESPONSE_SCHEMA),
         (MULTI_REQUEST_SCHEMA, MULTI_RESPONSE_SCHEMA),
         (INVENTORY_REQUEST_SCHEMA, INVENTORY_RESPONSE_SCHEMA),
+        (TEST_SELECTION_REQUEST_SCHEMA, TEST_SELECTION_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "6":
-        raise AssertionError("Environment capability revision must match application-build/6")
+    if contract.get("version") != "7":
+        raise AssertionError("Environment capability revision must match application-build/7")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        INVENTORY_REQUEST_SCHEMA, INVENTORY_RESPONSE_SCHEMA
+        TEST_SELECTION_REQUEST_SCHEMA, TEST_SELECTION_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Environment must advertise application-build/6 as its current contract")
+        raise AssertionError("Environment must advertise application-build/7 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Environment descriptor must retain /4, /5, and /6 request-response pairs")
+        raise AssertionError("Environment descriptor must retain /4 through /7 request-response pairs")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
-        raise AssertionError("application-build/6 must declare the Language source-module Test inventory")
+        raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
+    if (artifact.get("source_test_selection_schema") != "mncs.compiler.source-test-case-selection/1"
+            or artifact.get("source_test_selection_maximum_count") != 256):
+        raise AssertionError("application-build/7 must declare its bounded Language identity selection")
     if provider.RESPONSE_SCHEMA_BY_REQUEST != {
         REQUEST_SCHEMA: RESPONSE_SCHEMA,
         MULTI_REQUEST_SCHEMA: MULTI_RESPONSE_SCHEMA,
         INVENTORY_REQUEST_SCHEMA: INVENTORY_RESPONSE_SCHEMA,
+        TEST_SELECTION_REQUEST_SCHEMA: TEST_SELECTION_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -366,7 +381,10 @@ def invoke(
     result_path = output_dir / "native-application-build.json"
     response = json.loads(result_path.read_text())
     if response.get("schema_version") not in {
-        RESPONSE_SCHEMA, MULTI_RESPONSE_SCHEMA, INVENTORY_RESPONSE_SCHEMA
+        RESPONSE_SCHEMA,
+        MULTI_RESPONSE_SCHEMA,
+        INVENTORY_RESPONSE_SCHEMA,
+        TEST_SELECTION_RESPONSE_SCHEMA,
     }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):
@@ -1040,6 +1058,10 @@ def main() -> None:
                 "multi_callable_provider": batch_metrics,
             },
         }
+        if DIGEST_EVIDENCE_PATH.exists():
+            raise SystemExit(
+                f"refusing to overwrite immutable evidence: {DIGEST_EVIDENCE_PATH}"
+            )
         DIGEST_EVIDENCE_PATH.write_text(
             json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
         )

@@ -275,20 +275,49 @@ zero. This exercises the Compiler/VM contract on real Test sources; production
 runner migration, Forge integration, and generic selection remain open.
 Evidence is evidence/application-build-test-inventory-20261017.json.
 
-The actual seven-case mncs-test self-suite now runs through the same
-application-build/6 and canonical VM batch contract. It compiles
+## Test-case identity selection (2026-10-18)
+
+Application-build request /4 and response /7 add Language-issued
+test_case_identity selection to the Compiler contract. A request can select
+all Test declarations in the root source inventory or a bounded, explicit set
+of body-sensitive case identities. The Compiler resolves those identities
+against the current frontend inventory, merges the resulting functions with
+explicit callable roots, and returns the exact rows and callable mapping.
+Stale identities and invalid source produce no artifact. Generic Test
+declarations require matching explicit specialization seeds.
+
+The real mncs-test provider-fold workload selected four cases by their exact
+identities, then ran four typed scenario calls and all four Test callables in
+one canonical VM batch. All eight results matched Stage-0, and the fresh
+process exact hit reported zero frontend invocations. A comment edit refreshed
+selected source spans, a changed Test body invalidated its old case identity,
+and invalid source returned no inventory or artifact. The Compiler provider
+adapter also published a /7 result. Language verified facts reused: zero;
+this advances native Test selection and execution coverage without changing
+the production Test runner. The identity-selected build measured 0.998 s wall,
+0.96 s CPU, and 45.0 MiB peak RSS. Its fresh-process hit measured 0.112 s and
+6.95 MiB peak RSS. The VM batch measured 0.073 s and 22,932 KiB peak RSS.
+Cgroup memory was unavailable. Evidence is
+evidence/native-test-provider-fold-batch-test-case-selection-edges-20261018.json.
+The Environment provider adapter test also published the /7 response for the
+two-case source inventory fixture; its measurements and identities are in
+evidence/application-build-test-inventory-v7-20261018.json.
+
+The actual seven-case mncs-test self-suite now runs through the
+application-build/7 all-source selection and canonical VM batch contract. It compiles
 tests/self_suite.mncs with five Test library modules and task from the
 Compiler-pinned Language revision e8f8a5f8659c71b33cd32c964d4982bec1a9668e.
-One frontend resolves seven modules and 41 functions, returns all seven
-compiler-issued Test identities, and emits the selected artifact. One VM
-batch runs that artifact. Six cases return passing typed TestResult values
-and skipped returns the expected typed skip; all seven match Stage-0. The
-build measured 0.577 s and 57.0 MiB peak RSS. The VM batch measured 0.167 s
-and 26,332 KiB peak RSS. Cgroup memory was unavailable. Language
-verification facts reused: zero. The production host runner and Forge
-execution remain separate integration work. Exact Test and Language source
-identities are recorded in
-evidence/application-build-test-inventory-20261017.json.
+One frontend resolves seven modules and 41 functions, selects all seven
+compiler-issued Test identities from the Language inventory without caller
+callable mapping, and emits the selected artifact. One VM batch runs that
+artifact for two rounds. Six cases return passing typed TestResult values and
+skipped returns the expected typed skip; all 14 results match Stage-0. The
+build measured 0.590 s wall, 0.55 s CPU, and 29.2 MiB peak RSS. The VM batch
+measured 0.074 s and 22,204 KiB peak RSS. Cgroup memory was unavailable.
+Language verification facts reused: zero. The production host runner and
+Forge execution remain separate integration work. Exact Test and Language
+source identities are recorded in
+evidence/application-build-test-inventory-v7-20261018.json.
 
 The real five-module mncs-test readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across
@@ -489,7 +518,7 @@ No production host implementation is safe to remove from this evidence. The nati
 ## Prioritized next steps
 
 1. Implement canonical VM `sequence_copy` support through its owning repository. The real Test provider app already completes its structured read and first structured digest, then stops at this instruction before it can produce identities and publish results.
-2. Feed application-build/6 into the production `mncs-test` native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the current compiler result can carry both the executable artifact and root-module inventory, but the production consumer has not yet integrated it.
+2. Feed application-build/7 into the production mncs-test native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the Compiler can now select source tests by Language-issued case identity, but the production consumer has not yet integrated it.
 3. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
 4. Complete the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
 5. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.

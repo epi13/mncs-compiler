@@ -1,4 +1,4 @@
-"""Verify application-build/6 returns the frontend's current source Test inventory.
+"""Verify application-build/6 inventory and /7 identity selection contracts.
 
 The inventory is derived by mncs-language during the same frontend invocation
 that verifies callable roots and emits the VM artifact. This exercises exact
@@ -68,10 +68,11 @@ def require_inventory(
     response: dict,
     expected_names: set[str] | None = None,
     expected_module: str = MODULE,
+    response_schema: str = "mncs.compiler.application-build/6",
 ) -> dict:
-    if (response.get("schema_version") != "mncs.compiler.application-build/6"
+    if (response.get("schema_version") != response_schema
             or response.get("status") != "verified"):
-        raise AssertionError("application-build/6 did not verify: " + json.dumps({
+        raise AssertionError(f"{response_schema} did not verify: " + json.dumps({
             "schema_version": response.get("schema_version"),
             "status": response.get("status"),
             "diagnostics": response.get("diagnostics"),
@@ -205,10 +206,6 @@ def run_real_mncs_test_suite() -> dict:
         "path": "library/std/task.mncs",
         "sha256": sha(task_source.encode("utf-8")),
     }
-    callable_roots = [
-        {"module": module, "function": name} for name in sorted(expected_names)
-    ]
-
     with tempfile.TemporaryDirectory(prefix="mncs-test-real-self-suite-") as raw:
         directory = Path(raw)
         probe = app.Probe(
@@ -217,13 +214,16 @@ def run_real_mncs_test_suite() -> dict:
             application_cache_dir=directory / "application-cache",
         )
         try:
+            build_request = request(
+                source,
+                [],
+                root_source_id="mncs-test/tests/self_suite.mncs",
+                modules=module_sources,
+            )
+            build_request["schema_version"] = "mncs.compiler.application-build-request/4"
+            build_request["test_selection"] = {"kind": "all_source_cases"}
             built, build_metrics = probe.send(
-                {"compile_application": request(
-                    source,
-                    callable_roots,
-                    root_source_id="mncs-test/tests/self_suite.mncs",
-                    modules=module_sources,
-                )},
+                {"compile_application": build_request},
                 timeout=180.0,
             )
         finally:
@@ -233,7 +233,18 @@ def run_real_mncs_test_suite() -> dict:
             built,
             expected_names,
             expected_module=module,
+            response_schema="mncs.compiler.application-build/7",
         )
+        selection = built.get("test_case_selection", {})
+        selected_callables = built.get("callable_scope", {}).get("callable_roots", [])
+        if (selection.get("status") != "verified"
+                or selection.get("selection") != {"kind": "all_source_cases"}
+                or [row.get("test_case_identity") for row in selection.get("cases", [])]
+                != [row.get("test_case_identity") for row in inventory["tests"]]
+                or {(row.get("module"), row.get("function")) for row in selected_callables}
+                != {(module, name) for name in expected_names}
+                or any(row.get("status") != "verified" for row in selected_callables)):
+            raise AssertionError("application-build/7 did not select the real self-suite by Language inventory")
         artifact = built.get("artifact", {}).get("value")
         if (built.get("cache", {}).get("status") != "miss"
                 or frontend_invocations(built) != 1
@@ -362,7 +373,7 @@ def run_real_mncs_test_suite() -> dict:
                 "module": module,
             },
             "dependency_sources": module_provenance,
-            "request_schema": "mncs.compiler.application-build-request/3",
+            "request_schema": "mncs.compiler.application-build-request/4",
             "response_schema": built.get("schema_version"),
             "inventory_schema": inventory.get("schema_version"),
             "frontend_invocations": frontend_invocations(built),
@@ -406,6 +417,7 @@ def main() -> None:
         "mncs.compiler.application-build-request/1": "mncs.compiler.application-build/4",
         "mncs.compiler.application-build-request/2": "mncs.compiler.application-build/5",
         "mncs.compiler.application-build-request/3": "mncs.compiler.application-build/6",
+        "mncs.compiler.application-build-request/4": "mncs.compiler.application-build/7",
     }
     if provider.RESPONSE_SCHEMA_BY_REQUEST != expected_pairs:
         raise AssertionError("Environment provider does not accept all versioned build contracts")
@@ -414,10 +426,10 @@ def main() -> None:
         row for row in manifest.get("contracts", {}).get("provides", [])
         if isinstance(row, dict) and row.get("contract") == "native-application-build"
     ]
-    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "6"
+    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "7"
             or contract_rows[0].get("artifact_contract", {}).get("request_schema")
-            != "mncs.compiler.application-build-request/3"):
-        raise AssertionError("Compiler manifest does not advertise application-build/6")
+            != "mncs.compiler.application-build-request/4"):
+        raise AssertionError("Compiler manifest does not advertise application-build/7")
     provider_tests.validate_environment_contract_descriptor()
 
     with tempfile.TemporaryDirectory(
@@ -653,6 +665,39 @@ def main() -> None:
                 or not (provider_output_dir / "native-application-build.json").is_file()):
             raise AssertionError("application-build provider did not publish the /6 inventory result")
 
+        selection_request = request(SOURCE)
+        selection_request["schema_version"] = "mncs.compiler.application-build-request/4"
+        selection_request["test_selection"] = {"kind": "all_source_cases"}
+        selection_request_path = directory / "provider-test-selection-request.json"
+        provider_tests.write_json(selection_request_path, selection_request)
+        selection_output_dir = directory / "provider-test-selection-output"
+        selection_output_dir.mkdir()
+        selection_cache_dir = directory / "provider-test-selection-cache"
+        selection_summary, selection_response, selection_elapsed, selection_metrics = (
+            provider_tests.invoke(
+                [
+                    "--request-file", selection_request_path.relative_to(ROOT).as_posix(),
+                    "--cache-dir", selection_cache_dir.relative_to(ROOT).as_posix(),
+                ],
+                output_dir=selection_output_dir,
+                cache_dir=selection_cache_dir,
+            )
+        )
+        selection_rows = selection_response.get("test_case_selection", {}).get("cases", [])
+        selection_roots = {
+            (row.get("module"), row.get("function"))
+            for row in selection_response.get("callable_scope", {}).get("callable_roots", [])
+        }
+        if (selection_summary.get("response_schema")
+                != "mncs.compiler.application-build/7"
+                or selection_response.get("status") != "verified"
+                or {row.get("name") for row in selection_rows}
+                != {"first_case", "second_case"}
+                or not { (MODULE, "first_case"), (MODULE, "second_case"), (MODULE, "selected_entry") }
+                <= selection_roots
+                or not (selection_output_dir / "native-application-build.json").is_file()):
+            raise AssertionError("application-build provider did not publish the /7 identity-selection result")
+
         report = {
             "schema_version": 1,
             "kind": "mncs.compiler.application-build-source-test-inventory-proof",
@@ -677,6 +722,15 @@ def main() -> None:
                 "wall_seconds": round(provider_elapsed, 6),
                 "process_tree_metrics": provider_metrics,
             },
+            "identity_selection_provider_adapter": {
+                "response_schema": selection_response["schema_version"],
+                "selected_test_count": len(selection_rows),
+                "selected_test_case_identities": [
+                    row.get("test_case_identity") for row in selection_rows
+                ],
+                "wall_seconds": round(selection_elapsed, 6),
+                "process_tree_metrics": selection_metrics,
+            },
             "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
@@ -697,6 +751,11 @@ def main() -> None:
             "contract": {
                 "request_schema": "mncs.compiler.application-build-request/3",
                 "response_schema": cold["schema_version"],
+                "identity_selection_request_schema": selection_request["schema_version"],
+                "identity_selection_response_schema": selection_response["schema_version"],
+                "identity_selection_schema": selection_response.get(
+                    "test_case_selection", {}
+                ).get("schema_version"),
                 "source_test_inventory_schema": cold_inventory["schema_version"],
                 "source_test_inventory_scope": cold_inventory["scope"],
                 "source_artifact_identity": cold_inventory["source_artifact_identity"],
@@ -749,6 +808,13 @@ def main() -> None:
                     == "mncs.compiler.application-build/6"
                     and provider_inventory == cold_inventory
                 ),
+                "provider_adapter_publishes_identity_selected_tests": (
+                    selection_summary.get("response_schema")
+                    == "mncs.compiler.application-build/7"
+                    and len(selection_rows) == 2
+                    and (MODULE, "first_case") in selection_roots
+                    and (MODULE, "second_case") in selection_roots
+                ),
                 "one_build_emits_artifact_inventory_and_selected_test_callables": (
                     frontend_invocations(runner_build) == 1
                     and len(runner_tests) == 2
@@ -785,6 +851,7 @@ def main() -> None:
                 "unselected_test_body_edit": body_metrics,
                 "invalid_source": invalid_metrics,
                 "valid_source_without_tests": empty_metrics,
+                "identity_selection_provider": selection_metrics,
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -806,11 +873,14 @@ def main() -> None:
                 "with Stage-0 agreement. This does not implement Language verification-fact reuse "
                 "or change the production mncs-test consumer. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
-                "revision. One frontend emits all seven compiler-inventoried TestResult callables "
-                "into a verified artifact; one canonical VM batch runs two rounds of all seven tests "
+                "revision. One application-build/7 all-source selection resolves all seven "
+                "compiler-inventoried TestResult callables from the Language inventory and emits a "
+                "verified artifact; one canonical VM batch runs two rounds of all seven tests "
                 "in the same admitted artifact/session. All 14 results match Stage-0 and the second "
                 "round matches the first, including six passes and the typed skip result. This does "
                 "not migrate the production runner or add Forge integration."
+                " The Environment provider adapter also publishes /7 after resolving "
+                "the Language-issued source Test identities."
             ),
         }
         evidence = ROOT / os.environ.get(

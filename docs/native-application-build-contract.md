@@ -47,7 +47,28 @@ single compiler result from which to obtain both an artifact and the root
 module's test inventory; consuming that response in `mncs-test` is a separate
 integration step.
 
-An exact `/5` or `/6` source-snapshot hit skips the frontend. A changed snapshot always
+`mncs.compiler.application-build-request/4` returns
+`mncs.compiler.application-build/7`. It keeps the bounded explicit callable
+roots and adds a required `test_selection`: either `{"kind":"all_source_cases"}`
+or `{"kind":"case_identities","test_case_identities":[...]}`. The
+selection is resolved only against the Language inventory produced by the
+current verified frontend invocation. Test declarations become callable roots
+by their Language-issued function identities; callers do not map test names
+back to functions. Explicit callable roots can be combined with selected
+tests, and the effective root count remains bounded at 256.
+
+`/7` returns `test_case_selection` with the canonical request selection, exact
+selected inventory rows, and resolved test callable roots. Case identity
+selection rejects stale or duplicate IDs. `all_source_cases` uses the current
+root module inventory and rejects a source inventory beyond the same 256-case
+bound. Generic Test declarations require an explicit matching
+`generic_seeds` specialization. The selection participates in both exact
+artifact and cross-snapshot candidate cache keys. A changed source still runs
+the full Language frontend; if executable closure reuse is admitted, `/7`
+refreshes selected Test rows and their source locations from that frontend.
+Invalid source or unresolved case identity produces no artifact.
+
+An exact `/5`, `/6`, or `/7` source-snapshot hit skips the frontend. A changed snapshot always
 runs the full Language frontend; if the selected executable closure and
 callable interfaces still match a verified artifact, the Compiler reuses that
 VM artifact, otherwise it rebuilds the selected SSA closure and artifact. This
@@ -55,8 +76,8 @@ does not reuse Language-owned verified facts. The
 `tools/test_vm_native_digest_unreachable_body_reuse.py` workload verifies that
 an uncalled imported body edit takes the full-frontend path while preserving
 the digest executable artifact. The Environment provider accepts request `/1`
-with response `/4`, request `/2` with response `/5`, and request `/3` with
-response `/6`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
+with response `/4`, request `/2` with response `/5`, request `/3` with
+response `/6`, and request `/4` with response `/7`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
 bound. For large selections it reports the root count and points to the
 shareable result artifact, which retains the complete typed interfaces. The
 focused direct compiler proof is
@@ -64,8 +85,8 @@ focused direct compiler proof is
 also sends `/2` through the adapter and calls `snapshot_witness` from its
 seven-callable Test-core artifact in one canonical VM batch.
 
-The Environment descriptor advertises request `/3` and response `/6` as
-current while retaining all three request-response pairs.
+The Environment descriptor advertises request `/4` and response `/7` as
+current while retaining all four request-response pairs.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only

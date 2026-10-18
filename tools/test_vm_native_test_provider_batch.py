@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the production mncs-test provider's status folding in one VM batch.
+"""Select production mncs-test provider cases by Language identity and batch them.
 
 The selected roots call the real provider's pure result-folding functions.
 The harness transports bounded typed calls and compares canonical VM values
@@ -142,14 +142,15 @@ def sha(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
-def request(roots: list[dict] | None = None) -> dict:
+def request(test_selection: dict | None = None) -> dict:
     modules = {name: path.read_text(encoding="utf-8") for name, path in MODULE_FILES.items()}
     return {
-        "schema_version": "mncs.compiler.application-build-request/3",
+        "schema_version": "mncs.compiler.application-build-request/4",
         "target": "mncs-vm-0.1",
         "root_source_id": SOURCE_ID,
         "root_source": SOURCE,
-        "callable_roots": ROOTS if roots is None else roots,
+        "callable_roots": [CALLABLE],
+        "test_selection": {"kind": "all_source_cases"} if test_selection is None else test_selection,
         "modules": modules,
         "generic_seeds": [],
         "capabilities": [],
@@ -190,35 +191,21 @@ def main() -> None:
     if not PROBE.is_file() or not VM_BIN.is_file():
         raise SystemExit(f"missing probe or canonical VM binary: {PROBE}, {VM_BIN}")
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    build_request = request()
+    inventory_request = request()
     probe = app.Probe(CACHE_DIR, executable=PROBE)
     try:
-        built, build_metrics = probe.send(
-            {"compile_application": build_request}, timeout=180.0
+        inventory_build, inventory_build_metrics = probe.send(
+            {"compile_application": inventory_request}, timeout=180.0
         )
-        if (built.get("schema_version") != "mncs.compiler.application-build/6"
-                or built.get("status") != "verified"
-                or built.get("cache", {}).get("status") != "miss"):
-            raise AssertionError("provider fold application failed its cold build: " + json.dumps({
-                "status": built.get("status"),
-                "cache": built.get("cache", {}).get("status"),
-                "diagnostic_codes": [row.get("code") for row in built.get("diagnostics", [])],
+        if (inventory_build.get("schema_version") != "mncs.compiler.application-build/7"
+                or inventory_build.get("status") != "verified"
+                or inventory_build.get("cache", {}).get("status") != "miss"):
+            raise AssertionError("provider fold inventory build failed: " + json.dumps({
+                "status": inventory_build.get("status"),
+                "cache": inventory_build.get("cache", {}).get("status"),
+                "diagnostic_codes": [row.get("code") for row in inventory_build.get("diagnostics", [])],
             }))
-        artifact = built.get("artifact", {}).get("value")
-        if not isinstance(artifact, dict):
-            raise TypeError("provider fold build omitted its canonical VM artifact")
-        rows = built.get("callable_scope", {}).get("callable_roots", [])
-        selected_roots = {
-            (row.get("module"), row.get("function")) for row in rows
-        }
-        expected_roots = {
-            (row["module"], row["function"]) for row in ROOTS
-        }
-        if (selected_roots != expected_roots
-                or len(rows) != len(ROOTS)
-                or any(row.get("status") != "verified" for row in rows)):
-            raise AssertionError(f"provider fold callables were not all verified: {rows}")
-        inventory = built.get("source_test_inventory")
+        inventory = inventory_build.get("source_test_inventory")
         if (not isinstance(inventory, dict)
                 or inventory.get("schema_version") != "mncs.test-inventory/1"
                 or inventory.get("scope") != "source_module"
@@ -233,6 +220,48 @@ def main() -> None:
                        or not row.get("semantic_fingerprint")
                        for row in inventory_tests)):
             raise AssertionError(f"provider fold Test inventory lost stable case identities: {inventory_tests}")
+        build_request = request({
+            "kind": "case_identities",
+            "test_case_identities": [row["test_case_identity"] for row in inventory_tests],
+        })
+        selection_probe = app.Probe(CACHE_DIR, executable=PROBE)
+        try:
+            built, build_metrics = selection_probe.send(
+                {"compile_application": build_request}, timeout=180.0
+            )
+        finally:
+            selection_probe.close()
+        if (built.get("schema_version") != "mncs.compiler.application-build/7"
+                or built.get("status") != "verified"
+                or built.get("cache", {}).get("status") != "miss"):
+            raise AssertionError("provider fold identity-selected build failed: " + json.dumps({
+                "status": built.get("status"),
+                "cache": built.get("cache", {}).get("status"),
+                "diagnostic_codes": [row.get("code") for row in built.get("diagnostics", [])],
+            }))
+        selection = built.get("test_case_selection")
+        if (not isinstance(selection, dict)
+                or selection.get("schema_version") != "mncs.compiler.source-test-case-selection/1"
+                or selection.get("status") != "verified"
+                or selection.get("selection") != build_request["test_selection"]
+                or selection.get("selected_test_case_identities")
+                != [row["test_case_identity"] for row in sorted(
+                    inventory_tests, key=lambda row: row["declaration_identity"]
+                )]
+                or selection.get("cases") != sorted(
+                    inventory_tests, key=lambda row: row["declaration_identity"]
+                )):
+            raise AssertionError(f"Compiler did not resolve exact selected Test identities: {selection}")
+        artifact = built.get("artifact", {}).get("value")
+        if not isinstance(artifact, dict):
+            raise TypeError("identity-selected provider fold build omitted its canonical VM artifact")
+        rows = built.get("callable_scope", {}).get("callable_roots", [])
+        selected_roots = {(row.get("module"), row.get("function")) for row in rows}
+        expected_roots = {(row["module"], row["function"]) for row in ROOTS}
+        if (selected_roots != expected_roots
+                or len(rows) != len(ROOTS)
+                or any(row.get("status") != "verified" for row in rows)):
+            raise AssertionError(f"provider fold callables were not all verified: {rows}")
 
         warm_probe = app.Probe(CACHE_DIR, executable=PROBE)
         try:
@@ -242,7 +271,8 @@ def main() -> None:
             if (warm.get("cache", {}).get("status") != "hit"
                     or warm.get("artifact", {}).get("identity") != built["artifact"]["identity"]
                     or warm.get("cache", {}).get("verification_work", {}).get("front_end_invocations") != 0
-                    or warm.get("source_test_inventory") != inventory):
+                    or warm.get("source_test_inventory") != inventory
+                    or warm.get("test_case_selection") != selection):
                 raise AssertionError("provider fold fresh-process artifact reuse was not exact")
         finally:
             warm_probe.close()
@@ -260,6 +290,82 @@ def main() -> None:
         {"kind": "inventory_test", "id": row["test_case_identity"], "test": row}
         for row in inventory_tests
     ]
+    edge_probe = app.Probe(CACHE_DIR, executable=PROBE)
+    try:
+        comment_request = request(build_request["test_selection"])
+        comment_request["root_source"] = SOURCE.replace(
+            "test mixed_statuses()",
+            "// selection span must come from the current frontend\n\ntest mixed_statuses()",
+            1,
+        )
+        comment_response, comment_metrics = edge_probe.send(
+            {"compile_application": comment_request}, timeout=180.0
+        )
+        comment_inventory = comment_response.get("source_test_inventory", {})
+        comment_selection = comment_response.get("test_case_selection", {})
+        before_by_id = {
+            row["test_case_identity"]: row for row in inventory_tests
+        }
+        after_by_id = {
+            row["test_case_identity"]: row
+            for row in comment_inventory.get("tests", [])
+        }
+        shifted_id = next(
+            row["test_case_identity"]
+            for row in inventory_tests
+            if row["name"] == "mixed_statuses"
+        )
+        selected_after_comment = {
+            row["test_case_identity"]: row
+            for row in comment_selection.get("cases", [])
+        }
+        if (comment_response.get("status") != "verified"
+                or comment_selection.get("status") != "verified"
+                or set(after_by_id) != set(before_by_id)
+                or after_by_id[shifted_id]["source_span"]["start"]
+                <= before_by_id[shifted_id]["source_span"]["start"]
+                or selected_after_comment[shifted_id]["source_span"]["start"]
+                != after_by_id[shifted_id]["source_span"]["start"]):
+            raise AssertionError("selected Test identities did not refresh to the current source locations")
+
+        stale_request = request(build_request["test_selection"])
+        stale_request["root_source"] = SOURCE.replace(
+            "return fold_status_scenario(0);",
+            "return fold_status_scenario(1);",
+            1,
+        )
+        stale_response, stale_metrics = edge_probe.send(
+            {"compile_application": stale_request}, timeout=180.0
+        )
+        if (stale_response.get("status") != "rejected"
+                or stale_response.get("artifact") is not None
+                or stale_response.get("test_case_selection", {}).get("status") != "rejected"
+                or stale_response.get("source_test_inventory") is None
+                or stale_response.get("cache", {}).get("verification_work", {}).get(
+                    "front_end_invocations"
+                ) != 1):
+            raise AssertionError("a stale body-sensitive Test identity reused prior success")
+
+        invalid_request = request(build_request["test_selection"])
+        invalid_request["root_source"] = SOURCE.replace(
+            "return fold_status_scenario(0);",
+            "return missing_value;",
+            1,
+        )
+        invalid_response, invalid_metrics = edge_probe.send(
+            {"compile_application": invalid_request}, timeout=180.0
+        )
+        if (invalid_response.get("status") != "rejected"
+                or invalid_response.get("artifact") is not None
+                or invalid_response.get("source_test_inventory") is not None
+                or invalid_response.get("test_case_selection", {}).get("status") != "rejected"
+                or invalid_response.get("cache", {}).get("verification_work", {}).get(
+                    "front_end_invocations"
+                ) != 1):
+            raise AssertionError("invalid source reused a prior selected Test artifact")
+    finally:
+        edge_probe.close()
+
     oracle_probe = app.Probe(CACHE_DIR, executable=PROBE)
     try:
         oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
@@ -359,6 +465,12 @@ def main() -> None:
             "source_snapshot_identity": built.get("source_snapshot", {}).get("identity"),
             "contract_schema": built.get("schema_version"),
             "artifact_identity": built.get("artifact", {}).get("identity"),
+            "test_case_selection": {
+                "schema_version": selection.get("schema_version"),
+                "kind": selection.get("selection", {}).get("kind"),
+                "selected_test_case_identities": selection.get("selected_test_case_identities"),
+                "selected_test_roots": selection.get("selected_test_roots"),
+            },
             "artifact_sha256": sha(json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode()),
             "source_test_inventory": {
                 "schema_version": inventory.get("schema_version"),
@@ -390,6 +502,10 @@ def main() -> None:
             "repeated_callable_invocations": len(SCENARIOS),
             "inventory_test_invocations": len(observed_inventory_tests),
             "source_test_inventory_count": len(inventory_tests),
+            "selected_test_identity_count": len(selection.get("selected_test_case_identities", [])),
+            "comment_edit_rebound_current_span": True,
+            "stale_body_sensitive_identity_rejected": stale_response.get("status") == "rejected",
+            "invalid_source_rejected_without_artifact": invalid_response.get("artifact") is None,
             "typed_input_kind": "byte scenario selector",
             "typed_results_match": True,
             "fresh_process_cache_hit": warm.get("cache", {}).get("status"),
@@ -407,7 +523,11 @@ def main() -> None:
         },
         "measurements": {
             "cold_application_build": build_metrics,
+            "inventory_selection_build": inventory_build_metrics,
             "fresh_process_exact_hit": warm_metrics,
+            "comment_edit_selection_rebind": comment_metrics,
+            "stale_case_rejection": stale_metrics,
+            "invalid_source_rejection": invalid_metrics,
             "stage0_oracle": oracle_metrics,
             "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
             "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
@@ -415,8 +535,10 @@ def main() -> None:
             "canonical_vm_session_model": "one artifact admission and one retained VM Session for all calls",
         },
         "scope": (
-            "One application-build/6 result supplied a Compiler-issued source Test inventory and one "
-            "artifact exporting the repeated provider callable plus all four Test declarations. One "
+            "One application-build/7 all-source selection returned the current Language-issued root-module "
+            "Test inventory. A second application-build/7 request selected all four tests by exact "
+            "test_case_identity and emitted one artifact exporting the repeated provider callable plus the "
+            "selected Test declarations. One "
             "canonical VM batch invoked fold_status_scenario four times with distinct typed byte inputs "
             "and invoked each inventory-selected Test once. The calls reached production "
             "mncs.test.provider::fold_selected policy and all eight results matched Stage-0; each Test "
