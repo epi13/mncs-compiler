@@ -43,6 +43,12 @@ and current native syntax results are in
 | [CP-0023 backend value-arena ceiling](0023-backend-value-arena-ceiling.md) | Open; full project boundary unresolved | Current `decl.mncs` whole-source parse/signature ingestion passes at the 1513bdf pin, while the earlier `source.mncs` + `lexer.mncs` project request exhausted the 128 MiB arena at the recorded 3e874f pin. The current real `flow.mncs` project target ended before a compiler result, so it neither confirms nor clears the arena pressure; owner remains `mncs-language`. |
 | [CP-0026 real-flow HIR prelude reconstruction](0026-real-flow-hir-prelude-reconstruction.md) | Open; measured boundary narrowed | Matched research-bytecode backend-preparation runs reach `Program::lower_to_ir` after validation, then stop at a 1,600 MiB sampled RSS threshold before its `ir-prelude` completion event. Reducing requested artifact emissions did not materially change cost. This is a compiler/model pipeline optimization in `mncs-language`, not a language-syntax request or semantic rejection. |
 
+## Current Compiler campaign pressure (2026-10-17)
+
+| Finding | Current status | Current result and owner |
+| --- | --- | --- |
+| [CP-0027 Language verified-fact reuse](0027-language-verified-fact-reuse.md) | Open | Real `mncs-test` and Automation builds still recheck the full Language frontend for in-closure edits; `reused_semantic_facts` remains empty. Owner: `mncs-language`; implement in a separately authorized Language run. |
+
 ## Operating sequence
 
 ```text
