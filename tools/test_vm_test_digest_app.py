@@ -58,7 +58,10 @@ ARTIFACT_PATH = ROOT / '.build/native-app-readiness/test-digest-app.vm.json'
 RUNNER_SOURCE = ROOT / 'tools/native_app_vm_runner.rs'
 RUNNER_MANIFEST = ROOT / '.build/native-app-readiness/vm-capability-runner-batch/Cargo.toml'
 RUNNER_TARGET = ROOT / '.build/native-app-readiness/vm-capability-target-batch'
-EVIDENCE_PATH = ROOT / 'evidence/native-app-readiness-test-digest-app.json'
+EVIDENCE_PATH = ROOT / os.environ.get(
+    'MNCS_TEST_DIGEST_APP_EVIDENCE_PATH',
+    f"evidence/native-app-readiness-test-digest-app-{datetime.now(timezone.utc).strftime('%Y%m%d')}.json",
+)
 ENTRY_MODULE = 'mncs.test.digest'
 APP_FUNCTION = 'digest_app'
 PURE_FUNCTION = 'build_digest'
@@ -412,6 +415,8 @@ def reject_artifact_identity(binary: Path, capability: str,
 
 def main() -> None:
     global current_interface
+    if EVIDENCE_PATH.exists():
+        raise SystemExit(f'refusing to overwrite existing evidence: {EVIDENCE_PATH}')
     if not support.PROBE.is_file() or not RUNNER_SOURCE.is_file():
         raise SystemExit('pinned Stage-0 probe or VM runner source is missing')
     if not FIXTURE_PATH.is_file():
