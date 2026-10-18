@@ -25,7 +25,10 @@ frontend = prior.frontend
 test_vm_emit = prior.test_vm_emit
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.parser.v1"
-FUNCTIONS = ("header", "finish", "step", "header_global", "finish_global", "step_global")
+FUNCTIONS = (
+    "header", "finish", "step", "header_global", "finish_global",
+    "step_global", "header_with_locations_global",
+)
 HEADER_FIELDS = (
     "code", "start", "end", "version_start", "version_end",
     "module_start", "module_end", "next_offset", "state",
@@ -40,8 +43,17 @@ BASE_GLOBAL_SEEDS = prior.global_seeds
 
 def module_seeds() -> list[dict]:
     bounded = ("header", "finish", "step")
-    global_functions = ("header_global", "finish_global", "step_global")
-    return BASE_GLOBAL_SEEDS() + [
+    global_functions = (
+        "header_global", "finish_global", "step_global",
+        "header_with_locations_global",
+    )
+    source_span = [{
+        "module": "mncs.compiler.source.v1",
+        "function": "line_col_span_global",
+        "type_arguments": [frontend.nat_arg(PAGE_BOUND),
+                           frontend.nat_arg(BOUND)],
+    }]
+    return BASE_GLOBAL_SEEDS() + source_span + [
         {
             "module": MODULE,
             "function": function,
@@ -83,6 +95,41 @@ def request_global(raw: bytes, stride: int, *, module: str = MODULE) -> dict:
                                  frontend.nat_arg(BOUND)]
     request["step_budget"] = STEP_BUDGET
     return request
+
+
+def request_header_locations_global(raw: bytes, stride: int,
+                                    pages: list[bytes] | None = None) -> dict:
+    if pages is None:
+        pages = prior.pages_for(raw, stride)
+    return {
+        "schema_version": "0.1",
+        "target": {"module": MODULE, "function": "header_with_locations_global"},
+        "arguments": [prior.pages_wire(pages), frontend.integer(stride),
+                      frontend.integer(len(raw))],
+        "type_arguments": [frontend.nat_arg(PAGE_BOUND),
+                           frontend.nat_arg(BOUND)],
+        "step_budget": STEP_BUDGET,
+    }
+
+
+def ref_line_col(raw: bytes, offset: int) -> dict[str, int]:
+    line, col = 1, 1
+    for value in raw[:min(offset, len(raw))]:
+        if value == 10:
+            line, col = line + 1, 1
+        else:
+            col += 1
+    return {"line": line, "col": col}
+
+
+def expected_header_location(case: dict) -> dict:
+    parsed = case["parsed"]
+    return {
+        "header": parsed,
+        "mapped": True,
+        "start": ref_line_col(case["raw"], parsed["start"]),
+        "end": ref_line_col(case["raw"], parsed["end"]),
+    }
 
 
 def header_value(identity: str, **changes: int) -> dict:
@@ -196,6 +243,14 @@ def main() -> None:
         raise SystemExit(f"canonical VM binary is missing: {test_vm_emit.VM_BIN}")
 
     inputs = prior.source_cases()
+    inputs.append({
+        "id": "multiline-bad-module-identifier",
+        "raw": b"mncs 0.18;\nmodule;\n",
+        "expected_code": 6,
+        "version_span": None,
+        "module_span": None,
+        "stage0_check": True,
+    })
     short_header = b"mncs 0.18; module x;"
     inputs.append({
         "id": "short-header-long-ascii-source",
@@ -222,6 +277,9 @@ def main() -> None:
     bounded_reference: dict[str, dict] = {}
     global_reference: list[tuple[str, dict]] = []
     global_steps: list[int] = []
+    location_cases: list[dict] = []
+    location_reference: dict[str, dict] = {}
+    location_reference_steps: dict[str, int] = {}
     oracle_checks = []
     helper_source = b"mncs 0.18; module alpha;"
     helpers: list[dict] = []
@@ -300,6 +358,52 @@ def main() -> None:
             global_reference.append((case["id"], value))
             global_steps.append(steps)
 
+        for case, (_, parsed) in zip(global_cases, global_reference):
+            if parsed["code"] not in (0, 9):
+                location_cases.append({
+                    "id": case["id"],
+                    "raw": case["raw"],
+                    "stride": case["stride"],
+                    "pages": prior.pages_for(case["raw"], case["stride"]),
+                    "parsed": parsed,
+                })
+        zero_stride_raw = next(
+            item["raw"] for item in inputs
+            if item["id"] == "multiline-bad-module-identifier"
+        )
+        zero_stride_parse_request = {
+            "schema_version": "0.1",
+            "target": {"module": MODULE, "function": "header_global"},
+            "arguments": [prior.pages_wire([zero_stride_raw]), frontend.integer(0),
+                          frontend.integer(len(zero_stride_raw))],
+            "type_arguments": [frontend.nat_arg(PAGE_BOUND),
+                               frontend.nat_arg(BOUND)],
+            "step_budget": STEP_BUDGET,
+        }
+        zero_stride_parsed, _ = prior.decode_result(
+            reference.send(zero_stride_parse_request), "zero-stride-multiline-parse"
+        )
+        location_cases.append({
+            "id": "zero-stride-multiline-error",
+            "raw": zero_stride_raw,
+            "stride": 0,
+            "pages": [zero_stride_raw],
+            "parsed": zero_stride_parsed,
+        })
+        for case in location_cases:
+            value, steps = prior.decode_result(
+                reference.send(request_header_locations_global(
+                    case["raw"], case["stride"], case["pages"]
+                )), case["id"]
+            )
+            expected = expected_header_location(case)
+            if value != expected:
+                raise AssertionError(
+                    f"{case['id']}: header location mapping differed: {value} != {expected}"
+                )
+            location_reference[case["id"]] = value
+            location_reference_steps[case["id"]] = steps
+
         for case in helpers:
             value, steps = prior.decode_result(
                 reference.send(request_helper(case)), case["id"]
@@ -322,6 +426,7 @@ def main() -> None:
             "header_global": ("1024", "1024"),
             "finish_global": ("1024", "1024"),
             "step_global": ("1024", "1024"),
+            "header_with_locations_global": ("1024", "1024"),
         }
         for function, spellings in specialization_spellings.items():
             rows = [row for row in artifact.get("generic_entrypoints", [])
@@ -336,6 +441,8 @@ def main() -> None:
     bounded_cranelift: dict[str, dict] = {}
     global_cranelift: list[tuple[str, dict]] = []
     global_cranelift_steps: list[int] = []
+    location_cranelift: dict[str, dict] = {}
+    location_cranelift_steps: dict[str, int] = {}
     helper_cranelift: dict[str, dict] = {}
     helper_cranelift_steps: dict[str, int] = {}
     try:
@@ -359,6 +466,19 @@ def main() -> None:
                 raise AssertionError(f"{case['id']}: Cranelift parser.header_global differs")
             global_cranelift.append((case["id"], value))
             global_cranelift_steps.append(steps)
+        for case in location_cases:
+            value, steps = prior.decode_result(
+                cranelift.send(request_header_locations_global(
+                    case["raw"], case["stride"], case["pages"]
+                )), case["id"]
+            )
+            if value != location_reference[case["id"]]:
+                raise AssertionError(
+                    f"{case['id']}: Cranelift header location mapping differs: "
+                    f"{value!r} != {location_reference[case['id']]!r}"
+                )
+            location_cranelift[case["id"]] = value
+            location_cranelift_steps[case["id"]] = steps
         for case in helpers:
             value, steps = prior.decode_result(
                 cranelift.send(request_helper(case)), case["id"]
@@ -394,6 +514,20 @@ def main() -> None:
             "type_args": [frontend.nat_arg(PAGE_BOUND), frontend.nat_arg(BOUND)],
             "step_budget": STEP_BUDGET,
         })
+    for case in location_cases:
+        vm_cases.append({
+            "id": f"location/{case['id']}",
+            "kind": "location",
+            "function": "header_with_locations_global",
+            "args": [
+                prior.pages_wire(case["pages"]),
+                frontend.integer(case["stride"]),
+                frontend.integer(len(case["raw"])),
+            ],
+            "type_args": [frontend.nat_arg(PAGE_BOUND),
+                          frontend.nat_arg(BOUND)],
+            "step_budget": STEP_BUDGET,
+        })
     for case in helpers:
         vm_cases.append({
             "id": case["id"],
@@ -406,6 +540,8 @@ def main() -> None:
     vm_bounded: dict[str, dict] = {}
     vm_global: list[tuple[str, dict]] = []
     vm_steps: list[int] = []
+    vm_locations: dict[str, dict] = {}
+    vm_location_steps: dict[str, int] = {}
     vm_helpers: dict[str, dict] = {}
     vm_helper_steps: dict[str, int] = {}
     with tempfile.TemporaryDirectory(prefix="mncs-vm-parser-module-frontier-") as directory:
@@ -430,6 +566,11 @@ def main() -> None:
                 expected = helper_reference[call["id"]]
                 vm_helpers[call["id"]] = value
                 vm_helper_steps[call["id"]] = result["record"]["usage"]["steps"]
+            elif call["kind"] == "location":
+                identity = call["id"].removeprefix("location/")
+                expected = location_reference[identity]
+                vm_locations[identity] = value
+                vm_location_steps[identity] = result["record"]["usage"]["steps"]
             elif call["kind"] == "bounded":
                 identity = call["id"].removeprefix("bounded/")
                 expected = bounded_reference[identity]
@@ -469,12 +610,25 @@ def main() -> None:
             [(case["id"], vm_helpers[case["id"]]) for case in helpers]
         ),
     }
+    location_digests = {
+        "reference_interpreter": semantic_digest(
+            [(case["id"], location_reference[case["id"]]) for case in location_cases]
+        ),
+        "cranelift": semantic_digest(
+            [(case["id"], location_cranelift[case["id"]]) for case in location_cases]
+        ),
+        "canonical_vm": semantic_digest(
+            [(case["id"], vm_locations[case["id"]]) for case in location_cases]
+        ),
+    }
     if (len(set(bounded_digests.values())) != 1
             or len(set(global_digests.values())) != 1
-            or len(set(helper_digests.values())) != 1):
+            or len(set(helper_digests.values())) != 1
+            or len(set(location_digests.values())) != 1):
         raise AssertionError(
             "direct parser executor digests differ: "
-            f"bounded={bounded_digests}, global={global_digests}, helpers={helper_digests}"
+            f"bounded={bounded_digests}, global={global_digests}, helpers={helper_digests}, "
+            f"locations={location_digests}"
         )
 
     compiler_revision = subprocess.check_output(
@@ -519,10 +673,25 @@ def main() -> None:
             "header_global": ["1024", "1024"],
             "finish_global": ["1024", "1024"],
             "step_global": ["1024", "1024"],
+            "header_with_locations_global": ["1024", "1024"],
         },
         "bounded_cases": oracle_checks,
         "bounded_case_count": len(inputs),
         "global_case_count": len(global_cases),
+        "header_location_case_count": len(location_cases),
+        "header_location_cases": [
+            {
+                "id": case["id"],
+                "header_code": case["parsed"]["code"],
+                "start": case["parsed"]["start"],
+                "end": case["parsed"]["end"],
+                "reference_result": location_reference[case["id"]],
+                "reference_steps": location_reference_steps[case["id"]],
+                "cranelift_steps": location_cranelift_steps[case["id"]],
+                "canonical_vm_steps": vm_location_steps[case["id"]],
+            }
+            for case in location_cases
+        ],
         "helper_cases": [
             {
                 "id": case["id"],
@@ -535,12 +704,15 @@ def main() -> None:
             }
             for case in helpers
         ],
-        "canonical_vm_case_count": len(vm_bounded) + len(vm_global) + len(vm_helpers),
+        "canonical_vm_case_count": (
+            len(vm_bounded) + len(vm_global) + len(vm_locations) + len(vm_helpers)
+        ),
         "strides": list(STRIDES),
         "semantic_digests": {
             "bounded": bounded_digests,
             "global": global_digests,
             "helpers": helper_digests,
+            "header_locations": location_digests,
         },
         "step_observations": {
             "reference_global": global_steps,
@@ -549,6 +721,9 @@ def main() -> None:
             "reference_helpers": helper_reference_steps,
             "cranelift_helpers": helper_cranelift_steps,
             "canonical_vm_helpers": vm_helper_steps,
+            "reference_header_locations": location_reference_steps,
+            "cranelift_header_locations": location_cranelift_steps,
+            "canonical_vm_header_locations": vm_location_steps,
         },
         "timing_seconds": {**phases, "whole_frontier": round(time.monotonic() - whole_started, 6)},
         "resource_measurements": {
@@ -562,12 +737,15 @@ def main() -> None:
             "cgroup_measurements_are_ambient": True,
         },
         "scope": (
-            "All six current parser functions have executable selected specializations and are "
+            "All seven current parser functions have executable selected specializations and are "
             "called directly in a fresh canonical VM batch. header and header_global agree with "
             "Stage-0 project checks where the bounded global fuel policy permits completion, "
             "Cranelift, and canonical VM across frontend header fixtures, long dotted module "
             "names, all tested page strides, non-ASCII input, and the fuel boundary. Direct "
-            "finish/step helper calls use typed Header states and agree across the reference "
+            "header_with_locations_global maps the two byte offsets of each parser diagnostic "
+            "through Source.line_col_span_global and agrees with a byte-based location oracle across "
+            "reference interpreter, Cranelift, and canonical VM, including a zero-stride page. "
+            "Direct finish/step helper calls use typed Header states and agree across the reference "
             "interpreter, Cranelift, and canonical VM. This covers every parser function at the "
             "listed specializations and selected states; it does not prove all type arguments, "
             "full compiler succession, Stage-1, or Stage-2."
@@ -589,6 +767,8 @@ def main() -> None:
         "bounded_semantic_digest": bounded_digests["canonical_vm"],
         "global_semantic_digest": global_digests["canonical_vm"],
         "helper_semantic_digest": helper_digests["canonical_vm"],
+        "header_location_semantic_digest": location_digests["canonical_vm"],
+        "header_location_case_count": len(location_cases),
         "timing_seconds": report["timing_seconds"],
         "resource_measurements": report["resource_measurements"],
     }, indent=2))

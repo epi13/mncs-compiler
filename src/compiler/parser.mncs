@@ -9,6 +9,7 @@ use mncs.compiler.source.v1 as source;
 // 7 expected dot or semicolon; 8 unsupported non-ASCII source;
 // 9 header exceeds the 64-step bounded fuel (global form only).
 record Header { code: u64, start: u64, end: u64, version_start: u64, version_end: u64, module_start: u64, module_end: u64, next_offset: u64, state: u64 }
+record HeaderLocation { header: Header, mapped: bool, start: source.LineCol, end: source.LineCol }
 
 fn header<N: Nat>(text: [byte; up_to N]) -> (result: Header) {
     let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
@@ -104,4 +105,24 @@ fn step_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     if token.kind == 61 { return Header { ..st, state: 6, next_offset: token.end }; }
     if token.kind == 63 { return Header { ..st, state: 8, next_offset: token.end }; }
     return Header { ..st, code: 7, start: token.start, end: token.end };
+}
+
+// Attach byte-based source locations to a completed header diagnostic. The
+// parser keeps its established Header result unchanged; Source renders both
+// ends of the diagnostic span in one monotone scan.
+fn header_with_locations_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: HeaderLocation) {
+    let parsed: Header = header_global<P, N>(pages, stride, total);
+    let empty: source.LineCol = source.LineCol { line: 1, col: 1 };
+    if parsed.code == 0 || parsed.code == 9 {
+        return HeaderLocation { header: parsed, mapped: false, start: empty, end: empty };
+    }
+    let locations: source.LineColSpan = source.line_col_span_global<P, N>(
+        pages, stride, total, parsed.start, parsed.end
+    );
+    return HeaderLocation {
+        header: parsed,
+        mapped: true,
+        start: locations.start,
+        end: locations.end
+    };
 }
