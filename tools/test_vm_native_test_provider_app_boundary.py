@@ -76,6 +76,13 @@ def wire_record(name: str, fields: dict, identity: str) -> dict:
     }
 
 
+def record_fields(value: dict) -> dict:
+    record = value.get("record")
+    if not isinstance(record, dict) or not isinstance(record.get("fields"), list):
+        raise AssertionError(f"expected a typed record wire value, got {value}")
+    return {key: item for key, item in record["fields"]}
+
+
 def wire_finite(interface: dict, type_name: str, variant_name: str) -> dict:
     finite = next(row for row in interface["types"]["finite"] if row.get("name") == type_name)
     variant = next(row for row in finite["variants"] if row.get("name") == variant_name)
@@ -1113,6 +1120,137 @@ def main() -> None:
                     "stage0_provider_run": stage0_provider_run,
                 }, indent=2)[:18000])
 
+            invalid_request_fields = record_fields(
+                json.loads(json.dumps(real_request_value))
+            )
+            invalid_execution_values = invalid_request_fields[
+                "selected_test_executions"
+            ]["sequence"]["values"]
+            invalid_execution_fields = record_fields(invalid_execution_values[0])
+            invalid_execution_fields["artifact_identity"] = byte_sequence(
+                real_cases[0]["artifact_identity"] + ":mismatch"
+            )
+            invalid_execution_values[0] = wire_record(
+                "ProviderTestExecution", invalid_execution_fields,
+                record_identity(protocol_interface, "ProviderTestExecution"),
+            )
+            invalid_request_value = wire_record(
+                "ProviderRequest", invalid_request_fields, provider_request_identity,
+            )
+            invalid_oracle_probe = support.Probe(
+                ROOT / ".build/native-app-readiness/provider-invalid-binding-oracle-cache",
+                executable=support.PROBE,
+            )
+            try:
+                invalid_oracle, invalid_oracle_metrics = invalid_oracle_probe.send(
+                    {"project_oracle": {
+                        "root": root,
+                        "modules": modules,
+                        "calls": [{
+                            **stage0_oracle_call,
+                            "arguments": [invalid_request_value],
+                        }],
+                    }}, timeout=180,
+                )
+            finally:
+                invalid_oracle_probe.close()
+            invalid_oracle_rows = invalid_oracle.get("executions", [])
+            if (not invalid_oracle.get("valid") or len(invalid_oracle_rows) != 1
+                    or invalid_oracle_rows[0].get("status") != "returned"
+                    or len(invalid_oracle_rows[0].get("returned", [])) != 1):
+                raise AssertionError(
+                    "Stage-0 did not return the provider's typed invalid-binding result: "
+                    + json.dumps(invalid_oracle, indent=2)[:10000]
+                )
+            invalid_stage0_run = digest_app.support.decode_wire(
+                invalid_oracle_rows[0]["returned"][0]
+            )
+            invalid_dir = real_dir / "artifact-identity-mismatch"
+            invalid_dir.mkdir()
+            invalid_input = invalid_dir / "request.json"
+            invalid_output = invalid_dir / "result.json"
+            invalid_check = invalid_dir / "check.json"
+            invalid_input.write_text(
+                json.dumps(invalid_request_value, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            invalid_context = application_context(
+                interface, invalid_dir,
+                artifact_paths=[invalid_input, invalid_output, invalid_check],
+            )
+            invalid_call_path = invalid_dir / "execution.json"
+            invalid_call_path.write_text(
+                json.dumps(call_request(invalid_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            invalid_started = time.monotonic()
+            invalid_process = subprocess.run([
+                "/usr/bin/time", "-v", str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "single", str(invalid_call_path),
+                str(invalid_input), str(invalid_output), "success", str(invalid_check),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            invalid_wall_seconds = time.monotonic() - invalid_started
+            if invalid_process.returncode != 0 or not invalid_output.is_file() or not invalid_check.is_file():
+                raise AssertionError(
+                    "canonical VM failed to publish the provider's typed invalid-binding result: "
+                    f"rc={invalid_process.returncode}, stderr={invalid_process.stderr[-5000:]}"
+                )
+            invalid_document = json.loads(invalid_process.stdout)
+            invalid_record = invalid_document.get("record", {})
+            invalid_effects = invalid_record.get("effects", [])
+            invalid_returned = [digest_app.support.decode_wire(value)
+                                for value in invalid_document.get("returned_wire", [])]
+            invalid_published_result = digest_app.support.decode_wire(json.loads(
+                invalid_output.read_text(encoding="utf-8")
+            ))
+            invalid_published_check = digest_app.support.decode_wire(json.loads(
+                invalid_check.read_text(encoding="utf-8")
+            ))
+            unsupported_discriminant = next(
+                row["discriminant"] for row in verdict_row["variants"]
+                if row.get("name") == "UNSUPPORTED"
+            )
+            invalid_operations = [row.get("request", {}).get("operation")
+                                  for row in invalid_effects]
+            invalid_rss_match = re.search(
+                r"Maximum resident set size \(kbytes\): (\d+)", invalid_process.stderr
+            )
+            if (
+                invalid_document.get("outcome", {}).get("kind") != "completed"
+                or len(invalid_returned) != 1 or invalid_returned[0].get("exit_code") != 0
+                or invalid_operations != [
+                    "structured_read", *( ["structured_digest"] * 5 ),
+                    "structured_write", "structured_write",
+                ]
+                or len(invalid_effects) != 8
+                or any(row.get("outcome_tag") != "completed" for row in invalid_effects)
+                or invalid_published_result != invalid_stage0_run.get("test_result")
+                or invalid_published_check != invalid_stage0_run.get("check_result")
+                or invalid_published_result.get("native_result", {}).get(
+                    "verdict", {}
+                ).get("$v") != unsupported_discriminant
+                or invalid_published_result.get("native_result", {}).get(
+                    "verdict_code"
+                ) != 3
+                or invalid_published_result.get("native_result", {}).get(
+                    "failure_code"
+                ) != 9001
+                or invalid_published_result.get("selection_count") != 7
+                or invalid_published_result.get("result_identity")
+                == real_published_result.get("result_identity")
+                or invalid_published_check.get("test_result_identity")
+                != invalid_published_result.get("result_identity")
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": invalid_document.get("outcome"),
+                    "returned": invalid_returned,
+                    "operations": invalid_operations,
+                    "published_result": invalid_published_result,
+                    "published_check": invalid_published_check,
+                    "stage0_provider_run": invalid_stage0_run,
+                }, indent=2)[:18000])
+
             rss_match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", process.stderr)
             user_match = re.search(r"User time \(seconds\): ([0-9.]+)", process.stderr)
             sys_match = re.search(r"System time \(seconds\): ([0-9.]+)", process.stderr)
@@ -1285,6 +1423,28 @@ def main() -> None:
                     "vm_peak_rss_bytes": (
                         int(real_rss_match.group(1)) * 1024 if real_rss_match else None
                     ),
+                    "artifact_identity_mismatch": {
+                        "selected_count": 7,
+                        "bound_artifact_identity": real_cases[0]["artifact_identity"],
+                        "execution_artifact_identity": (
+                            real_cases[0]["artifact_identity"] + ":mismatch"
+                        ),
+                        "application_outcome": invalid_document.get("outcome"),
+                        "application_exit": invalid_returned[0],
+                        "published_result": invalid_published_result,
+                        "published_check": invalid_published_check,
+                        "stage0_provider_run_exact_match": True,
+                        "provider_did_not_report_pass": (
+                            invalid_published_result.get("native_result", {})
+                            .get("verdict_code") != 0
+                        ),
+                        "stage0_oracle_metrics": invalid_oracle_metrics,
+                        "vm_wall_seconds": round(invalid_wall_seconds, 6),
+                        "vm_peak_rss_bytes": (
+                            int(invalid_rss_match.group(1)) * 1024
+                            if invalid_rss_match else None
+                        ),
+                    },
                 },
                 "rejected_publication": {
                     "application_exit": failed_write_returned[0],
