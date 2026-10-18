@@ -102,28 +102,34 @@ def frontend_invocations(response: dict) -> int | None:
 
 
 def execute_inventory_batch(
-    artifact: dict, inventory: dict, step_budget: int = 100_000
+    artifact: dict, inventory: dict, step_budget: int = 100_000, repeat_count: int = 1
 ) -> tuple[dict, float, int | None]:
     tests = inventory.get("tests", [])
     inventory_module = inventory.get("module")
     if not isinstance(inventory_module, str) or not inventory_module:
         raise AssertionError("source Test inventory omitted its module identity")
+    if type(repeat_count) is not int or not 1 <= repeat_count <= 8:
+        raise ValueError("inventory batch repeat count must be between 1 and 8")
     calls = []
-    for row in tests:
-        if (row.get("module") != inventory_module
-                or row.get("generic_params")
-                or row.get("inputs")):
-            raise AssertionError(f"inventory test is outside the supported zero-argument slice: {row}")
-        calls.append({
-            "id": row["test_case_identity"],
-            "request": {
-                "schema_version": "0.1",
-                "target": {"module": row["module"], "function": row["name"]},
-                "arguments": [],
-                "type_arguments": [],
-                "step_budget": step_budget,
-            },
-        })
+    for repeat_index in range(repeat_count):
+        for row in tests:
+            if (row.get("module") != inventory_module
+                    or row.get("generic_params")
+                    or row.get("inputs")):
+                raise AssertionError(f"inventory test is outside the supported zero-argument slice: {row}")
+            call_id = row["test_case_identity"]
+            if repeat_count > 1:
+                call_id = f"{call_id}:round:{repeat_index + 1}"
+            calls.append({
+                "id": call_id,
+                "request": {
+                    "schema_version": "0.1",
+                    "target": {"module": row["module"], "function": row["name"]},
+                    "arguments": [],
+                    "type_arguments": [],
+                    "step_budget": step_budget,
+                },
+            })
     with tempfile.TemporaryDirectory(prefix="mncs-test-inventory-batch-") as raw:
         directory = Path(raw)
         artifact_path = directory / "application.vm.json"
@@ -241,13 +247,14 @@ def run_real_mncs_test_suite() -> dict:
         if not selected <= artifact_callables:
             raise AssertionError("real Test inventory roots are absent from the verified artifact")
 
+        repeat_count = 2
         oracle_calls = [{
             "schema_version": "0.1",
             "target": {"module": row["module"], "function": row["name"]},
             "arguments": [],
             "type_arguments": [],
             "step_budget": 200_000,
-        } for row in inventory["tests"]]
+        } for _ in range(repeat_count) for row in inventory["tests"]]
         oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
         try:
             oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
@@ -257,23 +264,29 @@ def run_real_mncs_test_suite() -> dict:
             }}, timeout=180.0)
         finally:
             oracle_probe.close()
+        expected_batch_count = len(inventory["tests"]) * repeat_count
         if (not oracle.get("valid")
-                or len(oracle.get("executions", [])) != len(inventory["tests"])):
-            raise AssertionError("Stage-0 did not execute every real mncs-test self-suite entry")
+                or len(oracle.get("executions", [])) != expected_batch_count):
+            raise AssertionError("Stage-0 did not execute both rounds of the real mncs-test self-suite")
 
         vm, vm_wall, vm_peak_rss = execute_inventory_batch(
-            artifact, inventory, step_budget=200_000
+            artifact, inventory, step_budget=200_000, repeat_count=repeat_count
         )
         rows = vm.get("results", [])
         if (vm.get("artifact_id") != artifact.get("artifact_id")
-                or len(rows) != len(inventory["tests"])):
-            raise AssertionError("real Test inventory batch changed artifact identity or selection count")
+                or len(rows) != expected_batch_count):
+            raise AssertionError("real Test inventory batch changed artifact identity or repeated call count")
 
         results: dict[str, dict] = {}
-        for test, actual_row, expected_row in zip(
-            inventory["tests"], rows, oracle["executions"]
-        ):
-            if (actual_row.get("id") != test["test_case_identity"]
+        test_rows = [row for _ in range(repeat_count) for row in inventory["tests"]]
+        for index, (test, actual_row, expected_row) in enumerate(zip(
+            test_rows, rows, oracle["executions"]
+        )):
+            repeat_index = index // len(inventory["tests"])
+            expected_call_id = test["test_case_identity"]
+            if repeat_count > 1:
+                expected_call_id = f"{expected_call_id}:round:{repeat_index + 1}"
+            if (actual_row.get("id") != expected_call_id
                     or actual_row.get("outcome") != {"kind": "completed"}
                     or actual_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
                 raise AssertionError(f"real mncs-test case did not complete under its inventory identity: {actual_row}")
@@ -284,20 +297,25 @@ def run_real_mncs_test_suite() -> dict:
             actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
             expected = app.decode_wire(expected_values[0])
             if actual != expected:
-                raise AssertionError(f"canonical VM TestResult differs from Stage-0 for {test['name']}")
+                raise AssertionError(
+                    f"canonical VM TestResult differs from Stage-0 for {test['name']} round {repeat_index + 1}"
+                )
             if (not isinstance(actual, dict)
                     or not {"verdict", "verdict_code", "failure_kind", "failure_code",
                             "assertions", "failures"} <= set(actual)):
                 raise AssertionError(f"real Test case did not return a typed TestResult: {actual}")
-            if test["name"] == "skipped":
+            if repeat_index == 0 and test["name"] == "skipped":
                 if (actual["verdict_code"] != 2 or actual["failure_code"] != 1006
                         or actual["assertions"] != 0 or actual["failures"] != 0):
                     raise AssertionError(f"native skip result changed its typed meaning: {actual}")
-            elif (actual["verdict_code"] != 0
+            elif repeat_index == 0 and (actual["verdict_code"] != 0
                     or actual["assertions"] != 1
                     or actual["failures"] != 0):
                 raise AssertionError(f"real Test case did not return one passing TestResult: {actual}")
-            results[test["name"]] = actual
+            if repeat_index == 0:
+                results[test["name"]] = actual
+            elif results.get(test["name"]) != actual:
+                raise AssertionError(f"repeated native TestResult changed for {test['name']}: {actual}")
 
         test_revision = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
@@ -323,6 +341,9 @@ def run_real_mncs_test_suite() -> dict:
             "selected_artifact_identity": built["artifact"]["identity"],
             "canonical_vm_artifact_identity": vm["artifact_id"],
             "canonical_vm_batch_count": len(rows),
+            "distinct_test_count": len(inventory["tests"]),
+            "repeat_round_count": repeat_count,
+            "repeat_results_match": True,
             "canonical_vm_results": results,
             "passing_test_count": sum(
                 result["verdict_code"] == 0 for result in results.values()
@@ -709,7 +730,10 @@ def main() -> None:
                 "selected_test_batch_matches_stage0": True,
                 "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
-                    and real_mncs_test_suite["canonical_vm_batch_count"] == 7
+                    and real_mncs_test_suite["canonical_vm_batch_count"] == 14
+                    and real_mncs_test_suite["distinct_test_count"] == 7
+                    and real_mncs_test_suite["repeat_round_count"] == 2
+                    and real_mncs_test_suite["repeat_results_match"]
                     and real_mncs_test_suite["passing_test_count"] == 6
                     and real_mncs_test_suite["skipped_test_count"] == 1
                     and real_mncs_test_suite["stage0_equivalent"]
@@ -750,12 +774,18 @@ def main() -> None:
                 "or change the production mncs-test consumer. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
                 "revision. One frontend emits all seven compiler-inventoried TestResult callables "
-                "into a verified artifact; one canonical VM batch matches Stage-0 for six passes "
-                "and the typed skip result. This does not migrate the production runner or add "
-                "Forge integration."
+                "into a verified artifact; one canonical VM batch runs two rounds of all seven tests "
+                "in the same admitted artifact/session. All 14 results match Stage-0 and the second "
+                "round matches the first, including six passes and the typed skip result. This does "
+                "not migrate the production runner or add Forge integration."
             ),
         }
-        evidence = ROOT / "evidence/application-build-test-inventory-20261017.json"
+        evidence = ROOT / os.environ.get(
+            "MNCS_TEST_INVENTORY_EVIDENCE_PATH",
+            "evidence/application-build-test-inventory-20261017.json",
+        )
+        if evidence.exists():
+            raise SystemExit(f"refusing to overwrite immutable evidence: {evidence}")
         evidence.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(report, indent=2))
 
