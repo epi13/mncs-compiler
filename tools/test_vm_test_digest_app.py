@@ -60,7 +60,8 @@ RUNNER_MANIFEST = ROOT / '.build/native-app-readiness/vm-capability-runner-batch
 RUNNER_TARGET = ROOT / '.build/native-app-readiness/vm-capability-target-batch'
 EVIDENCE_PATH = ROOT / os.environ.get(
     'MNCS_TEST_DIGEST_APP_EVIDENCE_PATH',
-    f"evidence/native-app-readiness-test-digest-app-{datetime.now(timezone.utc).strftime('%Y%m%d')}.json",
+    "evidence/native-app-readiness-test-digest-app-"
+    f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')}-{os.getpid()}.json",
 )
 ENTRY_MODULE = 'mncs.test.digest'
 APP_FUNCTION = 'digest_app'

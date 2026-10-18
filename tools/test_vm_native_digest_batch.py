@@ -37,7 +37,8 @@ CACHE_DIR = ROOT / ".build/native-app-readiness/digest-batch-cache" / (
 )
 EVIDENCE_PATH = ROOT / os.environ.get(
     "MNCS_NATIVE_TEST_WORKFLOW_EVIDENCE_PATH",
-    f"evidence/native-app-readiness-native-test-workflow-{time.strftime('%Y%m%d', time.gmtime())}.json",
+    "evidence/native-app-readiness-native-test-workflow-"
+    f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{os.getpid()}.json",
 )
 MODULE = "mncs.test.digest"
 SUITE_FIXTURE_FUNCTION = "native_suite_fixture"
