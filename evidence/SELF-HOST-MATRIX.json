@@ -8582,7 +8582,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-18T13:18:33.490797Z",
+  "evidence_updated_at": "2026-10-18T13:26:19.275943+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -14547,5 +14547,89 @@
       "evidence_sha256": "912967fb9a21a2684a891a6c84682feb955507fb39181592471f2215d8187a2a",
       "artifact_identity": "sha256:c5b7c445cf097b32507638c1a2412a9cfca5756892646c7bb34b1784431ca6e5"
     }
+  },
+  "current_campaign_application_build_test_inventory_current_head_20261018": {
+    "kind": "mncs.compiler.application-build-source-test-inventory-proof",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "status": "passed_current_head_real_mncs_test_inventory_repeat_batch",
+    "observed_at": "2026-10-18T13:26:19.275943+00:00",
+    "tested_compiler_head": "c6517eebf9edd2d241dc4e7d32592c82fd90ba50",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "test_harness": "tools/test_application_build_test_inventory.py",
+    "test_harness_sha256": "sha256:4925a30058bcf5bb610c533f2a4f05b3c6659d9a7a824bfc25ee19889516d7ad",
+    "probe_sha256": "sha256:9dd1ae7c68017e659d94dc1ce7bc2866d0cb64821d5676a452b9a210365d725e",
+    "test_repository_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "language_repository_head": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+    "language_locked_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "application_contract": "mncs.compiler.application-build/6",
+    "request_contract": "mncs.compiler.application-build-request/3",
+    "test_inventory_contract": "mncs.test-inventory/1",
+    "real_test_suite": {
+      "distinct_test_count": 7,
+      "canonical_vm_batch_count": 14,
+      "repeat_round_count": 2,
+      "passing_test_count": 6,
+      "skipped_test_count": 1,
+      "repeat_results_match": true,
+      "stage0_equivalent": true
+    },
+    "verification": {
+      "fresh_process_exact_hit": true,
+      "comment_edit_refreshes_locations": true,
+      "unselected_test_edit_reuses_executable_artifact": true,
+      "invalid_source_suppresses_artifact_and_inventory": true,
+      "one_frontend_supplies_inventory_and_artifact": true,
+      "language_verified_facts_reused": 0
+    },
+    "measurements": {
+      "cold_build": {
+        "wall_seconds": 0.120004,
+        "cpu_seconds": 0.08,
+        "peak_rss_bytes": 6688768,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 4,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "fresh_process_exact_hit": {
+        "wall_seconds": 0.104844,
+        "cpu_seconds": 0.08,
+        "peak_rss_bytes": 6488064,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 4,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "real_test_suite_build": {
+        "wall_seconds": 0.595034,
+        "cpu_seconds": 0.56,
+        "peak_rss_bytes": 30281728,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 5,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "stage0_oracle": {
+        "wall_seconds": 0.679214,
+        "cpu_seconds": 0.64,
+        "peak_rss_bytes": 35577856,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 4,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "canonical_vm_batch_wall_seconds": 0.072612,
+      "canonical_vm_batch_peak_rss_kib": 22820
+    },
+    "evidence_artifact": "evidence/application-build-test-inventory-current-head-20261018.json",
+    "evidence_sha256": "sha256:202a52874c4ffa013181c6adc46e6f42dfd78d7faf2e84dbb2549680013916ec",
+    "scope": "The Compiler returns the Language-owned source_module test inventory from the same frontend result used to verify callable roots and emit application-build/6. A fresh process can locate a prior artifact candidate across root snapshots; changed source still runs the full frontend before executable-closure reuse. Exact fresh-process reuse preserves the inventory; edits refresh source spans or the affected test identity, and invalid input publishes neither inventory nor artifact. A selected zero-argument source Test subset can now be emitted with the production entry, selected from the returned inventory, and executed in one canonical VM batch with Stage-0 agreement. This does not implement Language verification-fact reuse or change the production mncs-test consumer. A second workload reads the real mncs-test self-suite sources and the task module at the Compiler-pinned Language revision. One frontend emits all seven compiler-inventoried TestResult callables into a verified artifact; one canonical VM batch runs two rounds of all seven tests in the same admitted artifact/session. All 14 results match Stage-0 and the second round matches the first, including six passes and the typed skip result. This does not migrate the production runner or add Forge integration.",
+    "forge_execution_performed": false,
+    "canonical_store_publication_performed": false,
+    "production_mncs_test_consumer_migrated": false
   }
 }
