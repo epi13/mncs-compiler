@@ -71,14 +71,14 @@ pub fn serialize<T: Serialize, S: Serializer>(value: &T, s: S) -> Result<S::Ok, 
         .serialize(s)
 }
 // Canonical postorder follows sorted object keys regardless of struct field
-// emission order. The two u32 tables let us reorder the node allocation in
-// place instead of holding both a moved node vector and the output vector.
+// emission order. One u32 table holds the old-to-new permutation and doubles
+// as the cycle-visited set after references have been remapped.
 fn canonical_order(mut nodes: Vec<Node>, root: u32) -> Graph {
     const UNVISITED: u32 = u32::MAX;
     const VISITING: u32 = u32::MAX - 1;
     const PERMUTATION_CONSUMED: u32 = u32::MAX;
 
-    fn visit(id: u32, nodes: &[Node], mapped: &mut [u32], order: &mut Vec<u32>) -> u32 {
+    fn visit(id: u32, nodes: &[Node], mapped: &mut [u32], next: &mut u32) -> u32 {
         let index = id as usize;
         match mapped[index] {
             VISITING => panic!("cycle in interned artifact node graph"),
@@ -89,57 +89,35 @@ fn canonical_order(mut nodes: Vec<Node>, root: u32) -> Graph {
         match &nodes[index] {
             Node::A(a) => {
                 for &reference in a {
-                    visit(reference, nodes, mapped, order);
+                    visit(reference, nodes, mapped, next);
                 }
             }
             Node::O(o) => {
                 for &(key, value) in o {
-                    visit(key, nodes, mapped, order);
-                    visit(value, nodes, mapped, order);
+                    visit(key, nodes, mapped, next);
+                    visit(value, nodes, mapped, next);
                 }
             }
             _ => {}
         }
-        let new = u32::try_from(order.len()).expect("artifact node count fits u32");
-        order.push(id);
+        let new = *next;
+        *next += 1;
         mapped[index] = new;
         new
     }
 
     assert!(nodes.len() < (u32::MAX - 1) as usize);
     let mut mapped = vec![UNVISITED; nodes.len()];
-    let mut order = Vec::with_capacity(nodes.len());
-    let root = visit(root, &nodes, &mut mapped, &mut order);
+    let mut next = 0;
+    let root = visit(root, &nodes, &mut mapped, &mut next);
     assert_eq!(
-        order.len(),
+        next as usize,
         nodes.len(),
         "interned artifact nodes must be reachable"
     );
 
-    // `mapped` is old-index -> new-index; `order` initially is new-index ->
-    // old-index. Rotate each permutation cycle in the existing node buffer.
-    // Marking consumed destinations in `order` doubles as the cycle visited
-    // set, so no node-sized temporary vector is needed.
-    for start in 0..nodes.len() {
-        let first_destination = mapped[start] as usize;
-        if order[first_destination] == PERMUTATION_CONSUMED {
-            continue;
-        }
-        let mut current = start;
-        let mut node = std::mem::replace(&mut nodes[start], Node::N);
-        loop {
-            let destination = mapped[current] as usize;
-            order[destination] = PERMUTATION_CONSUMED;
-            std::mem::swap(&mut node, &mut nodes[destination]);
-            if destination == start {
-                break;
-            }
-            current = destination;
-        }
-    }
-
-    // References still contain old node IDs after the permutation. Translate
-    // them once the original node allocation has its canonical order.
+    // Remap references before consuming the sole old-index -> new-index
+    // table to rotate its permutation cycles in the existing node buffer.
     for node in &mut nodes {
         match node {
             Node::A(references) => {
@@ -154,6 +132,23 @@ fn canonical_order(mut nodes: Vec<Node>, root: u32) -> Graph {
                 }
             }
             _ => {}
+        }
+    }
+
+    for start in 0..nodes.len() {
+        if mapped[start] == PERMUTATION_CONSUMED {
+            continue;
+        }
+        let mut current = start;
+        let mut node = std::mem::replace(&mut nodes[start], Node::N);
+        loop {
+            let destination = mapped[current] as usize;
+            mapped[current] = PERMUTATION_CONSUMED;
+            std::mem::swap(&mut node, &mut nodes[destination]);
+            if destination == start {
+                break;
+            }
+            current = destination;
         }
     }
     Graph { nodes, root }
