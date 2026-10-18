@@ -1208,6 +1208,9 @@ fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_t
 }
 fn signatures_from_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache) -> (result: UseSignatureResult) {
     iterate i up_to 1024 carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc, nominals: nominals, modules: nominal_modules, provider_facts: provider_facts, resolved: resolved } {
+        if decl.use_list_empty(st.rest) {
+            return UseSignatureResult { acc: st.acc, provider_facts: st.provider_facts, resolved: st.resolved };
+        }
         next st = signatures_from_use<M, N>(sources, flat_pages, all, current, st);
     }
     return UseSignatureResult { acc: st.acc, provider_facts: st.provider_facts, resolved: st.resolved };

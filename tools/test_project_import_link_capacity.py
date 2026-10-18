@@ -634,7 +634,11 @@ def run():
             project.request_value(identities, capacity_sources),
             capacity_target_index,
         )
+        capacity_request_started = time.monotonic()
         capacity_response = probe.send(capacity_request)
+        capacity_request_seconds = round(
+            time.monotonic() - capacity_request_started, 6,
+        )
         assert capacity_response.get("status") == "returned", capacity_response
         capacity_native = project.decode(capacity_response["returned"][0])
         capacity_imports = project.flist(capacity_native["imports"])
@@ -702,7 +706,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/11",
+            "schema_version": "mncs.compiler.project-import-link-capacity/12",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -779,6 +783,8 @@ def run():
                 "stage0_oracle_valid": capacity_oracle["valid"],
                 "stage0_verified_function_count": len(capacity_oracle["program"]["functions"]),
                 "root_import_identity_matches_stage0": True,
+                "request_seconds": capacity_request_seconds,
+                "one_use_signature_scan_noop_iterations_avoided_model": 1023,
             },
             "project_import_link_limit": 4096,
             "global_limit_guard_below_boundary": not limit_results[4095],
