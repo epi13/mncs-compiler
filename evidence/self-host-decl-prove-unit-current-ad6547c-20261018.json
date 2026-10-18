@@ -1,0 +1,164 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "decl-prove-unit-canonical-vm-frontier",
+  "observed_at": "2026-10-18T11:45:45.730710Z",
+  "status": "passed",
+  "compiler": {
+    "tested_source_revision": "ad6547ca320905480892b476040eb7879d6c391d",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl"
+    ],
+    "module_source_sha256": {
+      "source": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+      "parser": "1b8f10e45f5467e7569262ce7c249424b55921d8227a9cf9329d26b5e946bb4a",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0"
+    },
+    "decl_source_sha256": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+    "test_harness": "tools/test_vm_decl_proof_frontier.py",
+    "test_harness_sha256": "09a8787515b54fdfb0e463e8b5c3923a1bcd12788389f19e7d39f1b2c6e870e8"
+  },
+  "toolchains": {
+    "stage0_probe": "tools/stage0-probe/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "f386d652e2e9df4ba04d94ada675c03362f8b343175430aa8106a0178d502433",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_repository": "/home/epi13/Documents/Projects/mncs-vm",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "workload": {
+    "module": "mncs.compiler.decl.v1",
+    "function": "prove_unit<1024,1024>",
+    "artifact_id": "sha256:69554d0530243b800cb2b9223210653c67314e22412d534a9fe1290fbcbb7a47",
+    "selected_case_count": 6,
+    "cases": [
+      {
+        "name": "clean-add",
+        "source_bytes": 76,
+        "source_sha256": "fdff9adf7658e64392280a308b3a511c702511e6e7545c80811a189abff0f3d0",
+        "stage0_diagnostics": [],
+        "expected_unknown_obligation_kinds": [
+          13
+        ],
+        "unknown_obligation_kinds": [
+          13
+        ]
+      },
+      {
+        "name": "clean-div-nonlit",
+        "source_bytes": 76,
+        "source_sha256": "be13175f65f8338e9d569df830c487b8a4fe45ef7d7c3f075ea78de27fce3de4",
+        "stage0_diagnostics": [],
+        "expected_unknown_obligation_kinds": [
+          14
+        ],
+        "unknown_obligation_kinds": [
+          14
+        ]
+      },
+      {
+        "name": "callee",
+        "source_bytes": 63,
+        "source_sha256": "f9dc83b2c45b993db3dfff4a58506cdb166cc37e2a7c4203b7f9f3fdb270cfa1",
+        "stage0_diagnostics": [
+          [
+            "MNE131",
+            49,
+            57
+          ]
+        ],
+        "expected_unknown_obligation_kinds": [],
+        "unknown_obligation_kinds": []
+      },
+      {
+        "name": "clean-if",
+        "source_bytes": 102,
+        "source_sha256": "b8a07d08eca9f76af3aa6ec32e619c842572ad21d7699f77a5c0dea6448532f9",
+        "stage0_diagnostics": [],
+        "expected_unknown_obligation_kinds": [],
+        "unknown_obligation_kinds": []
+      },
+      {
+        "name": "clean-record-proj",
+        "source_bytes": 79,
+        "source_sha256": "5fbd3f8aa3a8a12d2b2362f50547c9499d77e52040b8066a3cb839644e70a430",
+        "stage0_diagnostics": [],
+        "expected_unknown_obligation_kinds": [],
+        "unknown_obligation_kinds": []
+      },
+      {
+        "name": "generic-kind-type-as-nat",
+        "source_bytes": 121,
+        "source_sha256": "25b4c9638c87832146784bf21f5fbf2ee8c287a756a22df3f45236bab9a1968b",
+        "stage0_diagnostics": [
+          [
+            "MNE222",
+            113,
+            114
+          ]
+        ],
+        "expected_unknown_obligation_kinds": [],
+        "unknown_obligation_kinds": []
+      }
+    ]
+  },
+  "verification": {
+    "stage0_oracle_and_elaboration_cases": 6,
+    "canonical_vm_proof_cases": 6,
+    "canonical_vm_semantic_digest": "ba9a750cd8982358186d035d2172821bb673018bc047588386de12d2233ae538",
+    "canonical_vm_steps": [
+      1233015,
+      1232173,
+      1002533,
+      1381650,
+      1413420,
+      2039281
+    ],
+    "unknown_obligation_kinds": [
+      13,
+      14
+    ],
+    "artifact_identity_matched": true,
+    "stage0_diagnostics_match_fail_obligations": true,
+    "unknown_obligations_remain_explicit": true,
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "canonical_vm_batch_seconds": 24.854289,
+    "whole_frontier_seconds": 70.057943,
+    "child_cpu_seconds": 67.248101,
+    "child_peak_rss_kib": 2298452,
+    "canonical_vm_peak_rss_kib": 446144,
+    "host_memory_before": {
+      "total_bytes": 33411579904,
+      "available_bytes": 24306647040
+    },
+    "cgroup_memory_before": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "cgroup_memory_after": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "canonical_vm_batch_bytes": {
+      "calls": 52978,
+      "results": 87408
+    },
+    "stage0_probe_stderr_sha256": "975c72114c4b0809416f860d514692652af61fbda587419dff0b08291ab268f6",
+    "cgroup_peak_attributable_to_test": false
+  },
+  "claim_boundary": "This is a selected current-source decl.prove_unit semantic frontier: Stage-0 MNE diagnostics match canonical VM FAIL obligations, UNKNOWN obligations stay explicit, and the proof implementation runs on a fresh canonical VM artifact. It does not claim Cranelift differential coverage, full decl-module verification, Language-owned verified-fact reuse, or compiler succession."
+}
