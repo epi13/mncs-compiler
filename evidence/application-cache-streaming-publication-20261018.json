@@ -1,0 +1,95 @@
+{
+  "schema_version": "mncs.compiler.application-cache-publication-measurement/1",
+  "identity": "ev_compiler_application_cache_streaming_publication_20261018",
+  "observed_at": "2026-10-18T08:04:49.396409+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "compiler_head_before_change": "2c9088d048f14bdc5acdea012d81c0c13bfaa64a",
+    "commit_containing_tested_source": "fe1e5d14deafd585cc470f6e43a1331bd43356c4",
+    "path": "tools/stage0-probe/src/application.rs",
+    "source_file_sha256": "8fb3a42587f87b381cbfe26e05bf9b8791f7b94278b32659c355854244de7a99",
+    "cache_entry_contract": "mncs.compiler.application-build-cache-entry/3"
+  },
+  "change": {
+    "previous_behavior": "Serialized the response into a temporary byte vector for hashing, cloned the large response Value into a json! wrapper, then serialized that wrapper for publication.",
+    "current_behavior": "Hashes the serialized response through a streaming SHA-256 writer and serializes a borrowed response in the cache wrapper without cloning the large Value.",
+    "cache_schema_changed": false,
+    "atomic_tempfile_sync_and_rename_preserved": true
+  },
+  "workload": {
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target_with_diagnostic_locations",
+    "type_arguments": [1024, 1024],
+    "request_schema": "mncs.compiler.application-build-request/2",
+    "response_schema": "mncs.compiler.application-build/5",
+    "application_artifact_json_bytes": 68344562,
+    "callable_count": 4,
+    "generic_entrypoints": [
+      "compile_project_target",
+      "compile_project_target_with_diagnostic_locations",
+      "locate_project_diagnostics_global"
+    ]
+  },
+  "cold_build_comparison": {
+    "cache_status": "miss",
+    "baseline": {
+      "implementation": "pre-change application cache publisher",
+      "peak_rss_bytes": 3473268736,
+      "wall_seconds": 164.748608,
+      "cpu_seconds": 162.78
+    },
+    "current": {
+      "commit_containing_tested_source": "fe1e5d14deafd585cc470f6e43a1331bd43356c4",
+      "peak_rss_bytes": 2780872704,
+      "wall_seconds": 163.35113,
+      "cpu_seconds": 161.41,
+      "peak_cgroup_memory_bytes": null
+    },
+    "peak_rss_reduction_bytes": 692396032,
+    "peak_rss_reduction_percent": 19.93,
+    "wall_time_change_seconds": -1.397478,
+    "wall_time_claim": "No material speedup claimed; the measured improvement is lower peak RSS."
+  },
+  "fresh_process_cache_readback": {
+    "status": "verified",
+    "cache_status": "hit",
+    "artifact_identity": "sha256:3b5d9b4bdec161accb513f577631ab78fbcded98d2cc70c2480e2e7d167ac03d",
+    "callable_count": 4,
+    "wall_seconds": 2.138059,
+    "peak_rss_bytes": 1099743232
+  },
+  "canonical_vm_execution": {
+    "case_count": 5,
+    "cases": [
+      "valid-project",
+      "missing-import",
+      "multi-page-missing-import",
+      "parse-failure",
+      "invalid-page-count"
+    ],
+    "cranelift_exact_result_agreement": true,
+    "stage0_oracle_checked_case_count": 4,
+    "batch_wall_seconds": 24.370771,
+    "batch_peak_rss_kib": 406384
+  },
+  "verification": [
+    {
+      "command": "cargo test --release --offline --manifest-path tools/stage0-probe/Cargo.toml application_cache",
+      "result": "7 passed; 25 filtered"
+    },
+    {
+      "command": "cold Project application probe with isolated cache",
+      "result": "verified application build and five exact canonical-VM versus Cranelift results"
+    },
+    {
+      "command": "fresh-process application cache readback using the same isolated cache",
+      "result": "verified cache hit with matching artifact identity and four callables"
+    }
+  ],
+  "language_verified_facts_reused": 0,
+  "compiler_self_consumption": "The existing selected Project application frontier was exercised; no new full-module, Stage-1, or Stage-2 claim is made.",
+  "native_execution_scope": "Local canonical VM execution only; this measurement does not claim Forge execution or native Test conversion.",
+  "limitations": "One cold build per implementation; wall times are workload-specific. Cgroup memory was unavailable and is recorded as null, not zero."
+}
