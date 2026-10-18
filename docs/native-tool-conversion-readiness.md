@@ -175,6 +175,59 @@ Forge/Environment/Store `digest_app` route. Evidence is
 `evidence/native-app-readiness-digest-multi-callable-reuse-20261016.json`,
 SHA-256 `05cd710cae196905fca285c3843ee73f67df1556697e27510e3386db56d69b37`.
 
+## Structured digest provider and Test provider frontier (2026-10-17)
+
+Compiler commit `cd2fc1bd760fb020c75fd2da97ad58b6a356408a` extends the
+canonical VM runner's bounded test provider to bind multiple verified
+capability identities in one invocation. It validates each identity against
+the artifact and admitted SSA, keeps the source dispatch aliases distinct,
+and derives the caller-scope capability key needed to enter a nested function.
+The test provider can read and write typed fixtures and calculate the
+language's type-directed external `structured_digest` projection from the
+admitted SSA record declarations. Unsupported shapes fail closed.
+
+`tools/test_vm_native_app_runner_structured_digest.py` builds and executes a
+typed record digest application. Its canonical VM result exactly matches both
+the Stage-0 oracle and an independent compact-JSON/SHA-256 calculation,
+including a fixed 32-byte hex field and a UTF-8 bounded byte view. The VM call
+took 0.002 s and peaked at 4.5 MiB RSS. This is a bounded Compiler test
+provider, not Forge production-provider evidence.
+
+The same runner compiled the real `mncs.test.provider::provider_batch_app`
+and admitted its `provider_artifact` and `provider_digest` identities. The
+canonical VM completed `structured_read` and the first `structured_digest`,
+then stopped at `instruction sequence_copy` while the MNCS function copied
+the digest into its fixed-size identity. No result or check artifact was
+published. This records a VM execution gap; it does not complete provider-batch
+execution. Missing capability admission still returns `capability_denied`,
+and incorrect capability identities and dispatch aliases remain rejected.
+
+The existing `mncs.test.digest::digest_app` regression still passes all three
+canonical VM cases and the four interleaved retained-session batch cases.
+Its build measured 0.534 s / 0.490 CPU / 62.6 MiB peak RSS; the retained
+batch measured 0.036 s / 0.020 CPU / 15.2 MiB peak RSS in one process.
+These are workload-specific measurements; cgroup memory counters were
+unavailable.
+
+Evidence files are `evidence/native-app-readiness-structured-digest-provider.json`
+(SHA-256 `f300f8d7f5110b0e20737ec5966ca5b15d57d8b83bf3ef6396ac93257c328038`),
+`evidence/native-test-provider-app-boundary-20261017.json` (SHA-256
+`4b2a8a51ba60756bdda907207df7d8d7878bb07ab9a9269d03c4b5921461aeb2`), and
+the refreshed digest-app evidence at
+`evidence/native-app-readiness-test-digest-app.json` (SHA-256
+`1a3d0a60b1cef17f62b43777163099cab10a89549aa8ad370187455d347dca45`).
+All three pin Compiler `cd2fc1bd760fb020c75fd2da97ad58b6a356408a`. No
+Language verified facts were reused and the self-consumption frontier did not
+advance. The positive provider-batch result, Forge/Environment/Store execution,
+and canonical Store readback remain outstanding.
+
+The active campaign's selected Environment definition lists only
+`mncs-compiler` as a writable repository and protects `mncs-language`.
+Neither a Language nor VM write claim is present in this session. Compiler's
+repository instructions require a dedicated Language run, while the VM
+repository owns `sequence_copy` execution. The Compiler-owned work above did
+not modify either repository.
+
 ## Application artifact and Test inventory co-result (2026-10-17)
 
 Application-build request `/3` and response `/6` return the Language-owned
@@ -435,10 +488,11 @@ No production host implementation is safe to remove from this evidence. The nati
 
 ## Prioritized next steps
 
-1. Feed application-build/6 into the production `mncs-test` native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the current compiler result can now carry both the executable artifact and root-module inventory, but the production consumer has not yet integrated it.
-2. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
-3. Run the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
-4. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
-5. Retire host policy or compatibility code one behavior at a time only after full native-command parity proves it unnecessary.
+1. Implement canonical VM `sequence_copy` support through its owning repository. The real Test provider app already completes its structured read and first structured digest, then stops at this instruction before it can produce identities and publish results.
+2. Feed application-build/6 into the production `mncs-test` native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the current compiler result can carry both the executable artifact and root-module inventory, but the production consumer has not yet integrated it.
+3. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
+4. Complete the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
+5. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
+6. Retire host policy or compatibility code one behavior at a time only after full native-command parity proves it unnecessary.
 
 Gate A passes for the selected multi-module applications. Gate B remains partial. Gate C passes for the selected native readiness and `mncs.test.digest::build_digest` workloads through Forge and canonical Store, while the full production Test command and Monitor/Automation path remain open. Gate D is a concrete conversion assessment rather than a claim that the complete tool is ready to replace.
