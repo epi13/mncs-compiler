@@ -8,6 +8,11 @@ use serde::de::{
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
+// A verified Flow-to-SSA application currently expands to 8,101,381 nodes.
+// Keep a finite margin for that real closure while still refusing exponential
+// DAGs; this decoder bound is independent of VM execution budgets.
+const MAX_EXPANDED_NODES: u64 = 8_500_000;
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 enum Node {
     N,
@@ -424,7 +429,7 @@ impl Graph {
                 size = size.saturating_add(sizes[r as usize]);
                 depth = depth.max(depths[r as usize] + 1);
             }
-            if depth > 128 || size > 8_000_000 {
+            if depth > 128 || size > MAX_EXPANDED_NODES {
                 return Err("DAG expansion exceeds decoder limits".into());
             }
             if let Node::O(o) = n {
@@ -659,6 +664,16 @@ mod tests {
             assert!(g.validate().is_err());
         }
     }
+    #[test]
+    fn bounded_large_expansion_is_accepted() {
+        let mut nodes = vec![Node::N];
+        for i in 0..22 {
+            nodes.push(Node::A(vec![i, i]));
+        }
+        let root = nodes.len() as u32 - 1;
+        assert!(Graph { nodes, root }.validate().is_ok());
+    }
+
     #[test]
     fn exponential_expansion_is_refused() {
         let mut nodes = vec![Node::N];
