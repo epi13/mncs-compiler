@@ -1605,7 +1605,7 @@
         "page_bound": 314,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "c270aa865606290210ce2b55ca8ce017d6bb5ce2138e947d516223204bf23545",
+        "current_source_sha256": "c2bbca95c5a93507ccfeb9d90d9a479906c97bcd886185153c1e404b0ec91a9f",
         "selected_flow_to_ssa_canonical_vm_frontier": {
           "kind": "flow-to-ssa-canonical-vm-frontier",
           "status": "passed_with_bounded_frontier",
@@ -1895,6 +1895,42 @@
           "canonical_vm_peak_rss_kib": 617644,
           "cgroup_peak_attributable_to_test": false,
           "scope": "This selected current-source canonical VM batch starts each case from logical source pages, runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. It includes a conditional return inside a counted loop; both verified SSA function shapes match pinned Stage-0. It does not establish full SSA module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+        },
+        "selected_flow_to_ssa_loop_affinity_canonical_vm_frontier": {
+          "status": "passed",
+          "target_module": "mncs.compiler.ssa.v1",
+          "target_function": "lower_flow_unit_value_ssa<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+          "tested_source_revision": "2429b56240624ec7bb26d5286bd5b90f857bd5fb",
+          "source_sha256": "c2bbca95c5a93507ccfeb9d90d9a479906c97bcd886185153c1e404b0ec91a9f",
+          "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+          "test_harness_sha256": "1aa2376ac3bedd06dd159d733e0168781f34df63e4ffff1e37f0d82eeb3c49dc",
+          "canonical_vm_case_count": 2,
+          "verified_functions": 2,
+          "semantic_digest_sha256": "3a67f3f332fe6d10df1baa6bb7093380392f621690d9a0a3845840fd3240c808",
+          "stage0_control_flow_shape_matches_canonical_vm": true,
+          "stage0_terminator_shape_matches_canonical_vm": true,
+          "loop_cases": 1,
+          "ssa_instruction_deltas_by_case": {
+            "fallthrough_join": {
+              "blocks": 0,
+              "instructions": 0
+            },
+            "conditional_return_counted_iteration": {
+              "blocks": 0,
+              "instructions": -3
+            }
+          },
+          "evidence_artifact": "evidence/self-host-flow-ssa-20261018T195437.272222Z-1849143.json",
+          "evidence_sha256": "8c5105f230ac16ec7e1443edec228e03ff60121232a8ecd5458557d6c275077b",
+          "whole_frontier_seconds": 163.174715,
+          "application_build_seconds": 133.626151,
+          "canonical_vm_batch_seconds": 27.42337,
+          "child_peak_rss_kib": 2746264,
+          "canonical_vm_peak_rss_kib": 376728,
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "This selected application artifact contains the wrapper entry, its reachable compiler callable closure, and the explicit lower_flow_unit_value_ssa<1024,1024> specialization. The canonical VM batch starts each case from logical source pages; MNCS source runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. Function, conditional-branch, and return counts match the pinned Stage-0 oracle. Jumps, failures, switches, blocks, and instructions are reported separately so structural differences remain explicit. This does not establish full CFG/IR parity or Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
         }
       }
     },
@@ -3974,7 +4010,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-18T00:34:14Z",
+    "updated_at": "2026-10-18T20:07:09Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -8434,6 +8470,35 @@
       "language_verified_facts_reused": 0,
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    "native_application_readiness_20261013_flow_ssa_loop_affinity_20261018": {
+      "observed_at": "2026-10-18T19:57:20.035625Z",
+      "tested_source_revision": "2429b56240624ec7bb26d5286bd5b90f857bd5fb",
+      "evidence_commit": "86f5495e94137686ceceb4f53b0ea61305b9ebe9",
+      "branch": "campaign/native-application-readiness-20261013",
+      "module_source_sha256": {
+        "source": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+        "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+        "parser": "1b8f10e45f5467e7569262ce7c249424b55921d8227a9cf9329d26b5e946bb4a",
+        "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+        "flow": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
+        "ssa": "c2bbca95c5a93507ccfeb9d90d9a479906c97bcd886185153c1e404b0ec91a9f"
+      },
+      "selected_modules": [
+        "source",
+        "lexer",
+        "parser",
+        "segment",
+        "decl",
+        "flow",
+        "ssa"
+      ],
+      "evidence_artifact": "evidence/self-host-flow-ssa-20261018T195437.272222Z-1849143.json",
+      "evidence_sha256": "8c5105f230ac16ec7e1443edec228e03ff60121232a8ecd5458557d6c275077b",
+      "canonical_vm_batch_case_count": 2,
+      "canonical_vm_semantic_digest": "3a67f3f332fe6d10df1baa6bb7093380392f621690d9a0a3845840fd3240c808",
+      "scope": "Selected source-to-Flow-to-SSA application frontier with one counted-loop case; not full SSA module proof or compiler succession."
     }
   },
   "current_campaign_decl_parse_unit_frontier_20261018": {
