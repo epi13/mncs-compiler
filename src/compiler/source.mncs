@@ -390,10 +390,15 @@ fn line_col_many_position<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     return line_col_advance_global<P, N>(pages, stride, start, end, current);
 }
 fn line_col_advance_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, start: u64, end: u64, initial: LineCol) -> (result: LineCol) {
+    if stride == 0 { return line_col_global<P, N>(pages, stride, end, end); }
     let required_pages: u64 = page_count_for(stride, end);
     let scanned_pages: u64 = select(required_pages <= pages.len, required_pages, pages.len);
-    iterate p over pages[0..scanned_pages] carrying st: LineCol = initial {
-        next st = line_col_advance_page_step<P, N>(pages, stride, start, end, p, st);
+    // Ordered callers already scanned the prefix ending at start. Skip its
+    // page headers and scan only the remainder of the current page onward.
+    let requested_start_page: u64 = start / stride;
+    let first_page: u64 = select(requested_start_page <= scanned_pages, requested_start_page, scanned_pages);
+    iterate p over pages[first_page..scanned_pages] carrying st: LineCol = initial {
+        next st = line_col_advance_page_step<P, N>(pages, stride, start, end, first_page + p, st);
     }
     return st;
 }

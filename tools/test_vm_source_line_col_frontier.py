@@ -32,7 +32,7 @@ PAGE_BOUND = 1024
 STRIDE_BOUND = 1024
 STRIDES = (1, 7, 64, 1024)
 STEP_BUDGET = 8_000_000
-EVIDENCE = ROOT / "evidence" / "self-host-source-line-col-batch-20261017.json"
+EVIDENCE = ROOT / "evidence" / "self-host-source-line-col-batch-page-cursor-20261018.json"
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
@@ -66,6 +66,8 @@ def observations() -> list[dict]:
          lambda raw: [5, 6, 7, 12, 13, len(raw)]),
         ("utf8-columns-count-bytes", "cafe:\u2603\nend".encode(),
          lambda raw: [5, 6, 7, 8, len(raw)]),
+        ("duplicate-offsets", b"prefix\nsuffix",
+         lambda raw: [0, 0, 6, 6, len(raw), len(raw)]),
     ]
     for name, raw, select_offsets in base:
         for stride in STRIDES:
@@ -73,7 +75,9 @@ def observations() -> list[dict]:
                 "id": f"{name}-stride-{stride}",
                 "raw": raw,
                 "stride": stride,
-                "offsets": sorted(set(select_offsets(raw))),
+                "offsets": sorted(select_offsets(raw)),
+                **({"batch_offsets": sorted(select_offsets(raw))}
+                   if name == "duplicate-offsets" else {}),
             })
     for stride in (7, 64, 1024):
         for newline in (stride - 1, stride):
@@ -90,6 +94,13 @@ def observations() -> list[dict]:
         "raw": long_source,
         "stride": 1024,
         "offsets": [32766, 32767, 32768, len(long_source), len(long_source) + 1],
+    })
+    dense_source = b"x" * (16 * 1024)
+    rows.append({
+        "id": "dense-64-query-16k-source-stride-1024",
+        "raw": dense_source,
+        "stride": 1024,
+        "offsets": list(range(0, len(dense_source), 256)),
     })
     zero_stride = b"before\nafter"
     rows.append({
@@ -188,7 +199,7 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                 pages_for(case["raw"], case["stride"]),
                 case["stride"],
                 len(case["raw"]),
-                (query_list_value(case["offsets"]),),
+                (query_list_value(case.get("batch_offsets", case["offsets"])),),
                 budget=STEP_BUDGET,
             )
             wall = time.monotonic() - started
@@ -203,7 +214,8 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                     f"{backend} {case['id']} ordered offsets: {actual} != {expected}"
                 )
             batch_rows.append({
-                "id": case["id"], "offsets": case["offsets"],
+                "id": case["id"],
+                "offsets": case.get("batch_offsets", case["offsets"]),
                 "locations": [[line, column] for line, column in actual],
                 "steps": probe.steps[-1], "wall_seconds": round(wall, 6),
             })
@@ -300,7 +312,7 @@ def vm_cases(cases: list[dict], spans: list[dict]) -> list[dict]:
                 cp0001.pages_value(pages_for(case["raw"], case["stride"])),
                 cp0001.integer(case["stride"]),
                 cp0001.integer(len(case["raw"])),
-                query_list_value(case["offsets"]),
+                query_list_value(case.get("batch_offsets", case["offsets"])),
             ],
             "type_args": [cp0001.nat_arg(PAGE_BOUND),
                           cp0001.nat_arg(STRIDE_BOUND)],
@@ -332,7 +344,7 @@ def main() -> None:
     parser.add_argument("--ephemeral-output", action="store_true")
     args = parser.parse_args()
     evidence_path = (
-        ROOT / ".build" / "source-line-col-global-20261017.json"
+        ROOT / ".build" / "source-line-col-batch-page-cursor-20261018.json"
         if args.ephemeral_output else EVIDENCE
     )
     if not test_vm_emit.PROBE.is_file():
@@ -525,7 +537,7 @@ def main() -> None:
         }
     report = {
         "schema_version": 1,
-        "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
+        "kind": "mncs.compiler.source-line-col-batch-page-cursor-canonical-vm-frontier",
         "status": "passed",
         "compiler_revision_tested": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
@@ -533,6 +545,7 @@ def main() -> None:
         "compiler_branch": subprocess.check_output(
             ["git", "branch", "--show-current"], cwd=ROOT, text=True
         ).strip(),
+        "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "source_sha256": source_hash,
         "target": {"module": MODULE, "function": FUNCTION,
                    "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},
@@ -540,6 +553,11 @@ def main() -> None:
                         "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},
         "batch_target": {"module": MODULE, "function": BATCH_FUNCTION,
                          "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},
+        "batch_page_traversal": {
+            "cursor_start": "floor(previous_offset / stride), clamped to the scanned page count",
+            "zero_stride": "delegates to line_col_global's compatibility path",
+            "dense_case": "dense-64-query-16k-source-stride-1024",
+        },
         "oracle": "byte-based SourceSpan line/column convention: 1-based, newline resets column, UTF-8 columns count bytes",
         "page_strides": list(STRIDES),
         "input_count": len(cases),
@@ -548,7 +566,8 @@ def main() -> None:
         "batch_request_count_per_executor": len(reference_batch_rows),
         "offset_cases": [
             {"id": row["id"], "size_bytes": len(row["raw"]),
-             "stride": row["stride"], "offsets": row["offsets"]}
+             "stride": row["stride"],
+             "offsets": row.get("batch_offsets", row["offsets"])}
             for row in cases
         ],
         "reference_interpreter": reference_rows,
@@ -600,10 +619,10 @@ def main() -> None:
         "scope": (
             "The selected Source line_col_global callable maps byte offsets, and line_col_span_global "
             "maps ordered span endpoints in one prefix walk; line_cols_global maps ordered byte offsets "
-            "with one monotone scan and rejects decreasing query batches. "
+            "with one monotone scan that skips pages before the prior query cursor and rejects decreasing query batches. "
             "Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based "
             "SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, "
-            "and a 64 KiB source. Span and batch transition counts are compared with independent "
+            "duplicate offsets, a dense 64-query 16 KiB input, and a 64 KiB source. Span and batch transition counts are compared with independent "
             "single-coordinate calls. This is a selected source-location frontier, not full Source module proof, "
             "Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
         ),
