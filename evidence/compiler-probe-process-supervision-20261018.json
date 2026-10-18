@@ -1,0 +1,47 @@
+{
+  "schema_version": "mncs.compiler.probe-process-supervision/1",
+  "kind": "bounded-stage0-probe-response-and-shutdown",
+  "created_at": "2026-10-18T23:29:57Z",
+  "compiler": {
+    "repository": "mncs-compiler",
+    "revision": "4271b34ee029501b1bb5f0e4fc6e6117a0f7fc75",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler"
+  },
+  "implementation": {
+    "probe_helper": "tools/test_ssa_sequence_length.py",
+    "probe_helper_sha256": "67a84bb92411daeabdcbefd71bf5e03235b085737fbb033b07a6f68bc70d9a3f",
+    "regression": "tools/test_ssa_probe_timeout.py",
+    "regression_sha256": "740f262af8fa1f0771b2db5d05fcbcbb79b6b01148bd2111eb24a72bd70f876d",
+    "response_timeout_seconds": 120,
+    "shutdown_timeout_seconds": 120,
+    "termination": "SIGTERM then SIGKILL for the dedicated probe process group"
+  },
+  "verification": {
+    "command": "python3 tools/test_ssa_probe_timeout.py",
+    "status": "passed",
+    "cases": [
+      "partial JSON response followed by a stalled probe is bounded and terminated",
+      "probe that ignores stdin EOF is bounded and terminated"
+    ],
+    "python_compile": "passed",
+    "git_diff_check": "passed"
+  },
+  "resource_observation": {
+    "unbounded_attempt": "tools/test_ssa_record_construct.py",
+    "outcome": "interrupted before fixture execution or structured result",
+    "reason": "the selected SSA fixture first compiled the complete 305 KiB SSA module",
+    "last_child_rss_kib": 1774692,
+    "last_child_cpu_percent": 99.1,
+    "system_available_memory_before": "about 23 GiB from free -h",
+    "cgroup_memory_measurement": "unavailable",
+    "cleanup": "test parent and compiler probe process exited; no child remained"
+  },
+  "scope": {
+    "application_build_semantics_changed": false,
+    "language_verified_facts_reused": 0,
+    "native_application_execution_changed": false,
+    "compiler_self_consumption_frontier_advanced": false,
+    "notes": "This change bounds developer probe execution and prevents stalled frontend tests from leaving compiler processes behind. The interrupted SSA attempt is not a verification pass and establishes no new SSA proof."
+  }
+}
