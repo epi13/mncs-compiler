@@ -546,6 +546,13 @@ def main() -> None:
             ["git", "branch", "--show-current"], cwd=ROOT, text=True
         ).strip(),
         "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+        "stage0_revision": json.loads(
+            (ROOT / "mncs-language.lock.json").read_text(encoding="utf-8")
+        )["revision"],
+        "vm_revision": subprocess.check_output(
+            ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"],
+            text=True,
+        ).strip(),
         "source_sha256": source_hash,
         "target": {"module": MODULE, "function": FUNCTION,
                    "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},

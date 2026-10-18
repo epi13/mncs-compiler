@@ -428,7 +428,7 @@
         "ssa_verified_function_count": 20,
         "ssa_value_count": 693,
         "ssa_instruction_count": 198,
-        "current_source_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+        "current_source_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_ascii_global_four_byte_frontier": {
@@ -787,6 +787,84 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "The selected Source line_cols_global callable maps up to 64 nondecreasing byte offsets in one forward scan, accepts repeated/clamped offsets, rejects a decreasing clamped sequence, and retains the scalar fallback for zero-stride pages. Together with the scalar and span regression callables, reference interpreter, Cranelift, and one fresh canonical VM artifact agree across 24 input layouts. The 24 valid canonical-VM batches save 5,495,544 transitions (75.396%) against independent scalar lookups in this measured workload. This is a bounded Source frontier, not full Source module proof, Language verified-fact reuse, Unicode-scalar column semantics, or compiler succession."
+        },
+        "latest_selected_line_col_page_cursor_frontier": {
+          "status": "passed_selected_source_location_page_cursor_frontier",
+          "implementation_commit": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+          "tested_source_revision": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+          "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+          "source_module_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+          "test_harness": "tools/test_vm_source_line_col_frontier.py",
+          "test_harness_sha256": "dcd3581062d4699e5b5259036ccd7e4df94ac7884d9f4bfd85f2fd1994ac8104",
+          "evidence_artifact": "evidence/self-host-source-line-col-batch-page-cursor-20261018.json",
+          "evidence_sha256": "6a571540be331622fd96f4bfce18ca500e5a6953ffdd2a350056071f8aa7c014",
+          "target_functions": [
+            "line_col_global",
+            "line_col_span_global",
+            "line_cols_global",
+            "line_col_advance_global",
+            "line_col_advance_page_step"
+          ],
+          "page_strides": [
+            1,
+            7,
+            64,
+            1024
+          ],
+          "point_requests_per_executor": 178,
+          "span_requests_per_executor": 31,
+          "ordered_batch_requests_per_executor": 30,
+          "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+          "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+          "canonical_vm_artifact_identity": "sha256:1a75f6747d5f3a2062132036ddcb55fd153121113a36687edf0625675555a85b",
+          "canonical_vm_wall_seconds": 46.66574,
+          "canonical_vm_peak_rss_kib": 232536,
+          "dense_batch_page_cursor_comparison": {
+            "same_input_set_sha256": "10ce96a0a118cd78593850f485a20eec010faf304c9624944d552412524fe204",
+            "same_semantic_digests": true,
+            "baseline": {
+              "compiler_head": "3fc5c042f42f30021fb0ade36a87d8d77b4348bb",
+              "source_module_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+              "test_harness_sha256": "759549d7bcd37c0550dd8037898fc1c5434233ed98bcb51079ee43eaf72ebbfe",
+              "canonical_vm_artifact_identity": "sha256:5bc54086838401065458b0b85295f970777d4998d44a6d281a1f90055e86b40f",
+              "measurement_report_sha256": "da33d1b603b1be79288a972d5f511d8fb737b24ccb128d525cc299b3d16db0ec",
+              "dense_query": {
+                "reference_interpreter_batch_steps": 356991,
+                "reference_interpreter_independent_steps": 12404443,
+                "canonical_vm_batch_steps": 443215,
+                "canonical_vm_independent_steps": 16022442
+              },
+              "canonical_vm_wall_seconds": 46.361208,
+              "canonical_vm_peak_rss_kib": 232636
+            },
+            "candidate": {
+              "compiler_head": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+              "source_module_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+              "test_harness_sha256": "dcd3581062d4699e5b5259036ccd7e4df94ac7884d9f4bfd85f2fd1994ac8104",
+              "canonical_vm_artifact_identity": "sha256:1a75f6747d5f3a2062132036ddcb55fd153121113a36687edf0625675555a85b",
+              "dense_query": {
+                "reference_interpreter_batch_steps": 345348,
+                "reference_interpreter_independent_steps": 12404443,
+                "canonical_vm_batch_steps": 427980,
+                "canonical_vm_independent_steps": 16022442
+              },
+              "canonical_vm_wall_seconds": 46.66574,
+              "canonical_vm_peak_rss_kib": 232536
+            },
+            "dense_batch_step_delta": {
+              "reference_interpreter_saved": 11643,
+              "reference_interpreter_reduction_percent": 3.26,
+              "canonical_vm_saved": 15235,
+              "canonical_vm_reduction_percent": 3.44,
+              "canonical_vm_wall_delta_seconds": 0.304532,
+              "canonical_vm_peak_rss_delta_kib": -100,
+              "interpretation": "Dense batch step counts fell and all semantic digests stayed equal. Total wall time and peak RSS were effectively unchanged; no wall-time speedup is claimed."
+            }
+          },
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "Selected Source line_col_global, line_col_span_global, and line_cols_global callables agree across the pinned Stage-0 reference interpreter, Cranelift, and a canonical VM artifact for newline/page edges, UTF-8 byte columns, clamped and duplicate offsets, out-of-order batches, a dense 64-query 16 KiB input, and a 64 KiB source. Monotone batch advancement now skips pages before the previous query cursor. Dense-case reference and canonical VM transition counts are compared with an exact pre-change input set and semantic-digest baseline. This remains a selected Source frontier: full Source module canonical-VM proof, Language verified-fact reuse, Stage-1, and Stage-2 are not established."
         }
       }
     },
@@ -4010,7 +4088,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-18T20:07:09Z",
+    "updated_at": "2026-10-18T20:54:43Z",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -8499,6 +8577,86 @@
       "canonical_vm_batch_case_count": 2,
       "canonical_vm_semantic_digest": "3a67f3f332fe6d10df1baa6bb7093380392f621690d9a0a3845840fd3240c808",
       "scope": "Selected source-to-Flow-to-SSA application frontier with one counted-loop case; not full SSA module proof or compiler succession."
+    },
+    "native_application_readiness_20261013_source_line_col_batch_page_cursor_20261018": {
+      "status": "passed_selected_source_location_page_cursor_frontier",
+      "implementation_commit": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+      "tested_source_revision": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+      "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "source_module_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+      "test_harness": "tools/test_vm_source_line_col_frontier.py",
+      "test_harness_sha256": "dcd3581062d4699e5b5259036ccd7e4df94ac7884d9f4bfd85f2fd1994ac8104",
+      "evidence_artifact": "evidence/self-host-source-line-col-batch-page-cursor-20261018.json",
+      "evidence_sha256": "6a571540be331622fd96f4bfce18ca500e5a6953ffdd2a350056071f8aa7c014",
+      "target_functions": [
+        "line_col_global",
+        "line_col_span_global",
+        "line_cols_global",
+        "line_col_advance_global",
+        "line_col_advance_page_step"
+      ],
+      "page_strides": [
+        1,
+        7,
+        64,
+        1024
+      ],
+      "point_requests_per_executor": 178,
+      "span_requests_per_executor": 31,
+      "ordered_batch_requests_per_executor": 30,
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "canonical_vm_artifact_identity": "sha256:1a75f6747d5f3a2062132036ddcb55fd153121113a36687edf0625675555a85b",
+      "canonical_vm_wall_seconds": 46.66574,
+      "canonical_vm_peak_rss_kib": 232536,
+      "dense_batch_page_cursor_comparison": {
+        "same_input_set_sha256": "10ce96a0a118cd78593850f485a20eec010faf304c9624944d552412524fe204",
+        "same_semantic_digests": true,
+        "baseline": {
+          "compiler_head": "3fc5c042f42f30021fb0ade36a87d8d77b4348bb",
+          "source_module_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+          "test_harness_sha256": "759549d7bcd37c0550dd8037898fc1c5434233ed98bcb51079ee43eaf72ebbfe",
+          "canonical_vm_artifact_identity": "sha256:5bc54086838401065458b0b85295f970777d4998d44a6d281a1f90055e86b40f",
+          "measurement_report_sha256": "da33d1b603b1be79288a972d5f511d8fb737b24ccb128d525cc299b3d16db0ec",
+          "dense_query": {
+            "reference_interpreter_batch_steps": 356991,
+            "reference_interpreter_independent_steps": 12404443,
+            "canonical_vm_batch_steps": 443215,
+            "canonical_vm_independent_steps": 16022442
+          },
+          "canonical_vm_wall_seconds": 46.361208,
+          "canonical_vm_peak_rss_kib": 232636
+        },
+        "candidate": {
+          "compiler_head": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+          "source_module_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+          "test_harness_sha256": "dcd3581062d4699e5b5259036ccd7e4df94ac7884d9f4bfd85f2fd1994ac8104",
+          "canonical_vm_artifact_identity": "sha256:1a75f6747d5f3a2062132036ddcb55fd153121113a36687edf0625675555a85b",
+          "dense_query": {
+            "reference_interpreter_batch_steps": 345348,
+            "reference_interpreter_independent_steps": 12404443,
+            "canonical_vm_batch_steps": 427980,
+            "canonical_vm_independent_steps": 16022442
+          },
+          "canonical_vm_wall_seconds": 46.66574,
+          "canonical_vm_peak_rss_kib": 232536
+        },
+        "dense_batch_step_delta": {
+          "reference_interpreter_saved": 11643,
+          "reference_interpreter_reduction_percent": 3.26,
+          "canonical_vm_saved": 15235,
+          "canonical_vm_reduction_percent": 3.44,
+          "canonical_vm_wall_delta_seconds": 0.304532,
+          "canonical_vm_peak_rss_delta_kib": -100,
+          "interpretation": "Dense batch step counts fell and all semantic digests stayed equal. Total wall time and peak RSS were effectively unchanged; no wall-time speedup is claimed."
+        }
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "scope": "Selected Source line_col_global, line_col_span_global, and line_cols_global callables agree across the pinned Stage-0 reference interpreter, Cranelift, and a canonical VM artifact for newline/page edges, UTF-8 byte columns, clamped and duplicate offsets, out-of-order batches, a dense 64-query 16 KiB input, and a 64 KiB source. Monotone batch advancement now skips pages before the previous query cursor. Dense-case reference and canonical VM transition counts are compared with an exact pre-change input set and semantic-digest baseline. This remains a selected Source frontier: full Source module canonical-VM proof, Language verified-fact reuse, Stage-1, and Stage-2 are not established.",
+      "observed_at": "2026-10-18T20:54:43Z",
+      "branch": "campaign/native-application-readiness-20261013"
     }
   },
   "current_campaign_decl_parse_unit_frontier_20261018": {
@@ -8647,7 +8805,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-18T18:48:32Z",
+  "evidence_updated_at": "2026-10-18T20:54:43Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -16193,5 +16351,72 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "next_frontier": "Resolve the three missing counted-loop SSA instructions against the Stage-0 iteration witness, then implement Language-owned verified-fact reuse when authorized Language scope is available."
+  },
+  "current_campaign_source_line_col_batch_page_cursor_20261018": {
+    "kind": "mncs.compiler.source-line-col-batch-page-cursor-canonical-vm-frontier",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "observed_at": "2026-10-18T20:54:43Z",
+    "status": "passed_stage0_cranelift_and_canonical_vm",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "tested_compiler_revision": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+    "source_module_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+    "test_harness": "tools/test_vm_source_line_col_frontier.py",
+    "test_harness_sha256": "dcd3581062d4699e5b5259036ccd7e4df94ac7884d9f4bfd85f2fd1994ac8104",
+    "evidence_artifact": "evidence/self-host-source-line-col-batch-page-cursor-20261018.json",
+    "evidence_sha256": "6a571540be331622fd96f4bfce18ca500e5a6953ffdd2a350056071f8aa7c014",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "canonical_vm_artifact_identity": "sha256:1a75f6747d5f3a2062132036ddcb55fd153121113a36687edf0625675555a85b",
+    "point_requests_per_executor": 178,
+    "span_requests_per_executor": 31,
+    "ordered_batch_requests_per_executor": 30,
+    "canonical_vm_wall_seconds": 46.66574,
+    "canonical_vm_peak_rss_kib": 232536,
+    "dense_batch_page_cursor_comparison": {
+      "same_input_set_sha256": "10ce96a0a118cd78593850f485a20eec010faf304c9624944d552412524fe204",
+      "same_semantic_digests": true,
+      "baseline": {
+        "compiler_head": "3fc5c042f42f30021fb0ade36a87d8d77b4348bb",
+        "source_module_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+        "test_harness_sha256": "759549d7bcd37c0550dd8037898fc1c5434233ed98bcb51079ee43eaf72ebbfe",
+        "canonical_vm_artifact_identity": "sha256:5bc54086838401065458b0b85295f970777d4998d44a6d281a1f90055e86b40f",
+        "measurement_report_sha256": "da33d1b603b1be79288a972d5f511d8fb737b24ccb128d525cc299b3d16db0ec",
+        "dense_query": {
+          "reference_interpreter_batch_steps": 356991,
+          "reference_interpreter_independent_steps": 12404443,
+          "canonical_vm_batch_steps": 443215,
+          "canonical_vm_independent_steps": 16022442
+        },
+        "canonical_vm_wall_seconds": 46.361208,
+        "canonical_vm_peak_rss_kib": 232636
+      },
+      "candidate": {
+        "compiler_head": "0b571361fb33de77791a8f1649195c9bbcfc7cb9",
+        "source_module_sha256": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+        "test_harness_sha256": "dcd3581062d4699e5b5259036ccd7e4df94ac7884d9f4bfd85f2fd1994ac8104",
+        "canonical_vm_artifact_identity": "sha256:1a75f6747d5f3a2062132036ddcb55fd153121113a36687edf0625675555a85b",
+        "dense_query": {
+          "reference_interpreter_batch_steps": 345348,
+          "reference_interpreter_independent_steps": 12404443,
+          "canonical_vm_batch_steps": 427980,
+          "canonical_vm_independent_steps": 16022442
+        },
+        "canonical_vm_wall_seconds": 46.66574,
+        "canonical_vm_peak_rss_kib": 232536
+      },
+      "dense_batch_step_delta": {
+        "reference_interpreter_saved": 11643,
+        "reference_interpreter_reduction_percent": 3.26,
+        "canonical_vm_saved": 15235,
+        "canonical_vm_reduction_percent": 3.44,
+        "canonical_vm_wall_delta_seconds": 0.304532,
+        "canonical_vm_peak_rss_delta_kib": -100,
+        "interpretation": "Dense batch step counts fell and all semantic digests stayed equal. Total wall time and peak RSS were effectively unchanged; no wall-time speedup is claimed."
+      }
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "Selected Source line_col_global, line_col_span_global, and line_cols_global callables agree across the pinned Stage-0 reference interpreter, Cranelift, and a canonical VM artifact for newline/page edges, UTF-8 byte columns, clamped and duplicate offsets, out-of-order batches, a dense 64-query 16 KiB input, and a 64 KiB source. Monotone batch advancement now skips pages before the previous query cursor. Dense-case reference and canonical VM transition counts are compared with an exact pre-change input set and semantic-digest baseline. This remains a selected Source frontier: full Source module canonical-VM proof, Language verified-fact reuse, Stage-1, and Stage-2 are not established."
   }
 }
