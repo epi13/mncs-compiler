@@ -315,6 +315,109 @@ fn line_col_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     }
     return st;
 }
+
+// Map a bounded monotone batch of byte offsets with one forward scan. Offsets
+// are clamped to total as in line_col_global; equal clamped offsets are
+// allowed. An out-of-order batch is rejected with its first decreasing query
+// index so callers can sort source locations or use independent lookups.
+record LineColManyResult { ordered: bool, invalid_index: u64, locations: [LineCol; up_to 64] }
+record LineColManyState {
+    cursor: u64,
+    current: LineCol,
+    previous: u64,
+    has_previous: bool,
+    ordered: bool,
+    invalid_index: u64,
+    locations: [LineCol; 64]
+}
+fn line_cols_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offsets: [u64; up_to 64]) -> (result: LineColManyResult) {
+    let initial: LineCol = LineCol { line: 1, col: 1 };
+    let empty_locations: [LineCol; 64] = [initial; 64];
+    iterate index over offsets carrying st: LineColManyState = LineColManyState {
+        cursor: 0,
+        current: initial,
+        previous: 0,
+        has_previous: false,
+        ordered: true,
+        invalid_index: 0,
+        locations: empty_locations
+    } {
+        next st = line_cols_step<P, N>(pages, stride, total, offsets[index], index, st);
+    }
+    if !st.ordered {
+        return LineColManyResult {
+            ordered: false,
+            invalid_index: st.invalid_index,
+            locations: st.locations[0..0]
+        };
+    }
+    return LineColManyResult {
+        ordered: true,
+        invalid_index: 0,
+        locations: st.locations[0..offsets.len]
+    };
+}
+fn line_cols_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, offset: u64, index: u64, st: LineColManyState) -> (result: LineColManyState) {
+    if !st.ordered { return st; }
+    let clamped: u64 = select(offset <= total, offset, total);
+    if st.has_previous && clamped < st.previous {
+        return LineColManyState {
+            cursor: st.cursor,
+            current: st.current,
+            previous: st.previous,
+            has_previous: true,
+            ordered: false,
+            invalid_index: index,
+            locations: st.locations
+        };
+    }
+    let position: LineCol = line_col_many_position<P, N>(
+        pages, stride, total, st.cursor, clamped, st.current
+    );
+    let next_state: LineColManyState = LineColManyState {
+        cursor: clamped,
+        current: position,
+        previous: clamped,
+        has_previous: true,
+        ordered: true,
+        invalid_index: 0,
+        locations: replace(st.locations, index, position)
+    };
+    return next_state;
+}
+fn line_col_many_position<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, current: LineCol) -> (result: LineCol) {
+    if stride == 0 { return line_col_global<P, N>(pages, stride, total, end); }
+    return line_col_advance_global<P, N>(pages, stride, start, end, current);
+}
+fn line_col_advance_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, start: u64, end: u64, initial: LineCol) -> (result: LineCol) {
+    let required_pages: u64 = page_count_for(stride, end);
+    let scanned_pages: u64 = select(required_pages <= pages.len, required_pages, pages.len);
+    iterate p over pages[0..scanned_pages] carrying st: LineCol = initial {
+        next st = line_col_advance_page_step<P, N>(pages, stride, start, end, p, st);
+    }
+    return st;
+}
+fn line_col_advance_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, start: u64, end: u64, index: u64, st: LineCol) -> (result: LineCol) {
+    let page: [byte; up_to N] = pages[index];
+    let base: u64 = index * stride;
+    if base >= end { return st; }
+    let begin: u64 = line_col_page_local_start(start, base);
+    let remaining: u64 = end - base;
+    let finish: u64 = select(page.len <= remaining, page.len, remaining);
+    if begin >= finish { return st; }
+    iterate i over page[begin..finish] carrying cur: LineCol = st {
+        next cur = line_col_advance_byte(page[begin + i] as u64, cur);
+    }
+    return cur;
+}
+fn line_col_page_local_start(start: u64, base: u64) -> (result: u64) {
+    if start > base { return start - base; }
+    return 0;
+}
+fn line_col_advance_byte(value: u64, current: LineCol) -> (result: LineCol) {
+    if value == 10 { return LineCol { line: current.line + 1, col: 1 }; }
+    return LineCol { line: current.line, col: current.col + 1 };
+}
 fn line_col_page_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, index: u64, end: u64, st: LineCol) -> (result: LineCol) {
     let page: [byte; up_to N] = pages[index];
     if stride == 0 {

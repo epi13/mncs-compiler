@@ -27,11 +27,12 @@ ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.source.v1"
 FUNCTION = "line_col_global"
 SPAN_FUNCTION = "line_col_span_global"
+BATCH_FUNCTION = "line_cols_global"
 PAGE_BOUND = 1024
 STRIDE_BOUND = 1024
 STRIDES = (1, 7, 64, 1024)
 STEP_BUDGET = 8_000_000
-EVIDENCE = ROOT / "evidence" / "self-host-source-line-col-global-20261017.json"
+EVIDENCE = ROOT / "evidence" / "self-host-source-line-col-batch-20261017.json"
 
 test_vm_emit.VM_REPO = native_app.VM_ROOT
 test_vm_emit.VM_BIN = native_app.VM_BIN
@@ -42,7 +43,17 @@ def seeds() -> list[dict]:
         "module": MODULE,
         "function": function,
         "type_arguments": [cp0001.nat_arg(PAGE_BOUND), cp0001.nat_arg(STRIDE_BOUND)],
-    } for function in (FUNCTION, SPAN_FUNCTION)]
+    } for function in (FUNCTION, SPAN_FUNCTION, BATCH_FUNCTION)]
+
+
+def query_list_value(offsets: list[int]) -> dict:
+    return {"sequence": {"values": [cp0001.integer(offset) for offset in offsets]}}
+
+
+def pages_for(raw: bytes, stride: int) -> list[bytes]:
+    if stride == 0:
+        return [raw] if raw else []
+    return cp0001.chunk(raw, stride)
 
 
 def observations() -> list[dict]:
@@ -80,6 +91,13 @@ def observations() -> list[dict]:
         "stride": 1024,
         "offsets": [32766, 32767, 32768, len(long_source), len(long_source) + 1],
     })
+    zero_stride = b"before\nafter"
+    rows.append({
+        "id": "zero-stride-fallback-single-page",
+        "raw": zero_stride,
+        "stride": 0,
+        "offsets": [0, 5, 6, len(zero_stride), len(zero_stride) + 1],
+    })
     return rows
 
 
@@ -102,12 +120,13 @@ def span_observations(cases: list[dict]) -> list[dict]:
 
 
 def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
-                      ) -> tuple[list[dict], list[dict], dict | None]:
+                      ) -> tuple[list[dict], list[dict], list[dict], dict | None]:
     previous = os.environ.get("MNCS_PROBE_BACKEND")
     os.environ["MNCS_PROBE_BACKEND"] = backend
     probe = cp0001.Probe("source", MODULE, seeds())
     rows: list[dict] = []
     span_rows: list[dict] = []
+    batch_rows: list[dict] = []
     artifact = None
     try:
         for case in cases:
@@ -116,7 +135,7 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                 returned = probe.run_global(
                     MODULE,
                     FUNCTION,
-                    cp0001.chunk(case["raw"], case["stride"]),
+                    pages_for(case["raw"], case["stride"]),
                     case["stride"],
                     len(case["raw"]),
                     (cp0001.integer(offset),),
@@ -139,7 +158,7 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
             returned = probe.run_global(
                 MODULE,
                 SPAN_FUNCTION,
-                cp0001.chunk(span["raw"], span["stride"]),
+                pages_for(span["raw"], span["stride"]),
                 span["stride"],
                 len(span["raw"]),
                 (cp0001.integer(span["start"]), cp0001.integer(span["end"])),
@@ -161,6 +180,53 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                 "end_line": actual_end[0], "end_column": actual_end[1],
                 "steps": probe.steps[-1], "wall_seconds": round(wall, 6),
             })
+        for case in cases:
+            started = time.monotonic()
+            returned = probe.run_global(
+                MODULE,
+                BATCH_FUNCTION,
+                pages_for(case["raw"], case["stride"]),
+                case["stride"],
+                len(case["raw"]),
+                (query_list_value(case["offsets"]),),
+                budget=STEP_BUDGET,
+            )
+            wall = time.monotonic() - started
+            if not returned["ordered"]:
+                raise AssertionError(f"{backend} {case['id']}: ordered query batch rejected")
+            locations = returned["locations"]
+            expected = [cp0001.ref_line_col(case["raw"], offset)
+                        for offset in case["offsets"]]
+            actual = [(item["line"], item["col"]) for item in locations]
+            if actual != expected:
+                raise AssertionError(
+                    f"{backend} {case['id']} ordered offsets: {actual} != {expected}"
+                )
+            batch_rows.append({
+                "id": case["id"], "offsets": case["offsets"],
+                "locations": [[line, column] for line, column in actual],
+                "steps": probe.steps[-1], "wall_seconds": round(wall, 6),
+            })
+        long_case = next(case for case in cases
+                         if case["id"] == "real-64k-source-stride-1024")
+        rejected = probe.run_global(
+            MODULE,
+            BATCH_FUNCTION,
+            pages_for(long_case["raw"], long_case["stride"]),
+            long_case["stride"],
+            len(long_case["raw"]),
+            (query_list_value([len(long_case["raw"]), 0]),),
+            budget=STEP_BUDGET,
+        )
+        if rejected["ordered"] or rejected["invalid_index"] != 1 or rejected["locations"]:
+            raise AssertionError(f"{backend}: out-of-order query batch was not rejected: {rejected}")
+        batch_rows.append({
+            "id": "out-of-order-batch-rejected",
+            "offsets": [len(long_case["raw"]), 0],
+            "ordered": False,
+            "invalid_index": rejected["invalid_index"],
+            "steps": probe.steps[-1],
+        })
         if backend == "reference_interpreter":
             emitted = probe.send({"emit_vm_artifact": {"module": MODULE}})
             artifact = emitted.get("artifact")
@@ -169,9 +235,9 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                 raise AssertionError(f"Source did not emit a canonical VM artifact: {emitted}")
             entrypoints = [
                 row for row in artifact.get("generic_entrypoints", [])
-                if row.get("generic_function") in (FUNCTION, SPAN_FUNCTION)
+                if row.get("generic_function") in (FUNCTION, SPAN_FUNCTION, BATCH_FUNCTION)
             ]
-            for function in (FUNCTION, SPAN_FUNCTION):
+            for function in (FUNCTION, SPAN_FUNCTION, BATCH_FUNCTION):
                 if not any(row.get("generic_function") == function
                            and tuple(row.get("args_spellings", [])) == ("1024", "1024")
                            for row in entrypoints):
@@ -182,13 +248,13 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
             os.environ.pop("MNCS_PROBE_BACKEND", None)
         else:
             os.environ["MNCS_PROBE_BACKEND"] = previous
-    return rows, span_rows, artifact
+    return rows, span_rows, batch_rows, artifact
 
 
 def vm_cases(cases: list[dict], spans: list[dict]) -> list[dict]:
     requests = []
     for case in cases:
-        pages = cp0001.chunk(case["raw"], case["stride"])
+        pages = pages_for(case["raw"], case["stride"])
         for offset in case["offsets"]:
             requests.append({
                 "id": f"{case['id']}-offset-{offset}",
@@ -207,7 +273,7 @@ def vm_cases(cases: list[dict], spans: list[dict]) -> list[dict]:
                 "step_budget": STEP_BUDGET,
             })
     for span in spans:
-        pages = cp0001.chunk(span["raw"], span["stride"])
+        pages = pages_for(span["raw"], span["stride"])
         requests.append({
             "id": span["id"],
             "kind": "span",
@@ -223,6 +289,41 @@ def vm_cases(cases: list[dict], spans: list[dict]) -> list[dict]:
                           cp0001.nat_arg(STRIDE_BOUND)],
             "step_budget": STEP_BUDGET,
         })
+    for case in cases:
+        requests.append({
+            "id": f"{case['id']}-ordered-batch",
+            "kind": "batch",
+            "case_id": case["id"],
+            "offsets": case["offsets"],
+            "function": BATCH_FUNCTION,
+            "args": [
+                cp0001.pages_value(pages_for(case["raw"], case["stride"])),
+                cp0001.integer(case["stride"]),
+                cp0001.integer(len(case["raw"])),
+                query_list_value(case["offsets"]),
+            ],
+            "type_args": [cp0001.nat_arg(PAGE_BOUND),
+                          cp0001.nat_arg(STRIDE_BOUND)],
+            "step_budget": STEP_BUDGET,
+        })
+    long_case = next(case for case in cases
+                     if case["id"] == "real-64k-source-stride-1024")
+    requests.append({
+        "id": "out-of-order-batch-rejected",
+        "kind": "batch-invalid",
+        "case_id": long_case["id"],
+        "offsets": [len(long_case["raw"]), 0],
+        "function": BATCH_FUNCTION,
+        "args": [
+            cp0001.pages_value(pages_for(long_case["raw"], long_case["stride"])),
+            cp0001.integer(long_case["stride"]),
+            cp0001.integer(len(long_case["raw"])),
+            query_list_value([len(long_case["raw"]), 0]),
+        ],
+        "type_args": [cp0001.nat_arg(PAGE_BOUND),
+                      cp0001.nat_arg(STRIDE_BOUND)],
+        "step_budget": STEP_BUDGET,
+    })
     return requests
 
 
@@ -241,10 +342,10 @@ def main() -> None:
     spans = span_observations(cases)
     child_before = resource.getrusage(resource.RUSAGE_CHILDREN)
     source_hash = hashlib.sha256((ROOT / "src/compiler/source.mncs").read_bytes()).hexdigest()
-    reference_rows, reference_span_rows, artifact = run_probe_backend(
+    reference_rows, reference_span_rows, reference_batch_rows, artifact = run_probe_backend(
         "reference_interpreter", cases, spans
     )
-    cranelift_rows, cranelift_span_rows, _ = run_probe_backend(
+    cranelift_rows, cranelift_span_rows, cranelift_batch_rows, _ = run_probe_backend(
         "cranelift", cases, spans
     )
     expected_digest = [(row["id"], row["line"], row["column"]) for row in reference_rows]
@@ -263,6 +364,18 @@ def main() -> None:
     ]
     if cranelift_span_digest != expected_span_digest:
         raise AssertionError("Cranelift span results differ from the reference interpreter")
+    expected_batch_digest = [
+        (row["id"], row.get("ordered", True), row.get("invalid_index", 0),
+         row.get("locations", []))
+        for row in reference_batch_rows
+    ]
+    cranelift_batch_digest = [
+        (row["id"], row.get("ordered", True), row.get("invalid_index", 0),
+         row.get("locations", []))
+        for row in cranelift_batch_rows
+    ]
+    if cranelift_batch_digest != expected_batch_digest:
+        raise AssertionError("Cranelift ordered-batch results differ from the reference interpreter")
 
     calls = vm_cases(cases, spans)
     with tempfile.TemporaryDirectory(prefix="mncs-vm-source-line-col-") as raw_dir:
@@ -275,6 +388,7 @@ def main() -> None:
 
     vm_rows = []
     vm_span_rows = []
+    vm_batch_rows = []
     if len(document.get("results", [])) != len(calls):
         raise AssertionError("canonical VM omitted line/column or span results")
     expected_points = {
@@ -285,6 +399,10 @@ def main() -> None:
         row["id"]: (row["start_line"], row["start_column"],
                     row["end_line"], row["end_column"])
         for row in reference_span_rows
+    }
+    expected_batches = {
+        row["id"]: row["locations"]
+        for row in reference_batch_rows if row["id"] != "out-of-order-batch-rejected"
     }
     for call, result in zip(calls, document["results"]):
         if result.get("id") != call["id"] or result.get("outcome") != {"kind": "completed"}:
@@ -306,7 +424,7 @@ def main() -> None:
                 "line": value[0], "column": value[1],
                 "steps": steps,
             })
-        else:
+        elif call["kind"] == "span":
             value = (
                 actual["start"]["line"], actual["start"]["col"],
                 actual["end"]["line"], actual["end"]["col"],
@@ -318,6 +436,26 @@ def main() -> None:
                 "id": call["id"], "start_line": value[0], "start_column": value[1],
                 "end_line": value[2], "end_column": value[3], "steps": steps,
             })
+        else:
+            if call["kind"] == "batch-invalid":
+                if actual["ordered"] or actual["invalid_index"] != 1 or actual["locations"]:
+                    raise AssertionError(f"canonical VM accepted out-of-order offsets: {actual}")
+                vm_batch_rows.append({
+                    "id": call["id"], "ordered": False,
+                    "invalid_index": actual["invalid_index"], "steps": steps,
+                })
+                continue
+            locations = actual["locations"]
+            positions = [[item["line"], item["col"]] for item in locations]
+            expected = expected_batches[call["case_id"]]
+            if not actual["ordered"] or positions != expected:
+                raise AssertionError(
+                    f"canonical VM batch {call['id']}: {actual} != {expected}"
+                )
+            vm_batch_rows.append({
+                "id": call["case_id"], "offsets": call["offsets"],
+                "ordered": True, "locations": positions, "steps": steps,
+            })
 
     child_after = resource.getrusage(resource.RUSAGE_CHILDREN)
     child_cpu = ((child_after.ru_utime - child_before.ru_utime)
@@ -325,10 +463,11 @@ def main() -> None:
     artifact_id = artifact.get("artifact_id")
     work_comparisons = {}
     spans_by_id = {span["id"]: span for span in spans}
-    for backend, point_rows, span_rows in (
-        ("reference_interpreter", reference_rows, reference_span_rows),
-        ("cranelift", cranelift_rows, cranelift_span_rows),
-        ("canonical_vm", vm_rows, vm_span_rows),
+    batch_work_comparisons = {}
+    for backend, point_rows, span_rows, batch_rows in (
+        ("reference_interpreter", reference_rows, reference_span_rows, reference_batch_rows),
+        ("cranelift", cranelift_rows, cranelift_span_rows, cranelift_batch_rows),
+        ("canonical_vm", vm_rows, vm_span_rows, vm_batch_rows),
     ):
         point_steps = {
             (row.get("case_id", row["id"]), row["offset"]): row["steps"]
@@ -359,6 +498,31 @@ def main() -> None:
             ) if separate_total else 0,
             "requests": comparisons,
         }
+        batch_comparisons = []
+        for row in batch_rows:
+            if row.get("ordered", True) is False:
+                continue
+            separate_steps = sum(
+                point_steps[(row["id"], offset)] for offset in row["offsets"]
+            )
+            batch_comparisons.append({
+                "id": row["id"],
+                "batch_steps": row["steps"],
+                "independent_lookup_steps": separate_steps,
+                "steps_saved": separate_steps - row["steps"],
+            })
+        separate_total = sum(row["independent_lookup_steps"] for row in batch_comparisons)
+        batch_total = sum(row["batch_steps"] for row in batch_comparisons)
+        batch_work_comparisons[backend] = {
+            "batch_requests": len(batch_comparisons),
+            "batch_steps": batch_total,
+            "independent_lookup_steps": separate_total,
+            "steps_saved": separate_total - batch_total,
+            "reduction_fraction": round(
+                (separate_total - batch_total) / separate_total, 6
+            ) if separate_total else 0,
+            "requests": batch_comparisons,
+        }
     report = {
         "schema_version": 1,
         "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
@@ -374,11 +538,14 @@ def main() -> None:
                    "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},
         "span_target": {"module": MODULE, "function": SPAN_FUNCTION,
                         "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},
+        "batch_target": {"module": MODULE, "function": BATCH_FUNCTION,
+                         "generic_arguments": [PAGE_BOUND, STRIDE_BOUND]},
         "oracle": "byte-based SourceSpan line/column convention: 1-based, newline resets column, UTF-8 columns count bytes",
         "page_strides": list(STRIDES),
         "input_count": len(cases),
         "request_count_per_executor": len(reference_rows),
         "span_request_count_per_executor": len(reference_span_rows),
+        "batch_request_count_per_executor": len(reference_batch_rows),
         "offset_cases": [
             {"id": row["id"], "size_bytes": len(row["raw"]),
              "stride": row["stride"], "offsets": row["offsets"]}
@@ -388,6 +555,8 @@ def main() -> None:
         "cranelift": cranelift_rows,
         "reference_interpreter_spans": reference_span_rows,
         "cranelift_spans": cranelift_span_rows,
+        "reference_interpreter_batches": reference_batch_rows,
+        "cranelift_batches": cranelift_batch_rows,
         "canonical_vm": {
             "artifact_identity": artifact_id,
             "results": vm_rows,
@@ -401,12 +570,20 @@ def main() -> None:
             "results": vm_span_rows,
             "maximum_steps_per_call": max(row["steps"] for row in vm_span_rows),
         },
+        "canonical_vm_batches": {
+            "results": vm_batch_rows,
+            "maximum_steps_per_call": max(row["steps"] for row in vm_batch_rows),
+        },
         "span_vs_two_single_lookups": work_comparisons,
+        "batch_vs_independent_lookups": batch_work_comparisons,
         "semantic_digest_sha256": hashlib.sha256(json.dumps(
             expected_digest, separators=(",", ":")
         ).encode()).hexdigest(),
         "span_semantic_digest_sha256": hashlib.sha256(json.dumps(
             expected_span_digest, separators=(",", ":")
+        ).encode()).hexdigest(),
+        "batch_semantic_digest_sha256": hashlib.sha256(json.dumps(
+            expected_batch_digest, separators=(",", ":")
         ).encode()).hexdigest(),
         "measurements": {
             "reference_and_cranelift_child_cpu_seconds": round(child_cpu, 6),
@@ -422,11 +599,12 @@ def main() -> None:
         "stage2_claimed": False,
         "scope": (
             "The selected Source line_col_global callable maps byte offsets, and line_col_span_global "
-            "maps ordered span endpoints in one prefix walk across canonical page layouts. "
+            "maps ordered span endpoints in one prefix walk; line_cols_global maps ordered byte offsets "
+            "with one monotone scan and rejects decreasing query batches. "
             "Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based "
             "SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, "
-            "and a 64 KiB source. Span transition counts are compared with two single-coordinate calls "
-            "at the same endpoints. This is a selected source-location frontier, not full Source module proof, "
+            "and a 64 KiB source. Span and batch transition counts are compared with independent "
+            "single-coordinate calls. This is a selected source-location frontier, not full Source module proof, "
             "Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
         ),
     }
@@ -439,10 +617,16 @@ def main() -> None:
         "target": report["target"],
         "page_strides": list(STRIDES),
         "request_count_per_executor": len(reference_rows),
+        "batch_request_count_per_executor": len(reference_batch_rows),
         "canonical_vm": {"artifact_identity": artifact_id,
                          "wall_seconds": round(vm_wall, 6),
                          "peak_rss_kib": vm_peak_rss_kib,
                          "maximum_steps_per_call": max(row["steps"] for row in vm_rows)},
+        "canonical_vm_batch": {
+            "maximum_steps_per_call": max(row["steps"] for row in vm_batch_rows),
+            "steps_saved_vs_independent": batch_work_comparisons["canonical_vm"]["steps_saved"],
+            "reduction_fraction": batch_work_comparisons["canonical_vm"]["reduction_fraction"],
+        },
         "language_verified_facts_reused": 0,
     }, indent=2))
 
