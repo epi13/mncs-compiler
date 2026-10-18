@@ -16,6 +16,10 @@ import test_vm_native_application as support
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = common.MODULE
+configured_probe = os.environ.get("MNCS_NATIVE_APP_PROBE_BIN") or os.environ.get("MNCS_COMPILER_PROBE")
+support.PROBE = Path(configured_probe) if configured_probe else (
+    ROOT / "tools/stage0-probe/target/release/mncs-compiler-stage0-probe"
+)
 EVIDENCE_PATH = ROOT / os.environ.get(
     "MNCS_VM_OFFSET_BRANCH_EVIDENCE_PATH",
     "evidence/vm-runtime-checked-sequence-copy-offset-branches-20261018.json",
