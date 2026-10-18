@@ -1,0 +1,91 @@
+{
+  "schema_version": "mncs.compiler.vm-runtime-checked-sequence-copy-frontier/1",
+  "kind": "compiler-runtime-checked-bounded-view-sequence-copy-canonical-vm-frontier",
+  "observed_at": "2026-10-18T10:50:55.322895Z",
+  "status": "passed",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler": {
+    "revision": "9c31d5b47e9879018cbc4434958ebdb8625d8916",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "emitter": "tools/vm_emit.rs",
+    "emitter_sha256": "3b31ffeb5e7bb216a654e88dd7cbba3cc46312ca4067014d506d2ccd4c356e81",
+    "test_harness": "tools/test_vm_runtime_checked_sequence_copy.py",
+    "test_harness_sha256": "ded1d0728aa34c433cab57c32c21b1b7a09cf48b4c1ea4c8ff28f8e3d1a4ed4d"
+  },
+  "vm": {
+    "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "source": {
+    "module": "mncs.test.runtime_view_copy",
+    "function": "copy_digest",
+    "sha256": "3a79b93a38c79aab27f7ac242d05eab1e42b3c85210450f7a29d4e7b5f86318f",
+    "copy_window": {
+      "destination_offset": 0,
+      "source_offset": 0,
+      "length": 32
+    },
+    "valid_view_length": 32,
+    "short_view_length": 31,
+    "expected_result_sha256": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd",
+    "actual_result_sha256": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+  },
+  "verification": {
+    "application_build_status": "verified",
+    "application_entry_status": "verified",
+    "application_artifact_identity": "sha256:0c6a3cb57e2e1a02d7070771c3ba155373e324176696db7501d41b4912744d84",
+    "application_build_contract": "mncs.compiler.application-build/4",
+    "lowering_ref": "vm-runtime-checked-sequence-copy-lowering/1:bdfcea0bc1facf39a79508158d1f3da6b926771e9f16dcd86bcd56548716f585",
+    "runtime_checked_source_projections": 32,
+    "valid_result_matches_stage0": true,
+    "short_view_stage0_status": "runtime_failure",
+    "short_view_vm_outcome": {
+      "detail": "sequence projection index out of bounds",
+      "kind": "program_failure",
+      "mode": "runtime-failure"
+    },
+    "short_view_runtime_failure_matches": true,
+    "language_verified_facts_reused": 0
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 0.145783,
+      "cpu_seconds": 0.12,
+      "peak_rss_bytes": 14118912,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 0.003604,
+      "cpu_seconds": 0.0,
+      "peak_rss_bytes": 14118912,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "canonical_vm_cases": [
+      {
+        "wall_seconds": 0.01763,
+        "user_seconds": 0.01,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21389312
+      },
+      {
+        "wall_seconds": 0.01814,
+        "user_seconds": 0.01,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21868544
+      }
+    ],
+    "probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8"
+  },
+  "claim_boundary": "The compiler lowered the actual 0..32 bounded-view copy shape used by Test provider copy_digest. The source offsets and length are constant while the view length remains runtime-sized; all 32 source projections retain RuntimeChecked evidence and the Isolated failure mode. A 32-byte view matches Stage-0 on the canonical VM, and a 31-byte view produces a runtime failure. Copies with dynamic windows, nonzero empty-copy source offsets, or lengths above 256 remain explicit. This does not establish Language-owned verified-fact reuse or the authorized Forge/Environment/Store provider route.",
+  "evidence_artifact": "evidence/vm-runtime-checked-sequence-copy-20261018.json"
+}
