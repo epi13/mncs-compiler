@@ -21,8 +21,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use mncs_compiler::ReferenceCompiler;
 use mncs_model::{
-    ArtifactRepresentation, BodyType, CompilationStatus, Program, SsaInstructionKind, SsaModule,
-    TargetContractRef,
+    ArtifactRepresentation, BodyOperationKind, BodyType, CompilationStatus, Program,
+    SsaInstructionKind, SsaModule, TargetContractRef,
 };
 
 /// Must match `mncs_vm::artifact::ARTIFACT_SCHEMA_VERSION`.
@@ -644,6 +644,99 @@ fn application_ssa_closure(
     Ok(ssa)
 }
 
+/// Construct a backend input whose executable bodies are limited to the
+/// selected application's verified call closure. The caller first validates
+/// the complete source program; declaration interfaces and all provenance
+/// tables stay present so backend identities and call resolution remain bound
+/// to the complete linked application.
+fn application_lowering_program(
+    program: &Program,
+    selected_exports: &BTreeSet<(String, String)>,
+) -> Result<Program, String> {
+    if selected_exports.is_empty() {
+        return Err("application lowering has no selected roots".to_owned());
+    }
+
+    let validation = program.validate();
+    if !validation.valid {
+        return Err(format!(
+            "application source program failed semantic validation: {:?}",
+            validation.errors
+        ));
+    }
+
+    let functions_by_identity: BTreeMap<_, _> = program
+        .functions
+        .iter()
+        .map(|function| {
+            (
+                mncs_model::function_id(
+                    function.identity_namespace(&program.module),
+                    &function.name,
+                )
+                .0,
+                function,
+            )
+        })
+        .collect();
+    let mut pending: VecDeque<String> = selected_exports
+        .iter()
+        .map(|(module, function)| mncs_model::function_id(module, function).0)
+        .collect();
+    let mut reachable = BTreeSet::new();
+    while let Some(identity) = pending.pop_front() {
+        if !reachable.insert(identity.clone()) {
+            continue;
+        }
+        let function = functions_by_identity.get(&identity).ok_or_else(|| {
+            format!("selected application function {identity} has no source declaration")
+        })?;
+        if !function.generic_params.is_empty() {
+            return Err(format!(
+                "selected application function {identity} is an unresolved generic template"
+            ));
+        }
+        let body = function.body.as_ref().ok_or_else(|| {
+            format!("selected application function {identity} has no executable body")
+        })?;
+        for block in &body.blocks {
+            for operation in &block.operations {
+                if let BodyOperationKind::Call {
+                    function: callee,
+                    specialization,
+                    ..
+                } = &operation.kind
+                {
+                    if specialization
+                        .as_ref()
+                        .is_some_and(|specialization| specialization != callee)
+                    {
+                        return Err(format!(
+                            "application call in {identity} has mismatched generic specialization identity"
+                        ));
+                    }
+                    pending.push_back(callee.0.clone());
+                }
+            }
+        }
+        for iteration in &body.bounded_iterations {
+            pending.extend(iteration.callees.iter().map(|callee| callee.0.clone()));
+        }
+    }
+
+    let mut lowering_program = program.clone();
+    for function in &mut lowering_program.functions {
+        let identity = mncs_model::function_id(
+            function.identity_namespace(&lowering_program.module),
+            &function.name,
+        );
+        if !reachable.contains(&identity.0) {
+            function.body = None;
+        }
+    }
+    Ok(lowering_program)
+}
+
 fn emit_vm_artifact_scoped(
     compiler: &ReferenceCompiler,
     program: &Program,
@@ -660,14 +753,19 @@ fn emit_vm_artifact_scoped(
     ),
     String,
 > {
+    let lowering_program = match selected_exports {
+        Some(selected) => Some(application_lowering_program(program, selected)?),
+        None => None,
+    };
+    let lowering_program = lowering_program.as_ref().unwrap_or(program);
     let emit: BTreeSet<ArtifactRepresentation> =
         [ArtifactRepresentation::Ssa].into_iter().collect();
-    let request = compiler.request_for_program(program, emit, None);
-    let mut result = compiler.compile(request, program);
+    let request = compiler.request_for_program(lowering_program, emit, None);
+    let mut result = compiler.compile(request, lowering_program);
     if result.status == CompilationStatus::Failed {
         return Err(format!(
             "direct vm emission failed for {}: {:?}",
-            program.module, result.diagnostics
+            lowering_program.module, result.diagnostics
         ));
     }
     let ssa = result.emissions.ssa.take().expect("ssa emission present");
@@ -706,7 +804,7 @@ fn emit_vm_artifact_scoped(
         }
     }
     let execution_ssa = match selected_exports {
-        Some(roots) => application_ssa_closure(ssa, program, roots)?,
+        Some(roots) => application_ssa_closure(ssa, lowering_program, roots)?,
         None => ssa,
     };
     let capability_bindings = capability_dispatch_bindings(&execution_ssa)?;
@@ -1107,7 +1205,8 @@ fn resolve_generic_entry(
 #[cfg(test)]
 mod application_closure_tests {
     use super::{
-        application_ssa_closure, emit_vm_application_artifact_for_callables_with_producer,
+        application_lowering_program, application_ssa_closure,
+        emit_vm_application_artifact_for_callables_with_producer,
         emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer,
     };
     use mncs_compiler::ReferenceCompiler;
@@ -1249,6 +1348,20 @@ mod application_closure_tests {
             full["code"]["mncs-selected-ssa"]["module"].clone(),
         )
         .expect("decode full canonical SSA module");
+        let roots = BTreeSet::from([("closure.sample".to_owned(), "entry".to_owned())]);
+        let expected_closure = application_ssa_closure(full_module.clone(), program, &roots)
+            .expect("full compiler output projects to the selected application closure");
+        assert_eq!(
+            projected.functions, expected_closure.functions,
+            "selected SSA functions must be identical when unrelated bodies are omitted before lowering"
+        );
+        assert_eq!(projected.record_types, expected_closure.record_types);
+        assert_eq!(projected.obligations, expected_closure.obligations);
+        assert_eq!(projected.transformations, expected_closure.transformations);
+        assert_eq!(
+            projected.generic_specializations,
+            expected_closure.generic_specializations
+        );
         let functions: BTreeSet<String> = projected
             .functions
             .iter()
@@ -1286,6 +1399,56 @@ mod application_closure_tests {
             application_bytes < full_bytes,
             "entry closure should reduce this artifact: app={application_bytes}, full={full_bytes}"
         );
+    }
+
+    #[test]
+    fn application_lowering_preserves_full_validation_and_only_keeps_reachable_bodies() {
+        let source = r#"
+            mncs 0.18;
+            module closure.lowering;
+            fn entry() -> (result: u64) { return helper(); }
+            fn helper() -> (result: u64) { return leaf(); }
+            fn leaf() -> (result: u64) { return 7; }
+            fn unused() -> (result: u64) { return 99; }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-lowering",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let roots = BTreeSet::from([("closure.lowering".to_owned(), "entry".to_owned())]);
+        let projected = application_lowering_program(program, &roots)
+            .expect("verified application lowering projection");
+        let retained: BTreeSet<_> = projected
+            .functions
+            .iter()
+            .filter(|function| function.body.is_some())
+            .map(|function| function.name.as_str())
+            .collect();
+        assert_eq!(retained, BTreeSet::from(["entry", "helper", "leaf"]));
+        assert_eq!(projected.functions.len(), program.functions.len());
+
+        let mut invalid = program.clone();
+        invalid
+            .functions
+            .iter_mut()
+            .find(|function| function.name == "unused")
+            .expect("unused function")
+            .body
+            .as_mut()
+            .expect("unused body")
+            .blocks
+            .clear();
+        let error = application_lowering_program(&invalid, &roots)
+            .expect_err("invalid unreachable code must not be masked by backend projection");
+        assert!(error.contains("failed semantic validation"), "{error}");
     }
 
     #[test]
