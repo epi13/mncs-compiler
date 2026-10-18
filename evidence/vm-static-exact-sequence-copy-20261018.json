@@ -1,0 +1,110 @@
+{
+  "schema_version": "mncs.compiler.vm-static-sequence-copy-frontier/1",
+  "kind": "compiler-static-exact-sequence-copy-canonical-vm-frontier",
+  "observed_at": "2026-10-18T10:13:16.197919Z",
+  "status": "passed",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler": {
+    "revision": "7f90f24f1ce3bd8028333e9fd37a169305b24f41",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "emitter": "tools/vm_emit.rs",
+    "emitter_sha256": "4b89a1a962c167483db675d2bf6349048124f255cda04958de69a50773abbf10",
+    "test_harness": "tools/test_vm_static_sequence_copy.py",
+    "test_harness_sha256": "9ee5ef9aa43c26e774997d8725c90038317a354b1e0508a73b957ddbe6a5cf53"
+  },
+  "vm": {
+    "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "source": {
+    "module": "mncs.test.vm_static_copy",
+    "function": "copy_window",
+    "sha256": "8e712a3550b7cae349bad7c5357f28831dcf9431c0f6e5507287c219a0b73474",
+    "destination": [
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17
+    ],
+    "source_sequence": [
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37
+    ],
+    "sequence_copy_operations": [
+      {
+        "destination_offset": 8,
+        "source_offset": 8,
+        "length": 0
+      },
+      {
+        "destination_offset": 2,
+        "source_offset": 1,
+        "length": 3
+      }
+    ],
+    "expected": [
+      10,
+      11,
+      31,
+      32,
+      33,
+      15,
+      16,
+      17
+    ],
+    "actual": [
+      10,
+      11,
+      31,
+      32,
+      33,
+      15,
+      16,
+      17
+    ]
+  },
+  "verification": {
+    "application_build_status": "verified",
+    "application_artifact_identity": "sha256:938bc648f89bb6751ea51dc5b1a3c433129e5d0b9a17880d38edc795625b808a",
+    "application_build_contract": "mncs.compiler.application-build/4",
+    "lowering_ref": "vm-static-exact-sequence-copy-lowering/1:8942933221024373a8210e7030e3c6fea5a8dfb96ee22d25fc124b9efdc52e90",
+    "frozen_artifact_contains_lowering_transformation": true,
+    "lowering_transformation_recorded": true,
+    "vm_outcome": {
+      "kind": "completed"
+    },
+    "vm_receipt_artifact_identity": "sha256:938bc648f89bb6751ea51dc5b1a3c433129e5d0b9a17880d38edc795625b808a",
+    "result_matches_source_semantics": true,
+    "language_verified_facts_reused": 0,
+    "runtime_checked_sequencecopy_transformed": false
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 0.127133,
+      "cpu_seconds": 0.1,
+      "peak_rss_bytes": 12361728,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "canonical_vm_wall_seconds": 0.007369,
+    "canonical_vm_peak_rss_bytes": 21073920,
+    "probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8"
+  },
+  "claim_boundary": "The compiler lowered two static exact-bound byte span copies, including an empty copy at the end of both exact sequences, into canonical-VM-supported operations. The exact artifact completed on the canonical VM and returned the expected functional-copy result. Runtime-checked and over-limit copies remain explicit SequenceCopy instructions, so this does not complete the dynamic provider application path or add Language-owned verified-fact reuse.",
+  "evidence_artifact": "evidence/vm-static-exact-sequence-copy-20261018.json"
+}
