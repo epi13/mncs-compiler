@@ -344,7 +344,12 @@ def main() -> None:
             "publish Store evidence, or establish full provider/CLI conversion."
         ),
     }
-    evidence_path = ROOT / "evidence/native-test-provider-fold-batch-20261017.json"
+    evidence_path = ROOT / os.environ.get(
+        "MNCS_TEST_PROVIDER_BATCH_EVIDENCE_PATH",
+        "evidence/native-test-provider-fold-batch-20261017.json",
+    )
+    if evidence_path.exists():
+        raise SystemExit(f"refusing to overwrite immutable evidence: {evidence_path}")
     evidence_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
 

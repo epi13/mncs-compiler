@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.native-test-provider-fold-batch-proof",
+  "observed_at": "2026-10-18T05:07:48.303200+00:00",
+  "compiler": {
+    "revision": "26ab39e5299b5b99356755ac2a465b23086fba5b",
+    "branch": "campaign/native-application-readiness-20261013",
+    "harness_sha256": "sha256:41f90adbca905fa798cc1ba2d6bf81294bab97030f68e2df4464e9e8aa3582ad",
+    "probe_sha256": "sha256:e0e917489fe6bf8e1227ec9e2add374a56c005d3cef72479385b4dcb2095136a",
+    "canonical_vm_sha256": "sha256:1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "production_sources": {
+    "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "provider_sha256": "sha256:995525034826f5b0102f31f6d374cbb652201e5b9146ff85543c702fb597edc6",
+    "protocol_sha256": "sha256:e0d95a8a9da03a47f7452ed01a75f19a5488ec6822641cd3c1a05c8c57677f52",
+    "assertions_sha256": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b",
+    "stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "sequence_module_sha256": "sha256:ef8fc2bdb651071fdba8c9d8b3ec520db5dee5b2b27ad310c5ff727f1f23731c",
+    "application_module_sha256": "sha256:5669f67e921e71c0f54742325f06fddfe3b11692c1fe3d27ee515f8a3fd30c7e"
+  },
+  "application": {
+    "module": "tests.native_provider_fold_batch",
+    "source_sha256": "sha256:3d27bf775df2b6896c9d30401fdf5d207cac12c1710acb31a1bd6f735893afeb",
+    "source_snapshot_identity": "sha256:09214adb3123dfe327c61573e2162796a841a95994fbdc48549dca1f0b065935",
+    "contract_schema": "mncs.compiler.application-build/5",
+    "artifact_identity": "sha256:7f90878a7944e31321b1fea5e6e6df133a7bcbfef501d84ca6692b42e8fb9f74",
+    "artifact_sha256": "sha256:12f55d52389d85ca131eb9618147239e7ac6ade5de2c50d327f93bf4e96c8e4b",
+    "selected_roots": [
+      {
+        "module": "tests.native_provider_fold_batch",
+        "function": "fold_failure_precedence",
+        "status": "verified",
+        "interface_identity": "sha256:35f039bed7d8e8523e0db0431847d3677b6b6492708abf40e7aae26569f792b6"
+      },
+      {
+        "module": "tests.native_provider_fold_batch",
+        "function": "fold_invalid_request",
+        "status": "verified",
+        "interface_identity": "sha256:aba8c9f30d9f40a6b312d0b34c913b0f802b28790671b860dfd3e786ca6e986e"
+      },
+      {
+        "module": "tests.native_provider_fold_batch",
+        "function": "fold_mixed_statuses",
+        "status": "verified",
+        "interface_identity": "sha256:fd26863d19b5d3f601b7ce57dc518976d0e51a587669ba324b65ceb1c6660956"
+      },
+      {
+        "module": "tests.native_provider_fold_batch",
+        "function": "fold_unsupported_only",
+        "status": "verified",
+        "interface_identity": "sha256:0b4d6c5b29c5bfeb6c510237113a6571411fa9da1105e8a9a96481e751fd48c8"
+      }
+    ],
+    "capability_dispatch_status": "verified",
+    "capability_dispatch_bindings": 0
+  },
+  "verification": {
+    "stage0_oracle_results": 4,
+    "canonical_vm_results": 4,
+    "typed_results_match": true,
+    "fresh_process_cache_hit": "hit",
+    "fresh_process_frontend_invocations": 0,
+    "language_verified_facts_reused": 0,
+    "native_provider_status_cases": [
+      "RETURNED success",
+      "RETURNED assertion failure",
+      "INVALID_REQUEST",
+      "BUDGET_EXHAUSTED",
+      "UNSUPPORTED",
+      "failure-over-unsupported verdict precedence"
+    ],
+    "results": {
+      "fold_failure_precedence": {
+        "actual": 3,
+        "assertion_code": 9201,
+        "assertions": 1,
+        "expected": 5,
+        "failure_code": 9201,
+        "failure_kind": {
+          "$v": 6,
+          "$p": {}
+        },
+        "failures": 1,
+        "verdict": {
+          "$v": 1,
+          "$p": {}
+        },
+        "verdict_code": 1
+      },
+      "fold_invalid_request": {
+        "actual": 0,
+        "assertion_code": 0,
+        "assertions": 0,
+        "expected": 0,
+        "failure_code": 9005,
+        "failure_kind": {
+          "$v": 4,
+          "$p": {}
+        },
+        "failures": 1,
+        "verdict": {
+          "$v": 1,
+          "$p": {}
+        },
+        "verdict_code": 1
+      },
+      "fold_mixed_statuses": {
+        "actual": 0,
+        "assertion_code": 0,
+        "assertions": 1,
+        "expected": 0,
+        "failure_code": 9004,
+        "failure_kind": {
+          "$v": 6,
+          "$p": {}
+        },
+        "failures": 1,
+        "verdict": {
+          "$v": 1,
+          "$p": {}
+        },
+        "verdict_code": 1
+      },
+      "fold_unsupported_only": {
+        "actual": 0,
+        "assertion_code": 0,
+        "assertions": 0,
+        "expected": 0,
+        "failure_code": 9003,
+        "failure_kind": {
+          "$v": 6,
+          "$p": {}
+        },
+        "failures": 0,
+        "verdict": {
+          "$v": 3,
+          "$p": {}
+        },
+        "verdict_code": 3
+      }
+    }
+  },
+  "measurements": {
+    "cold_application_build": {
+      "wall_seconds": 0.968089,
+      "cpu_seconds": 0.93,
+      "peak_rss_bytes": 65503232,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "fresh_process_exact_hit": {
+      "wall_seconds": 0.110712,
+      "cpu_seconds": 0.08,
+      "peak_rss_bytes": 6828032,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 0.921995,
+      "cpu_seconds": 0.87,
+      "peak_rss_bytes": 64827392,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "canonical_vm_batch_wall_seconds": 0.068399,
+    "canonical_vm_batch_peak_rss_kib": 22524,
+    "canonical_vm_batch_invocations": 1
+  },
+  "scope": "The production mncs.test.provider::fold_selected policy and its status-to-TestResult mapping ran through one selected-callable VM artifact. Four typed root results matched Stage-0. This does not execute provider_batch_app, admit provider_digest, invoke Forge, publish Store evidence, or establish full provider/CLI conversion."
+}
