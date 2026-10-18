@@ -21,6 +21,9 @@ os.environ["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([
      "type_arguments": NAT_ARGS},
     {"module": PROJECT_MODULE, "function": "locate_project_diagnostics_global",
      "type_arguments": NAT_ARGS},
+    {"module": PROJECT_MODULE,
+     "function": "compile_project_target_with_diagnostic_locations",
+     "type_arguments": NAT_ARGS},
 ])
 
 import test_project as project
@@ -90,6 +93,37 @@ def run_project(probe, source: bytes, source_id: str, *, page_count_override=Non
     return rows, compiled["steps"], located["steps"]
 
 
+def run_project_with_integrated_locations(probe, source: bytes, source_id: str):
+    request = project.request_value(
+        project.identity_map(probe),
+        [(source_id, source_id, source)],
+    )
+    request["target"]["function"] = "compile_project_target_with_diagnostic_locations"
+    request["arguments"].append(project.integer(0))
+    compiled = probe.send(request)
+    assert compiled.get("status") == "returned", compiled
+    wrapped = compiled["returned"][0]
+    result = project.wire_field(wrapped, "result")
+    diagnostics = project.wire_field(result, "diagnostics")
+    original = project.decode(diagnostics)
+    original_rows = []
+    node = original
+    while node["$v"] == 1:
+        original_rows.append(node["$p"]["head"])
+        node = node["$p"]["tail"]
+    assert node["$v"] == 0, node
+
+    locations = project.decode(project.wire_field(wrapped, "diagnostic_locations"))
+    rows = []
+    node = locations
+    while node["$v"] == 1:
+        rows.append(node["$p"]["head"])
+        node = node["$p"]["tail"]
+    assert node["$v"] == 0, node
+    assert [row["diagnostic"] for row in rows] == original_rows
+    return rows, compiled["steps"]
+
+
 def span(row):
     diag = row["diagnostic"]
     if diag["$v"] in (2, 3, 4, 5, 6, 8):
@@ -123,6 +157,11 @@ def main():
             missing.index(b"demo.absent"),
             missing.index(b"demo.absent") + len(b"demo.absent"),
         ), missing_row
+        integrated_rows, integrated_steps = run_project_with_integrated_locations(
+            probe, missing, "integrated-missing.mncs")
+        integrated_row = verify_span(integrated_rows, missing)
+        assert integrated_row["diagnostic"]["$v"] == 3, integrated_row
+        assert span(integrated_row) == span(missing_row), integrated_row
 
         multi_page = (
             b"mncs 0.18;\nmodule demo.multi_page;\n"
@@ -170,6 +209,7 @@ def main():
             "kind": "project-diagnostic-source-locations",
             "status": "passed",
             "missing_import_span_matches_source": True,
+            "integrated_target_compile_diagnostic_locations": True,
             "multi_page_span_matches_source": True,
             "multi_page_source_bytes": len(multi_page),
             "multi_page_span_line": multi_page_row["start"]["line"],
@@ -190,6 +230,7 @@ def main():
             "steps": {
                 "compile_missing": missing_compile_steps,
                 "locate_missing": missing_location_steps,
+                "integrated_compile_and_locate_missing": integrated_steps,
                 "compile_multi_page": multi_page_compile_steps,
                 "locate_multi_page": multi_page_location_steps,
                 "compile_parse_failure": broken_compile_steps,

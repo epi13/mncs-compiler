@@ -265,6 +265,11 @@ record ProjectResult {
     diagnostics: DiagnosticList
 }
 
+record ProjectResultWithDiagnosticLocations {
+    result: ProjectResult,
+    diagnostic_locations: ProjectDiagnosticLocationList
+}
+
 record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64, parse_failed: bool, parse_index: u64, parse_start: u64, parse_end: u64 }
 fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64, target_only: bool) -> (result: ModuleBuild) {
     iterate i over sources carrying st: ModuleBuild = ModuleBuild {
@@ -2042,4 +2047,14 @@ fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages:
         imports: resolved.imports,
         diagnostics: diagnostics
     };
+}
+
+// Compile the selected source and project its current diagnostics into source
+// positions in one native call. ProjectResult remains byte-span authoritative;
+// callers can refresh locations from the exact source pages used here.
+fn compile_project_target_with_diagnostic_locations<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: ProjectResultWithDiagnosticLocations) {
+    let sources: [ProjectSource; up_to 64] = snapshot.sources;
+    let compiled: ProjectResult = compile_project_target<M, N>(snapshot, flat_pages, target_source_index);
+    let locations: ProjectDiagnosticLocationList = locate_project_diagnostics_global<M, N>(sources, flat_pages, compiled.diagnostics);
+    return ProjectResultWithDiagnosticLocations { result: compiled, diagnostic_locations: locations };
 }
