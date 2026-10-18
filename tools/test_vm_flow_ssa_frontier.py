@@ -52,6 +52,29 @@ PROBE = Path(os.environ.get(
 MODULE_NAMES = ["source", "lexer", "parser", "segment", "decl", "flow", "ssa"]
 
 
+def evidence_output_path() -> Path:
+    configured = os.environ.get("MNCS_FLOW_SSA_FRONTIER_EVIDENCE_PATH")
+    if configured:
+        output = Path(configured)
+        if not output.is_absolute():
+            output = ROOT / output
+    else:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        output = ROOT / "evidence" / f"self-host-flow-ssa-{stamp}-{os.getpid()}.json"
+
+    try:
+        parent = output.parent.resolve(strict=True)
+        parent.relative_to(ROOT.resolve())
+    except (OSError, ValueError) as error:
+        raise SystemExit(
+            f"Flow-to-SSA evidence path must stay inside the Compiler checkout: {output}"
+        ) from error
+    output = parent / output.name
+    if output.exists() or output.is_symlink():
+        raise SystemExit(f"refusing to overwrite immutable evidence: {output}")
+    return output
+
+
 class Probe:
     """Stage-0 oracle and current-source canonical artifact emitter."""
 
@@ -153,6 +176,7 @@ def artifact_cache_identity() -> tuple[Path, Path, str, dict]:
 
 
 def main() -> None:
+    output = evidence_output_path()
     if not PROBE.exists():
         raise SystemExit(f"Stage-0 probe missing: {PROBE}")
     host_before = memory_snapshot()
@@ -385,9 +409,12 @@ def main() -> None:
             "succession."
         ),
     }
-    report["evidence_artifact"] = "evidence/self-host-flow-ssa-current-20261017.json"
-    output = ROOT / os.environ.get("MNCS_FLOW_SSA_FRONTIER_EVIDENCE_PATH", report["evidence_artifact"])
-    output.write_text(json.dumps(report, indent=2) + "\n")
+    report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
+    try:
+        with output.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(report, indent=2) + "\n")
+    except FileExistsError as error:
+        raise SystemExit(f"refusing to overwrite immutable evidence: {output}") from error
     print(json.dumps(report, indent=2))
 
 
