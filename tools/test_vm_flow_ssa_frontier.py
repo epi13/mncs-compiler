@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
+from urllib.parse import unquote
 
 import test_flow
 from test_vm_segment import run_batch, vm_to_wire, test_vm_emit
@@ -56,16 +57,24 @@ APP_SOURCE = (
     "mncs 0.18; module demo.flow_ssa_frontier; use mncs.compiler.ssa.v1 as ssa; "
     "record FlowSsaFrontierSummary { valid: bool, function_count: u64, "
     "supported_function_count: u64, verified_function_count: u64, "
+    "loop_instruction_counts_complete: bool, "
+    "loop_index_init_count: u64, loop_guard_count: u64, loop_index_advance_count: u64, "
     "block_count: u64, instruction_count: u64, branch_count: u64, jump_count: u64, "
     "return_count: u64, failure_count: u64, switch_count: u64 } "
     "fn run(pages: [[byte; up_to 1024]; up_to 1024], stride: u64, total: u64) "
     "-> (result: FlowSsaFrontierSummary) { "
     "let summary: ssa.ValueSsaSummary = "
     "ssa.lower_flow_unit_value_ssa<1024, 1024>(pages, stride, total); "
+    "let loop_counts: ssa.LoopInstructionCounts = "
+    "ssa.value_ssa_loop_instruction_counts(summary); "
     "return FlowSsaFrontierSummary { valid: summary.valid, "
     "function_count: summary.function_count, "
     "supported_function_count: summary.supported_function_count, "
     "verified_function_count: summary.verified_function_count, "
+    "loop_instruction_counts_complete: loop_counts.complete, "
+    "loop_index_init_count: loop_counts.index_init_count, "
+    "loop_guard_count: loop_counts.guard_count, "
+    "loop_index_advance_count: loop_counts.index_advance_count, "
     "block_count: summary.block_count, instruction_count: summary.instruction_count, "
     "branch_count: summary.branch_count, jump_count: summary.jump_count, "
     "return_count: summary.return_count, failure_count: summary.failure_count, "
@@ -187,6 +196,38 @@ def semantic_digest(value: dict) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def stage0_loop_instruction_facts(functions: list[dict]) -> list[dict]:
+    """Summarize the pinned Stage-0's explicit counted-loop bookkeeping."""
+    labels = {
+        "iteration_bound": "bound_initialization",
+        "iteration_zero": "remaining_zero",
+        "iteration_has_attempt": "remaining_guard",
+        "counted_index": "materialized_index",
+        "iteration_one": "decrement_constant",
+        "iteration_decrement": "remaining_decrement",
+    }
+    facts = []
+    for function in functions:
+        for block in function.get("blocks", []):
+            for instruction in block.get("instructions", []):
+                identity = unquote(instruction.get("semantic_identity", ""))
+                label = next((key for key in labels if f"$mncs${key}$" in identity), None)
+                if label is None:
+                    continue
+                kind = instruction["kind"]
+                kind_name = next(iter(kind))
+                payload = kind[kind_name]
+                fact = {"role": labels[label], "ssa_kind": kind_name}
+                if kind_name == "Constant":
+                    fact["value"] = payload["value"]
+                elif kind_name == "IntegerCompare":
+                    fact["predicate"] = payload["predicate"]
+                elif kind_name == "Integer":
+                    fact["operator"] = payload["operator"]
+                facts.append(fact)
+    return facts
+
+
 def main() -> None:
     output = evidence_output_path()
     if not PROBE.exists():
@@ -229,6 +270,30 @@ def main() -> None:
             raise AssertionError(f"Stage-0 iteration facts changed for {name}: {iterations}")
         if any(not loop.get("header") or not loop.get("backedge") for loop in iterations):
             raise AssertionError(f"Stage-0 did not retain the counted-loop cycle for {name}: {iterations}")
+        stage0_loop_facts = stage0_loop_instruction_facts(oracle_functions)
+        expected_loop_facts = 6 * expected_iterations
+        if len(stage0_loop_facts) != expected_loop_facts:
+            raise AssertionError(
+                f"Stage-0 counted-loop instruction inventory changed for {name}: "
+                f"{stage0_loop_facts}"
+            )
+        if expected_iterations:
+            expected_roles = {
+                "bound_initialization": ("Constant", 4),
+                "remaining_zero": ("Constant", 0),
+                "remaining_guard": ("IntegerCompare", "gt"),
+                "materialized_index": ("Integer", "sub"),
+                "decrement_constant": ("Constant", 1),
+                "remaining_decrement": ("Integer", "sub"),
+            }
+            actual_roles = {}
+            for fact in stage0_loop_facts:
+                value = fact.get("value", fact.get("predicate", fact.get("operator")))
+                actual_roles[fact["role"]] = (fact["ssa_kind"], value)
+            if actual_roles != expected_roles:
+                raise AssertionError(
+                    f"Stage-0 counted-loop operation roles changed for {name}: {actual_roles}"
+                )
         data = source.encode()
         cases.append({
             "name": name,
@@ -239,6 +304,7 @@ def main() -> None:
             "oracle_shape": oracle_shape,
             "expected_iterations": expected_iterations,
             "stage0_iterations": iterations,
+            "stage0_loop_instruction_facts": stage0_loop_facts,
         })
 
     application_build_started = time.monotonic()
@@ -303,6 +369,19 @@ def main() -> None:
             raise AssertionError(f"Flow-to-SSA summary is invalid for {case['name']}: {summary}")
         if summary["supported_function_count"] != 1 or summary["verified_function_count"] != 1:
             raise AssertionError(f"Flow-to-SSA did not verify {case['name']}: {summary}")
+        if not summary["loop_instruction_counts_complete"]:
+            raise AssertionError(f"MNCS loop-instruction scan was incomplete for {case['name']}: {summary}")
+        loop_instruction_counts = {
+            "index_init": summary["loop_index_init_count"],
+            "guard": summary["loop_guard_count"],
+            "index_advance": summary["loop_index_advance_count"],
+        }
+        expected_candidate_loop_count = case["expected_iterations"]
+        if any(count != expected_candidate_loop_count for count in loop_instruction_counts.values()):
+            raise AssertionError(
+                f"MNCS counted-loop operation inventory changed for {case['name']}: "
+                f"{loop_instruction_counts}"
+            )
         actual_shape = {
             "functions": summary["function_count"],
             "blocks": summary["block_count"],
@@ -343,6 +422,18 @@ def main() -> None:
                 f"canonical VM SSA function/branch/return counts differ from Stage-0 "
                 f"for {case['name']}: {actual_control_flow_shape} != {expected_control_flow_shape}"
             )
+        stage0_non_loop_instruction_count = (
+            case["oracle_shape"]["instructions"] - len(case["stage0_loop_instruction_facts"])
+        )
+        candidate_non_loop_instruction_count = (
+            actual_shape["instructions"] - sum(loop_instruction_counts.values())
+        )
+        if stage0_non_loop_instruction_count != candidate_non_loop_instruction_count:
+            raise AssertionError(
+                f"non-loop SSA instruction counts differ for {case['name']}: "
+                f"Stage-0 {stage0_non_loop_instruction_count}, "
+                f"MNCS {candidate_non_loop_instruction_count}"
+            )
         native_values.append({
             "name": case["name"],
             "summary": summary,
@@ -352,6 +443,10 @@ def main() -> None:
             "return_count": summary["return_count"],
             "failure_count": summary["failure_count"],
             "switch_count": summary["switch_count"],
+            "loop_instruction_counts": loop_instruction_counts,
+            "loop_instruction_count": sum(loop_instruction_counts.values()),
+            "non_loop_instruction_count": candidate_non_loop_instruction_count,
+            "stage0_non_loop_instruction_count": stage0_non_loop_instruction_count,
             "terminator_shape": actual_terminator_shape,
             "expected_terminator_shape": expected_terminator_shape,
             "execution_steps": result["record"]["usage"]["steps"],
@@ -400,6 +495,7 @@ def main() -> None:
                 "stage0_ssa_shape": case["oracle_shape"],
                 "expected_iterations": case["expected_iterations"],
                 "stage0_iteration_facts": case["stage0_iterations"],
+                "stage0_loop_instruction_facts": case["stage0_loop_instruction_facts"],
             } for case in cases],
             "artifact_id": artifact["artifact_id"],
             "artifact_json_bytes": len(artifact_bytes),
@@ -426,6 +522,8 @@ def main() -> None:
                     "returns": value["return_count"],
                     "failures": value["failure_count"],
                     "switches": value["switch_count"],
+                    "loop_instruction_counts": value["loop_instruction_counts"],
+                    "loop_instruction_count": value["loop_instruction_count"],
                 }
                 for value in native_values
             ],
@@ -467,6 +565,32 @@ def main() -> None:
             "stage0_loop_header_and_backedge_cases": sum(
                 bool(case["stage0_iterations"]) for case in cases
             ),
+            "stage0_counted_loop_instruction_inventory": {
+                case["name"]: {
+                    "stage0_loop_bookkeeping_instruction_count": len(case["stage0_loop_instruction_facts"]),
+                    "candidate_dedicated_instruction_count": sum(
+                        value["loop_instruction_counts"].values()
+                    ),
+                    "stage0_total_instructions": case["oracle_shape"]["instructions"],
+                    "candidate_total_instructions": value["shape"]["instructions"],
+                    "total_instruction_delta": value["shape"]["instructions"] - case["oracle_shape"]["instructions"],
+                    "stage0_non_loop_instruction_count": value["stage0_non_loop_instruction_count"],
+                    "candidate_non_loop_instruction_count": value["non_loop_instruction_count"],
+                    "non_loop_instruction_counts_match": (
+                        value["stage0_non_loop_instruction_count"] == value["non_loop_instruction_count"]
+                    ),
+                }
+                for value, case in zip(native_values, cases, strict=True)
+            },
+            "counted_loop_instruction_delta_resolution": (
+                "Stage-0 emits six ordinary loop-bookkeeping instructions for a counted loop: "
+                "bound initialization, remaining-count zero, remaining > 0, bound - remaining "
+                "index materialization, decrement constant, and remaining - 1. MNCS carries the "
+                "index directly and verifies one dedicated index-init, guard, and index-advance "
+                "instruction in their preheader, header, and backedge blocks. The remaining state "
+                "operations are present in both summaries; the three-instruction total delta is "
+                "therefore a compact representation difference, not an unaccounted lowering gap."
+            ),
             "language_verified_facts_reused": 0,
             "stage1_claimed": False,
             "stage2_claimed": False,
@@ -490,8 +614,11 @@ def main() -> None:
             "callable closure, and the explicit lower_flow_unit_value_ssa<1024,1024> specialization. "
             "The canonical VM batch starts each case from logical source pages; MNCS source runs "
             "flow.lower_unit, derives local nominal identities from the returned proof unit, and "
-            "passes that exact Flow result to value SSA. Function, conditional-branch, and return "
-            "counts match the pinned Stage-0 oracle. Jumps, failures, switches, blocks, and "
+            "passes that exact Flow result to value SSA. Function, conditional-branch, return, "
+            "block, and terminator counts match the pinned "
+            "Stage-0 oracle. The counted-loop operation inventory accounts for the three fewer "
+            "instructions as dedicated verified loop operations; the instruction forms are not "
+            "claimed to be one-to-one equivalent. Jumps, failures, switches, blocks, and "
             "instructions are reported separately so structural differences remain explicit. "
             "This does not establish full CFG/IR parity or Language-owned "
             "verified-fact reuse, "

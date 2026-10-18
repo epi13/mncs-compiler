@@ -198,6 +198,10 @@ record FunctionShape { blocks: u64, branches: u64, jumps: u64, returns: u64, fai
 record BlockShapeScan { rest: SsaBlockList, blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64, value_limit: u64 }
 record TerminatorShape { branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64 }
 record InstructionShapeScan { rest: InstructionList, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, limit: u64 }
+record LoopInstructionCounts { index_init_count: u64, guard_count: u64, index_advance_count: u64, complete: bool }
+record LoopInstructionFunctionScan { rest: FunctionList, counts: LoopInstructionCounts }
+record LoopInstructionBlockScan { rest: SsaBlockList, counts: LoopInstructionCounts }
+record LoopInstructionScan { rest: InstructionList, counts: LoopInstructionCounts }
 
 fn invalid_identity() -> (result: decl.SemanticIdentity) {
     return decl.invalid_semantic_identity();
@@ -334,6 +338,68 @@ fn function_list_ended<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
 }
 fn ssa_function_list_empty(functions: FunctionList) -> (result: bool) {
     return match functions { FunctionList.FNil => true, FunctionList.FCons { head: head, tail: tail } => false };
+}
+// Count the dedicated loop op kinds without changing ValueSsaSummary.
+// Complete is false if any bounded function, block, or instruction scan truncates.
+fn value_ssa_loop_instruction_counts(summary: ValueSsaSummary) -> (result: LoopInstructionCounts) {
+    let initial: LoopInstructionCounts = LoopInstructionCounts { index_init_count: 0, guard_count: 0, index_advance_count: 0, complete: true };
+    iterate i up_to 1024 carrying st: LoopInstructionFunctionScan = LoopInstructionFunctionScan { rest: summary.functions, counts: initial } {
+        if ssa_function_list_empty(st.rest) { return st.counts; }
+        next st = loop_instruction_function_step(st);
+    }
+    return LoopInstructionCounts { ..st.counts, complete: st.counts.complete && ssa_function_list_empty(st.rest) };
+}
+fn loop_instruction_function_step(st: LoopInstructionFunctionScan) -> (result: LoopInstructionFunctionScan) {
+    return match st.rest {
+        FunctionList.FNil => st,
+        FunctionList.FCons { head: function, tail: rest } => LoopInstructionFunctionScan {
+            rest: rest,
+            counts: loop_instruction_counts_in_blocks(function.blocks, st.counts)
+        }
+    };
+}
+fn loop_instruction_counts_in_blocks(blocks: SsaBlockList, counts: LoopInstructionCounts) -> (result: LoopInstructionCounts) {
+    iterate i up_to 1024 carrying st: LoopInstructionBlockScan = LoopInstructionBlockScan { rest: blocks, counts: counts } {
+        if block_list_empty(st.rest) { return st.counts; }
+        next st = loop_instruction_block_step(st);
+    }
+    return LoopInstructionCounts { ..st.counts, complete: st.counts.complete && block_list_empty(st.rest) };
+}
+fn loop_instruction_block_step(st: LoopInstructionBlockScan) -> (result: LoopInstructionBlockScan) {
+    return match st.rest {
+        LNil => st,
+        LCons { head: block, tail: rest } => LoopInstructionBlockScan {
+            rest: rest,
+            counts: loop_instruction_counts_in_block(block.instructions, st.counts)
+        }
+    };
+}
+fn loop_instruction_counts_in_block(instructions: InstructionList, counts: LoopInstructionCounts) -> (result: LoopInstructionCounts) {
+    let initial: LoopInstructionScan = LoopInstructionScan { rest: instructions, counts: counts };
+    iterate i up_to 1024 carrying first: LoopInstructionScan = initial {
+        if instruction_list_empty(first.rest) { return first.counts; }
+        next first = loop_instruction_count_step(first);
+    }
+    if instruction_list_empty(first.rest) { return first.counts; }
+    iterate j up_to 1024 carrying second: LoopInstructionScan = first {
+        if instruction_list_empty(second.rest) { return second.counts; }
+        next second = loop_instruction_count_step(second);
+    }
+    return LoopInstructionCounts { ..second.counts, complete: second.counts.complete && instruction_list_empty(second.rest) };
+}
+fn loop_instruction_count_step(st: LoopInstructionScan) -> (result: LoopInstructionScan) {
+    return match st.rest {
+        QNil => st,
+        QCons { head: instruction, tail: rest } => LoopInstructionScan {
+            rest: rest,
+            counts: LoopInstructionCounts {
+                index_init_count: st.counts.index_init_count + select(instruction.kind == 15, 1, 0),
+                guard_count: st.counts.guard_count + select(instruction.kind == 13, 1, 0),
+                index_advance_count: st.counts.index_advance_count + select(instruction.kind == 14, 1, 0),
+                complete: st.counts.complete
+            }
+        }
+    };
 }
 fn summarize_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList, function_count: u64, source_ok: bool) -> (result: FunctionSummaryScan) {
     iterate i up_to 1024 carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, branches: 0, jumps: 0, returns: 0, failures: 0, switches: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_function: 0, first_bad_block: 0, first_bad_kind: 0 } {
