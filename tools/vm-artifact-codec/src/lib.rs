@@ -71,42 +71,92 @@ pub fn serialize<T: Serialize, S: Serializer>(value: &T, s: S) -> Result<S::Ok, 
         .serialize(s)
 }
 // Canonical postorder follows sorted object keys regardless of struct field
-// emission order. Moving nodes avoids cloning the interned strings/metadata.
-fn canonical_order(nodes: Vec<Node>, root: u32) -> Graph {
-    fn visit(
-        id: u32,
-        old: &mut [Option<Node>],
-        mapped: &mut [Option<u32>],
-        out: &mut Vec<Node>,
-    ) -> u32 {
-        if let Some(id) = mapped[id as usize] {
-            return id;
+// emission order. The two u32 tables let us reorder the node allocation in
+// place instead of holding both a moved node vector and the output vector.
+fn canonical_order(mut nodes: Vec<Node>, root: u32) -> Graph {
+    const UNVISITED: u32 = u32::MAX;
+    const VISITING: u32 = u32::MAX - 1;
+    const PERMUTATION_CONSUMED: u32 = u32::MAX;
+
+    fn visit(id: u32, nodes: &[Node], mapped: &mut [u32], order: &mut Vec<u32>) -> u32 {
+        let index = id as usize;
+        match mapped[index] {
+            VISITING => panic!("cycle in interned artifact node graph"),
+            UNVISITED => {}
+            id => return id,
         }
-        let mut node = old[id as usize].take().expect("acyclic interned node");
-        match &mut node {
+        mapped[index] = VISITING;
+        match &nodes[index] {
             Node::A(a) => {
-                for r in a {
-                    *r = visit(*r, old, mapped, out);
+                for &reference in a {
+                    visit(reference, nodes, mapped, order);
                 }
             }
             Node::O(o) => {
-                for (k, v) in o {
-                    *k = visit(*k, old, mapped, out);
-                    *v = visit(*v, old, mapped, out);
+                for &(key, value) in o {
+                    visit(key, nodes, mapped, order);
+                    visit(value, nodes, mapped, order);
                 }
             }
             _ => {}
         }
-        let new = out.len() as u32;
-        out.push(node);
-        mapped[id as usize] = Some(new);
+        let new = u32::try_from(order.len()).expect("artifact node count fits u32");
+        order.push(id);
+        mapped[index] = new;
         new
     }
-    let mut mapped = vec![None; nodes.len()];
-    let mut out = Vec::with_capacity(nodes.len());
-    let mut old: Vec<_> = nodes.into_iter().map(Some).collect();
-    let root = visit(root, &mut old, &mut mapped, &mut out);
-    Graph { nodes: out, root }
+
+    assert!(nodes.len() < (u32::MAX - 1) as usize);
+    let mut mapped = vec![UNVISITED; nodes.len()];
+    let mut order = Vec::with_capacity(nodes.len());
+    let root = visit(root, &nodes, &mut mapped, &mut order);
+    assert_eq!(
+        order.len(),
+        nodes.len(),
+        "interned artifact nodes must be reachable"
+    );
+
+    // `mapped` is old-index -> new-index; `order` initially is new-index ->
+    // old-index. Rotate each permutation cycle in the existing node buffer.
+    // Marking consumed destinations in `order` doubles as the cycle visited
+    // set, so no node-sized temporary vector is needed.
+    for start in 0..nodes.len() {
+        let first_destination = mapped[start] as usize;
+        if order[first_destination] == PERMUTATION_CONSUMED {
+            continue;
+        }
+        let mut current = start;
+        let mut node = std::mem::replace(&mut nodes[start], Node::N);
+        loop {
+            let destination = mapped[current] as usize;
+            order[destination] = PERMUTATION_CONSUMED;
+            std::mem::swap(&mut node, &mut nodes[destination]);
+            if destination == start {
+                break;
+            }
+            current = destination;
+        }
+    }
+
+    // References still contain old node IDs after the permutation. Translate
+    // them once the original node allocation has its canonical order.
+    for node in &mut nodes {
+        match node {
+            Node::A(references) => {
+                for reference in references {
+                    *reference = mapped[*reference as usize];
+                }
+            }
+            Node::O(references) => {
+                for (key, value) in references {
+                    *key = mapped[*key as usize];
+                    *value = mapped[*value as usize];
+                }
+            }
+            _ => {}
+        }
+    }
+    Graph { nodes, root }
 }
 struct Compound<'a> {
     builder: &'a mut Builder,
@@ -724,6 +774,55 @@ mod tests {
 #[cfg(test)]
 mod canonical_tests {
     use super::*;
+
+    fn reference_canonical_order(nodes: Vec<Node>, root: u32) -> Graph {
+        fn visit(
+            id: u32,
+            old: &mut [Option<Node>],
+            mapped: &mut [Option<u32>],
+            out: &mut Vec<Node>,
+        ) -> u32 {
+            if let Some(id) = mapped[id as usize] {
+                return id;
+            }
+            let mut node = old[id as usize].take().expect("acyclic reference graph");
+            match &mut node {
+                Node::A(references) => {
+                    for reference in references {
+                        *reference = visit(*reference, old, mapped, out);
+                    }
+                }
+                Node::O(references) => {
+                    for (key, value) in references {
+                        *key = visit(*key, old, mapped, out);
+                        *value = visit(*value, old, mapped, out);
+                    }
+                }
+                _ => {}
+            }
+            let new = out.len() as u32;
+            out.push(node);
+            mapped[id as usize] = Some(new);
+            new
+        }
+
+        let mut mapped = vec![None; nodes.len()];
+        let mut out = Vec::with_capacity(nodes.len());
+        let mut old: Vec<_> = nodes.into_iter().map(Some).collect();
+        let root = visit(root, &mut old, &mut mapped, &mut out);
+        Graph { nodes: out, root }
+    }
+
+    fn compare_canonical_order<T: Serialize>(value: &T) {
+        let mut builder = Builder {
+            nodes: Vec::new(),
+            ids: HashMap::new(),
+        };
+        let root = value.serialize(&mut builder).unwrap();
+        let expected = reference_canonical_order(builder.nodes.clone(), root);
+        assert_eq!(canonical_order(builder.nodes, root), expected);
+    }
+
     #[derive(Serialize, Deserialize, PartialEq, Debug)]
     struct Row {
         z: i128,
@@ -752,5 +851,23 @@ mod canonical_tests {
             serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["module"],
             freeze(&artifact.module).unwrap()
         );
+    }
+
+    #[test]
+    fn in_place_canonical_order_matches_the_previous_graph_order() {
+        let row = Row {
+            z: i64::MIN.into(),
+            a: "α identity".into(),
+        };
+        compare_canonical_order(&row);
+        compare_canonical_order(&serde_json::json!([
+            {"z": [null, false, 7], "a": {"shared": "text", "number": 9}},
+            {"a": {"number": 9, "shared": "text"}, "z": [null, false, 7]},
+            ["text", "text", [true, {"key": "value"}]],
+        ]));
+        compare_canonical_order(&serde_json::json!({
+            "outer": {"right": [1, 2], "left": [1, 2]},
+            "same": [1, 2],
+        }));
     }
 }
