@@ -1,0 +1,149 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/3",
+  "kind": "flow-to-ssa-verified-failure-target",
+  "observed_at": "2026-10-18T18:46:31Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "compiler_head": "c7288a7d205566fefc4408938bd9b1603c3472bf",
+  "implementation_commit": "c7288a7d205566fefc4408938bd9b1603c3472bf",
+  "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+  "source_identity": {
+    "src/compiler/ssa.mncs": "72116a3991f4069fc9432a410029039e7412e96811e3ad84700676afc2276b46",
+    "tools/test_project.py": "ddd8c114026595a49264a7455611ce7add4264e3519d5cd29343f87eb7e95113",
+    "tools/test_vm_flow_ssa_frontier.py": "1aa2376ac3bedd06dd159d733e0168781f34df63e4ffff1e37f0d82eeb3c49dc"
+  },
+  "implementation": {
+    "owner": "mncs-compiler",
+    "summary": "Every lowered function now has one isolated terminal Failure block. All ordinary blocks carry a numeric failure_target to that block; verify_function checks exact target identity and the sink shape before accepting the function.",
+    "function_block_contract": {
+      "ordinary_block": "has_failure_target=true and failure_target equals the final block id",
+      "failure_sink": "last block; Fail terminator; unreachable; no parameters or instructions; no failure target; lowering_ok=true; failure kind=0",
+      "function_acceptance": "verified functions and ValueSsaSummary.valid require the full block verifier to pass"
+    }
+  },
+  "flow_to_ssa_frontier": {
+    "raw_evidence_artifact": "evidence/self-host-flow-ssa-20261018T182954.849349Z-1827070.json",
+    "raw_evidence_sha256": "7455ce282105040f4bce45446918da7b7a437c57495fc664fe0ec5b367149bf7",
+    "raw_observed_at": "2026-10-18T18:32:33.179440Z",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "application_build_schema": "mncs.compiler.application-build/4",
+    "application_build_status": "verified",
+    "canonical_vm_semantic_digest": "81b4d8739eb7b2ea3e4e0fb489b077c6a3d2cf573f30afabce96f66735bf0b29",
+    "canonical_vm_calls": 2,
+    "canonical_vm_ssa_shapes": [
+      {
+        "name": "fallthrough_join",
+        "functions": 1,
+        "blocks": 5,
+        "instructions": 2,
+        "branches": 1,
+        "jumps": 1,
+        "returns": 2,
+        "failures": 1,
+        "switches": 0
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "functions": 1,
+        "blocks": 8,
+        "instructions": 6,
+        "branches": 2,
+        "jumps": 3,
+        "returns": 2,
+        "failures": 1,
+        "switches": 0
+      }
+    ],
+    "stage0_terminator_shape_matches_canonical_vm": true,
+    "ssa_metric_deltas_by_case": {
+      "fallthrough_join": {
+        "blocks": 0,
+        "instructions": 0
+      },
+      "conditional_return_counted_iteration": {
+        "blocks": 0,
+        "instructions": -3
+      }
+    },
+    "language_verified_facts_reused": 0,
+    "measurements": {
+      "application_build_seconds": 130.402697,
+      "canonical_vm_batch_seconds": 26.246366,
+      "whole_frontier_seconds": 158.733366,
+      "child_cpu_seconds": 155.55082,
+      "child_peak_rss_kib": 2683516,
+      "canonical_vm_peak_rss_kib": 373900,
+      "host_memory_before": {
+        "total_bytes": 33411579904,
+        "available_bytes": 24267022336
+      },
+      "cgroup_memory_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_memory_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "canonical_vm_batch_bytes": {
+        "calls": 8046,
+        "results": 4665
+      },
+      "stage0_probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8",
+      "cgroup_peak_attributable_to_test": false
+    }
+  },
+  "project_match_ssa": {
+    "command": "python3 tools/test_project.py match-ssa",
+    "status": "passed",
+    "elapsed_seconds": 276.864,
+    "result_sha256": "09932ae73d67660a3ddc6f12bbddeb89e614e74c3d7017a70661715bdd2a7939",
+    "native_project_valid": true,
+    "native_project_ssa_valid": true,
+    "native_root_blocks": 5,
+    "stage0_root_blocks": 5,
+    "native_root_terminator_discriminants": [
+      0,
+      1,
+      1,
+      2,
+      3
+    ],
+    "stage0_normal_terminators": [
+      "ConditionalBranch",
+      "Branch",
+      "Branch",
+      "Return"
+    ],
+    "stage0_failure_sink_count": 1,
+    "ssa_verifier_positive": true,
+    "ssa_verifier_negative_checks": {
+      "duplicate_value_id": "rejected",
+      "invalid_function_identity": "rejected",
+      "call_use_before_definition": "rejected",
+      "imported_call_argument_type": "rejected",
+      "invalid_call_identity": "rejected",
+      "branch_condition_type": "rejected",
+      "block_argument_type": "rejected",
+      "invalid_terminator_target": "rejected",
+      "return_type": "rejected"
+    },
+    "enum_construction_verified_functions": 11,
+    "scalar_match_verified_functions": 6,
+    "projection_verified_functions": 5,
+    "nested_match_verified_functions": 6,
+    "execution_mode": "retained_cranelift",
+    "native_execution_steps_total": 11
+  },
+  "limitations": [
+    "The current workload establishes failure-sink structure and verifier linkage, not full CFG/IR parity.",
+    "The counted-loop case still has three fewer SSA instructions than Stage-0; its block and terminator counts now match.",
+    "The verifier checks the structural failure target; runtime behavior for all operation-specific failure paths is not established by these fixtures.",
+    "Language-owned verified-fact reuse remains zero; Stage-1 and Stage-2 succession remain unproven.",
+    "Forge native application execution, retained native Test replacement, and Language development scope remain outstanding."
+  ],
+  "next_frontier": "Resolve the three missing counted-loop SSA instructions against the Stage-0 iteration witness, then use the new verified facts work when authorized Language scope is available."
+}
