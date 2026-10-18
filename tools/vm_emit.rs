@@ -528,13 +528,34 @@ fn emit_vm_artifact_scoped(
         "selected ssa identity is valid for {}",
         program.module
     );
-    // Keep a compact identity index for declarations outside the selected
-    // executable closure without retaining a duplicate SSA module.
-    let mut ssa_function_counts = BTreeMap::<String, usize>::new();
-    for function in &ssa.functions {
-        *ssa_function_counts
-            .entry(function.semantic_identity.0.clone())
-            .or_default() += 1;
+    let generic_rows = generic_entrypoint_rows(program);
+    let mut unselected_unresolved: Vec<String> = Vec::new();
+    if let Some(selected) = selected_exports {
+        for function in &program.functions {
+            let namespace = function.identity_namespace(&program.module);
+            if !selected.contains(&(namespace.to_owned(), function.name.clone()))
+                && resolve_callable(&ssa, namespace, &function.name).is_none()
+            {
+                unselected_unresolved.push(format!(
+                    "export {namespace}::{}: no ssa instance",
+                    function.name
+                ));
+            }
+        }
+    }
+    if let Some(selected) = selected_generic_bases {
+        for row in &generic_rows {
+            if !selected.contains(&(row.0.clone(), row.1.clone()))
+                && resolve_generic_entry(&ssa, row).is_none()
+            {
+                unselected_unresolved.push(format!(
+                    "generic {}::{}({}): no ssa instance",
+                    row.0,
+                    row.1,
+                    row.2.join(", ")
+                ));
+            }
+        }
     }
     let execution_ssa = match selected_exports {
         Some(roots) => application_ssa_closure(ssa, program, roots)?,
@@ -565,7 +586,6 @@ fn emit_vm_artifact_scoped(
         .map(|function| function.name.clone())
         .collect();
     let mut unsupported: Vec<String> = Vec::new();
-    let mut unselected_unresolved: Vec<String> = Vec::new();
     // Callables resolve per (namespace, name) function, not per bare
     // name: linked programs routinely define one helper name in
     // several modules (segment's `next_token` wraps lexer's), and
@@ -584,18 +604,6 @@ fn emit_vm_artifact_scoped(
             selected.contains(&(namespace.to_owned(), function.name.clone()))
         });
         if !selected {
-            let identity = mncs_model::function_id(namespace, &function.name).0;
-            match ssa_function_counts.get(&identity).copied().unwrap_or(0) {
-                0 => unselected_unresolved.push(format!(
-                    "export {namespace}::{}: no ssa instance",
-                    function.name
-                )),
-                1 => {}
-                _ => panic!(
-                    "callable {namespace}::{} is ambiguous across ssa functions",
-                    function.name
-                ),
-            }
             continue;
         }
         match resolve_callable(&execution_ssa, namespace, &function.name) {
@@ -613,24 +621,10 @@ fn emit_vm_artifact_scoped(
     }
 
     let mut generic_entrypoints: Vec<GenericEntrypoint> = Vec::new();
-    for row in generic_entrypoint_rows(program) {
+    for row in generic_rows {
         let selected = selected_generic_bases
             .is_none_or(|selected| selected.contains(&(row.0.clone(), row.1.clone())));
         if !selected {
-            let identity = mncs_model::function_id(&row.4, &row.5).0;
-            match ssa_function_counts.get(&identity).copied().unwrap_or(0) {
-                0 => unselected_unresolved.push(format!(
-                    "generic {}::{}({}): no ssa instance",
-                    row.0,
-                    row.1,
-                    row.2.join(", ")
-                )),
-                1 => {}
-                _ => panic!(
-                    "generic {}::{} entry {}::{} is ambiguous across ssa instances",
-                    row.0, row.1, row.4, row.5
-                ),
-            }
             continue;
         }
         match resolve_generic_entry(&execution_ssa, &row) {
