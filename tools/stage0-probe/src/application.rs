@@ -2604,6 +2604,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             .collect(),
     );
     let compiler = ReferenceCompiler::default();
+    let frontend_started = Instant::now();
     let frontend = compiler.front_end_with_resolver_and_seeds(
         envelope(root_source),
         &resolver,
@@ -2619,7 +2620,18 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let diagnostics = serde_json::to_value(&frontend.diagnostics).unwrap_or_else(|_| json!([]));
     let resolutions =
         serde_json::to_value(&frontend.module_resolutions).unwrap_or_else(|_| json!([]));
-    let Some(program) = frontend.program.as_ref().filter(|_| frontend.is_valid()) else {
+    let frontend_valid = frontend.is_valid();
+    crate::trace_phase(
+        "application_language_frontend",
+        frontend_started,
+        json!({
+            "resolved_module_count": resolved_module_count,
+            "program_function_count": program_function_count,
+            "diagnostic_count": frontend.diagnostics.len(),
+            "verified": frontend_valid,
+        }),
+    );
+    if !frontend_valid {
         let mut rejected_response = json!({
             "schema_version": contract,
             "status": "rejected",
@@ -2683,37 +2695,48 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             program_function_count,
             "rejected",
         );
+    }
+
+    let mncs_compiler::SourceFrontEndResult {
+        program: Some(program),
+        identities,
+        module_resolutions,
+        artifacts,
+        ..
+    } = frontend
+    else {
+        unreachable!("valid frontend results contain a semantic program");
     };
 
     let callable_interfaces = callable_roots
         .iter()
-        .map(|(module, function)| callable_interface(program, module, function))
+        .map(|(module, function)| callable_interface(&program, module, function))
         .collect::<Vec<_>>();
     let entry_interface = callable_interfaces.first().cloned().flatten();
-    let semantic_identity = frontend
-        .artifact(ArtifactRepresentation::Semantic)
+    let semantic_identity = artifacts
+        .iter()
+        .find(|artifact| artifact.representation == ArtifactRepresentation::Semantic)
         .and_then(|artifact| {
             application_semantic_identity(
-                program,
+                &program,
                 &artifact.fingerprint,
-                &frontend.module_resolutions,
+                &module_resolutions,
                 &generic_seeds,
             )
         });
+    drop(module_resolutions);
+    drop(artifacts);
     let closure_identity_started = Instant::now();
-    let identity_map_reused = !callable_roots.is_empty() && frontend.identities.is_some();
-    let executable_closure_identity =
-        frontend
-            .identities
-            .as_ref()
-            .and_then(|semantic_identities| {
-                application_executable_closure_identity(
-                    program,
-                    semantic_identities,
-                    &callable_roots,
-                    &generic_seeds,
-                )
-            });
+    let identity_map_reused = !callable_roots.is_empty() && identities.is_some();
+    let executable_closure_identity = identities.as_ref().and_then(|semantic_identities| {
+        application_executable_closure_identity(
+            &program,
+            semantic_identities,
+            &callable_roots,
+            &generic_seeds,
+        )
+    });
+    drop(identities);
     crate::trace_phase(
         "application_executable_closure_identity",
         closure_identity_started,
@@ -2764,7 +2787,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             .and_then(Value::as_str)
             == Some(executable_closure_identity);
         let current_artifact_interface_identity =
-            mncs_codegen::language_owned_interface_identity(program);
+            mncs_codegen::language_owned_interface_identity(&program);
         let cached_artifact_interface_identity = candidate
             .pointer("/artifact/value/source/interface_identity")
             .and_then(Value::as_str);
@@ -2852,10 +2875,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     }
     let producer_reference = format!("stage0-probe:{probe_identity}");
     let callable_root_set = callable_roots.iter().cloned().collect::<BTreeSet<_>>();
+    let emission_started = Instant::now();
     let emission = if multiple_callables {
         vm_emit::emit_vm_application_artifact_for_callables_with_producer(
             &compiler,
-            program,
+            &program,
             Some(&producer_reference),
             &callable_root_set,
             &generic_seed_functions,
@@ -2863,13 +2887,23 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     } else {
         vm_emit::emit_vm_application_artifact_with_producer(
             &compiler,
-            program,
+            &program,
             Some(&producer_reference),
             &entry_module,
             &entry_function,
             &generic_seed_functions,
         )
     };
+    drop(program);
+    crate::trace_phase(
+        "application_vm_artifact_emission",
+        emission_started,
+        json!({
+            "callable_root_count": callable_roots.len(),
+            "generic_seed_count": generic_seeds.len(),
+            "succeeded": emission.is_ok(),
+        }),
+    );
     let (artifact, unselected_unresolved, capability_bindings, emission_error) = match emission {
         Ok((artifact, unselected_unresolved, capability_bindings)) => (
             Some(artifact),

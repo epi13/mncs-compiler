@@ -1,0 +1,182 @@
+{
+  "schema_version": "mncs.compiler.project-target-integrated-diagnostic-locations-canonical-vm/1",
+  "status": "passed_with_selected_frontier",
+  "observed_at": "2026-10-18T08:58:39.006969+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "compiler_head": "dc45bd390922dc516896dd1256c345baa22a3c7c",
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+  "target_module": "mncs.compiler.project.v1",
+  "target_function": "compile_project_target_with_diagnostic_locations",
+  "type_arguments": [
+    1024,
+    1024
+  ],
+  "application_build_request_schema": "mncs.compiler.application-build-request/2",
+  "application_build_response_schema": "mncs.compiler.application-build/5",
+  "application_build_identity": "sha256:5d92c4b1c0a7a1282ca033455a0a5eee8a64301600dc3b4bd1d333a0a352af4f",
+  "application_artifact_identity": "sha256:5d92c4b1c0a7a1282ca033455a0a5eee8a64301600dc3b4bd1d333a0a352af4f",
+  "application_artifact_json_bytes": 68344562,
+  "application_artifact_json_sha256": "9d21a8e590509d1840f12586b048bf780f098a28f107dc661486f409c868a09b",
+  "application_callable_count": 4,
+  "generic_entrypoints": [
+    "compile_project_target",
+    "compile_project_target_with_diagnostic_locations",
+    "locate_project_diagnostics_global"
+  ],
+  "application_build_cache_status": "miss",
+  "application_build_wall_seconds": 183.530948,
+  "application_build_metrics": {
+    "wall_seconds": 182.586469,
+    "cpu_seconds": 181.39,
+    "peak_rss_bytes": 2660638720,
+    "peak_cgroup_memory_bytes": null,
+    "peak_open_file_descriptors": 5,
+    "peak_threads": 1,
+    "peak_child_processes": 0,
+    "request_sequence": 1
+  },
+  "application_build_probe_stderr_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=e8f8a5f8659c/e8f8a5f8659c\n",
+  "cranelift_backend": "cranelift",
+  "case_count": 5,
+  "case_results": [
+    {
+      "id": "valid-project",
+      "valid": true,
+      "diagnostic_count": 0
+    },
+    {
+      "id": "missing-import",
+      "valid": false,
+      "diagnostic_variant": 3,
+      "byte_span": [
+        33,
+        44
+      ],
+      "start": {
+        "line": 3,
+        "col": 5
+      },
+      "end": {
+        "line": 3,
+        "col": 16
+      },
+      "mapped": true
+    },
+    {
+      "id": "multi-page-missing-import",
+      "valid": false,
+      "diagnostic_variant": 3,
+      "byte_span": [
+        1139,
+        1150
+      ],
+      "start": {
+        "line": 1103,
+        "col": 5
+      },
+      "end": {
+        "line": 1103,
+        "col": 16
+      },
+      "mapped": true
+    },
+    {
+      "id": "parse-failure",
+      "valid": false,
+      "diagnostic_variant": 4,
+      "byte_span": [
+        40,
+        42
+      ],
+      "start": {
+        "line": 3,
+        "col": 10
+      },
+      "end": {
+        "line": 3,
+        "col": 12
+      },
+      "mapped": true
+    },
+    {
+      "id": "invalid-page-count",
+      "valid": false,
+      "diagnostic_variants": [
+        4,
+        1
+      ],
+      "mapped": [
+        false,
+        false
+      ]
+    }
+  ],
+  "canonical_vm_batch_wall_seconds": 24.578211,
+  "canonical_vm_batch_peak_rss_kib": 406532,
+  "canonical_vm_calls_json_bytes": 50375,
+  "canonical_vm_results_json_bytes": 218696,
+  "canonical_vm_returned_all_cases": true,
+  "canonical_vm_cranelift_exact_result_agreement": true,
+  "stage0_oracle_checked_case_count": 4,
+  "cranelift_request_total_seconds": 0.05819,
+  "language_verified_facts_reused": 0,
+  "stage1_claimed": false,
+  "stage2_claimed": false,
+  "evidence_scope": "One compile-once Project application artifact executed five typed requests in one canonical VM batch: valid input, missing import, a multi-page missing import, parse failure, and an invalid page descriptor. Every canonical VM result exactly matched the Cranelift result; Stage-0 oracle validity and diagnostic counts matched for four source-validity cases, and mapped byte spans produced the current source line/column. This is a selected integrated Project entrypoint frontier, not full Project-module proof, Language fact reuse, Forge execution, Stage-1, or Stage-2 succession.",
+  "compiler_source_state": {
+    "branch": "campaign/native-application-readiness-20261013",
+    "head": "dc45bd390922dc516896dd1256c345baa22a3c7c",
+    "dirty": true,
+    "modified_source_files": [
+      "tools/stage0-probe/src/application.rs"
+    ],
+    "application_source_sha256": "38fad9da293d3088906d3d9048dc1fd4520be792686a81f4863f36ee27d2c050",
+    "application_source_patch_sha256": "edfb98fdc0fa3f36810cb77bfdcc93fd32e0e61163b3e82e369fc8c5963d1f44"
+  },
+  "resource_measurement_comparison": {
+    "workload": "mncs.compiler.project.v1::compile_project_target_with_diagnostic_locations, Nat<1024>, Nat<1024>",
+    "baseline": {
+      "source": "committed HEAD dc45bd390922dc516896dd1256c345baa22a3c7c",
+      "application_build_cache": "miss in isolated empty cache",
+      "wall_seconds": 181.770995,
+      "probe_wall_seconds": 180.863713,
+      "cpu_seconds": 179.81,
+      "peak_rss_bytes": 2780868608,
+      "cgroup_peak_memory_bytes": null,
+      "status": "verified",
+      "artifact_identity": "sha256:a0fead3e093fe6453317817c1e8e3b80a7d2ca9304b811607162ad0e1ccc926e"
+    },
+    "lifetime_change": {
+      "source_sha256": "38fad9da293d3088906d3d9048dc1fd4520be792686a81f4863f36ee27d2c050",
+      "application_build_cache": "miss in isolated empty cache",
+      "wall_seconds": 182.98766,
+      "probe_wall_seconds": 182.076365,
+      "cpu_seconds": 181.05,
+      "peak_rss_bytes": 2661163008,
+      "cgroup_peak_memory_bytes": null,
+      "status": "verified",
+      "artifact_identity": "sha256:5d92c4b1c0a7a1282ca033455a0a5eee8a64301600dc3b4bd1d333a0a352af4f",
+      "telemetry": "disabled"
+    },
+    "delta_lifetime_change_vs_baseline": {
+      "wall_seconds": 1.216665,
+      "wall_percent": 0.6694,
+      "cpu_seconds": 1.24,
+      "cpu_percent": 0.6896,
+      "peak_rss_bytes": -119705600,
+      "peak_rss_percent": -4.3048
+    },
+    "phase_timing_lifetime_change_run": {
+      "frontend_seconds": 51.899052,
+      "closure_identity_seconds": 0.44384,
+      "vm_artifact_emission_seconds": 108.597772
+    },
+    "notes": [
+      "Both builds used the same Project application request and separate fresh application caches.",
+      "The committed-source baseline and lifetime-change probe artifacts have different identities because each probe executable has its own producer identity.",
+      "The lifetime-change artifact completed the five-case canonical VM batch with exact Cranelift agreement; language_verified_facts_reused remains zero.",
+      "Peak cgroup memory was unavailable and is recorded as null, not zero."
+    ]
+  }
+}
