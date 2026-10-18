@@ -144,6 +144,109 @@ enum ProjectDiagnostic {
 }
 enum DiagnosticList { DiagNil, DiagCons { head: ProjectDiagnostic, tail: DiagnosticList } }
 record DiagnosticReverse { rest: DiagnosticList, acc: DiagnosticList }
+// Source locations are a projection over immutable project diagnostics. The
+// byte spans remain authoritative; mapping is refreshed from the current
+// snapshot and fails closed for an invalid source descriptor or page slice.
+record ProjectDiagnosticSpan { source_index: u64, start: u64, end: u64, has_span: bool }
+record ProjectDiagnosticLocation {
+    diagnostic: ProjectDiagnostic,
+    source_index: u64,
+    has_span: bool,
+    mapped: bool,
+    start: source.LineCol,
+    end: source.LineCol
+}
+enum ProjectDiagnosticLocationList {
+    LocationNil,
+    LocationCons { head: ProjectDiagnosticLocation, tail: ProjectDiagnosticLocationList }
+}
+record ProjectDiagnosticLocationWalk { rest: DiagnosticList, acc: ProjectDiagnosticLocationList }
+record ProjectDiagnosticLocationReverse { rest: ProjectDiagnosticLocationList, acc: ProjectDiagnosticLocationList }
+
+fn project_diagnostic_span(diagnostic: ProjectDiagnostic) -> (result: ProjectDiagnosticSpan) {
+    return match diagnostic {
+        SourceOrder { source_index: index } => ProjectDiagnosticSpan { source_index: index, start: 0, end: 0, has_span: false },
+        SourceCountMismatch { source_index: index } => ProjectDiagnosticSpan { source_index: index, start: 0, end: 0, has_span: false },
+        DuplicateModule { source_index: index, start: start, end: end } => ProjectDiagnosticSpan { source_index: index, start: start, end: end, has_span: true },
+        MissingImport { source_index: index, start: start, end: end } => ProjectDiagnosticSpan { source_index: index, start: start, end: end, has_span: true },
+        ParseFailed { source_index: index, start: start, end: end } => ProjectDiagnosticSpan { source_index: index, start: start, end: end, has_span: true },
+        ProofFailed { source_index: index, start: start, end: end } => ProjectDiagnosticSpan { source_index: index, start: start, end: end, has_span: true },
+        FlowFailed { source_index: index, code: code, start: start, end: end } => ProjectDiagnosticSpan { source_index: index, start: start, end: end, has_span: true },
+        TargetModuleMissing { source_index: index } => ProjectDiagnosticSpan { source_index: index, start: 0, end: 0, has_span: false },
+        ImportLimitExceeded { source_index: index, start: start, end: end, limit: limit } => ProjectDiagnosticSpan { source_index: index, start: start, end: end, has_span: true }
+    };
+}
+
+fn project_diagnostic_location<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], diagnostic: ProjectDiagnostic) -> (result: ProjectDiagnosticLocation) {
+    let span: ProjectDiagnosticSpan = project_diagnostic_span(diagnostic);
+    let initial: source.LineCol = source.LineCol { line: 1, col: 1 };
+    if !(span.has_span) || span.source_index >= sources.len {
+        return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: span.has_span, mapped: false, start: initial, end: initial };
+    }
+    let meta: ProjectSource = sources[span.source_index];
+    // Check before slicing so a hostile descriptor cannot trap location
+    // projection. Validate the selected composition before trusting its
+    // stride and total as a current source snapshot.
+    if meta.page_start > flat_pages.len || meta.page_count > flat_pages.len - meta.page_start {
+        return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: true, mapped: false, start: initial, end: initial };
+    }
+    let pages: [[byte; up_to N]; up_to 1024] = flat_pages[meta.page_start..meta.page_start + meta.page_count];
+    if source.validate_pages<1024, N>(pages, meta.stride, meta.total) != 0 {
+        return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: true, mapped: false, start: initial, end: initial };
+    }
+    let positions: source.LineColSpan = source.line_col_span_global<1024, N>(pages, meta.stride, meta.total, span.start, span.end);
+    return ProjectDiagnosticLocation { diagnostic: diagnostic, source_index: span.source_index, has_span: true, mapped: true, start: positions.start, end: positions.end };
+}
+
+// Convert an existing diagnostic list without recompiling the project. Two
+// bounded loop levels cover the current project diagnostic ceiling while
+// preserving input order in the returned projection.
+fn locate_project_diagnostics_global<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], diagnostics: DiagnosticList) -> (result: ProjectDiagnosticLocationList) {
+    iterate chunk up_to 1024 carrying outer: ProjectDiagnosticLocationWalk = ProjectDiagnosticLocationWalk { rest: diagnostics, acc: ProjectDiagnosticLocationList.LocationNil } {
+        iterate i up_to 1024 carrying inner: ProjectDiagnosticLocationWalk = outer {
+            if diagnostic_list_empty(inner.rest) { return reverse_project_diagnostic_locations(inner.acc); }
+            next inner = project_diagnostic_location_step<M, N>(sources, flat_pages, inner);
+        }
+        if diagnostic_list_empty(inner.rest) { return reverse_project_diagnostic_locations(inner.acc); }
+        next outer = inner;
+    }
+    return reverse_project_diagnostic_locations(outer.acc);
+}
+fn project_diagnostic_location_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: ProjectDiagnosticLocationWalk) -> (result: ProjectDiagnosticLocationWalk) {
+    return match st.rest {
+        DiagNil => st,
+        DiagCons { head: diagnostic, tail: rest } => ProjectDiagnosticLocationWalk {
+            rest: rest,
+            acc: ProjectDiagnosticLocationList.LocationCons {
+                head: project_diagnostic_location<M, N>(sources, flat_pages, diagnostic),
+                tail: st.acc
+            }
+        }
+    };
+}
+fn reverse_project_diagnostic_locations(initial: ProjectDiagnosticLocationList) -> (result: ProjectDiagnosticLocationList) {
+    iterate chunk up_to 1024 carrying outer: ProjectDiagnosticLocationReverse = ProjectDiagnosticLocationReverse { rest: initial, acc: ProjectDiagnosticLocationList.LocationNil } {
+        iterate i up_to 1024 carrying inner: ProjectDiagnosticLocationReverse = outer {
+            if project_diagnostic_locations_empty(inner.rest) { return inner.acc; }
+            next inner = reverse_project_diagnostic_location_step(inner);
+        }
+        if project_diagnostic_locations_empty(inner.rest) { return inner.acc; }
+        next outer = inner;
+    }
+    return outer.acc;
+}
+fn project_diagnostic_locations_empty(locations: ProjectDiagnosticLocationList) -> (result: bool) {
+    return match locations {
+        LocationNil => true,
+        LocationCons { head: location, tail: rest } => false
+    };
+}
+fn reverse_project_diagnostic_location_step(st: ProjectDiagnosticLocationReverse) -> (result: ProjectDiagnosticLocationReverse) {
+    return match st.rest {
+        LocationNil => st,
+        LocationCons { head: location, tail: rest } => ProjectDiagnosticLocationReverse { rest: rest, acc: ProjectDiagnosticLocationList.LocationCons { head: location, tail: st.acc } }
+    };
+}
 
 record ProjectResult {
     valid: bool,
