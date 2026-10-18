@@ -276,6 +276,8 @@ def run_real_mncs_test_suite() -> dict:
         if (vm.get("artifact_id") != artifact.get("artifact_id")
                 or len(rows) != expected_batch_count):
             raise AssertionError("real Test inventory batch changed artifact identity or repeated call count")
+        if built.get("artifact", {}).get("identity") != artifact.get("artifact_id"):
+            raise AssertionError("compiler build receipt and executable artifact identities differ")
 
         results: dict[str, dict] = {}
         test_rows = [row for _ in range(repeat_count) for row in inventory["tests"]]
@@ -320,6 +322,36 @@ def run_real_mncs_test_suite() -> dict:
         test_revision = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
         ).strip()
+        artifact_identity = built["artifact"]["identity"]
+        artifact_callables = {
+            (row.get("module"), row.get("name")): row
+            for row in artifact.get("callables", [])
+        }
+        provider_cases = []
+        for test in inventory["tests"]:
+            callable_row = artifact_callables.get((module, test["name"]))
+            binding = callable_row.get("test_binding") if callable_row else None
+            required_binding_fields = {
+                "test_case_identity", "declaration_identity", "callable_identity",
+                "signature_identity",
+            }
+            if (not isinstance(binding, dict)
+                    or not required_binding_fields <= set(binding)
+                    or binding.get("test_case_identity") != test["test_case_identity"]
+                    or binding.get("declaration_identity") != test["declaration_identity"]):
+                raise AssertionError(
+                    f"compiler artifact binding does not match Test inventory for {test['name']}: "
+                    f"{binding}"
+                )
+            provider_cases.append({
+                "name": test["name"],
+                "artifact_identity": artifact_identity,
+                "test_case_identity": binding["test_case_identity"],
+                "declaration_identity": binding["declaration_identity"],
+                "callable_identity": binding["callable_identity"],
+                "signature_identity": binding["signature_identity"],
+                "native_result": results[test["name"]],
+            })
         return {
             "test_repository_revision": test_revision,
             "language_repository_head": language_head,
@@ -340,6 +372,7 @@ def run_real_mncs_test_suite() -> dict:
             },
             "selected_artifact_identity": built["artifact"]["identity"],
             "canonical_vm_artifact_identity": vm["artifact_id"],
+            "provider_integration_cases": provider_cases,
             "canonical_vm_batch_count": len(rows),
             "distinct_test_count": len(inventory["tests"]),
             "repeat_round_count": repeat_count,

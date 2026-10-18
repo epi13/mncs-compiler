@@ -22,6 +22,7 @@ from datetime import datetime, timezone
 
 import test_vm_native_application as support
 import test_vm_test_digest_app as digest_app
+import test_application_build_test_inventory as test_inventory
 
 ROOT = Path(__file__).resolve().parents[1]
 TEST_ROOT = digest_app.TEST_ROOT
@@ -39,6 +40,14 @@ EVIDENCE_PATH = ROOT / os.environ.get(
     "MNCS_NATIVE_TEST_PROVIDER_APP_EVIDENCE_PATH",
     "evidence/native-test-provider-app-boundary-20261017.json",
 )
+PROVIDER_INTERFACE_IDENTITY = bytes([
+    239, 160, 50, 155, 9, 221, 240, 227, 220, 117, 104, 17, 134, 215, 15, 192,
+    206, 150, 165, 44, 250, 237, 241, 7, 176, 213, 182, 151, 52, 146, 186, 101,
+])
+PROVIDER_REVISION_IDENTITY = bytes([
+    242, 141, 98, 241, 104, 235, 30, 81, 190, 31, 78, 85, 62, 100, 140, 222,
+    6, 235, 59, 56, 33, 238, 68, 155, 119, 69, 38, 11, 227, 233, 132, 215,
+])
 
 
 def sha(data: bytes) -> str:
@@ -51,6 +60,10 @@ def byte_sequence(text: str) -> dict:
 
 def unsigned(value: int) -> dict:
     return {"integer": {"type": {"bits": 64, "signed": False}, "value": value}}
+
+
+def signed(value: int) -> dict:
+    return {"integer": {"type": {"bits": 64, "signed": True}, "value": value}}
 
 
 def wire_record(name: str, fields: dict, identity: str) -> dict:
@@ -72,6 +85,91 @@ def wire_finite(interface: dict, type_name: str, variant_name: str) -> dict:
         "discriminant": variant["discriminant"],
         "payload": [],
     }}
+
+
+def variant_name(interface: dict, type_name: str, discriminant: int) -> str:
+    finite = next(row for row in interface["types"]["finite"] if row.get("name") == type_name)
+    variant = next((row for row in finite["variants"]
+                    if row.get("discriminant") == discriminant), None)
+    if variant is None:
+        raise AssertionError(f"{type_name} has no variant with discriminant {discriminant}")
+    return variant["name"]
+
+
+def test_result_wire(interface: dict, result: dict) -> dict:
+    verdict_names = {0: "PASS", 1: "FAIL", 2: "SKIP", 3: "UNSUPPORTED"}
+    verdict_name = verdict_names.get(result.get("verdict_code"))
+    failure_kind = result.get("failure_kind", {}).get("$v")
+    if verdict_name is None or not isinstance(failure_kind, int):
+        raise AssertionError(f"canonical TestResult has unknown typed tags: {result}")
+    expected_discriminant = next(
+        row["discriminant"] for row in next(
+            row for row in interface["types"]["finite"] if row.get("name") == "Verdict"
+        )["variants"] if row.get("name") == verdict_name
+    )
+    if result.get("verdict", {}).get("$v") != expected_discriminant:
+        raise AssertionError(f"canonical TestResult verdict and numeric code disagree: {result}")
+    return wire_record("TestResult", {
+        "verdict": wire_finite(interface, "Verdict", verdict_name),
+        "verdict_code": unsigned(result["verdict_code"]),
+        "failure_kind": wire_finite(
+            interface, "FailureKind", variant_name(interface, "FailureKind", failure_kind)
+        ),
+        "failure_code": unsigned(result["failure_code"]),
+        "assertions": unsigned(result["assertions"]),
+        "failures": unsigned(result["failures"]),
+        "expected": signed(result["expected"]),
+        "actual": signed(result["actual"]),
+        "assertion_code": unsigned(result["assertion_code"]),
+    }, record_identity(interface, "TestResult"))
+
+
+def provider_request_wire(interface: dict, provider_request_identity: str,
+                          cases: list[dict]) -> dict:
+    callable_entries = []
+    executions = []
+    selected = []
+    artifact_identity = None
+    for case in cases:
+        required = {
+            "artifact_identity", "test_case_identity", "declaration_identity",
+            "callable_identity", "signature_identity", "native_result",
+        }
+        if not required <= set(case):
+            raise AssertionError(f"real compiler Test binding omitted required identities: {case}")
+        if artifact_identity is None:
+            artifact_identity = case["artifact_identity"]
+        elif artifact_identity != case["artifact_identity"]:
+            raise AssertionError("self-suite provider batch mixes artifact revisions")
+        identity_fields = {
+            key: byte_sequence(case[key]) for key in (
+                "artifact_identity", "test_case_identity", "declaration_identity",
+                "callable_identity", "signature_identity",
+            )
+        }
+        callable_entries.append(wire_record(
+            "TestCallableEntry", identity_fields,
+            record_identity(interface, "TestCallableEntry"),
+        ))
+        selected.append(byte_sequence(case["test_case_identity"]))
+        executions.append(wire_record("ProviderTestExecution", {
+            **{key: identity_fields[key] for key in (
+                "test_case_identity", "declaration_identity", "callable_identity",
+                "signature_identity", "artifact_identity",
+            )},
+            "execution_status": wire_finite(interface, "CallableExecutionStatus", "RETURNED"),
+            "native_result": test_result_wire(interface, case["native_result"]),
+        }, record_identity(interface, "ProviderTestExecution")))
+    if not cases or len(cases) > 8:
+        raise AssertionError(f"provider self-suite selection is outside its bounded shape: {len(cases)}")
+    return wire_record("ProviderRequest", {
+        "compiler_callable_bindings": {"sequence": {"values": callable_entries}},
+        "selected_test_identities": {"sequence": {"values": selected}},
+        "selected_test_executions": {"sequence": {"values": executions}},
+        "selection_count": unsigned(len(cases)),
+        "interface_identity": byte_values(PROVIDER_INTERFACE_IDENTITY),
+        "provider_revision_identity": byte_values(PROVIDER_REVISION_IDENTITY),
+    }, provider_request_identity)
 
 
 def record_identity(interface: dict, name: str) -> str:
@@ -866,6 +964,155 @@ def main() -> None:
                     "published": [failed_write_output.exists(), failed_write_check.exists()],
                 }, indent=2)[:9000])
 
+            real_suite = test_inventory.run_real_mncs_test_suite()
+            real_cases = real_suite.get("provider_integration_cases", [])
+            if (len(real_cases) != 7
+                    or real_suite.get("passing_test_count") != 6
+                    or real_suite.get("skipped_test_count") != 1
+                    or real_suite.get("stage0_equivalent") is not True):
+                raise AssertionError(
+                    "real mncs-test self-suite did not produce the verified seven-case provider input: "
+                    + json.dumps(real_suite, indent=2)[:6000]
+                )
+            real_request_value = provider_request_wire(
+                protocol_interface, provider_request_identity, real_cases,
+            )
+            real_dir = call_dir / "real-mncs-test-self-suite"
+            real_dir.mkdir()
+            real_input = real_dir / "request.json"
+            real_output = real_dir / "result.json"
+            real_check = real_dir / "check.json"
+            real_input.write_text(
+                json.dumps(real_request_value, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            real_context = application_context(
+                interface, real_dir,
+                artifact_paths=[real_input, real_output, real_check],
+            )
+            real_call_path = real_dir / "execution.json"
+            real_call_path.write_text(
+                json.dumps(call_request(real_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+
+            stage0_oracle_call = {
+                "schema_version": "0.1",
+                "target": {"module": ENTRY_MODULE, "function": "run_selected_batch"},
+                "arguments": [real_request_value],
+                "type_arguments": [],
+                "step_budget": 200_000,
+                "policy": {"effects": "realize"},
+                "host_grants": [{
+                    "capability": "provider_digest",
+                    "locator": "bounded-self-suite-provider-oracle",
+                    "bytes": [],
+                }],
+            }
+            real_oracle_probe = support.Probe(
+                ROOT / ".build/native-app-readiness/provider-self-suite-oracle-cache",
+                executable=support.PROBE,
+            )
+            try:
+                real_oracle, real_oracle_metrics = real_oracle_probe.send({"project_oracle": {
+                    "root": root,
+                    "modules": modules,
+                    "calls": [stage0_oracle_call],
+                }}, timeout=180)
+            finally:
+                real_oracle_probe.close()
+            real_oracle_rows = real_oracle.get("executions", [])
+            if (not real_oracle.get("valid") or len(real_oracle_rows) != 1
+                    or real_oracle_rows[0].get("status") != "returned"
+                    or len(real_oracle_rows[0].get("returned", [])) != 1):
+                raise AssertionError(
+                    "Stage-0 did not return a typed production provider fold for the real Test batch: "
+                    + json.dumps(real_oracle, indent=2)[:10000]
+                )
+            stage0_provider_run = digest_app.support.decode_wire(
+                real_oracle_rows[0]["returned"][0]
+            )
+
+            real_started = time.monotonic()
+            real_process = subprocess.run([
+                "/usr/bin/time", "-v", str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "single", str(real_call_path),
+                str(real_input), str(real_output), "success", str(real_check),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            real_wall_seconds = time.monotonic() - real_started
+            if real_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the real mncs-test provider batch: "
+                    f"rc={real_process.returncode}, stderr={real_process.stderr[-5000:]}"
+                )
+            real_document = json.loads(real_process.stdout)
+            real_record = real_document.get("record", {})
+            real_effects = real_record.get("effects", [])
+            real_returned = [digest_app.support.decode_wire(value)
+                             for value in real_document.get("returned_wire", [])]
+            if not real_output.is_file() or not real_check.is_file():
+                raise AssertionError("real provider batch did not publish both typed result records")
+            real_published_result = digest_app.support.decode_wire(json.loads(
+                real_output.read_text(encoding="utf-8")
+            ))
+            real_published_check = digest_app.support.decode_wire(json.loads(
+                real_check.read_text(encoding="utf-8")
+            ))
+            real_operations = [row.get("request", {}).get("operation") for row in real_effects]
+            real_expected_admitted = sorted([
+                "provider_artifact", "provider_digest",
+                *[
+                    identity
+                    for binding in real_document.get("capability_binding", {}).get("bindings", [])
+                    for identity in binding.get("call_authority_identities", [])
+                ],
+            ])
+            expected_test_identities = [
+                list(case["test_case_identity"].encode()) for case in real_cases
+            ]
+            real_native_result = real_published_result.get("native_result", {})
+            real_pass_discriminant = next(
+                row["discriminant"] for row in verdict_row["variants"]
+                if row.get("name") == "PASS"
+            )
+            real_rss_match = re.search(
+                r"Maximum resident set size \(kbytes\): (\d+)", real_process.stderr
+            )
+            real_user_match = re.search(r"User time \(seconds\): ([0-9.]+)", real_process.stderr)
+            real_sys_match = re.search(r"System time \(seconds\): ([0-9.]+)", real_process.stderr)
+            if (
+                real_document.get("outcome", {}).get("kind") != "completed"
+                or real_record.get("admitted_capabilities") != real_expected_admitted
+                or real_operations != [
+                    "structured_read", *( ["structured_digest"] * 5 ),
+                    "structured_write", "structured_write",
+                ]
+                or any(row.get("outcome_tag") != "completed" for row in real_effects)
+                or len(real_effects) != 8
+                or len(real_returned) != 1 or real_returned[0].get("exit_code") != 0
+                or real_published_result != stage0_provider_run.get("test_result")
+                or real_published_check != stage0_provider_run.get("check_result")
+                or real_published_result.get("selection_count") != 7
+                or real_published_result.get("selected_test_identities") != expected_test_identities
+                or real_native_result.get("verdict", {}).get("$v") != real_pass_discriminant
+                or real_native_result.get("verdict_code") != 0
+                or real_native_result.get("assertions") != 6
+                or real_native_result.get("failures") != 0
+                or real_published_check.get("test_result_identity")
+                != real_published_result.get("result_identity")
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": real_document.get("outcome"),
+                    "returned": real_returned,
+                    "admitted_capabilities": real_record.get("admitted_capabilities"),
+                    "expected_admitted_capabilities": real_expected_admitted,
+                    "operations": real_operations,
+                    "published_result": real_published_result,
+                    "published_check": real_published_check,
+                    "stage0_provider_run": stage0_provider_run,
+                }, indent=2)[:18000])
+
             rss_match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", process.stderr)
             user_match = re.search(r"User time \(seconds\): ([0-9.]+)", process.stderr)
             sys_match = re.search(r"System time \(seconds\): ([0-9.]+)", process.stderr)
@@ -905,6 +1152,9 @@ def main() -> None:
                     "stage0_probe_sha256": sha(support.PROBE.read_bytes()),
                     "vm_runner_source_sha256": sha(digest_app.RUNNER_SOURCE.read_bytes()),
                     "verification_harness_sha256": sha(Path(__file__).read_bytes()),
+                    "test_inventory_harness_sha256": sha(
+                        Path(test_inventory.__file__).read_bytes()
+                    ),
                     "vm_runner_binary_sha256": runner_sha,
                     "vm_runner_lockfile_sha256": runner_lock_sha,
                 },
@@ -986,6 +1236,56 @@ def main() -> None:
                     "vm_wall_seconds": round(batch_wall_seconds, 6),
                     "vm_peak_rss_bytes": int(batch_rss_match.group(1)) * 1024 if batch_rss_match else None,
                 },
+                "real_mncs_test_self_suite_batch": {
+                    "test_revision": real_suite["test_repository_revision"],
+                    "language_locked_revision": real_suite["language_locked_revision"],
+                    "self_suite_source": real_suite["root_source"],
+                    "dependency_sources": real_suite["dependency_sources"],
+                    "inventory_artifact_identity": real_suite["selected_artifact_identity"],
+                    "compiler_inventory_count": real_suite["distinct_test_count"],
+                    "compiler_inventory_test_case_identities": [
+                        case["test_case_identity"] for case in real_cases
+                    ],
+                    "compiler_inventory_callable_bindings": [
+                        {
+                            "test_case_identity": case["test_case_identity"],
+                            "declaration_identity": case["declaration_identity"],
+                            "callable_identity": case["callable_identity"],
+                            "signature_identity": case["signature_identity"],
+                        }
+                        for case in real_cases
+                    ],
+                    "individual_canonical_vm_results_match_stage0": real_suite["stage0_equivalent"],
+                    "individual_canonical_vm_batch_count": real_suite["canonical_vm_batch_count"],
+                    "individual_canonical_vm_batch_wall_seconds": (
+                        real_suite["canonical_vm_batch_wall_seconds"]
+                    ),
+                    "individual_canonical_vm_batch_peak_rss_kib": (
+                        real_suite["canonical_vm_batch_peak_rss_kib"]
+                    ),
+                    "build_process_metrics": real_suite["build_process_metrics"],
+                    "provider_application_outcome": real_document.get("outcome"),
+                    "provider_application_exit": real_returned[0],
+                    "admitted_capabilities": real_record.get("admitted_capabilities"),
+                    "effects": [
+                        {
+                            "operation": row.get("request", {}).get("operation"),
+                            "capability": row.get("request", {}).get("capability"),
+                            "outcome_tag": row.get("outcome_tag"),
+                        }
+                        for row in real_effects
+                    ],
+                    "published_result": real_published_result,
+                    "published_check": real_published_check,
+                    "stage0_provider_run_exact_match": True,
+                    "stage0_oracle_metrics": real_oracle_metrics,
+                    "vm_wall_seconds": round(real_wall_seconds, 6),
+                    "vm_user_seconds": float(real_user_match.group(1)) if real_user_match else None,
+                    "vm_system_seconds": float(real_sys_match.group(1)) if real_sys_match else None,
+                    "vm_peak_rss_bytes": (
+                        int(real_rss_match.group(1)) * 1024 if real_rss_match else None
+                    ),
+                },
                 "rejected_publication": {
                     "application_exit": failed_write_returned[0],
                     "effect_operations": [
@@ -1009,7 +1309,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "The local bounded structured-file provider completes the single-test and two-test provider application paths; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
+                    "The local bounded structured-file provider completes the single-test, two-test, and real seven-case mncs-test self-suite provider paths; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,
