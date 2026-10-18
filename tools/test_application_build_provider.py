@@ -38,7 +38,9 @@ TEST_SELECTION_RESPONSE_SCHEMA = "mncs.compiler.application-build/7"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
-    ROOT / "evidence/native-app-readiness-provider-digest.json",
+    ROOT / ".build/native-app-readiness" / (
+        f"provider-digest-{os.getpid()}-{time.time_ns()}.json"
+    ),
 ))
 DIGEST_EVIDENCE_PATH = (
     _DIGEST_EVIDENCE_PATH
