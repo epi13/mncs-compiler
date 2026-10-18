@@ -1,0 +1,58 @@
+{
+  "schema_version": "mncs.compiler.ssa-loop-flow-affinity-evidence/1",
+  "created_at": "2026-10-18",
+  "objective": "Bind loop-related value-SSA instructions to the exact verified Flow block generated from the same source function.",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "commit": "ae80fce1728536bf56ebfbcf939aaf5fb0cb7ce6",
+    "files": [
+      "src/compiler/ssa.mncs",
+      "tools/test_project.py"
+    ]
+  },
+  "verification": {
+    "command": "python3 tools/test_project.py match-ssa",
+    "status": "PASS",
+    "mode": "match-ssa",
+    "elapsed_seconds": 308.291,
+    "backend": "retained_cranelift",
+    "retained_sessions": 2,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "requests": 24,
+    "native_execution_steps_total": 16,
+    "result_sha256": "c83f97a555cecd2eb4a6b941a8e638e60f766a2eb6e8652ba67f08e3d5ad6fdd",
+    "loop_affinity_case": {
+      "project_valid": true,
+      "value_ssa_valid": true,
+      "verified_functions": 2,
+      "target_function_index": 1,
+      "loop_guards": 2,
+      "original_ssa_accepted": true,
+      "cross_loop_guard_and_binding_reassociation_rejected": true
+    },
+    "existing_cases": [
+      "multi-module branch and join SSA",
+      "enum construction and finite match SSA",
+      "scalar match SSA",
+      "record projection SSA",
+      "nested match SSA",
+      "verifier corruption rejection checks"
+    ],
+    "format_and_syntax_checks": [
+      "python3 -m py_compile tools/test_project.py",
+      "git diff --check"
+    ]
+  },
+  "resource_observation": {
+    "sampled_system_available_memory": "approximately 13 GiB",
+    "sampled_concurrent_probe_rss": "approximately 9.6 GiB across two retained sessions",
+    "cgroup_memory_measurement": "unavailable"
+  },
+  "limitations": [
+    "Language-owned verified-fact reuse is not implemented; reused semantic fact count remains zero.",
+    "Effectful mncs.test.digest::digest_app execution through Forge was not exercised by this slice.",
+    "Compiler self-consumption status was not changed by this slice.",
+    "Merge and publish remain outside the selected Environment session authority."
+  ]
+}
