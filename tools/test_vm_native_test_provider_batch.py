@@ -61,47 +61,53 @@ fn execution(id: byte, status: protocol.CallableExecutionStatus, result: TestRes
     };
 }
 
-fn fold_mixed_statuses() -> (result: TestResult) {
-    let passed: protocol.ProviderTestExecution = execution(
-        1, protocol.CallableExecutionStatus.RETURNED, from_assertion(equals_i64(42, 42, 9101))
-    );
-    let skipped: protocol.ProviderTestExecution = execution(2, protocol.CallableExecutionStatus.RETURNED, skip(9102));
-    let budgeted: protocol.ProviderTestExecution = execution(3, protocol.CallableExecutionStatus.BUDGET_EXHAUSTED, pass());
-    let unsupported_run: protocol.ProviderTestExecution = execution(4, protocol.CallableExecutionStatus.UNSUPPORTED, pass());
-    return provider.native_result(provider.fold_selected(
-        [passed, skipped, budgeted, unsupported_run]
-    ));
-}
-
-fn fold_failure_precedence() -> (result: TestResult) {
-    let failed: protocol.ProviderTestExecution = execution(
-        5, protocol.CallableExecutionStatus.RETURNED, from_assertion(equals_i64(5, 3, 9201))
-    );
-    let unsupported_run: protocol.ProviderTestExecution = execution(6, protocol.CallableExecutionStatus.UNSUPPORTED, pass());
-    return provider.native_result(provider.fold_selected([failed, unsupported_run]));
-}
-
-fn fold_unsupported_only() -> (result: TestResult) {
-    let unsupported_run: protocol.ProviderTestExecution = execution(7, protocol.CallableExecutionStatus.UNSUPPORTED, pass());
-    let skipped: protocol.ProviderTestExecution = execution(8, protocol.CallableExecutionStatus.RETURNED, skip(9202));
-    return provider.native_result(provider.fold_selected([unsupported_run, skipped]));
-}
-
-fn fold_invalid_request() -> (result: TestResult) {
+fn fold_status_scenario(scenario: byte) -> (result: TestResult) {
+    if scenario == 0 {
+        let passed: protocol.ProviderTestExecution = execution(
+            1, protocol.CallableExecutionStatus.RETURNED, from_assertion(equals_i64(42, 42, 9101))
+        );
+        let skipped: protocol.ProviderTestExecution = execution(2, protocol.CallableExecutionStatus.RETURNED, skip(9102));
+        let budgeted: protocol.ProviderTestExecution = execution(3, protocol.CallableExecutionStatus.BUDGET_EXHAUSTED, pass());
+        let unsupported_run: protocol.ProviderTestExecution = execution(4, protocol.CallableExecutionStatus.UNSUPPORTED, pass());
+        return provider.native_result(provider.fold_selected(
+            [passed, skipped, budgeted, unsupported_run]
+        ));
+    }
+    if scenario == 1 {
+        let failed: protocol.ProviderTestExecution = execution(
+            5, protocol.CallableExecutionStatus.RETURNED, from_assertion(equals_i64(5, 3, 9201))
+        );
+        let precedence_unsupported: protocol.ProviderTestExecution = execution(6, protocol.CallableExecutionStatus.UNSUPPORTED, pass());
+        return provider.native_result(provider.fold_selected([failed, precedence_unsupported]));
+    }
+    if scenario == 2 {
+        let unsupported_run: protocol.ProviderTestExecution = execution(7, protocol.CallableExecutionStatus.UNSUPPORTED, pass());
+        let skipped: protocol.ProviderTestExecution = execution(8, protocol.CallableExecutionStatus.RETURNED, skip(9202));
+        return provider.native_result(provider.fold_selected([unsupported_run, skipped]));
+    }
     let invalid: protocol.ProviderTestExecution = execution(9, protocol.CallableExecutionStatus.INVALID_REQUEST, pass());
     return provider.native_result(provider.fold_selected([invalid]));
 }
 """
 
-ROOTS = [
-    {"module": MODULE, "function": name}
-    for name in (
-        "fold_failure_precedence",
-        "fold_invalid_request",
-        "fold_mixed_statuses",
-        "fold_unsupported_only",
-    )
+CALLABLE = {"module": MODULE, "function": "fold_status_scenario"}
+ROOTS = [CALLABLE]
+SCENARIOS = [
+    {"id": "mixed_statuses", "scenario": 0},
+    {"id": "failure_precedence", "scenario": 1},
+    {"id": "unsupported_only", "scenario": 2},
+    {"id": "invalid_request", "scenario": 3},
 ]
+
+
+def call_request(scenario: dict) -> dict:
+    return {
+        "schema_version": "0.1",
+        "target": CALLABLE,
+        "arguments": [{"byte": {"value": scenario["scenario"]}}],
+        "type_arguments": [],
+        "step_budget": 2_000_000,
+    }
 
 
 def sha(data: bytes) -> str:
@@ -125,14 +131,8 @@ def request(roots: list[dict] | None = None) -> dict:
 
 def vm_batch(artifact: dict, calls: list[dict]) -> tuple[dict, float, int | None]:
     rows = [{
-        "id": item["function"],
-        "request": {
-            "schema_version": "0.1",
-            "target": {"module": MODULE, "function": item["function"]},
-            "arguments": [],
-            "type_arguments": [],
-            "step_budget": 2_000_000,
-        },
+        "id": item["id"],
+        "request": call_request(item),
     } for item in calls]
     with tempfile.TemporaryDirectory(prefix="mncs-test-provider-fold-") as raw:
         directory = Path(raw)
@@ -181,7 +181,7 @@ def main() -> None:
             raise TypeError("provider fold build omitted its canonical VM artifact")
         rows = built.get("callable_scope", {}).get("callable_roots", [])
         if ([(row.get("module"), row.get("function")) for row in rows]
-                != [(MODULE, row["function"]) for row in ROOTS]
+                != [(CALLABLE["module"], CALLABLE["function"])]
                 or any(row.get("status") != "verified" for row in rows)):
             raise AssertionError(f"provider fold callables were not all verified: {rows}")
 
@@ -203,19 +203,13 @@ def main() -> None:
             probe.proc.wait(timeout=5)
         raise
 
-    calls = ROOTS
+    calls = SCENARIOS
     oracle_probe = app.Probe(CACHE_DIR, executable=PROBE)
     try:
         oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
             "root": SOURCE,
             "modules": {name: path.read_text(encoding="utf-8") for name, path in MODULE_FILES.items()},
-            "calls": [{
-                "schema_version": "0.1",
-                "target": {"module": MODULE, "function": item["function"]},
-                "arguments": [],
-                "type_arguments": [],
-                "step_budget": 2_000_000,
-            } for item in calls],
+            "calls": [call_request(item) for item in calls],
         }}, timeout=180.0)
         if not oracle.get("valid") or len(oracle.get("executions", [])) != len(calls):
             raise AssertionError("Stage-0 provider fold oracle failed: " + json.dumps({
@@ -237,7 +231,7 @@ def main() -> None:
         raise AssertionError("canonical VM provider batch lost its call count or artifact identity")
     observed: dict[str, dict] = {}
     for call, vm_row, oracle_row in zip(calls, results, oracle["executions"]):
-        if (vm_row.get("id") != call["function"]
+        if (vm_row.get("id") != call["id"]
                 or vm_row.get("outcome") != {"kind": "completed"}
                 or vm_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
             raise AssertionError(f"provider fold VM call did not complete on the admitted artifact: {vm_row}")
@@ -248,13 +242,13 @@ def main() -> None:
         actual = app.decode_wire(app.vm_to_wire(actual_rows[0]))
         expected = app.decode_wire(expected_rows[0])
         if actual != expected:
-            raise AssertionError(f"canonical VM diverged from Stage-0 for {call['function']}")
-        observed[call["function"]] = actual
+            raise AssertionError(f"canonical VM diverged from Stage-0 for {call['id']}")
+        observed[call["id"]] = actual
 
-    mixed = observed["fold_mixed_statuses"]
-    precedence = observed["fold_failure_precedence"]
-    unsupported = observed["fold_unsupported_only"]
-    invalid = observed["fold_invalid_request"]
+    mixed = observed["mixed_statuses"]
+    precedence = observed["failure_precedence"]
+    unsupported = observed["unsupported_only"]
+    invalid = observed["invalid_request"]
     if (mixed["verdict_code"] != 1 or mixed["assertions"] != 1
             or mixed["failures"] != 1 or mixed["failure_code"] != 9004):
         raise AssertionError(f"mixed provider statuses were folded incorrectly: {mixed}")
@@ -315,6 +309,9 @@ def main() -> None:
         "verification": {
             "stage0_oracle_results": len(oracle.get("executions", [])),
             "canonical_vm_results": len(results),
+            "selected_callable_count": len(rows),
+            "repeated_callable_invocations": len(calls),
+            "typed_input_kind": "byte scenario selector",
             "typed_results_match": True,
             "fresh_process_cache_hit": warm.get("cache", {}).get("status"),
             "fresh_process_frontend_invocations": warm.get("cache", {}).get("verification_work", {}).get("front_end_invocations"),
@@ -338,10 +335,11 @@ def main() -> None:
             "canonical_vm_batch_invocations": 1,
         },
         "scope": (
-            "The production mncs.test.provider::fold_selected policy and its status-to-TestResult "
-            "mapping ran through one selected-callable VM artifact. Four typed root results matched "
-            "Stage-0. This does not execute provider_batch_app, admit provider_digest, invoke Forge, "
-            "publish Store evidence, or establish full provider/CLI conversion."
+            "One selected callable in one application artifact was invoked four times in one canonical "
+            "VM batch with distinct typed byte scenario inputs. Each invocation reached the production "
+            "mncs.test.provider::fold_selected policy and its status-to-TestResult mapping; all four "
+            "results matched Stage-0. This does not execute provider_batch_app, admit provider_digest, "
+            "invoke Forge, publish Store evidence, or establish full provider/CLI conversion."
         ),
     }
     evidence_path = ROOT / os.environ.get(
