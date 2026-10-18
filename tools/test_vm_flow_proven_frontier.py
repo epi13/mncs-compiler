@@ -172,7 +172,31 @@ def semantic_digest(values: list[dict]) -> str:
     return state.hexdigest()
 
 
+def evidence_output_path() -> Path:
+    configured = os.environ.get("MNCS_FLOW_PROVEN_FRONTIER_EVIDENCE_PATH")
+    if configured:
+        output = Path(configured)
+        if not output.is_absolute():
+            output = ROOT / output
+    else:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        output = ROOT / "evidence" / f"self-host-flow-proven-unit-{stamp}-{os.getpid()}.json"
+
+    try:
+        parent = output.parent.resolve(strict=True)
+        parent.relative_to(ROOT.resolve())
+    except (OSError, ValueError) as error:
+        raise SystemExit(
+            f"Flow frontier evidence path must stay inside the Compiler checkout: {output}"
+        ) from error
+    output = parent / output.name
+    if output.exists() or output.is_symlink():
+        raise SystemExit(f"refusing to overwrite immutable evidence: {output}")
+    return output
+
+
 def main() -> None:
+    output = evidence_output_path()
     if not PROBE.exists():
         raise SystemExit(f"Stage-0 probe missing: {PROBE}")
     host_before = memory_snapshot()
@@ -454,12 +478,12 @@ def main() -> None:
             "Cranelift differential coverage, or compiler succession."
         ),
     }
-    output = ROOT / os.environ.get(
-        "MNCS_FLOW_PROVEN_FRONTIER_EVIDENCE_PATH",
-        "evidence/self-host-flow-proven-unit-current-20261017.json",
-    )
     report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
-    output.write_text(json.dumps(report, indent=2) + "\n")
+    try:
+        with output.open("x", encoding="utf-8") as stream:
+            stream.write(json.dumps(report, indent=2) + "\n")
+    except FileExistsError as error:
+        raise SystemExit(f"refusing to overwrite immutable evidence: {output}") from error
     print(json.dumps(report, indent=2))
 
 

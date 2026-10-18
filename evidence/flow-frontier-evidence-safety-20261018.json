@@ -1,0 +1,77 @@
+{
+  "schema_version": "mncs.compiler.verification-evidence-output-safety/1",
+  "kind": "flow-frontier-evidence-output-safety",
+  "observed_at": "2026-10-18T13:39:56.100505Z",
+  "tested_compiler_head": "db2091131ef3cfbd97a9af2d0a4b9437a147cacc",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+  "implementation": {
+    "path": "tools/test_vm_flow_proven_frontier.py",
+    "sha256": "sha256:fcac8870623d00fd7fd97395be4aeb55123ea6793f49b8743ebe0f05208c7963",
+    "behavior": [
+      "Default report names include UTC microseconds and process ID.",
+      "Configured report paths must resolve inside the selected Compiler checkout.",
+      "Existing files and symlinks are refused before running the expensive verifier.",
+      "Final report creation uses exclusive file creation to reject a concurrent collision."
+    ]
+  },
+  "verification": {
+    "source_ast_parse": true,
+    "distinct_default_paths": true,
+    "default_paths_remain_uncreated_until_verifier_finishes": true,
+    "existing_immutable_report_refused": true,
+    "outside_checkout_path_refused": true,
+    "concurrent_collision_behavior": "exclusive create is implemented; concurrent race was not separately stress-tested",
+    "cli_preflight_refused_existing_evidence_before_running_frontier": true
+  },
+  "flow_frontier_run": {
+    "evidence_artifact": "evidence/self-host-flow-proven-unit-current-20261018-run-01.json",
+    "evidence_sha256": "sha256:60520644835f32e9f237a66a3e88cecaee0d0ae230f6b24147681439b0324cc7",
+    "tested_source_revision": "db2091131ef3cfbd97a9af2d0a4b9437a147cacc",
+    "flow_source_sha256": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+    "selected_vm_cases": 10,
+    "stage0_diagnostic_exact_matches": 9,
+    "known_diagnostic_divergences": [
+      {
+        "case": "unreachable_loop_join",
+        "stage0_diagnostics": [
+          [
+            "MNB010",
+            0,
+            326
+          ],
+          [
+            "MNB010",
+            0,
+            326
+          ],
+          [
+            "MNB017",
+            0,
+            326
+          ],
+          [
+            "MNB017",
+            0,
+            326
+          ],
+          [
+            "MNB038",
+            0,
+            326
+          ]
+        ],
+        "canonical_vm_diagnostics": [
+          [
+            "MNB038",
+            0,
+            326
+          ]
+        ],
+        "reason": "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the next-state expression after an unreachable loop join. Native Flow keeps the already-verified expression in the function's explicit elided-expression inventory, emits no executable backedge, and reports MNB038. The diagnostic difference remains recorded and is not counted as parity."
+      }
+    ],
+    "language_verified_facts_reused": 0
+  },
+  "scope": "This change protects verifier evidence from accidental replacement and path escape. It does not change Flow semantics, claim full Flow-module proof, or establish Language verified-fact reuse."
+}

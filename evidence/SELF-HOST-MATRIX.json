@@ -8582,7 +8582,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-18T13:26:19.275943+00:00",
+  "evidence_updated_at": "2026-10-18T13:39:56.100505Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -14631,5 +14631,118 @@
     "forge_execution_performed": false,
     "canonical_store_publication_performed": false,
     "production_mncs_test_consumer_migrated": false
+  },
+  "current_campaign_flow_proven_unit_frontier_20261018": {
+    "kind": "flow-proven-unit-canonical-vm-frontier",
+    "status": "completed_with_known_diagnostic_divergence",
+    "observed_at": "2026-10-18T13:37:39.774036Z",
+    "tested_compiler_head": "db2091131ef3cfbd97a9af2d0a4b9437a147cacc",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "test_harness": "tools/test_vm_flow_proven_frontier.py",
+    "test_harness_sha256": "sha256:b8f0cfaf53e68ab9fae342029c1c506da057bbc12fb120fc949c157cce066e94",
+    "flow_source_sha256": "ee84e1d0d3dcda76d0713d02a8e48efaa0caf23b264acd95603ea8798b762f38",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "target_module": "mncs.compiler.flow.v1",
+    "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+    "selected_case_count": 10,
+    "verification": {
+      "canonical_vm_flow_cases": 10,
+      "stage0_diagnostic_exact_matches": 9,
+      "known_diagnostic_divergences": [
+        {
+          "case": "unreachable_loop_join",
+          "stage0_diagnostics": [
+            [
+              "MNB010",
+              0,
+              326
+            ],
+            [
+              "MNB010",
+              0,
+              326
+            ],
+            [
+              "MNB017",
+              0,
+              326
+            ],
+            [
+              "MNB017",
+              0,
+              326
+            ],
+            [
+              "MNB038",
+              0,
+              326
+            ]
+          ],
+          "canonical_vm_diagnostics": [
+            [
+              "MNB038",
+              0,
+              326
+            ]
+          ],
+          "reason": "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the next-state expression after an unreachable loop join. Native Flow keeps the already-verified expression in the function's explicit elided-expression inventory, emits no executable backedge, and reports MNB038. The diagnostic difference remains recorded and is not counted as parity."
+        }
+      ],
+      "stage0_iteration_metadata_matches_vm": true,
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false
+    },
+    "measurements": {
+      "canonical_vm_batch_seconds": 51.076549,
+      "whole_frontier_seconds": 101.57794,
+      "child_cpu_seconds": 98.708561,
+      "child_peak_rss_kib": 2640440,
+      "canonical_vm_peak_rss_kib": 464888,
+      "host_memory_before": {
+        "total_bytes": 33411579904,
+        "available_bytes": 24485371904
+      },
+      "cgroup_memory_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_memory_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "canonical_vm_batch_bytes": {
+        "calls": 87424,
+        "results": 707994
+      },
+      "stage0_probe_stderr_sha256": "975c72114c4b0809416f860d514692652af61fbda587419dff0b08291ab268f6",
+      "cgroup_peak_attributable_to_test": false
+    },
+    "evidence_artifact": "evidence/self-host-flow-proven-unit-current-20261018-run-01.json",
+    "evidence_sha256": "sha256:60520644835f32e9f237a66a3e88cecaee0d0ae230f6b24147681439b0324cc7",
+    "claim_boundary": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph accounts for every typed proof operation in executable blocks or explicit elided-expression records, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including multiple conditional exits in counted and sequence loops. The unreachable loop-join negative case completes on the canonical VM, retains its verified next-state operations without adding an unreachable backedge, and has one recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+  },
+  "current_campaign_flow_evidence_output_safety_20261018": {
+    "kind": "flow-frontier-evidence-output-safety",
+    "status": "passed_collision_and_path_containment_checks",
+    "observed_at": "2026-10-18T13:39:56.100505Z",
+    "tested_compiler_head": "db2091131ef3cfbd97a9af2d0a4b9437a147cacc",
+    "implementation_path": "tools/test_vm_flow_proven_frontier.py",
+    "implementation_sha256": "sha256:fcac8870623d00fd7fd97395be4aeb55123ea6793f49b8743ebe0f05208c7963",
+    "verification": {
+      "source_ast_parse": true,
+      "distinct_default_paths": true,
+      "default_paths_remain_uncreated_until_verifier_finishes": true,
+      "existing_immutable_report_refused": true,
+      "outside_checkout_path_refused": true,
+      "concurrent_collision_behavior": "exclusive create is implemented; concurrent race was not separately stress-tested",
+      "cli_preflight_refused_existing_evidence_before_running_frontier": true
+    },
+    "evidence_artifact": "evidence/flow-frontier-evidence-safety-20261018.json",
+    "evidence_sha256": "sha256:37710c43696bc2bda8e9a316f772bcc79fed6b440c6f89d6e69129f1526d601b",
+    "scope": "This change protects verifier evidence from accidental replacement and path escape. It does not change Flow semantics, claim full Flow-module proof, or establish Language verified-fact reuse."
   }
 }
