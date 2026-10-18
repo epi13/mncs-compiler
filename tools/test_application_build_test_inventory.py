@@ -863,7 +863,7 @@ def main() -> None:
             },
             "scope": (
                 "The Compiler returns the Language-owned source_module test inventory from the same "
-                "frontend result used to verify callable roots and emit application-build/6. A fresh "
+                "frontend result used to verify callable roots and emit application-build/7. A fresh "
                 "process can locate a prior artifact candidate across root snapshots; changed source "
                 "still runs the full frontend before executable-closure reuse. Exact fresh-process "
                 "reuse preserves the inventory; edits refresh source spans or the "
