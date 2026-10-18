@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Run the source -> verified Flow -> value SSA handoff on the canonical VM.
 
-Stage-0 provides an independent SSA shape oracle and emits the current-source
-artifact. The MNCS wrapper under test invokes Flow and passes its typed result
-directly into SSA inside one canonical VM call.
+Stage-0 supplies an independent SSA shape oracle. Compiler application-build
+seals the selected wrapper and reachable generic specialization; the wrapper
+invokes Flow and passes its typed result directly into SSA inside each VM call.
 """
 from __future__ import annotations
 
@@ -24,6 +24,8 @@ from test_vm_segment import run_batch, vm_to_wire, test_vm_emit
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.ssa.v1"
 FUNCTION = "lower_flow_unit_value_ssa"
+APP_MODULE = "demo.flow_ssa_frontier"
+APP_FUNCTION = "run"
 TYPE_ARGS = [
     {"kind": "nat", "value": test_flow.PAGE_BOUND},
     {"kind": "nat", "value": test_flow.STRIDE_BOUND},
@@ -50,6 +52,36 @@ PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
 ))
 MODULE_NAMES = ["source", "lexer", "parser", "segment", "decl", "flow", "ssa"]
+APP_SOURCE = (
+    "mncs 0.18; module demo.flow_ssa_frontier; use mncs.compiler.ssa.v1 as ssa; "
+    "fn run(pages: [[byte; up_to 1024]; up_to 1024], stride: u64, total: u64) "
+    "-> (result: ssa.ValueSsaSummary) { "
+    "return ssa.lower_flow_unit_value_ssa<1024, 1024>(pages, stride, total); }"
+)
+
+
+def application_build_request() -> dict:
+    modules = {
+        f"mncs.compiler.{name}.v1": (ROOT / "src/compiler" / f"{name}.mncs").read_text()
+        for name in MODULE_NAMES
+    }
+    return {
+        "schema_version": "mncs.compiler.application-build-request/1",
+        "target": "mncs-vm-0.1",
+        "root_source_id": "demo/flow_ssa_frontier.mncs",
+        "root_source": APP_SOURCE,
+        "entry": {"module": APP_MODULE, "function": APP_FUNCTION},
+        "modules": modules,
+        "generic_seeds": [{
+            "module": MODULE,
+            "function": FUNCTION,
+            "type_arguments": TYPE_ARGS,
+        }],
+        "capabilities": [],
+        "effect_assumptions": [],
+        "optimization_policy": "default",
+        "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1",
+    }
 
 
 def evidence_output_path() -> Path:
@@ -89,6 +121,10 @@ class Probe:
             "type_arguments": TYPE_ARGS,
         }])
         env.setdefault("MNCS_PROBE_CACHE_DIR", str(ROOT / ".build/probe-cache"))
+        env.setdefault(
+            "MNCS_PROBE_APPLICATION_CACHE_DIR",
+            str(ROOT / ".build/flow-ssa-frontier-application-cache"),
+        )
         env["MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT"] = str(ROOT)
         self.proc = subprocess.Popen(
             [str(PROBE)], cwd=ROOT, env=env, stdin=subprocess.PIPE,
@@ -156,25 +192,6 @@ def semantic_digest(value: dict) -> str:
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def artifact_cache_identity() -> tuple[Path, Path, str, dict]:
-    cache_root = ROOT / ".build" / "flow-ssa-frontier-cache"
-    artifact_path = cache_root / "artifact.json"
-    manifest_path = cache_root / "manifest.json"
-    inputs = {
-        "module_source_sha256": {
-            name: hashlib.sha256((ROOT / "src/compiler" / f"{name}.mncs").read_bytes()).hexdigest()
-            for name in MODULE_NAMES
-        },
-        "project_manifest_sha256": hashlib.sha256((ROOT / ".mncs/project.json").read_bytes()).hexdigest(),
-        "stage0_lock_sha256": hashlib.sha256((ROOT / "mncs-language.lock.json").read_bytes()).hexdigest(),
-        "stage0_probe_sha256": hashlib.sha256(PROBE.read_bytes()).hexdigest(),
-        "module": MODULE,
-        "generic_seed": {"function": FUNCTION, "type_arguments": [1024, 1024]},
-    }
-    key = hashlib.sha256(json.dumps(inputs, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    return artifact_path, manifest_path, key, inputs
-
-
 def main() -> None:
     output = evidence_output_path()
     if not PROBE.exists():
@@ -223,48 +240,32 @@ def main() -> None:
             "stage0_iterations": iterations,
         })
 
-    artifact_path, cache_manifest_path, cache_key, cache_inputs = artifact_cache_identity()
-    artifact_cache_hit = False
-    artifact = None
-    if artifact_path.exists() and cache_manifest_path.exists():
-        try:
-            cached_manifest = json.loads(cache_manifest_path.read_text())
-            cached_bytes = artifact_path.read_bytes()
-            candidate = json.loads(cached_bytes)
-            if (
-                cached_manifest.get("schema_version") == "mncs.compiler.canonical-artifact-cache/1"
-                and cached_manifest.get("cache_key") == cache_key
-                and cached_manifest.get("inputs") == cache_inputs
-                and cached_manifest.get("artifact_sha256") == hashlib.sha256(cached_bytes).hexdigest()
-                and cached_manifest.get("artifact_id") == candidate.get("artifact_id")
-                and candidate.get("schema_version") == "mncs.vm.artifact/1"
-            ):
-                artifact = candidate
-                artifact_cache_hit = True
-        except (OSError, ValueError, TypeError):
-            artifact = None
-    if artifact is None:
-        emitted = probe.send({"emit_vm_artifact": {"module": MODULE}})
-        artifact = emitted.get("artifact")
-        if not isinstance(artifact, dict) or artifact.get("schema_version") != "mncs.vm.artifact/1":
-            raise AssertionError(f"Stage-0 did not emit a canonical SSA artifact: {emitted}")
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        artifact_bytes = json.dumps(artifact, sort_keys=True) + "\n"
-        artifact_path.write_text(artifact_bytes)
-        cache_manifest_path.write_text(json.dumps({
-            "schema_version": "mncs.compiler.canonical-artifact-cache/1",
-            "cache_key": cache_key,
-            "inputs": cache_inputs,
-            "artifact_id": artifact["artifact_id"],
-            "artifact_sha256": hashlib.sha256(artifact_bytes.encode()).hexdigest(),
-        }, indent=2) + "\n")
+    build = probe.send({"compile_application": application_build_request()})
+    if (
+        build.get("schema_version") != "mncs.compiler.application-build/4"
+        or build.get("status") != "verified"
+        or build.get("entry", {}).get("status") != "verified"
+        or build.get("unresolved_obligations") != []
+    ):
+        raise AssertionError(f"selected Flow-to-SSA application did not verify: {json.dumps({
+            "schema_version": build.get("schema_version"),
+            "status": build.get("status"),
+            "entry": build.get("entry"),
+            "unresolved_obligations": build.get("unresolved_obligations"),
+            "diagnostics": build.get("diagnostics"),
+            "cache": build.get("cache"),
+        }, sort_keys=True)}")
+    artifact = (build.get("artifact") or {}).get("value")
+    if not isinstance(artifact, dict) or artifact.get("schema_version") != "mncs.vm.artifact/1":
+        raise AssertionError(f"verified Flow-to-SSA application omitted its VM artifact: {build.get('artifact')}")
+    artifact_bytes = json.dumps(artifact, sort_keys=True, separators=(",", ":")).encode()
     probe_stderr = probe.close()
 
     batch_cases = [{
-        "id": f"ssa.lower_flow_unit_value_ssa:{case['name']}",
-        "function": FUNCTION,
+        "id": f"flow-ssa-application.run:{case['name']}",
+        "function": APP_FUNCTION,
         "args": case["arguments"],
-        "type_args": TYPE_ARGS,
+        "type_args": [],
         "step_budget": STEP_BUDGET,
     } for case in cases]
     with tempfile.TemporaryDirectory(prefix="mncs-vm-flow-ssa-") as directory_name:
@@ -272,7 +273,7 @@ def main() -> None:
         vm_artifact_path = directory / "flow-ssa-current.json"
         vm_artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n")
         document, vm_wall, vm_peak_kb, calls_bytes, results_bytes = run_batch(
-            vm_artifact_path, batch_cases, directory, module=MODULE
+            vm_artifact_path, batch_cases, directory, module=APP_MODULE
         )
 
     if document.get("artifact_id") != artifact.get("artifact_id"):
@@ -322,8 +323,8 @@ def main() -> None:
     child_after = resource.getrusage(resource.RUSAGE_CHILDREN)
     child_cpu = (child_after.ru_utime - child_before.ru_utime) + (child_after.ru_stime - child_before.ru_stime)
     report = {
-        "schema_version": "mncs.compiler.self-consumption-frontier/1",
-        "kind": "flow-to-ssa-canonical-vm-frontier",
+        "schema_version": "mncs.compiler.self-consumption-frontier/2",
+        "kind": "flow-to-ssa-application-canonical-vm-frontier",
         "observed_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "status": "passed",
         "compiler": {
@@ -346,7 +347,8 @@ def main() -> None:
         },
         "workload": {
             "module": MODULE,
-            "function": f"{FUNCTION}<1024,1024> -> flow.lower_unit -> lower_value_ssa",
+            "application_entry": f"{APP_MODULE}::{APP_FUNCTION}",
+            "selected_generic_call": f"{MODULE}::{FUNCTION}<1024,1024> -> flow.lower_unit -> lower_value_ssa",
             "cases": [{
                 "name": case["name"],
                 "source_sha256": case["source_sha256"],
@@ -356,13 +358,17 @@ def main() -> None:
                 "stage0_iteration_facts": case["stage0_iterations"],
             } for case in cases],
             "artifact_id": artifact["artifact_id"],
-            "artifact_cache_key": cache_key,
-            "artifact_cache_sha256": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+            "artifact_json_bytes": len(artifact_bytes),
+            "artifact_json_sha256": hashlib.sha256(artifact_bytes).hexdigest(),
         },
         "verification": {
+            "application_build_schema": build.get("schema_version"),
+            "application_build_status": build.get("status"),
+            "application_entry_status": build.get("entry", {}).get("status"),
+            "application_cache_status": build.get("cache", {}).get("status"),
+            "application_unresolved_obligations": build.get("unresolved_obligations"),
             "canonical_vm_calls": len(native_values),
             "canonical_vm_batch_case_count": len(native_values),
-            "artifact_cache_hit": artifact_cache_hit,
             "canonical_vm_semantic_digest": semantic_digest(native_values),
             "canonical_vm_execution_steps": {
                 value["name"]: value["execution_steps"] for value in native_values
@@ -400,13 +406,13 @@ def main() -> None:
             "cgroup_peak_attributable_to_test": False,
         },
         "claim_boundary": (
-            "This selected current-source canonical VM batch starts each case from logical source "
-            "pages, runs flow.lower_unit, derives local nominal identities from the returned proof "
-            "unit, and passes that exact Flow result to value SSA. It includes a conditional return "
-                "inside a counted loop; both "
-            "verified SSA function shapes match pinned Stage-0. It does not establish full SSA module "
-            "proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler "
-            "succession."
+            "This selected application artifact contains the wrapper entry, its reachable compiler "
+            "callable closure, and the explicit lower_flow_unit_value_ssa<1024,1024> specialization. "
+            "The canonical VM batch starts each case from logical source pages; MNCS source runs "
+            "flow.lower_unit, derives local nominal identities from the returned proof unit, and "
+            "passes that exact Flow result to value SSA. Both verified SSA function shapes match the "
+            "pinned Stage-0 oracle. It does not establish Language-owned verified-fact reuse, "
+            "Cranelift differential coverage, or compiler succession."
         ),
     }
     report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
