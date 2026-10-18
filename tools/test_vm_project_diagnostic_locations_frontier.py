@@ -178,11 +178,22 @@ def main():
             references.append(result)
 
         emission = probe.send({"emit_vm_artifact": {"module": PROJECT_MODULE}})
-        assert emission.get("status") == "returned", emission
-        artifact = emission["artifact"]
+        artifact = emission.get("artifact")
+        assert isinstance(artifact, dict), {
+            "response_keys": sorted(emission),
+            "status": emission.get("status"),
+        }
         assert artifact.get("schema_version") == "mncs.vm.artifact/1", artifact.get("schema_version")
         assert "program" not in artifact
         assert artifact.get("artifact_id", "").startswith("sha256:")
+        generic_rows = [
+            row for row in artifact.get("generic_entrypoints", [])
+            if row.get("generic_function") == "locate_project_diagnostics_global"
+        ]
+        assert len(generic_rows) == 1 and generic_rows[0].get("args_spellings") == ["2", "1024"], {
+            "generic_entrypoint_count": len(generic_rows),
+            "generic_entrypoints": generic_rows,
+        }
 
         vm_cases = [{
             "id": case["id"],
@@ -242,6 +253,7 @@ def main():
             "type_arguments": [2, 1024],
             "source_sha256": "sha256:" + hashlib.sha256(source_bytes).hexdigest(),
             "artifact_identity": artifact["artifact_id"],
+            "generic_entrypoint": generic_rows[0],
             "artifact_sha256": "sha256:" + hashlib.sha256(
                 json.dumps(artifact, sort_keys=True).encode()).hexdigest(),
             "stage0_revision": json.loads(
