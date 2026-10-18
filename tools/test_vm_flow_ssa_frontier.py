@@ -108,18 +108,14 @@ def evidence_output_path() -> Path:
 
 
 class Probe:
-    """Stage-0 oracle and current-source canonical artifact emitter."""
+    """Stage-0 oracle and selected current-source application builder."""
 
     def __init__(self) -> None:
         env = dict(os.environ)
         env.pop("MNCS_PROBE_BACKEND", None)
-        env["MNCS_PROBE_MODULES"] = ",".join(MODULE_NAMES)
-        env["MNCS_PROBE_EXECUTION_MODULES"] = MODULE
-        env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([{
-            "module": MODULE,
-            "function": FUNCTION,
-            "type_arguments": TYPE_ARGS,
-        }])
+        env["MNCS_PROBE_MODULES"] = ""
+        env["MNCS_PROBE_EXECUTION_MODULES"] = ""
+        env["MNCS_PROBE_GENERIC_SEEDS"] = "[]"
         env.setdefault("MNCS_PROBE_CACHE_DIR", str(ROOT / ".build/probe-cache"))
         env.setdefault(
             "MNCS_PROBE_APPLICATION_CACHE_DIR",
@@ -240,7 +236,9 @@ def main() -> None:
             "stage0_iterations": iterations,
         })
 
+    application_build_started = time.monotonic()
     build = probe.send({"compile_application": application_build_request()})
+    application_build_wall = time.monotonic() - application_build_started
     if (
         build.get("schema_version") != "mncs.compiler.application-build/4"
         or build.get("status") != "verified"
@@ -393,6 +391,7 @@ def main() -> None:
             "stage2_claimed": False,
         },
         "measurements": {
+            "application_build_seconds": round(application_build_wall, 6),
             "canonical_vm_batch_seconds": round(vm_wall, 6),
             "whole_frontier_seconds": round(time.monotonic() - started, 6),
             "child_cpu_seconds": round(child_cpu, 6),
