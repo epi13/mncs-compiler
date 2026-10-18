@@ -496,6 +496,7 @@ fn annotate_artifact_emission_failure(
 fn read_application_cache(
     path: &PathBuf,
     key: &str,
+    expected_contract: &str,
     expected_source_identity: Option<&str>,
     probe_identity: &str,
     toolchain: Option<&ToolchainIdentity>,
@@ -539,6 +540,8 @@ fn read_application_cache(
         .pointer("/source_snapshot/identity")
         .and_then(Value::as_str)?;
     if !cached_source_identity.starts_with("sha256:")
+        || response.get("schema_version").and_then(Value::as_str) != Some(expected_contract)
+        || response.get("status").and_then(Value::as_str) != Some("verified")
         || expected_source_identity.is_some_and(|expected| expected != cached_source_identity)
         || response
             .pointer("/producer/probe/probe_executable_sha256")
@@ -1646,6 +1649,7 @@ mod tests {
                         let response = super::read_application_cache(
                             &cache_path,
                             &key,
+                            super::CONTRACT_V2,
                             Some(&source_identity),
                             &probe_identity,
                             None,
@@ -1685,6 +1689,8 @@ mod tests {
                     start.wait();
                     for _ in 0..12 {
                         let response = json!({
+                            "schema_version": super::CONTRACT_V2,
+                            "status": "verified",
                             "source_snapshot": { "identity": source_identity },
                             "producer": {
                                 "probe": { "probe_executable_sha256": probe_identity }
@@ -1722,6 +1728,7 @@ mod tests {
         let response = super::read_application_cache(
             &cache_path,
             &key,
+            super::CONTRACT_V2,
             Some(&source_identity),
             &probe_identity,
             None,
@@ -1740,6 +1747,63 @@ mod tests {
             2,
             "temporary publication files must not remain after successful writes"
         );
+        fs::remove_dir_all(&root).expect("remove isolated cache directory");
+    }
+
+    #[test]
+    fn application_cache_rejects_a_response_from_another_contract() {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock is after Unix epoch")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "mncs-application-cache-contract-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).expect("create isolated cache directory");
+        let path = root.join("application.json");
+        let key = format!("sha256:{}", "a".repeat(64));
+        let source_identity = format!("sha256:{}", "b".repeat(64));
+        let probe_identity = format!("sha256:{}", "c".repeat(64));
+        let artifact_identity = format!("sha256:{}", "d".repeat(64));
+        let response = json!({
+            "schema_version": super::CONTRACT_V2,
+            "status": "verified",
+            "source_snapshot": { "identity": source_identity },
+            "producer": {
+                "probe": { "probe_executable_sha256": probe_identity }
+            },
+            "artifact": {
+                "schema_version": "mncs.vm.artifact/1",
+                "identity": artifact_identity,
+                "value": {
+                    "schema_version": "mncs.vm.artifact/1",
+                    "artifact_id": artifact_identity
+                }
+            },
+            "entry": { "status": "verified" }
+        });
+        super::publish_application_cache(&path, &key, &response)
+            .expect("publish test cache response");
+
+        assert!(super::read_application_cache(
+            &path,
+            &key,
+            super::CONTRACT_V2,
+            Some(&source_identity),
+            &probe_identity,
+            None,
+        )
+        .is_some());
+        assert!(super::read_application_cache(
+            &path,
+            &key,
+            super::CONTRACT_V1,
+            Some(&source_identity),
+            &probe_identity,
+            None,
+        )
+        .is_none());
         fs::remove_dir_all(&root).expect("remove isolated cache directory");
     }
 
@@ -2423,6 +2487,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         let cached_response = read_application_cache(
             path,
             &cache_key,
+            contract,
             Some(&source_identity),
             &probe_identity,
             toolchain,
@@ -2451,6 +2516,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 if let Some(candidate) = read_application_cache(
                     &candidate_path,
                     &candidate_key,
+                    contract,
                     None,
                     &probe_identity,
                     toolchain,
