@@ -1799,7 +1799,7 @@
         "page_bound": 1024,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "22a8f15a3b5ed0ae03aff73c099277267baef2a554f85994d9109fff4188bd9e",
+        "current_source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
         "selected_import_resolution_cache_frontier": {
           "status": "passed_with_bounded_frontier",
           "target_module": "mncs.compiler.project.v1",
@@ -1830,7 +1830,7 @@
           "evidence_sha256": "8c3d844f96ee1451b40529ef10036164c524c87d2bee7f1b9060bc5daab2264f",
           "scope": "Selected Cranelift callable only; no Language verified facts, canonical VM, full Project module proof, or succession claim."
         },
-        "current_source_bytes": 152574,
+        "current_source_bytes": 153011,
         "selected_diagnostic_location_canonical_vm_frontier": {
           "status": "passed_with_selected_frontier",
           "target_module": "mncs.compiler.project.v1",
@@ -1895,6 +1895,34 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "Selected diagnostic mapper; full Project module canonical VM proof remains not-proven."
+        },
+        "selected_import_cache_early_exit_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "target_module": "mncs.compiler.project.v1",
+          "target_function": "compile_project_target",
+          "implementation_commit": "99c2b4b17fd7c5c4653b18f0799ddfa60d931e4c",
+          "source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
+          "test_harness_sha256": "ce1a32acb915a5495d1e5266f7c659cf5d80a0f4fea341948c1a541a30323a34",
+          "evidence_artifact": "evidence/project-import-cache-early-exit-20261018.json",
+          "evidence_sha256": "1abe29a0d00313a37e6e65323bf299574314d2abe03e342d6217d4c7b1fb658f",
+          "backend": "cranelift",
+          "stage0_oracle_valid": true,
+          "canonical_vm_tested": false,
+          "successful_lookup_cache_hits": {
+            "module_limit": 1023,
+            "project_limit": 4092
+          },
+          "algorithmic_step_count_model": {
+            "module_limit_previous": 65536,
+            "module_limit_early_exit": 1023,
+            "project_limit_previous": 262144,
+            "project_limit_early_exit": 4092,
+            "measured_speedup": false
+          },
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "Selected Cranelift Project import resolver under the Stage-0 oracle. The 64-step work reduction is a derived helper-call model, not measured wall time or VM instructions; this does not prove full Project module semantics or canonical VM behavior."
         }
       }
     }
@@ -12156,5 +12184,32 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "The Project diagnostic mapper now validates ordered byte spans against the verified source total before rendering line and column values. Cranelift coverage includes the one-call target compile and location API. The standalone mapper matched the Stage-0 interpreter through a sealed canonical VM artifact on six cases. Full Project module verification and canonical VM execution of the combined target compile wrapper remain unproven."
+  },
+  "current_campaign_project_import_cache_early_exit_frontier_20261018": {
+    "kind": "mncs.compiler.project-import-cache-early-exit-frontier",
+    "status": "passed_with_bounded_frontier",
+    "observed_at": "2026-10-18T03:17:04Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "implementation_commit": "99c2b4b17fd7c5c4653b18f0799ddfa60d931e4c",
+    "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target",
+    "source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "ce1a32acb915a5495d1e5266f7c659cf5d80a0f4fea341948c1a541a30323a34",
+    "evidence_artifact": "evidence/project-import-cache-early-exit-20261018.json",
+    "evidence_sha256": "1abe29a0d00313a37e6e65323bf299574314d2abe03e342d6217d4c7b1fb658f",
+    "backend": "cranelift",
+    "stage0_oracle_valid": true,
+    "canonical_vm_tested": false,
+    "successful_lookup_cache_hits": {
+      "module_limit": 1023,
+      "project_limit": 4092
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "Selected Project import resolver capacity and edge cases. Derived early-exit helper-call model only; no measured wall-time comparison, Language fact reuse, full Project module proof, or canonical VM test."
   }
 }

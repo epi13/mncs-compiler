@@ -1,0 +1,112 @@
+{
+  "schema_version": "mncs.compiler.project-import-cache-early-exit/1",
+  "identity": "ev_compiler_project_import_cache_early_exit_20261018",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-18T03:17:04Z",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "head": "99c2b4b17fd7c5c4653b18f0799ddfa60d931e4c",
+    "implementation_commit": "99c2b4b17fd7c5c4653b18f0799ddfa60d931e4c",
+    "source_file": "src/compiler/project.mncs",
+    "source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "ce1a32acb915a5495d1e5266f7c659cf5d80a0f4fea341948c1a541a30323a34",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "change": {
+    "summary": "Project import-resolution cache lookup now returns as soon as a target is found or the memo facts are exhausted, instead of executing the unused remainder of a fixed 64-step scan.",
+    "scope": "One selected native Project resolver callable. The 64-entry memo bound, successful lookup identity, negative import diagnostics, source spans, and stale-snapshot rejection remain covered by the capacity harness.",
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "verification": {
+    "command": "MNCS_PROBE_BIN=tools/stage0-probe/target/release/mncs-compiler-stage0-probe MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_GENERIC_SEEDS='[]' MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "schema_version": "mncs.compiler.project-import-link-capacity/10",
+    "status": "verified",
+    "backend": "cranelift",
+    "stage0_oracle_valid": true,
+    "native_project_valid": true,
+    "target_ssa_valid": true,
+    "canonical_vm_tested": false,
+    "probe_request_count": 25,
+    "result_sha256": "7c6924bcbfd3c83394ca5da9a5c7eac9c21009d7b5bd5b1bba4d24528091301",
+    "module_limit": {
+      "imports": 1024,
+      "candidate_header_comparisons": 1,
+      "successful_lookup_cache_hits": 1023,
+      "source_alias_target_spans_preserved": true
+    },
+    "project_limit": {
+      "imports": 4096,
+      "candidate_header_comparisons": 4,
+      "successful_lookup_cache_hits": 4092,
+      "limit_accepted": true,
+      "overflow_rejected_at_4096": true,
+      "overflow_diagnostic_count": 1
+    },
+    "dense_dag": {
+      "import_links": 15,
+      "schemas_verified": true,
+      "stage0_oracle_valid": true,
+      "target_ssa_valid": true
+    },
+    "interleaved_targets": {
+      "successful_lookup_cache_hits": 4,
+      "candidate_header_comparisons": 3,
+      "distinct_targets_preserved": true
+    },
+    "diagnostics_and_fallbacks": {
+      "missing_import_diagnostics_and_spans_preserved": true,
+      "repeated_missing_negative_cache_hits": 2,
+      "changed_snapshot_stale_success_reused": false,
+      "long_or_oversized_names_use_uncached_path": true,
+      "long_name_locations_preserved": true,
+      "per_module_overflow_1025_rejected_at_1024": true
+    },
+    "connected_chain": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "target_flow_valid": true,
+      "target_ssa_valid": true,
+      "stage0_oracle_valid": true
+    },
+    "algorithmic_work_model": {
+      "basis": "Derived from the previous fixed 64-iteration loop and current measured successful lookup hit counts; helper-call counts were not directly instrumented.",
+      "module_limit_previous_step_calls_estimate": 65536,
+      "module_limit_early_exit_step_calls_estimate": 1023,
+      "project_limit_previous_step_calls_estimate": 262144,
+      "project_limit_early_exit_step_calls_estimate": 4092,
+      "interpretation": "Algorithmic model only. No wall-time speedup, VM instruction reduction, or per-query duration comparison was measured."
+    }
+  },
+  "resource_measurement": {
+    "test_process_elapsed_seconds": 251.0,
+    "stage0_elaboration_seconds": 51.386,
+    "cranelift_compilation_seconds": 156.963,
+    "retained_session_admission_seconds": 24.916,
+    "backend_artifact_payload_bytes": 424861537,
+    "test_process_peak_rss_bytes": 4528963584,
+    "test_process_kernel_rss_high_water_bytes": 4970856448,
+    "sample_count": 3,
+    "cpu_time_delta_ns": null,
+    "cpu_measurement_note": "Telemetry returned 0 for the CPU delta; it is recorded as unavailable rather than interpreted as zero CPU usage.",
+    "cgroup_memory_bytes": null,
+    "cgroup_memory_note": "The cgroup memory counter was unavailable; no zero usage is inferred.",
+    "test_process_elapsed_note": "Approximately 251 seconds as reported by the run summary; not a precision timing sample."
+  },
+  "interpretation": {
+    "capacity_and_edge_cases_passed": true,
+    "candidate_work_reduced_by_early_exit_logic": true,
+    "measured_wall_time_improvement": false,
+    "language_verified_fact_reuse_demonstrated": false,
+    "canonical_vm_execution_demonstrated": false,
+    "full_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
