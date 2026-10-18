@@ -1348,6 +1348,13 @@ def _sec_merge(probe, identities, project_root):
 
     rejected("invalid_terminator_target", replace_jump_target)
 
+    def replace_failure_target(function):
+        block = next(block for block in wire_flist(wire_field(function, "blocks"))
+                     if wire_field(block, "has_failure_target")["boolean"]["value"])
+        set_wire_field(block, "failure_target", integer(999))
+
+    rejected("invalid_failure_target", replace_failure_target)
+
     def replace_return_with_bool(function):
         block = next(block for block in wire_flist(wire_field(function, "blocks"))
                      if wire_field(block, "terminator")["finite"]["discriminant"] == 2)
