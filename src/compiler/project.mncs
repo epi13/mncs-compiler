@@ -672,9 +672,19 @@ fn resolve_one_use_result(current: ParsedModule, usage: decl.UseDecl, tail: decl
 }
 fn module_resolution_cache_lookup<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, usage: decl.UseDecl, facts: ModuleResolutionFactList) -> (result: ModuleResolutionCacheLookup) {
     iterate i up_to 64 carrying st: ModuleResolutionCacheLookup = ModuleResolutionCacheLookup { rest: facts, source_index: current.source_index, module_start: usage.module_start, module_end: usage.module_end, found: false, target_found: false, target_index: 0 } {
+        // Return on a match or exhausted facts instead of paying for the
+        // remaining no-op iterations in this bounded lookup.
+        if module_resolution_cache_lookup_done(st) { return st; }
         next st = module_resolution_cache_step<M, N>(sources, flat_pages, current.source_index, st);
     }
     return st;
+}
+fn module_resolution_cache_lookup_done(st: ModuleResolutionCacheLookup) -> (result: bool) {
+    if st.found { return true; }
+    return match st.rest {
+        MRNil => true,
+        MRCons { head: head, tail: tail } => false
+    };
 }
 fn module_resolution_cache_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], source_index: u64, st: ModuleResolutionCacheLookup) -> (result: ModuleResolutionCacheLookup) {
     if st.found { return st; }
