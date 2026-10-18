@@ -306,7 +306,7 @@ pub fn emit_vm_application_artifact_for_callables_with_producer(
 /// SSA remains the provenance authority; this closed module is revalidated
 /// before it is serialized into an application artifact.
 fn application_ssa_closure(
-    ssa: &SsaModule,
+    mut ssa: SsaModule,
     program: &Program,
     selected_exports: &BTreeSet<(String, String)>,
 ) -> Result<SsaModule, String> {
@@ -368,13 +368,9 @@ fn application_ssa_closure(
         }
     }
 
-    let functions: Vec<_> = ssa
-        .functions
-        .iter()
-        .filter(|function| reachable.contains(&function.semantic_identity.0))
-        .cloned()
-        .collect();
-    if functions.len() != reachable.len() {
+    ssa.functions
+        .retain(|function| reachable.contains(&function.semantic_identity.0));
+    if ssa.functions.len() != reachable.len() {
         return Err("application SSA closure did not resolve every selected function".to_owned());
     }
 
@@ -386,7 +382,7 @@ fn application_ssa_closure(
     let mut reachable_semantic_ids = BTreeSet::<String>::new();
     let mut reachable_hir_ids = BTreeSet::<String>::new();
     let mut obligation_ids = BTreeSet::<String>::new();
-    for function in &functions {
+    for function in &ssa.functions {
         reachable_ssa_ids.insert(function.identity.0.clone());
         reachable_semantic_ids.insert(function.semantic_identity.0.clone());
         for value in function.inputs.iter().chain(&function.outputs) {
@@ -461,78 +457,43 @@ fn application_ssa_closure(
             }
         }
     }
-    let obligations = ssa
-        .obligations
-        .iter()
-        .filter(|obligation| obligation_ids.contains(&obligation.identity.0))
-        .cloned()
-        .collect();
+    drop(obligations_by_id);
+    ssa.obligations
+        .retain(|obligation| obligation_ids.contains(&obligation.identity.0));
+    ssa.trace.entries.retain_mut(|entry| {
+        let semantic_is_reachable = reachable_semantic_ids.contains(&entry.semantic_identity.0);
+        entry
+            .ssa_identities
+            .retain(|identity| reachable_ssa_ids.contains(&identity.0));
+        entry
+            .hir_identities
+            .retain(|identity| reachable_hir_ids.contains(&identity.0));
+        semantic_is_reachable
+            || !entry.ssa_identities.is_empty()
+            || !entry.hir_identities.is_empty()
+    });
+    ssa.transformations.retain(|transformation| {
+        reachable_semantic_ids.contains(&transformation.operation.0)
+            || reachable_ssa_ids.contains(&transformation.operation.0)
+            || reachable_ssa_ids.contains(&transformation.output_identity.0)
+    });
+    ssa.generic_specializations
+        .retain(|specialization| reachable.contains(&specialization.specialization_function.0));
+    // The VM executor does not consult the whole-program binding index; its
+    // full content remains bound by ArtifactSource's original SSA fingerprint.
+    ssa.binding_table = None;
 
-    let trace = mncs_model::SsaTraceMap {
-        entries: ssa
-            .trace
-            .entries
-            .iter()
-            .filter_map(|entry| {
-                let semantic_is_reachable =
-                    reachable_semantic_ids.contains(&entry.semantic_identity.0);
-                let mut projected = entry.clone();
-                projected
-                    .ssa_identities
-                    .retain(|identity| reachable_ssa_ids.contains(&identity.0));
-                projected
-                    .hir_identities
-                    .retain(|identity| reachable_hir_ids.contains(&identity.0));
-                (semantic_is_reachable
-                    || !projected.ssa_identities.is_empty()
-                    || !projected.hir_identities.is_empty())
-                .then_some(projected)
-            })
-            .collect(),
-    };
-    let transformations = ssa
-        .transformations
-        .iter()
-        .filter(|transformation| {
-            reachable_semantic_ids.contains(&transformation.operation.0)
-                || reachable_ssa_ids.contains(&transformation.operation.0)
-                || reachable_ssa_ids.contains(&transformation.output_identity.0)
-        })
-        .cloned()
-        .collect();
-    let generic_specializations = ssa
-        .generic_specializations
-        .iter()
-        .filter(|specialization| reachable.contains(&specialization.specialization_function.0))
-        .cloned()
-        .collect();
-    let projected = SsaModule {
-        schema_version: ssa.schema_version.clone(),
-        identity: ssa.identity.clone(),
-        semantic_identity: ssa.semantic_identity.clone(),
-        hir_fingerprint: ssa.hir_fingerprint.clone(),
-        // The VM executor does not consult the whole-program binding index;
-        // its full content remains bound by ArtifactSource's SSA fingerprint.
-        binding_table: None,
-        record_types: ssa.record_types.clone(),
-        functions,
-        obligations,
-        trace,
-        transformations,
-        generic_specializations,
-        proof_relationships: Vec::new(),
-    };
-    let validation = projected.validate_lowering_boundary(program);
+    let validation = ssa.validate_lowering_boundary(program);
     if !validation.valid {
         return Err(format!(
             "projected application SSA failed backend validation: {:?}",
             validation.errors
         ));
     }
-    if !projected.identity_is_valid() {
+    if !ssa.identity_is_valid() {
         return Err("projected application SSA identity is invalid".to_owned());
     }
-    Ok(projected)
+    Ok(ssa)
 }
 
 fn emit_vm_artifact_scoped(
@@ -567,9 +528,17 @@ fn emit_vm_artifact_scoped(
         "selected ssa identity is valid for {}",
         program.module
     );
+    // Keep a compact identity index for declarations outside the selected
+    // executable closure without retaining a duplicate SSA module.
+    let mut ssa_function_counts = BTreeMap::<String, usize>::new();
+    for function in &ssa.functions {
+        *ssa_function_counts
+            .entry(function.semantic_identity.0.clone())
+            .or_default() += 1;
+    }
     let execution_ssa = match selected_exports {
-        Some(roots) => application_ssa_closure(&ssa, program, roots)?,
-        None => ssa.clone(),
+        Some(roots) => application_ssa_closure(ssa, program, roots)?,
+        None => ssa,
     };
     let capability_bindings = capability_dispatch_bindings(&execution_ssa)?;
     let selected = result
@@ -615,15 +584,21 @@ fn emit_vm_artifact_scoped(
             selected.contains(&(namespace.to_owned(), function.name.clone()))
         });
         if !selected {
-            if resolve_callable(&ssa, namespace, &function.name).is_none() {
-                unselected_unresolved.push(format!(
+            let identity = mncs_model::function_id(namespace, &function.name).0;
+            match ssa_function_counts.get(&identity).copied().unwrap_or(0) {
+                0 => unselected_unresolved.push(format!(
                     "export {namespace}::{}: no ssa instance",
                     function.name
-                ));
+                )),
+                1 => {}
+                _ => panic!(
+                    "callable {namespace}::{} is ambiguous across ssa functions",
+                    function.name
+                ),
             }
             continue;
         }
-        match resolve_callable(&ssa, namespace, &function.name) {
+        match resolve_callable(&execution_ssa, namespace, &function.name) {
             Some(mut entry) => {
                 entry.test_binding = test_bindings
                     .get(&(namespace.to_owned(), function.name.clone()))
@@ -642,17 +617,23 @@ fn emit_vm_artifact_scoped(
         let selected = selected_generic_bases
             .is_none_or(|selected| selected.contains(&(row.0.clone(), row.1.clone())));
         if !selected {
-            if resolve_generic_entry(&ssa, &row).is_none() {
-                unselected_unresolved.push(format!(
+            let identity = mncs_model::function_id(&row.4, &row.5).0;
+            match ssa_function_counts.get(&identity).copied().unwrap_or(0) {
+                0 => unselected_unresolved.push(format!(
                     "generic {}::{}({}): no ssa instance",
                     row.0,
                     row.1,
                     row.2.join(", ")
-                ));
+                )),
+                1 => {}
+                _ => panic!(
+                    "generic {}::{} entry {}::{} is ambiguous across ssa instances",
+                    row.0, row.1, row.4, row.5
+                ),
             }
             continue;
         }
-        match resolve_generic_entry(&ssa, &row) {
+        match resolve_generic_entry(&execution_ssa, &row) {
             Some(entry) => generic_entrypoints.push(entry),
             None => unsupported.push(format!(
                 "generic {}::{}({}): no ssa instance",
@@ -719,7 +700,7 @@ fn emit_vm_artifact_scoped(
             .iter()
             .map(|row| row.identity.clone())
             .collect();
-        for function in &ssa.functions {
+        for function in &execution_ssa.functions {
             if !functions.contains(&function.semantic_identity) {
                 continue;
             }
