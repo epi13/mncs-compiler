@@ -85,6 +85,8 @@ record ValueSsaSummary {
     value_count: u64,
     instruction_count: u64,
     block_count: u64,
+    branch_count: u64,
+    return_count: u64,
     block_parameter_count: u64,
     unsupported_block_count: u64,
     first_unsupported_function: u64,
@@ -187,9 +189,10 @@ record SsaBuild {
     initial_failure_kind: u64
 }
 record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, ok: bool }
-record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_function: u64, first_bad_block: u64, first_bad_kind: u64 }
-record FunctionShape { blocks: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
-record BlockShapeScan { rest: SsaBlockList, blocks: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
+record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, branches: u64, returns: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_function: u64, first_bad_block: u64, first_bad_kind: u64 }
+record FunctionShape { blocks: u64, branches: u64, returns: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
+record BlockShapeScan { rest: SsaBlockList, blocks: u64, branches: u64, returns: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
+record TerminatorShape { branches: u64, returns: u64 }
 record InstructionShapeScan { rest: InstructionList, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity }
 
 fn invalid_identity() -> (result: decl.SemanticIdentity) {
@@ -287,10 +290,10 @@ fn lower_value_ssa_with_imported_schemas<P: Nat, N: Nat>(pages: [[byte; up_to N]
     }
     let functions: FunctionList = reverse_functions<P, N>(pages, stride, total, st.acc);
     let summary: FunctionSummaryScan = summarize_functions<P, N>(pages, stride, total, functions, st.ok && function_list_ended<P, N>(pages, stride, total, st));
-    return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_function: summary.first_bad_function, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
+    return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, branch_count: summary.branches, return_count: summary.returns, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_function: summary.first_bad_function, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
 }
 fn empty_ssa_summary(valid: bool) -> (result: ValueSsaSummary) {
-    return ValueSsaSummary { functions: FunctionList.FNil, valid: valid, function_count: 0, supported_function_count: 0, verified_function_count: 0, value_count: 0, instruction_count: 0, block_count: 0, block_parameter_count: 0, unsupported_block_count: 0, first_unsupported_function: 0, first_unsupported_block: 0, first_unsupported_kind: 0, call_count: 0, has_call: false, first_call_identity: invalid_identity() };
+    return ValueSsaSummary { functions: FunctionList.FNil, valid: valid, function_count: 0, supported_function_count: 0, verified_function_count: 0, value_count: 0, instruction_count: 0, block_count: 0, branch_count: 0, return_count: 0, block_parameter_count: 0, unsupported_block_count: 0, first_unsupported_function: 0, first_unsupported_block: 0, first_unsupported_kind: 0, call_count: 0, has_call: false, first_call_identity: invalid_identity() };
 }
 fn value_ssa_function_status(summary: ValueSsaSummary, target: u64) -> (result: ValueSsaFunctionStatus) {
     let empty: ValueSsaFunctionStatus = ValueSsaFunctionStatus { found: false, supported: false, verified: false, identity: invalid_identity() };
@@ -317,7 +320,7 @@ fn function_list_ended<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     return match st.fns { DNil => st.index == flow.ssa_function_count<P, N>(pages, stride, total, st.lowered), DCons { head: h, tail: t } => false };
 }
 fn summarize_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList, source_ok: bool) -> (result: FunctionSummaryScan) {
-    iterate i up_to 1024 carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_function: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_function_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, branches: 0, returns: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_function: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_function_step<P, N>(pages, stride, total, st); }
     return st;
 }
 fn summarize_function_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionSummaryScan) -> (result: FunctionSummaryScan) {
@@ -328,25 +331,36 @@ fn summarize_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     let has_call: bool = st.has_call || shape.has_call;
     let first: decl.SemanticIdentity = select_identity(st.has_call, st.first_identity, shape.first_identity);
     let first_bad: bool = st.unsupported == 0 && shape.unsupported > 0;
-    return FunctionSummaryScan { rest: rest, valid: st.valid && function.verified, functions: st.functions + 1, supported: st.supported + select(function.supported, 1, 0), verified: st.verified + select(function.verified, 1, 0), values: st.values + function.value_count, instructions: st.instructions + shape.instructions, blocks: st.blocks + shape.blocks, parameters: st.parameters + shape.parameters, calls: st.calls + shape.calls, has_call: has_call, first_identity: first, unsupported: st.unsupported + shape.unsupported, first_bad_block: select(first_bad, shape.first_bad_block, st.first_bad_block), first_bad_kind: select(first_bad, shape.first_bad_kind, st.first_bad_kind), first_bad_function: select(first_bad, st.functions, st.first_bad_function) };
+    return FunctionSummaryScan { rest: rest, valid: st.valid && function.verified, functions: st.functions + 1, supported: st.supported + select(function.supported, 1, 0), verified: st.verified + select(function.verified, 1, 0), values: st.values + function.value_count, instructions: st.instructions + shape.instructions, blocks: st.blocks + shape.blocks, branches: st.branches + shape.branches, returns: st.returns + shape.returns, parameters: st.parameters + shape.parameters, calls: st.calls + shape.calls, has_call: has_call, first_identity: first, unsupported: st.unsupported + shape.unsupported, first_bad_block: select(first_bad, shape.first_bad_block, st.first_bad_block), first_bad_kind: select(first_bad, shape.first_bad_kind, st.first_bad_kind), first_bad_function: select(first_bad, st.functions, st.first_bad_function) };
 }
 fn select_identity(already: bool, prior: decl.SemanticIdentity, candidate: decl.SemanticIdentity) -> (result: decl.SemanticIdentity) {
     if already { return prior; }
     return candidate;
 }
 fn summarize_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList) -> (result: FunctionShape) {
-    iterate i up_to 1024 carrying st: BlockShapeScan = BlockShapeScan { rest: blocks, blocks: 0, parameters: 0, instructions: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_block_step<P, N>(pages, stride, total, st); }
-    return FunctionShape { blocks: st.blocks, parameters: st.parameters, instructions: st.instructions, calls: st.calls, has_call: st.has_call, first_identity: st.first_identity, unsupported: st.unsupported, first_bad_block: st.first_bad_block, first_bad_kind: st.first_bad_kind };
+    iterate i up_to 1024 carrying st: BlockShapeScan = BlockShapeScan { rest: blocks, blocks: 0, branches: 0, returns: 0, parameters: 0, instructions: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_block_step<P, N>(pages, stride, total, st); }
+    return FunctionShape { blocks: st.blocks, branches: st.branches, returns: st.returns, parameters: st.parameters, instructions: st.instructions, calls: st.calls, has_call: st.has_call, first_identity: st.first_identity, unsupported: st.unsupported, first_bad_block: st.first_bad_block, first_bad_kind: st.first_bad_kind };
 }
 fn summarize_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BlockShapeScan) -> (result: BlockShapeScan) {
     return match st.rest { SsaBlockList.LNil => st, SsaBlockList.LCons { head: block, tail: rest } => summarize_block<P, N>(pages, stride, total, st, block, rest) };
 }
 fn summarize_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BlockShapeScan, block: SsaBlock, rest: SsaBlockList) -> (result: BlockShapeScan) {
     let instruction_shape: InstructionShapeScan = summarize_instructions<P, N>(pages, stride, total, block.instructions);
+    let terminator_shape: TerminatorShape = summarize_terminator(block.terminator);
     let first: decl.SemanticIdentity = select_identity(st.has_call, st.first_identity, instruction_shape.first_identity);
     let is_bad: bool = !(block.lowering_ok);
     let first_bad: bool = st.unsupported == 0 && is_bad;
-    return BlockShapeScan { rest: rest, blocks: st.blocks + 1, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters), instructions: st.instructions + instruction_shape.instructions, calls: st.calls + instruction_shape.calls, has_call: st.has_call || instruction_shape.has_call, first_identity: first, unsupported: st.unsupported + select(is_bad, 1, 0), first_bad_block: select(first_bad, block.id, st.first_bad_block), first_bad_kind: select(first_bad, block.lowering_failure_kind, st.first_bad_kind) };
+    return BlockShapeScan { rest: rest, blocks: st.blocks + 1, branches: st.branches + terminator_shape.branches, returns: st.returns + terminator_shape.returns, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters), instructions: st.instructions + instruction_shape.instructions, calls: st.calls + instruction_shape.calls, has_call: st.has_call || instruction_shape.has_call, first_identity: first, unsupported: st.unsupported + select(is_bad, 1, 0), first_bad_block: select(first_bad, block.id, st.first_bad_block), first_bad_kind: select(first_bad, block.lowering_failure_kind, st.first_bad_kind) };
+}
+fn summarize_terminator(terminator: Terminator) -> (result: TerminatorShape) {
+    return match terminator {
+        Branch { condition: condition, yes: yes, no: no, yes_args: yes_args, no_args: no_args } => TerminatorShape { branches: 1, returns: 0 },
+        Jump { target: target, arguments: arguments } => TerminatorShape { branches: 0, returns: 0 },
+        Return { value: value } => TerminatorShape { branches: 0, returns: 1 },
+        Fail => TerminatorShape { branches: 0, returns: 0 },
+        FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal_identity, result_type: result_type, source_start: source_start, source_end: source_end, arm_count: arm_count, join_target: join_target, cases: cases } => TerminatorShape { branches: 0, returns: 0 },
+        ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_type, source_start: source_start, source_end: source_end, arm_count: arm_count, default_target: default_target, join_target: join_target, cases: cases } => TerminatorShape { branches: 0, returns: 0 }
+    };
 }
 record ValueCountScan { rest: ValueList, count: u64 }
 fn value_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList) -> (result: u64) {
