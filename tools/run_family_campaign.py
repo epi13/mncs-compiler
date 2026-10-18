@@ -42,7 +42,8 @@ from test_project import (  # noqa: E402
     request_value,
 )
 
-WORKSPACE = ROOT.parent
+WORKSPACE = None
+WORKSPACE_REPOSITORIES = {}
 DIAGNOSTICS = {
     0: "SourceOrder",
     1: "SourceCountMismatch",
@@ -90,11 +91,7 @@ SLICES = [
         ],
         "root": "fixtures/repos/healthy/src/main.mncs",
         "adapt": {
-            "fixtures/repos/healthy/src/lib.mncs": [
-                {"find": "mncs 0.17;", "replace": "mncs 0.18;"},
-            ],
             "fixtures/repos/healthy/src/main.mncs": [
-                {"find": "mncs 0.17;", "replace": "mncs 0.18;"},
                 {"find": "use healthy.lib;", "replace": "use healthy.lib as lib;"},
             ],
         },
@@ -148,6 +145,74 @@ def git_head(path):
         capture_output=True, text=True, check=True,
     ).stdout.strip()
     return out, bool(dirty)
+
+
+def resolve_workspace_root(repo_root):
+    """Find the shared projects directory from this registered Git checkout.
+
+    Linked worktrees keep their common Git directory in the main checkout, so
+    the worktree's parent path is not a reliable workspace boundary.
+    """
+    repo_root = Path(repo_root).resolve(strict=True)
+    top_level = Path(subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()).resolve(strict=True)
+    if top_level != repo_root:
+        raise ValueError(f"compiler checkout is not a Git worktree root: {repo_root}")
+
+    common_text = subprocess.run(
+        ["git", "-C", str(repo_root), "rev-parse", "--path-format=absolute", "--git-common-dir"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    common_dir = Path(common_text)
+    if not common_dir.is_absolute():
+        common_dir = repo_root / common_dir
+    common_dir = common_dir.resolve(strict=True)
+    if common_dir.name != ".git":
+        raise ValueError(f"compiler Git common directory is not a standard checkout: {common_dir}")
+    workspace = common_dir.parent.parent
+    if workspace.resolve(strict=True) != workspace:
+        raise ValueError(f"workspace path contains a symbolic-link escape: {workspace}")
+
+    configured = os.environ.get("MNCS_FAMILY_WORKSPACE_ROOT")
+    if configured:
+        requested = Path(configured).expanduser()
+        if requested.is_symlink():
+            raise ValueError("configured family workspace root may not be a symbolic link")
+        requested = requested.resolve(strict=True)
+        if requested != workspace:
+            raise ValueError(
+                f"configured family workspace root does not match Git identity: {requested}"
+            )
+    return workspace
+
+
+def resolve_workspace_repository(workspace, repository):
+    """Accept only the named, immediate, real Git repository in this workspace."""
+    if not re.fullmatch(r"mncs-[A-Za-z0-9][A-Za-z0-9._-]{0,119}", repository):
+        raise ValueError(f"invalid family repository identity: {repository!r}")
+    candidate = workspace / repository
+    if candidate.is_symlink():
+        raise ValueError(f"family repository may not be a symbolic link: {candidate}")
+    resolved = candidate.resolve(strict=True)
+    if resolved.parent != workspace:
+        raise ValueError(f"family repository is outside the selected workspace: {candidate}")
+    top_level = Path(subprocess.run(
+        ["git", "-C", str(resolved), "rev-parse", "--show-toplevel"],
+        capture_output=True, text=True, check=True,
+    ).stdout.strip()).resolve(strict=True)
+    if top_level != resolved:
+        raise ValueError(f"family repository path is not its Git worktree root: {candidate}")
+    manifest_path = resolved / ".mncs" / "project.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_repository = manifest.get("repository")
+        if manifest_repository is not None and manifest_repository != repository:
+            raise ValueError(
+                f"family repository manifest identity mismatch at {manifest_path}"
+            )
+    return resolved
 
 
 def file_dirty(repo_path, rel):
@@ -209,7 +274,7 @@ def run_slice(probe, identities, definition):
                 "modified": False,
             }
         else:
-            repo_path = WORKSPACE / definition["repo"]
+            repo_path = WORKSPACE_REPOSITORIES[definition["repo"]]
             for i, rel in enumerate(definition["files"]):
                 raw = (repo_path / rel).read_bytes()
                 text = raw.decode()
@@ -268,6 +333,9 @@ def run_slice(probe, identities, definition):
 
 
 def main(argv):
+    if "--help" in argv or "-h" in argv:
+        print(__doc__.strip())
+        return 0
     if "--list" in argv:
         for definition in SLICES:
             print(f"{definition['name']}  {definition['classification']}")
@@ -275,13 +343,20 @@ def main(argv):
     wanted = [a for a in argv[1:] if not a.startswith("-")] or None
     selected = [d for d in SLICES if wanted is None or d["name"] in wanted]
     assert selected, f"no slices match {wanted}"
+    global WORKSPACE, WORKSPACE_REPOSITORIES
+    WORKSPACE = resolve_workspace_root(ROOT)
+    repository_names = sorted({d["repo"] for d in selected if d.get("repo")})
+    WORKSPACE_REPOSITORIES = {
+        name: resolve_workspace_repository(WORKSPACE, name)
+        for name in repository_names
+    }
     lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
     compiler_rev, compiler_dirty = git_head(ROOT)
     source_revs = {}
     for definition in selected:
         repo = definition.get("repo")
         if repo and repo not in source_revs:
-            head, dirty = git_head(WORKSPACE / repo)
+            head, dirty = git_head(WORKSPACE_REPOSITORIES[repo])
             source_revs[repo] = {"revision": head, "dirty": dirty}
     probe = Probe()
     try:

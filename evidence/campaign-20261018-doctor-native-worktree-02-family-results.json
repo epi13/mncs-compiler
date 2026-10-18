@@ -1,0 +1,179 @@
+{
+  "campaign_id": "20261018-doctor-native-worktree-02",
+  "compiler_dirty": true,
+  "compiler_revision": "79daa14350b45646e56468a5ae861ed0c616c7ed",
+  "environment_campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "environment_checkpoint_before": "chk_38735af14bfc1d5c",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "identity": "ev_compiler_doctor_family_nested_worktree_20261018",
+  "invocation_provenance": {
+    "command": [
+      "python3",
+      "tools/run_family_campaign.py",
+      "doctor-healthy-lib",
+      "doctor-healthy-pair-bare-use",
+      "doctor-018-alias-pair"
+    ],
+    "help_option_returns_without_running_workload": true,
+    "returncode": 0,
+    "runner_sha256": "sha256:0e3ea39c83f09787bf8cc4d63840ed76147377fb261357ab2f931f0b0a7879bc",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "workspace_root_resolved_from_git_common_directory": "/home/epi13/Documents/Projects",
+    "wrong_workspace_override_rejected_before_build": true
+  },
+  "probe_readiness_observation": {
+    "backend": "cranelift",
+    "backend_artifact_cache_hits": 2,
+    "cache_hits": 2,
+    "cache_misses": 0,
+    "frontend_program_cache_hits": 0,
+    "ready_seconds": 50.7,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "probe_requests": 7,
+  "probe_steps_total": 3,
+  "schema_version": 1,
+  "slices": [
+    {
+      "classification": "unmodified-real-source",
+      "detail": {
+        "modules": [
+          {
+            "first_unsupported_block": 0,
+            "first_unsupported_kind": 0,
+            "source_index": 0,
+            "valid": true,
+            "verified": 1
+          }
+        ]
+      },
+      "elapsed_seconds": 0.015,
+      "file_report": {
+        "fixtures/repos/healthy/src/lib.mncs": {
+          "bytes": 80,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "native_diagnostics": [],
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "repo": "mncs-doctor",
+      "slice": "doctor-healthy-lib",
+      "stage": "native-full-slice-ok",
+      "stage0_oracle_diagnostics": [],
+      "stage0_oracle_valid": true
+    },
+    {
+      "classification": "unmodified-real-source",
+      "detail": {
+        "end": 100,
+        "source_index": 1,
+        "start": 90
+      },
+      "elapsed_seconds": 0.022,
+      "file_report": {
+        "fixtures/repos/healthy/src/lib.mncs": {
+          "bytes": 80,
+          "modified": false,
+          "repo_dirty": false
+        },
+        "fixtures/repos/healthy/src/main.mncs": {
+          "bytes": 106,
+          "modified": false,
+          "repo_dirty": false
+        }
+      },
+      "native_diagnostics": [
+        {
+          "kind": "ProofFailed",
+          "payload": {
+            "end": 100,
+            "source_index": 1,
+            "start": 90
+          }
+        }
+      ],
+      "native_valid": false,
+      "native_value_ssa_valid": false,
+      "repo": "mncs-doctor",
+      "slice": "doctor-healthy-pair-bare-use",
+      "stage": "native-ProofFailed",
+      "stage0_oracle_diagnostics": [
+        {
+          "code": "MNE131",
+          "expected": [],
+          "found": null,
+          "message": "call target does not resolve to a function in this module",
+          "severity": "error",
+          "span": {
+            "column": 12,
+            "end": 100,
+            "line": 7,
+            "start": 90
+          },
+          "stage": "elaboration"
+        }
+      ],
+      "stage0_oracle_valid": false
+    },
+    {
+      "adapt": {
+        "fixtures/repos/healthy/src/main.mncs": [
+          {
+            "find": "use healthy.lib;",
+            "replace": "use healthy.lib as lib;"
+          }
+        ]
+      },
+      "classification": "minimally-adapted-real-source",
+      "detail": {
+        "modules": [
+          {
+            "first_unsupported_block": 0,
+            "first_unsupported_kind": 0,
+            "source_index": 0,
+            "valid": true,
+            "verified": 1
+          },
+          {
+            "first_unsupported_block": 0,
+            "first_unsupported_kind": 0,
+            "source_index": 1,
+            "valid": true,
+            "verified": 1
+          }
+        ]
+      },
+      "elapsed_seconds": 0.035,
+      "file_report": {
+        "fixtures/repos/healthy/src/lib.mncs": {
+          "bytes": 80,
+          "modified": false,
+          "repo_dirty": false
+        },
+        "fixtures/repos/healthy/src/main.mncs": {
+          "bytes": 106,
+          "modified": true,
+          "repo_dirty": false
+        }
+      },
+      "native_diagnostics": [],
+      "native_valid": true,
+      "native_value_ssa_valid": true,
+      "repo": "mncs-doctor",
+      "slice": "doctor-018-alias-pair",
+      "stage": "native-full-slice-ok",
+      "stage0_oracle_diagnostics": [],
+      "stage0_oracle_valid": true
+    }
+  ],
+  "source_profile": "0.18",
+  "source_revisions": {
+    "mncs-doctor": {
+      "dirty": false,
+      "revision": "aacbcbb025cae47ea3e74e0a895e18b838cb1848"
+    }
+  },
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+}
