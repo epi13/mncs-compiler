@@ -104,6 +104,7 @@ record FnWalk {
     acc: FunctionList,
     diagnostics: DiagnosticList,
     block_count: u64,
+    function_count: u64,
     ok: bool
 }
 record FnRev { rest: FunctionList, acc: FunctionList }
@@ -121,16 +122,25 @@ record LoweredUnit {
 // of making downstream consumers reconstruct their storage layout.
 record SsaFunctionCount { rest: FunctionList, count: u64 }
 fn ssa_function_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit) -> (result: u64) {
-    iterate i up_to 1024 carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } { next st = ssa_function_count_step(st); }
+    iterate i up_to 1024 carrying st: SsaFunctionCount = SsaFunctionCount { rest: lowered.functions, count: 0 } {
+        if st.count >= lowered.proof.fn_count || flow_function_list_empty(st.rest) { return st.count; }
+        next st = ssa_function_count_step(st);
+    }
     return st.count;
 }
 fn ssa_function_count_step(st: SsaFunctionCount) -> (result: SsaFunctionCount) {
     return match st.rest { QNil => st, QCons { head: h, tail: t } => SsaFunctionCount { rest: t, count: st.count + 1 } };
 }
+fn flow_function_list_empty(functions: FunctionList) -> (result: bool) {
+    return match functions { QNil => true, QCons { head: head, tail: tail } => false };
+}
 record SsaFunctionLookup { rest: FunctionList, index: u64, wanted: u64, found: bool, function: FunctionFlow }
 fn ssa_function_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: LoweredUnit, wanted: u64) -> (result: FunctionFlow) {
     let empty: FunctionFlow = FunctionFlow { fn_start: 0, fn_end: 0, entry: 0, blocks: BlockList.BNil, elided_expressions: TypedExprList.ENil, block_count: 0, unreachable_joins: 0, verified: false };
-    iterate i up_to 1024 carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } { next st = ssa_function_lookup_step(st); }
+    iterate i up_to 1024 carrying st: SsaFunctionLookup = SsaFunctionLookup { rest: lowered.functions, index: 0, wanted: wanted, found: false, function: empty } {
+        if st.found || flow_function_list_empty(st.rest) || st.index >= lowered.proof.fn_count { return st.function; }
+        next st = ssa_function_lookup_step(st);
+    }
     return st.function;
 }
 fn ssa_function_lookup_step(st: SsaFunctionLookup) -> (result: SsaFunctionLookup) {
@@ -175,12 +185,12 @@ fn lower_proven_unit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         };
     }
     let unit: decl.Unit = proof.unit;
-    let fns: FnWalk = lower_functions<P, N>(pages, stride, total, unit.fns, proof.tops);
+    let fns: FnWalk = lower_functions<P, N>(pages, stride, total, unit.fns, proof.tops, proof.fn_count);
     let count: u64 = diagnostic_count<P, N>(pages, stride, total, fns.diagnostics);
     return LoweredUnit {
-        valid: fns.ok && tops_empty(fns.typed_rest) && count == 0,
+        valid: fns.ok && fns.function_count == proof.fn_count && fn_list_empty(fns.rest) && tops_empty(fns.typed_rest) && count == 0,
         graph_ok: fns.ok && tops_empty(fns.typed_rest), proof: proof,
-        functions: reverse_functions<P, N>(pages, stride, total, fns.acc),
+        functions: reverse_functions<P, N>(pages, stride, total, fns.acc, fns.function_count),
         diagnostics: reverse_diagnostics<P, N>(pages, stride, total, fns.diagnostics),
         block_count: fns.block_count
     };
@@ -195,9 +205,15 @@ fn first_diagnostic(lowered: LoweredUnit) -> (result: Diagnostic) {
     };
 }
 
-fn lower_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: decl.FnList, tops: decl.TopsList) -> (result: FnWalk) {
-    iterate i up_to 1024 carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, ok: true } { next d = lower_fn_step<P, N>(pages, stride, total, d); }
+fn lower_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fns: decl.FnList, tops: decl.TopsList, function_count: u64) -> (result: FnWalk) {
+    iterate i up_to 1024 carrying d: FnWalk = FnWalk { rest: fns, typed_rest: tops, acc: FunctionList.QNil, diagnostics: DiagnosticList.DNil, block_count: 0, function_count: 0, ok: true } {
+        if d.function_count >= function_count || fn_list_empty(d.rest) { return d; }
+        next d = lower_fn_step<P, N>(pages, stride, total, d);
+    }
     return d;
+}
+fn fn_list_empty(fns: decl.FnList) -> (result: bool) {
+    return match fns { decl.FnList.DNil => true, decl.FnList.DCons { head: head, tail: tail } => false };
 }
 fn lower_fn_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FnWalk) -> (result: FnWalk) {
     return match st.rest {
@@ -233,7 +249,7 @@ fn lower_one_fn<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
         rest: t, typed_rest: finished.typed_rest,
         acc: FunctionList.QCons { head: flow, tail: st.acc },
         diagnostics: append_diagnostics<P, N>(pages, stride, total, st.diagnostics, finished.diagnostics),
-        block_count: st.block_count + n, ok: st.ok && verified
+        block_count: st.block_count + n, function_count: st.function_count + 1, ok: st.ok && verified
     };
 }
 
@@ -585,8 +601,11 @@ fn prepend_diag_step(st: DiagRev) -> (result: DiagRev) {
     };
 }
 
-fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: FunctionList) -> (result: FunctionList) {
-    iterate i up_to 1024 carrying d: FnRev = FnRev { rest: list, acc: FunctionList.QNil } { next d = reverse_fn_step(d); }
+fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: FunctionList, function_count: u64) -> (result: FunctionList) {
+    iterate i up_to 1024 carrying d: FnRev = FnRev { rest: list, acc: FunctionList.QNil } {
+        if i >= function_count || flow_function_list_empty(d.rest) { return d.acc; }
+        next d = reverse_fn_step(d);
+    }
     return d.acc;
 }
 fn reverse_fn_step(st: FnRev) -> (result: FnRev) {

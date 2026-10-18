@@ -70,6 +70,7 @@ record Function {
     inputs: ValueList,
     result_type: decl.SemType,
     blocks: SsaBlockList,
+    block_count: u64,
     values: ValueList,
     value_count: u64,
     supported: bool,
@@ -194,9 +195,9 @@ record SsaBuild {
 record FunctionWalk { fns: decl.FnList, lowered: flow.LoweredUnit, index: u64, acc: FunctionList, count: u64, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList, ok: bool }
 record FunctionSummaryScan { rest: FunctionList, valid: bool, functions: u64, supported: u64, verified: u64, values: u64, instructions: u64, blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_function: u64, first_bad_block: u64, first_bad_kind: u64 }
 record FunctionShape { blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
-record BlockShapeScan { rest: SsaBlockList, blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64 }
+record BlockShapeScan { rest: SsaBlockList, blocks: u64, branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64, parameters: u64, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, unsupported: u64, first_bad_block: u64, first_bad_kind: u64, value_limit: u64 }
 record TerminatorShape { branches: u64, jumps: u64, returns: u64, failures: u64, switches: u64 }
-record InstructionShapeScan { rest: InstructionList, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity }
+record InstructionShapeScan { rest: InstructionList, instructions: u64, calls: u64, has_call: bool, first_identity: decl.SemanticIdentity, limit: u64 }
 
 fn invalid_identity() -> (result: decl.SemanticIdentity) {
     return decl.invalid_semantic_identity();
@@ -288,12 +289,21 @@ fn lower_value_ssa_with_imported_schemas<P: Nat, N: Nat>(pages: [[byte; up_to N]
     if !(flow.ssa_flow_valid(lowered)) {
         return empty_ssa_summary(false);
     }
-    iterate i up_to 1024 carrying st: FunctionWalk = FunctionWalk { fns: lowered.proof.unit.fns, lowered: lowered, index: 0, acc: FunctionList.FNil, count: 0, nominals: nominals, imported_records: imported_records, imported_enums: imported_enums, ok: true } {
+    let st: FunctionWalk = lower_ssa_functions<P, N>(pages, stride, total, lowered, nominals, imported_records, imported_enums);
+    let functions: FunctionList = reverse_functions<P, N>(pages, stride, total, st.acc, st.count);
+    let summary: FunctionSummaryScan = summarize_functions<P, N>(pages, stride, total, functions, st.count, st.ok && st.count == lowered.proof.fn_count && function_list_ended<P, N>(pages, stride, total, st));
+    return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, branch_count: summary.branches, jump_count: summary.jumps, return_count: summary.returns, failure_count: summary.failures, switch_count: summary.switches, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_function: summary.first_bad_function, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
+}
+fn lower_ssa_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, lowered: flow.LoweredUnit, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList) -> (result: FunctionWalk) {
+    let initial: FunctionWalk = FunctionWalk { fns: lowered.proof.unit.fns, lowered: lowered, index: 0, acc: FunctionList.FNil, count: 0, nominals: nominals, imported_records: imported_records, imported_enums: imported_enums, ok: true };
+    iterate i up_to 1024 carrying st: FunctionWalk = initial {
+        if st.count >= lowered.proof.fn_count || ssa_decl_function_list_empty(st.fns) { return st; }
         next st = lower_function_step<P, N>(pages, stride, total, st, lowered.proof.unit.header);
     }
-    let functions: FunctionList = reverse_functions<P, N>(pages, stride, total, st.acc);
-    let summary: FunctionSummaryScan = summarize_functions<P, N>(pages, stride, total, functions, st.ok && function_list_ended<P, N>(pages, stride, total, st));
-    return ValueSsaSummary { functions: functions, valid: summary.valid, function_count: summary.functions, supported_function_count: summary.supported, verified_function_count: summary.verified, value_count: summary.values, instruction_count: summary.instructions, block_count: summary.blocks, branch_count: summary.branches, jump_count: summary.jumps, return_count: summary.returns, failure_count: summary.failures, switch_count: summary.switches, block_parameter_count: summary.parameters, unsupported_block_count: summary.unsupported, first_unsupported_function: summary.first_bad_function, first_unsupported_block: summary.first_bad_block, first_unsupported_kind: summary.first_bad_kind, call_count: summary.calls, has_call: summary.has_call, first_call_identity: summary.first_identity };
+    return st;
+}
+fn ssa_decl_function_list_empty(functions: decl.FnList) -> (result: bool) {
+    return match functions { decl.FnList.DNil => true, decl.FnList.DCons { head: head, tail: tail } => false };
 }
 fn empty_ssa_summary(valid: bool) -> (result: ValueSsaSummary) {
     return ValueSsaSummary { functions: FunctionList.FNil, valid: valid, function_count: 0, supported_function_count: 0, verified_function_count: 0, value_count: 0, instruction_count: 0, block_count: 0, branch_count: 0, jump_count: 0, return_count: 0, failure_count: 0, switch_count: 0, block_parameter_count: 0, unsupported_block_count: 0, first_unsupported_function: 0, first_unsupported_block: 0, first_unsupported_kind: 0, call_count: 0, has_call: false, first_call_identity: invalid_identity() };
@@ -301,7 +311,7 @@ fn empty_ssa_summary(valid: bool) -> (result: ValueSsaSummary) {
 fn value_ssa_function_status(summary: ValueSsaSummary, target: u64) -> (result: ValueSsaFunctionStatus) {
     let empty: ValueSsaFunctionStatus = ValueSsaFunctionStatus { found: false, supported: false, verified: false, identity: invalid_identity() };
     iterate i up_to 1024 carrying st: FunctionStatusWalk = FunctionStatusWalk { rest: summary.functions, index: 0, target: target, status: empty, done: false } {
-        if st.done { return st.status; }
+        if st.done || ssa_function_list_empty(st.rest) { return st.status; }
         next st = value_ssa_function_status_step(st);
     }
     return st.status;
@@ -322,38 +332,52 @@ fn value_ssa_function_status_item(st: FunctionStatusWalk, function: Function, re
 fn function_list_ended<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionWalk) -> (result: bool) {
     return match st.fns { DNil => st.index == flow.ssa_function_count<P, N>(pages, stride, total, st.lowered), DCons { head: h, tail: t } => false };
 }
-fn summarize_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList, source_ok: bool) -> (result: FunctionSummaryScan) {
-    iterate i up_to 1024 carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, branches: 0, jumps: 0, returns: 0, failures: 0, switches: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_function: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_function_step<P, N>(pages, stride, total, st); }
-    return st;
+fn ssa_function_list_empty(functions: FunctionList) -> (result: bool) {
+    return match functions { FunctionList.FNil => true, FunctionList.FCons { head: head, tail: tail } => false };
+}
+fn summarize_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList, function_count: u64, source_ok: bool) -> (result: FunctionSummaryScan) {
+    iterate i up_to 1024 carrying st: FunctionSummaryScan = FunctionSummaryScan { rest: functions, valid: source_ok, functions: 0, supported: 0, verified: 0, values: 0, instructions: 0, blocks: 0, branches: 0, jumps: 0, returns: 0, failures: 0, switches: 0, parameters: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_function: 0, first_bad_block: 0, first_bad_kind: 0 } {
+        if ssa_function_list_empty(st.rest) || st.functions >= function_count {
+            return FunctionSummaryScan { ..st, valid: st.valid && st.functions == function_count && ssa_function_list_empty(st.rest) };
+        }
+        next st = summarize_function_step<P, N>(pages, stride, total, st);
+    }
+    return FunctionSummaryScan { ..st, valid: st.valid && st.functions == function_count && ssa_function_list_empty(st.rest) };
 }
 fn summarize_function_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionSummaryScan) -> (result: FunctionSummaryScan) {
     return match st.rest { FNil => st, FCons { head: function, tail: rest } => summarize_function<P, N>(pages, stride, total, st, function, rest) };
 }
 fn summarize_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionSummaryScan, function: Function, rest: FunctionList) -> (result: FunctionSummaryScan) {
-    let shape: FunctionShape = summarize_blocks<P, N>(pages, stride, total, function.blocks);
+    let shape: FunctionShape = summarize_blocks<P, N>(pages, stride, total, function.blocks, function.block_count, function.value_count);
     let has_call: bool = st.has_call || shape.has_call;
     let first: decl.SemanticIdentity = select_identity(st.has_call, st.first_identity, shape.first_identity);
     let first_bad: bool = st.unsupported == 0 && shape.unsupported > 0;
-    return FunctionSummaryScan { rest: rest, valid: st.valid && function.verified, functions: st.functions + 1, supported: st.supported + select(function.supported, 1, 0), verified: st.verified + select(function.verified, 1, 0), values: st.values + function.value_count, instructions: st.instructions + shape.instructions, blocks: st.blocks + shape.blocks, branches: st.branches + shape.branches, jumps: st.jumps + shape.jumps, returns: st.returns + shape.returns, failures: st.failures + shape.failures, switches: st.switches + shape.switches, parameters: st.parameters + shape.parameters, calls: st.calls + shape.calls, has_call: has_call, first_identity: first, unsupported: st.unsupported + shape.unsupported, first_bad_block: select(first_bad, shape.first_bad_block, st.first_bad_block), first_bad_kind: select(first_bad, shape.first_bad_kind, st.first_bad_kind), first_bad_function: select(first_bad, st.functions, st.first_bad_function) };
+    return FunctionSummaryScan { rest: rest, valid: st.valid && function.verified && shape.blocks == function.block_count, functions: st.functions + 1, supported: st.supported + select(function.supported, 1, 0), verified: st.verified + select(function.verified, 1, 0), values: st.values + function.value_count, instructions: st.instructions + shape.instructions, blocks: st.blocks + shape.blocks, branches: st.branches + shape.branches, jumps: st.jumps + shape.jumps, returns: st.returns + shape.returns, failures: st.failures + shape.failures, switches: st.switches + shape.switches, parameters: st.parameters + shape.parameters, calls: st.calls + shape.calls, has_call: has_call, first_identity: first, unsupported: st.unsupported + shape.unsupported, first_bad_block: select(first_bad, shape.first_bad_block, st.first_bad_block), first_bad_kind: select(first_bad, shape.first_bad_kind, st.first_bad_kind), first_bad_function: select(first_bad, st.functions, st.first_bad_function) };
 }
 fn select_identity(already: bool, prior: decl.SemanticIdentity, candidate: decl.SemanticIdentity) -> (result: decl.SemanticIdentity) {
     if already { return prior; }
     return candidate;
 }
-fn summarize_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList) -> (result: FunctionShape) {
-    iterate i up_to 1024 carrying st: BlockShapeScan = BlockShapeScan { rest: blocks, blocks: 0, branches: 0, jumps: 0, returns: 0, failures: 0, switches: 0, parameters: 0, instructions: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_block: 0, first_bad_kind: 0 } { next st = summarize_block_step<P, N>(pages, stride, total, st); }
+fn summarize_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, block_count: u64, value_limit: u64) -> (result: FunctionShape) {
+    iterate i up_to 1024 carrying st: BlockShapeScan = BlockShapeScan { rest: blocks, blocks: 0, branches: 0, jumps: 0, returns: 0, failures: 0, switches: 0, parameters: 0, instructions: 0, calls: 0, has_call: false, first_identity: invalid_identity(), unsupported: 0, first_bad_block: 0, first_bad_kind: 0, value_limit: value_limit } {
+        if block_list_empty(st.rest) { return finish_block_shape(st); }
+        next st = summarize_block_step<P, N>(pages, stride, total, st);
+    }
+    return finish_block_shape(st);
+}
+fn finish_block_shape(st: BlockShapeScan) -> (result: FunctionShape) {
     return FunctionShape { blocks: st.blocks, branches: st.branches, jumps: st.jumps, returns: st.returns, failures: st.failures, switches: st.switches, parameters: st.parameters, instructions: st.instructions, calls: st.calls, has_call: st.has_call, first_identity: st.first_identity, unsupported: st.unsupported, first_bad_block: st.first_bad_block, first_bad_kind: st.first_bad_kind };
 }
 fn summarize_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BlockShapeScan) -> (result: BlockShapeScan) {
     return match st.rest { SsaBlockList.LNil => st, SsaBlockList.LCons { head: block, tail: rest } => summarize_block<P, N>(pages, stride, total, st, block, rest) };
 }
 fn summarize_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BlockShapeScan, block: SsaBlock, rest: SsaBlockList) -> (result: BlockShapeScan) {
-    let instruction_shape: InstructionShapeScan = summarize_instructions<P, N>(pages, stride, total, block.instructions);
+    let instruction_shape: InstructionShapeScan = summarize_instructions<P, N>(pages, stride, total, block.instructions, st.value_limit);
     let terminator_shape: TerminatorShape = summarize_terminator(block.terminator);
     let first: decl.SemanticIdentity = select_identity(st.has_call, st.first_identity, instruction_shape.first_identity);
     let is_bad: bool = !(block.lowering_ok);
     let first_bad: bool = st.unsupported == 0 && is_bad;
-    return BlockShapeScan { rest: rest, blocks: st.blocks + 1, branches: st.branches + terminator_shape.branches, jumps: st.jumps + terminator_shape.jumps, returns: st.returns + terminator_shape.returns, failures: st.failures + terminator_shape.failures, switches: st.switches + terminator_shape.switches, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters), instructions: st.instructions + instruction_shape.instructions, calls: st.calls + instruction_shape.calls, has_call: st.has_call || instruction_shape.has_call, first_identity: first, unsupported: st.unsupported + select(is_bad, 1, 0), first_bad_block: select(first_bad, block.id, st.first_bad_block), first_bad_kind: select(first_bad, block.lowering_failure_kind, st.first_bad_kind) };
+    return BlockShapeScan { rest: rest, blocks: st.blocks + 1, branches: st.branches + terminator_shape.branches, jumps: st.jumps + terminator_shape.jumps, returns: st.returns + terminator_shape.returns, failures: st.failures + terminator_shape.failures, switches: st.switches + terminator_shape.switches, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters, st.value_limit), instructions: st.instructions + instruction_shape.instructions, calls: st.calls + instruction_shape.calls, has_call: st.has_call || instruction_shape.has_call, first_identity: first, unsupported: st.unsupported + select(is_bad, 1, 0), first_bad_block: select(first_bad, block.id, st.first_bad_block), first_bad_kind: select(first_bad, block.lowering_failure_kind, st.first_bad_kind), value_limit: st.value_limit };
 }
 fn summarize_terminator(terminator: Terminator) -> (result: TerminatorShape) {
     return match terminator {
@@ -365,15 +389,37 @@ fn summarize_terminator(terminator: Terminator) -> (result: TerminatorShape) {
         ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_type, source_start: source_start, source_end: source_end, arm_count: arm_count, default_target: default_target, join_target: join_target, cases: cases } => TerminatorShape { branches: 0, jumps: 0, returns: 0, failures: 0, switches: 1 }
     };
 }
-record ValueCountScan { rest: ValueList, count: u64 }
-fn value_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList) -> (result: u64) {
-    iterate i up_to 1024 carrying st: ValueCountScan = ValueCountScan { rest: values, count: 0 } { next st = value_count_step(st); }
-    return st.count;
+record ValueCountScan { rest: ValueList, count: u64, limit: u64 }
+fn value_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, limit: u64) -> (result: u64) {
+    iterate i up_to 1024 carrying first: ValueCountScan = ValueCountScan { rest: values, count: 0, limit: limit } {
+        if value_list_empty(first.rest) { return first.count; }
+        if first.count >= first.limit { return first.limit + 1; }
+        next first = value_count_step(first);
+    }
+    if value_list_empty(first.rest) { return first.count; }
+    iterate j up_to 1024 carrying second: ValueCountScan = first {
+        if value_list_empty(second.rest) { return second.count; }
+        if second.count >= second.limit { return second.limit + 1; }
+        next second = value_count_step(second);
+    }
+    if value_list_empty(second.rest) { return second.count; }
+    return second.limit + 1;
 }
-fn value_count_step(st: ValueCountScan) -> (result: ValueCountScan) { return match st.rest { ValueList.VNil => st, ValueList.VCons { head: h, tail: t } => ValueCountScan { rest: t, count: st.count + 1 } }; }
-fn summarize_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, instructions: InstructionList) -> (result: InstructionShapeScan) {
-    iterate i up_to 1024 carrying st: InstructionShapeScan = InstructionShapeScan { rest: instructions, instructions: 0, calls: 0, has_call: false, first_identity: invalid_identity() } { next st = summarize_instruction_step(st); }
-    return st;
+fn value_count_step(st: ValueCountScan) -> (result: ValueCountScan) { return match st.rest { ValueList.VNil => st, ValueList.VCons { head: h, tail: t } => ValueCountScan { rest: t, count: st.count + 1, limit: st.limit } }; }
+fn summarize_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, instructions: InstructionList, limit: u64) -> (result: InstructionShapeScan) {
+    iterate i up_to 1024 carrying first: InstructionShapeScan = InstructionShapeScan { rest: instructions, instructions: 0, calls: 0, has_call: false, first_identity: invalid_identity(), limit: limit } {
+        if instruction_list_empty(first.rest) { return first; }
+        if first.instructions >= first.limit { return InstructionShapeScan { ..first, instructions: first.limit + 1 }; }
+        next first = summarize_instruction_step(first);
+    }
+    if instruction_list_empty(first.rest) { return first; }
+    iterate j up_to 1024 carrying second: InstructionShapeScan = first {
+        if instruction_list_empty(second.rest) { return second; }
+        if second.instructions >= second.limit { return InstructionShapeScan { ..second, instructions: second.limit + 1 }; }
+        next second = summarize_instruction_step(second);
+    }
+    if instruction_list_empty(second.rest) { return second; }
+    return InstructionShapeScan { ..second, instructions: second.limit + 1 };
 }
 fn summarize_instruction_step(st: InstructionShapeScan) -> (result: InstructionShapeScan) {
     return match st.rest { InstructionList.QNil => st, InstructionList.QCons { head: instruction, tail: rest } => summarize_instruction(st, instruction, rest) };
@@ -381,7 +427,7 @@ fn summarize_instruction_step(st: InstructionShapeScan) -> (result: InstructionS
 fn summarize_instruction(st: InstructionShapeScan, instruction: Instruction, rest: InstructionList) -> (result: InstructionShapeScan) {
     let is_call: bool = instruction.kind == 3;
     let first: decl.SemanticIdentity = select_identity(st.has_call, st.first_identity, instruction.identity);
-    return InstructionShapeScan { rest: rest, instructions: st.instructions + 1, calls: st.calls + select(is_call, 1, 0), has_call: st.has_call || is_call, first_identity: first };
+    return InstructionShapeScan { rest: rest, instructions: st.instructions + 1, calls: st.calls + select(is_call, 1, 0), has_call: st.has_call || is_call, first_identity: first, limit: st.limit };
 }
 fn lower_function_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionWalk, header: parser.Header) -> (result: FunctionWalk) {
     return match st.fns {
@@ -397,8 +443,11 @@ fn finish_function_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     let lowered: Function = lower_function<P, N>(pages, stride, total, header, fn_decl, cfg, st.lowered.proof.unit.records, st.lowered.proof.unit.enums, st.nominals, st.imported_records, st.imported_enums);
     return FunctionWalk { fns: fns, lowered: st.lowered, index: st.index + 1, acc: FunctionList.FCons { head: lowered, tail: st.acc }, count: st.count + 1, nominals: st.nominals, imported_records: st.imported_records, imported_enums: st.imported_enums, ok: st.ok && lowered.verified };
 }
-fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList) -> (result: FunctionList) {
-    iterate i up_to 1024 carrying st: FunctionReverse = FunctionReverse { rest: functions, acc: FunctionList.FNil } { next st = reverse_function_step(st); }
+fn reverse_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, functions: FunctionList, function_count: u64) -> (result: FunctionList) {
+    iterate i up_to 1024 carrying st: FunctionReverse = FunctionReverse { rest: functions, acc: FunctionList.FNil } {
+        if i >= function_count || ssa_function_list_empty(st.rest) { return st.acc; }
+        next st = reverse_function_step(st);
+    }
     return st.acc;
 }
 record FunctionReverse { rest: FunctionList, acc: FunctionList }
@@ -409,6 +458,18 @@ fn reverse_function_step(st: FunctionReverse) -> (result: FunctionReverse) {
     };
 }
 
+record SsaBlockWalk { build: SsaBuild, processed: u64 }
+fn lower_flow_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, expected: u64, initial: SsaBuild) -> (result: SsaBlockWalk) {
+    let first: SsaBlockWalk = SsaBlockWalk { build: initial, processed: 0 };
+    iterate i up_to 1024 carrying walk: SsaBlockWalk = first {
+        if i >= expected || flow_block_list_empty(walk.build.rest) { return walk; }
+        next walk = lower_flow_block_step<P, N>(pages, stride, total, walk);
+    }
+    return walk;
+}
+fn lower_flow_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, walk: SsaBlockWalk) -> (result: SsaBlockWalk) {
+    return SsaBlockWalk { build: lower_block_step<P, N>(pages, stride, total, walk.build), processed: walk.processed + 1 };
+}
 fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, fn_decl: decl.FnDecl, cfg: flow.FunctionFlow, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList, imported_records: decl.ImportedRecordList, imported_enums: decl.ImportedEnumList) -> (result: Function) {
     let identity: decl.SemanticIdentity = decl.canonical_function_identity<P, N>(pages, stride, total, header.module_start, header.module_end, fn_decl.sig.name_start, fn_decl.sig.name_end);
     let parameters: ParamBuild = function_parameters<P, N>(pages, stride, total, fn_decl.sig.params, fn_decl.sig.generics, records, enums, nominals);
@@ -424,14 +485,17 @@ fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
         supported: cfg_ok && parameters.ok && result_ok && identity.valid,
         initial_failure_kind: initial_failure
     };
-    iterate i up_to 1024 carrying st: SsaBuild = initial { next st = lower_block_step<P, N>(pages, stride, total, st); }
-    let blocks: SsaBlockList = reverse_blocks<P, N>(pages, stride, total, st.blocks);
+    let block_walk: SsaBlockWalk = lower_flow_blocks<P, N>(pages, stride, total, cfg.block_count, initial);
+    let st: SsaBuild = block_walk.build;
+    let block_count: u64 = select(st.next_block_id <= 1024, st.next_block_id, 0);
+    let blocks_complete: bool = block_walk.processed == cfg.block_count && flow_block_list_empty(st.rest) && ssa_block_list_exact(st.blocks, block_count);
+    let blocks: SsaBlockList = reverse_blocks<P, N>(pages, stride, total, st.blocks, block_count);
     let candidate: Function = Function {
         identity: st.identity, nominals: st.nominals, imported_records: imported_records, imported_enums: imported_enums, inputs: st.inputs, result_type: st.result_type,
-        blocks: blocks, values: st.values, value_count: st.next_value,
-        supported: st.supported, verified: false
+        blocks: blocks, block_count: block_count, values: st.values, value_count: st.next_value,
+        supported: st.supported && blocks_complete, verified: false
     };
-    let verified: bool = st.supported && verify_function<P, N>(pages, stride, total, candidate);
+    let verified: bool = candidate.supported && verify_function<P, N>(pages, stride, total, candidate);
     return Function { ..candidate, verified: verified };
 }
 fn function_support_failure(cfg_ok: bool, parameters_ok: bool, result_ok: bool, identity_ok: bool) -> (result: u64) {
@@ -442,8 +506,14 @@ fn function_support_failure(cfg_ok: bool, parameters_ok: bool, result_ok: bool, 
     return 0;
 }
 fn function_parameters<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: decl.FieldList, generics: decl.GenericParamList, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: ParamBuild) {
-    iterate i up_to 1024 carrying st: ParamBuild = ParamBuild { rest: fields, env: Environment.EnvNil, inputs: ValueList.VNil, values: ValueList.VNil, next_value: 0, ok: true } { next st = function_parameter_step<P, N>(pages, stride, total, st, generics, records, enums, nominals); }
+    iterate i up_to 1024 carrying st: ParamBuild = ParamBuild { rest: fields, env: Environment.EnvNil, inputs: ValueList.VNil, values: ValueList.VNil, next_value: 0, ok: true } {
+        if parameter_fields_empty(st.rest) { return st; }
+        next st = function_parameter_step<P, N>(pages, stride, total, st, generics, records, enums, nominals);
+    }
     return st;
+}
+fn parameter_fields_empty(fields: decl.FieldList) -> (result: bool) {
+    return match fields { decl.FieldList.FNil => true, decl.FieldList.FCons { head: head, tail: tail } => false };
 }
 fn function_parameter_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ParamBuild, generics: decl.GenericParamList, records: decl.RecordList, enums: decl.EnumList, nominals: decl.NominalTypeIdentityList) -> (result: ParamBuild) {
     return match st.rest {
@@ -1557,8 +1627,12 @@ record InstructionReverse { rest: InstructionList, acc: InstructionList }
 fn reverse_instruction_step(st: InstructionReverse) -> (result: InstructionReverse) {
     return match st.rest { QNil => st, QCons { head: h, tail: t } => InstructionReverse { rest: t, acc: InstructionList.QCons { head: h, tail: st.acc } } };
 }
-fn reverse_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList) -> (result: SsaBlockList) {
-    iterate i up_to 1024 carrying st: SsaBlockRev = SsaBlockRev { rest: blocks, acc: SsaBlockList.LNil } { next st = reverse_block_step(st); }
+fn reverse_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, block_count: u64) -> (result: SsaBlockList) {
+    if block_count > 1024 { return SsaBlockList.LNil; }
+    iterate i up_to 1024 carrying st: SsaBlockRev = SsaBlockRev { rest: blocks, acc: SsaBlockList.LNil } {
+        if i >= block_count || block_list_empty(st.rest) { return st.acc; }
+        next st = reverse_block_step(st);
+    }
     return st.acc;
 }
 fn reverse_block_step(st: SsaBlockRev) -> (result: SsaBlockRev) {
@@ -1695,7 +1769,7 @@ fn verify_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     // CP-0021: fail closed on a non-canonical page composition, mirroring
     // the parse_unit gate; project-chained lowering trusts build time.
     if source.validate_pages<P, N>(pages, stride, total) != 0 { return false; }
-    if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(supported_value_type<P, N>(pages, stride, total, function.result_type, function.nominals)) || function.value_count == 0 || function.value_count > 2048 { return false; }
+    if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(supported_value_type<P, N>(pages, stride, total, function.result_type, function.nominals)) || function.block_count == 0 || function.block_count > 1024 || function.value_count == 0 || function.value_count > 2048 { return false; }
     if !(verify_value_ids<P, N>(pages, stride, total, function)) || !(verify_function_inputs<P, N>(pages, stride, total, function)) { return false; }
     if !(verify_blocks<P, N>(pages, stride, total, function, function.blocks)) || !(verify_definition_counts<P, N>(pages, stride, total, function)) { return false; }
     return true;
@@ -1703,33 +1777,52 @@ fn verify_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 record ValueIdCheck { rest: ValueList, seen: u64, ok: bool, count: u64, nominals: decl.NominalTypeIdentityList }
 fn verify_value_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
     if function.value_count == 0 || function.value_count > 2048 { return false; }
-    iterate i up_to 1024 carrying first: ValueIdCheck = ValueIdCheck { rest: function.values, seen: 0, ok: true, count: function.value_count, nominals: function.nominals } { next first = value_id_step<P, N>(pages, stride, total, first); }
-    if !(first.ok) { return false; }
-    if value_list_empty(first.rest) { return first.seen == first.count; }
-    iterate j up_to 1024 carrying second: ValueIdCheck = first { next second = value_id_step<P, N>(pages, stride, total, second); }
+    iterate i up_to 1024 carrying first: ValueIdCheck = ValueIdCheck { rest: function.values, seen: 0, ok: true, count: function.value_count, nominals: function.nominals } {
+        if value_list_empty(first.rest) { return first.ok && first.seen == first.count; }
+        if first.seen >= first.count { return false; }
+        next first = value_id_step<P, N>(pages, stride, total, first);
+    }
+    if value_list_empty(first.rest) { return first.ok && first.seen == first.count; }
+    iterate j up_to 1024 carrying second: ValueIdCheck = first {
+        if value_list_empty(second.rest) { return second.ok && second.seen == second.count; }
+        if second.seen >= second.count { return false; }
+        next second = value_id_step<P, N>(pages, stride, total, second);
+    }
     return second.ok && second.seen == second.count && value_list_empty(second.rest);
 }
 fn value_id_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ValueIdCheck) -> (result: ValueIdCheck) {
     if !(st.ok) { return st; }
     return match st.rest { VNil => st, VCons { head: h, tail: t } => ValueIdCheck { rest: t, seen: st.seen + 1, ok: h.id == st.count - 1 - st.seen && h.kind < 3 && supported_value_type<P, N>(pages, stride, total, h.ty, st.nominals), count: st.count, nominals: st.nominals } };
 }
-record ValueIdLookup { rest: ValueList, id: u64, found: bool }
-fn value_id_in<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, id: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: ValueIdLookup = ValueIdLookup { rest: values, id: id, found: false } { next st = value_id_lookup_step(st); }
-    return st.found;
+record ValueIdLookup { rest: ValueList, id: u64, found: bool, limit: u64, seen: u64 }
+fn value_id_in<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, id: u64, limit: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying first: ValueIdLookup = ValueIdLookup { rest: values, id: id, found: false, limit: limit, seen: 0 } {
+        if first.found || value_list_empty(first.rest) || first.seen >= first.limit { return first.found; }
+        next first = value_id_lookup_step(first);
+    }
+    if first.found || value_list_empty(first.rest) || first.seen >= first.limit { return first.found; }
+    iterate j up_to 1024 carrying second: ValueIdLookup = first {
+        if second.found || value_list_empty(second.rest) || second.seen >= second.limit { return second.found; }
+        next second = value_id_lookup_step(second);
+    }
+    return second.found;
 }
 fn value_id_lookup_step(st: ValueIdLookup) -> (result: ValueIdLookup) {
     if st.found { return st; }
-    return match st.rest { VNil => st, VCons { head: h, tail: t } => ValueIdLookup { rest: t, id: st.id, found: h.id == st.id } };
+    return match st.rest { VNil => st, VCons { head: h, tail: t } => ValueIdLookup { rest: t, id: st.id, found: h.id == st.id, limit: st.limit, seen: st.seen + 1 } };
 }
 fn value_list_empty(values: ValueList) -> (result: bool) { return match values { VNil => true, VCons { head: h, tail: t } => false }; }
 fn verify_function_inputs<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
-    let inputs_ok: bool = verify_input_list<P, N>(pages, stride, total, function.values, function.inputs);
-    return inputs_ok && value_count<P, N>(pages, stride, total, function.inputs) == value_kind_count<P, N>(pages, stride, total, function.values, 0);
+    let inputs_ok: bool = verify_input_list<P, N>(pages, stride, total, function.values, function.inputs, function.value_count);
+    return inputs_ok && value_count<P, N>(pages, stride, total, function.inputs, function.value_count) == value_kind_count<P, N>(pages, stride, total, function.values, 0, function.value_count);
 }
-record InputCheck { rest: ValueList, values: ValueList, ok: bool }
-fn verify_input_list<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, inputs: ValueList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: InputCheck = InputCheck { rest: inputs, values: values, ok: true } { next st = verify_input_step<P, N>(pages, stride, total, st); }
+record InputCheck { rest: ValueList, values: ValueList, ok: bool, limit: u64, seen: u64 }
+fn verify_input_list<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, inputs: ValueList, limit: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying st: InputCheck = InputCheck { rest: inputs, values: values, ok: true, limit: limit, seen: 0 } {
+        if value_list_empty(st.rest) { return st.ok; }
+        if st.seen >= st.limit { return false; }
+        next st = verify_input_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && value_list_empty(st.rest);
 }
 fn verify_input_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: InputCheck) -> (result: InputCheck) {
@@ -1739,21 +1832,35 @@ fn verify_input_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
 fn verify_input_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: InputCheck, value: Value, rest: ValueList) -> (result: InputCheck) {
     let found: LookupValue = find_value<P, N>(pages, stride, total, st.values, value.id);
     let same: bool = found.found && found.value.kind == 0 && found.value.id == value.id && decl.sem_eq<P, N>(pages, stride, total, found.value.ty, value.ty);
-    return InputCheck { rest: rest, values: st.values, ok: value.kind == 0 && value.owner_block == 0 && value.index == 0 && same && !(value_id_in<P, N>(pages, stride, total, rest, value.id)) };
+    return InputCheck { rest: rest, values: st.values, ok: value.kind == 0 && value.owner_block == 0 && value.index == 0 && same && !(value_id_in<P, N>(pages, stride, total, rest, value.id, st.limit)), limit: st.limit, seen: st.seen + 1 };
 }
-record ValueKindCount { rest: ValueList, kind: u64, count: u64 }
-fn value_kind_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, kind: u64) -> (result: u64) {
-    iterate i up_to 1024 carrying first: ValueKindCount = ValueKindCount { rest: values, kind: kind, count: 0 } { next first = value_kind_count_step(first); }
+record ValueKindCount { rest: ValueList, kind: u64, count: u64, limit: u64, seen: u64 }
+fn value_kind_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, kind: u64, limit: u64) -> (result: u64) {
+    iterate i up_to 1024 carrying first: ValueKindCount = ValueKindCount { rest: values, kind: kind, count: 0, limit: limit, seen: 0 } {
+        if value_list_empty(first.rest) { return first.count; }
+        if first.seen >= first.limit { return first.limit + 1; }
+        next first = value_kind_count_step(first);
+    }
     if value_list_empty(first.rest) { return first.count; }
-    iterate j up_to 1024 carrying second: ValueKindCount = first { next second = value_kind_count_step(second); }
-    return second.count;
+    iterate j up_to 1024 carrying second: ValueKindCount = first {
+        if value_list_empty(second.rest) { return second.count; }
+        if second.seen >= second.limit { return second.limit + 1; }
+        next second = value_kind_count_step(second);
+    }
+    if value_list_empty(second.rest) { return second.count; }
+    return second.limit + 1;
 }
 fn value_kind_count_step(st: ValueKindCount) -> (result: ValueKindCount) {
-    return match st.rest { VNil => st, VCons { head: value, tail: rest } => ValueKindCount { rest: rest, kind: st.kind, count: st.count + select(value.kind == st.kind, 1, 0) } };
+    return match st.rest { VNil => st, VCons { head: value, tail: rest } => ValueKindCount { rest: rest, kind: st.kind, count: st.count + select(value.kind == st.kind, 1, 0), limit: st.limit, seen: st.seen + 1 } };
 }
 fn verify_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, blocks: SsaBlockList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: BlockCheck = BlockCheck { rest: blocks, function: function, ok: true, count: 0 } { next st = verify_block_step<P, N>(pages, stride, total, st); }
-    return st.ok && block_list_empty(st.rest) && st.count > 0 && verify_block_ids<P, N>(pages, stride, total, blocks, st.count);
+    iterate i up_to 1024 carrying st: BlockCheck = BlockCheck { rest: blocks, function: function, ok: true, count: 0 } {
+        if !(st.ok) { return false; }
+        if block_list_empty(st.rest) { return st.count == function.block_count && verify_block_ids<P, N>(pages, stride, total, blocks, function.block_count); }
+        if st.count >= function.block_count { return false; }
+        next st = verify_block_step<P, N>(pages, stride, total, st);
+    }
+    return st.ok && block_list_empty(st.rest) && st.count == function.block_count && verify_block_ids<P, N>(pages, stride, total, blocks, function.block_count);
 }
 record BlockCheck { rest: SsaBlockList, function: Function, ok: bool, count: u64 }
 fn block_list_empty(blocks: SsaBlockList) -> (result: bool) { return match blocks { LNil => true, LCons { head: h, tail: t } => false }; }
@@ -1768,30 +1875,44 @@ fn verify_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     return block.lowering_ok && params_ok && instructions_ok && term_ok;
 }
 record BlockIdCheck { rest: SsaBlockList, total: u64, seen: u64, ok: bool }
-record BlockIdLookup { rest: SsaBlockList, id: u64, found: bool }
+record BlockIdLookup { rest: SsaBlockList, id: u64, found: bool, limit: u64, seen: u64 }
 fn verify_block_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, expected: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: BlockIdCheck = BlockIdCheck { rest: blocks, total: expected, seen: 0, ok: true } { next st = verify_block_id_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: BlockIdCheck = BlockIdCheck { rest: blocks, total: expected, seen: 0, ok: true } {
+        if !(st.ok) { return false; }
+        if block_list_empty(st.rest) { return st.seen == expected; }
+        if st.seen >= expected { return false; }
+        next st = verify_block_id_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && st.seen == expected && block_list_empty(st.rest);
 }
 fn verify_block_id_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BlockIdCheck) -> (result: BlockIdCheck) {
     if !(st.ok) { return st; }
     return match st.rest {
         LNil => st,
-        LCons { head: block, tail: rest } => BlockIdCheck { rest: rest, total: st.total, seen: st.seen + 1, ok: block.id < st.total && !(block_id_in<P, N>(pages, stride, total, rest, block.id)) }
+        LCons { head: block, tail: rest } => BlockIdCheck { rest: rest, total: st.total, seen: st.seen + 1, ok: block.id < st.total && !(block_id_in<P, N>(pages, stride, total, rest, block.id, st.total)) }
     };
 }
-fn block_id_in<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, id: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: BlockIdLookup = BlockIdLookup { rest: blocks, id: id, found: false } { next st = block_id_lookup_step(st); }
+fn block_id_in<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, id: u64, limit: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying st: BlockIdLookup = BlockIdLookup { rest: blocks, id: id, found: false, limit: limit, seen: 0 } {
+        if st.found || block_list_empty(st.rest) || st.seen >= st.limit { return st.found; }
+        next st = block_id_lookup_step(st);
+    }
     return st.found;
 }
 fn block_id_lookup_step(st: BlockIdLookup) -> (result: BlockIdLookup) {
     if st.found { return st; }
-    return match st.rest { LNil => st, LCons { head: block, tail: rest } => BlockIdLookup { rest: rest, id: st.id, found: block.id == st.id } };
+    return match st.rest { LNil => st, LCons { head: block, tail: rest } => BlockIdLookup { rest: rest, id: st.id, found: block.id == st.id, limit: st.limit, seen: st.seen + 1 } };
 }
 fn verify_parameters<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block_id: u64, params: ValueList) -> (result: bool) {
-    let last_index: u64 = value_count<P, N>(pages, stride, total, params);
+    let last_index: u64 = value_count<P, N>(pages, stride, total, params, function.value_count);
     let first_index: u64 = predecessor_or_zero(last_index);
-    iterate i up_to 1024 carrying st: ParameterCheck = ParameterCheck { rest: params, function: function, block: block_id, index: first_index, ok: true } { next st = verify_parameter_step<P, N>(pages, stride, total, st); }
+    if last_index > function.value_count { return false; }
+    iterate i up_to 1024 carrying st: ParameterCheck = ParameterCheck { rest: params, function: function, block: block_id, index: first_index, ok: true } {
+        if !(st.ok) { return false; }
+        if value_list_empty(st.rest) { return true; }
+        if i >= function.value_count { return false; }
+        next st = verify_parameter_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && value_list_empty(st.rest);
 }
 fn predecessor_or_zero(value: u64) -> (result: u64) {
@@ -1811,7 +1932,12 @@ fn parameter_is_defined<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
 }
 
 fn verify_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock, instructions: InstructionList) -> (result: bool) {
-    iterate i up_to 1024 carrying st: InstructionCheck = InstructionCheck { rest: instructions, function: function, block: block.id, ok: true, sequence: 0 } { next st = verify_instruction_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: InstructionCheck = InstructionCheck { rest: instructions, function: function, block: block.id, ok: true, sequence: 0 } {
+        if !(st.ok) { return false; }
+        if instruction_list_empty(st.rest) { return true; }
+        if i >= function.value_count { return false; }
+        next st = verify_instruction_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && instruction_list_empty(st.rest);
 }
 record InstructionCheck { rest: InstructionList, function: Function, block: u64, ok: bool, sequence: u64 }
@@ -1820,15 +1946,22 @@ fn verify_instruction_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
     if !(st.ok) { return st; }
     return match st.rest { QNil => st, QCons { head: inst, tail: rest } => InstructionCheck { rest: rest, function: st.function, block: st.block, ok: verify_instruction<P, N>(pages, stride, total, st.function, st.block, inst, st.sequence), sequence: st.sequence + 1 } };
 }
-record DefinitionCountScan { rest: SsaBlockList, parameters: u64, instructions: u64 }
+record DefinitionCountScan { rest: SsaBlockList, parameters: u64, instructions: u64, value_limit: u64 }
 fn verify_definition_counts<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
-    iterate i up_to 1024 carrying st: DefinitionCountScan = DefinitionCountScan { rest: function.blocks, parameters: 0, instructions: 0 } { next st = definition_count_step<P, N>(pages, stride, total, st); }
-    return st.parameters == value_kind_count<P, N>(pages, stride, total, function.values, 1) && st.instructions == value_kind_count<P, N>(pages, stride, total, function.values, 2);
+    iterate i up_to 1024 carrying st: DefinitionCountScan = DefinitionCountScan { rest: function.blocks, parameters: 0, instructions: 0, value_limit: function.value_count } {
+        if block_list_empty(st.rest) { return definition_counts_match<P, N>(pages, stride, total, function, st); }
+        if i >= function.block_count { return false; }
+        next st = definition_count_step<P, N>(pages, stride, total, st);
+    }
+    return block_list_empty(st.rest) && definition_counts_match<P, N>(pages, stride, total, function, st);
+}
+fn definition_counts_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, st: DefinitionCountScan) -> (result: bool) {
+    return st.parameters == value_kind_count<P, N>(pages, stride, total, function.values, 1, function.value_count) && st.instructions == value_kind_count<P, N>(pages, stride, total, function.values, 2, function.value_count);
 }
 fn definition_count_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: DefinitionCountScan) -> (result: DefinitionCountScan) {
     return match st.rest {
         LNil => st,
-        LCons { head: block, tail: rest } => DefinitionCountScan { rest: rest, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters), instructions: st.instructions + instruction_count<P, N>(pages, stride, total, block.instructions) }
+        LCons { head: block, tail: rest } => DefinitionCountScan { rest: rest, parameters: st.parameters + value_count<P, N>(pages, stride, total, block.parameters, st.value_limit), instructions: st.instructions + instruction_count<P, N>(pages, stride, total, block.instructions, st.value_limit), value_limit: st.value_limit }
     };
 }
 fn verify_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: u64, inst: Instruction, sequence: u64) -> (result: bool) {
@@ -1905,7 +2038,7 @@ fn loop_parameter_binding<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
 record LoopParameterMapScan { rest: Environment, function: Function, block: u64, index: u64, ok: bool }
 fn loop_parameter_bindings_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock) -> (result: bool) {
     iterate i up_to 1024 carrying st: LoopParameterMapScan = LoopParameterMapScan { rest: block.parameter_bindings, function: function, block: block.id, index: 0, ok: true } { next st = loop_parameter_binding_step<P, N>(pages, stride, total, st); }
-    return st.ok && binding_list_empty(st.rest) && st.index == value_count<P, N>(pages, stride, total, block.parameters);
+    return st.ok && binding_list_empty(st.rest) && st.index == value_count<P, N>(pages, stride, total, block.parameters, function.value_count);
 }
 fn loop_parameter_binding_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LoopParameterMapScan) -> (result: LoopParameterMapScan) {
     if !(st.ok) { return st; }
@@ -2208,7 +2341,7 @@ fn payload_declared_named_field_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up
     if !(imported_variant.found) { return false; }
     return match params {
         decl.BindList.BNil => false,
-        decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_imported_enum_field<P, N>(pages, stride, total, imported_variant.variant.fields, parameter, rest, output_ty)
+        decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_imported_enum_field<P, N>(pages, stride, total, function.nominals, imported_variant.variant.fields, parameter, rest, output_ty)
     };
 }
 fn payload_declared_local_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, enum_decl: decl.EnumDecl, variant_start: u64, variant_end: u64, params: decl.BindList, output_ty: decl.SemType, unit: decl.Unit) -> (result: bool) {
@@ -2219,11 +2352,11 @@ fn payload_declared_local_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up
         decl.BindList.BCons { head: parameter, tail: rest } => payload_declared_field_parameter<P, N>(pages, stride, total, function, variant.variant.fields, parameter, rest, output_ty, unit)
     };
 }
-fn payload_declared_imported_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: decl.ImportedEnumFieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
+fn payload_declared_imported_enum_field<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, fields: decl.ImportedEnumFieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType) -> (result: bool) {
     if !(decl.bind_list_empty(rest)) { return false; }
     let key: decl.SemanticIdentity = decl.signature_name_key<P, N>(pages, stride, total, parameter.start, parameter.end);
     let field: decl.ImportedEnumFieldLookup = decl.imported_enum_field_lookup(fields, key);
-    return field.found && field.field.type_valid && decl.sem_eq<P, N>(pages, stride, total, field.field.ty, parameter.ty) && decl.sem_eq<P, N>(pages, stride, total, field.field.ty, output_ty);
+    return field.found && field.field.type_valid && imported_enum_field_type_equal<P, N>(pages, stride, total, nominals, field.field.ty, parameter.ty) && imported_enum_field_type_equal<P, N>(pages, stride, total, nominals, field.field.ty, output_ty);
 }
 fn payload_declared_field_parameter<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, fields: decl.FieldList, parameter: decl.Bind, rest: decl.BindList, output_ty: decl.SemType, unit: decl.Unit) -> (result: bool) {
     if !(decl.bind_list_empty(rest)) { return false; }
@@ -2301,11 +2434,11 @@ fn imported_enum_construct_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
     let variant_key: decl.SemanticIdentity = decl.signature_name_key<P, N>(pages, stride, total, inst.variant_start, inst.variant_end);
     let variant: decl.ImportedEnumVariantLookup = decl.imported_enum_variant_lookup(schema.schema.variants, variant_key);
     if !(variant.found) { return false; }
-    return imported_enum_construct_fields_valid<P, N>(pages, stride, total, variant.variant.fields, inst.params);
+    return imported_enum_construct_fields_valid<P, N>(pages, stride, total, function.nominals, variant.variant.fields, inst.params);
 }
-record ImportedEnumConstructParamCheck { rest: decl.BindList, fields: decl.ImportedEnumFieldList, seen: decl.NameList, ok: bool }
-fn imported_enum_construct_fields_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: decl.ImportedEnumFieldList, params: decl.BindList) -> (result: bool) {
-    let initial: ImportedEnumConstructParamCheck = ImportedEnumConstructParamCheck { rest: params, fields: fields, seen: decl.NameList.NNil, ok: true };
+record ImportedEnumConstructParamCheck { rest: decl.BindList, fields: decl.ImportedEnumFieldList, seen: decl.NameList, nominals: decl.NominalTypeIdentityList, ok: bool }
+fn imported_enum_construct_fields_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, fields: decl.ImportedEnumFieldList, params: decl.BindList) -> (result: bool) {
+    let initial: ImportedEnumConstructParamCheck = ImportedEnumConstructParamCheck { rest: params, fields: fields, seen: decl.NameList.NNil, nominals: nominals, ok: true };
     iterate i up_to 1024 carrying st: ImportedEnumConstructParamCheck = initial { next st = imported_enum_construct_param_step<P, N>(pages, stride, total, st); }
     return st.ok && decl.bind_list_empty(st.rest) && decl.imported_payload_shape_ok<P, N>(pages, stride, total, fields, st.seen);
 }
@@ -2320,9 +2453,67 @@ fn imported_enum_construct_check_param<P: Nat, N: Nat>(pages: [[byte; up_to N]; 
     if decl.name_known<P, N>(pages, stride, total, st.seen, param.start, param.end) { return ImportedEnumConstructParamCheck { ..st, ok: false }; }
     let key: decl.SemanticIdentity = decl.signature_name_key<P, N>(pages, stride, total, param.start, param.end);
     let field: decl.ImportedEnumFieldLookup = decl.imported_enum_field_lookup(st.fields, key);
-    if !(field.found) || !(field.field.type_valid) || !(decl.sem_eq<P, N>(pages, stride, total, field.field.ty, param.ty)) { return ImportedEnumConstructParamCheck { ..st, ok: false }; }
+    if !(field.found) || !(field.field.type_valid) || !(imported_enum_field_type_equal<P, N>(pages, stride, total, st.nominals, field.field.ty, param.ty)) { return ImportedEnumConstructParamCheck { ..st, ok: false }; }
     let seen: decl.NameList = decl.NameList.NCons { head: decl.NameSpan { start: param.start, end: param.end }, tail: st.seen };
-    return ImportedEnumConstructParamCheck { rest: rest, fields: st.fields, seen: seen, ok: true };
+    return ImportedEnumConstructParamCheck { rest: rest, fields: st.fields, seen: seen, nominals: st.nominals, ok: true };
+}
+record ImportedEnumTypeComparison { left: decl.SemType, right: decl.SemType, done: bool, ok: bool }
+fn imported_enum_field_type_equal<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, left: decl.SemType, right: decl.SemType) -> (result: bool) {
+    iterate i up_to 32 carrying st: ImportedEnumTypeComparison = ImportedEnumTypeComparison { left: left, right: right, done: false, ok: true } {
+        if st.done { return st.ok; }
+        if !(st.ok) { return false; }
+        next st = imported_enum_type_comparison_step<P, N>(pages, stride, total, nominals, st);
+    }
+    return st.done && st.ok;
+}
+fn imported_enum_type_comparison_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, st: ImportedEnumTypeComparison) -> (result: ImportedEnumTypeComparison) {
+    return match st.left {
+        TNamed { start: start, end: end } => imported_enum_named_comparison_step<P, N>(pages, stride, total, nominals, st, start, end),
+        TSeqExact { element: element, length: length, length_valid: length_valid } => imported_enum_sequence_comparison_step(st, element, length, length_valid),
+        TBool => ImportedEnumTypeComparison { ..st, done: true, ok: decl.sem_eq<P, N>(pages, stride, total, st.left, st.right) },
+        TByte => ImportedEnumTypeComparison { ..st, done: true, ok: decl.sem_eq<P, N>(pages, stride, total, st.left, st.right) },
+        TInt { width: width, signed: signed } => ImportedEnumTypeComparison { ..st, done: true, ok: decl.sem_eq<P, N>(pages, stride, total, st.left, st.right) },
+        TSeq => ImportedEnumTypeComparison { ..st, done: true, ok: decl.sem_eq<P, N>(pages, stride, total, st.left, st.right) },
+        TPoison => ImportedEnumTypeComparison { ..st, done: true, ok: decl.sem_eq<P, N>(pages, stride, total, st.left, st.right) }
+    };
+}
+fn imported_enum_named_comparison_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, st: ImportedEnumTypeComparison, start: u64, end: u64) -> (result: ImportedEnumTypeComparison) {
+    return match st.right {
+        TNamed { start: other_start, end: other_end } => ImportedEnumTypeComparison { ..st, done: true, ok: imported_enum_named_spans_equal<P, N>(pages, stride, total, nominals, start, end, other_start, other_end) },
+        TBool => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TByte => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TInt { width: width, signed: signed } => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TSeq => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TSeqExact { element: element, length: length, length_valid: valid } => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TPoison => ImportedEnumTypeComparison { ..st, done: true, ok: false }
+    };
+}
+fn imported_enum_named_spans_equal<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, start: u64, end: u64, other_start: u64, other_end: u64) -> (result: bool) {
+    let left_marker: u64 = decl.generic_type_marker_index(start, end);
+    let right_marker: u64 = decl.generic_type_marker_index(other_start, other_end);
+    if left_marker > 0 && left_marker <= 1024 { return right_marker == left_marker; }
+    if right_marker > 0 && right_marker <= 1024 { return false; }
+    let left_identity: decl.SemanticIdentity = nominal_identity_for_span<P, N>(pages, stride, total, nominals, start, end);
+    let right_identity: decl.SemanticIdentity = nominal_identity_for_span<P, N>(pages, stride, total, nominals, other_start, other_end);
+    if left_identity.valid || right_identity.valid { return left_identity.valid && right_identity.valid && decl.semantic_identity_equal(left_identity, right_identity); }
+    if left_marker > 1024 || right_marker > 1024 { return false; }
+    return decl.spans_equal<P, N>(pages, stride, total, start, end, other_start, other_end);
+}
+fn imported_enum_sequence_comparison_step(st: ImportedEnumTypeComparison, element: decl.SemType, length: u64, length_valid: bool) -> (result: ImportedEnumTypeComparison) {
+    return match st.right {
+        TSeqExact { element: other_element, length: other_length, length_valid: other_valid } => imported_enum_sequence_comparison_pair(st, element, length, length_valid, other_element, other_length, other_valid),
+        TBool => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TByte => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TInt { width: width, signed: signed } => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TNamed { start: start, end: end } => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TSeq => ImportedEnumTypeComparison { ..st, done: true, ok: false },
+        TPoison => ImportedEnumTypeComparison { ..st, done: true, ok: false }
+    };
+}
+fn imported_enum_sequence_comparison_pair(st: ImportedEnumTypeComparison, element: decl.SemType, length: u64, length_valid: bool, other_element: decl.SemType, other_length: u64, other_valid: bool) -> (result: ImportedEnumTypeComparison) {
+    if length != other_length { return ImportedEnumTypeComparison { ..st, done: true, ok: false }; }
+    if length_valid { if !(other_valid) { return ImportedEnumTypeComparison { ..st, done: true, ok: false }; } } else { if other_valid { return ImportedEnumTypeComparison { ..st, done: true, ok: false }; } }
+    return ImportedEnumTypeComparison { left: element, right: other_element, done: false, ok: true };
 }
 fn verify_record_construct_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
     if inst.operator == 1 { return verify_record_update_instruction<P, N>(pages, stride, total, function, inst); }
@@ -2507,7 +2698,7 @@ fn available_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
 }
 
 fn verify_terminator<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock, term: Terminator, instructions: InstructionList) -> (result: bool) {
-    let instruction_total: u64 = instruction_count<P, N>(pages, stride, total, instructions);
+    let instruction_total: u64 = instruction_count<P, N>(pages, stride, total, instructions, function.value_count);
     return match term {
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => verify_branch_term<P, N>(pages, stride, total, function, block.id, condition, yes, no, ya, na, instruction_total),
         Jump { target: target, arguments: args } => verify_edge<P, N>(pages, stride, total, function, block.id, target, args, instruction_total),
@@ -2564,7 +2755,7 @@ fn finite_match_duplicate_step(st: DuplicateFiniteCaseScan) -> (result: Duplicat
 }
 fn match_arm_jumps_to_join<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock, join: u64, result_ty: decl.SemType) -> (result: bool) {
     return match block.terminator {
-        Jump { target: target, arguments: args } => target == join && verify_edge<P, N>(pages, stride, total, function, block.id, target, args, instruction_count<P, N>(pages, stride, total, block.instructions)) && first_argument_has_type<P, N>(pages, stride, total, function.values, args, result_ty),
+        Jump { target: target, arguments: args } => target == join && verify_edge<P, N>(pages, stride, total, function, block.id, target, args, instruction_count<P, N>(pages, stride, total, block.instructions, function.value_count)) && first_argument_has_type<P, N>(pages, stride, total, function.values, args, result_ty),
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => false,
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result, source_start: start, source_end: end, arm_count: count, join_target: target, cases: cases } => nested_join_jumps_to_join<P, N>(pages, stride, total, function, target, join, result_ty),
         ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: target, cases: cases } => nested_join_jumps_to_join<P, N>(pages, stride, total, function, target, join, result_ty),
@@ -2582,7 +2773,7 @@ fn nested_join_jumps_to_join<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
     let found: BlockLookup = find_block<P, N>(pages, stride, total, function.blocks, inner);
     if !(found.found) { return false; }
     return match found.block.terminator {
-        Jump { target: target, arguments: args } => target == join && verify_edge<P, N>(pages, stride, total, function, inner, join, args, instruction_count<P, N>(pages, stride, total, found.block.instructions)) && first_argument_has_type<P, N>(pages, stride, total, function.values, args, result_ty),
+        Jump { target: target, arguments: args } => target == join && verify_edge<P, N>(pages, stride, total, function, inner, join, args, instruction_count<P, N>(pages, stride, total, found.block.instructions, function.value_count)) && first_argument_has_type<P, N>(pages, stride, total, function.values, args, result_ty),
         Branch { condition: condition, yes: yes, no: no, yes_args: ya, no_args: na } => false,
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result, source_start: start, source_end: end, arm_count: count, join_target: target, cases: cases } => false,
         ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: target, cases: cases } => false,
@@ -2839,9 +3030,36 @@ fn argument_value_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     let found: LookupValue = find_value<P, N>(pages, stride, total, st.values, arg.value);
     return ArgumentTypeCheck { args: args, params: params, values: st.values, ok: found.found && decl.sem_eq<P, N>(pages, stride, total, found.value.ty, param.ty) };
 }
-record InstructionCount { rest: InstructionList, count: u64 }
-fn instruction_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, instructions: InstructionList) -> (result: u64) {
-    iterate i up_to 1024 carrying st: InstructionCount = InstructionCount { rest: instructions, count: 0 } { next st = instruction_count_step(st); }
-    return st.count;
+record InstructionCount { rest: InstructionList, count: u64, limit: u64 }
+fn instruction_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, instructions: InstructionList, limit: u64) -> (result: u64) {
+    iterate i up_to 1024 carrying first: InstructionCount = InstructionCount { rest: instructions, count: 0, limit: limit } {
+        if instruction_list_empty(first.rest) { return first.count; }
+        if first.count >= first.limit { return first.limit + 1; }
+        next first = instruction_count_step(first);
+    }
+    if instruction_list_empty(first.rest) { return first.count; }
+    iterate j up_to 1024 carrying second: InstructionCount = first {
+        if instruction_list_empty(second.rest) { return second.count; }
+        if second.count >= second.limit { return second.limit + 1; }
+        next second = instruction_count_step(second);
+    }
+    if instruction_list_empty(second.rest) { return second.count; }
+    return second.limit + 1;
 }
-fn instruction_count_step(st: InstructionCount) -> (result: InstructionCount) { return match st.rest { QNil => st, QCons { head: h, tail: t } => InstructionCount { rest: t, count: st.count + 1 } }; }
+fn instruction_count_step(st: InstructionCount) -> (result: InstructionCount) { return match st.rest { QNil => st, QCons { head: h, tail: t } => InstructionCount { rest: t, count: st.count + 1, limit: st.limit } }; }
+record BlockLengthCheck { rest: SsaBlockList, seen: u64 }
+fn flow_block_list_empty(blocks: flow.BlockList) -> (result: bool) {
+    return match blocks { flow.BlockList.BNil => true, flow.BlockList.BCons { head: block, tail: rest } => false };
+}
+fn ssa_block_list_exact(blocks: SsaBlockList, expected: u64) -> (result: bool) {
+    if expected > 1024 { return false; }
+    iterate i up_to 1024 carrying st: BlockLengthCheck = BlockLengthCheck { rest: blocks, seen: 0 } {
+        if block_list_empty(st.rest) { return st.seen == expected; }
+        if st.seen >= expected { return false; }
+        next st = ssa_block_length_step(st);
+    }
+    return st.seen == expected && block_list_empty(st.rest);
+}
+fn ssa_block_length_step(st: BlockLengthCheck) -> (result: BlockLengthCheck) {
+    return match st.rest { LNil => st, LCons { head: block, tail: rest } => BlockLengthCheck { rest: rest, seen: st.seen + 1 } };
+}
