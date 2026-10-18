@@ -1,0 +1,183 @@
+{
+  "schema_version": "mncs.compiler.vm-runtime-checked-sequence-copy-dynamic-offset-frontier/1",
+  "kind": "compiler-runtime-checked-dynamic-offset-sequence-copy-canonical-vm-frontier",
+  "observed_at": "2026-10-18T11:08:31.001442Z",
+  "status": "passed",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler": {
+    "revision": "5161255ae32579d1e1aa29f81b28d991b28ab857",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "emitter": "tools/vm_emit.rs",
+    "emitter_sha256": "989b8d395bc9b437e465f18b1cafbffccac350f3a6ec60d298c7a5ccf663f215",
+    "test_harness": "tools/test_vm_runtime_checked_sequence_copy_dynamic_offsets.py",
+    "test_harness_sha256": "a0fbbd69df1cfc2334e581964f3e7c6127c8adb76c3ea8ee9cac9a2235aba069"
+  },
+  "vm": {
+    "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5"
+  },
+  "source": {
+    "module": "mncs.test.runtime_dynamic_offset_copy",
+    "function": "copy_window",
+    "sha256": "7e69605225804f20a342e43bf1b3a437a0471b8e3beb14e8923a57b2edaf007d",
+    "constant_length": 3,
+    "dynamic_source_offset": true,
+    "dynamic_destination_offset": true
+  },
+  "verification": {
+    "application_build_status": "verified",
+    "application_entry_status": "verified",
+    "application_artifact_identity": "sha256:27ef430ed4fb9895154876780eade349f349966c827a7bd96602ce6458066b42",
+    "application_build_contract": "mncs.compiler.application-build/4",
+    "lowering_ref": "vm-runtime-checked-sequence-copy-dynamic-offset-lowering/1:ac1bc8565d49d9016394a97c666ecc5914d500c2f042b19f64209a473d1b9c67",
+    "runtime_checked_source_projections": 3,
+    "runtime_checked_destination_replacements": 3,
+    "checked_index_additions": 4,
+    "generated_checked_add_obligations": 4,
+    "generated_checked_add_obligation_status": "UNKNOWN with runtime checked fallback",
+    "execution_equivalent_to_stage0": true,
+    "cases": [
+      {
+        "case": 0,
+        "status": "returned",
+        "matches": true,
+        "result": [
+          0,
+          1,
+          11,
+          12,
+          13,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": 1,
+        "status": "returned",
+        "matches": true,
+        "result": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          15,
+          16,
+          17
+        ]
+      },
+      {
+        "case": 2,
+        "status": "returned",
+        "matches": true,
+        "result": [
+          0,
+          1,
+          1,
+          2,
+          3,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "case": 3,
+        "status": "runtime_failure",
+        "matches": true,
+        "outcome": {
+          "detail": "sequence projection index out of bounds",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "case": 4,
+        "status": "runtime_failure",
+        "matches": true,
+        "outcome": {
+          "detail": "sequence replace outside declared bound",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      },
+      {
+        "case": 5,
+        "status": "runtime_failure",
+        "matches": true,
+        "outcome": {
+          "detail": "sequence replace outside declared bound",
+          "kind": "program_failure",
+          "mode": "runtime-failure"
+        }
+      }
+    ],
+    "language_verified_facts_reused": 0
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 0.122737,
+      "cpu_seconds": 0.09,
+      "peak_rss_bytes": 12427264,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 5,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 0.004561,
+      "cpu_seconds": 0.0,
+      "peak_rss_bytes": 12435456,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 3,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "canonical_vm_cases": [
+      {
+        "wall_seconds": 0.006638,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21303296
+      },
+      {
+        "wall_seconds": 0.006249,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21532672
+      },
+      {
+        "wall_seconds": 0.006462,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21164032
+      },
+      {
+        "wall_seconds": 0.006798,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21282816
+      },
+      {
+        "wall_seconds": 0.006361,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21725184
+      },
+      {
+        "wall_seconds": 0.006255,
+        "user_seconds": 0.0,
+        "system_seconds": 0.0,
+        "peak_rss_bytes": 21311488
+      }
+    ],
+    "probe_stderr_sha256": "bdc9a2effdbd0137874415cd2a5d3f6b24f8edb67aa39cd7e8697c394295e4f8"
+  },
+  "claim_boundary": "The Compiler lowers positive constant lengths up to the existing 256-element bound when source or destination offsets are dynamic. Dynamic indices use checked u64 additions; source projections and destination replacements keep RuntimeChecked failure evidence. All valid and invalid cases match the Stage-0 oracle on the canonical VM. Dynamic lengths, empty copies, Language-owned verified-fact reuse, and the authenticated Forge/Environment/Store route are not established by this evidence.",
+  "evidence_artifact": "evidence/vm-runtime-checked-sequence-copy-dynamic-offsets-precommit-20261018.json"
+}

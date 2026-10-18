@@ -1409,6 +1409,373 @@ fn lower_vm_runtime_checked_sequence_copies(ssa: &mut SsaModule) -> Result<usize
     Ok(lowered_count)
 }
 
+/// Lower runtime-checked copies whose length is constant but whose source or
+/// destination offset is dynamic. Each index is formed with checked u64
+/// addition, and the source read and destination update retain runtime bounds
+/// checks. Dynamic lengths and empty copies stay on the conservative fallback.
+fn lower_vm_runtime_checked_dynamic_offset_sequence_copies(
+    ssa: &mut SsaModule,
+) -> Result<usize, String> {
+    let target = TargetIdentity {
+        identity: mncs_model::SemanticId("mncs:0.2:target:mncs-vm-0.1".to_owned()),
+        family: "mncs-vm".to_owned(),
+        features: vec![
+            "integer-add-checked".to_owned(),
+            "sequence-project".to_owned(),
+            "sequence-replace".to_owned(),
+        ],
+        integer_widths: vec![64],
+        abi: None,
+    };
+    let implementation = mncs_model::SemanticId(
+        "mncs:0.2:compiler:vm-runtime-checked-sequence-copy-dynamic-offsets/1".to_owned(),
+    );
+    let u64_type = BodyType::Integer(mncs_model::IntegerType {
+        bits: 64,
+        signed: false,
+    });
+    let mut lowered_count = 0usize;
+    let mut transformations = Vec::new();
+    let mut generated_obligations = Vec::new();
+
+    for function in &mut ssa.functions {
+        let mut constants = BTreeMap::new();
+        let mut types = BTreeMap::new();
+        for value in &function.inputs {
+            types.insert(value.identity.clone(), value.ty.clone());
+        }
+        for value in &function.outputs {
+            types.insert(value.identity.clone(), value.ty.clone());
+        }
+        for block in &function.blocks {
+            for value in &block.parameters {
+                types.insert(value.identity.clone(), value.ty.clone());
+            }
+            for instruction in &block.instructions {
+                for value in &instruction.outputs {
+                    types.insert(value.identity.clone(), value.ty.clone());
+                }
+                if let (SsaInstructionKind::Constant { value, ty }, Some(output)) =
+                    (&instruction.kind, instruction.outputs.first())
+                {
+                    if ty == &u64_type {
+                        constants.insert(output.identity.clone(), *value);
+                    }
+                }
+            }
+        }
+
+        for block in &mut function.blocks {
+            let mut rewritten = Vec::with_capacity(block.instructions.len());
+            for instruction in std::mem::take(&mut block.instructions) {
+                let SsaInstructionKind::SequenceCopy {
+                    element_type,
+                    dst_bound,
+                    src_bound,
+                    evidence: BoundsEvidence::RuntimeChecked { failure },
+                } = &instruction.kind
+                else {
+                    rewritten.push(instruction);
+                    continue;
+                };
+                let SequenceBound::Exact(_) = dst_bound else {
+                    rewritten.push(instruction);
+                    continue;
+                };
+                if instruction.inputs.len() != 5 || instruction.outputs.len() != 1 {
+                    return Err(format!(
+                        "dynamic-offset SequenceCopy {} has an invalid operand or result count",
+                        instruction.identity.0
+                    ));
+                }
+                let Some(length) = constants.get(&instruction.inputs[4]).copied() else {
+                    rewritten.push(instruction);
+                    continue;
+                };
+                if length <= 0 || length > i128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT) {
+                    rewritten.push(instruction);
+                    continue;
+                }
+                let dst_at = constants.get(&instruction.inputs[1]).copied();
+                let src_at = constants.get(&instruction.inputs[3]).copied();
+                if dst_at.is_some_and(|value| value < 0)
+                    || src_at.is_some_and(|value| value < 0)
+                    || (dst_at.is_some() && src_at.is_some())
+                {
+                    rewritten.push(instruction);
+                    continue;
+                }
+                if [1usize, 3, 4]
+                    .into_iter()
+                    .any(|index| types.get(&instruction.inputs[index]) != Some(&u64_type))
+                {
+                    return Err(format!(
+                        "dynamic-offset SequenceCopy {} offsets or length are not u64",
+                        instruction.identity.0
+                    ));
+                }
+
+                let destination_type = types.get(&instruction.inputs[0]).ok_or_else(|| {
+                    format!(
+                        "SequenceCopy {} destination type is missing",
+                        instruction.identity.0
+                    )
+                })?;
+                let source_type = types.get(&instruction.inputs[2]).ok_or_else(|| {
+                    format!(
+                        "SequenceCopy {} source type is missing",
+                        instruction.identity.0
+                    )
+                })?;
+                let expected_type = BodyType::Sequence {
+                    element: Box::new(element_type.clone()),
+                    bound: dst_bound.clone(),
+                };
+                if destination_type != &expected_type
+                    || source_type
+                        != &(BodyType::Sequence {
+                            element: Box::new(element_type.clone()),
+                            bound: src_bound.clone(),
+                        })
+                    || instruction.outputs[0].ty != expected_type
+                {
+                    return Err(format!(
+                        "dynamic-offset SequenceCopy {} types disagree with its bounds",
+                        instruction.identity.0
+                    ));
+                }
+
+                let owner = instruction.identity.clone();
+                let operation_identity = instruction
+                    .semantic_identity
+                    .as_ref()
+                    .unwrap_or(&instruction.identity)
+                    .clone();
+                let block_identity = block.identity.clone();
+                let copy_length = u64::try_from(length).expect("length is bounded by 256");
+                let mut ordinal = 0u64;
+                let mut current_sequence = instruction.inputs[0].clone();
+                let mut dynamic_obligation_ids = Vec::new();
+                for offset in 0..copy_length {
+                    let destination_index = push_vm_sequence_copy_dynamic_index(
+                        &mut rewritten,
+                        &owner,
+                        &mut ordinal,
+                        &block_identity,
+                        &instruction.inputs[1],
+                        dst_at,
+                        offset,
+                        failure,
+                        &operation_identity,
+                        &mut generated_obligations,
+                        &mut dynamic_obligation_ids,
+                    );
+                    let source_index = push_vm_sequence_copy_dynamic_index(
+                        &mut rewritten,
+                        &owner,
+                        &mut ordinal,
+                        &block_identity,
+                        &instruction.inputs[3],
+                        src_at,
+                        offset,
+                        failure,
+                        &operation_identity,
+                        &mut generated_obligations,
+                        &mut dynamic_obligation_ids,
+                    );
+
+                    let projection_id =
+                        vm_sequence_copy_id(&owner, "dynamic-offset-project", ordinal);
+                    ordinal += 1;
+                    let projected_value = SsaValue {
+                        identity: vm_sequence_copy_id(
+                            &owner,
+                            "dynamic-offset-project-value",
+                            ordinal,
+                        ),
+                        semantic_identity: None,
+                        ty: element_type.clone(),
+                        producer: Some(projection_id.clone()),
+                        block: block_identity.clone(),
+                    };
+                    let projected_value_id = projected_value.identity.clone();
+                    let mut projection = vm_sequence_copy_instruction(
+                        projection_id,
+                        SsaInstructionKind::SequenceProject {
+                            bound: src_bound.clone(),
+                            evidence: BoundsEvidence::RuntimeChecked {
+                                failure: failure.clone(),
+                            },
+                        },
+                        vec![instruction.inputs[2].clone(), source_index],
+                        vec![projected_value],
+                    );
+                    projection.failure = Some(failure.clone());
+                    rewritten.push(projection);
+
+                    let final_operation = offset + 1 == copy_length;
+                    let replace_id = if final_operation {
+                        vm_sequence_copy_id(&owner, "dynamic-offset-result", ordinal)
+                    } else {
+                        vm_sequence_copy_id(&owner, "dynamic-offset-replace", ordinal)
+                    };
+                    ordinal += 1;
+                    let mut output = if final_operation {
+                        instruction.outputs[0].clone()
+                    } else {
+                        SsaValue {
+                            identity: vm_sequence_copy_id(
+                                &owner,
+                                "dynamic-offset-replace-value",
+                                ordinal,
+                            ),
+                            semantic_identity: None,
+                            ty: expected_type.clone(),
+                            producer: Some(replace_id.clone()),
+                            block: block_identity.clone(),
+                        }
+                    };
+                    output.producer = Some(replace_id.clone());
+                    let mut replace = vm_sequence_copy_instruction(
+                        replace_id.clone(),
+                        SsaInstructionKind::SequenceReplace {
+                            element_type: element_type.clone(),
+                            bound: dst_bound.clone(),
+                            evidence: BoundsEvidence::RuntimeChecked {
+                                failure: failure.clone(),
+                            },
+                        },
+                        vec![
+                            current_sequence.clone(),
+                            destination_index,
+                            projected_value_id,
+                        ],
+                        vec![output],
+                    );
+                    replace.failure = Some(failure.clone());
+                    if final_operation {
+                        replace.semantic_identity = instruction.semantic_identity.clone();
+                        replace.hir_identity = instruction.hir_identity.clone();
+                        replace.obligations.clone_from(&instruction.obligations);
+                        replace.evidence.clone_from(&instruction.evidence);
+                    }
+                    current_sequence = replace.outputs[0].identity.clone();
+                    rewritten.push(replace);
+                }
+
+                record_vm_sequence_copy_lowering(
+                    &mut transformations,
+                    &instruction,
+                    current_sequence,
+                    &target,
+                    &implementation,
+                    "vm-runtime-checked-sequence-copy-dynamic-offsets-to-project-replace/1",
+                );
+                if let Some(record) = transformations.last_mut() {
+                    record.obligations_required.extend(dynamic_obligation_ids);
+                    record.backend_promises_permitted =
+                        vec!["functional-runtime-checked-span-copy".to_owned()];
+                }
+                lowered_count += 1;
+            }
+            block.instructions = rewritten;
+        }
+    }
+    ssa.transformations.extend(transformations);
+    ssa.obligations.extend(generated_obligations);
+    Ok(lowered_count)
+}
+
+fn push_vm_sequence_copy_dynamic_index(
+    rewritten: &mut Vec<SsaInstruction>,
+    owner: &mncs_model::SemanticId,
+    ordinal: &mut u64,
+    block: &mncs_model::SemanticId,
+    base: &mncs_model::SemanticId,
+    base_constant: Option<i128>,
+    increment: u64,
+    failure: &mncs_model::FailureMode,
+    operation_identity: &mncs_model::SemanticId,
+    generated_obligations: &mut Vec<mncs_model::ObligationRecord>,
+    generated_obligation_ids: &mut Vec<mncs_model::SemanticId>,
+) -> mncs_model::SemanticId {
+    if increment == 0 {
+        return base.clone();
+    }
+    if let Some(base_constant) = base_constant {
+        let index = base_constant + i128::from(increment);
+        if (0..=i128::from(u64::MAX)).contains(&index) {
+            return push_vm_sequence_copy_constant(
+                rewritten,
+                owner,
+                ordinal,
+                block,
+                u64::try_from(index).expect("constant index is in u64 domain"),
+            );
+        }
+    }
+
+    let increment_id = push_vm_sequence_copy_constant(rewritten, owner, ordinal, block, increment);
+    let identity = vm_sequence_copy_id(owner, "dynamic-offset-add", *ordinal);
+    *ordinal += 1;
+    let output = SsaValue {
+        identity: vm_sequence_copy_id(owner, "dynamic-offset-add-value", *ordinal),
+        semantic_identity: None,
+        ty: BodyType::Integer(mncs_model::IntegerType {
+            bits: 64,
+            signed: false,
+        }),
+        producer: Some(identity.clone()),
+        block: block.clone(),
+    };
+    let output_identity = output.identity.clone();
+    let requirement_identity =
+        vm_sequence_copy_id(owner, "dynamic-offset-add-requirement", *ordinal);
+    let obligation_identity = vm_sequence_copy_id(owner, "dynamic-offset-add-obligation", *ordinal);
+    let intent_identity = vm_sequence_copy_id(owner, "dynamic-offset-add-intent", *ordinal);
+    generated_obligations.push(mncs_model::ObligationRecord {
+        schema_version: mncs_model::OBLIGATION_SCHEMA_VERSION.to_owned(),
+        identity: obligation_identity.clone(),
+        subject: identity.clone(),
+        requirement: requirement_identity.clone(),
+        status: mncs_model::ObligationStatus::Unknown,
+        method: "runtime-checked-copy-index-offset".to_owned(),
+        assumptions: Vec::new(),
+        dependencies: vec![operation_identity.clone()],
+        freshness: mncs_model::EvidenceFreshness::Unknown,
+        fallback: Some(
+            "retain checked u64 addition so index overflow remains a runtime failure".to_owned(),
+        ),
+    });
+    generated_obligation_ids.push(obligation_identity.clone());
+    let mut add = vm_sequence_copy_instruction(
+        identity,
+        SsaInstructionKind::Integer {
+            operator: "add".to_owned(),
+            operand_type: mncs_model::IntegerType {
+                bits: 64,
+                signed: false,
+            },
+            intent: mncs_model::ArithmeticIntent::Checked,
+        },
+        vec![base.clone(), increment_id],
+        vec![output],
+    );
+    add.machine_intent = Some(mncs_model::MachineIntentLinks {
+        operation_identity: operation_identity.clone(),
+        intent_identity,
+        fact_identities: Vec::new(),
+        preference_identities: Vec::new(),
+        requirement_identities: vec![requirement_identity],
+        obligation_identities: vec![obligation_identity.clone()],
+        capability_identities: Vec::new(),
+    });
+    add.obligations.push(obligation_identity);
+    add.failure = Some(failure.clone());
+    rewritten.push(add);
+    output_identity
+}
+
 fn vm_sequence_copy_id(
     owner: &mncs_model::SemanticId,
     role: &str,
@@ -1596,6 +1963,14 @@ fn emit_vm_artifact_scoped(
         .map_err(|error| {
             format!("runtime-checked VM-lowered application SSA fingerprint failed: {error}")
         })?;
+    let dynamic_offset_sequence_copies_lowered =
+        lower_vm_runtime_checked_dynamic_offset_sequence_copies(&mut execution_ssa)?;
+    let dynamic_offset_vm_lowering_fingerprint = (dynamic_offset_sequence_copies_lowered > 0)
+        .then(|| execution_ssa.fingerprint())
+        .transpose()
+        .map_err(|error| {
+            format!("dynamic-offset VM-lowered application SSA fingerprint failed: {error}")
+        })?;
     let capability_bindings = capability_dispatch_bindings(&execution_ssa)?;
     let selected = result
         .artifacts
@@ -1782,6 +2157,11 @@ fn emit_vm_artifact_scoped(
     if let Some(vm_lowering_fingerprint) = runtime_checked_vm_lowering_fingerprint {
         lowering_refs.push(format!(
             "vm-runtime-checked-sequence-copy-lowering/1:{vm_lowering_fingerprint}"
+        ));
+    }
+    if let Some(vm_lowering_fingerprint) = dynamic_offset_vm_lowering_fingerprint {
+        lowering_refs.push(format!(
+            "vm-runtime-checked-sequence-copy-dynamic-offset-lowering/1:{vm_lowering_fingerprint}"
         ));
     }
 
@@ -2626,6 +3006,138 @@ mod application_closure_tests {
             .is_some_and(|refs| refs.iter().any(|row| {
                 row.as_str().is_some_and(|value| {
                     value.starts_with("vm-runtime-checked-sequence-copy-lowering/1:")
+                })
+            })));
+    }
+
+    #[test]
+    fn canonical_vm_lowers_constant_length_copies_with_dynamic_offsets() {
+        let source = r#"
+            mncs 0.18;
+            module closure.dynamic_offset_copy;
+            fn copy_window(
+                destination: [byte; 8],
+                destination_at: u64,
+                source: [byte; up_to 8],
+                source_at: u64
+            ) -> (result: [byte; 8]) {
+                return copy_span(destination, destination_at, source, source_at, 3);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-dynamic-offset-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact with checked dynamic copy offsets");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        let validation = module.validate();
+        assert!(
+            validation.valid,
+            "VM-lowered SSA diagnostics: {:?}",
+            validation.errors
+        );
+        let instructions = module
+            .functions
+            .iter()
+            .flat_map(|function| function.blocks.iter())
+            .flat_map(|block| block.instructions.iter())
+            .collect::<Vec<_>>();
+        assert!(instructions.iter().all(|instruction| !matches!(
+            instruction.kind,
+            SsaInstructionKind::SequenceCopy { .. }
+        )));
+        let runtime_projections = instructions
+            .iter()
+            .filter(|instruction| {
+                matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceProject {
+                        evidence: BoundsEvidence::RuntimeChecked { .. },
+                        ..
+                    }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(runtime_projections.len(), 3);
+        assert!(runtime_projections
+            .iter()
+            .all(|instruction| instruction.failure == Some(mncs_model::FailureMode::Isolated)));
+        let runtime_replacements = instructions
+            .iter()
+            .filter(|instruction| {
+                matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceReplace {
+                        evidence: BoundsEvidence::RuntimeChecked { .. },
+                        ..
+                    }
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(runtime_replacements.len(), 3);
+        assert!(runtime_replacements
+            .iter()
+            .all(|instruction| instruction.failure == Some(mncs_model::FailureMode::Isolated)));
+        let checked_adds = instructions
+            .iter()
+            .filter(|instruction| {
+                matches!(
+                        &instruction.kind,
+                    SsaInstructionKind::Integer {
+                        operator,
+                        intent: mncs_model::ArithmeticIntent::Checked,
+                        ..
+                    } if operator == "add"
+                )
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(checked_adds.len(), 4);
+        assert!(checked_adds
+            .iter()
+            .all(|instruction| instruction.failure == Some(mncs_model::FailureMode::Isolated)));
+        let lowering = module
+            .transformations
+            .iter()
+            .find(|record| {
+                record.rule
+                    == "vm-runtime-checked-sequence-copy-dynamic-offsets-to-project-replace/1"
+            })
+            .expect("dynamic-offset lowering provenance");
+        assert_eq!(
+            lowering.backend_promises_permitted,
+            ["functional-runtime-checked-span-copy".to_owned()]
+        );
+        let generated_add_obligations = module
+            .obligations
+            .iter()
+            .filter(|obligation| obligation.method == "runtime-checked-copy-index-offset")
+            .collect::<Vec<_>>();
+        assert_eq!(generated_add_obligations.len(), 4);
+        assert!(generated_add_obligations.iter().all(|obligation| {
+            obligation.status == mncs_model::ObligationStatus::Unknown
+                && obligation
+                    .fallback
+                    .as_deref()
+                    .is_some_and(|fallback| fallback.contains("checked u64 addition"))
+                && lowering.obligations_required.contains(&obligation.identity)
+        }));
+        assert!(artifact["source"]["lowering_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|row| {
+                row.as_str().is_some_and(|value| {
+                    value.starts_with("vm-runtime-checked-sequence-copy-dynamic-offset-lowering/1:")
                 })
             })));
     }
