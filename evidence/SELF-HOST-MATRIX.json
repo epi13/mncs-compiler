@@ -1993,7 +1993,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Continue authorized Compiler self-host and native Test work. Forge digest_app execution needs an owner-managed Control grant scoped to mncs-environment and bound to a campaign whose work intent includes the required Compiler/Forge route; the current Compiler grant is Compiler-scoped and the existing Environment campaign is Environment-only. Language-owned verified-fact implementation still needs a matching authenticated Language worktree grant. Continue Compiler-only progress while those exact scopes remain unavailable.",
+  "next_frontier": "Advance the now-passing local native Test provider application through Forge, Environment, and canonical Store using a properly scoped authenticated campaign. Language-owned verified-fact reuse still requires matching Language worktree authority; continue independently useful Compiler work while those exact scopes remain unavailable.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -8318,7 +8318,7 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-18T07:22:54.678924Z",
+  "evidence_updated_at": "2026-10-18T11:30:50.974518Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -13513,9 +13513,9 @@
   "current_campaign_project_test_provider_app_boundary_20261018": {
     "kind": "mncs.compiler.native-test-provider-application-boundary-frontier",
     "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
-    "status": "incomplete_vm_instruction_sequence_copy",
+    "status": "passed_local_two_capability_vm_boundary",
     "compiler_branch": "campaign/native-application-readiness-20261013",
-    "tested_compiler_head": "5bdf762fd341f7026cf5c1745cb1dd0836ad1e10",
+    "tested_compiler_head": "0336d779aae23617e92ffc2da81ad9607da04646",
     "test_source_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
     "stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
     "language_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
@@ -13523,17 +13523,17 @@
     "application_entry": "mncs.test.provider::provider_batch_app",
     "application_build_contract": "mncs.compiler.application-build/4",
     "application_build_status": "verified",
-    "application_artifact_identity": "sha256:7696da5d3bea81f49d442172e755a51380d0d0a5942f9833bb7a0a68527b198d",
-    "application_artifact_bytes": 2277159,
+    "application_artifact_identity": "sha256:1ff6468f4d7561b295e8d4f4acb95259c75fd7af0fb2981f42c264f073cc3cde",
+    "application_artifact_bytes": 954456,
     "build_metrics": {
-      "cpu_seconds": 0.96,
+      "cpu_seconds": 1.14,
       "peak_cgroup_memory_bytes": null,
       "peak_child_processes": 0,
       "peak_open_file_descriptors": 4,
-      "peak_rss_bytes": 114688000,
+      "peak_rss_bytes": 60866560,
       "peak_threads": 1,
       "request_sequence": 1,
-      "wall_seconds": 1.01516
+      "wall_seconds": 1.163478
     },
     "capability_dispatch": {
       "canonical_capability_identities": {
@@ -13554,54 +13554,34 @@
         ]
       },
       "status": "verified",
-      "validated_artifact_identity": "sha256:7696da5d3bea81f49d442172e755a51380d0d0a5942f9833bb7a0a68527b198d"
+      "validated_artifact_identity": "sha256:1ff6468f4d7561b295e8d4f4acb95259c75fd7af0fb2981f42c264f073cc3cde"
     },
     "negative_cases": {
-      "invalid_arguments": {
-        "exit_code": 2,
-        "stderr": [
-          105,
-          110,
-          118,
-          97,
-          108,
-          105,
-          100,
-          32,
-          112,
-          114,
-          111,
-          118,
-          105,
-          100,
-          101,
-          114,
-          32,
-          97,
-          114,
-          103,
-          115
-        ],
-        "stdout": []
-      },
+      "invalid_arguments_exit_code": 2,
       "missing_provider_artifact": {
-        "outcome": {
-          "capability": "provider_artifact",
-          "kind": "capability_denied",
-          "operation": "structured_read"
-        },
-        "no_artifact_publication": true
+        "capability": "provider_artifact",
+        "kind": "capability_denied",
+        "operation": "structured_read"
       },
       "missing_provider_digest": {
-        "outcome": {
-          "capability": "mncs:0.2:capability:mncs.test.provider::provider_batch_app::provider_digest",
-          "kind": "capability_denied",
-          "operation": "call mncs:0.2:function:mncs.test.provider::run_selected_batch"
-        },
-        "no_result_publication": true
+        "capability": "mncs:0.2:capability:mncs.test.provider::provider_batch_app::provider_digest",
+        "kind": "capability_denied",
+        "operation": "call mncs:0.2:function:mncs.test.provider::run_selected_batch"
       },
       "wrong_alias_rejected": "application contract dispatch alias differs from admitted SSA",
-      "wrong_identity_rejected": "artifact does not require authorized capability"
+      "wrong_identity_rejected": "artifact does not require authorized capability",
+      "rejected_publication_exit_code": 3,
+      "rejected_publication_effect_operations": [
+        "structured_read",
+        "structured_digest",
+        "structured_digest",
+        "structured_digest",
+        "structured_digest",
+        "structured_digest",
+        "structured_write",
+        "structured_write"
+      ],
+      "rejected_publication_no_output": true
     },
     "two_capability_execution": {
       "admitted_capabilities": [
@@ -13619,27 +13599,87 @@
           "capability": "provider_digest",
           "operation": "structured_digest",
           "outcome_tag": "completed"
+        },
+        {
+          "capability": "provider_digest",
+          "operation": "structured_digest",
+          "outcome_tag": "completed"
+        },
+        {
+          "capability": "provider_digest",
+          "operation": "structured_digest",
+          "outcome_tag": "completed"
+        },
+        {
+          "capability": "provider_digest",
+          "operation": "structured_digest",
+          "outcome_tag": "completed"
+        },
+        {
+          "capability": "provider_digest",
+          "operation": "structured_digest",
+          "outcome_tag": "completed"
+        },
+        {
+          "capability": "provider_artifact",
+          "operation": "structured_write",
+          "outcome_tag": "completed"
+        },
+        {
+          "capability": "provider_artifact",
+          "operation": "structured_write",
+          "outcome_tag": "completed"
         }
       ],
       "outcome": {
-        "feature": "instruction sequence_copy",
-        "kind": "unsupported"
+        "kind": "completed"
       },
-      "published_check": false,
-      "published_result": false,
-      "wall_seconds": 0.054319,
-      "peak_rss_bytes": 30007296
+      "application_exit": {
+        "exit_code": 0,
+        "stderr": [],
+        "stdout": []
+      },
+      "published_check": true,
+      "published_result": true,
+      "typed_native_result": {
+        "actual": 0,
+        "assertion_code": 0,
+        "assertions": 1,
+        "expected": 0,
+        "failure_code": 0,
+        "failure_kind": {
+          "$p": {},
+          "$v": 0
+        },
+        "failures": 0,
+        "verdict": {
+          "$p": {},
+          "$v": 0
+        },
+        "verdict_code": 0
+      },
+      "wall_seconds": 0.034037,
+      "peak_rss_bytes": 19988480
     },
-    "evidence_artifact": "evidence/native-test-provider-app-boundary-metadata-projection-20261018.json",
-    "evidence_sha256": "0da232db4d726184ba8e669f296651f2ffb20eaf0bfb1b5d19d9bc5a7c271390",
+    "stage0_invalid_argument_return_match": true,
+    "evidence_artifact": "evidence/native-test-provider-app-boundary-20261018-current-0336d77.json",
+    "evidence_sha256": "5f55c066d1c2b6802e31ef81f3796690211dda6f85c8bd77269826a9bb33b8e1",
     "test_harness": "tools/test_vm_native_test_provider_app_boundary.py",
-    "test_harness_sha256": "ae7d53258b0a46cc23e7cd747acbcde46e29a704e9440d7dde8450f11a36448f",
+    "test_harness_sha256": "0f22874d76e52df2d6555b360730e05f8b1a04cd87db01b0244577313fb662be",
+    "stage0_probe_sha256": "f386d652e2e9df4ba04d94ada675c03362f8b343175430aa8106a0178d502433",
     "language_verified_facts_reused": 0,
     "forge_execution_performed": false,
     "canonical_store_publication_performed": false,
     "self_consumption_frontier_advanced": false,
-    "limitation": "The production provider application completes structured_read and its first structured_digest, then reaches an unsupported canonical VM sequence_copy while copying the digest into the language-owned fixed-size identity. This prevents a positive provider result in the current VM contract. The Forge/Environment/Store route and canonical Store readback also remain unproven.",
-    "next_step": "Implement and verify canonical VM sequence_copy in mncs-vm under its authorized repository scope, then rerun the production provider application boundary and advance through Forge/Environment/Store."
+    "previous_frontier": {
+      "status": "incomplete_vm_instruction_sequence_copy",
+      "tested_compiler_head": "5bdf762fd341f7026cf5c1745cb1dd0836ad1e10",
+      "evidence_artifact": "evidence/native-test-provider-app-boundary-metadata-projection-20261018.json",
+      "evidence_sha256": "0da232db4d726184ba8e669f296651f2ffb20eaf0bfb1b5d19d9bc5a7c271390",
+      "limitation": "The production provider application completes structured_read and its first structured_digest, then reaches an unsupported canonical VM sequence_copy while copying the digest into the language-owned fixed-size identity. This prevents a positive provider result in the current VM contract. The Forge/Environment/Store route and canonical Store readback also remain unproven."
+    },
+    "limitation": "The local bounded structured-file provider completes this positive Test provider application path; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback.",
+    "next_step": "Advance this verified local Compiler/VM application through Forge, Environment, and canonical Store using a properly scoped authenticated campaign. Keep Compiler-only development moving while the Environment route and Language writable scope remain unavailable."
   },
   "current_campaign_project_target_application_ssa_inplace_measurement_20261018": {
     "kind": "mncs.compiler.project-application-ssa-inplace-projection-measurement",
