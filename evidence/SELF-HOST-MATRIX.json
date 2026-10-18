@@ -8582,7 +8582,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-18T17:16:54.595755Z",
+  "evidence_updated_at": "2026-10-18T17:37:31.159886Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -12408,6 +12408,71 @@
       "stage1_claimed": false,
       "stage2_claimed": false,
       "ssa_shape_scope": "Canonical VM matched the Flow/SSA stage for reported function, branch, return and other listed counts except the explicitly retained Failure terminator/block and loop instruction deltas; this is not full CFG parity."
+    },
+    {
+      "kind": "flow-to-ssa-artifact-decoder-compact-metadata",
+      "status": "passed",
+      "observed_at": "2026-10-18T17:37:31.159886Z",
+      "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "tested_source_revision": "d5cbb2cae1c676675e3f72f7ed5992b90b605233",
+      "commit_containing_tested_source": "d5cbb2cae1c676675e3f72f7ed5992b90b605233",
+      "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "test_harness": "tools/test_vm_flow_ssa_frontier.py",
+      "test_harness_sha256": "1aa2376ac3bedd06dd159d733e0168781f34df63e4ffff1e37f0d82eeb3c49dc",
+      "implementation_source": "tools/vm-artifact-codec/src/lib.rs",
+      "implementation_source_sha256": "567f2a582d2e63dbb36833bbb7e9d705a0a30a041e39f167ed2817d1027b2a41",
+      "evidence_artifact": "evidence/self-host-flow-ssa-decoder-compact-metadata-20261018.json",
+      "evidence_sha256": "3995adc0ea1a151a37d082c4b7eeae1e3e0f13a9b4e0923f86f6b305cbe9a570",
+      "baseline_evidence_artifact": "evidence/self-host-flow-ssa-decoder-validation-optimization-20261018.json",
+      "baseline_evidence_sha256": "5cab7b40474211f7d5bc892b58cbf64abdc3b381cc8c7563b81e4f6cefc9b8a5",
+      "decoder_expansion_limit": 8500000,
+      "selected_ssa_module_graph_nodes": 1200549,
+      "validation_summary_storage_bytes_before": 14406588,
+      "validation_summary_storage_bytes_after": 6002745,
+      "validation_summary_storage_difference_bytes": 8403843,
+      "application_artifact_identity": "sha256:1ef58c10c8e8799f334789895e2b1748db95e00e6da3fac14014a9eb1ffd651b",
+      "artifact_json_sha256": "d12b42618b51de1eb7aa74c108a5d6ed97f8b5190a37d269f82cd55ab325d26a",
+      "canonical_vm_semantic_digest": "ac536e6a271ee9c0765ae41bc9b7e1f9804e1e0aacf3b9ed3e64e8ef82da5545",
+      "canonical_vm_calls": 2,
+      "performance_comparison": {
+        "baseline_evidence": "evidence/self-host-flow-ssa-decoder-validation-optimization-20261018.json",
+        "baseline_evidence_sha256": "5cab7b40474211f7d5bc892b58cbf64abdc3b381cc8c7563b81e4f6cefc9b8a5",
+        "baseline_revision": "b89b92a49d3e2d152f8eab37b97e5dcbcaf72717",
+        "baseline_measurements": {
+          "whole_frontier_seconds": 40.062553,
+          "canonical_vm_batch_seconds": 33.660884,
+          "child_cpu_seconds": 35.665174,
+          "child_peak_rss_kib": 1622632,
+          "canonical_vm_peak_rss_kib": 626096
+        },
+        "compact_metadata_measurements": {
+          "whole_frontier_seconds": 40.15341,
+          "canonical_vm_batch_seconds": 33.732421,
+          "child_cpu_seconds": 35.822936,
+          "child_peak_rss_kib": 1623096,
+          "canonical_vm_peak_rss_kib": 625388
+        },
+        "difference_compact_minus_baseline": {
+          "whole_frontier_seconds": 0.090857,
+          "canonical_vm_batch_seconds": 0.071537,
+          "child_cpu_seconds": 0.157762,
+          "child_peak_rss_kib": 464,
+          "canonical_vm_peak_rss_kib": -708
+        },
+        "relative_change_percent": {
+          "whole_frontier_seconds": 0.227,
+          "canonical_vm_batch_seconds": 0.213,
+          "child_cpu_seconds": 0.442,
+          "child_peak_rss_kib": 0.029,
+          "canonical_vm_peak_rss_kib": -0.113
+        },
+        "interpretation": "One run per revision; timing and peak-RSS differences are within run noise and do not establish an end-to-end resource reduction. cgroup memory metrics were unavailable."
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "scope": "The compact metadata saves about 8 MiB in the selected module validation summaries by arithmetic. Measured end-to-end peak RSS did not show a meaningful decrease; cgroup measurements are unavailable."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {
