@@ -60,6 +60,33 @@ def wire_record(name: str, fields: dict, identity: str) -> dict:
     }
 
 
+def wire_finite(interface: dict, type_name: str, variant_name: str) -> dict:
+    finite = next(row for row in interface["types"]["finite"] if row.get("name") == type_name)
+    variant = next(row for row in finite["variants"] if row.get("name") == variant_name)
+    return {"finite": {
+        "type_identity": finite["identity"],
+        "variant_identity": variant["identity"],
+        "discriminant": variant["discriminant"],
+        "payload": [],
+    }}
+
+
+def record_identity(interface: dict, name: str) -> str:
+    row = next((row for row in interface["types"]["records"] if row.get("name") == name), None)
+    if row is None:
+        raise AssertionError(f"verified provider protocol omitted record type {name}")
+    identity = row.get("identity")
+    if isinstance(identity, dict):
+        identity = identity.get("0")
+    if not isinstance(identity, str):
+        raise AssertionError(f"verified provider protocol has no identity for {name}")
+    return identity
+
+
+def byte_values(values: bytes) -> dict:
+    return {"sequence": {"values": [{"byte": {"value": byte}} for byte in values]}}
+
+
 def compile_request(root: str, modules: dict[str, str]) -> dict:
     return {
         "schema_version": "mncs.compiler.application-build-request/1",
@@ -285,8 +312,15 @@ def main() -> None:
                 if row.get("runtime_capability_key") == "provider_artifact"
                 and row.get("operation") == "structured_read"
             )
+            artifact_identity_for_digest = next(
+                row["capability_identity"] for row in host_rows
+                if row.get("runtime_capability_key") == "provider_digest"
+                and row.get("operation") == "structured_digest"
+            )
             if artifact_identity_for_files not in artifact.get("requirements", {}).get("capabilities", []):
                 raise AssertionError("artifact requirements omit the provider_artifact host-call identity")
+            if artifact_identity_for_digest not in artifact.get("requirements", {}).get("capabilities", []):
+                raise AssertionError("artifact requirements omit the provider_digest host-call identity")
         finally:
             probe.close()
 
@@ -462,6 +496,121 @@ def main() -> None:
                     or expected_wires[0].get("returned") != returned_wire):
                 raise AssertionError(f"Stage-0 provider app rejection differs from canonical VM: {oracle}")
 
+            positive_dir = call_dir / "positive-provider-run"
+            positive_dir.mkdir()
+            test_artifact_identity = "mncs:fixture:provider-artifact"
+            test_identity = "mncs:fixture:test-case:provider-pass"
+            declaration_identity = "mncs:fixture:declaration:provider-pass"
+            callable_identity = "mncs:fixture:callable:provider-pass"
+            signature_identity = "mncs:fixture:signature:provider-pass"
+            callable_entry = wire_record("TestCallableEntry", {
+                "artifact_identity": byte_sequence(test_artifact_identity),
+                "test_case_identity": byte_sequence(test_identity),
+                "declaration_identity": byte_sequence(declaration_identity),
+                "callable_identity": byte_sequence(callable_identity),
+                "signature_identity": byte_sequence(signature_identity),
+            }, record_identity(protocol_interface, "TestCallableEntry"))
+            test_result = wire_record("TestResult", {
+                "verdict": wire_finite(protocol_interface, "Verdict", "PASS"),
+                "verdict_code": unsigned(0),
+                "failure_kind": wire_finite(protocol_interface, "FailureKind", "NoFailure"),
+                "failure_code": unsigned(0),
+                "assertions": unsigned(1),
+                "failures": unsigned(0),
+                "expected": {"integer": {"type": {"bits": 64, "signed": True}, "value": 1}},
+                "actual": {"integer": {"type": {"bits": 64, "signed": True}, "value": 1}},
+                "assertion_code": unsigned(0),
+            }, record_identity(protocol_interface, "TestResult"))
+            execution = wire_record("ProviderTestExecution", {
+                "test_case_identity": byte_sequence(test_identity),
+                "declaration_identity": byte_sequence(declaration_identity),
+                "callable_identity": byte_sequence(callable_identity),
+                "signature_identity": byte_sequence(signature_identity),
+                "artifact_identity": byte_sequence(test_artifact_identity),
+                "execution_status": wire_finite(protocol_interface, "CallableExecutionStatus", "RETURNED"),
+                "native_result": test_result,
+            }, record_identity(protocol_interface, "ProviderTestExecution"))
+            provider_request_value = wire_record("ProviderRequest", {
+                "compiler_callable_bindings": {"sequence": {"values": [callable_entry]}},
+                "selected_test_identities": {"sequence": {"values": [byte_sequence(test_identity)]}},
+                "selected_test_executions": {"sequence": {"values": [execution]}},
+                "selection_count": unsigned(1),
+                "interface_identity": byte_values(bytes([
+                    239, 160, 50, 155, 9, 221, 240, 227, 220, 117, 104, 17, 134, 215, 15, 192,
+                    206, 150, 165, 44, 250, 237, 241, 7, 176, 213, 182, 151, 52, 146, 186, 101,
+                ])),
+                "provider_revision_identity": byte_values(bytes([
+                    242, 141, 98, 241, 104, 235, 30, 81, 190, 31, 78, 85, 62, 100, 140, 222,
+                    6, 235, 59, 56, 33, 238, 68, 155, 119, 69, 38, 11, 227, 233, 132, 215,
+                ])),
+            }, provider_request_identity)
+            positive_input = positive_dir / "request.json"
+            positive_output = positive_dir / "result.json"
+            positive_check = positive_dir / "check.json"
+            positive_input.write_text(
+                json.dumps(provider_request_value, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            positive_context = application_context(
+                interface, positive_dir,
+                artifact_paths=[positive_input, positive_output, positive_check],
+            )
+            positive_call_path = positive_dir / "execution.json"
+            positive_call_path.write_text(
+                json.dumps(call_request(positive_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            positive_command = [
+                "/usr/bin/time", "-v", str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "single", str(positive_call_path),
+                str(positive_input), str(positive_output), "success",
+            ]
+            positive_started = time.monotonic()
+            positive_process = subprocess.run(
+                positive_command, cwd=ROOT, capture_output=True, text=True, check=False,
+            )
+            positive_wall_seconds = time.monotonic() - positive_started
+            if positive_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the positive two-capability provider application: "
+                    f"rc={positive_process.returncode}, stderr={positive_process.stderr[-5000:]}"
+                )
+            positive_document = json.loads(positive_process.stdout)
+            positive_record = positive_document.get("record", {})
+            positive_effects = positive_record.get("effects", [])
+            positive_returned = [digest_app.support.decode_wire(value)
+                                 for value in positive_document.get("returned_wire", [])]
+            positive_bindings = positive_document.get("capability_binding", {}).get("bindings", [])
+            expected_admitted = sorted([
+                "provider_artifact", "provider_digest",
+                *[
+                    identity
+                    for binding in positive_bindings
+                    for identity in binding.get("call_authority_identities", [])
+                ],
+            ])
+            observed_operations = [row.get("request", {}).get("operation") for row in positive_effects]
+            if (
+                positive_document.get("outcome", {}).get("kind") != "unsupported"
+                or positive_document.get("outcome", {}).get("feature") != "instruction sequence_copy"
+                or positive_record.get("admitted_capabilities") != expected_admitted
+                or observed_operations != ["structured_read", "structured_digest"]
+                or len(positive_effects) != 2
+                or any(row.get("outcome_tag") != "completed" for row in positive_effects)
+                or positive_output.exists() or positive_check.exists()
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": positive_document.get("outcome"),
+                    "returned": positive_returned,
+                    "admitted_capabilities": positive_record.get("admitted_capabilities"),
+                    "expected_admitted_capabilities": expected_admitted,
+                    "observed_operations": observed_operations,
+                    "effect_count": len(positive_effects),
+                    "published": [positive_output.exists(), positive_check.exists()],
+                    "effects": positive_effects,
+                }, indent=2)[:12000])
+
             rss_match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", process.stderr)
             user_match = re.search(r"User time \(seconds\): ([0-9.]+)", process.stderr)
             sys_match = re.search(r"System time \(seconds\): ([0-9.]+)", process.stderr)
@@ -474,7 +623,7 @@ def main() -> None:
             evidence = {
                 "schema_version": "mncs.compiler.native-application-proof/2",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "objective": "Compile the production mncs-test provider application and verify its multi-capability dispatch boundary, invalid-argument behavior, and denial when only provider_artifact is admitted",
+                "objective": "Compile the production mncs-test provider application, validate both capability identities, and exercise its bounded VM path through the first unsupported instruction",
                 "application": {
                     "root_source_id": "native/mncs/test/provider.mncs",
                     "entry": f"{ENTRY_MODULE}::{ENTRY_FUNCTION}",
@@ -536,6 +685,27 @@ def main() -> None:
                     "wrong_identity_rejected": wrong_identity_diagnostic,
                     "wrong_alias_rejected": wrong_alias_diagnostic,
                 },
+                "two_capability_admission_attempt": {
+                    "outcome": positive_document.get("outcome"),
+                    "admitted_capabilities": positive_record.get("admitted_capabilities"),
+                    "effects": [
+                        {
+                            "operation": row.get("request", {}).get("operation"),
+                            "capability": row.get("request", {}).get("capability"),
+                            "outcome_tag": row.get("outcome_tag"),
+                        }
+                        for row in positive_effects
+                    ],
+                    "published_result": positive_output.exists(),
+                    "published_check": positive_check.exists(),
+                    "vm_wall_seconds": round(positive_wall_seconds, 6),
+                    "vm_peak_rss_bytes": (
+                        int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", positive_process.stderr).group(1)) * 1024
+                        if re.search(r"Maximum resident set size \(kbytes\): (\d+)", positive_process.stderr)
+                        else None
+                    ),
+                    "dispatch_bindings": positive_document.get("capability_binding", {}).get("bindings"),
+                },
                 "missing_capability": {
                     "outcome": missing_cap_document.get("outcome"),
                     "admitted_capabilities": missing_cap_record.get("admitted_capabilities"),
@@ -550,7 +720,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "Positive provider-batch execution still requires exact structured_read, structured_write, and structured_digest providers through the authorized Forge/Environment/Store route."
+                    "The production provider application completes structured_read and its first structured_digest, then reaches an unsupported canonical VM sequence_copy while copying the digest into the language-owned fixed-size identity. This prevents a positive provider result in the current VM contract. The Forge/Environment/Store route and canonical Store readback also remain unproven."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,
@@ -567,6 +737,7 @@ def main() -> None:
                 "capability_aliases": evidence["application"]["capability_dispatch"]["host_operation_aliases"],
                 "stage0_exact_return_match": True,
                 "missing_capability_outcome": evidence["missing_capability"]["outcome"].get("kind"),
+                "two_capability_runtime_outcome": evidence["two_capability_admission_attempt"]["outcome"].get("kind"),
             }, indent=2))
     finally:
         artifact_path.unlink(missing_ok=True)
