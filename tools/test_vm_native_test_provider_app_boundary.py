@@ -278,6 +278,14 @@ def main() -> None:
             artifact_identity = built["artifact"]["identity"]
             if artifact.get("artifact_id") != artifact_identity:
                 raise AssertionError("provider app artifact identity differs from compiler receipt")
+            runtime_copy_lowering_ref = next((
+                value for value in artifact.get("source", {}).get("lowering_refs", [])
+                if value.startswith("vm-runtime-checked-sequence-copy-lowering/1:")
+            ), None)
+            if runtime_copy_lowering_ref is None:
+                raise AssertionError("production provider artifact omitted runtime-checked copy lowering")
+            if "vm-runtime-checked-sequence-copy-to-project-replace/1" not in json.dumps(artifact):
+                raise AssertionError("production provider artifact omitted its copy transformation record")
 
             dispatch = built.get("capability_dispatch", {})
             rows = dispatch.get("bindings", [])
@@ -567,7 +575,7 @@ def main() -> None:
                 "/usr/bin/time", "-v", str(binary), str(artifact_path),
                 f"{artifact_identity_for_files};{artifact_identity_for_digest}",
                 "provider_artifact;provider_digest", "single", str(positive_call_path),
-                str(positive_input), str(positive_output), "success",
+                str(positive_input), str(positive_output), "success", str(positive_check),
             ]
             positive_started = time.monotonic()
             positive_process = subprocess.run(
@@ -595,13 +603,18 @@ def main() -> None:
             ])
             observed_operations = [row.get("request", {}).get("operation") for row in positive_effects]
             if (
-                positive_document.get("outcome", {}).get("kind") != "unsupported"
-                or positive_document.get("outcome", {}).get("feature") != "instruction sequence_copy"
+                positive_document.get("outcome", {}).get("kind") != "completed"
                 or positive_record.get("admitted_capabilities") != expected_admitted
-                or observed_operations != ["structured_read", "structured_digest"]
-                or len(positive_effects) != 2
+                or observed_operations != [
+                    "structured_read",
+                    *(["structured_digest"] * 5),
+                    "structured_write",
+                    "structured_write",
+                ]
+                or len(positive_effects) != 8
                 or any(row.get("outcome_tag") != "completed" for row in positive_effects)
-                or positive_output.exists() or positive_check.exists()
+                or not positive_output.exists() or not positive_check.exists()
+                or len(positive_returned) != 1 or positive_returned[0].get("exit_code") != 0
             ):
                 raise AssertionError(json.dumps({
                     "outcome": positive_document.get("outcome"),
@@ -614,6 +627,84 @@ def main() -> None:
                     "effects": positive_effects,
                 }, indent=2)[:12000])
 
+            published_result = digest_app.support.decode_wire(json.loads(
+                positive_output.read_text(encoding="utf-8")
+            ))
+            published_check = digest_app.support.decode_wire(json.loads(
+                positive_check.read_text(encoding="utf-8")
+            ))
+            verdict_row = next(
+                row for row in protocol_interface["types"]["finite"]
+                if row.get("name") == "Verdict"
+            )
+            pass_discriminant = next(
+                row["discriminant"] for row in verdict_row["variants"]
+                if row.get("name") == "PASS"
+            )
+            result_identity = published_result.get("result_identity")
+            if (
+                published_result.get("native_result", {}).get("verdict", {}).get("$v")
+                != pass_discriminant
+                or published_result.get("native_result", {}).get("failures") != 0
+                or published_check.get("verdict", {}).get("$v") != pass_discriminant
+                or published_check.get("test_result_identity") != result_identity
+            ):
+                raise AssertionError(json.dumps({
+                    "published_result": published_result,
+                    "published_check": published_check,
+                    "pass_discriminant": pass_discriminant,
+                }, indent=2)[:8000])
+
+            failed_write_dir = call_dir / "rejected-provider-publication"
+            failed_write_dir.mkdir()
+            failed_write_input = failed_write_dir / "request.json"
+            failed_write_output = failed_write_dir / "result.json"
+            failed_write_check = failed_write_dir / "check.json"
+            failed_write_input.write_text(
+                json.dumps(provider_request_value, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            failed_write_context = application_context(
+                interface, failed_write_dir,
+                artifact_paths=[failed_write_input, failed_write_output, failed_write_check],
+            )
+            failed_write_call_path = failed_write_dir / "execution.json"
+            failed_write_call_path.write_text(
+                json.dumps(call_request(failed_write_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            failed_write_process = subprocess.run([
+                str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "single", str(failed_write_call_path),
+                str(failed_write_input), str(failed_write_output), "fail-write",
+                str(failed_write_check),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            if failed_write_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the failed-publication provider run: "
+                    f"rc={failed_write_process.returncode}, stderr={failed_write_process.stderr[-3000:]}"
+                )
+            failed_write_document = json.loads(failed_write_process.stdout)
+            failed_write_returned = [digest_app.support.decode_wire(value)
+                                     for value in failed_write_document.get("returned_wire", [])]
+            failed_write_effects = failed_write_document.get("record", {}).get("effects", [])
+            if (
+                failed_write_document.get("outcome", {}).get("kind") != "completed"
+                or len(failed_write_returned) != 1
+                or failed_write_returned[0].get("exit_code") != 3
+                or [row.get("request", {}).get("operation") for row in failed_write_effects]
+                != ["structured_read", *(["structured_digest"] * 5),
+                    "structured_write", "structured_write"]
+                or failed_write_output.exists() or failed_write_check.exists()
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": failed_write_document.get("outcome"),
+                    "returned": failed_write_returned,
+                    "effects": failed_write_effects,
+                    "published": [failed_write_output.exists(), failed_write_check.exists()],
+                }, indent=2)[:9000])
+
             rss_match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", process.stderr)
             user_match = re.search(r"User time \(seconds\): ([0-9.]+)", process.stderr)
             sys_match = re.search(r"System time \(seconds\): ([0-9.]+)", process.stderr)
@@ -624,9 +715,9 @@ def main() -> None:
             source_rows.append({"module": ENTRY_MODULE, "path": str(ROOT_SOURCE_PATH),
                                 "sha256": sha(ROOT_SOURCE_PATH.read_bytes())})
             evidence = {
-                "schema_version": "mncs.compiler.native-application-proof/2",
+                "schema_version": "mncs.compiler.native-application-proof/3",
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "objective": "Compile the production mncs-test provider application, validate both capability identities, and exercise its bounded VM path through the first unsupported instruction",
+                "objective": "Compile and execute the production mncs-test provider application with typed capability results and bounded output publication",
                 "application": {
                     "root_source_id": "native/mncs/test/provider.mncs",
                     "entry": f"{ENTRY_MODULE}::{ENTRY_FUNCTION}",
@@ -663,6 +754,7 @@ def main() -> None:
                     "artifact_identity": artifact_identity,
                     "artifact_sha256": sha(artifact_bytes),
                     "artifact_bytes": len(artifact_bytes),
+                    "runtime_checked_sequence_copy_lowering_ref": runtime_copy_lowering_ref,
                     "unresolved_obligations": built.get("unresolved_obligations"),
                     "metrics": build_metrics,
                     "provider_request_interface": {
@@ -690,6 +782,7 @@ def main() -> None:
                 },
                 "two_capability_admission_attempt": {
                     "outcome": positive_document.get("outcome"),
+                    "application_exit": positive_returned[0],
                     "admitted_capabilities": positive_record.get("admitted_capabilities"),
                     "effects": [
                         {
@@ -701,6 +794,8 @@ def main() -> None:
                     ],
                     "published_result": positive_output.exists(),
                     "published_check": positive_check.exists(),
+                    "typed_result": published_result,
+                    "typed_check": published_check,
                     "vm_wall_seconds": round(positive_wall_seconds, 6),
                     "vm_peak_rss_bytes": (
                         int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", positive_process.stderr).group(1)) * 1024
@@ -708,6 +803,15 @@ def main() -> None:
                         else None
                     ),
                     "dispatch_bindings": positive_document.get("capability_binding", {}).get("bindings"),
+                },
+                "rejected_publication": {
+                    "application_exit": failed_write_returned[0],
+                    "effect_operations": [
+                        row.get("request", {}).get("operation") for row in failed_write_effects
+                    ],
+                    "no_output_published": (
+                        not failed_write_output.exists() and not failed_write_check.exists()
+                    ),
                 },
                 "missing_capability": {
                     "outcome": missing_cap_document.get("outcome"),
@@ -723,7 +827,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "The production provider application completes structured_read and its first structured_digest, then reaches an unsupported canonical VM sequence_copy while copying the digest into the language-owned fixed-size identity. This prevents a positive provider result in the current VM contract. The Forge/Environment/Store route and canonical Store readback also remain unproven."
+                    "The local bounded structured-file provider completes this positive Test provider application path; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,

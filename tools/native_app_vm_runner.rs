@@ -20,11 +20,14 @@ const PROVIDER_ID: &str = "mncs.compiler.test-structured-file-provider/1";
 const INPUT_SCHEMA: &str = "mncs.test-digest-request/1";
 const PROVIDER_REQUEST_SCHEMA: &str = "mncs.test-provider-request/1";
 const OUTPUT_SCHEMA: &str = "mncs.test-digest/1";
+const PROVIDER_RESULT_SCHEMA: &str = "mncs.test-provider-result/1";
+const PROVIDER_CHECK_SCHEMA: &str = "mncs.test-provider-check/1";
 
 struct StructuredFileProvider {
     capability: String,
     input_path: PathBuf,
     output_path: PathBuf,
+    check_path: Option<PathBuf>,
     fail_write: bool,
     allowed_operations: BTreeSet<String>,
     ssa_module: SsaModule,
@@ -101,14 +104,20 @@ impl Provider for StructuredFileProvider {
                 let path = value_bytes(&request.inputs[0])
                     .and_then(|bytes| String::from_utf8(bytes).map_err(|e| e.to_string()))
                     .map_err(|e| self.provider_failure(format!("bad write path: {e}")))?;
-                if PathBuf::from(path) != self.output_path {
-                    return Err(self.provider_failure("write path is outside the admitted fixture"));
-                }
                 let schema = value_bytes(&request.inputs[1])
                     .and_then(|bytes| String::from_utf8(bytes).map_err(|e| e.to_string()))
                     .map_err(|e| self.provider_failure(format!("bad write schema: {e}")))?;
-                if schema != OUTPUT_SCHEMA {
+                let path = PathBuf::from(path);
+                let expected_path = match schema.as_str() {
+                    OUTPUT_SCHEMA | PROVIDER_RESULT_SCHEMA => Some(&self.output_path),
+                    PROVIDER_CHECK_SCHEMA => self.check_path.as_ref(),
+                    _ => None,
+                };
+                let Some(expected_path) = expected_path else {
                     return Err(self.provider_failure("unexpected structured write schema"));
+                };
+                if &path != expected_path {
+                    return Err(self.provider_failure("write path is outside the admitted fixture"));
                 }
                 if self.fail_write {
                     return Ok(self.response(vec![Value::Integer {
@@ -119,7 +128,7 @@ impl Provider for StructuredFileProvider {
                 }
                 let bytes = serde_json::to_vec(&to_wire(&request.inputs[2]))
                     .map_err(|e| self.provider_failure(format!("encode output: {e}")))?;
-                fs::write(&self.output_path, bytes)
+                fs::write(expected_path, bytes)
                     .map_err(|e| self.provider_failure(format!("write output: {e}")))?;
                 Ok(self.response(vec![Value::Integer {
                     value: 1,
@@ -345,6 +354,7 @@ fn execute_call(
     request_path: &PathBuf,
     input_path: &PathBuf,
     output_path: &PathBuf,
+    check_path: Option<&PathBuf>,
     bindings: &[DispatchBinding],
     ssa_module: &SsaModule,
     mode: &str,
@@ -352,7 +362,7 @@ fn execute_call(
     if mode != "none" && mode != "success" && mode != "fail-write" {
         return Err(std::io::Error::other(format!("unsupported provider mode {mode}")).into());
     }
-    if mode != "none" && output_path.exists() {
+    if mode != "none" && (output_path.exists() || check_path.is_some_and(|path| path.exists())) {
         return Err(std::io::Error::other("output path already exists").into());
     }
     let request: ExecutionRequest = serde_json::from_slice(&fs::read(request_path)?)?;
@@ -364,6 +374,7 @@ fn execute_call(
                 capability: binding.dispatch_alias.clone(),
                 input_path: input_path.clone(),
                 output_path: output_path.clone(),
+                check_path: check_path.cloned(),
                 fail_write: mode == "fail-write",
                 allowed_operations: binding.operations.clone(),
                 ssa_module: ssa_module.clone(),
@@ -376,6 +387,7 @@ fn execute_call(
                         capability: binding.dispatch_alias.clone(),
                         input_path: input_path.clone(),
                         output_path: output_path.clone(),
+                        check_path: check_path.cloned(),
                         fail_write: mode == "fail-write",
                         allowed_operations: binding.operations.clone(),
                         ssa_module: ssa_module.clone(),
@@ -428,6 +440,7 @@ fn run_single(
     let input_path = PathBuf::from(take_arg(args, "input path")?);
     let output_path = PathBuf::from(take_arg(args, "output path")?);
     let mode = take_arg(args, "provider mode")?;
+    let check_path = args.next().map(PathBuf::from);
     let bindings =
         capability_dispatch_bindings(admitted, authorized_identity, declared_dispatch_alias)
             .map_err(std::io::Error::other)?;
@@ -440,6 +453,7 @@ fn run_single(
         &request_path,
         &input_path,
         &output_path,
+        check_path.as_ref(),
         &bindings,
         ssa_module,
         &mode,
@@ -483,7 +497,18 @@ fn run_batch(
         let request_path = absolute_path(row, "request_path").map_err(std::io::Error::other)?;
         let input_path = absolute_path(row, "input_path").map_err(std::io::Error::other)?;
         let output_path = absolute_path(row, "output_path").map_err(std::io::Error::other)?;
-        for path in [&request_path, &input_path, &output_path] {
+        let check_path = row
+            .get("check_path")
+            .and_then(serde_json::Value::as_str)
+            .map(PathBuf::from);
+        if check_path.as_ref().is_some_and(|path| !path.is_absolute()) {
+            return Err(std::io::Error::other("batch call check_path must be absolute").into());
+        }
+        let mut call_paths = vec![&request_path, &input_path, &output_path];
+        if let Some(check_path) = &check_path {
+            call_paths.push(check_path);
+        }
+        for path in call_paths {
             let key = path.to_string_lossy().into_owned();
             if !unique_paths.insert(key) {
                 return Err(std::io::Error::other(
@@ -501,6 +526,7 @@ fn run_batch(
             &request_path,
             &input_path,
             &output_path,
+            check_path.as_ref(),
             &bindings,
             ssa_module,
             mode,
