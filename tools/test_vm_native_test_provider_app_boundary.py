@@ -655,6 +655,167 @@ def main() -> None:
                     "pass_discriminant": pass_discriminant,
                 }, indent=2)[:8000])
 
+            batch_dir = call_dir / "two-test-batch"
+            batch_dir.mkdir()
+            failed_test_identity = "mncs:fixture:test-case:provider-fail"
+            failed_declaration_identity = "mncs:fixture:declaration:provider-fail"
+            failed_callable_identity = "mncs:fixture:callable:provider-fail"
+            failed_signature_identity = "mncs:fixture:signature:provider-fail"
+            failed_callable_entry = wire_record("TestCallableEntry", {
+                "artifact_identity": byte_sequence(test_artifact_identity),
+                "test_case_identity": byte_sequence(failed_test_identity),
+                "declaration_identity": byte_sequence(failed_declaration_identity),
+                "callable_identity": byte_sequence(failed_callable_identity),
+                "signature_identity": byte_sequence(failed_signature_identity),
+            }, record_identity(protocol_interface, "TestCallableEntry"))
+            failed_test_result = wire_record("TestResult", {
+                "verdict": wire_finite(protocol_interface, "Verdict", "FAIL"),
+                "verdict_code": unsigned(1),
+                "failure_kind": wire_finite(protocol_interface, "FailureKind", "Assertion"),
+                "failure_code": unsigned(9201),
+                "assertions": unsigned(1),
+                "failures": unsigned(1),
+                "expected": {"integer": {"type": {"bits": 64, "signed": True}, "value": 5}},
+                "actual": {"integer": {"type": {"bits": 64, "signed": True}, "value": 3}},
+                "assertion_code": unsigned(9201),
+            }, record_identity(protocol_interface, "TestResult"))
+            failed_execution = wire_record("ProviderTestExecution", {
+                "test_case_identity": byte_sequence(failed_test_identity),
+                "declaration_identity": byte_sequence(failed_declaration_identity),
+                "callable_identity": byte_sequence(failed_callable_identity),
+                "signature_identity": byte_sequence(failed_signature_identity),
+                "artifact_identity": byte_sequence(test_artifact_identity),
+                "execution_status": wire_finite(
+                    protocol_interface, "CallableExecutionStatus", "RETURNED"
+                ),
+                "native_result": failed_test_result,
+            }, record_identity(protocol_interface, "ProviderTestExecution"))
+            batch_request_value = wire_record("ProviderRequest", {
+                "compiler_callable_bindings": {"sequence": {"values": [
+                    callable_entry, failed_callable_entry,
+                ]}},
+                "selected_test_identities": {"sequence": {"values": [
+                    byte_sequence(test_identity), byte_sequence(failed_test_identity),
+                ]}},
+                "selected_test_executions": {"sequence": {"values": [
+                    execution, failed_execution,
+                ]}},
+                "selection_count": unsigned(2),
+                "interface_identity": byte_values(bytes([
+                    239, 160, 50, 155, 9, 221, 240, 227, 220, 117, 104, 17, 134, 215, 15, 192,
+                    206, 150, 165, 44, 250, 237, 241, 7, 176, 213, 182, 151, 52, 146, 186, 101,
+                ])),
+                "provider_revision_identity": byte_values(bytes([
+                    242, 141, 98, 241, 104, 235, 30, 81, 190, 31, 78, 85, 62, 100, 140, 222,
+                    6, 235, 59, 56, 33, 238, 68, 155, 119, 69, 38, 11, 227, 233, 132, 215,
+                ])),
+            }, provider_request_identity)
+            batch_input = batch_dir / "request.json"
+            batch_output = batch_dir / "result.json"
+            batch_check = batch_dir / "check.json"
+            batch_input.write_text(
+                json.dumps(batch_request_value, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            batch_context = application_context(
+                interface, batch_dir,
+                artifact_paths=[batch_input, batch_output, batch_check],
+            )
+            batch_call_path = batch_dir / "execution.json"
+            batch_call_path.write_text(
+                json.dumps(call_request(batch_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            batch_started = time.monotonic()
+            batch_process = subprocess.run([
+                "/usr/bin/time", "-v", str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "single", str(batch_call_path),
+                str(batch_input), str(batch_output), "success", str(batch_check),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            batch_wall_seconds = time.monotonic() - batch_started
+            if batch_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the positive two-test provider application batch: "
+                    f"rc={batch_process.returncode}, stderr={batch_process.stderr[-5000:]}"
+                )
+            batch_document = json.loads(batch_process.stdout)
+            batch_record = batch_document.get("record", {})
+            batch_effects = batch_record.get("effects", [])
+            batch_returned = [digest_app.support.decode_wire(value)
+                              for value in batch_document.get("returned_wire", [])]
+            batch_published_result = digest_app.support.decode_wire(json.loads(
+                batch_output.read_text(encoding="utf-8")
+            ))
+            batch_published_check = digest_app.support.decode_wire(json.loads(
+                batch_check.read_text(encoding="utf-8")
+            ))
+            fail_discriminant = next(
+                row["discriminant"] for row in verdict_row["variants"]
+                if row.get("name") == "FAIL"
+            )
+            failure_kind_row = next(
+                row for row in protocol_interface["types"]["finite"]
+                if row.get("name") == "FailureKind"
+            )
+            assertion_discriminant = next(
+                row["discriminant"] for row in failure_kind_row["variants"]
+                if row.get("name") == "Assertion"
+            )
+            batch_rss_match = re.search(
+                r"Maximum resident set size \(kbytes\): (\d+)", batch_process.stderr
+            )
+            batch_operations = [row.get("request", {}).get("operation") for row in batch_effects]
+            expected_batch_admitted = sorted([
+                "provider_artifact", "provider_digest",
+                *[
+                    identity
+                    for binding in batch_document.get("capability_binding", {}).get("bindings", [])
+                    for identity in binding.get("call_authority_identities", [])
+                ],
+            ])
+            batch_native_result = batch_published_result.get("native_result", {})
+            if (
+                batch_document.get("outcome", {}).get("kind") != "completed"
+                or batch_record.get("admitted_capabilities") != expected_batch_admitted
+                or batch_operations != [
+                    "structured_read",
+                    *( ["structured_digest"] * 5 ),
+                    "structured_write",
+                    "structured_write",
+                ]
+                or any(row.get("outcome_tag") != "completed" for row in batch_effects)
+                or len(batch_effects) != 8
+                or not batch_output.exists() or not batch_check.exists()
+                or len(batch_returned) != 1 or batch_returned[0].get("exit_code") != 0
+                or batch_published_result.get("selection_count") != 2
+                or batch_published_result.get("selected_test_identities") != [
+                    list(test_identity.encode()), list(failed_test_identity.encode()),
+                ]
+                or batch_native_result.get("verdict", {}).get("$v") != fail_discriminant
+                or batch_native_result.get("verdict_code") != 1
+                or batch_native_result.get("assertions") != 2
+                or batch_native_result.get("failures") != 1
+                or batch_native_result.get("failure_code") != 9201
+                or batch_native_result.get("failure_kind", {}).get("$v") != assertion_discriminant
+                or batch_native_result.get("assertion_code") != 9201
+                or batch_native_result.get("expected") != 5
+                or batch_native_result.get("actual") != 3
+                or batch_published_check.get("verdict", {}).get("$v") != fail_discriminant
+                or batch_published_check.get("test_result_identity")
+                != batch_published_result.get("result_identity")
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": batch_document.get("outcome"),
+                    "returned": batch_returned,
+                    "admitted_capabilities": batch_record.get("admitted_capabilities"),
+                    "expected_admitted_capabilities": expected_batch_admitted,
+                    "operations": batch_operations,
+                    "effects": batch_effects,
+                    "published_result": batch_published_result,
+                    "published_check": batch_published_check,
+                }, indent=2)[:15000])
+
             failed_write_dir = call_dir / "rejected-provider-publication"
             failed_write_dir.mkdir()
             failed_write_input = failed_write_dir / "request.json"
@@ -804,6 +965,27 @@ def main() -> None:
                     ),
                     "dispatch_bindings": positive_document.get("capability_binding", {}).get("bindings"),
                 },
+                "multi_test_batch": {
+                    "selection_count": 2,
+                    "selected_test_identities": [test_identity, failed_test_identity],
+                    "outcome": batch_document.get("outcome"),
+                    "application_exit": batch_returned[0],
+                    "admitted_capabilities": batch_record.get("admitted_capabilities"),
+                    "effects": [
+                        {
+                            "operation": row.get("request", {}).get("operation"),
+                            "capability": row.get("request", {}).get("capability"),
+                            "outcome_tag": row.get("outcome_tag"),
+                        }
+                        for row in batch_effects
+                    ],
+                    "published_result": batch_output.exists(),
+                    "published_check": batch_check.exists(),
+                    "typed_result": batch_published_result,
+                    "typed_check": batch_published_check,
+                    "vm_wall_seconds": round(batch_wall_seconds, 6),
+                    "vm_peak_rss_bytes": int(batch_rss_match.group(1)) * 1024 if batch_rss_match else None,
+                },
                 "rejected_publication": {
                     "application_exit": failed_write_returned[0],
                     "effect_operations": [
@@ -827,7 +1009,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "The local bounded structured-file provider completes this positive Test provider application path; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
+                    "The local bounded structured-file provider completes the single-test and two-test provider application paths; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,
@@ -847,6 +1029,7 @@ def main() -> None:
                 "stage0_exact_return_match": True,
                 "missing_capability_outcome": evidence["missing_capability"]["outcome"].get("kind"),
                 "two_capability_runtime_outcome": evidence["two_capability_admission_attempt"]["outcome"].get("kind"),
+                "multi_test_batch_runtime_outcome": evidence["multi_test_batch"]["outcome"].get("kind"),
             }, indent=2))
     finally:
         artifact_path.unlink(missing_ok=True)
