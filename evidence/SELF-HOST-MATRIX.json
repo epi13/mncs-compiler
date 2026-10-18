@@ -311,7 +311,7 @@
         "ssa_verified_function_count": 20,
         "ssa_value_count": 693,
         "ssa_instruction_count": 198,
-        "current_source_sha256": "f9f5d1558579716014f73a9626430feb22256da2ceadf591637c37b52b8feb12",
+        "current_source_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_ascii_global_four_byte_frontier": {
@@ -646,6 +646,30 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "evidence_scope": "The existing global byte-offset mapping regression remains covered. The new line_col_span_global callable maps ordered endpoints in one bounded prefix walk for canonical positive-stride pages, with fast paths for byte-zero and identical endpoints. Reference interpreter, Cranelift, and a fresh canonical VM artifact agree with the byte-based SourceSpan convention across 23 page-layout inputs and 25 span requests covering newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Within the tested span pairs, canonical VM transition counts fell 7.91% versus two separate lookups at the same endpoints. This does not prove full Source module behavior, Language verified-fact reuse, Unicode-scalar columns, or compiler succession."
+        },
+        "selected_line_col_batch_global_frontier": {
+          "status": "passed_with_bounded_frontier",
+          "kind": "mncs.compiler.source-line-col-batch-canonical-vm-frontier",
+          "target_module": "mncs.compiler.source.v1",
+          "target_function": "line_cols_global",
+          "tested_source_revision": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+          "candidate_source_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+          "evidence_artifact": "evidence/self-host-source-line-col-batch-20261017.json",
+          "evidence_sha256": "544fac833b57f164728b0427e7c7eb3ce412dbff7608850944aac8e835edcf81",
+          "test_harness": "tools/test_vm_source_line_col_frontier.py",
+          "test_harness_sha256": "66c93c5f03e2bb893fc6588ba94e2cd0a23ae922ecbe99af6856e5587e9441e2",
+          "input_count": 24,
+          "request_count_per_executor": 90,
+          "span_request_count_per_executor": 26,
+          "batch_request_count_per_executor": 25,
+          "canonical_vm_artifact_identity": "sha256:5bc54086838401065458b0b85295f970777d4998d44a6d281a1f90055e86b40f",
+          "canonical_vm_batch_steps_saved": 5495544,
+          "canonical_vm_batch_reduction_fraction": 0.75396,
+          "canonical_vm_maximum_batch_steps_per_call": 1712779,
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "The selected Source line_cols_global callable maps up to 64 nondecreasing byte offsets in one forward scan, accepts repeated/clamped offsets, rejects a decreasing clamped sequence, and retains the scalar fallback for zero-stride pages. Together with the scalar and span regression callables, reference interpreter, Cranelift, and one fresh canonical VM artifact agree across 24 input layouts. The 24 valid canonical-VM batches save 5,495,544 transitions (75.396%) against independent scalar lookups in this measured workload. This is a bounded Source frontier, not full Source module proof, Language verified-fact reuse, Unicode-scalar column semantics, or compiler succession."
         }
       }
     },
@@ -1730,7 +1754,7 @@
     "classification": "project input bound; not a module parse or semantic failure",
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
-  "next_frontier": "Execute mncs.test.digest::digest_app through the authorized Forge/Environment/Store application-execution route with bounded capabilities and negative cases. Repair the Environment invoke timeout through its authorized owner context. Implement Language-owned verified-fact reuse when its authenticated writable scope is available.",
+  "next_frontier": "Continue the authorized Forge digest_app route and retained native Test workflow; implement Language-owned verified-fact reuse when its authenticated Language writable scope is available.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -8001,69 +8025,10 @@
       "evidence_scope": "The existing global byte-offset mapping regression remains covered. The new line_col_span_global callable maps ordered endpoints in one bounded prefix walk for canonical positive-stride pages, with fast paths for byte-zero and identical endpoints. Reference interpreter, Cranelift, and a fresh canonical VM artifact agree with the byte-based SourceSpan convention across 23 page-layout inputs and 25 span requests covering newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Within the tested span pairs, canonical VM transition counts fell 7.91% versus two separate lookups at the same endpoints. This does not prove full Source module behavior, Language verified-fact reuse, Unicode-scalar columns, or compiler succession."
     }
   },
-  "evidence_updated_at": "2026-10-17T23:30:55Z",
+  "evidence_updated_at": "2026-10-18T00:12:40Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
-    "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
-    "status": "passed_with_bounded_frontier",
-    "observed_at": "2026-10-17T23:11:06Z",
-    "compiler_branch": "campaign/native-application-readiness-20261013",
-    "compiler_head": "3685d2086ac62e2bc106296832b709e744402e5b",
-    "tested_source_revision": "3685d2086ac62e2bc106296832b709e744402e5b",
-    "commit_containing_measured_source": "3685d2086ac62e2bc106296832b709e744402e5b",
-    "test_harness": "tools/test_vm_source_line_col_frontier.py",
-    "test_harness_sha256": "dc5e312ded8174603b1a76ae2a1ed809fb3e46984edfd9e4a4bd7f68ce1cb26a",
-    "evidence_artifact": "evidence/self-host-source-line-col-global-20261017.json",
-    "evidence_sha256": "a9b95469020444be0be743768d8ee808d9929157b6f817e759933147b74d4068",
-    "target_module": "mncs.compiler.source.v1",
-    "target_function": "line_col_global",
-    "source_sha256": "f9f5d1558579716014f73a9626430feb22256da2ceadf591637c37b52b8feb12",
-    "page_strides": [
-      1,
-      7,
-      64,
-      1024
-    ],
-    "input_count": 23,
-    "request_count_per_executor": 85,
-    "semantic_digest_sha256": "df63621408a6930a1486a77b0553c2c40216d974afabd00a84fd12a3c52d63f6",
-    "canonical_vm_artifact_identity": "sha256:731f582512a228223843844875e1b9a00ae507ba32fea269f260b605e3a910d8",
-    "canonical_vm_wall_seconds": 9.320808,
-    "canonical_vm_peak_rss_kib": 103244,
-    "maximum_steps_per_call": 2034155,
-    "performance_comparison": {
-      "reference_interpreter_total_steps_change_percent": -19.64,
-      "canonical_vm_total_steps_change_percent": -19.57,
-      "canonical_vm_wall_change_percent": -18.09,
-      "maximum_steps_per_call_change_percent": 0.06,
-      "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
-      "canonical_vm_candidate_wall_seconds_samples": [
-        9.22781,
-        9.320808
-      ],
-      "reference_and_cranelift_child_cpu_seconds_candidate_samples": [
-        33.435382,
-        33.03464
-      ]
-    },
-    "environment_verification": {
-      "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
-      "binding_id": "cap_97d3c4286c601232",
-      "contract_revision": "56127bce0b54b0a7",
-      "inventory_revision": 44,
-      "status": "ok",
-      "returncode": 0,
-      "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
-      "session_id": "ses_164edc158d9b1637",
-      "checkpoint_before_verification": "chk_b043378d7ed49224"
-    },
-    "language_verified_facts_reused": 0,
-    "stage1_claimed": false,
-    "stage2_claimed": false,
-    "evidence_scope": "The selected Source line_col_global implementation scans only the page and byte prefix through the clamped offset, while preserving the existing zero-stride fallback. Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based SourceSpan convention over newline/page edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Aggregate interpreter and VM step counts fell about 19.6% on the same 85 requests; the maximum single call remains the end-of-source scan. This is a selected source-location frontier, not full Source module proof, Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
-  },
-  "current_campaign_frontier_update": {
     "kind": "mncs.compiler.source-line-col-global-canonical-vm-frontier",
     "status": "passed_with_bounded_frontier",
     "observed_at": "2026-10-17T23:30:55Z",
@@ -8121,6 +8086,63 @@
     "stage2_claimed": false,
     "evidence_scope": "The existing global byte-offset mapping regression remains covered. The new line_col_span_global callable maps ordered endpoints in one bounded prefix walk for canonical positive-stride pages, with fast paths for byte-zero and identical endpoints. Reference interpreter, Cranelift, and a fresh canonical VM artifact agree with the byte-based SourceSpan convention across 23 page-layout inputs and 25 span requests covering newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Within the tested span pairs, canonical VM transition counts fell 7.91% versus two separate lookups at the same endpoints. This does not prove full Source module behavior, Language verified-fact reuse, Unicode-scalar columns, or compiler succession.",
     "next_frontier": "Continue the Forge digest_app route and retained native Test workflow; implement Language-owned verified-fact reuse when the authorized Language scope is available."
+  },
+  "current_campaign_frontier_update": {
+    "kind": "mncs.compiler.source-line-col-batch-canonical-vm-frontier",
+    "status": "passed_with_bounded_frontier",
+    "observed_at": "2026-10-18T00:11:11Z",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+    "tested_source_revision": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+    "commit_containing_measured_source": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+    "test_harness": "tools/test_vm_source_line_col_frontier.py",
+    "test_harness_sha256": "66c93c5f03e2bb893fc6588ba94e2cd0a23ae922ecbe99af6856e5587e9441e2",
+    "evidence_artifact": "evidence/self-host-source-line-col-batch-20261017.json",
+    "evidence_sha256": "544fac833b57f164728b0427e7c7eb3ce412dbff7608850944aac8e835edcf81",
+    "target_module": "mncs.compiler.source.v1",
+    "target_function": "line_cols_global",
+    "companion_regression_functions": [
+      "line_col_global",
+      "line_col_span_global"
+    ],
+    "source_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+    "page_strides": [
+      0,
+      1,
+      7,
+      64,
+      1024
+    ],
+    "input_count": 24,
+    "request_count_per_executor": 90,
+    "span_request_count_per_executor": 26,
+    "batch_request_count_per_executor": 25,
+    "valid_batch_request_count_per_executor": 24,
+    "rejected_out_of_order_batch_count_per_executor": 1,
+    "batch_semantic_digest_sha256": "81c5282dc279146ed61d01e05dd45b7f0c717c7d48b2e766f5b65798cd9a5037",
+    "canonical_vm_artifact_identity": "sha256:5bc54086838401065458b0b85295f970777d4998d44a6d281a1f90055e86b40f",
+    "canonical_vm_wall_seconds": 25.357293,
+    "canonical_vm_peak_rss_kib": 135320,
+    "canonical_vm_maximum_point_steps_per_call": 2034155,
+    "canonical_vm_maximum_batch_steps_per_call": 1712779,
+    "canonical_vm_batch_steps_saved": 5495544,
+    "canonical_vm_batch_reduction_fraction": 0.75396,
+    "environment_verification": {
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+      "binding_id": "cap_97d3c4286c601232",
+      "contract_revision": "56127bce0b54b0a7",
+      "inventory_revision": 44,
+      "status": "ok",
+      "returncode": 0,
+      "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+      "session_id": "ses_164edc158d9b1637",
+      "checkpoint_before_verification": "chk_c4f8d79f61b1303c"
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "next_frontier": "Continue the authorized Forge digest_app route and retained native Test workflow; implement Language-owned verified-fact reuse when its authenticated Language writable scope is available.",
+    "evidence_scope": "The selected Source line_cols_global callable maps up to 64 nondecreasing byte offsets in one forward scan, accepts repeated/clamped offsets, rejects a decreasing clamped sequence, and retains the scalar fallback for zero-stride pages. Together with the scalar and span regression callables, reference interpreter, Cranelift, and one fresh canonical VM artifact agree across 24 input layouts. The 24 valid canonical-VM batches save 5,495,544 transitions (75.396%) against independent scalar lookups in this measured workload. This is a bounded Source frontier, not full Source module proof, Language verified-fact reuse, Unicode-scalar column semantics, or compiler succession."
   },
   "campaign_frontier_history": [
     {
@@ -11039,6 +11061,63 @@
       "stage2_claimed": false,
       "evidence_scope": "The existing global byte-offset mapping regression remains covered. The new line_col_span_global callable maps ordered endpoints in one bounded prefix walk for canonical positive-stride pages, with fast paths for byte-zero and identical endpoints. Reference interpreter, Cranelift, and a fresh canonical VM artifact agree with the byte-based SourceSpan convention across 23 page-layout inputs and 25 span requests covering newline edges, UTF-8 byte columns, clamped offsets, empty input, and a 64 KiB source. Within the tested span pairs, canonical VM transition counts fell 7.91% versus two separate lookups at the same endpoints. This does not prove full Source module behavior, Language verified-fact reuse, Unicode-scalar columns, or compiler succession.",
       "next_frontier": "Continue the Forge digest_app route and retained native Test workflow; implement Language-owned verified-fact reuse when the authorized Language scope is available."
+    },
+    {
+      "kind": "mncs.compiler.source-line-col-batch-canonical-vm-frontier",
+      "status": "passed_with_bounded_frontier",
+      "observed_at": "2026-10-18T00:11:11Z",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "compiler_head": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+      "tested_source_revision": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+      "commit_containing_measured_source": "259cbbc832e1cf9392cc4d83553802855273e2b8",
+      "test_harness": "tools/test_vm_source_line_col_frontier.py",
+      "test_harness_sha256": "66c93c5f03e2bb893fc6588ba94e2cd0a23ae922ecbe99af6856e5587e9441e2",
+      "evidence_artifact": "evidence/self-host-source-line-col-batch-20261017.json",
+      "evidence_sha256": "544fac833b57f164728b0427e7c7eb3ce412dbff7608850944aac8e835edcf81",
+      "target_module": "mncs.compiler.source.v1",
+      "target_function": "line_cols_global",
+      "companion_regression_functions": [
+        "line_col_global",
+        "line_col_span_global"
+      ],
+      "source_sha256": "e7792f0dc93f32b15d745cacebf34db40238072d2350a2b66e1bd16eff98cd86",
+      "page_strides": [
+        0,
+        1,
+        7,
+        64,
+        1024
+      ],
+      "input_count": 24,
+      "request_count_per_executor": 90,
+      "span_request_count_per_executor": 26,
+      "batch_request_count_per_executor": 25,
+      "valid_batch_request_count_per_executor": 24,
+      "rejected_out_of_order_batch_count_per_executor": 1,
+      "batch_semantic_digest_sha256": "81c5282dc279146ed61d01e05dd45b7f0c717c7d48b2e766f5b65798cd9a5037",
+      "canonical_vm_artifact_identity": "sha256:5bc54086838401065458b0b85295f970777d4998d44a6d281a1f90055e86b40f",
+      "canonical_vm_wall_seconds": 25.357293,
+      "canonical_vm_peak_rss_kib": 135320,
+      "canonical_vm_maximum_point_steps_per_call": 2034155,
+      "canonical_vm_maximum_batch_steps_per_call": 1712779,
+      "canonical_vm_batch_steps_saved": 5495544,
+      "canonical_vm_batch_reduction_fraction": 0.75396,
+      "environment_verification": {
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.source-line-col-global-canonical-vm-frontier",
+        "binding_id": "cap_97d3c4286c601232",
+        "contract_revision": "56127bce0b54b0a7",
+        "inventory_revision": 44,
+        "status": "ok",
+        "returncode": 0,
+        "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+        "session_id": "ses_164edc158d9b1637",
+        "checkpoint_before_verification": "chk_c4f8d79f61b1303c"
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "next_frontier": "Continue the authorized Forge digest_app route and retained native Test workflow; implement Language-owned verified-fact reuse when its authenticated Language writable scope is available.",
+      "evidence_scope": "The selected Source line_cols_global callable maps up to 64 nondecreasing byte offsets in one forward scan, accepts repeated/clamped offsets, rejects a decreasing clamped sequence, and retains the scalar fallback for zero-stride pages. Together with the scalar and span regression callables, reference interpreter, Cranelift, and one fresh canonical VM artifact agree across 24 input layouts. The 24 valid canonical-VM batches save 5,495,544 transitions (75.396%) against independent scalar lookups in this measured workload. This is a bounded Source frontier, not full Source module proof, Language verified-fact reuse, Unicode-scalar column semantics, or compiler succession."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {

@@ -515,6 +515,25 @@ The verifier descriptor allows 900 seconds, while the effective invocation
 limit observed was 120 seconds; the bounded 85-request suite passed through the
 same authenticated Environment verifier.
 
+## Source location batch frontier (2026-10-17)
+
+The [batch line/column frontier](self-host-source-line-col-batch-20261017.json)
+adds `source.line_cols_global`, which maps up to 64 nondecreasing byte offsets
+in one forward scan. Repeated offsets and offsets that clamp to the same source
+end are accepted; a decreasing clamped sequence is rejected. A zero-stride page
+uses the existing scalar lookup path. Reference interpreter, Cranelift, and a
+fresh canonical VM artifact agree across 24 input layouts, including empty and
+64 KiB sources, newline page edges, UTF-8 byte columns, and the zero-stride case.
+The harness also checks 90 scalar requests, 26 spans, and 25 batches per
+executor, including one rejected out-of-order batch.
+
+For the 24 valid canonical-VM batches, measured transition counts fell by
+5,495,544 (75.396%) compared with independent scalar lookups. The largest batch
+used 1,712,779 transitions. The full canonical-VM run took 25.357 seconds at
+135,320 KiB peak RSS; these are workload-specific single-run measurements.
+Language verified facts remain unreused, and this selected Source frontier does
+not establish full Source module proof or compiler succession.
+
 ## Current real-Flow resource profile (2026-10-09)
 
 The [Flow resource profile](campaign-20261009-flow-resource-profile.json)
