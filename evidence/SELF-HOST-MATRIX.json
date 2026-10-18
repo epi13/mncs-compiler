@@ -1799,7 +1799,7 @@
         "page_bound": 1024,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "92ae7e8ec79b090ed74c99f7e9986a4a40429fe1ece7c12db72b652085d8b768",
+        "current_source_sha256": "645b98d172804afb456a2d75d4f15d0b82aa2c8f4fde1b18d40b9549ece2181f",
         "selected_import_resolution_cache_frontier": {
           "status": "passed_with_bounded_frontier",
           "target_module": "mncs.compiler.project.v1",
@@ -1829,6 +1829,31 @@
           "evidence_artifact": "evidence/project-import-resolution-cache-edge-cases-20261017.json",
           "evidence_sha256": "8c3d844f96ee1451b40529ef10036164c524c87d2bee7f1b9060bc5daab2264f",
           "scope": "Selected Cranelift callable only; no Language verified facts, canonical VM, full Project module proof, or succession claim."
+        },
+        "current_source_bytes": 151349,
+        "selected_diagnostic_location_canonical_vm_frontier": {
+          "status": "passed_with_selected_frontier",
+          "target_module": "mncs.compiler.project.v1",
+          "target_function": "locate_project_diagnostics_global",
+          "type_arguments": [
+            2,
+            1024
+          ],
+          "evidence_artifact": "evidence/self-host-project-diagnostic-locations-canonical-vm-20261018.json",
+          "evidence_sha256": "cefdb6a02474bc77068f1b558d24bf8699d602c20b1a3b504e7b5df290b30147",
+          "source_sha256": "645b98d172804afb456a2d75d4f15d0b82aa2c8f4fde1b18d40b9549ece2181f",
+          "artifact_identity": "sha256:51f714c6fe8b14837c72b37d5d36f33e08de455a7e473d498b4d99e463b9d11b",
+          "typed_result_sha256": "sha256:c569915553cb736c90b68e10650c976a350ef254f7af35c8cea55fc67eaabb24",
+          "case_count": 4,
+          "multi_page_source_bytes": 1198,
+          "multi_page_line": 1103,
+          "vm_wall_seconds": 9.702689,
+          "vm_peak_rss_kib": 360968,
+          "probe_peak_rss_kib": 2018352,
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "Selected function execution only; modules.project.stages.canonical_vm remains not-proven for the full Project module."
         }
       }
     }
@@ -8196,7 +8221,7 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-18T00:34:14Z",
+  "evidence_updated_at": "2026-10-18T01:22:39Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -11989,5 +12014,39 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "evidence_scope": "All seven current parser functions have executable selected specializations and are called directly in a fresh canonical VM batch. header and header_global agree with Stage-0 project checks where the bounded global fuel policy permits completion, Cranelift, and canonical VM across frontend header fixtures, long dotted module names, all tested page strides, non-ASCII input, and the fuel boundary. Direct header_with_locations_global maps the two byte offsets of each parser diagnostic through Source.line_col_span_global and agrees with a byte-based location oracle across reference interpreter, Cranelift, and canonical VM, including a zero-stride page. Direct finish/step helper calls use typed Header states and agree across the reference interpreter, Cranelift, and canonical VM. This covers every parser function at the listed specializations and selected states; it does not prove all type arguments, full compiler succession, Stage-1, or Stage-2."
+  },
+  "current_campaign_project_diagnostic_location_frontier_20261018": {
+    "kind": "mncs.compiler.project-diagnostic-location-canonical-vm-frontier",
+    "status": "passed_with_selected_frontier",
+    "observed_at": "2026-10-18T01:22:39Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head": "d2f9b5fa1fc0f23a82129fffbf7090e32ebd14c2",
+    "implementation_commit": "d2f9b5fa1fc0f23a82129fffbf7090e32ebd14c2",
+    "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "locate_project_diagnostics_global",
+    "type_arguments": [
+      2,
+      1024
+    ],
+    "source_sha256": "645b98d172804afb456a2d75d4f15d0b82aa2c8f4fde1b18d40b9549ece2181f",
+    "test_harness": "tools/test_vm_project_diagnostic_locations_frontier.py",
+    "test_harness_sha256": "c5de884e4f83da211e4adfe7a83ba9ef2ef2289a66827df6825c3c7fdd464dd8",
+    "evidence_artifact": "evidence/self-host-project-diagnostic-locations-canonical-vm-20261018.json",
+    "evidence_sha256": "cefdb6a02474bc77068f1b558d24bf8699d602c20b1a3b504e7b5df290b30147",
+    "artifact_identity": "sha256:51f714c6fe8b14837c72b37d5d36f33e08de455a7e473d498b4d99e463b9d11b",
+    "typed_result_sha256": "sha256:c569915553cb736c90b68e10650c976a350ef254f7af35c8cea55fc67eaabb24",
+    "case_count": 4,
+    "multi_page_line": 1103,
+    "vm_wall_seconds": 9.702689,
+    "vm_peak_rss_kib": 360968,
+    "probe_peak_rss_kib": 2018352,
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "execution_route": "Freshly emitted sealed mncs.vm.artifact/1 executed through the local canonical VM runner and compared with the Stage-0 reference interpreter.",
+    "canonical_store_publication": false,
+    "evidence_scope": "One selected Project diagnostic-location generic function at type arguments [2,1024], with four typed input cases. This is not full Project module proof, Language verified-fact reuse, Forge application execution, or Stage-1/Stage-2 succession."
   }
 }
