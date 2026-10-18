@@ -1,0 +1,101 @@
+{
+  "schema_version": "mncs.compiler.project-import-cache-early-exit-warm-measurement/1",
+  "identity": "ev_compiler_project_import_cache_early_exit_warm_20261018",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "observed_at": "2026-10-18T03:26:07Z",
+  "compiler_worktree": {
+    "repository": "mncs-compiler",
+    "path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "tested_head_before_run": "ae4c387d56a56367788921cd805a7ca9011ccb60",
+    "source_file": "src/compiler/project.mncs",
+    "source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "909850f523528eefb87f094ccf8c74075516977d9442546b6571b2b385e2a67a",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "verification": {
+    "command": "MNCS_PROBE_BIN=tools/stage0-probe/target/release/mncs-compiler-stage0-probe MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_GENERIC_SEEDS='[]' MNCS_PROBE_TELEMETRY=1 MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "schema_version": "mncs.compiler.project-import-link-capacity/11",
+    "status": "verified",
+    "backend": "cranelift",
+    "stage0_oracle_valid": true,
+    "native_project_valid": true,
+    "target_ssa_valid": true,
+    "canonical_vm_tested": false,
+    "probe_request_count": 25,
+    "result_sha256": "7c6924bcbfd3c83394ca5da9a5c7eac9c21009d7b5bd5b1bba4d24528091301",
+    "warm_cache_observation": {
+      "backend_artifact_cache_hits": 1,
+      "backend_compile_count": 0,
+      "frontend_program_cache_hits": 0,
+      "cache_miss_count": 0,
+      "artifact_payload_reused_bytes": 424861537
+    },
+    "module_limit": {
+      "imports": 1024,
+      "candidate_header_comparisons": 1,
+      "successful_lookup_cache_hits": 1023,
+      "probe_send_wall_seconds": 0.178598,
+      "sample_count": 1,
+      "all_import_locations_preserved": true
+    },
+    "project_limit": {
+      "imports": 4096,
+      "candidate_header_comparisons": 4,
+      "successful_lookup_cache_hits": 4092,
+      "probe_send_wall_seconds": 0.549644,
+      "sample_count": 1,
+      "limit_accepted": true,
+      "overflow_rejected_at_4096": true,
+      "overflow_diagnostic_count": 1
+    },
+    "other_capacity_and_edge_cases": {
+      "dense_dag_import_links": 15,
+      "dense_dag_schemas_verified": true,
+      "interleaved_target_cache_hits": 4,
+      "interleaved_target_header_comparisons": 3,
+      "missing_import_diagnostics_and_spans_preserved": true,
+      "repeated_missing_negative_cache_hits": 2,
+      "changed_snapshot_stale_success_reused": false,
+      "long_and_oversized_names_uncached": true,
+      "per_module_overflow_1025_rejected_at_1024": true,
+      "connected_chain_sources": 64,
+      "connected_chain_import_links": 63,
+      "connected_chain_target_flow_and_ssa_valid": true
+    },
+    "algorithmic_work_model": {
+      "basis": "Derived from the previous fixed 64-iteration loop and measured lookup hit counts; helper-call totals were not directly instrumented.",
+      "module_limit_previous_step_calls_estimate": 65536,
+      "module_limit_early_exit_step_calls_estimate": 1023,
+      "project_limit_previous_step_calls_estimate": 262144,
+      "project_limit_early_exit_step_calls_estimate": 4092,
+      "measured_speedup": false,
+      "vm_instruction_reduction_measured": false
+    }
+  },
+  "resource_measurement": {
+    "test_process_elapsed_seconds": 37.53,
+    "test_process_elapsed_note": "Approximate value from the final probe telemetry event; request timings below use the harness monotonic clock.",
+    "cache_read_decode_seconds": 10.906348,
+    "retained_session_admission_seconds": 23.17218,
+    "backend_artifact_payload_bytes": 424861537,
+    "test_process_peak_rss_bytes": 3023732736,
+    "test_process_kernel_rss_high_water_bytes": 3449348096,
+    "sample_count": 3,
+    "cpu_time_delta_ns": null,
+    "cpu_measurement_note": "Telemetry returned 0 for the CPU delta; it is recorded as unavailable rather than interpreted as zero CPU usage.",
+    "cgroup_memory_bytes": null,
+    "cgroup_memory_note": "The cgroup memory counter was unavailable; no zero usage is inferred."
+  },
+  "interpretation": {
+    "measured_current_run_request_durations": true,
+    "measured_before_after_speedup": false,
+    "language_verified_facts_reused": 0,
+    "canonical_vm_execution_demonstrated": false,
+    "full_project_module_proven": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}

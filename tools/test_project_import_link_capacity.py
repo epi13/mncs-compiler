@@ -168,7 +168,11 @@ def run():
         module_limit_request = _target_request(
             project.request_value(identities, module_limit_sources), 1,
         )
+        module_limit_request_started = time.monotonic()
         module_limit_response = probe.send(module_limit_request)
+        module_limit_request_seconds = round(
+            time.monotonic() - module_limit_request_started, 6,
+        )
         assert module_limit_response.get("status") == "returned", module_limit_response
         module_limit_native = project.decode(module_limit_response["returned"][0])
         module_limit_imports = project.flist(module_limit_native["imports"])
@@ -570,7 +574,11 @@ def run():
             project.request_value(identities, at_project_limit_sources),
             len(at_project_limit_sources) - 1,
         )
+        project_limit_request_started = time.monotonic()
         at_project_limit_response = probe.send(at_project_limit_request)
+        project_limit_request_seconds = round(
+            time.monotonic() - project_limit_request_started, 6,
+        )
         assert at_project_limit_response.get("status") == "returned", at_project_limit_response
         at_project_limit_native = project.decode(
             at_project_limit_response["returned"][0]
@@ -694,7 +702,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/10",
+            "schema_version": "mncs.compiler.project-import-link-capacity/11",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -709,6 +717,7 @@ def run():
             "imports_at_module_limit_resolved": module_limit_native["import_count"] == 1024,
             "module_limit_candidate_name_comparisons": module_limit_native["import_module_name_comparisons"],
             "module_limit_resolution_cache_hits": module_limit_native["import_resolution_cache_hits"],
+            "module_limit_request_seconds": module_limit_request_seconds,
             "module_limit_import_locations_preserved": len(observed_links) == 1024,
             "interleaved_distinct_target_header_comparisons": interleaved_native["import_module_name_comparisons"],
             "interleaved_distinct_target_cache_hits": interleaved_native["import_resolution_cache_hits"],
@@ -754,6 +763,7 @@ def run():
             "project_limit_project_valid": at_project_limit_native["valid"],
             "project_limit_candidate_name_comparisons": at_project_limit_native["import_module_name_comparisons"],
             "project_limit_resolution_cache_hits": at_project_limit_native["import_resolution_cache_hits"],
+            "project_limit_request_seconds": project_limit_request_seconds,
             "project_overflow_source_count": len(over_project_sources),
             "project_overflow_links_retained": len(over_project_imports),
             "project_overflow_rejected": not over_project_native["valid"],

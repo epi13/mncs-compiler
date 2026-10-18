@@ -1902,9 +1902,9 @@
           "target_function": "compile_project_target",
           "implementation_commit": "99c2b4b17fd7c5c4653b18f0799ddfa60d931e4c",
           "source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
-          "test_harness_sha256": "ce1a32acb915a5495d1e5266f7c659cf5d80a0f4fea341948c1a541a30323a34",
-          "evidence_artifact": "evidence/project-import-cache-early-exit-20261018.json",
-          "evidence_sha256": "1abe29a0d00313a37e6e65323bf299574314d2abe03e342d6217d4c7b1fb658f",
+          "test_harness_sha256": "909850f523528eefb87f094ccf8c74075516977d9442546b6571b2b385e2a67a",
+          "evidence_artifact": "evidence/project-import-cache-early-exit-warm-measurement-20261018.json",
+          "evidence_sha256": "c374257c0f9cb17f2b65ee6d153e3597b134f1d345219c5e6454cdc960669d24",
           "backend": "cranelift",
           "stage0_oracle_valid": true,
           "canonical_vm_tested": false,
@@ -1922,7 +1922,13 @@
           "language_verified_facts_reused": 0,
           "stage1_claimed": false,
           "stage2_claimed": false,
-          "scope": "Selected Cranelift Project import resolver under the Stage-0 oracle. The 64-step work reduction is a derived helper-call model, not measured wall time or VM instructions; this does not prove full Project module semantics or canonical VM behavior."
+          "scope": "Selected Cranelift Project import resolver under the Stage-0 oracle. The 64-step work reduction is a derived helper-call model, not measured wall time or VM instructions; this does not prove full Project module semantics or canonical VM behavior.",
+          "current_run_wall_seconds": {
+            "module_limit_1024": 0.178598,
+            "project_limit_4096": 0.549644
+          },
+          "current_run_timing_samples": 1,
+          "before_after_speedup_measured": false
         }
       }
     }
@@ -12211,5 +12217,32 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "evidence_scope": "Selected Project import resolver capacity and edge cases. Derived early-exit helper-call model only; no measured wall-time comparison, Language fact reuse, full Project module proof, or canonical VM test."
+  },
+  "current_campaign_project_import_cache_early_exit_warm_measurement_20261018": {
+    "kind": "mncs.compiler.project-import-cache-early-exit-warm-measurement",
+    "status": "passed_with_bounded_frontier",
+    "observed_at": "2026-10-18T03:26:07Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "tested_head_before_run": "ae4c387d56a56367788921cd805a7ca9011ccb60",
+    "source_sha256": "1cd14d5e61b64c1d8d3be268e0113134363145a25f04126d68ba4e14fcc4bef2",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "909850f523528eefb87f094ccf8c74075516977d9442546b6571b2b385e2a67a",
+    "evidence_artifact": "evidence/project-import-cache-early-exit-warm-measurement-20261018.json",
+    "evidence_sha256": "c374257c0f9cb17f2b65ee6d153e3597b134f1d345219c5e6454cdc960669d24",
+    "backend": "cranelift",
+    "stage0_oracle_valid": true,
+    "backend_artifact_cache_hits": 1,
+    "backend_compile_count": 0,
+    "test_process_elapsed_seconds": 37.53,
+    "peak_rss_bytes": 3023732736,
+    "module_limit_request_seconds": 0.178598,
+    "project_limit_request_seconds": 0.549644,
+    "language_verified_facts_reused": 0,
+    "canonical_vm_tested": false,
+    "measured_speedup_claimed": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "Single warm Cranelift/Stage-0 test run. The request durations are current-run measurements; there is no matching before measurement, no canonical VM run, and no Language verification reuse."
   }
 }
