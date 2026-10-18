@@ -30,6 +30,33 @@ struct ApplicationCacheEntry<'a> {
     response: &'a serde_json::value::RawValue,
 }
 
+#[derive(serde::Serialize)]
+struct ApplicationCachePublishEntry<'a> {
+    schema_version: &'static str,
+    key: &'a str,
+    response_sha256: String,
+    response: &'a Value,
+}
+
+struct Sha256Writer(Sha256);
+
+impl Write for Sha256Writer {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.update(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+fn sha256_serialized<T: serde::Serialize>(value: &T) -> Result<String, serde_json::Error> {
+    let mut writer = Sha256Writer(Sha256::new());
+    serde_json::to_writer(&mut writer, value)?;
+    Ok(format!("sha256:{:x}", writer.0.finalize()))
+}
+
 const CONTRACT_V1: &str = "mncs.compiler.application-build/4";
 const CONTRACT_V2: &str = "mncs.compiler.application-build/5";
 const CONTRACT_V3: &str = "mncs.compiler.application-build/6";
@@ -1132,14 +1159,13 @@ fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Res
         .parent()
         .ok_or_else(|| "cache path has no parent".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| format!("create cache directory: {error}"))?;
-    let response_bytes =
-        serde_json::to_vec(response).map_err(|error| format!("encode cached response: {error}"))?;
-    let entry = json!({
-        "schema_version": "mncs.compiler.application-build-cache-entry/3",
-        "key": key,
-        "response_sha256": format!("sha256:{}", mncs_model::sha256_hex(&response_bytes)),
-        "response": response,
-    });
+    let entry = ApplicationCachePublishEntry {
+        schema_version: "mncs.compiler.application-build-cache-entry/3",
+        key,
+        response_sha256: sha256_serialized(response)
+            .map_err(|error| format!("hash cached response: {error}"))?,
+        response,
+    };
     let encoded =
         serde_json::to_vec(&entry).map_err(|error| format!("encode cache entry: {error}"))?;
     let nonce = CACHE_NONCE.fetch_add(1, Ordering::Relaxed);
@@ -1360,8 +1386,8 @@ mod tests {
         annotate_artifact_emission_failure, application_cache_index_key,
         application_cache_index_path_at, application_cache_key, application_cache_path_at,
         application_cache_root_from, application_executable_closure_identity,
-        application_semantic_identity, callable_interface, envelope, ApplicationSources,
-        CONTRACT_V2,
+        application_semantic_identity, callable_interface, envelope, sha256_serialized,
+        ApplicationSources, CONTRACT_V2,
     };
     use mncs_compiler::ReferenceCompiler;
     use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
@@ -1375,6 +1401,20 @@ mod tests {
     use std::sync::{Arc, Barrier};
     use std::thread;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn streamed_application_cache_digest_matches_buffered_json_hash() {
+        let response = json!({
+            "status": "verified",
+            "nested": {"z": [1, 2, 3], "a": "canonical map order"},
+        });
+        let bytes = serde_json::to_vec(&response).expect("response serializes");
+        let expected = format!("sha256:{}", mncs_model::sha256_hex(&bytes));
+        assert_eq!(
+            sha256_serialized(&response).expect("response hashes"),
+            expected
+        );
+    }
 
     #[test]
     fn application_cache_can_be_isolated_from_program_cache() {
