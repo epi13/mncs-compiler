@@ -35,7 +35,10 @@ VM_BIN = Path(os.environ.get(
 CACHE_DIR = ROOT / ".build/native-app-readiness/digest-batch-cache" / (
     f"run-{os.getpid()}-{time.time_ns()}"
 )
-EVIDENCE_PATH = ROOT / "evidence/native-app-readiness-native-test-workflow-20261017.json"
+EVIDENCE_PATH = ROOT / os.environ.get(
+    "MNCS_NATIVE_TEST_WORKFLOW_EVIDENCE_PATH",
+    f"evidence/native-app-readiness-native-test-workflow-{time.strftime('%Y%m%d', time.gmtime())}.json",
+)
 MODULE = "mncs.test.digest"
 SUITE_FIXTURE_FUNCTION = "native_suite_fixture"
 SUITE_EDGE_FIXTURE_FUNCTION = "native_suite_edge_fixture"
@@ -561,6 +564,8 @@ def vm_retained_session(
 
 
 def main() -> None:
+    if EVIDENCE_PATH.exists():
+        raise SystemExit(f"refusing to overwrite existing evidence: {EVIDENCE_PATH}")
     if not PROBE.is_file() or not VM_BIN.is_file():
         raise SystemExit(f"missing probe or canonical VM binary: {PROBE}, {VM_BIN}")
     fixture = json.loads(digest_app.FIXTURE_PATH.read_text(encoding="utf-8"))
