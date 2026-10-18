@@ -192,6 +192,9 @@ def run_project_vm(artifact: dict, artifact_id: str) -> dict:
 
 def main() -> dict:
     test_vm_emit.ensure_vm()
+    previous_report = (
+        json.loads(EVIDENCE_PATH.read_text()) if EVIDENCE_PATH.is_file() else None
+    )
     request = build_request()
     response, metrics, build_wall, probe_stderr = run_application_build(request)
     if response.get("status") != "verified":
@@ -204,11 +207,47 @@ def main() -> dict:
     if not isinstance(artifact, dict):
         raise AssertionError("verified application build omitted its VM artifact")
     artifact_id = artifact.get("artifact_id")
+    selected_module = (
+        artifact.get("code", {})
+        .get("mncs-selected-ssa", {})
+        .get("module", {})
+    )
+    selected_record_types = selected_module.get("record_types", [])
     artifact_path = ARTIFACT_PATH.with_suffix(".json.tmp")
     artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n")
     artifact_path.replace(ARTIFACT_PATH)
 
     vm = run_project_vm(artifact, artifact_id)
+    previous_artifact_bytes = None
+    previous_artifact_identity = None
+    previous_execution_status = None
+    if previous_report is not None:
+        previous_artifact_bytes = previous_report.get(
+            "application_artifact_json_bytes",
+            previous_report.get("artifact_json_bytes"),
+        )
+        previous_artifact_identity = previous_report.get(
+            "application_artifact_identity",
+            previous_report.get("artifact_identity"),
+        )
+        previous_execution_status = previous_report.get("status")
+    artifact_bytes = ARTIFACT_PATH.stat().st_size
+    if vm["status"] == "vm_executed_and_equivalent":
+        evidence_scope = (
+            "The native application compiler verified the selected callable closure "
+            "containing a concrete compile_project_target specialization. The canonical "
+            "VM admitted and executed the emitted application, and its result matched "
+            "the Cranelift result and independent Project oracle for this fixture. "
+            "Language-owned verified-fact reuse is not exercised by this evidence."
+        )
+    else:
+        evidence_scope = (
+            "The native application compiler verified a selected callable closure containing "
+            "a concrete compile_project_target specialization. Cranelift and the independent "
+            "Project oracle returned valid results with the same input fixture, but canonical "
+            "VM admission refused the artifact, so no VM semantics or cross-backend equivalence "
+            "is claimed."
+        )
     report = {
         "schema_version": "mncs.compiler.project-target-application-closure-frontier/1",
         "status": vm["status"],
@@ -233,6 +272,10 @@ def main() -> dict:
         "application_callable_root": request["callable_roots"][0],
         "generic_seed": request["generic_seeds"][0],
         "application_callable_count": len(artifact.get("callables", [])),
+        "application_ssa_record_type_count": len(selected_record_types),
+        "previous_application_execution_status": previous_execution_status,
+        "previous_application_artifact_identity": previous_artifact_identity,
+        "previous_application_artifact_json_bytes": previous_artifact_bytes,
         "application_generic_entrypoint": next(
             row for row in artifact.get("generic_entrypoints", [])
             if row.get("generic_function") == "compile_project_target"
@@ -244,7 +287,11 @@ def main() -> dict:
         ),
         "application_build_probe_stderr_tail": probe_stderr,
         "application_artifact_identity": artifact_id,
-        "application_artifact_json_bytes": ARTIFACT_PATH.stat().st_size,
+        "application_artifact_json_bytes": artifact_bytes,
+        "application_artifact_json_bytes_reduced_from_previous": (
+            previous_artifact_bytes - artifact_bytes
+            if isinstance(previous_artifact_bytes, int) else None
+        ),
         "application_artifact_json_sha256": hashlib.sha256(
             ARTIFACT_PATH.read_bytes(),
         ).hexdigest(),
@@ -252,7 +299,7 @@ def main() -> dict:
         **vm,
         "stage1_claimed": False,
         "stage2_claimed": False,
-        "evidence_scope": "The native application compiler verified a selected callable closure containing a concrete compile_project_target specialization. Cranelift and the independent Project oracle returned valid results with the same input fixture, but canonical VM admission refused the artifact at the shared codec DAG expansion bound, so no VM semantics or cross-backend equivalence is claimed.",
+        "evidence_scope": evidence_scope,
     }
     EVIDENCE_PATH.write_text(json.dumps(report, indent=2) + "\n")
     return report

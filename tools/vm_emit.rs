@@ -21,7 +21,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use mncs_compiler::ReferenceCompiler;
 use mncs_model::{
-    ArtifactRepresentation, CompilationStatus, Program, SsaInstructionKind, SsaModule,
+    ArtifactRepresentation, BodyType, CompilationStatus, Program, SsaInstructionKind, SsaModule,
     TargetContractRef,
 };
 
@@ -301,6 +301,126 @@ pub fn emit_vm_application_artifact_for_callables_with_producer(
     Ok((artifact, unselected_unresolved, capability_bindings))
 }
 
+fn collect_record_type_ids(ty: &BodyType, identities: &mut BTreeSet<String>) {
+    match ty {
+        BodyType::Record { identity, .. } => {
+            identities.insert(identity.0.clone());
+        }
+        BodyType::Sequence { element, .. } | BodyType::Vector { element, .. } => {
+            collect_record_type_ids(element, identities);
+        }
+        BodyType::Named(_)
+        | BodyType::Bool
+        | BodyType::Integer(_)
+        | BodyType::Float(_)
+        | BodyType::Byte
+        | BodyType::Mask { .. }
+        | BodyType::Finite { .. }
+        | BodyType::GenericParam { .. } => {}
+    }
+}
+
+fn collect_instruction_record_type_ids(
+    kind: &SsaInstructionKind,
+    identities: &mut BTreeSet<String>,
+) {
+    match kind {
+        SsaInstructionKind::Constant { ty, .. }
+        | SsaInstructionKind::Select { operand_type: ty } => {
+            collect_record_type_ids(ty, identities);
+        }
+        SsaInstructionKind::SequenceReplace { element_type, .. }
+        | SsaInstructionKind::SequenceCopy { element_type, .. }
+        | SsaInstructionKind::VectorConstruct { element_type, .. }
+        | SsaInstructionKind::VectorSplat { element_type, .. }
+        | SsaInstructionKind::VectorExtract { element_type, .. }
+        | SsaInstructionKind::VectorReplace { element_type, .. }
+        | SsaInstructionKind::VectorBinary { element_type, .. }
+        | SsaInstructionKind::VectorCompare { element_type, .. }
+        | SsaInstructionKind::VectorReduce { element_type, .. } => {
+            collect_record_type_ids(element_type, identities);
+        }
+        SsaInstructionKind::Convert { from, to } => {
+            collect_record_type_ids(from, identities);
+            collect_record_type_ids(to, identities);
+        }
+        SsaInstructionKind::SequenceConstruct { element_type, .. } => {
+            collect_record_type_ids(element_type, identities);
+        }
+        SsaInstructionKind::RecordConstruct { type_identity, .. }
+        | SsaInstructionKind::RecordProject { type_identity, .. } => {
+            identities.insert(type_identity.0.clone());
+        }
+        SsaInstructionKind::Integer { .. }
+        | SsaInstructionKind::IntegerCompare { .. }
+        | SsaInstructionKind::FloatConstant { .. }
+        | SsaInstructionKind::Float { .. }
+        | SsaInstructionKind::FloatCompare { .. }
+        | SsaInstructionKind::FloatIntrinsic { .. }
+        | SsaInstructionKind::BooleanOp { .. }
+        | SsaInstructionKind::BooleanCompare { .. }
+        | SsaInstructionKind::BooleanNot
+        | SsaInstructionKind::ByteBitwise { .. }
+        | SsaInstructionKind::ByteShift { .. }
+        | SsaInstructionKind::ByteCompare { .. }
+        | SsaInstructionKind::BoundCheck { .. }
+        | SsaInstructionKind::MaskBinary { .. }
+        | SsaInstructionKind::MaskNot { .. }
+        | SsaInstructionKind::MaskReduce { .. }
+        | SsaInstructionKind::SequenceProject { .. }
+        | SsaInstructionKind::SequenceLength { .. }
+        | SsaInstructionKind::ViewConstruct { .. }
+        | SsaInstructionKind::ViewNarrow { .. }
+        | SsaInstructionKind::FiniteConstruct { .. }
+        | SsaInstructionKind::FinitePayloadProject { .. }
+        | SsaInstructionKind::FiniteIsVariant { .. }
+        | SsaInstructionKind::Call { .. }
+        | SsaInstructionKind::Effect
+        | SsaInstructionKind::HostCall { .. }
+        | SsaInstructionKind::RuntimeCheck { .. } => {}
+    }
+}
+
+fn retain_application_ssa_record_type_closure(
+    ssa: &mut SsaModule,
+    mut pending: VecDeque<String>,
+) -> Result<(), String> {
+    let mut record_indices = BTreeMap::<String, usize>::new();
+    for (index, record) in ssa.record_types.iter().enumerate() {
+        if record_indices
+            .insert(record.identity.0.clone(), index)
+            .is_some()
+        {
+            return Err(format!(
+                "duplicate application SSA record type identity {}",
+                record.identity.0
+            ));
+        }
+    }
+
+    let mut reachable = BTreeSet::<String>::new();
+    while let Some(identity) = pending.pop_front() {
+        if !reachable.insert(identity.clone()) {
+            continue;
+        }
+        let Some(index) = record_indices.get(&identity).copied() else {
+            return Err(format!(
+                "selected application SSA references missing record type {identity}"
+            ));
+        };
+        let record = &ssa.record_types[index];
+        let mut nested = BTreeSet::new();
+        for (_, field_type) in &record.fields {
+            collect_record_type_ids(field_type, &mut nested);
+        }
+        pending.extend(nested);
+    }
+
+    ssa.record_types
+        .retain(|record| reachable.contains(&record.identity.0));
+    Ok(())
+}
+
 /// Project a linked program's verified SSA to the selected application roots
 /// and their transitive compiler-resolved call closure. The originating full
 /// SSA remains the provenance authority; this closed module is revalidated
@@ -373,6 +493,34 @@ fn application_ssa_closure(
     if ssa.functions.len() != reachable.len() {
         return Err("application SSA closure did not resolve every selected function".to_owned());
     }
+
+    let mut required_record_types = BTreeSet::<String>::new();
+    for function in &ssa.functions {
+        for value in function.inputs.iter().chain(&function.outputs) {
+            collect_record_type_ids(&value.ty, &mut required_record_types);
+        }
+        for iteration in &function.bounded_iterations {
+            collect_record_type_ids(&iteration.state_type, &mut required_record_types);
+            if let mncs_model::IterationDomain::OverSequence { element_type } = &iteration.domain {
+                collect_record_type_ids(element_type, &mut required_record_types);
+            }
+        }
+        for block in &function.blocks {
+            for value in &block.parameters {
+                collect_record_type_ids(&value.ty, &mut required_record_types);
+            }
+            for instruction in &block.instructions {
+                collect_instruction_record_type_ids(&instruction.kind, &mut required_record_types);
+                for value in &instruction.outputs {
+                    collect_record_type_ids(&value.ty, &mut required_record_types);
+                }
+            }
+        }
+    }
+    retain_application_ssa_record_type_closure(
+        &mut ssa,
+        required_record_types.into_iter().collect(),
+    )?;
 
     // The executable closure must not carry the source program's unrelated
     // semantic index and lowering history. ArtifactSource binds the original
@@ -959,13 +1107,101 @@ fn resolve_generic_entry(
 #[cfg(test)]
 mod application_closure_tests {
     use super::{
-        emit_vm_application_artifact_for_callables_with_producer,
+        application_ssa_closure, emit_vm_application_artifact_for_callables_with_producer,
         emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer,
     };
     use mncs_compiler::ReferenceCompiler;
     use mncs_model::SsaModule;
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
     use std::collections::BTreeSet;
+
+    #[test]
+    fn application_ssa_retains_only_selected_and_nested_record_types() {
+        let source = r#"
+            mncs 0.18;
+            module closure.records;
+            record Inner { value: u64 }
+            record Outer { inner: Inner }
+            record Spare { enabled: bool }
+            fn entry(value: u64) -> (result: Outer) { return construct(value); }
+            fn construct(value: u64) -> (result: Outer) {
+                return Outer { inner: Inner { value: value } };
+            }
+            fn unused(value: Spare) -> (result: Spare) { return value; }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-records",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let roots = BTreeSet::from([("closure.records".to_owned(), "entry".to_owned())]);
+
+        let full = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("full canonical VM artifact");
+        let (application, unresolved, _) = emit_vm_application_artifact_with_producer(
+            &compiler,
+            program,
+            None,
+            "closure.records",
+            "entry",
+            &BTreeSet::new(),
+        )
+        .expect("application entry artifact");
+        assert!(
+            unresolved.is_empty(),
+            "unexpected unresolved exports: {unresolved:?}"
+        );
+
+        let full_module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            full["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode full canonical SSA module");
+        let projected: SsaModule = mncs_vm_artifact_codec::deserialize(
+            application["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode projected canonical SSA closure");
+        let full_record_names: BTreeSet<String> = full_module
+            .record_types
+            .iter()
+            .map(|record| record.name.clone())
+            .collect();
+        let projected_record_names: BTreeSet<String> = projected
+            .record_types
+            .iter()
+            .map(|record| record.name.clone())
+            .collect();
+        assert_eq!(
+            full_record_names,
+            BTreeSet::from(["Inner".to_owned(), "Outer".to_owned(), "Spare".to_owned()])
+        );
+        assert_eq!(
+            projected_record_names,
+            BTreeSet::from(["Inner".to_owned(), "Outer".to_owned()])
+        );
+        assert!(
+            projected.validate().valid,
+            "projected SSA diagnostics: {:?}",
+            projected.validate().errors
+        );
+
+        let mut incomplete = full_module;
+        incomplete
+            .record_types
+            .retain(|record| record.name != "Inner");
+        let error = application_ssa_closure(incomplete, program, &roots)
+            .expect_err("a selected closure with a missing nested record must fail closed");
+        assert!(
+            error.contains("missing record type"),
+            "unexpected closure error: {error}"
+        );
+    }
 
     #[test]
     fn application_artifact_contains_only_the_transitive_entry_closure() {
