@@ -213,6 +213,7 @@ def main():
         vm_results = document.get("results", [])
         assert len(vm_results) == len(cases), document
         rows_summary = []
+        typed_results = []
         for case, reference, vm_result in zip(cases, references, vm_results):
             assert vm_result.get("id") == case["id"]
             assert vm_result.get("outcome") == {"kind": "completed"}, vm_result
@@ -221,6 +222,7 @@ def main():
             actual = project.decode(vm_to_wire(vm_returned[0]))
             expected = project.decode(reference["returned"][0])
             assert actual == expected, {"case": case["id"], "reference": expected, "vm": actual}
+            typed_results.append({"case": case["id"], "result": actual})
             locations = decode_locations(reference["returned"][0])
             assert len(locations) == len(case["expected_spans"]), locations
             for location, byte_span in zip(locations, case["expected_spans"]):
@@ -242,6 +244,8 @@ def main():
             })
 
         source_bytes = (ROOT / "src/compiler/project.mncs").read_bytes()
+        typed_result_sha256 = hashlib.sha256(json.dumps(
+            typed_results, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         report = {
             "schema_version": 1,
             "kind": "mncs.compiler.project-diagnostic-location-canonical-vm-frontier",
@@ -256,12 +260,18 @@ def main():
             "generic_entrypoint": generic_rows[0],
             "artifact_sha256": "sha256:" + hashlib.sha256(
                 json.dumps(artifact, sort_keys=True).encode()).hexdigest(),
+            "test_source_sha256": "sha256:" + hashlib.sha256(
+                Path(__file__).read_bytes()).hexdigest(),
             "stage0_revision": json.loads(
                 (ROOT / "mncs-language.lock.json").read_text())["revision"],
             "source_bytes": len(raw),
             "cases": rows_summary,
             "multi_page_line": line_col(raw, start)[0],
-            "reference_vm_semantic_digests_match": True,
+            "reference_vm_typed_results_equal": True,
+            "typed_result_sha256": "sha256:" + typed_result_sha256,
+            "language_verified_facts_reused": 0,
+            "stage1_claimed": False,
+            "stage2_claimed": False,
             "vm_wall_seconds": round(vm_wall, 6),
             "vm_peak_rss_kib": vm_peak_kib,
             "probe_peak_rss_kib": rss_high_water_kib(next(iter(probe._procs.values())).pid),
