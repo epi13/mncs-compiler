@@ -812,3 +812,24 @@ authorized Forge/Environment/Store route.
 The check is registered as `mncs-compiler.native-test-provider-app-boundary`
 in verification inventory revision 41, with the JSON proof exported as a
 bounded Environment shareable artifact for fresh-process readback.
+
+## Counted-loop SSA instruction accounting (2026-10-18)
+
+The [loop accounting report](self-host-flow-ssa-loop-accounting-delivery-20261018.json)
+resolves the three-instruction delta in the selected counted-loop frontier.
+Pinned Stage-0 emits six ordinary loop-bookkeeping instructions: bound and
+zero initialization, the remaining-count guard, index materialization, and
+the decrement constant and operation. MNCS carries the index directly and
+verifies one dedicated init, guard, and advance instruction in the
+preheader/header/backedge. Both representations have three non-loop
+instructions, and the reported block and terminator counts match. This is an
+accounted representation difference; it does not claim one-to-one instruction
+parity or execution of the produced SSA function. The canonical VM executed
+the source-to-Flow-to-SSA compiler application for both selected cases.
+
+The project `match-ssa` regression also passed 24 requests, including rejection
+of cross-loop guard reassociation and the existing malformed-SSA cases. The
+report records a 68.03-second application build (cache hit), a 27.72-second
+canonical VM batch, 2.72 GiB child peak RSS, and 378 MiB VM peak RSS. These
+measurements are specific to this selected compiler workload. Language-owned
+verified facts reused remains zero.
