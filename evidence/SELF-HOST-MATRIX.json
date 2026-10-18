@@ -1799,7 +1799,7 @@
         "page_bound": 1024,
         "suite": "tools/test_decl.py",
         "suite_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
-        "current_source_sha256": "645b98d172804afb456a2d75d4f15d0b82aa2c8f4fde1b18d40b9549ece2181f",
+        "current_source_sha256": "911b478b3cfc634246e3b917bd432bc11acce0906faa5f957e386bcf79982630",
         "selected_import_resolution_cache_frontier": {
           "status": "passed_with_bounded_frontier",
           "target_module": "mncs.compiler.project.v1",
@@ -1830,7 +1830,7 @@
           "evidence_sha256": "8c3d844f96ee1451b40529ef10036164c524c87d2bee7f1b9060bc5daab2264f",
           "scope": "Selected Cranelift callable only; no Language verified facts, canonical VM, full Project module proof, or succession claim."
         },
-        "current_source_bytes": 151349,
+        "current_source_bytes": 152336,
         "selected_diagnostic_location_canonical_vm_frontier": {
           "status": "passed_with_selected_frontier",
           "target_module": "mncs.compiler.project.v1",
@@ -1854,6 +1854,25 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "Selected function execution only; modules.project.stages.canonical_vm remains not-proven for the full Project module."
+        },
+        "integrated_target_diagnostic_locations": {
+          "status": "passed_with_selected_frontier",
+          "target_function": "compile_project_target_with_diagnostic_locations",
+          "evidence_artifact": "evidence/project-diagnostic-locations-integrated-target-20261018.json",
+          "evidence_sha256": "10118da7f4d976228bb251f53fbe258c607f771465b8f1662072b9529c0c9f5f",
+          "implementation_commit": "89b7821f512a5db4d86dac535734d9db579b2dd7",
+          "source_sha256": "911b478b3cfc634246e3b917bd432bc11acce0906faa5f957e386bcf79982630",
+          "test_harness_sha256": "d190ca00443abad5763325ff3c7d830f302b86139060de761cb08eb619dacd92",
+          "backend": "cranelift",
+          "integrated_case": "missing-import byte span and source location agree",
+          "cranelift_ready_seconds": 239.5,
+          "process_rss_sample_kib": 4757188,
+          "process_rss_peak_kib": null,
+          "language_verified_facts_reused": 0,
+          "combined_entrypoint_canonical_vm_tested": false,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "Combined target compilation and diagnostic-location projection for a selected fixture; modules.project.stages.canonical_vm remains not-proven."
         }
       }
     }
@@ -8221,7 +8240,7 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-18T01:22:39Z",
+  "evidence_updated_at": "2026-10-18T01:33:36Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -12048,5 +12067,37 @@
     "execution_route": "Freshly emitted sealed mncs.vm.artifact/1 executed through the local canonical VM runner and compared with the Stage-0 reference interpreter.",
     "canonical_store_publication": false,
     "evidence_scope": "One selected Project diagnostic-location generic function at type arguments [2,1024], with four typed input cases. This is not full Project module proof, Language verified-fact reuse, Forge application execution, or Stage-1/Stage-2 succession."
+  },
+  "current_campaign_project_integrated_diagnostic_locations_20261018": {
+    "kind": "mncs.compiler.project-integrated-diagnostic-location-frontier",
+    "status": "passed_with_selected_frontier",
+    "observed_at": "2026-10-18T01:33:36Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head_before_run": "7951276dd3cf8b43079bd8ed27eea8ce2a6eed08",
+    "implementation_commit": "89b7821f512a5db4d86dac535734d9db579b2dd7",
+    "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target_with_diagnostic_locations",
+    "type_arguments": [
+      1024,
+      1024
+    ],
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "source_sha256": "911b478b3cfc634246e3b917bd432bc11acce0906faa5f957e386bcf79982630",
+    "test_harness": "tools/test_project_diagnostic_locations.py",
+    "test_harness_sha256": "d190ca00443abad5763325ff3c7d830f302b86139060de761cb08eb619dacd92",
+    "evidence_artifact": "evidence/project-diagnostic-locations-integrated-target-20261018.json",
+    "evidence_sha256": "10118da7f4d976228bb251f53fbe258c607f771465b8f1662072b9529c0c9f5f",
+    "backend": "cranelift",
+    "request_count": 20,
+    "cranelift_ready_seconds": 239.5,
+    "process_rss_sample_kib": 4757188,
+    "process_rss_peak_kib": null,
+    "language_verified_facts_reused": 0,
+    "combined_entrypoint_canonical_vm_tested": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "Cranelift execution of the combined Project target compile and location projection entrypoint for a selected missing-import fixture. The existing byte-span ProjectResult is returned unchanged alongside locations computed from the same source descriptors and pages. This does not prove full Project module verification or canonical VM execution of the combined entrypoint."
   }
 }

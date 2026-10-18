@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.project-integrated-diagnostic-location-frontier",
+  "status": "passed_with_selected_frontier",
+  "observed_at": "2026-10-18T01:33:36Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "tested_head_before_commit": "7951276dd3cf8b43079bd8ed27eea8ce2a6eed08",
+  "implementation_commit": "89b7821f512a5db4d86dac535734d9db579b2dd7",
+  "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+  "target_module": "mncs.compiler.project.v1",
+  "target_function": "compile_project_target_with_diagnostic_locations",
+  "type_arguments": [
+    1024,
+    1024
+  ],
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+  "project_source_sha256": "911b478b3cfc634246e3b917bd432bc11acce0906faa5f957e386bcf79982630",
+  "test_harness": "tools/test_project_diagnostic_locations.py",
+  "test_harness_sha256": "d190ca00443abad5763325ff3c7d830f302b86139060de761cb08eb619dacd92",
+  "backend": "cranelift",
+  "request_count": 20,
+  "integrated_missing_import": {
+    "source_bytes": 92,
+    "diagnostic_variant": "MissingImport",
+    "byte_span_matches_source": true,
+    "mapped_line": 3,
+    "mapped_start_column": 5,
+    "mapped_end_column": 16,
+    "diagnostics_preserved_in_order": true,
+    "project_result_retained": true
+  },
+  "other_location_cases_passed": [
+    "multi-page missing-import source at line 1103",
+    "parse-failure span",
+    "malformed page descriptor fails closed",
+    "location-free diagnostic remains unmapped",
+    "invalid source index fails closed"
+  ],
+  "timing": {
+    "cranelift_ready_seconds": 239.5,
+    "total_elapsed_seconds": 239.667
+  },
+  "resource_observations": {
+    "process_rss_peak_kib": null,
+    "peak_reason": "The test harness did not record per-process peak RSS.",
+    "process_rss_sample": {
+      "elapsed_seconds": 226,
+      "rss_kib": 4757188
+    },
+    "host_available_memory_before_gib_approx": 23,
+    "host_available_memory_during_gib_approx": 21
+  },
+  "language_verified_facts_reused": 0,
+  "combined_entrypoint_canonical_vm_tested": false,
+  "stage1_claimed": false,
+  "stage2_claimed": false,
+  "evidence_scope": "Cranelift execution of the combined Project target compile and location projection entrypoint for a selected missing-import fixture. The existing byte-span ProjectResult is returned unchanged alongside locations computed from the same source descriptors and pages. This does not prove full Project module verification or canonical VM execution of the combined entrypoint."
+}
