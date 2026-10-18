@@ -678,7 +678,7 @@
             "canonical_vm_total_steps_change_percent": -19.57,
             "canonical_vm_wall_change_percent": -18.09,
             "maximum_steps_per_call_change_percent": 0.06,
-            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
             "canonical_vm_candidate_wall_seconds_samples": [
               9.22781,
               9.320808
@@ -8250,7 +8250,7 @@
         "canonical_vm_total_steps_change_percent": -19.57,
         "canonical_vm_wall_change_percent": -18.09,
         "maximum_steps_per_call_change_percent": 0.06,
-        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
         "canonical_vm_candidate_wall_seconds_samples": [
           9.22781,
           9.320808
@@ -8582,7 +8582,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-18T17:59:17.374509Z",
+  "evidence_updated_at": "2026-10-18T18:18:37.968556Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -16071,5 +16071,29 @@
     "evidence_artifact": "evidence/self-host-flow-ssa-decoder-in-place-ordering-20261018.json",
     "evidence_sha256": "a2263b266d707bf3f01f95d90f0211b2c4d30ab21cf25578741263b389b3ad5c",
     "claim_boundary": "The previous canonical graph ordering is preserved in differential tests, and the current artifact passed two canonical VM cases with the retained semantic digest. Resource measurements are single-run and artifact identities differ; no Language-owned verified-fact reuse is established."
+  },
+  "current_campaign_flow_to_ssa_decoder_single_table_ordering_20261018": {
+    "kind": "vm-artifact-canonical-ordering-single-table-scratch-memory",
+    "status": "passed",
+    "observed_at": "2026-10-18T18:17:22.089255Z",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "tested_source_revision": "6c72ae9ea74ca336825376445c6ebe488931a598",
+    "implementation_commit": "eb7e7f4",
+    "codec_source_sha256": "84aca94ce2c2d7e75b6f5dca5d902079596a9a4a904355e32c6d7e53a09ddea3",
+    "evidence_artifact": "evidence/self-host-flow-ssa-single-table-ordering-20261018.json",
+    "evidence_sha256": "038ef7f2cf6019894c55b1619d82fb3551cb83c43b9d6cc56f8080b1b07040e2",
+    "application_build_seconds": 128.208713,
+    "whole_frontier_seconds": 156.537453,
+    "child_cpu_seconds": 153.147444,
+    "child_peak_rss_kib": 2518580,
+    "canonical_vm_peak_rss_kib": 373540,
+    "canonical_vm_semantic_digest": "ac536e6a271ee9c0765ae41bc9b7e1f9804e1e0aacf3b9ed3e64e8ef82da5545",
+    "language_verified_facts_reused": 0,
+    "ordering_index_tables": {
+      "before": 2,
+      "after": 1,
+      "bytes_removed_per_reachable_node": 4
+    },
+    "claim_boundary": "The canonical VM workload passed with the recorded semantic digest. Whole-process peak RSS is not attributed to the encoder change. Stage-0 Failure terminator/block and loop-instruction deltas remain; Language verified-fact reuse, Forge execution, and Stage-1/Stage-2 succession are unproven."
   }
 }
