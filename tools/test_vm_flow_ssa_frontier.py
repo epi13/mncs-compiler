@@ -35,7 +35,7 @@ CASES = [
     (
         "fallthrough_join",
         next(case[1] for case in test_flow.CASES if case[0] == "fallthrough_join"),
-        {"functions": 1, "branches": 1, "returns": 2},
+        {"functions": 1, "branches": 1, "jumps": 1, "returns": 2, "failures": 1, "switches": 0},
         0,
     ),
     (
@@ -44,7 +44,7 @@ CASES = [
         "iterate i up_to 4 carrying state: u64 = 0 { "
         "if flag { return state; } next state = state + 1; "
         "} return state; }",
-        {"functions": 1, "branches": 2, "returns": 2},
+        {"functions": 1, "branches": 2, "jumps": 3, "returns": 2, "failures": 1, "switches": 0},
         1,
     ),
 ]
@@ -56,7 +56,8 @@ APP_SOURCE = (
     "mncs 0.18; module demo.flow_ssa_frontier; use mncs.compiler.ssa.v1 as ssa; "
     "record FlowSsaFrontierSummary { valid: bool, function_count: u64, "
     "supported_function_count: u64, verified_function_count: u64, "
-    "block_count: u64, instruction_count: u64, branch_count: u64, return_count: u64 } "
+    "block_count: u64, instruction_count: u64, branch_count: u64, jump_count: u64, "
+    "return_count: u64, failure_count: u64, switch_count: u64 } "
     "fn run(pages: [[byte; up_to 1024]; up_to 1024], stride: u64, total: u64) "
     "-> (result: FlowSsaFrontierSummary) { "
     "let summary: ssa.ValueSsaSummary = "
@@ -66,7 +67,9 @@ APP_SOURCE = (
     "supported_function_count: summary.supported_function_count, "
     "verified_function_count: summary.verified_function_count, "
     "block_count: summary.block_count, instruction_count: summary.instruction_count, "
-    "branch_count: summary.branch_count, return_count: summary.return_count }; }"
+    "branch_count: summary.branch_count, jump_count: summary.jump_count, "
+    "return_count: summary.return_count, failure_count: summary.failure_count, "
+    "switch_count: summary.switch_count }; }"
 )
 
 
@@ -199,16 +202,17 @@ def main() -> None:
         if oracle.get("ssa") is None or oracle.get("diagnostics"):
             raise AssertionError(f"Stage-0 SSA oracle rejected {name}: {oracle}")
         oracle_functions = oracle["ssa"]["functions"]
+        term_names = [
+            next(iter(block["terminator"]))
+            for function in oracle_functions for block in function["blocks"]
+        ]
         oracle_shape = {
             "functions": len(oracle_functions),
-            "branches": sum(
-                "ConditionalBranch" in block["terminator"]
-                for function in oracle_functions for block in function["blocks"]
-            ),
-            "returns": sum(
-                "Return" in block["terminator"]
-                for function in oracle_functions for block in function["blocks"]
-            ),
+            "branches": sum(term == "ConditionalBranch" for term in term_names),
+            "jumps": sum(term == "Branch" for term in term_names),
+            "returns": sum(term == "Return" for term in term_names),
+            "failures": sum(term == "Failure" for term in term_names),
+            "switches": sum(term in {"FiniteSwitch", "ScalarSwitch"} for term in term_names),
             "blocks": sum(len(function["blocks"]) for function in oracle_functions),
             "instructions": sum(
                 len(block["instructions"])
@@ -309,10 +313,31 @@ def main() -> None:
             "branches": summary["branch_count"],
             "returns": summary["return_count"],
         }
+        actual_terminator_shape = {
+            "branches": summary["branch_count"],
+            "jumps": summary["jump_count"],
+            "returns": summary["return_count"],
+            "failures": summary["failure_count"],
+            "switches": summary["switch_count"],
+        }
         expected_control_flow_shape = {
             name: case["oracle_shape"][name]
             for name in ("functions", "branches", "returns")
         }
+        expected_terminator_shape = {
+            name: case["oracle_shape"][name]
+            for name in ("branches", "jumps", "returns", "failures", "switches")
+        }
+        if sum(actual_terminator_shape.values()) != actual_shape["blocks"]:
+            raise AssertionError(
+                f"native SSA terminator counts do not account for every block in "
+                f"{case['name']}: {actual_terminator_shape} vs {actual_shape['blocks']} blocks"
+            )
+        if sum(expected_terminator_shape.values()) != case["oracle_shape"]["blocks"]:
+            raise AssertionError(
+                f"Stage-0 SSA terminator counts do not account for every block in "
+                f"{case['name']}: {expected_terminator_shape} vs {case['oracle_shape']['blocks']} blocks"
+            )
         if actual_control_flow_shape != expected_control_flow_shape:
             raise AssertionError(
                 f"canonical VM SSA function/branch/return counts differ from Stage-0 "
@@ -323,7 +348,12 @@ def main() -> None:
             "summary": summary,
             "shape": actual_shape,
             "branch_count": summary["branch_count"],
+            "jump_count": summary["jump_count"],
             "return_count": summary["return_count"],
+            "failure_count": summary["failure_count"],
+            "switch_count": summary["switch_count"],
+            "terminator_shape": actual_terminator_shape,
+            "expected_terminator_shape": expected_terminator_shape,
             "execution_steps": result["record"]["usage"]["steps"],
         })
 
@@ -392,7 +422,10 @@ def main() -> None:
                     "name": value["name"],
                     **value["shape"],
                     "branches": value["branch_count"],
+                    "jumps": value["jump_count"],
                     "returns": value["return_count"],
+                    "failures": value["failure_count"],
+                    "switches": value["switch_count"],
                 }
                 for value in native_values
             ],
@@ -411,6 +444,19 @@ def main() -> None:
                     for name in ("functions", "branches", "returns")}
                 for value, case in zip(native_values, cases, strict=True)
             ),
+            "stage0_terminator_shape_matches_canonical_vm": all(
+                value["terminator_shape"] == value["expected_terminator_shape"]
+                for value in native_values
+            ),
+            "stage0_terminator_shape_by_case": [{
+                "name": value["name"],
+                "stage0": value["expected_terminator_shape"],
+                "canonical_vm": value["terminator_shape"],
+                "deltas": {
+                    metric: value["terminator_shape"][metric] - value["expected_terminator_shape"][metric]
+                    for metric in value["terminator_shape"]
+                },
+            } for value in native_values],
             "ssa_metric_deltas_by_case": {
                 value["name"]: {
                     metric: value["shape"][metric] - case["oracle_shape"][metric]
@@ -444,9 +490,10 @@ def main() -> None:
             "callable closure, and the explicit lower_flow_unit_value_ssa<1024,1024> specialization. "
             "The canonical VM batch starts each case from logical source pages; MNCS source runs "
             "flow.lower_unit, derives local nominal identities from the returned proof unit, and "
-            "passes that exact Flow result to value SSA. Function, branch, and return counts match "
-            "the pinned Stage-0 oracle. Per-case block and instruction deltas are recorded and are "
-            "not treated as parity. This does not establish full CFG/IR parity or Language-owned "
+            "passes that exact Flow result to value SSA. Function, conditional-branch, and return "
+            "counts match the pinned Stage-0 oracle. Jumps, failures, switches, blocks, and "
+            "instructions are reported separately so structural differences remain explicit. "
+            "This does not establish full CFG/IR parity or Language-owned "
             "verified-fact reuse, "
             "Cranelift differential coverage, or compiler succession."
         ),
