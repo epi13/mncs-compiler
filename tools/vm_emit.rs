@@ -21,9 +21,12 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use mncs_compiler::ReferenceCompiler;
 use mncs_model::{
-    ArtifactRepresentation, BodyOperationKind, BodyType, CompilationStatus, Program,
-    SsaInstructionKind, SsaModule, TargetContractRef,
+    ArtifactRepresentation, BodyOperationKind, BodyType, BoundsEvidence, CompilationStatus,
+    Program, SequenceBound, SsaInstruction, SsaInstructionKind, SsaModule, SsaValue,
+    TargetContractRef, TargetIdentity,
 };
+
+const VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT: u32 = 256;
 
 /// Must match `mncs_vm::artifact::ARTIFACT_SCHEMA_VERSION`.
 pub const VM_ARTIFACT_SCHEMA_VERSION: &str = "mncs.vm.artifact/1";
@@ -737,6 +740,395 @@ fn application_lowering_program(
     Ok(lowering_program)
 }
 
+/// Lower statically proven exact-bound span copies into VM-supported
+/// projections and replacements. The canonical VM deliberately refuses the
+/// `SequenceCopy` instruction today; for literal windows, the compiler can
+/// express the same total operation using its existing `SequenceProject` and
+/// `SequenceReplace` subset without adding runtime checks or changing the
+/// source-level proof. Dynamic windows and large copies remain untouched and
+/// retain the VM's explicit unsupported outcome.
+fn lower_vm_static_sequence_copies(ssa: &mut SsaModule) -> Result<usize, String> {
+    let target = TargetIdentity {
+        identity: mncs_model::SemanticId("mncs:0.2:target:mncs-vm-0.1".to_owned()),
+        family: "mncs-vm".to_owned(),
+        features: vec!["sequence-project".to_owned(), "sequence-replace".to_owned()],
+        integer_widths: vec![64],
+        abi: None,
+    };
+    let implementation =
+        mncs_model::SemanticId("mncs:0.2:compiler:vm-static-exact-sequence-copy/1".to_owned());
+    let mut lowered_count = 0usize;
+    let mut transformations = Vec::new();
+
+    for function in &mut ssa.functions {
+        let mut constants = BTreeMap::new();
+        let mut types = BTreeMap::new();
+        for value in &function.inputs {
+            types.insert(value.identity.clone(), value.ty.clone());
+        }
+        for value in &function.outputs {
+            types.insert(value.identity.clone(), value.ty.clone());
+        }
+        for block in &function.blocks {
+            for value in &block.parameters {
+                types.insert(value.identity.clone(), value.ty.clone());
+            }
+            for instruction in &block.instructions {
+                for value in &instruction.outputs {
+                    types.insert(value.identity.clone(), value.ty.clone());
+                }
+                if let (SsaInstructionKind::Constant { value, ty }, Some(output)) =
+                    (&instruction.kind, instruction.outputs.first())
+                {
+                    if let BodyType::Integer(integer) = ty {
+                        if *integer
+                            == (mncs_model::IntegerType {
+                                bits: 64,
+                                signed: false,
+                            })
+                        {
+                            constants.insert(output.identity.clone(), *value);
+                        }
+                    }
+                }
+            }
+        }
+
+        for block in &mut function.blocks {
+            let mut rewritten = Vec::with_capacity(block.instructions.len());
+            for instruction in std::mem::take(&mut block.instructions) {
+                let SsaInstructionKind::SequenceCopy {
+                    element_type,
+                    dst_bound,
+                    src_bound,
+                    evidence: BoundsEvidence::StaticExact,
+                } = &instruction.kind
+                else {
+                    rewritten.push(instruction);
+                    continue;
+                };
+                let (SequenceBound::Exact(dst_length), SequenceBound::Exact(src_length)) =
+                    (dst_bound, src_bound)
+                else {
+                    rewritten.push(instruction);
+                    continue;
+                };
+                if instruction.inputs.len() != 5 || instruction.outputs.len() != 1 {
+                    return Err(format!(
+                        "static SequenceCopy {} has an invalid operand or result count",
+                        instruction.identity.0
+                    ));
+                }
+                let (Some(dst_at), Some(src_at), Some(length)) = (
+                    constants.get(&instruction.inputs[1]),
+                    constants.get(&instruction.inputs[3]),
+                    constants.get(&instruction.inputs[4]),
+                ) else {
+                    rewritten.push(instruction);
+                    continue;
+                };
+                if *dst_at < 0 || *src_at < 0 || *length < 0 {
+                    return Err(format!(
+                        "static SequenceCopy {} carries a negative exact window",
+                        instruction.identity.0
+                    ));
+                }
+                let (dst_at, src_at, length) = (*dst_at as u128, *src_at as u128, *length as u128);
+                if dst_at + length > u128::from(*dst_length)
+                    || src_at + length > u128::from(*src_length)
+                {
+                    return Err(format!(
+                        "static SequenceCopy {} violates its StaticExact bounds evidence",
+                        instruction.identity.0
+                    ));
+                }
+                if length > u128::from(VM_STATIC_SEQUENCE_COPY_UNROLL_LIMIT) {
+                    rewritten.push(instruction);
+                    continue;
+                }
+
+                let destination_type = types.get(&instruction.inputs[0]).ok_or_else(|| {
+                    format!(
+                        "SequenceCopy {} destination type is missing",
+                        instruction.identity.0
+                    )
+                })?;
+                let source_type = types.get(&instruction.inputs[2]).ok_or_else(|| {
+                    format!(
+                        "SequenceCopy {} source type is missing",
+                        instruction.identity.0
+                    )
+                })?;
+                let expected_type = BodyType::Sequence {
+                    element: Box::new(element_type.clone()),
+                    bound: dst_bound.clone(),
+                };
+                if destination_type != &expected_type
+                    || source_type
+                        != &(BodyType::Sequence {
+                            element: Box::new(element_type.clone()),
+                            bound: src_bound.clone(),
+                        })
+                    || instruction.outputs[0].ty != expected_type
+                {
+                    return Err(format!(
+                        "static SequenceCopy {} types disagree with its exact bounds",
+                        instruction.identity.0
+                    ));
+                }
+
+                let owner = instruction.identity.clone();
+                let block_identity = block.identity.clone();
+                let mut ordinal = 0u64;
+                if length == 0 {
+                    let condition_id = vm_sequence_copy_id(&owner, "empty-condition", ordinal);
+                    ordinal += 1;
+                    let condition = SsaValue {
+                        identity: vm_sequence_copy_id(&owner, "empty-condition-value", ordinal),
+                        semantic_identity: None,
+                        ty: BodyType::Bool,
+                        producer: Some(condition_id.clone()),
+                        block: block_identity.clone(),
+                    };
+                    let condition_value = condition.identity.clone();
+                    rewritten.push(vm_sequence_copy_instruction(
+                        condition_id,
+                        SsaInstructionKind::Constant {
+                            value: 1,
+                            ty: BodyType::Bool,
+                        },
+                        Vec::new(),
+                        vec![condition],
+                    ));
+                    let output_id = vm_sequence_copy_id(&owner, "empty-result", ordinal);
+                    let mut output = instruction.outputs[0].clone();
+                    output.producer = Some(output_id.clone());
+                    let mut lowered = instruction.clone();
+                    lowered.identity = output_id.clone();
+                    lowered.kind = SsaInstructionKind::Select {
+                        operand_type: expected_type.clone(),
+                    };
+                    lowered.inputs = vec![
+                        condition_value,
+                        instruction.inputs[0].clone(),
+                        instruction.inputs[0].clone(),
+                    ];
+                    lowered.outputs = vec![output];
+                    rewritten.push(lowered);
+                    record_vm_sequence_copy_lowering(
+                        &mut transformations,
+                        &instruction,
+                        output_id,
+                        &target,
+                        &implementation,
+                    );
+                    lowered_count += 1;
+                    continue;
+                }
+
+                let mut current_sequence = instruction.inputs[0].clone();
+                let copy_length = u64::try_from(length).expect("length was bounded by u32");
+                for offset in 0..copy_length {
+                    let destination_index = push_vm_sequence_copy_constant(
+                        &mut rewritten,
+                        &owner,
+                        &mut ordinal,
+                        &block_identity,
+                        u64::try_from(dst_at + u128::from(offset))
+                            .expect("destination is u32 bounded"),
+                    );
+                    let source_index = push_vm_sequence_copy_constant(
+                        &mut rewritten,
+                        &owner,
+                        &mut ordinal,
+                        &block_identity,
+                        u64::try_from(src_at + u128::from(offset)).expect("source is u32 bounded"),
+                    );
+                    let projection_id = vm_sequence_copy_id(&owner, "project", ordinal);
+                    ordinal += 1;
+                    let projected_value = SsaValue {
+                        identity: vm_sequence_copy_id(&owner, "project-value", ordinal),
+                        semantic_identity: None,
+                        ty: element_type.clone(),
+                        producer: Some(projection_id.clone()),
+                        block: block_identity.clone(),
+                    };
+                    let projected_value_id = projected_value.identity.clone();
+                    rewritten.push(vm_sequence_copy_instruction(
+                        projection_id,
+                        SsaInstructionKind::SequenceProject {
+                            bound: src_bound.clone(),
+                            evidence: BoundsEvidence::StaticExact,
+                        },
+                        vec![instruction.inputs[2].clone(), source_index],
+                        vec![projected_value],
+                    ));
+
+                    let final_operation = offset + 1 == copy_length;
+                    let replace_id = if final_operation {
+                        vm_sequence_copy_id(&owner, "replace-result", ordinal)
+                    } else {
+                        vm_sequence_copy_id(&owner, "replace", ordinal)
+                    };
+                    ordinal += 1;
+                    let mut output = if final_operation {
+                        instruction.outputs[0].clone()
+                    } else {
+                        SsaValue {
+                            identity: vm_sequence_copy_id(&owner, "replace-value", ordinal),
+                            semantic_identity: None,
+                            ty: expected_type.clone(),
+                            producer: Some(replace_id.clone()),
+                            block: block_identity.clone(),
+                        }
+                    };
+                    output.producer = Some(replace_id.clone());
+                    let replace = if final_operation {
+                        let mut lowered = instruction.clone();
+                        lowered.identity = replace_id.clone();
+                        lowered.kind = SsaInstructionKind::SequenceReplace {
+                            element_type: element_type.clone(),
+                            bound: dst_bound.clone(),
+                            evidence: BoundsEvidence::StaticExact,
+                        };
+                        lowered.inputs = vec![
+                            current_sequence.clone(),
+                            destination_index,
+                            projected_value_id,
+                        ];
+                        lowered.outputs = vec![output];
+                        lowered
+                    } else {
+                        vm_sequence_copy_instruction(
+                            replace_id.clone(),
+                            SsaInstructionKind::SequenceReplace {
+                                element_type: element_type.clone(),
+                                bound: dst_bound.clone(),
+                                evidence: BoundsEvidence::StaticExact,
+                            },
+                            vec![
+                                current_sequence.clone(),
+                                destination_index,
+                                projected_value_id,
+                            ],
+                            vec![output],
+                        )
+                    };
+                    current_sequence = replace.outputs[0].identity.clone();
+                    rewritten.push(replace);
+                }
+                let final_identity = current_sequence;
+                record_vm_sequence_copy_lowering(
+                    &mut transformations,
+                    &instruction,
+                    final_identity,
+                    &target,
+                    &implementation,
+                );
+                lowered_count += 1;
+            }
+            block.instructions = rewritten;
+        }
+    }
+    ssa.transformations.extend(transformations);
+    Ok(lowered_count)
+}
+
+fn vm_sequence_copy_id(
+    owner: &mncs_model::SemanticId,
+    role: &str,
+    ordinal: u64,
+) -> mncs_model::SemanticId {
+    let material = format!("{}:{role}:{ordinal}", owner.0);
+    mncs_model::SemanticId(format!(
+        "mncs:0.2:ssa:vm-sequence-copy:{}",
+        mncs_model::sha256_hex(material.as_bytes())
+    ))
+}
+
+fn push_vm_sequence_copy_constant(
+    rewritten: &mut Vec<SsaInstruction>,
+    owner: &mncs_model::SemanticId,
+    ordinal: &mut u64,
+    block: &mncs_model::SemanticId,
+    value: u64,
+) -> mncs_model::SemanticId {
+    let identity = vm_sequence_copy_id(owner, "constant", *ordinal);
+    *ordinal += 1;
+    let output = SsaValue {
+        identity: vm_sequence_copy_id(owner, "constant-value", *ordinal),
+        semantic_identity: None,
+        ty: BodyType::Integer(mncs_model::IntegerType {
+            bits: 64,
+            signed: false,
+        }),
+        producer: Some(identity.clone()),
+        block: block.clone(),
+    };
+    let value_identity = output.identity.clone();
+    rewritten.push(vm_sequence_copy_instruction(
+        identity,
+        SsaInstructionKind::Constant {
+            value: i128::from(value),
+            ty: output.ty.clone(),
+        },
+        Vec::new(),
+        vec![output],
+    ));
+    value_identity
+}
+
+fn vm_sequence_copy_instruction(
+    identity: mncs_model::SemanticId,
+    kind: SsaInstructionKind,
+    inputs: Vec<mncs_model::SemanticId>,
+    outputs: Vec<SsaValue>,
+) -> SsaInstruction {
+    SsaInstruction {
+        identity,
+        semantic_identity: None,
+        hir_identity: None,
+        kind,
+        inputs,
+        outputs,
+        effects: Vec::new(),
+        capability_uses: Vec::new(),
+        contracts: Vec::new(),
+        assumptions: Vec::new(),
+        evidence: Vec::new(),
+        machine_intent: None,
+        obligations: Vec::new(),
+        failure: None,
+    }
+}
+
+fn record_vm_sequence_copy_lowering(
+    records: &mut Vec<mncs_model::TransformationRecord>,
+    input: &SsaInstruction,
+    output: mncs_model::SemanticId,
+    target: &TargetIdentity,
+    implementation: &mncs_model::SemanticId,
+) {
+    let operation = input
+        .semantic_identity
+        .clone()
+        .unwrap_or_else(|| input.identity.clone());
+    let mut record = mncs_model::TransformationRecord::new(
+        input.identity.clone(),
+        output,
+        "vm-static-exact-sequence-copy-to-project-replace/1".to_owned(),
+        operation,
+        target.clone(),
+        implementation.clone(),
+    );
+    record.obligations_required.clone_from(&input.obligations);
+    record.evidence_consumed.clone_from(&input.evidence);
+    record
+        .backend_promises_permitted
+        .push("functional-exact-bound-span-copy".to_owned());
+    records.push(record);
+}
+
 fn emit_vm_artifact_scoped(
     compiler: &ReferenceCompiler,
     program: &Program,
@@ -803,10 +1195,23 @@ fn emit_vm_artifact_scoped(
             }
         }
     }
-    let execution_ssa = match selected_exports {
+    let mut execution_ssa = match selected_exports {
         Some(roots) => application_ssa_closure(ssa, lowering_program, roots)?,
         None => ssa,
     };
+    let application_closure_fingerprint =
+        if selected_exports.is_some() {
+            Some(execution_ssa.fingerprint().map_err(|error| {
+                format!("projected application SSA fingerprint failed: {error}")
+            })?)
+        } else {
+            None
+        };
+    let static_sequence_copies_lowered = lower_vm_static_sequence_copies(&mut execution_ssa)?;
+    let vm_lowering_fingerprint = (static_sequence_copies_lowered > 0)
+        .then(|| execution_ssa.fingerprint())
+        .transpose()
+        .map_err(|error| format!("VM-lowered application SSA fingerprint failed: {error}"))?;
     let capability_bindings = capability_dispatch_bindings(&execution_ssa)?;
     let selected = result
         .artifacts
@@ -982,11 +1387,13 @@ fn emit_vm_artifact_scoped(
     if let Some(map) = &source_map {
         lowering_refs.push(format!("source-map:{}", map.identity));
     }
-    if selected_exports.is_some() {
-        let closure_fingerprint = execution_ssa
-            .fingerprint()
-            .map_err(|error| format!("projected application SSA fingerprint failed: {error}"))?;
+    if let Some(closure_fingerprint) = application_closure_fingerprint {
         lowering_refs.push(format!("application-ssa-closure/1:{closure_fingerprint}"));
+    }
+    if let Some(vm_lowering_fingerprint) = vm_lowering_fingerprint {
+        lowering_refs.push(format!(
+            "vm-static-exact-sequence-copy-lowering/1:{vm_lowering_fingerprint}"
+        ));
     }
 
     let artifact = VmArtifact {
@@ -1210,7 +1617,7 @@ mod application_closure_tests {
         emit_vm_application_artifact_with_producer, emit_vm_artifact_with_producer,
     };
     use mncs_compiler::ReferenceCompiler;
-    use mncs_model::SsaModule;
+    use mncs_model::{SsaInstructionKind, SsaModule};
     use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
     use std::collections::BTreeSet;
 
@@ -1517,5 +1924,140 @@ mod application_closure_tests {
             BTreeSet::from(["first".to_owned(), "second".to_owned()])
         );
         assert!(projected.validate().valid);
+    }
+
+    #[test]
+    fn canonical_vm_lowers_static_exact_sequence_copies_to_supported_ops() {
+        let source = r#"
+            mncs 0.18;
+            module closure.static_copy;
+            fn copy_window(destination: [byte; 8], source: [byte; 8]) -> (result: [byte; 8]) {
+                let unchanged: [byte; 8] = copy_span(destination, 8, source, 8, 0);
+                return copy_span(unchanged, 2, source, 1, 3);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-static-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact with statically lowered span copy");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        assert!(
+            module.validate().valid,
+            "VM-lowered SSA diagnostics: {:?}",
+            module.validate().errors
+        );
+        let instructions = module
+            .functions
+            .iter()
+            .flat_map(|function| function.blocks.iter())
+            .flat_map(|block| block.instructions.iter())
+            .collect::<Vec<_>>();
+        assert!(instructions.iter().all(|instruction| !matches!(
+            instruction.kind,
+            SsaInstructionKind::SequenceCopy { .. }
+        )));
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceProject { .. }
+                ))
+                .count(),
+            3
+        );
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(
+                    instruction.kind,
+                    SsaInstructionKind::SequenceReplace { .. }
+                ))
+                .count(),
+            3
+        );
+        assert_eq!(
+            instructions
+                .iter()
+                .filter(|instruction| matches!(instruction.kind, SsaInstructionKind::Select { .. }))
+                .count(),
+            1,
+            "the empty span lowers to a value-preserving selection"
+        );
+        assert_eq!(
+            module
+                .transformations
+                .iter()
+                .filter(|record| record.rule == "vm-static-exact-sequence-copy-to-project-replace/1")
+                .count(),
+            2
+        );
+        assert!(artifact["source"]["lowering_refs"]
+            .as_array()
+            .is_some_and(|refs| refs.iter().any(|row| {
+                row.as_str().is_some_and(|value| {
+                    value.starts_with("vm-static-exact-sequence-copy-lowering/1:")
+                })
+            })));
+    }
+
+    #[test]
+    fn canonical_vm_keeps_runtime_checked_sequence_copies_explicit() {
+        let source = r#"
+            mncs 0.18;
+            module closure.dynamic_copy;
+            fn copy_window(
+                destination: [byte; 8],
+                destination_at: u64,
+                source: [byte; up_to 8],
+                source_at: u64,
+                length: u64
+            ) -> (result: [byte; 8]) {
+                return copy_span(destination, destination_at, source, source_at, length);
+            }
+        "#;
+        let compiler = ReferenceCompiler::default();
+        let frontend = compiler.front_end(SourceEnvelope::inline(
+            SourceArtifactKind::Program,
+            "closure-dynamic-copy",
+            source.to_owned(),
+        ));
+        assert!(
+            frontend.is_valid(),
+            "frontend diagnostics: {:?}",
+            frontend.diagnostics
+        );
+        let program = frontend.program.as_ref().expect("validated Program");
+        let artifact = emit_vm_artifact_with_producer(&compiler, program, None)
+            .expect("canonical VM artifact retains runtime-checked span copy");
+        let module: SsaModule = mncs_vm_artifact_codec::deserialize(
+            artifact["code"]["mncs-selected-ssa"]["module"].clone(),
+        )
+        .expect("decode canonical selected SSA");
+        assert!(module.validate().valid);
+        assert!(module.functions.iter().any(|function| {
+            function.blocks.iter().any(|block| {
+                block.instructions.iter().any(|instruction| {
+                    matches!(instruction.kind, SsaInstructionKind::SequenceCopy { .. })
+                })
+            })
+        }));
+        assert!(!module
+            .transformations
+            .iter()
+            .any(|record| { record.rule == "vm-static-exact-sequence-copy-to-project-replace/1" }));
     }
 }
