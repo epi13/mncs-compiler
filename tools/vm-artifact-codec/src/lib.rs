@@ -11,7 +11,7 @@ use std::collections::HashMap;
 // A verified Flow-to-SSA application currently expands to 8,101,381 nodes.
 // Keep a finite margin for that real closure while still refusing exponential
 // DAGs; this decoder bound is independent of VM execution budgets.
-const MAX_EXPANDED_NODES: u64 = 8_500_000;
+const MAX_EXPANDED_NODES: u32 = 8_500_000;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 enum Node {
@@ -407,10 +407,10 @@ impl Graph {
         fn account_ref(
             reference: u32,
             node_index: usize,
-            sizes: &[u64],
-            depths: &[u32],
-            size: &mut u64,
-            depth: &mut u32,
+            sizes: &[u32],
+            depths: &[u8],
+            size: &mut u32,
+            depth: &mut u8,
         ) -> Result<(), String> {
             if reference as usize >= node_index {
                 return Err("DAG references must point backward".into());
@@ -427,13 +427,15 @@ impl Graph {
         // Bound expansion before typed decoding. Shared nodes cannot create
         // exponential expansion, host stack overflow, or unbounded allocation.
         // These are decoder limits, independent of VM execution budgets.
-        let mut sizes: Vec<u64> = Vec::with_capacity(self.nodes.len());
-        let mut depths: Vec<u32> = Vec::with_capacity(self.nodes.len());
+        // The expansion bound fits u32; the depth guard fits u8. Keep these
+        // per-node summaries compact for the multi-million-node artifacts.
+        let mut sizes: Vec<u32> = Vec::with_capacity(self.nodes.len());
+        let mut depths: Vec<u8> = Vec::with_capacity(self.nodes.len());
         let mut reached = vec![false; self.nodes.len()];
         reached[self.root as usize] = true;
         for (i, n) in self.nodes.iter().enumerate() {
-            let mut size = 1u64;
-            let mut depth = 1;
+            let mut size = 1u32;
+            let mut depth = 1u8;
             match n {
                 Node::A(refs) => {
                     for &reference in refs {
@@ -691,6 +693,22 @@ mod tests {
         }
         let root = nodes.len() as u32 - 1;
         assert!(Graph { nodes, root }.validate().is_ok());
+    }
+
+    #[test]
+    fn depth_limit_boundary_is_enforced() {
+        let graph_with_arrays = |array_count: usize| {
+            let mut nodes = vec![Node::N];
+            for _ in 0..array_count {
+                let child = nodes.len() as u32 - 1;
+                nodes.push(Node::A(vec![child]));
+            }
+            let root = nodes.len() as u32 - 1;
+            Graph { nodes, root }
+        };
+
+        assert!(graph_with_arrays(127).validate().is_ok());
+        assert!(graph_with_arrays(128).validate().is_err());
     }
 
     #[test]
