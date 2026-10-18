@@ -8318,7 +8318,7 @@
       "stage2_claimed": false
     }
   },
-  "evidence_updated_at": "2026-10-18T07:00:56Z",
+  "evidence_updated_at": "2026-10-18T07:22:54.678924Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -13893,5 +13893,141 @@
       "request_sequence": 1,
       "wall_seconds": 0.716477
     }
+  },
+  "current_campaign_project_target_integrated_diagnostic_locations_vm_20261018": {
+    "kind": "mncs.compiler.project-target-integrated-diagnostic-locations-canonical-vm-frontier",
+    "status": "passed_with_selected_frontier",
+    "observed_at": "2026-10-18T07:22:54.678924+00:00",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_head": "2122f525a7068afb54784a450f40cf8603b6db8d",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "target_module": "mncs.compiler.project.v1",
+    "target_function": "compile_project_target_with_diagnostic_locations",
+    "type_arguments": [
+      1024,
+      1024
+    ],
+    "tested_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "test_harness": "tools/probe_vm_project_target_integrated_diagnostics.py",
+    "test_harness_sha256": "2ba1cdc38533abab48790674702f1d9e27abed86e309cdd58b5f9918c2c85177",
+    "evidence_artifact": "evidence/project-target-integrated-diagnostic-locations-canonical-vm-20261018.json",
+    "evidence_sha256": "578ca8fb964a19c81a29a93b9b451c408cf3ae7c40c75126fcf7953c52770685",
+    "application_build_request_schema": "mncs.compiler.application-build-request/2",
+    "application_build_response_schema": "mncs.compiler.application-build/5",
+    "application_build_identity": "sha256:d1285a74c751d006dea75debb3093f204af0a20b3cb9e8970756258e9f91fdcf",
+    "application_artifact_identity": "sha256:d1285a74c751d006dea75debb3093f204af0a20b3cb9e8970756258e9f91fdcf",
+    "application_artifact_json_bytes": 68357252,
+    "application_artifact_json_sha256": "269fa9fc389404b45fe7f00165e3fc7eee5b77a7e259b87d40ebcd4ce986e9f4",
+    "application_callable_count": 4,
+    "generic_entrypoints": [
+      "compile_project_target",
+      "compile_project_target_with_diagnostic_locations",
+      "locate_project_diagnostics_global"
+    ],
+    "application_build_cache_status": "hit",
+    "application_build_wall_seconds": 2.326321,
+    "application_build_metrics": {
+      "wall_seconds": 1.321576,
+      "cpu_seconds": 1.2,
+      "peak_rss_bytes": 1099956224,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 1
+    },
+    "cranelift_probe_readiness": {
+      "backend": "cranelift",
+      "ready_seconds": 33.4,
+      "cache_hits": 1,
+      "backend_artifact_cache_hits": 1,
+      "frontend_program_cache_hits": 0,
+      "cache_misses": 0
+    },
+    "case_count": 5,
+    "case_results": [
+      {
+        "id": "valid-project",
+        "valid": true,
+        "diagnostic_count": 0
+      },
+      {
+        "id": "missing-import",
+        "valid": false,
+        "diagnostic_variant": 3,
+        "byte_span": [
+          33,
+          44
+        ],
+        "start": {
+          "line": 3,
+          "col": 5
+        },
+        "end": {
+          "line": 3,
+          "col": 16
+        },
+        "mapped": true
+      },
+      {
+        "id": "multi-page-missing-import",
+        "valid": false,
+        "diagnostic_variant": 3,
+        "byte_span": [
+          1139,
+          1150
+        ],
+        "start": {
+          "line": 1103,
+          "col": 5
+        },
+        "end": {
+          "line": 1103,
+          "col": 16
+        },
+        "mapped": true
+      },
+      {
+        "id": "parse-failure",
+        "valid": false,
+        "diagnostic_variant": 4,
+        "byte_span": [
+          40,
+          42
+        ],
+        "start": {
+          "line": 3,
+          "col": 10
+        },
+        "end": {
+          "line": 3,
+          "col": 12
+        },
+        "mapped": true
+      },
+      {
+        "id": "invalid-page-count",
+        "valid": false,
+        "diagnostic_variants": [
+          4,
+          1
+        ],
+        "mapped": [
+          false,
+          false
+        ]
+      }
+    ],
+    "canonical_vm_batch_wall_seconds": 25.640789,
+    "canonical_vm_batch_peak_rss_kib": 406388,
+    "canonical_vm_results_json_bytes": 218696,
+    "canonical_vm_cranelift_exact_result_agreement": true,
+    "stage0_oracle_checked_case_count": 4,
+    "language_verified_facts_reused": 0,
+    "selected_project_self_consumption_frontier_advanced": true,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "evidence_scope": "One compile-once Project application artifact executed five typed requests in one canonical VM batch: valid input, missing import, a multi-page missing import, parse failure, and an invalid page descriptor. Every canonical VM result exactly matched the Cranelift result; Stage-0 oracle validity and diagnostic counts matched for four source-validity cases, and mapped byte spans produced the current source line/column. This is a selected integrated Project entrypoint frontier, not full Project-module proof, Language fact reuse, Forge execution, Stage-1, or Stage-2 succession."
   }
 }
