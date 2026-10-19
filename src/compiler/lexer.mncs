@@ -976,10 +976,19 @@ record BatchState { cursor: u64, tokens: TokenList, count: u64, done: bool, eof:
 record BatchResult { tokens: TokenList, next: u64, eof: bool, count: u64 }
 fn lex_tokens_from<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: BatchResult) {
     let seed: BatchState = BatchState { cursor: start, tokens: TokenList.TNil, count: 0, done: false, eof: false };
-    iterate i up_to 1024 carrying st: BatchState = seed {
-        next st = batch_step<P, N>(pages, stride, total, st);
+    // Check for completion once per bounded block. A completed partial block
+    // may perform a few cheap no-op batch steps, while full batches avoid a
+    // done test on every token.
+    iterate group up_to 64 carrying st: BatchState = seed {
+        iterate slot up_to 16 carrying inner: BatchState = st {
+            next inner = batch_step<P, N>(pages, stride, total, inner);
+        }
+        if inner.done {
+            return BatchResult { tokens: reverse_tokens(inner.tokens, inner.count), next: inner.cursor, eof: inner.eof, count: inner.count };
+        }
+        next st = inner;
     }
-    return BatchResult { tokens: reverse_tokens(st.tokens), next: st.cursor, eof: st.eof, count: st.count };
+    return BatchResult { tokens: reverse_tokens(st.tokens, st.count), next: st.cursor, eof: st.eof, count: st.count };
 }
 fn batch_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BatchState) -> (result: BatchState) {
     if st.done { return st; }
@@ -991,7 +1000,15 @@ fn batch_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
     return BatchState { cursor: token.end, tokens: tokens, count: count, done: false, eof: false };
 }
 record TokenReverse { rest: TokenList, acc: TokenList }
-fn reverse_tokens(tokens: TokenList) -> (result: TokenList) {
+fn reverse_tokens(tokens: TokenList, count: u64) -> (result: TokenList) {
+    if count == 1024 { return reverse_tokens_full(tokens); }
+    iterate i up_to 1024 carrying st: TokenReverse = TokenReverse { rest: tokens, acc: TokenList.TNil } {
+        if i >= count { return st.acc; }
+        next st = reverse_token_step(st);
+    }
+    return st.acc;
+}
+fn reverse_tokens_full(tokens: TokenList) -> (result: TokenList) {
     iterate i up_to 1024 carrying st: TokenReverse = TokenReverse { rest: tokens, acc: TokenList.TNil } {
         next st = reverse_token_step(st);
     }
