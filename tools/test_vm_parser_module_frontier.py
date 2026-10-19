@@ -242,7 +242,10 @@ def main() -> None:
     if not test_vm_emit.VM_BIN.is_file():
         raise SystemExit(f"canonical VM binary is missing: {test_vm_emit.VM_BIN}")
 
-    inputs = prior.source_cases()
+    # The direct bounded parser root has a 1024-byte argument capacity. The
+    # focused global-header frontier separately exercises larger page-backed
+    # inputs, including its fuel-exhaustion case.
+    inputs = [item for item in prior.source_cases() if len(item["raw"]) <= BOUND]
     inputs.append({
         "id": "multiline-bad-module-identifier",
         "raw": b"mncs 0.18;\nmodule;\n",
