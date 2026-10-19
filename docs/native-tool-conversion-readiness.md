@@ -353,17 +353,22 @@ TestResult matched Stage-0; the native provider app then checked the row-level
 bindings and published a two-case passing summary and check record exactly
 matching the independent Stage-0 provider fold.
 
-The second Test artifact build measured 0.205 s wall, 0.18 s CPU, and 15.3 MiB
-peak RSS. Its VM call measured 0.0115 s and 20,908 KiB peak RSS. The provider
-app's heterogeneous fold measured 0.0375 s and 22.5 MiB VM peak RSS; Stage-0
-took 0.679 s wall, 0.64 s CPU, and 63.4 MiB peak RSS. Cgroup memory was unavailable.
+The second Test artifact build measured 0.207 s wall, 0.18 s CPU, and 15.3 MiB
+peak RSS. Its VM call measured 0.0116 s and 20,684 KiB peak RSS. The provider
+app's heterogeneous fold measured 0.0374 s and 22.4 MiB VM peak RSS; Stage-0
+took 0.689 s wall, 0.66 s CPU, and 65.4 MiB peak RSS. Cgroup memory was unavailable.
 This closes the local sequence-copy execution gap recorded in the earlier
 provider boundary report and proves the compiler/VM/provider contract for a
 small multi-artifact batch. It still runs through the local bounded structured
 file adapter; Forge, Environment, Store publication, and fresh-process Store
-readback remain open. Language verified facts reused: zero. Evidence is
-[`evidence/native-test-provider-heterogeneous-batch-20261019-final.json`](../evidence/native-test-provider-heterogeneous-batch-20261019-final.json)
-(SHA-256 `c6b52ba37735e546f3fd431b606b2f9e8e43d4e8a247e83954196bedb1307072`).
+readback remain open. A negative mixed-batch case changes the cross-module
+Test row's artifact identity to the other row's valid artifact. The provider
+returns typed `UNSUPPORTED` with code 9001 rather than accepting the neighboring
+binding, matching Stage-0 exactly. This rejection took 0.0379 s and 22.6 MiB VM
+peak RSS. Language verified facts reused: zero. The positive and negative
+results are recorded in
+[`evidence/native-test-provider-heterogeneous-identity-20261019.json`](../evidence/native-test-provider-heterogeneous-identity-20261019.json)
+(SHA-256 `7131bf342b339727136a94975932d5e94f5efcf94fb279817c5539bd5d8cd8cf`).
 
 The real five-module mncs-test readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across

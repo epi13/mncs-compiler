@@ -1429,16 +1429,16 @@ def main() -> None:
                 }, indent=2)[:18000])
 
             invalid_request_fields = record_fields(
-                json.loads(json.dumps(real_request_value))
+                json.loads(json.dumps(heterogeneous_request))
             )
             invalid_execution_values = invalid_request_fields[
                 "selected_test_executions"
             ]["sequence"]["values"]
-            invalid_execution_fields = record_fields(invalid_execution_values[0])
+            invalid_execution_fields = record_fields(invalid_execution_values[1])
             invalid_execution_fields["artifact_identity"] = byte_sequence(
-                real_cases[0]["artifact_identity"] + ":mismatch"
+                self_suite_case["artifact_identity"]
             )
-            invalid_execution_values[0] = wire_record(
+            invalid_execution_values[1] = wire_record(
                 "ProviderTestExecution", invalid_execution_fields,
                 record_identity(protocol_interface, "ProviderTestExecution"),
             )
@@ -1544,9 +1544,11 @@ def main() -> None:
                 or invalid_published_result.get("native_result", {}).get(
                     "failure_code"
                 ) != 9001
-                or invalid_published_result.get("selection_count") != 7
+                or invalid_published_result.get("selection_count") != len(heterogeneous_cases)
+                or invalid_published_result.get("selected_test_identities")
+                != [list(identity.encode()) for identity in heterogeneous_test_identities]
                 or invalid_published_result.get("result_identity")
-                == real_published_result.get("result_identity")
+                == heterogeneous_published_result.get("result_identity")
                 or invalid_published_check.get("test_result_identity")
                 != invalid_published_result.get("result_identity")
             ):
@@ -1558,6 +1560,27 @@ def main() -> None:
                     "published_check": invalid_published_check,
                     "stage0_provider_run": invalid_stage0_run,
                 }, indent=2)[:18000])
+
+            heterogeneous_batch_proof["per_row_artifact_identity_mismatch"] = {
+                "test_case_identity": cross_case["test_case_identity"],
+                "declared_artifact_identity": cross_case["artifact_identity"],
+                "execution_artifact_identity": self_suite_case["artifact_identity"],
+                "execution_identity_is_another_valid_batch_artifact": True,
+                "application_outcome": invalid_document.get("outcome"),
+                "application_exit": invalid_returned[0],
+                "published_result": invalid_published_result,
+                "published_check": invalid_published_check,
+                "stage0_provider_run_exact_match": True,
+                "provider_did_not_report_pass": (
+                    invalid_published_result.get("native_result", {}).get("verdict_code") != 0
+                ),
+                "stage0_oracle_metrics": invalid_oracle_metrics,
+                "vm_wall_seconds": round(invalid_wall_seconds, 6),
+                "vm_peak_rss_bytes": (
+                    int(invalid_rss_match.group(1)) * 1024
+                    if invalid_rss_match else None
+                ),
+            }
 
             rss_match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", process.stderr)
             user_match = re.search(r"User time \(seconds\): ([0-9.]+)", process.stderr)
@@ -1731,28 +1754,6 @@ def main() -> None:
                     "vm_peak_rss_bytes": (
                         int(real_rss_match.group(1)) * 1024 if real_rss_match else None
                     ),
-                    "artifact_identity_mismatch": {
-                        "selected_count": 7,
-                        "bound_artifact_identity": real_cases[0]["artifact_identity"],
-                        "execution_artifact_identity": (
-                            real_cases[0]["artifact_identity"] + ":mismatch"
-                        ),
-                        "application_outcome": invalid_document.get("outcome"),
-                        "application_exit": invalid_returned[0],
-                        "published_result": invalid_published_result,
-                        "published_check": invalid_published_check,
-                        "stage0_provider_run_exact_match": True,
-                        "provider_did_not_report_pass": (
-                            invalid_published_result.get("native_result", {})
-                            .get("verdict_code") != 0
-                        ),
-                        "stage0_oracle_metrics": invalid_oracle_metrics,
-                        "vm_wall_seconds": round(invalid_wall_seconds, 6),
-                        "vm_peak_rss_bytes": (
-                            int(invalid_rss_match.group(1)) * 1024
-                            if invalid_rss_match else None
-                        ),
-                    },
                 },
                 "heterogeneous_artifact_batch": heterogeneous_batch_proof,
                 "rejected_publication": {
