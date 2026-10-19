@@ -10,13 +10,13 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-19T16:50:24Z",
-    "compiler_revision": "cb499a7c0a68c17a7b74553997c4c461fdee6f2a",
+    "observed_at": "2026-10-19T17:53:12.197649+00:00",
+    "compiler_revision": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
       "source": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
-      "lexer": "d1c183fce6429d42e715acaac7e1b503784a1331e25830cb00117496a6146da6",
+      "lexer": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
       "parser": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
       "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
       "kernel": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
@@ -26,10 +26,7 @@
       "project": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7"
     },
     "changed_since_previous_matrix_hashes": [
-      "source",
-      "lexer",
-      "parser",
-      "kernel"
+      "lexer"
     ],
     "targeted_checks": {
       "flow_cfg_differential": {
@@ -353,6 +350,16 @@
         "stage1_claimed": false,
         "stage2_claimed": false,
         "scope": "Current source, lexer, parser, and kernel passed selected UTF-8 scalar, Unicode token/header/location parity, frontend regression, and one Unicode-module Project-to-SSA admission. This does not prove arbitrary multi-module application execution, Language fact reuse, full compiler self-consumption, or Stage-1/Stage-2 succession."
+      },
+      "lexer_batch_early_exit": {
+        "status": "passed_and_measured",
+        "target_function": "mncs.compiler.lexer.v1::lex_tokens_from<64,1024>",
+        "evidence_artifact": "evidence/self-host-lexer-batch-early-exit-20261019T175233Z.json",
+        "evidence_sha256": "da3db32022d7979da81dec1bcfb178873e88d7f4a7fcbb7075a43e25079682e4",
+        "comparison_evidence": "evidence/self-host-lexer-batch-early-exit-comparison-20261019T175312Z.json",
+        "comparison_evidence_sha256": "a22867fc18762f7e1c2a96c32d361e39bab8c02541085123d423135fc2d8d030",
+        "canonical_vm_steps_reduced_percent": 19.317,
+        "scope": "Selected lexer batch specialization: empty and short source completion, 1,024-token cap, paginated continuation, and final EOF across fresh canonical VM artifact and Stage-0. Not full lexer-module proof or compiler succession."
       }
     }
   },
@@ -1294,7 +1301,7 @@
         "ssa_verified_function_count": 22,
         "ssa_value_count": 6257,
         "ssa_instruction_count": 2897,
-        "current_source_sha256": "9a70c1fe551961b5266c3bab441a2586f812b17079c6a0415d3e699846028fea",
+        "current_source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_word_char_profile_frontier": {
@@ -1491,6 +1498,37 @@
         "stage1_claimed": false,
         "stage2_claimed": false,
         "scope": "The flat Scan state carries page coordinates across the global scanner loop. Stage-0/Cranelift stride coverage and a fresh canonical VM global-segment frontier agree. The six-module profile is an incomplete 1M-step prefix. Full lexer verification, full project compilation, and succession remain unproven."
+      },
+      "selected_batch_early_exit_frontier": {
+        "status": "passed_and_measured",
+        "target_module": "mncs.compiler.lexer.v1",
+        "target_function": "lex_tokens_from<64,1024>",
+        "target_functions": [
+          "lex_tokens_from",
+          "batch_step",
+          "reverse_tokens"
+        ],
+        "tested_compiler_revision": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
+        "tested_compiler_branch": "campaign/native-application-readiness-20261013",
+        "candidate_lexer_source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+        "baseline_compiler_revision": "9616c10d35801596893507b737638f17c0b5c6b6",
+        "baseline_lexer_source_sha256": "9a70c1fe551961b5266c3bab441a2586f812b17079c6a0415d3e699846028fea",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "canonical_vm_artifact_identity": "sha256:8b699c063917ab50b4bd75347512dd867ba1cdf6f2edd76815f6696a7e7c73ca",
+        "evidence_artifact": "evidence/self-host-lexer-batch-early-exit-20261019T175233Z.json",
+        "evidence_sha256": "da3db32022d7979da81dec1bcfb178873e88d7f4a7fcbb7075a43e25079682e4",
+        "comparison_evidence": "evidence/self-host-lexer-batch-early-exit-comparison-20261019T175312Z.json",
+        "comparison_evidence_sha256": "a22867fc18762f7e1c2a96c32d361e39bab8c02541085123d423135fc2d8d030",
+        "canonical_vm_invocations": 4,
+        "batch_pagination_verified": true,
+        "stage0_and_canonical_vm_agreement": true,
+        "canonical_vm_steps_reduced_percent": 19.317,
+        "canonical_vm_wall_time_reduced_percent": 2.624,
+        "language_verified_facts_reused": 0,
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "scope": "Selected lexer batch specialization: empty and short source completion, 1,024-token cap, paginated continuation, and final EOF across fresh canonical VM artifact and Stage-0. Not full lexer-module proof or compiler succession."
       }
     },
     "kernel": {
@@ -4567,7 +4605,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-19T15:57:29.579324+00:00",
+    "updated_at": "2026-10-19T17:53:12.197649+00:00",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -9252,6 +9290,29 @@
       "language_verified_facts_reused": 0,
       "stage1_claimed": false,
       "stage2_claimed": false
+    },
+    "current_campaign_lexer_batch_early_exit_20261019": {
+      "observed_at": "2026-10-19T17:53:12.197649+00:00",
+      "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+      "compiler_revision": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "tested_compiler_revision": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
+      "tested_source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+      "test_harness_sha256": "6b2ad40e1ec947db2e479c37945811d3e1cd6724ec91d1e505199206e26f9d60",
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "baseline_revision": "9616c10d35801596893507b737638f17c0b5c6b6",
+      "baseline_source_sha256": "9a70c1fe551961b5266c3bab441a2586f812b17079c6a0415d3e699846028fea",
+      "canonical_vm_steps_reduced_percent": 19.317,
+      "canonical_vm_wall_time_reduced_percent": 2.624,
+      "evidence_artifact": "evidence/self-host-lexer-batch-early-exit-20261019T175233Z.json",
+      "evidence_sha256": "da3db32022d7979da81dec1bcfb178873e88d7f4a7fcbb7075a43e25079682e4",
+      "comparison_evidence": "evidence/self-host-lexer-batch-early-exit-comparison-20261019T175312Z.json",
+      "comparison_evidence_sha256": "a22867fc18762f7e1c2a96c32d361e39bab8c02541085123d423135fc2d8d030",
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "scope": "Selected lexer batch specialization: empty and short source completion, 1,024-token cap, paginated continuation, and final EOF across fresh canonical VM artifact and Stage-0. Not full lexer-module proof or compiler succession."
     }
   },
   "current_campaign_decl_parse_unit_frontier_20261018": {

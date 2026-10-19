@@ -1,0 +1,109 @@
+{
+  "artifact_identity": "sha256:f6a3ff2f41ec1a80bf1d3810daac6abc947998ce080ff3be43dbc74286503708",
+  "batch_pagination_verified": true,
+  "batch_results_match_stage0": true,
+  "batch_step_observations": [
+    {
+      "batch_index": 0,
+      "canonical_vm_steps": 33863,
+      "count": 1,
+      "eof": true,
+      "id": "empty:0",
+      "input": "empty",
+      "next": 0,
+      "reference_interpreter_steps": 24635,
+      "start": 0
+    },
+    {
+      "batch_index": 0,
+      "canonical_vm_steps": 40702,
+      "count": 12,
+      "eof": true,
+      "id": "short-source:0",
+      "input": "short-source",
+      "next": 20,
+      "reference_interpreter_steps": 30424,
+      "start": 0
+    },
+    {
+      "batch_index": 0,
+      "canonical_vm_steps": 403018,
+      "count": 1024,
+      "eof": false,
+      "id": "paged-1025-punctuation:0",
+      "input": "paged-1025-punctuation",
+      "next": 1024,
+      "reference_interpreter_steps": 343456,
+      "start": 0
+    },
+    {
+      "batch_index": 1,
+      "canonical_vm_steps": 34372,
+      "count": 2,
+      "eof": true,
+      "id": "paged-1025-punctuation:1",
+      "input": "paged-1025-punctuation",
+      "next": 1025,
+      "reference_interpreter_steps": 25050,
+      "start": 1024
+    }
+  ],
+  "canonical_vm_batches": [
+    "empty:0",
+    "short-source:0",
+    "paged-1025-punctuation:0",
+    "paged-1025-punctuation:1"
+  ],
+  "canonical_vm_calls": 4,
+  "canonical_vm_calls_bytes": 53901,
+  "canonical_vm_peak_rss_kib": 92080,
+  "canonical_vm_results_bytes": 642373,
+  "canonical_vm_steps": {
+    "maximum": 403018,
+    "total": 511955
+  },
+  "canonical_vm_wall_seconds": 4.013616,
+  "child_cpu_seconds": 21.286455,
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "compiler_head": "9616c10d35801596893507b737638f17c0b5c6b6",
+  "elapsed_seconds": 21.658027,
+  "harness_sha256": "6b2ad40e1ec947db2e479c37945811d3e1cd6724ec91d1e505199206e26f9d60",
+  "input_cases": [
+    {
+      "batch_count": 1,
+      "id": "empty",
+      "oracle_tokens_including_eof": 1,
+      "source_bytes": 0,
+      "source_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "batch_count": 1,
+      "id": "short-source",
+      "oracle_tokens_including_eof": 12,
+      "source_bytes": 20,
+      "source_sha256": "0820eacdb8b592a5d50055a858809a0ea531476ef03af97bdd1982e6c9c0628b"
+    },
+    {
+      "batch_count": 2,
+      "id": "paged-1025-punctuation",
+      "oracle_tokens_including_eof": 1026,
+      "source_bytes": 1025,
+      "source_sha256": "57ad32b31f9939a3aa928920d42603facaa50125f903ae5781b4f0a7cee818d0"
+    }
+  ],
+  "limitations": [
+    "This proves the selected lex_tokens_from generic specialization and these exact inputs; it is not full lexer-module or compiler succession proof.",
+    "The measurements are workload-specific and are not a before/after speedup claim."
+  ],
+  "reference_interpreter_steps": {
+    "maximum": 343456,
+    "total": 423565
+  },
+  "schema_version": "mncs.compiler.lexer-batch-canonical-vm-frontier/1",
+  "scope": "Direct lexer batch execution completed the empty and short inputs early, and paginated 1,025 punctuation tokens over multiple calls with exact Stage-0 and canonical-VM agreement. The 1,024-token bound and final EOF status were preserved.",
+  "source_sha256": "9a70c1fe551961b5266c3bab441a2586f812b17079c6a0415d3e699846028fea",
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+  "status": "passed",
+  "target": "mncs.compiler.lexer.v1::lex_tokens_from<64,1024>",
+  "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+}

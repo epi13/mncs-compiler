@@ -1,0 +1,81 @@
+{
+  "aggregate_change_percent": {
+    "canonical_vm_steps_reduced": 19.317,
+    "canonical_vm_wall_time_reduced": 2.624,
+    "reference_interpreter_steps_reduced": 16.986
+  },
+  "baseline": {
+    "canonical_vm_steps": {
+      "maximum": 403018,
+      "total": 511955
+    },
+    "canonical_vm_wall_seconds": 4.013616,
+    "compiler_head": "9616c10d35801596893507b737638f17c0b5c6b6",
+    "evidence": "evidence/self-host-lexer-batch-early-exit-20261019T175114Z.json",
+    "evidence_sha256": "ed2fd6b8428253d275e3aeac9b655cd8fbe677c90f8f9e0c31c14d895ff3a8cc",
+    "reference_interpreter_steps": {
+      "maximum": 343456,
+      "total": 423565
+    },
+    "source_sha256": "9a70c1fe551961b5266c3bab441a2586f812b17079c6a0415d3e699846028fea"
+  },
+  "candidate": {
+    "canonical_vm_steps": {
+      "maximum": 404370,
+      "total": 413062
+    },
+    "canonical_vm_wall_seconds": 3.908289,
+    "compiler_head": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
+    "evidence": "evidence/self-host-lexer-batch-early-exit-20261019T175233Z.json",
+    "evidence_sha256": "da3db32022d7979da81dec1bcfb178873e88d7f4a7fcbb7075a43e25079682e4",
+    "reference_interpreter_steps": {
+      "maximum": 344422,
+      "total": 351619
+    },
+    "source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692"
+  },
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "limitations": [
+    "One same-machine run per source revision for the exact three lexer inputs; timing is workload-specific.",
+    "The 1,024-token batch remains bounded at the maximum and has a small block-boundary check cost; empty, short, and final partial batches return early."
+  ],
+  "per_batch": [
+    {
+      "canonical_vm_steps_after": 356,
+      "canonical_vm_steps_before": 33863,
+      "canonical_vm_steps_reduced_percent": 98.949,
+      "id": "empty:0",
+      "reference_steps_after": 267,
+      "reference_steps_before": 24635
+    },
+    {
+      "canonical_vm_steps_after": 7448,
+      "canonical_vm_steps_before": 40702,
+      "canonical_vm_steps_reduced_percent": 81.701,
+      "id": "short-source:0",
+      "reference_steps_after": 6232,
+      "reference_steps_before": 30424
+    },
+    {
+      "canonical_vm_steps_after": 404370,
+      "canonical_vm_steps_before": 403018,
+      "canonical_vm_steps_reduced_percent": -0.335,
+      "id": "paged-1025-punctuation:0",
+      "reference_steps_after": 344422,
+      "reference_steps_before": 343456
+    },
+    {
+      "canonical_vm_steps_after": 888,
+      "canonical_vm_steps_before": 34372,
+      "canonical_vm_steps_reduced_percent": 97.417,
+      "id": "paged-1025-punctuation:1",
+      "reference_steps_after": 698,
+      "reference_steps_before": 25050
+    }
+  ],
+  "same_inputs_and_call_order": true,
+  "schema_version": "mncs.compiler.lexer-batch-early-exit-comparison/1",
+  "semantic_agreement": true,
+  "status": "passed",
+  "target": "mncs.compiler.lexer.v1::lex_tokens_from<64,1024>"
+}
