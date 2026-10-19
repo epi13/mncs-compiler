@@ -1149,3 +1149,27 @@ seven-test `mncs-test` self-suite again completed 14 canonical-VM calls with
 Stage-0 agreement, taking 0.074 seconds at 22.6 MiB peak RSS. Language verified
 facts reused remains zero; production runner migration and Forge execution are
 still separate frontiers.
+
+## Project source-count closure fast path (2026-10-19)
+
+The [current self-host matrix](SELF-HOST-MATRIX.json) records Compiler revision
+**06bfbc9349096001874fe2408e2a149ad8f05e9c**. The Project import-closure
+function now checks the selected source count and can return after a complete
+first scan for small projects. The
+[canonical-VM run record](project-import-closure-source-count-fast-path-20261019.json)
+passed 29 cases against the Python oracle and locked Stage-0 behavior.
+
+On the same four-source dense graph, the source-count path used 470 VM steps
+versus 655 for a control that takes the second scan (28.24% fewer). The shared
+25-case corpus increased from 1,887,794 to 1,888,230 steps (+436, 0.023%);
+the 4096-link case increased by 22 steps, from 1,175,474 to 1,175,496. These
+measurements show a targeted first-scan saving, not a general speedup. The
+build took 0.153 seconds at 17.8 MiB peak RSS; the canonical-VM batch took
+61.71 seconds at 37.0 MiB. Cgroup memory data was unavailable.
+
+The Project target-dependency integration also passed: it selected one target
+module among 20 unrelated record modules, matched Stage-0 for a transitive
+nominal case, and rejected a fresh missing field with matching diagnostics.
+Language verified facts reused remains zero; this improves a narrow Compiler
+resolver path and does not establish Forge execution, production Test migration,
+full Project-module proof, or succession.
