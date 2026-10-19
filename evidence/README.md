@@ -72,6 +72,15 @@ and cgroup samples were unavailable. This was a Cranelift/Stage-0 Project
 frontier, not a canonical-VM run. Language verified facts remain unreused;
 Forge execution, Stage-1, and Stage-2 remain unproven.
 
+The focused [canonical-VM record](project-import-closure-worklist-canonical-vm-20261019.json)
+builds a 491 KB selected application around `project_import_closure` and runs
+the exact eight-link cyclic graph on both Stage-0 and the canonical VM. Both
+return indices 0–7 reachable with the same completed result. Artifact
+generation took 61.21 seconds at 1.78 GB peak RSS; Stage-0 execution took
+74.67 seconds at 1.89 GB peak RSS; the VM call took 0.10 seconds at 23 MiB
+peak RSS. Cgroup measurements were unavailable. This proves the selected
+callable for this graph, not the whole Project module or a Forge route.
+
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 
 The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the

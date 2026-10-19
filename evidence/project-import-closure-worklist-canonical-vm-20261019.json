@@ -1,0 +1,84 @@
+{
+  "schema_version": "mncs.compiler.project-import-closure-worklist-canonical-vm/1",
+  "identity": "ev_compiler_project_import_closure_worklist_vm_20261019",
+  "kind": "project-import-closure-canonical-vm-execution",
+  "observed_at": "2026-10-19T15:18:52Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "checkpoint_before_validation": {
+    "identity": "chk_7360ed8f41594f4d",
+    "sequence": 442
+  },
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "revision": "6a462d3b1b4eca72fdb4901ceb1161ac52a6053b",
+    "project_source": "src/compiler/project.mncs",
+    "project_source_sha256": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_binary_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76"
+  },
+  "vm": {
+    "repository": "mncs-vm",
+    "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "binary": "target/debug/mncs-vm",
+    "binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583"
+  },
+  "verification": {
+    "status": "verified",
+    "harness": "tools/test_vm_project_import_closure_worklist.py",
+    "harness_sha256": "c27580205c84e75644726c5106b35d49857d9b3981ef40a016c50cf239acbe0f",
+    "result_file": ".build/project-import-closure-worklist-vm-candidate.json",
+    "result_file_sha256": "06f21059d55592a80295589dbe6b727c0cb3c813606adf433cb3a43169a9ca7f",
+    "artifact_id": "sha256:466ec327186e77326c729714a072ce280c474709f13c409bfb8b8c6ffc470222",
+    "artifact_json_bytes": 491182,
+    "artifact_json_sha256": "5a9ebfa0676ead9efcf753d04824d8fa0855e6dac307dc388f8247d8d310e721",
+    "application_build_request": "mncs.compiler.application-build-request/2",
+    "selected_callable": "probe.project_closure_worklist::run",
+    "project_callable": "mncs.compiler.project.v1::project_import_closure",
+    "input_import_links": 8,
+    "graph_target": 7,
+    "cycle_edge": [6, 7],
+    "worklist_fallback_exercised": true,
+    "stage0_project_oracle_valid": true,
+    "stage0_returned_reachable_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "canonical_vm_returned_reachable_indices": [0, 1, 2, 3, 4, 5, 6, 7],
+    "closure_changed_after_completion": false,
+    "stage0_canonical_vm_equivalent": true
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 61.213175,
+      "cpu_seconds": 60.89,
+      "peak_rss_bytes": 1775460352,
+      "peak_cgroup_memory_bytes": null,
+      "peak_threads": 1
+    },
+    "stage0_oracle": {
+      "wall_seconds": 74.670018,
+      "cpu_seconds": 73.93,
+      "peak_rss_bytes": 1888333824,
+      "peak_cgroup_memory_bytes": null,
+      "peak_threads": 1
+    },
+    "canonical_vm": {
+      "wall_seconds": 0.099092,
+      "peak_rss_kib": 23860,
+      "return_code": 0
+    },
+    "interpretation": "One bounded canonical-VM execution of the selected Project worklist closure; build and oracle costs are reported separately. Cgroup measurements were unavailable."
+  },
+  "scope": {
+    "canonical_vm_semantics_executed": true,
+    "forge_execution_receipt_published": false,
+    "language_verified_facts_reused": 0,
+    "language_repository_modified": false,
+    "compiler_stage1_or_stage2_succession": false
+  },
+  "limitations": [
+    "This proves the selected project_import_closure callable for one reverse-ordered cyclic link fixture, not the whole Project module or all closure graph shapes.",
+    "The wrapper supplies import-link data directly; this test is not a complete native application-build or Forge provider workflow.",
+    "Language-owned verified-fact reuse remains unimplemented and no Language worktree grant was available."
+  ]
+}
