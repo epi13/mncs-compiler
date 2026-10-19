@@ -414,18 +414,49 @@ def execute_inventory_batch(
     repeat_count: int = 1,
     arguments_by_test_case: dict[str, list[dict]] | None = None,
     type_arguments_by_test_case: dict[str, list[dict]] | None = None,
+    selected_cases: list[dict] | None = None,
 ) -> tuple[dict, float, int | None]:
     tests = inventory.get("tests", [])
     inventory_module = inventory.get("module")
     if not isinstance(inventory_module, str) or not inventory_module:
         raise AssertionError("source Test inventory omitted its module identity")
+    if not isinstance(tests, list):
+        raise AssertionError("source Test inventory omitted its case list")
     if type(repeat_count) is not int or not 1 <= repeat_count <= 8:
         raise ValueError("inventory batch repeat count must be between 1 and 8")
-    test_identities = {
-        row.get("test_case_identity")
-        for row in tests
-        if isinstance(row, dict) and isinstance(row.get("test_case_identity"), str)
-    }
+    inventory_by_identity: dict[str, dict] = {}
+    for row in tests:
+        identity = row.get("test_case_identity") if isinstance(row, dict) else None
+        if (not isinstance(identity, str) or not identity
+                or identity in inventory_by_identity):
+            raise AssertionError("source Test inventory contains a missing or duplicate case identity")
+        if row.get("module") != inventory_module:
+            raise AssertionError(f"inventory test is outside its source module: {row}")
+        inventory_by_identity[identity] = row
+
+    if selected_cases is None:
+        cases = tests
+    else:
+        if not isinstance(selected_cases, list) or not selected_cases:
+            raise ValueError("selected Test cases must be a nonempty Language selection")
+        cases = []
+        selected_identities: set[str] = set()
+        for selected in selected_cases:
+            identity = selected.get("test_case_identity") if isinstance(selected, dict) else None
+            if not isinstance(identity, str) or not identity:
+                raise AssertionError("selected Test case omitted its Language identity")
+            if identity in selected_identities:
+                raise AssertionError(f"selected Test case identity is duplicated: {identity}")
+            current = inventory_by_identity.get(identity)
+            if current is None or current != selected:
+                raise AssertionError(
+                    "selected Test case does not exactly match the current Language inventory: "
+                    f"{identity}"
+                )
+            selected_identities.add(identity)
+            cases.append(current)
+
+    test_identities = {row["test_case_identity"] for row in cases}
     unknown_arguments = set(arguments_by_test_case or {}) - test_identities
     if unknown_arguments:
         raise AssertionError(
@@ -440,9 +471,7 @@ def execute_inventory_batch(
         )
     calls = []
     for repeat_index in range(repeat_count):
-        for row in tests:
-            if row.get("module") != inventory_module:
-                raise AssertionError(f"inventory test is outside its source module: {row}")
+        for row in cases:
             call_id = row["test_case_identity"]
             if repeat_count > 1:
                 call_id = f"{call_id}:round:{repeat_index + 1}"
@@ -1546,6 +1575,161 @@ def run_real_mncs_test_suite() -> dict:
             elif results.get(test["name"]) != actual:
                 raise AssertionError(f"repeated native TestResult changed for {test['name']}: {actual}")
 
+        selected_names = {"arithmetic", "skipped"}
+        selected_identities = [
+            row["test_case_identity"]
+            for row in inventory["tests"]
+            if row["name"] in selected_names
+        ]
+        if len(selected_identities) != len(selected_names):
+            raise AssertionError("real mncs-test self-suite omitted an identity-selected case")
+        selected_request = request(
+            source,
+            [],
+            root_source_id="mncs-test/tests/self_suite.mncs",
+            modules=module_sources,
+        )
+        selected_request["schema_version"] = "mncs.compiler.application-build-request/4"
+        selected_request["test_selection"] = {
+            "kind": "case_identities",
+            "test_case_identities": selected_identities,
+        }
+        selected_probe = app.Probe(
+            directory / "identity-selection-program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "identity-selection-application-cache",
+        )
+        try:
+            selected_build, selected_build_metrics = selected_probe.send(
+                {"compile_application": selected_request}, timeout=180.0
+            )
+        finally:
+            selected_probe.close()
+        selected_inventory = require_inventory(
+            selected_build,
+            expected_names,
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/7",
+        )
+        selection = selected_build.get("test_case_selection", {})
+        selected_cases = selection.get("cases")
+        selected_roots = selected_build.get("callable_scope", {}).get("callable_roots", [])
+        selected_root_pairs = {
+            (row.get("module"), row.get("function")) for row in selected_roots
+        }
+        expected_selected_roots = {(module, name) for name in selected_names}
+        selected_artifact = selected_build.get("artifact", {}).get("value")
+        if (selected_build.get("status") != "verified"
+                or frontend_invocations(selected_build) != 1
+                or selection.get("status") != "verified"
+                or selection.get("selection") != selected_request["test_selection"]
+                or not isinstance(selected_cases, list)
+                or {row.get("name") for row in selected_cases} != selected_names
+                or selected_root_pairs != expected_selected_roots
+                or any(row.get("status") != "verified" for row in selected_roots)
+                or selected_inventory != inventory
+                or not isinstance(selected_artifact, dict)):
+            raise AssertionError(
+                "identity-selected self-suite build did not retain the full inventory and exact selected roots"
+            )
+
+        require_inventory_rejection(
+            "selection case with stale source location",
+            lambda: execute_inventory_batch(
+                selected_artifact,
+                selected_inventory,
+                selected_cases=[{**selected_cases[0], "source_span": {"start": -1}}],
+            ),
+        )
+        unselected_case_identity = next(
+            row["test_case_identity"]
+            for row in selected_inventory["tests"]
+            if row["name"] not in selected_names
+        )
+        require_inventory_rejection(
+            "arguments for an unselected Test case",
+            lambda: execute_inventory_batch(
+                selected_artifact,
+                selected_inventory,
+                arguments_by_test_case={unselected_case_identity: []},
+                selected_cases=selected_cases,
+            ),
+        )
+
+        selected_oracle_calls = [{
+            "schema_version": "0.1",
+            "target": {"module": row["module"], "function": row["name"]},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 200_000,
+        } for _ in range(repeat_count) for row in selected_cases]
+        selected_oracle_probe = app.Probe(
+            directory / "identity-selection-oracle-cache", executable=PROBE
+        )
+        try:
+            selected_oracle, selected_oracle_metrics = selected_oracle_probe.send(
+                {"project_oracle": {
+                    "root": source,
+                    "modules": module_sources,
+                    "calls": selected_oracle_calls,
+                }},
+                timeout=180.0,
+            )
+        finally:
+            selected_oracle_probe.close()
+        if (not selected_oracle.get("valid")
+                or len(selected_oracle.get("executions", []))
+                != len(selected_cases) * repeat_count):
+            raise AssertionError("Stage-0 did not execute every identity-selected Test call")
+        selected_vm, selected_vm_wall, selected_vm_peak_rss = execute_inventory_batch(
+            selected_artifact,
+            selected_inventory,
+            step_budget=200_000,
+            repeat_count=repeat_count,
+            selected_cases=selected_cases,
+        )
+        selected_vm_rows = selected_vm.get("results", [])
+        selected_expected_rows = [
+            row for _ in range(repeat_count) for row in selected_cases
+        ]
+        if (selected_vm.get("artifact_id") != selected_artifact.get("artifact_id")
+                or len(selected_vm_rows) != len(selected_expected_rows)):
+            raise AssertionError("identity-selected batch changed its artifact or exact call count")
+        selected_results: dict[str, dict] = {}
+        for index, (test, actual_row, expected_row) in enumerate(zip(
+            selected_expected_rows,
+            selected_vm_rows,
+            selected_oracle["executions"],
+        )):
+            round_index = index // len(selected_cases)
+            expected_call_id = test["test_case_identity"]
+            if repeat_count > 1:
+                expected_call_id = f"{expected_call_id}:round:{round_index + 1}"
+            if (actual_row.get("id") != expected_call_id
+                    or actual_row.get("outcome") != {"kind": "completed"}
+                    or actual_row.get("record", {}).get("artifact_id")
+                    != selected_artifact.get("artifact_id")):
+                raise AssertionError(
+                    f"identity-selected Test did not complete on the selected artifact: {actual_row}"
+                )
+            actual_values = actual_row.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if len(actual_values) != 1 or len(expected_values) != 1:
+                raise AssertionError(f"identity-selected Test returned the wrong arity: {test['name']}")
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected:
+                raise AssertionError(
+                    f"identity-selected canonical VM result differs from Stage-0 for {test['name']}"
+                )
+            if round_index == 0:
+                selected_results[test["name"]] = actual
+            elif selected_results.get(test["name"]) != actual:
+                raise AssertionError(f"identity-selected Test changed across rounds: {test['name']}")
+        if (selected_results.get("arithmetic", {}).get("verdict_code") != 0
+                or selected_results.get("skipped", {}).get("verdict_code") != 2):
+            raise AssertionError("identity-selected real Test subset lost its pass/skip outcomes")
+
         test_revision = subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
         ).strip()
@@ -1616,6 +1800,30 @@ def run_real_mncs_test_suite() -> dict:
             "stage0_oracle_metrics": oracle_metrics,
             "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
             "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
+            "identity_selected_subset_batch": {
+                "source_test_count": len(selected_inventory["tests"]),
+                "selected_test_count": len(selected_cases),
+                "selected_test_case_identities": [
+                    row["test_case_identity"] for row in selected_cases
+                ],
+                "selected_roots": [
+                    {"module": row.get("module"), "function": row.get("function")}
+                    for row in selected_roots
+                ],
+                "frontend_invocations": frontend_invocations(selected_build),
+                "verified_artifact_identity": selected_build["artifact"]["identity"],
+                "canonical_vm_artifact_identity": selected_vm["artifact_id"],
+                "canonical_vm_batch_count": len(selected_vm_rows),
+                "repeat_round_count": repeat_count,
+                "canonical_vm_results": selected_results,
+                "stage0_equivalent": True,
+                "stale_selection_case_rejected": True,
+                "unselected_case_arguments_rejected": True,
+                "build_process_metrics": selected_build_metrics,
+                "stage0_oracle_metrics": selected_oracle_metrics,
+                "canonical_vm_batch_wall_seconds": round(selected_vm_wall, 6),
+                "canonical_vm_batch_peak_rss_kib": selected_vm_peak_rss,
+            },
             "language_verified_facts_reused": 0,
         }
 
@@ -2159,6 +2367,49 @@ def main() -> None:
                      "assertions", "failures"} <= set(result)
                     for result in real_mncs_test_suite["canonical_vm_results"].values()
                 ),
+                "real_mncs_test_identity_selection_executes_only_requested_cases": (
+                    real_mncs_test_suite["identity_selected_subset_batch"][
+                        "source_test_count"
+                    ] == 7
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "selected_test_count"
+                    ] == 2
+                    and {
+                        row["function"]
+                        for row in real_mncs_test_suite["identity_selected_subset_batch"][
+                            "selected_roots"
+                        ]
+                    } == {"arithmetic", "skipped"}
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "frontend_invocations"
+                    ] == 1
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "canonical_vm_batch_count"
+                    ] == 4
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "repeat_round_count"
+                    ] == 2
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "canonical_vm_results"
+                    ]["arithmetic"]["verdict_code"] == 0
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "canonical_vm_results"
+                    ]["skipped"]["verdict_code"] == 2
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "verified_artifact_identity"
+                    ] == real_mncs_test_suite["identity_selected_subset_batch"][
+                        "canonical_vm_artifact_identity"
+                    ]
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "stage0_equivalent"
+                    ]
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "stale_selection_case_rejected"
+                    ]
+                    and real_mncs_test_suite["identity_selected_subset_batch"][
+                        "unselected_case_arguments_rejected"
+                    ]
+                ),
                 "language_verified_facts_reused": 0,
             },
             "measurements": {
@@ -2177,6 +2428,12 @@ def main() -> None:
                 "failure_isolation_test_oracle": failure_isolation_test_batch["stage0_oracle_metrics"],
                 "interrupted_vm_recovery_build": interrupted_vm_recovery_batch["build_process_metrics"],
                 "interrupted_vm_recovery_oracle": interrupted_vm_recovery_batch["stage0_oracle_metrics"],
+                "real_self_suite_identity_selected_build": real_mncs_test_suite[
+                    "identity_selected_subset_batch"
+                ]["build_process_metrics"],
+                "real_self_suite_identity_selected_oracle": real_mncs_test_suite[
+                    "identity_selected_subset_batch"
+                ]["stage0_oracle_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -2195,7 +2452,11 @@ def main() -> None:
                 "affected test identity, and invalid input publishes neither inventory nor artifact. "
                 "A selected zero-argument source Test subset can be emitted with the production "
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
-                "with Stage-0 agreement. A bounded parameterized Test slice binds two typed u64 "
+                "with Stage-0 agreement. The real seven-case mncs-test self-suite also selects "
+                "arithmetic and skipped by exact Language-issued identities, retains the full source "
+                "inventory, and executes only those two selected callables twice on the emitted "
+                "artifact with Stage-0 agreement; stale selection rows and arguments for unselected "
+                "cases are rejected before dispatch. A bounded parameterized Test slice binds two typed u64 "
                 "inputs, one signed i64, one bool, and one byte input to the Language-issued signature and repeats "
                 "its typed TestResult "
                 "through the same artifact with Stage-0 agreement; wrong arity and integer wire type "

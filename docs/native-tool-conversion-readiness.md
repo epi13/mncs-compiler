@@ -319,6 +319,25 @@ Forge execution remain separate integration work. Exact Test and Language
 source identities are recorded in
 evidence/application-build-test-inventory-v7-20261018.json.
 
+## Identity-selected self-suite execution (2026-10-19)
+
+The shared Test batch adapter now accepts the exact `cases` projection from
+application-build/7 selection. It requires every selected row to match the
+current Language-issued inventory entry, rejects duplicate or stale rows, and
+rejects argument bindings for cases outside the selected set. The real
+seven-case `mncs-test` self-suite selected `arithmetic` and `skipped` by their
+exact `test_case_identity` values. One frontend emitted the selected artifact
+while retaining all seven inventory rows; one canonical VM batch invoked only
+the two selected cases twice. All four typed results matched Stage-0, including
+the pass and skip outcomes. The selected build measured 0.424 s wall, 0.38 s
+CPU, and 26.1 MiB peak RSS; Stage-0 took 0.392 s; the VM batch measured
+0.017 s and 21,420 KiB peak RSS. Cgroup memory was unavailable. Language
+verified facts reused: zero. This strengthens exact case selection and batch
+dispatch in the Compiler harness; it does not migrate the production Test
+consumer or add Forge execution. Evidence is
+[`evidence/application-build-test-inventory-identity-selected-batch-20261019.json`](../evidence/application-build-test-inventory-identity-selected-batch-20261019.json)
+(SHA-256 `423943d8096e804cdc7584e2ce9685effb154e128f5e3406048135731673514c`).
+
 The real five-module mncs-test readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across
 five resolved modules and 24 functions; the selected executable closure,
