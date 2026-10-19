@@ -700,6 +700,17 @@ cursor, and EOF result. The canonical VM batch took 2.10 seconds and peaked at
 56,000 KiB RSS; the full frontier took 20.98 seconds. This is a selected
 executable batch frontier, not full module proof or Stage-1/Stage-2 succession.
 
+## Current-source global segment frontier (2026-10-19)
+
+The [authenticated rerun report](self-host-global-segment-canonical-vm-current-source-20261019T055838Z.json)
+revalidates `segment.next_token_global` and `significant_global` at Compiler
+revision `eacb5097e7bbfe0b134af222d251a11a75fbf222`. Stage-0, the reference
+interpreter, Cranelift, and a fresh canonical VM agree across 1,224 cases with
+the same semantic digest. The frontier took 91.83 seconds and 89.04 child CPU
+seconds; child peak RSS was 463,588 KiB and canonical VM peak RSS was 155,600
+KiB. Cgroup readings were unavailable. This remains a selected cursor
+frontier, not full segment/lexer verification or Stage-1/Stage-2 succession.
+
 ## Probe producer identity cache cost (2026-10-16)
 
 The [probe cache identity report](native-app-readiness-probe-cache-identity-20261016.json)

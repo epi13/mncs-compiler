@@ -17279,5 +17279,66 @@
       "The selected digest_app workload executed through the canonical VM test adapter, not the Forge application provider route.",
       "This does not establish complete mncs-test workflow parity or compiler succession."
     ]
+  },
+  "current_campaign_global_segment_frontier_revalidated_20261019": {
+    "kind": "global-segment-canonical-vm-current-source",
+    "status": "passed",
+    "observed_at": "2026-10-19T05:58:38.631433Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "checkpoint_before_verification": "chk_f0186fe831459b4f",
+    "checkpoint_sequence_before_verification": 435,
+    "tested_compiler_revision": "eacb5097e7bbfe0b134af222d251a11a75fbf222",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "segment"
+    ],
+    "target_module": "mncs.compiler.segment.v1",
+    "target_functions": [
+      "next_token_global",
+      "significant_global"
+    ],
+    "module_source_sha256": {
+      "source": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "test_harness": "tools/test_vm_global_segment_frontier.py",
+    "test_harness_sha256": "ad9ca1a478b34af970c82826909cbda8254c1852a55ef39b03f90c585ad9f5a7",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "eacb5097e7bbfe0b134af222d251a11a75fbf222",
+    "evidence_artifact": "evidence/self-host-global-segment-canonical-vm-current-source-20261019T055838Z.json",
+    "evidence_sha256": "f16bdbb3f697e61b53456ae1ada047a332a81dc975f991ccc977429ba022bc26",
+    "canonical_vm_artifact_identity": "sha256:96bd13e1f768f5f8b8d19fad63762105b8a0e00a29bc2ce475885a2a0aafa384",
+    "case_count": 1224,
+    "per_function_case_counts": {
+      "next_token": 778,
+      "significant": 446
+    },
+    "per_stride_case_counts": {
+      "1": 302,
+      "2": 1,
+      "7": 302,
+      "16": 2,
+      "64": 315,
+      "256": 302
+    },
+    "executor_case_counts": {
+      "reference_interpreter": 1224,
+      "cranelift": 1224,
+      "canonical_vm": 1224
+    },
+    "semantic_digest_sha256": "d2d5e32e70ff5e6d424f4008cad395b3c2a5d5dc9785d4f22727f7c13bfe0eaf",
+    "whole_frontier_seconds": 91.828304,
+    "child_cpu_seconds": 89.035099,
+    "child_peak_rss_kib": 463588,
+    "canonical_vm_batch_seconds": 21.503312,
+    "canonical_vm_peak_rss_kib": 155600,
+    "cgroup_memory_measurements": null,
+    "claim_boundary": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. Additional identifier window-boundary, overlong, nonzero-cursor, and malformed page-table cases have explicit expected tokens. This is a selected cursor frontier, not full segment/lexer module verification.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }
