@@ -338,6 +338,33 @@ consumer or add Forge execution. Evidence is
 [`evidence/application-build-test-inventory-identity-selected-batch-20261019.json`](../evidence/application-build-test-inventory-identity-selected-batch-20261019.json)
 (SHA-256 `423943d8096e804cdc7584e2ce9685effb154e128f5e3406048135731673514c`).
 
+## Heterogeneous Test artifact batch (2026-10-19)
+
+The provider boundary now accepts the per-row `artifact_identity` already
+defined by `ProviderTestExecution`. The previous harness restriction requiring
+every selected test to come from one artifact prevented it from exercising the
+protocol's actual identity contract. The run compiled
+`tests.provider_cross_module::separate_module_identity` from the real
+`mncs-test` source into a distinct application-build/7 artifact, executed it in
+the canonical VM, and combined its compiler-issued test, declaration,
+callable, and signature identities with the real self-suite `arithmetic` case.
+The two source tests came from distinct artifact identities. Each individual
+TestResult matched Stage-0; the native provider app then checked the row-level
+bindings and published a two-case passing summary and check record exactly
+matching the independent Stage-0 provider fold.
+
+The second Test artifact build measured 0.205 s wall, 0.18 s CPU, and 15.3 MiB
+peak RSS. Its VM call measured 0.0115 s and 20,908 KiB peak RSS. The provider
+app's heterogeneous fold measured 0.0375 s and 22.5 MiB VM peak RSS; Stage-0
+took 0.679 s wall, 0.64 s CPU, and 63.4 MiB peak RSS. Cgroup memory was unavailable.
+This closes the local sequence-copy execution gap recorded in the earlier
+provider boundary report and proves the compiler/VM/provider contract for a
+small multi-artifact batch. It still runs through the local bounded structured
+file adapter; Forge, Environment, Store publication, and fresh-process Store
+readback remain open. Language verified facts reused: zero. Evidence is
+[`evidence/native-test-provider-heterogeneous-batch-20261019-final.json`](../evidence/native-test-provider-heterogeneous-batch-20261019-final.json)
+(SHA-256 `c6b52ba37735e546f3fd431b606b2f9e8e43d4e8a247e83954196bedb1307072`).
+
 The real five-module mncs-test readiness application also now verifies a
 comment-only root edit from a fresh process. The full frontend ran once across
 five resolved modules and 24 functions; the selected executable closure,
@@ -536,11 +563,10 @@ No production host implementation is safe to remove from this evidence. The nati
 
 ## Prioritized next steps
 
-1. Implement canonical VM `sequence_copy` support through its owning repository. The real Test provider app already completes its structured read and first structured digest, then stops at this instruction before it can produce identities and publish results.
-2. Feed application-build/7 into the production mncs-test native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the Compiler can now select source tests by Language-issued case identity, but the production consumer has not yet integrated it.
-3. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
-4. Complete the effectful digest application through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
-5. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
-6. Retire host policy or compatibility code one behavior at a time only after full native-command parity proves it unnecessary.
+1. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
+2. Feed application-build/7 into the production mncs-test native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the Compiler can now select and execute source tests by Language-issued case identity, including across distinct artifacts.
+3. Complete the effectful digest and Test provider applications through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
+4. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
+5. Retire host policy or compatibility code one behavior at a time only after full native-command parity proves it unnecessary.
 
 Gate A passes for the selected multi-module applications. Gate B remains partial. Gate C passes for the selected native readiness and `mncs.test.digest::build_digest` workloads through Forge and canonical Store, while the full production Test command and Monitor/Automation path remain open. Gate D is a concrete conversion assessment rather than a claim that the complete tool is ready to replace.

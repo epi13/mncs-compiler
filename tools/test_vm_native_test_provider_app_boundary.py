@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Verify the production Test provider application's multi-capability boundary.
+"""Verify the production Test provider application's capability boundary.
 
-This slice compiles the real provider entry and executes its invalid-argument
-path through the canonical VM with no capabilities admitted. It proves that
-the VM runner can validate one capability identity in an artifact whose other
-host calls use a separate identity, while the MNCS application rejects the
-bad context before performing effects.
+The harness compiles the real application and protocol, checks denied and
+invalid calls, and executes real inventory results through bounded structured
+host operations. It also combines Test callables from distinct verified
+artifacts and compares the native provider fold with Stage-0. This local VM
+adapter is not a Forge or canonical Store integration test.
 """
 from __future__ import annotations
 
@@ -136,7 +136,6 @@ def provider_request_wire(interface: dict, provider_request_identity: str,
     callable_entries = []
     executions = []
     selected = []
-    artifact_identity = None
     for case in cases:
         required = {
             "artifact_identity", "test_case_identity", "declaration_identity",
@@ -144,10 +143,11 @@ def provider_request_wire(interface: dict, provider_request_identity: str,
         }
         if not required <= set(case):
             raise AssertionError(f"real compiler Test binding omitted required identities: {case}")
-        if artifact_identity is None:
-            artifact_identity = case["artifact_identity"]
-        elif artifact_identity != case["artifact_identity"]:
-            raise AssertionError("self-suite provider batch mixes artifact revisions")
+        for key in required - {"native_result"}:
+            if not isinstance(case[key], str) or not case[key]:
+                raise AssertionError(f"real compiler Test binding has an invalid {key}: {case}")
+        if not isinstance(case["native_result"], dict):
+            raise AssertionError(f"real compiler Test binding has no typed native result: {case}")
         identity_fields = {
             key: byte_sequence(case[key]) for key in (
                 "artifact_identity", "test_case_identity", "declaration_identity",
@@ -311,6 +311,134 @@ def expect_runner_rejection(binary: Path, artifact_path: Path, identity: str,
             f"rc={process.returncode}, stderr={process.stderr[-2000:]}"
         )
     return expected
+
+
+def compile_cross_module_provider_case(cache_dir: Path) -> tuple[dict, dict]:
+    """Compile and execute one Test from its own real source module artifact."""
+    source_path = TEST_ROOT / "tests/provider_cross_module.mncs"
+    source = source_path.read_text(encoding="utf-8")
+    modules = {
+        "mncs.test.assertions": MODULE_PATHS["mncs.test.assertions"].read_text(encoding="utf-8"),
+    }
+    build_request = test_inventory.request(
+        source,
+        [],
+        root_source_id="mncs-test/tests/provider_cross_module.mncs",
+        modules=modules,
+    )
+    build_request["schema_version"] = "mncs.compiler.application-build-request/4"
+    build_request["test_selection"] = {"kind": "all_source_cases"}
+    probe = support.Probe(
+        cache_dir / "program-cache",
+        executable=support.PROBE,
+        application_cache_dir=cache_dir / "application-cache",
+    )
+    try:
+        built, build_metrics = probe.send(
+            {"compile_application": build_request}, timeout=180.0,
+        )
+    finally:
+        probe.close()
+
+    inventory = test_inventory.require_inventory(
+        built,
+        {"separate_module_identity"},
+        expected_module="tests.provider_cross_module",
+        response_schema="mncs.compiler.application-build/7",
+    )
+    if (built.get("unresolved_obligations") != []
+            or test_inventory.frontend_invocations(built) != 1):
+        raise AssertionError("separate Test module was not verified in one application frontend pass")
+    artifact = built.get("artifact", {}).get("value")
+    artifact_identity = built.get("artifact", {}).get("identity")
+    if (not isinstance(artifact, dict) or not isinstance(artifact_identity, str)
+            or artifact.get("artifact_id") != artifact_identity):
+        raise AssertionError("separate Test module omitted its verified executable artifact identity")
+
+    test_case = inventory["tests"][0]
+    vm, vm_wall, vm_peak_rss = test_inventory.execute_inventory_batch(
+        artifact, inventory, step_budget=200_000,
+    )
+    vm_rows = vm.get("results", [])
+    if (vm.get("artifact_id") != artifact_identity or len(vm_rows) != 1
+            or vm_rows[0].get("id") != test_case["test_case_identity"]
+            or vm_rows[0].get("outcome") != {"kind": "completed"}
+            or vm_rows[0].get("record", {}).get("artifact_id") != artifact_identity):
+        raise AssertionError("separate Test case did not execute under its own selected artifact identity")
+    actual_values = vm_rows[0].get("record", {}).get("returned", [])
+    if len(actual_values) != 1:
+        raise AssertionError("separate Test case returned the wrong result arity")
+    native_result = test_inventory.app.decode_wire(
+        test_inventory.app.vm_to_wire(actual_values[0])
+    )
+
+    oracle_probe = support.Probe(cache_dir / "stage0-cache", executable=support.PROBE)
+    try:
+        oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
+            "root": source,
+            "modules": modules,
+            "calls": [{
+                "schema_version": "0.1",
+                "target": {
+                    "module": test_case["module"],
+                    "function": test_case["name"],
+                },
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 200_000,
+            }],
+        }}, timeout=180.0)
+    finally:
+        oracle_probe.close()
+    executions = oracle.get("executions", [])
+    if (not oracle.get("valid") or len(executions) != 1
+            or executions[0].get("status") != "returned"
+            or len(executions[0].get("returned", [])) != 1):
+        raise AssertionError("Stage-0 did not return the separate Test module's typed result")
+    expected_result = test_inventory.app.decode_wire(executions[0]["returned"][0])
+    if native_result != expected_result or native_result.get("verdict_code") != 0:
+        raise AssertionError("separate Test result differs between canonical VM and Stage-0")
+
+    callable_row = next((row for row in artifact.get("callables", [])
+                         if row.get("module") == test_case["module"]
+                         and row.get("name") == test_case["name"]), None)
+    binding = callable_row.get("test_binding") if callable_row else None
+    required_binding_fields = {
+        "test_case_identity", "declaration_identity", "callable_identity",
+        "signature_identity",
+    }
+    if (not isinstance(binding, dict)
+            or not required_binding_fields <= set(binding)
+            or binding.get("test_case_identity") != test_case["test_case_identity"]
+            or binding.get("declaration_identity") != test_case["declaration_identity"]):
+        raise AssertionError("separate Test artifact omitted its Language inventory callable binding")
+    case = {
+        "name": test_case["name"],
+        "artifact_identity": artifact_identity,
+        "test_case_identity": binding["test_case_identity"],
+        "declaration_identity": binding["declaration_identity"],
+        "callable_identity": binding["callable_identity"],
+        "signature_identity": binding["signature_identity"],
+        "native_result": native_result,
+    }
+    proof = {
+        "source_path": str(source_path),
+        "source_sha256": sha(source.encode("utf-8")),
+        "module": test_case["module"],
+        "test_name": test_case["name"],
+        "test_case_identity": case["test_case_identity"],
+        "artifact_identity": artifact_identity,
+        "artifact_bytes": len(json.dumps(
+            artifact, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")),
+        "frontend_invocations": test_inventory.frontend_invocations(built),
+        "build_metrics": build_metrics,
+        "canonical_vm_result_matches_stage0": True,
+        "canonical_vm_wall_seconds": round(vm_wall, 6),
+        "canonical_vm_peak_rss_kib": vm_peak_rss,
+        "stage0_oracle_metrics": oracle_metrics,
+    }
+    return case, proof
 
 
 def main() -> None:
@@ -981,6 +1109,186 @@ def main() -> None:
                     "real mncs-test self-suite did not produce the verified seven-case provider input: "
                     + json.dumps(real_suite, indent=2)[:6000]
                 )
+
+            cross_case, cross_case_proof = compile_cross_module_provider_case(
+                call_dir / "cross-module-test-build"
+            )
+            self_suite_case = next(
+                (case for case in real_cases if case.get("name") == "arithmetic"), None
+            )
+            if self_suite_case is None:
+                raise AssertionError("real mncs-test self-suite omitted its arithmetic callable")
+            heterogeneous_cases = [self_suite_case, cross_case]
+            heterogeneous_artifact_identities = sorted({
+                case["artifact_identity"] for case in heterogeneous_cases
+            })
+            if len(heterogeneous_artifact_identities) != 2:
+                raise AssertionError("separate Test modules did not produce distinct executable artifacts")
+            heterogeneous_request = provider_request_wire(
+                protocol_interface, provider_request_identity, heterogeneous_cases,
+            )
+            heterogeneous_dir = call_dir / "heterogeneous-artifact-batch"
+            heterogeneous_dir.mkdir()
+            heterogeneous_input = heterogeneous_dir / "request.json"
+            heterogeneous_output = heterogeneous_dir / "result.json"
+            heterogeneous_check = heterogeneous_dir / "check.json"
+            heterogeneous_input.write_text(
+                json.dumps(heterogeneous_request, sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            heterogeneous_context = application_context(
+                interface, heterogeneous_dir,
+                artifact_paths=[heterogeneous_input, heterogeneous_output, heterogeneous_check],
+            )
+            heterogeneous_call_path = heterogeneous_dir / "execution.json"
+            heterogeneous_call_path.write_text(
+                json.dumps(call_request(heterogeneous_context), sort_keys=True, separators=(",", ":")),
+                encoding="utf-8",
+            )
+            heterogeneous_oracle_probe = support.Probe(
+                ROOT / ".build/native-app-readiness/provider-heterogeneous-oracle-cache",
+                executable=support.PROBE,
+            )
+            try:
+                heterogeneous_oracle, heterogeneous_oracle_metrics = heterogeneous_oracle_probe.send(
+                    {"project_oracle": {
+                        "root": root,
+                        "modules": modules,
+                        "calls": [{
+                            "schema_version": "0.1",
+                            "target": {"module": ENTRY_MODULE, "function": "run_selected_batch"},
+                            "arguments": [heterogeneous_request],
+                            "type_arguments": [],
+                            "step_budget": 200_000,
+                            "policy": {"effects": "realize"},
+                            "host_grants": [{
+                                "capability": "provider_digest",
+                                "locator": "bounded-heterogeneous-test-provider-oracle",
+                                "bytes": [],
+                            }],
+                        }],
+                    }}, timeout=180.0,
+                )
+            finally:
+                heterogeneous_oracle_probe.close()
+            heterogeneous_oracle_rows = heterogeneous_oracle.get("executions", [])
+            if (not heterogeneous_oracle.get("valid")
+                    or len(heterogeneous_oracle_rows) != 1
+                    or heterogeneous_oracle_rows[0].get("status") != "returned"
+                    or len(heterogeneous_oracle_rows[0].get("returned", [])) != 1):
+                raise AssertionError(
+                    "Stage-0 rejected or failed the real heterogeneous-artifact provider request: "
+                    + json.dumps(heterogeneous_oracle, indent=2)[:10000]
+                )
+            heterogeneous_stage0 = digest_app.support.decode_wire(
+                heterogeneous_oracle_rows[0]["returned"][0]
+            )
+            heterogeneous_started = time.monotonic()
+            heterogeneous_process = subprocess.run([
+                "/usr/bin/time", "-v", str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "single", str(heterogeneous_call_path),
+                str(heterogeneous_input), str(heterogeneous_output), "success",
+                str(heterogeneous_check),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            heterogeneous_wall_seconds = time.monotonic() - heterogeneous_started
+            if heterogeneous_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the real heterogeneous-artifact Test provider batch: "
+                    f"rc={heterogeneous_process.returncode}, stderr={heterogeneous_process.stderr[-5000:]}"
+                )
+            heterogeneous_document = json.loads(heterogeneous_process.stdout)
+            heterogeneous_record = heterogeneous_document.get("record", {})
+            heterogeneous_effects = heterogeneous_record.get("effects", [])
+            heterogeneous_returned = [digest_app.support.decode_wire(value)
+                                       for value in heterogeneous_document.get("returned_wire", [])]
+            if not heterogeneous_output.is_file() or not heterogeneous_check.is_file():
+                raise AssertionError("heterogeneous-artifact provider batch did not publish typed outputs")
+            heterogeneous_published_result = digest_app.support.decode_wire(json.loads(
+                heterogeneous_output.read_text(encoding="utf-8")
+            ))
+            heterogeneous_published_check = digest_app.support.decode_wire(json.loads(
+                heterogeneous_check.read_text(encoding="utf-8")
+            ))
+            heterogeneous_operations = [
+                row.get("request", {}).get("operation") for row in heterogeneous_effects
+            ]
+            heterogeneous_native_result = heterogeneous_published_result.get("native_result", {})
+            heterogeneous_rss_match = re.search(
+                r"Maximum resident set size \(kbytes\): (\d+)", heterogeneous_process.stderr
+            )
+            expected_heterogeneous_admitted = sorted([
+                "provider_artifact", "provider_digest",
+                *[
+                    identity
+                    for binding in heterogeneous_document.get("capability_binding", {}).get("bindings", [])
+                    for identity in binding.get("call_authority_identities", [])
+                ],
+            ])
+            heterogeneous_test_identities = [
+                case["test_case_identity"] for case in heterogeneous_cases
+            ]
+            if (
+                heterogeneous_document.get("outcome", {}).get("kind") != "completed"
+                or heterogeneous_record.get("admitted_capabilities") != expected_heterogeneous_admitted
+                or heterogeneous_operations != [
+                    "structured_read", *( ["structured_digest"] * 5 ),
+                    "structured_write", "structured_write",
+                ]
+                or len(heterogeneous_effects) != 8
+                or any(row.get("outcome_tag") != "completed" for row in heterogeneous_effects)
+                or len(heterogeneous_returned) != 1
+                or heterogeneous_returned[0].get("exit_code") != 0
+                or heterogeneous_published_result != heterogeneous_stage0.get("test_result")
+                or heterogeneous_published_check != heterogeneous_stage0.get("check_result")
+                or heterogeneous_published_result.get("selection_count") != 2
+                or heterogeneous_published_result.get("selected_test_identities")
+                != [list(identity.encode()) for identity in heterogeneous_test_identities]
+                or heterogeneous_native_result.get("verdict_code") != 0
+                or heterogeneous_native_result.get("assertions") != 2
+                or heterogeneous_native_result.get("failures") != 0
+                or heterogeneous_published_check.get("test_result_identity")
+                != heterogeneous_published_result.get("result_identity")
+            ):
+                raise AssertionError(json.dumps({
+                    "outcome": heterogeneous_document.get("outcome"),
+                    "return": heterogeneous_returned,
+                    "operations": heterogeneous_operations,
+                    "admitted_capabilities": heterogeneous_record.get("admitted_capabilities"),
+                    "published_result": heterogeneous_published_result,
+                    "published_check": heterogeneous_published_check,
+                    "stage0": heterogeneous_stage0,
+                }, indent=2)[:16000])
+            heterogeneous_batch_proof = {
+                "selection_count": 2,
+                "test_case_identities": heterogeneous_test_identities,
+                "test_module_artifact_identities": [
+                    case["artifact_identity"] for case in heterogeneous_cases
+                ],
+                "distinct_test_module_artifact_count": len(heterogeneous_artifact_identities),
+                "second_module_compilation_and_execution": cross_case_proof,
+                "provider_artifact_identity": artifact_identity,
+                "provider_outcome": heterogeneous_document.get("outcome"),
+                "provider_exit": heterogeneous_returned[0],
+                "effects": [
+                    {
+                        "operation": row.get("request", {}).get("operation"),
+                        "capability": row.get("request", {}).get("capability"),
+                        "outcome_tag": row.get("outcome_tag"),
+                    }
+                    for row in heterogeneous_effects
+                ],
+                "published_result": heterogeneous_published_result,
+                "published_check": heterogeneous_published_check,
+                "stage0_provider_run_exact_match": True,
+                "stage0_oracle_metrics": heterogeneous_oracle_metrics,
+                "vm_wall_seconds": round(heterogeneous_wall_seconds, 6),
+                "vm_peak_rss_bytes": (
+                    int(heterogeneous_rss_match.group(1)) * 1024
+                    if heterogeneous_rss_match else None
+                ),
+            }
+
             real_request_value = provider_request_wire(
                 protocol_interface, provider_request_identity, real_cases,
             )
@@ -1446,6 +1754,7 @@ def main() -> None:
                         ),
                     },
                 },
+                "heterogeneous_artifact_batch": heterogeneous_batch_proof,
                 "rejected_publication": {
                     "application_exit": failed_write_returned[0],
                     "effect_operations": [
@@ -1469,7 +1778,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "The local bounded structured-file provider completes the single-test, two-test, and real seven-case mncs-test self-suite provider paths; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
+                    "The local bounded structured-file provider completes single-test, two-test, heterogeneous-artifact, and real seven-case mncs-test self-suite paths; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,
@@ -1490,6 +1799,12 @@ def main() -> None:
                 "missing_capability_outcome": evidence["missing_capability"]["outcome"].get("kind"),
                 "two_capability_runtime_outcome": evidence["two_capability_admission_attempt"]["outcome"].get("kind"),
                 "multi_test_batch_runtime_outcome": evidence["multi_test_batch"]["outcome"].get("kind"),
+                "heterogeneous_artifact_batch_outcome": evidence[
+                    "heterogeneous_artifact_batch"
+                ]["provider_outcome"].get("kind"),
+                "heterogeneous_artifact_count": evidence[
+                    "heterogeneous_artifact_batch"
+                ]["distinct_test_module_artifact_count"],
             }, indent=2))
     finally:
         artifact_path.unlink(missing_ok=True)
