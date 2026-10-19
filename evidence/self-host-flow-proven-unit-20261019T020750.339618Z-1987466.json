@@ -1,0 +1,517 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "flow-proven-unit-canonical-vm-frontier",
+  "observed_at": "2026-10-19T02:09:28.141567Z",
+  "status": "completed_with_known_diagnostic_divergence",
+  "compiler": {
+    "tested_source_revision": "2a4f4257c801667f7102d81328a8dade7c361f9d",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "segment",
+      "decl",
+      "flow"
+    ],
+    "module_source_sha256": {
+      "source": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+      "parser": "1b8f10e45f5467e7569262ce7c249424b55921d8227a9cf9329d26b5e946bb4a",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+      "flow": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd"
+    },
+    "test_harness": "tools/test_vm_flow_proven_frontier.py",
+    "test_harness_sha256": "fcac8870623d00fd7fd97395be4aeb55123ea6793f49b8743ebe0f05208c7963"
+  },
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/debug/mncs-vm",
+    "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+    "vm_repository": "/home/epi13/Documents/Projects/mncs-vm",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "workload": {
+    "module": "mncs.compiler.flow.v1",
+    "function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+    "artifact_id": "sha256:aecf62d521f3720d8b214ae665bb0f464224b9faee04ba73b4c0dc30354135bf",
+    "selected_case_count": 10,
+    "cases": [
+      {
+        "name": "fallthrough_join",
+        "source_bytes": 326,
+        "source_sha256": "49a8e65eca21063ff8dfee1ec511f010522083824beb6c8dc49c58418e164247",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 1,
+          "returns": 2
+        },
+        "expected_iterations": 0,
+        "stage0_bounded_iterations": []
+      },
+      {
+        "name": "unreachable_join",
+        "source_bytes": 326,
+        "source_sha256": "c023565c534038b80fedc789bdec84796a3b02caade27cc8bc5de1ec7288d2d0",
+        "stage0_diagnostics": [
+          [
+            "MNB038",
+            0,
+            326
+          ]
+        ],
+        "expected_mnb_count": 1,
+        "stage0_ssa_shape": null,
+        "expected_iterations": 0,
+        "stage0_bounded_iterations": []
+      },
+      {
+        "name": "bounded_iteration_counted",
+        "source_bytes": 326,
+        "source_sha256": "2c68369e73f30f5122a4db80c3398578c22106cf5e0c63743e09205cfa041b2a",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 1,
+          "returns": 1
+        },
+        "expected_iterations": 1,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 4,
+            "domain": "attempts",
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "bounded_iteration_sequence",
+        "source_bytes": 326,
+        "source_sha256": "fb8e19dd11577bfacdf6de6f2c0f86ed59a3e5d01a0852ca34859b157c0f0e56",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 1,
+          "returns": 1
+        },
+        "expected_iterations": 1,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 8,
+            "domain": {
+              "over_sequence": {
+                "element_type": "byte"
+              }
+            },
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "nested_bounded_iteration",
+        "source_bytes": 326,
+        "source_sha256": "a59e65d773d682448fa9d5f2ded838e278ca5aa25297833e45a17c34cdbe1a6e",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 2,
+          "returns": 1
+        },
+        "expected_iterations": 2,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 2,
+            "domain": "attempts",
+            "has_header": true,
+            "has_backedge": true
+          },
+          {
+            "bound": 4,
+            "domain": "attempts",
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "source_bytes": 326,
+        "source_sha256": "6b51d3cf0a8fb2c37b8ba1f663ec378de2e781487b92d4cbda924da2eb4fc12a",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 2,
+          "returns": 2
+        },
+        "expected_iterations": 1,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 4,
+            "domain": "attempts",
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "conditional_return_sequence_iteration",
+        "source_bytes": 326,
+        "source_sha256": "14a726149a3de7baaaa2ebd469f72a181d93aa79efa84c942c4d2e98b2af9ffc",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 2,
+          "returns": 2
+        },
+        "expected_iterations": 1,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 8,
+            "domain": {
+              "over_sequence": {
+                "element_type": "byte"
+              }
+            },
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "multiple_conditional_exits_counted_iteration",
+        "source_bytes": 326,
+        "source_sha256": "5f3bdceab5342bc9d378a3419ff0041b0e481387a8bc549652fc4b904db5ff16",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 3,
+          "returns": 3
+        },
+        "expected_iterations": 1,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 4,
+            "domain": "attempts",
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "multiple_conditional_exits_sequence_iteration",
+        "source_bytes": 326,
+        "source_sha256": "08222fe2b4ce1fbb48baa37240666a03da8492fcd8df79e5c0c8380bf529c044",
+        "stage0_diagnostics": [],
+        "expected_mnb_count": 0,
+        "stage0_ssa_shape": {
+          "branches": 3,
+          "returns": 3
+        },
+        "expected_iterations": 1,
+        "stage0_bounded_iterations": [
+          {
+            "bound": 8,
+            "domain": {
+              "over_sequence": {
+                "element_type": "byte"
+              }
+            },
+            "has_header": true,
+            "has_backedge": true
+          }
+        ]
+      },
+      {
+        "name": "unreachable_loop_join",
+        "source_bytes": 326,
+        "source_sha256": "6e395bf3ee7e59b69bd645df1aaf71575c46586763582cce2a8a54fa5c8542e6",
+        "stage0_diagnostics": [
+          [
+            "MNB010",
+            0,
+            326
+          ],
+          [
+            "MNB010",
+            0,
+            326
+          ],
+          [
+            "MNB017",
+            0,
+            326
+          ],
+          [
+            "MNB017",
+            0,
+            326
+          ],
+          [
+            "MNB038",
+            0,
+            326
+          ]
+        ],
+        "expected_mnb_count": 5,
+        "stage0_ssa_shape": null,
+        "expected_iterations": null,
+        "stage0_bounded_iterations": []
+      }
+    ]
+  },
+  "verification": {
+    "stage0_diagnostic_cases": 10,
+    "unreachable_loop_join_cases": 1,
+    "diagnostic_exact_match_cases": 9,
+    "known_diagnostic_divergences": [
+      {
+        "case": "unreachable_loop_join",
+        "stage0_diagnostics": [
+          [
+            "MNB010",
+            0,
+            326
+          ],
+          [
+            "MNB010",
+            0,
+            326
+          ],
+          [
+            "MNB017",
+            0,
+            326
+          ],
+          [
+            "MNB017",
+            0,
+            326
+          ],
+          [
+            "MNB038",
+            0,
+            326
+          ]
+        ],
+        "canonical_vm_diagnostics": [
+          [
+            "MNB038",
+            0,
+            326
+          ]
+        ],
+        "reason": "Stage-0 emits two MNB010 and two MNB017 diagnostics while validating the next-state expression after an unreachable loop join. Native Flow keeps the already-verified expression in the function's explicit elided-expression inventory, emits no executable backedge, and reports MNB038. The diagnostic difference remains recorded and is not counted as parity."
+      }
+    ],
+    "canonical_vm_flow_cases": 10,
+    "stage0_bounded_iteration_cases": 7,
+    "stage0_iteration_metadata_matches_vm": true,
+    "canonical_vm_semantic_digest": "e6002b288f01a4e91834f9a7502d61f738aaf4a09aa57a657cf424e975d90b60",
+    "canonical_vm_execution_steps": [
+      1766313,
+      1738950,
+      1730927,
+      2691257,
+      2223301,
+      2078867,
+      3189579,
+      2507039,
+      3784678,
+      2206438
+    ],
+    "canonical_vm_graph_shapes": [
+      {
+        "name": "fallthrough_join",
+        "functions": 1,
+        "blocks": 4,
+        "branches": 1,
+        "jumps": 1,
+        "returns": 2,
+        "typed_expressions": 4,
+        "typed_operations": 4,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 0,
+        "iteration_backedges": 0,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "unreachable_join",
+        "functions": 1,
+        "blocks": 4,
+        "branches": 1,
+        "jumps": 0,
+        "returns": 3,
+        "typed_expressions": 4,
+        "typed_operations": 4,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 0,
+        "iteration_backedges": 0,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "bounded_iteration_counted",
+        "functions": 1,
+        "blocks": 4,
+        "branches": 1,
+        "jumps": 2,
+        "returns": 1,
+        "typed_expressions": 3,
+        "typed_operations": 5,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 1,
+        "iteration_backedges": 1,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "bounded_iteration_sequence",
+        "functions": 1,
+        "blocks": 4,
+        "branches": 1,
+        "jumps": 2,
+        "returns": 1,
+        "typed_expressions": 5,
+        "typed_operations": 8,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 1,
+        "iteration_backedges": 1,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "nested_bounded_iteration",
+        "functions": 1,
+        "blocks": 7,
+        "branches": 2,
+        "jumps": 4,
+        "returns": 1,
+        "typed_expressions": 5,
+        "typed_operations": 5,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 2,
+        "iteration_backedges": 2,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "conditional_return_counted_iteration",
+        "functions": 1,
+        "blocks": 7,
+        "branches": 2,
+        "jumps": 3,
+        "returns": 2,
+        "typed_expressions": 5,
+        "typed_operations": 7,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 1,
+        "iteration_backedges": 1,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "conditional_return_sequence_iteration",
+        "functions": 1,
+        "blocks": 7,
+        "branches": 2,
+        "jumps": 3,
+        "returns": 2,
+        "typed_expressions": 7,
+        "typed_operations": 15,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 1,
+        "iteration_backedges": 1,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "multiple_conditional_exits_counted_iteration",
+        "functions": 1,
+        "blocks": 10,
+        "branches": 3,
+        "jumps": 4,
+        "returns": 3,
+        "typed_expressions": 7,
+        "typed_operations": 11,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 1,
+        "iteration_backedges": 1,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "multiple_conditional_exits_sequence_iteration",
+        "functions": 1,
+        "blocks": 10,
+        "branches": 3,
+        "jumps": 4,
+        "returns": 3,
+        "typed_expressions": 9,
+        "typed_operations": 22,
+        "elided_typed_expressions": 0,
+        "elided_typed_operations": 0,
+        "iteration_headers": 1,
+        "iteration_backedges": 1,
+        "unreachable_sink_blocks": 0
+      },
+      {
+        "name": "unreachable_loop_join",
+        "functions": 1,
+        "blocks": 7,
+        "branches": 2,
+        "jumps": 1,
+        "returns": 3,
+        "typed_expressions": 5,
+        "typed_operations": 7,
+        "elided_typed_expressions": 1,
+        "elided_typed_operations": 3,
+        "iteration_headers": 1,
+        "iteration_backedges": 0,
+        "unreachable_sink_blocks": 1
+      }
+    ],
+    "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+    "stage0_diagnostics_match_vm_flow_diagnostics": false,
+    "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": true,
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "canonical_vm_batch_seconds": 49.455018,
+    "whole_frontier_seconds": 98.111012,
+    "child_cpu_seconds": 95.463221,
+    "child_peak_rss_kib": 2410228,
+    "canonical_vm_peak_rss_kib": 465740,
+    "host_memory_before": {
+      "total_bytes": 33411579904,
+      "available_bytes": 24698908672
+    },
+    "cgroup_memory_before": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "cgroup_memory_after": {
+      "memory.current": null,
+      "memory.max": null,
+      "memory.peak": null
+    },
+    "canonical_vm_batch_bytes": {
+      "calls": 87424,
+      "results": 707994
+    },
+    "stage0_probe_stderr_sha256": "975c72114c4b0809416f860d514692652af61fbda587419dff0b08291ab268f6",
+    "cgroup_peak_attributable_to_test": false
+  },
+  "claim_boundary": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph accounts for every typed proof operation in executable blocks or explicit elided-expression records, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including multiple conditional exits in counted and sequence loops. The unreachable loop-join negative case completes on the canonical VM, retains its verified next-state operations without adding an unreachable backedge, and has one recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession.",
+  "evidence_artifact": "evidence/self-host-flow-proven-unit-20261019T020750.339618Z-1987466.json"
+}
