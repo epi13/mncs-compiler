@@ -223,7 +223,11 @@ def suite():
         header = b'mncs 0.18; module x;'
         extended_header = header + b' ' * (65 - len(header))
         assert probe.run('kernel', 'parse_header', [blob(extended_header)])['code'] == 0
-        assert probe.run('kernel', 'lex_summary', [blob(fixed_bytes('é'))])['code'] == 3
+        assert probe.run('kernel', 'lex_summary', [blob(fixed_bytes('é'))])['code'] == 0
+        assert probe.run('kernel', 'lex_summary', [blob(fixed_bytes('😀'))])['code'] == 1
+        invalid_utf8 = probe.run('kernel', 'lex_summary', [blob(fixed_bytes(b'\xff'))])
+        assert (invalid_utf8['code'], invalid_utf8['cursor'], invalid_utf8['first_start'],
+                invalid_utf8['first_end']) == (3, 1, 0, 1), invalid_utf8
         return {'requests': probe.count, 'lexical_sources': len(samples), 'tokens_compared': tokens,
                 'header_cases': len(fixtures['headers']), 'result_sha256': probe.digest.hexdigest(),
                 'execution_steps_total': sum(probe.steps), 'execution_steps_max': max(probe.steps),
@@ -240,6 +244,6 @@ if __name__ == '__main__':
     report = {'schema_version': 1, 'stage0_revision': json.loads(Path('mncs-language.lock.json').read_text())['revision'],
               'stage0_reference_mode': os.environ.get('MNCS_PROBE_REFERENCE_MODE', 'locked'),
               'tests': first, 'identical_runs': 2, 'elapsed_seconds': round(time.monotonic() - started, 3),
-              'scope': 'bounded ASCII lexical facts and header spans vs Stage-0; MNCS execution uses a retained backend when available'}
+              'scope': 'bounded ASCII and selected UTF-8 lexical facts, header spans, and source locations vs Stage-0; MNCS execution uses a retained backend when available'}
     (OUT / 'frontend-results.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report, indent=2))

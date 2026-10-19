@@ -85,17 +85,19 @@ fn lex_evidence_batch_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
 
 // Whole bounded-source coverage evidence, independently useful before parsing.
 // code: 0 complete; 1 lexical errors; 2 structural verification failure;
-// 3 unsupported non-ASCII source. Counts include trivia; EOF is not counted.
+// 3 invalid UTF-8 source. Counts include trivia; EOF is not counted.
 record LexicalEvidence { code: u64, cursor: u64, tokens: u64, trivia: u64, errors: u64, first_start: u64, first_end: u64 }
 fn lex_summary<N: Nat>(text: [byte; up_to N]) -> (result: LexicalEvidence) {
     let seed: LexicalEvidence = LexicalEvidence { code: 0, cursor: 0, tokens: 0, trivia: 0, errors: 0, first_start: 0, first_end: 0 };
-    if source.ascii<N>(text) {
-        iterate i over text carrying evidence: LexicalEvidence = seed {
-            next evidence = lex_step<N>(text, evidence);
-        }
-        return evidence;
+    let utf8: source.Utf8Validation = source.validate_utf8<N>(text);
+    if !utf8.valid {
+        let error_end: u64 = select(utf8.error_offset < text.len, utf8.error_offset + 1, text.len);
+        return LexicalEvidence { ..seed, code: 3, cursor: error_end, errors: 1, first_start: utf8.error_offset, first_end: error_end };
     }
-    return LexicalEvidence { ..seed, code: 3, first_end: text.len };
+    iterate i over text carrying evidence: LexicalEvidence = seed {
+        next evidence = lex_step<N>(text, evidence);
+    }
+    return evidence;
 }
 fn lex_step<N: Nat>(text: [byte; up_to N], evidence: LexicalEvidence) -> (result: LexicalEvidence) {
     if evidence.cursor == text.len || evidence.code == 2 { return evidence; }
