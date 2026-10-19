@@ -1721,6 +1721,66 @@ mod tests {
     }
 
     #[test]
+    fn application_cache_keys_bind_capabilities_and_effect_assumptions() {
+        let root_id = "root.mncs";
+        let root_source = "mncs 0.18; module policy.root; fn entry() -> (r: u64) { return 1; }";
+        let modules = BTreeMap::from([("policy.root".to_owned(), root_source.to_owned())]);
+        let generic_seeds = Vec::<HostGenericSeedRequest>::new();
+        let callable_roots = Vec::<(String, String)>::new();
+        let keys_for = |request: &serde_json::Value| {
+            (
+                application_cache_key(
+                    request,
+                    CONTRACT_V2,
+                    root_id,
+                    "sha256:source-snapshot",
+                    &modules,
+                    &generic_seeds,
+                    &callable_roots,
+                    None,
+                    None,
+                    "sha256:compiler-probe",
+                ),
+                application_cache_index_key(
+                    request,
+                    CONTRACT_V2,
+                    root_id,
+                    &generic_seeds,
+                    &callable_roots,
+                    None,
+                    None,
+                    "sha256:compiler-probe",
+                ),
+            )
+        };
+
+        let baseline = json!({
+            "target": VM_TARGET,
+            "capabilities": ["test_artifact.read"],
+            "effect_assumptions": [{
+                "capability": "test_artifact.read",
+                "policy": "bounded-artifact/1",
+            }],
+        });
+        let baseline_keys = keys_for(&baseline);
+
+        let mut changed_capability = baseline.clone();
+        changed_capability["capabilities"] = json!(["test_artifact.read", "test_artifact.write"]);
+        let changed_capability_keys = keys_for(&changed_capability);
+        assert_ne!(baseline_keys.0, changed_capability_keys.0);
+        assert_ne!(baseline_keys.1, changed_capability_keys.1);
+
+        let mut changed_effect_assumption = baseline;
+        changed_effect_assumption["effect_assumptions"] = json!([{
+            "capability": "test_artifact.read",
+            "policy": "bounded-artifact/2",
+        }]);
+        let changed_effect_keys = keys_for(&changed_effect_assumption);
+        assert_ne!(baseline_keys.0, changed_effect_keys.0);
+        assert_ne!(baseline_keys.1, changed_effect_keys.1);
+    }
+
+    #[test]
     fn source_test_selection_is_canonical_and_bound_into_cache_keys() {
         let first = parse_source_test_selection(&json!({
             "kind": "case_identities",

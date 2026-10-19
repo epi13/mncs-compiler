@@ -1,0 +1,51 @@
+{
+  "schema_version": "mncs.compiler.application-cache-isolation/1",
+  "kind": "capability-and-effect-assumption-cache-isolation",
+  "observed_at": "2026-10-19T01:04:43Z",
+  "status": "passed",
+  "compiler": {
+    "tested_base_revision": "895defc7079649249b13908fe3c2ddb662f8557b",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "modified_test_file": "tools/stage0-probe/src/application.rs",
+    "modified_test_file_sha256": "e5519b341dacb1617fc97300bb46f3082c99239cf59a8532a6f7856e0da7de57"
+  },
+  "coverage": {
+    "unit_test": "application::tests::application_cache_keys_bind_capabilities_and_effect_assumptions",
+    "assertions": [
+      "Changing the capability set changes the application artifact cache key.",
+      "Changing the capability set changes the cross-source-snapshot cache index key.",
+      "Changing an effect assumption changes the application artifact cache key.",
+      "Changing an effect assumption changes the cross-source-snapshot cache index key."
+    ],
+    "scope": "Compiler executable-artifact cache identity only. This proves changed authorization and effect assumptions cannot reuse the same application cache entries. It does not implement or claim Language verified-fact reuse."
+  },
+  "verification": {
+    "format_check": {
+      "command": "cargo fmt --all --check --manifest-path tools/stage0-probe/Cargo.toml",
+      "status": "passed"
+    },
+    "focused_release_test": {
+      "command": "CARGO_TARGET_DIR=.bootstrap/target cargo test --offline --release --manifest-path tools/stage0-probe/Cargo.toml application_cache_keys_bind_capabilities_and_effect_assumptions",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "filtered_out": 47,
+      "build_seconds": 17.82
+    },
+    "full_release_suite": {
+      "command": "CARGO_TARGET_DIR=.bootstrap/target cargo test --offline --release --manifest-path tools/stage0-probe/Cargo.toml -- --test-threads=1",
+      "status": "passed",
+      "passed": 48,
+      "failed": 0,
+      "ignored": 0,
+      "test_seconds": 1.85
+    }
+  },
+  "resources": {
+    "host_available_before": "approximately 23 GiB from free -h",
+    "cgroup_measurements": "unavailable",
+    "test_process_peak_memory": "not_measured"
+  },
+  "claim_boundary": "No source-language semantics or Language-owned identity system was added. Existing Compiler cache keys already include capabilities and effect assumptions; this regression test locks in invalidation for both the exact artifact entry and the cross-snapshot candidate index."
+}
