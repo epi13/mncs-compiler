@@ -115,8 +115,8 @@ def reachable_indices(target: int, edges: list[tuple[int, int]]) -> list[int]:
 
 
 def wrapper_source() -> str:
-    # In each graph, ascending link order makes each of the first four full
-    # scans discover at most one new source. Both graphs then need the worklist.
+    # In each graph, ascending link order makes the first scans discover only
+    # one new source at a time, forcing deeper cases through the worklist.
     fixed_functions = "".join(
         closure_function(f"run_{graph['name']}", graph["target"], graph["edges"])
         for graph in FIXED_GRAPHS
@@ -388,7 +388,7 @@ def main() -> dict:
         if "Maximum resident set size" in line:
             peak_rss_kib = int(line.split(":", 1)[1].strip().split()[0])
     return {
-        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/5",
+        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/6",
         "status": "verified",
         "compiler_source_root": str(ROOT),
         "wrapper_module": WRAPPER_MODULE,
@@ -406,6 +406,8 @@ def main() -> dict:
                         (actual[position].get("closure", actual[position])["reachable"])
                     ) if value
                 ],
+                "canonical_vm_steps": rows[position].get("record", {}).get("usage", {}).get("steps"),
+                "canonical_vm_max_memory_cells": rows[position].get("record", {}).get("usage", {}).get("max_memory_cells"),
             }
             for position, spec in enumerate(call_specs)
         ],

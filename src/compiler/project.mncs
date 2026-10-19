@@ -1827,22 +1827,18 @@ fn project_import_closure(imports: ImportList, target_source_index: u64) -> (res
         return ProjectImportClosure { reachable: empty, changed: false };
     }
     let initial_reachable: [bool; 64] = replace(empty, target_source_index, true);
-    // Keep the common shallow-closure path as one or a few linear scans. Deep
-    // reverse-ordered chains fall back to adjacency plus a worklist after four
-    // rounds, instead of paying for up to 64 full-project rescans.
+    // Keep the common shallow-closure path to at most two linear scans. Deeper
+    // reverse-ordered chains use adjacency plus a worklist instead of paying
+    // for repeated full-project rescans before traversal.
     let first_round: ProjectImportClosure = project_import_closure_round(imports, initial_reachable);
     if !(first_round.changed) { return first_round; }
     let second_round: ProjectImportClosure = project_import_closure_round(imports, first_round.reachable);
-    if !(second_round.changed) { return second_round; }
-    let third_round: ProjectImportClosure = project_import_closure_round(imports, second_round.reachable);
-    if !(third_round.changed) { return third_round; }
-    let fourth_round: ProjectImportClosure = project_import_closure_round(imports, third_round.reachable);
-    if !(fourth_round.changed) || project_import_closure_complete(fourth_round.reachable) {
-        return ProjectImportClosure { reachable: fourth_round.reachable, changed: false };
+    if !(second_round.changed) || project_import_closure_complete(second_round.reachable) {
+        return ProjectImportClosure { reachable: second_round.reachable, changed: false };
     }
 
     let adjacency: [ImportList; 64] = project_import_adjacency(imports);
-    let seeded: ProjectImportClosureWork = project_import_closure_seed_work(fourth_round.reachable);
+    let seeded: ProjectImportClosureWork = project_import_closure_seed_work(second_round.reachable);
     iterate i up_to 64 carrying st: ProjectImportClosureWork = seeded {
         if st.pending_count == 0 {
             return ProjectImportClosure { reachable: st.reachable, changed: false };
