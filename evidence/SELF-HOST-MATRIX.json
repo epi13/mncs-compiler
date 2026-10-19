@@ -10,24 +10,26 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-19T15:57:29.579324+00:00",
-    "compiler_revision": "26d42475c7e17395e74321e40c85a891b304c8d3",
+    "observed_at": "2026-10-19T16:50:24Z",
+    "compiler_revision": "cb499a7c0a68c17a7b74553997c4c461fdee6f2a",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
-      "source": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
-      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
-      "parser": "524b3c0431181eee71eca0296c2f585a9a50180f2aa1f095e2225f54b9c71344",
+      "source": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+      "lexer": "d1c183fce6429d42e715acaac7e1b503784a1331e25830cb00117496a6146da6",
+      "parser": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
       "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
-      "kernel": "03fe2398d7e40eb35f62010403cc7cea14f339b7a6c962739be80e8250b148a2",
+      "kernel": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
       "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
       "flow": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
       "ssa": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709",
       "project": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7"
     },
     "changed_since_previous_matrix_hashes": [
+      "source",
+      "lexer",
       "parser",
-      "project"
+      "kernel"
     ],
     "targeted_checks": {
       "flow_cfg_differential": {
@@ -275,6 +277,82 @@
         "stage0_equivalent": true,
         "language_verified_facts_reused": 0,
         "scope": "The selected project_import_closure callable was compared against an independent Python reachability oracle, Stage-0, and canonical VM; this is not full Project-module proof."
+      },
+      "unicode_utf8_frontend": {
+        "status": "passed_selected_frontend_and_project_ssa",
+        "tested_compiler_revision": "cb499a7c0a68c17a7b74553997c4c461fdee6f2a",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "module_source_sha256": {
+          "source": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+          "lexer": "d1c183fce6429d42e715acaac7e1b503784a1331e25830cb00117496a6146da6",
+          "parser": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+          "kernel": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9"
+        },
+        "evidence_artifacts": [
+          {
+            "path": "evidence/unicode-lexer-frontier-20261019.json",
+            "sha256": "fc049ed03287d1f3683be3b98b6c8da6ed94807cc40f66d2af5cff3dc4856381",
+            "schema_version": "mncs.compiler.unicode-lexer-frontier/1"
+          },
+          {
+            "path": "evidence/project-unicode-module-20261019.json",
+            "sha256": "4a9e8438d18ba6c0fa16bbcefdf4544ad8b21a8176914e5c6f782e49041caedf",
+            "schema_version": "mncs.compiler.unicode-project-module/1"
+          }
+        ],
+        "scalar_validation": {
+          "case_count": 735,
+          "backends_agreed": true,
+          "canonical_vm_wall_seconds": 3.624229,
+          "canonical_vm_peak_rss_kib": 60420
+        },
+        "unicode_lexer": {
+          "sample_count": 12,
+          "header_count": 3,
+          "strides": [
+            1,
+            2,
+            3,
+            4,
+            7,
+            64,
+            1024
+          ],
+          "token_count_per_backend": 33,
+          "backend_agreement": {
+            "canonical_vm_tokens": true,
+            "cranelift_tokens": true,
+            "stage0_reference_tokens": true,
+            "unicode_module_headers": true,
+            "unicode_scalar_columns": true
+          },
+          "canonical_vm_wall_seconds": 8.230976,
+          "canonical_vm_peak_rss_kib": 99668
+        },
+        "frontend_regression": {
+          "identical_runs": 2,
+          "requests_per_run": 7976,
+          "lexical_sources": 199,
+          "tokens_compared": 1772,
+          "header_cases": 18,
+          "result_sha256": "226b60918ba21de675fc38390dfb132567c91c8b5db962675353d9e83a15c73a",
+          "elapsed_seconds": 13.67
+        },
+        "project_module_admission": {
+          "backend": "cranelift",
+          "valid": true,
+          "module_count": 1,
+          "value_ssa_valid": true,
+          "diagnostic_count": 0,
+          "wall_seconds": 469.971311,
+          "cpu_seconds": 447.35,
+          "peak_rss_bytes": 7712714752,
+          "cgroup_status": "OBSERVED"
+        },
+        "language_verified_facts_reused": 0,
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "scope": "Current source, lexer, parser, and kernel passed selected UTF-8 scalar, Unicode token/header/location parity, frontend regression, and one Unicode-module Project-to-SSA admission. This does not prove arbitrary multi-module application execution, Language fact reuse, full compiler self-consumption, or Stage-1/Stage-2 succession."
       }
     }
   },
@@ -9308,7 +9386,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-19T06:45:47Z",
+  "evidence_updated_at": "2026-10-19T16:50:24Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -18055,5 +18133,29 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "Selected project_import_closure callable and bounded deterministic graph corpus."
+  },
+  "current_campaign_unicode_frontend_20261019": {
+    "kind": "mncs.compiler.unicode-source-frontend",
+    "status": "passed_selected_frontend_and_project_ssa",
+    "observed_at": "2026-10-19T16:50:24Z",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "tested_compiler_revision": "cb499a7c0a68c17a7b74553997c4c461fdee6f2a",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "evidence_artifacts": [
+      {
+        "path": "evidence/unicode-lexer-frontier-20261019.json",
+        "sha256": "fc049ed03287d1f3683be3b98b6c8da6ed94807cc40f66d2af5cff3dc4856381"
+      },
+      {
+        "path": "evidence/project-unicode-module-20261019.json",
+        "sha256": "4a9e8438d18ba6c0fa16bbcefdf4544ad8b21a8176914e5c6f782e49041caedf"
+      }
+    ],
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The selected current-source frontend accepts valid Unicode source, matches Stage-0 and canonical VM outcomes for the covered corpus, rejects malformed UTF-8, and produces verified SSA for one Unicode module. It does not establish Language-owned fact reuse or full compiler succession."
   }
 }
