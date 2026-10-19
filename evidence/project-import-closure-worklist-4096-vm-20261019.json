@@ -1,0 +1,121 @@
+{
+  "schema_version": "mncs.compiler.project-import-closure-worklist-4096-vm/1",
+  "identity": "ev_compiler_project_import_closure_4096_vm_20261019",
+  "kind": "project-import-closure-4096-link-canonical-vm-execution",
+  "observed_at": "2026-10-19T15:34:14Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "checkpoint_before_validation": {
+    "identity": "chk_43a98ee13383cc8b",
+    "sequence": 444
+  },
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "revision": "62fb10920ae18d5e76287a988ac7d63293d0d7af",
+    "project_source": "src/compiler/project.mncs",
+    "project_source_sha256": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_binary_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76"
+  },
+  "vm": {
+    "repository": "mncs-vm",
+    "revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "binary": "target/debug/mncs-vm",
+    "binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583"
+  },
+  "verification": {
+    "status": "verified",
+    "harness": "tools/test_vm_project_import_closure_worklist.py",
+    "harness_schema": "mncs.compiler.project-import-closure-worklist-vm/3",
+    "harness_sha256": "ff5ce9b1a3275a84f4233002c790b37d3c450606586ca84338f2bf0c72327af2",
+    "result_file": ".build/project-import-closure-worklist-vm-4096-candidate.json",
+    "result_file_sha256": "7a3d7ee832eef4e754f6e763592f7eba593daa3aed3d1f032559747e1142d5a3",
+    "canonical_vm_raw_results_file": ".build/project-import-closure-worklist-vm/results.json",
+    "canonical_vm_raw_results_sha256": "79401e6e32b0c649b58cefb3fad6a831ebf7b8300285f390cb09076b8abda603",
+    "application_artifact_id": "sha256:4635e97f8bf41030df7cc519f479cc72cfb0c3e9019d01ea944b80149a81f8c6",
+    "application_artifact_json_bytes": 1197448,
+    "application_artifact_json_sha256": "4720a360921f1415435332b2a011182ea0848bb79179d62f9b93db8b7bd2c076",
+    "selected_callables": [
+      "probe.project_closure_worklist::run",
+      "probe.project_closure_worklist::run_capacity",
+      "probe.project_closure_worklist::run_full_link_capacity"
+    ],
+    "project_callable": "mncs.compiler.project.v1::project_import_closure",
+    "graphs": [
+      {
+        "name": "reverse_cyclic_chain",
+        "import_links": 8,
+        "target_source_index": 7,
+        "cycle_edges": [[6, 7], [7, 6]],
+        "reachable_index_count": 8,
+        "stage0_vm_equivalent": true
+      },
+      {
+        "name": "maximum_source_index_cyclic_chain",
+        "source_index_capacity": 64,
+        "import_links": 64,
+        "target_source_index": 63,
+        "cycle_edges": [[62, 63], [63, 62]],
+        "reachable_index_count": 64,
+        "stage0_vm_equivalent": true
+      },
+      {
+        "name": "maximum_import_link_cyclic_chain",
+        "source_index_capacity": 64,
+        "links_per_source": 64,
+        "import_links_generated_and_counted_by_mncs": 4096,
+        "target_source_index": 63,
+        "cycle_edges": [[62, 63], [63, 62]],
+        "reachable_index_count": 64,
+        "stage0_vm_equivalent": true,
+        "step_budget": 8000000,
+        "canonical_vm_steps_used": 1741056,
+        "canonical_vm_max_memory_cells": 221590
+      }
+    ],
+    "worklist_fallback_exercised_by_deep_reverse_order": true,
+    "stage0_project_oracle_valid": true,
+    "all_results_have_changed_false": true,
+    "canonical_vm_batch_invocations": 1,
+    "canonical_vm_batch_return_code": 0
+  },
+  "measurements": {
+    "application_build": {
+      "wall_seconds": 61.783895,
+      "cpu_seconds": 61.26,
+      "peak_rss_bytes": 1737916416,
+      "peak_cgroup_memory_bytes": null,
+      "peak_threads": 1
+    },
+    "stage0_oracle_three_graphs": {
+      "wall_seconds": 82.563021,
+      "cpu_seconds": 81.93,
+      "peak_rss_bytes": 1893765120,
+      "peak_cgroup_memory_bytes": null,
+      "peak_threads": 1
+    },
+    "canonical_vm_three_call_batch": {
+      "wall_seconds": 89.837077,
+      "peak_rss_kib": 35156,
+      "return_code": 0
+    },
+    "cgroup_memory": "unavailable",
+    "interpretation": "The VM measurement covers one batch with all three calls; the 4096-link call used 1,741,056 of its 8,000,000 step allowance. Resource values are observations for this fixture."
+  },
+  "scope": {
+    "4096_import_link_ceiling_exercised": true,
+    "64_source_index_capacity_exercised": true,
+    "canonical_vm_semantics_executed": true,
+    "language_verified_facts_reused": 0,
+    "language_repository_modified": false,
+    "forge_execution_receipt_published": false,
+    "stage1_or_stage2_succession": false
+  },
+  "limitations": [
+    "The test generates a valid 4096-link closure input and verifies one deep cyclic topology; it does not cover every possible maximum-size import graph.",
+    "The wrapper application directly exercises project_import_closure and is not the full compile_project_target path or a Forge application workflow.",
+    "Language-owned verified-fact reuse remains outstanding."
+  ]
+}

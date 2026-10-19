@@ -22,6 +22,7 @@ VM = test_vm_emit.VM_BIN
 PROJECT_MODULE = "mncs.compiler.project.v1"
 WRAPPER_MODULE = "probe.project_closure_worklist"
 STEP_BUDGET = 2_000_000
+FULL_LINK_STEP_BUDGET = 8_000_000
 BUILD_DIR = ROOT / ".build/project-import-closure-worklist-vm"
 
 
@@ -68,8 +69,41 @@ def wrapper_source() -> str:
     return (
         "mncs 0.18; module probe.project_closure_worklist;\n"
         "use mncs.compiler.project.v1 as project;\n"
+        "record ImportLinkBuild { imports: project.ImportList, count: u64 }\n"
+        "record FullClosureSummary { closure: project.ProjectImportClosure, import_count: u64 }\n"
         + closure_function("run", 7, cycle_edges)
         + closure_function("run_capacity", 63, capacity_edges)
+        + """fn import_target_for_source(source_index: u64) -> (result: u64) {
+  if source_index == 0 { return 0; }
+  return source_index - 1;
+}
+fn append_link_block(source_index: u64, target_index: u64, initial: ImportLinkBuild) -> (result: ImportLinkBuild) {
+  iterate i up_to 64 carrying st: ImportLinkBuild = initial {
+    let link: project.ImportLink = project.ImportLink {
+      source_index: source_index, target_index: target_index,
+      module_start: 0, module_end: 0, alias_start: 0, alias_end: 0,
+      has_alias: false
+    };
+    let imports: project.ImportList = project.ImportList.ICons { head: link, tail: st.imports };
+    next st = ImportLinkBuild { imports: imports, count: st.count + 1 };
+  }
+  return st;
+}
+fn build_full_link_list() -> (result: ImportLinkBuild) {
+  let initial: ImportLinkBuild = ImportLinkBuild { imports: project.ImportList.INil, count: 0 };
+  iterate i up_to 64 carrying st: ImportLinkBuild = initial {
+    let source_index: u64 = 63 - i;
+    let target_index: u64 = import_target_for_source(source_index);
+    next st = append_link_block(source_index, target_index, st);
+  }
+  return st;
+}
+fn run_full_link_capacity() -> (result: FullClosureSummary) {
+  let built: ImportLinkBuild = build_full_link_list();
+  let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, 63);
+  return FullClosureSummary { closure: closure, import_count: built.count };
+}
+"""
     )
 
 
@@ -82,6 +116,7 @@ def build_request(modules: dict[str, str]) -> dict:
         "callable_roots": [
             {"module": WRAPPER_MODULE, "function": "run"},
             {"module": WRAPPER_MODULE, "function": "run_capacity"},
+            {"module": WRAPPER_MODULE, "function": "run_full_link_capacity"},
         ],
         "modules": modules,
         "generic_seeds": [],
@@ -90,13 +125,13 @@ def build_request(modules: dict[str, str]) -> dict:
     }
 
 
-def target_call(function: str) -> dict:
+def target_call(function: str, step_budget: int = STEP_BUDGET) -> dict:
     return {
         "schema_version": "0.1",
         "target": {"module": WRAPPER_MODULE, "function": function},
         "arguments": [],
         "type_arguments": [],
-        "step_budget": STEP_BUDGET,
+        "step_budget": step_budget,
     }
 
 
@@ -126,7 +161,11 @@ def main() -> dict:
         if not isinstance(artifact, dict):
             raise AssertionError("application build omitted its canonical VM artifact")
 
-        calls = [target_call("run"), target_call("run_capacity")]
+        calls = [
+            target_call("run"),
+            target_call("run_capacity"),
+            target_call("run_full_link_capacity", FULL_LINK_STEP_BUDGET),
+        ]
         oracle, oracle_metrics = probe.send({"project_oracle": {
             "root": source,
             "modules": modules,
@@ -151,6 +190,9 @@ def main() -> dict:
     calls_path.write_text(json.dumps([
         {"id": "reverse-cyclic-closure", "request": target_call("run")},
         {"id": "64-source-cyclic-closure", "request": target_call("run_capacity")},
+        {"id": "4096-link-cyclic-closure", "request": target_call(
+            "run_full_link_capacity", FULL_LINK_STEP_BUDGET,
+        )},
     ]))
 
     started = time.monotonic()
@@ -170,7 +212,7 @@ def main() -> dict:
         })
     document = json.loads(results_path.read_text())
     rows = document.get("results", [])
-    if len(rows) != 2 or any(row.get("outcome") != {"kind": "completed"} for row in rows):
+    if len(rows) != 3 or any(row.get("outcome") != {"kind": "completed"} for row in rows):
         raise AssertionError({"canonical_vm_results": rows})
     actual = []
     for vm_row in rows:
@@ -181,19 +223,23 @@ def main() -> dict:
     expected_reachable = [
         [index < 8 for index in range(64)],
         [True for _ in range(64)],
+        [True for _ in range(64)],
     ]
     for index, (oracle_result, vm_result) in enumerate(zip(expected, actual)):
+        closure_result = vm_result.get("closure") if index == 2 else vm_result
         if (vm_result != oracle_result
-                or vm_result.get("reachable") != expected_reachable[index]
-                or vm_result.get("changed") is not False):
+                or closure_result.get("reachable") != expected_reachable[index]
+                or closure_result.get("changed") is not False):
             raise AssertionError({"stage0": oracle_result, "canonical_vm": vm_result})
+    if actual[2].get("import_count") != 4096:
+        raise AssertionError({"generated_import_count": actual[2].get("import_count")})
 
     peak_rss_kib = None
     for line in vm_run.stderr.splitlines():
         if "Maximum resident set size" in line:
             peak_rss_kib = int(line.split(":", 1)[1].strip().split()[0])
     return {
-        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/2",
+        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/3",
         "status": "verified",
         "compiler_source_root": str(ROOT),
         "wrapper_module": WRAPPER_MODULE,
@@ -217,6 +263,18 @@ def main() -> dict:
                 "reachable_indices": [
                     index for index, value in enumerate(actual[1]["reachable"]) if value
                 ],
+            },
+            {
+                "callable": "run_full_link_capacity",
+                "source_index_capacity": 64,
+                "import_link_count": actual[2]["import_count"],
+                "target_source_index": 63,
+                "cycle_edges": [[62, 63], [63, 62]],
+                "reachable_indices": [
+                    index for index, value in enumerate(actual[2]["closure"]["reachable"])
+                    if value
+                ],
+                "step_budget": FULL_LINK_STEP_BUDGET,
             },
         ],
         "worklist_fallback_exercised_by_graph_depth": True,

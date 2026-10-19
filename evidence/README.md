@@ -90,6 +90,16 @@ peak RSS. Stage-0 took 78.38 seconds and peaked at 1.80 GB RSS. The repeat
 application-build request returned the same artifact in 0.143 seconds. This
 does not test every 4,096-link topology or complete a Forge route.
 
+The [4,096-link VM record](project-import-closure-worklist-4096-vm-20261019.json)
+generates 64 links for each of 64 source indices inside MNCS, counts all 4,096,
+and passes the list through `project_import_closure`. Stage-0 and canonical VM
+agree that all indices are reachable across the reverse-ordered cycle. The VM
+used 1,741,056 of an 8,000,000 step allowance and 221,590 memory cells for
+that call. One batch with all three graph cases took 89.84 seconds at 34.3 MiB
+peak RSS; the Stage-0 oracle took 82.56 seconds at 1.89 GB peak RSS. Cgroup
+measurements were unavailable. This proves one maximum-size topology, not all
+possible 4,096-link graphs.
+
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 
 The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the
