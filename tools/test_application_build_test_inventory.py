@@ -755,6 +755,162 @@ test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
         }
 
 
+def run_failure_isolation_test_batch() -> dict:
+    """Keep a typed Test failure local while later inventory calls complete."""
+    module = "tests.failure_isolation"
+    source = """mncs 0.18;
+module tests.failure_isolation;
+use mncs.test.assertions;
+
+fn selected_entry() -> (result: u64) { return 0; }
+test failing_case() -> (result: TestResult) {
+    return from_assertion(equals_i64(23, 24, 9301));
+}
+test passing_case() -> (result: TestResult) {
+    return from_assertion(equals_i64(23, 23, 9302));
+}
+"""
+    assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
+    assertions_source = assertions_path.read_text(encoding="utf-8")
+    modules = {"mncs.test.assertions": assertions_source}
+    test_names = ["failing_case", "passing_case"]
+    build_request = {
+        "schema_version": "mncs.compiler.application-build-request/4",
+        "target": "mncs-vm-0.1",
+        "root_source_id": "tests/failure_isolation.mncs",
+        "root_source": source,
+        "callable_roots": [{"module": module, "function": "selected_entry"}],
+        "modules": modules,
+        "generic_seeds": [],
+        "capabilities": [],
+        "verification_policy": "application-build-test-failure-isolation/1",
+        "test_selection": {"kind": "all_source_cases"},
+    }
+    with tempfile.TemporaryDirectory(prefix="mncs-test-failure-isolation-") as raw:
+        directory = Path(raw)
+        probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            built, build_metrics = probe.send(
+                {"compile_application": build_request}, timeout=180.0
+            )
+        finally:
+            probe.close()
+        inventory = require_inventory(
+            built,
+            set(test_names),
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/7",
+        )
+        tests = inventory["tests"]
+        if ([row.get("name") for row in tests] != test_names
+                or frontend_invocations(built) != 1):
+            raise AssertionError("failure-isolation Tests were not selected from one Language inventory")
+        artifact = built.get("artifact", {}).get("value")
+        if (built.get("status") != "verified"
+                or built.get("unresolved_obligations") != []
+                or not isinstance(artifact, dict)):
+            raise AssertionError("failure-isolation Tests did not produce one verified VM artifact")
+
+        repeat_count = 2
+        oracle_calls = [{
+            "schema_version": "0.1",
+            "target": {"module": module, "function": row["name"]},
+            "arguments": [],
+            "type_arguments": [],
+            "step_budget": 100_000,
+        } for _ in range(repeat_count) for row in tests]
+        oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
+        try:
+            oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
+                "root": source,
+                "modules": modules,
+                "calls": oracle_calls,
+            }}, timeout=180.0)
+        finally:
+            oracle_probe.close()
+        expected_count = len(tests) * repeat_count
+        if (not oracle.get("valid")
+                or len(oracle.get("executions", [])) != expected_count):
+            raise AssertionError("Stage-0 did not complete both rounds after the expected failed TestResult")
+
+        vm, vm_wall, vm_peak_rss = execute_inventory_batch(
+            artifact, inventory, repeat_count=repeat_count
+        )
+        rows = vm.get("results", [])
+        if (vm.get("artifact_id") != artifact.get("artifact_id")
+                or len(rows) != expected_count
+                or built.get("artifact", {}).get("identity") != artifact.get("artifact_id")):
+            raise AssertionError("failure-isolation batch changed artifact identity or call count")
+
+        results_by_case: dict[str, list[dict]] = {name: [] for name in test_names}
+        repeated_rows = [row for _ in range(repeat_count) for row in tests]
+        for index, (test, actual_row, expected_row) in enumerate(zip(
+            repeated_rows, rows, oracle["executions"]
+        )):
+            repeat_index = index // len(tests)
+            expected_id = test["test_case_identity"]
+            if repeat_count > 1:
+                expected_id = f"{expected_id}:round:{repeat_index + 1}"
+            if (actual_row.get("id") != expected_id
+                    or actual_row.get("outcome") != {"kind": "completed"}
+                    or actual_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
+                raise AssertionError(f"Test failure escaped its result value: {actual_row}")
+            actual_values = actual_row.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if len(actual_values) != 1 or len(expected_values) != 1:
+                raise AssertionError(f"TestResult returned the wrong arity for {test['name']}")
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected:
+                raise AssertionError(
+                    f"canonical VM TestResult differs from Stage-0 for {test['name']}"
+                )
+            results_by_case[test["name"]].append(actual)
+
+        failure = results_by_case["failing_case"]
+        passed = results_by_case["passing_case"]
+        if (len(failure) != repeat_count
+                or any(result.get("verdict_code") != 1
+                       or result.get("failure_code") != 9301
+                       or result.get("assertions") != 1
+                       or result.get("failures") != 1 for result in failure)
+                or len(passed) != repeat_count
+                or any(result.get("verdict_code") != 0
+                       or result.get("failure_code") != 0
+                       or result.get("assertions") != 1
+                       or result.get("failures") != 0 for result in passed)
+                or failure[0] != failure[1]
+                or passed[0] != passed[1]):
+            raise AssertionError("native Test failure or later passing result was not deterministic")
+
+        return {
+            "test_repository_revision": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
+            ).strip(),
+            "test_case_identities": {
+                row["name"]: row["test_case_identity"] for row in tests
+            },
+            "verified_artifact_identity": built["artifact"]["identity"],
+            "canonical_vm_artifact_identity": vm["artifact_id"],
+            "canonical_vm_batch_count": len(rows),
+            "repeat_round_count": repeat_count,
+            "failing_result": failure[0],
+            "passing_result_after_failure": passed[0],
+            "failure_does_not_abort_later_case": True,
+            "repeat_results_match": True,
+            "stage0_equivalent": True,
+            "build_frontend_invocations": frontend_invocations(built),
+            "build_process_metrics": build_metrics,
+            "stage0_oracle_metrics": oracle_metrics,
+            "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
+            "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
+        }
+
+
 def run_real_mncs_test_suite() -> dict:
     module = "tests.self_suite"
     root_path = app.TEST_ROOT / "tests/self_suite.mncs"
@@ -1140,6 +1296,7 @@ def main() -> None:
 
         parameterized_test_batch = run_parameterized_test_case()
         generic_test_batch = run_generic_test_case()
+        failure_isolation_test_batch = run_failure_isolation_test_batch()
         real_mncs_test_suite = run_real_mncs_test_suite()
 
         warm_probe = app.Probe(program_cache, executable=PROBE,
@@ -1339,6 +1496,7 @@ def main() -> None:
             "build_assumption_cache_isolation": policy_cache_isolation,
             "parameterized_test_batch": parameterized_test_batch,
             "generic_test_batch": generic_test_batch,
+            "failure_isolation_test_batch": failure_isolation_test_batch,
             "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
@@ -1357,7 +1515,7 @@ def main() -> None:
                 "canonical_vm_batch_peak_rss_kib": inventory_vm_peak_rss,
             },
             "contract": {
-                "request_schema": "mncs.compiler.application-build-request/3",
+                "request_schema": "mncs.compiler.application-build-request/4",
                 "response_schema": cold["schema_version"],
                 "identity_selection_request_schema": selection_request["schema_version"],
                 "identity_selection_response_schema": selection_response["schema_version"],
@@ -1463,6 +1621,17 @@ def main() -> None:
                     and generic_test_batch["stage0_equivalent"]
                     and generic_test_batch["typed_test_result"]["verdict_code"] == 0
                 ),
+                "native_test_failure_does_not_abort_later_inventory_cases": (
+                    failure_isolation_test_batch["build_frontend_invocations"] == 1
+                    and failure_isolation_test_batch["canonical_vm_batch_count"] == 4
+                    and failure_isolation_test_batch["repeat_round_count"] == 2
+                    and failure_isolation_test_batch["failing_result"]["verdict_code"] == 1
+                    and failure_isolation_test_batch["failing_result"]["failure_code"] == 9301
+                    and failure_isolation_test_batch["passing_result_after_failure"]["verdict_code"] == 0
+                    and failure_isolation_test_batch["failure_does_not_abort_later_case"]
+                    and failure_isolation_test_batch["repeat_results_match"]
+                    and failure_isolation_test_batch["stage0_equivalent"]
+                ),
                 "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
                     and real_mncs_test_suite["canonical_vm_batch_count"] == 14
@@ -1492,6 +1661,8 @@ def main() -> None:
                 "parameterized_test_oracle": parameterized_test_batch["stage0_oracle_metrics"],
                 "generic_test_build": generic_test_batch["build_process_metrics"],
                 "generic_test_oracle": generic_test_batch["stage0_oracle_metrics"],
+                "failure_isolation_test_build": failure_isolation_test_batch["build_process_metrics"],
+                "failure_isolation_test_oracle": failure_isolation_test_batch["stage0_oracle_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -1512,11 +1683,13 @@ def main() -> None:
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
                 "with Stage-0 agreement. A bounded parameterized Test slice also binds a typed u64 "
                 "argument to the Language-issued input signature and repeats its typed TestResult "
-                "through the same artifact with Stage-0 agreement. The batch adapter rejects generic "
-                "tests until seeds are resolved to concrete callables. The Compiler now removes the "
+                "through the same artifact with Stage-0 agreement. The batch adapter accepts a generic "
+                "Test only when its seed resolves to a concrete callable. The Compiler removes the "
                 "generic template from executable exports, lowers its verified seeded specialization, "
                 "and admits the selected Test when the exact generic-entrypoint spelling is present. "
                 "A bounded [byte; N] Test with N=4 now executes twice by inventory identity and matches "
+                "Stage-0. A failure-isolation batch then runs a failing typed TestResult followed by "
+                "a passing case, twice on the same artifact; all four results complete and match "
                 "Stage-0. This does not implement Language verification-fact reuse or change the "
                 "production mncs-test consumer. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
