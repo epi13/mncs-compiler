@@ -1,0 +1,1379 @@
+{
+  "schema_version": "mncs.compiler.self-consumption-frontier/1",
+  "kind": "parser-header-global-canonical-vm-current-source",
+  "observed_at": "2026-10-19T06:39:25.999312Z",
+  "status": "passed",
+  "claim_boundary": "The current kernel.parse_header_global callable executes parser.header_global over all frontend header fixtures, a 65-byte page split, a 20-segment header, 100-, 130-, and 400-segment headers, a non-ASCII scalar split across pages, and the documented 1024-iteration fuel boundary (600 segments are rejected). Strides 1, 7, 64, and 1024 agree across Stage-0 checked bounded parser results, the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a selected helper frontier, not full parser-module verification or succession.",
+  "compiler": {
+    "tested_source_revision": "deaad92600a47e5f61ef9968a077460e3061ffc0",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "kernel",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+      "parser": "61a194117ab9284d7432b681adfee91f9f45eb72b9c549f4200201cd188eca69",
+      "kernel": "03fe2398d7e40eb35f62010403cc7cea14f339b7a6c962739be80e8250b148a2",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.kernel.v1",
+    "target_function": "parse_header_global",
+    "test_harness": "tools/test_vm_parser_global_frontier.py",
+    "test_harness_sha256": "2f947c4b3d4baedf61ca5e17a30a6bf9380ded0eca5025b728d3d9ede2381277"
+  },
+  "evidence_artifact": "evidence/self-host-parser-header-global-fuel-1024-deaad92.json",
+  "toolchains": {
+    "stage0_probe": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_binary": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "vm_revision": "deaad92600a47e5f61ef9968a077460e3061ffc0"
+  },
+  "verification": {
+    "executor_case_counts": {
+      "reference_interpreter": 104,
+      "cranelift": 104,
+      "canonical_vm": 104
+    },
+    "semantic_digests": {
+      "reference_interpreter": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764",
+      "cranelift": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764",
+      "canonical_vm": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764"
+    },
+    "stage0_checks": "all bounded header diagnostics and span assertions passed",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "measurements": {
+    "timing_seconds": {
+      "stage0_oracles_and_reference_execution": 45.034573,
+      "direct_vm_emission": 2.647446,
+      "cranelift_execution": 0.120102,
+      "canonical_vm_batch": 12.447387,
+      "whole_frontier": 77.066035
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 76.159342,
+      "child_peak_rss_kib": 683672,
+      "canonical_vm_peak_rss_kib": 76660,
+      "canonical_vm_calls_bytes": 573752,
+      "canonical_vm_results_bytes": 202278,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    }
+  },
+  "raw_test_report": {
+    "schema_version": 1,
+    "kind": "mncs-compiler-parser-header-global-canonical-vm-frontier",
+    "compiler_revision_tested": "deaad92600a47e5f61ef9968a077460e3061ffc0",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76",
+    "selected_modules": [
+      "source",
+      "lexer",
+      "parser",
+      "kernel",
+      "segment"
+    ],
+    "module_source_sha256": {
+      "source": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
+      "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
+      "parser": "61a194117ab9284d7432b681adfee91f9f45eb72b9c549f4200201cd188eca69",
+      "kernel": "03fe2398d7e40eb35f62010403cc7cea14f339b7a6c962739be80e8250b148a2",
+      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+    },
+    "target_module": "mncs.compiler.kernel.v1",
+    "target_function": "parse_header_global",
+    "test_harness_sha256": "2f947c4b3d4baedf61ca5e17a30a6bf9380ded0eca5025b728d3d9ede2381277",
+    "artifact_identity": "sha256:b40a44e1c3093e4750a0f21053985314a93f72a12021b4429a86e07504e382fc",
+    "specializations": [
+      [
+        "1024",
+        "1024"
+      ]
+    ],
+    "inputs": [
+      {
+        "id": "frontend-header-00",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "cb5eb14d788978198079eae0673904e5a2da6b90c31e011d815de996c9b777e7",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-01",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "827e5ead6747c78acefae8e4e20eaf08e28aa222d61098f150451c26d75cd9da",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-02",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "86561ec6374e000684e24abb5ae92e32554dd16ef7383f616331e303a7017e3c",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-03",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "8ad3399013a5ef9de42e5266043339f5e0e1d46a1a9a1cc27d8a148c898acffe",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-04",
+        "expected_code": 0,
+        "bytes": 64,
+        "sha256": "028ed69a31c4ec15a49991ee831bde71c69e2efdfcefb8e5bfd9a2d93cd00964",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "frontend-header-05",
+        "expected_code": 2,
+        "bytes": 64,
+        "sha256": "ce4153b0147c2a863ed4298ee0676bc879fc77a12abe1f49b2b055df1069523e",
+        "stage0_diagnostics": 7
+      },
+      {
+        "id": "frontend-header-06",
+        "expected_code": 2,
+        "bytes": 64,
+        "sha256": "57f6eb2185f67778c02ab129ee3766bbd05f681ea32fe3885cbbbc5b7f9150f2",
+        "stage0_diagnostics": 4
+      },
+      {
+        "id": "frontend-header-07",
+        "expected_code": 3,
+        "bytes": 64,
+        "sha256": "4a72a29980c3985b9cf8146cb5f576ba4fcae989e97a300638c560f65a8542a2",
+        "stage0_diagnostics": 7
+      },
+      {
+        "id": "frontend-header-08",
+        "expected_code": 4,
+        "bytes": 64,
+        "sha256": "ec26302ef571f5abf7a068cbb89d54f16e373b59fd6ea2d2f2affc4f7915c8b0",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-09",
+        "expected_code": 5,
+        "bytes": 64,
+        "sha256": "311159dab4f89064fd23857c40ca8be41eff9ddb293c7ab917de641d9de12a82",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-10",
+        "expected_code": 6,
+        "bytes": 64,
+        "sha256": "75c9b36bfed0738ce33fe078e478f9b4b5627355bc361e45cef52f570030a212",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-11",
+        "expected_code": 6,
+        "bytes": 64,
+        "sha256": "700a22c1e932ad4c41177c9bffac75e32f31a0592dda6ff3edc64a916d054ebc",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-12",
+        "expected_code": 6,
+        "bytes": 64,
+        "sha256": "ca41207ea803374a9cf520038d3fd9a1e08b4c56e39976c89433b66896a69a65",
+        "stage0_diagnostics": 13
+      },
+      {
+        "id": "frontend-header-13",
+        "expected_code": 7,
+        "bytes": 64,
+        "sha256": "c2cf2242c8feddb5be1b9a4a0053f906d76d49b71ec1183bf6e3cc16b2772edf",
+        "stage0_diagnostics": 3
+      },
+      {
+        "id": "frontend-header-14",
+        "expected_code": 7,
+        "bytes": 64,
+        "sha256": "6f80c6fe62a1a4605036461fe92c27ecc9a02140d0ea17b675ae80e7fb29d683",
+        "stage0_diagnostics": 2
+      },
+      {
+        "id": "frontend-header-15",
+        "expected_code": 1,
+        "bytes": 64,
+        "sha256": "5403c4e0b6917d8a8e98a58474be71da4adff288d12ccd0fc725cacf2cd8a99a",
+        "stage0_diagnostics": 3
+      },
+      {
+        "id": "frontend-header-16",
+        "expected_code": 1,
+        "bytes": 64,
+        "sha256": "bd3c99fd5f33bbe4d585086f69e3affd42047ede3dd16f7892f560529cc6856b",
+        "stage0_diagnostics": 5
+      },
+      {
+        "id": "frontend-header-17",
+        "expected_code": 8,
+        "bytes": 64,
+        "sha256": "85eae12f4f6af3956b4c37c3be36dbe49a50cf35414f95a0aaeaba4e5d7641dd",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "extended-header-65-byte-bound",
+        "expected_code": 0,
+        "bytes": 65,
+        "sha256": "b3afc55f15dfc2b27a3f8611bf37183336359ee7caa319f67a5d248661dcf426",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "twenty-segment-header-within-fuel",
+        "expected_code": 0,
+        "bytes": 98,
+        "sha256": "578a6cdea9cc9692ccf10f956fe1758669a050de2918f858f79f805325a6cd73",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "forty-segment-header-within-extended-fuel",
+        "expected_code": 0,
+        "bytes": 178,
+        "sha256": "72ad2bd0846bdb1bddcee5f01379748d2e983fead5d94fcaadf1bc59779f3788",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "hundred-segment-header-within-fuel",
+        "expected_code": 0,
+        "bytes": 218,
+        "sha256": "96fadd8c71b18827d711926c65cc253c573ea4f6f5c2d8bf95299fa63b34c213",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "one-hundred-thirty-segment-header-within-extended-fuel",
+        "expected_code": 0,
+        "bytes": 278,
+        "sha256": "d6bfd2bb967cca14a6aba86feefef0b29e0fb20b4390c3be6a666c79304f0697",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "four-hundred-segment-header-within-fuel",
+        "expected_code": 0,
+        "bytes": 818,
+        "sha256": "38541c02ff39ccee7477bea510bff08fce430bd9bf30e264c55bc4bdd82608e1",
+        "stage0_diagnostics": 1
+      },
+      {
+        "id": "non-ascii-scalar-split-across-pages",
+        "expected_code": 8,
+        "bytes": 23,
+        "sha256": "aabedae3a8870e781204208aa79e031226d00490bb092de280dbb95706296ac5",
+        "stage0_diagnostics": 2
+      }
+    ],
+    "cases": [
+      {
+        "id": "frontend-header-00@stride-1",
+        "input_id": "frontend-header-00",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-00@stride-7",
+        "input_id": "frontend-header-00",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-00@stride-64",
+        "input_id": "frontend-header-00",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-00@stride-1024",
+        "input_id": "frontend-header-00",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-01@stride-1",
+        "input_id": "frontend-header-01",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-01@stride-7",
+        "input_id": "frontend-header-01",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-01@stride-64",
+        "input_id": "frontend-header-01",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-01@stride-1024",
+        "input_id": "frontend-header-01",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-02@stride-1",
+        "input_id": "frontend-header-02",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-02@stride-7",
+        "input_id": "frontend-header-02",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-02@stride-64",
+        "input_id": "frontend-header-02",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-02@stride-1024",
+        "input_id": "frontend-header-02",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-03@stride-1",
+        "input_id": "frontend-header-03",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-03@stride-7",
+        "input_id": "frontend-header-03",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-03@stride-64",
+        "input_id": "frontend-header-03",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-03@stride-1024",
+        "input_id": "frontend-header-03",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-04@stride-1",
+        "input_id": "frontend-header-04",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-04@stride-7",
+        "input_id": "frontend-header-04",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-04@stride-64",
+        "input_id": "frontend-header-04",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-04@stride-1024",
+        "input_id": "frontend-header-04",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 0
+      },
+      {
+        "id": "frontend-header-05@stride-1",
+        "input_id": "frontend-header-05",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-05@stride-7",
+        "input_id": "frontend-header-05",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-05@stride-64",
+        "input_id": "frontend-header-05",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-05@stride-1024",
+        "input_id": "frontend-header-05",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-06@stride-1",
+        "input_id": "frontend-header-06",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-06@stride-7",
+        "input_id": "frontend-header-06",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-06@stride-64",
+        "input_id": "frontend-header-06",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-06@stride-1024",
+        "input_id": "frontend-header-06",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 2
+      },
+      {
+        "id": "frontend-header-07@stride-1",
+        "input_id": "frontend-header-07",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 3
+      },
+      {
+        "id": "frontend-header-07@stride-7",
+        "input_id": "frontend-header-07",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 3
+      },
+      {
+        "id": "frontend-header-07@stride-64",
+        "input_id": "frontend-header-07",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 3
+      },
+      {
+        "id": "frontend-header-07@stride-1024",
+        "input_id": "frontend-header-07",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 3
+      },
+      {
+        "id": "frontend-header-08@stride-1",
+        "input_id": "frontend-header-08",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 4
+      },
+      {
+        "id": "frontend-header-08@stride-7",
+        "input_id": "frontend-header-08",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 4
+      },
+      {
+        "id": "frontend-header-08@stride-64",
+        "input_id": "frontend-header-08",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 4
+      },
+      {
+        "id": "frontend-header-08@stride-1024",
+        "input_id": "frontend-header-08",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 4
+      },
+      {
+        "id": "frontend-header-09@stride-1",
+        "input_id": "frontend-header-09",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 5
+      },
+      {
+        "id": "frontend-header-09@stride-7",
+        "input_id": "frontend-header-09",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 5
+      },
+      {
+        "id": "frontend-header-09@stride-64",
+        "input_id": "frontend-header-09",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 5
+      },
+      {
+        "id": "frontend-header-09@stride-1024",
+        "input_id": "frontend-header-09",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 5
+      },
+      {
+        "id": "frontend-header-10@stride-1",
+        "input_id": "frontend-header-10",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-10@stride-7",
+        "input_id": "frontend-header-10",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-10@stride-64",
+        "input_id": "frontend-header-10",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-10@stride-1024",
+        "input_id": "frontend-header-10",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-11@stride-1",
+        "input_id": "frontend-header-11",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-11@stride-7",
+        "input_id": "frontend-header-11",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-11@stride-64",
+        "input_id": "frontend-header-11",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-11@stride-1024",
+        "input_id": "frontend-header-11",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-12@stride-1",
+        "input_id": "frontend-header-12",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-12@stride-7",
+        "input_id": "frontend-header-12",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-12@stride-64",
+        "input_id": "frontend-header-12",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-12@stride-1024",
+        "input_id": "frontend-header-12",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 6
+      },
+      {
+        "id": "frontend-header-13@stride-1",
+        "input_id": "frontend-header-13",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-13@stride-7",
+        "input_id": "frontend-header-13",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-13@stride-64",
+        "input_id": "frontend-header-13",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-13@stride-1024",
+        "input_id": "frontend-header-13",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-14@stride-1",
+        "input_id": "frontend-header-14",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-14@stride-7",
+        "input_id": "frontend-header-14",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-14@stride-64",
+        "input_id": "frontend-header-14",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-14@stride-1024",
+        "input_id": "frontend-header-14",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 7
+      },
+      {
+        "id": "frontend-header-15@stride-1",
+        "input_id": "frontend-header-15",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-15@stride-7",
+        "input_id": "frontend-header-15",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-15@stride-64",
+        "input_id": "frontend-header-15",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-15@stride-1024",
+        "input_id": "frontend-header-15",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-16@stride-1",
+        "input_id": "frontend-header-16",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-16@stride-7",
+        "input_id": "frontend-header-16",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-16@stride-64",
+        "input_id": "frontend-header-16",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-16@stride-1024",
+        "input_id": "frontend-header-16",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 1
+      },
+      {
+        "id": "frontend-header-17@stride-1",
+        "input_id": "frontend-header-17",
+        "stride": 1,
+        "bytes": 64,
+        "expected_code": 8
+      },
+      {
+        "id": "frontend-header-17@stride-7",
+        "input_id": "frontend-header-17",
+        "stride": 7,
+        "bytes": 64,
+        "expected_code": 8
+      },
+      {
+        "id": "frontend-header-17@stride-64",
+        "input_id": "frontend-header-17",
+        "stride": 64,
+        "bytes": 64,
+        "expected_code": 8
+      },
+      {
+        "id": "frontend-header-17@stride-1024",
+        "input_id": "frontend-header-17",
+        "stride": 1024,
+        "bytes": 64,
+        "expected_code": 8
+      },
+      {
+        "id": "extended-header-65-byte-bound@stride-1",
+        "input_id": "extended-header-65-byte-bound",
+        "stride": 1,
+        "bytes": 65,
+        "expected_code": 0
+      },
+      {
+        "id": "extended-header-65-byte-bound@stride-7",
+        "input_id": "extended-header-65-byte-bound",
+        "stride": 7,
+        "bytes": 65,
+        "expected_code": 0
+      },
+      {
+        "id": "extended-header-65-byte-bound@stride-64",
+        "input_id": "extended-header-65-byte-bound",
+        "stride": 64,
+        "bytes": 65,
+        "expected_code": 0
+      },
+      {
+        "id": "extended-header-65-byte-bound@stride-1024",
+        "input_id": "extended-header-65-byte-bound",
+        "stride": 1024,
+        "bytes": 65,
+        "expected_code": 0
+      },
+      {
+        "id": "twenty-segment-header-within-fuel@stride-1",
+        "input_id": "twenty-segment-header-within-fuel",
+        "stride": 1,
+        "bytes": 98,
+        "expected_code": 0
+      },
+      {
+        "id": "twenty-segment-header-within-fuel@stride-7",
+        "input_id": "twenty-segment-header-within-fuel",
+        "stride": 7,
+        "bytes": 98,
+        "expected_code": 0
+      },
+      {
+        "id": "twenty-segment-header-within-fuel@stride-64",
+        "input_id": "twenty-segment-header-within-fuel",
+        "stride": 64,
+        "bytes": 98,
+        "expected_code": 0
+      },
+      {
+        "id": "twenty-segment-header-within-fuel@stride-1024",
+        "input_id": "twenty-segment-header-within-fuel",
+        "stride": 1024,
+        "bytes": 98,
+        "expected_code": 0
+      },
+      {
+        "id": "forty-segment-header-within-extended-fuel@stride-1",
+        "input_id": "forty-segment-header-within-extended-fuel",
+        "stride": 1,
+        "bytes": 178,
+        "expected_code": 0
+      },
+      {
+        "id": "forty-segment-header-within-extended-fuel@stride-7",
+        "input_id": "forty-segment-header-within-extended-fuel",
+        "stride": 7,
+        "bytes": 178,
+        "expected_code": 0
+      },
+      {
+        "id": "forty-segment-header-within-extended-fuel@stride-64",
+        "input_id": "forty-segment-header-within-extended-fuel",
+        "stride": 64,
+        "bytes": 178,
+        "expected_code": 0
+      },
+      {
+        "id": "forty-segment-header-within-extended-fuel@stride-1024",
+        "input_id": "forty-segment-header-within-extended-fuel",
+        "stride": 1024,
+        "bytes": 178,
+        "expected_code": 0
+      },
+      {
+        "id": "hundred-segment-header-within-fuel@stride-1",
+        "input_id": "hundred-segment-header-within-fuel",
+        "stride": 1,
+        "bytes": 218,
+        "expected_code": 0
+      },
+      {
+        "id": "hundred-segment-header-within-fuel@stride-7",
+        "input_id": "hundred-segment-header-within-fuel",
+        "stride": 7,
+        "bytes": 218,
+        "expected_code": 0
+      },
+      {
+        "id": "hundred-segment-header-within-fuel@stride-64",
+        "input_id": "hundred-segment-header-within-fuel",
+        "stride": 64,
+        "bytes": 218,
+        "expected_code": 0
+      },
+      {
+        "id": "hundred-segment-header-within-fuel@stride-1024",
+        "input_id": "hundred-segment-header-within-fuel",
+        "stride": 1024,
+        "bytes": 218,
+        "expected_code": 0
+      },
+      {
+        "id": "one-hundred-thirty-segment-header-within-extended-fuel@stride-1",
+        "input_id": "one-hundred-thirty-segment-header-within-extended-fuel",
+        "stride": 1,
+        "bytes": 278,
+        "expected_code": 0
+      },
+      {
+        "id": "one-hundred-thirty-segment-header-within-extended-fuel@stride-7",
+        "input_id": "one-hundred-thirty-segment-header-within-extended-fuel",
+        "stride": 7,
+        "bytes": 278,
+        "expected_code": 0
+      },
+      {
+        "id": "one-hundred-thirty-segment-header-within-extended-fuel@stride-64",
+        "input_id": "one-hundred-thirty-segment-header-within-extended-fuel",
+        "stride": 64,
+        "bytes": 278,
+        "expected_code": 0
+      },
+      {
+        "id": "one-hundred-thirty-segment-header-within-extended-fuel@stride-1024",
+        "input_id": "one-hundred-thirty-segment-header-within-extended-fuel",
+        "stride": 1024,
+        "bytes": 278,
+        "expected_code": 0
+      },
+      {
+        "id": "four-hundred-segment-header-within-fuel@stride-1",
+        "input_id": "four-hundred-segment-header-within-fuel",
+        "stride": 1,
+        "bytes": 818,
+        "expected_code": 0
+      },
+      {
+        "id": "four-hundred-segment-header-within-fuel@stride-7",
+        "input_id": "four-hundred-segment-header-within-fuel",
+        "stride": 7,
+        "bytes": 818,
+        "expected_code": 0
+      },
+      {
+        "id": "four-hundred-segment-header-within-fuel@stride-64",
+        "input_id": "four-hundred-segment-header-within-fuel",
+        "stride": 64,
+        "bytes": 818,
+        "expected_code": 0
+      },
+      {
+        "id": "four-hundred-segment-header-within-fuel@stride-1024",
+        "input_id": "four-hundred-segment-header-within-fuel",
+        "stride": 1024,
+        "bytes": 818,
+        "expected_code": 0
+      },
+      {
+        "id": "six-hundred-segment-header-fuel-exhaustion@stride-2",
+        "input_id": "six-hundred-segment-header-fuel-exhaustion",
+        "stride": 2,
+        "bytes": 1218,
+        "expected_code": 9
+      },
+      {
+        "id": "six-hundred-segment-header-fuel-exhaustion@stride-7",
+        "input_id": "six-hundred-segment-header-fuel-exhaustion",
+        "stride": 7,
+        "bytes": 1218,
+        "expected_code": 9
+      },
+      {
+        "id": "six-hundred-segment-header-fuel-exhaustion@stride-64",
+        "input_id": "six-hundred-segment-header-fuel-exhaustion",
+        "stride": 64,
+        "bytes": 1218,
+        "expected_code": 9
+      },
+      {
+        "id": "six-hundred-segment-header-fuel-exhaustion@stride-1024",
+        "input_id": "six-hundred-segment-header-fuel-exhaustion",
+        "stride": 1024,
+        "bytes": 1218,
+        "expected_code": 9
+      },
+      {
+        "id": "non-ascii-scalar-split-across-pages@stride-1",
+        "input_id": "non-ascii-scalar-split-across-pages",
+        "stride": 1,
+        "bytes": 23,
+        "expected_code": 8
+      },
+      {
+        "id": "non-ascii-scalar-split-across-pages@stride-7",
+        "input_id": "non-ascii-scalar-split-across-pages",
+        "stride": 7,
+        "bytes": 23,
+        "expected_code": 8
+      },
+      {
+        "id": "non-ascii-scalar-split-across-pages@stride-64",
+        "input_id": "non-ascii-scalar-split-across-pages",
+        "stride": 64,
+        "bytes": 23,
+        "expected_code": 8
+      },
+      {
+        "id": "non-ascii-scalar-split-across-pages@stride-1024",
+        "input_id": "non-ascii-scalar-split-across-pages",
+        "stride": 1024,
+        "bytes": 23,
+        "expected_code": 8
+      }
+    ],
+    "case_count": 104,
+    "executor_case_counts": {
+      "reference_interpreter": 104,
+      "cranelift": 104,
+      "canonical_vm": 104
+    },
+    "semantic_digests": {
+      "reference_interpreter": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764",
+      "cranelift": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764",
+      "canonical_vm": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764"
+    },
+    "steps": {
+      "reference_interpreter": [
+        16593,
+        8566,
+        5680,
+        5680,
+        14837,
+        6820,
+        4621,
+        4621,
+        21116,
+        11920,
+        8174,
+        8174,
+        15218,
+        7926,
+        4867,
+        4867,
+        15247,
+        7776,
+        4896,
+        4896,
+        14778,
+        7118,
+        5230,
+        5230,
+        9357,
+        2549,
+        1397,
+        1397,
+        10358,
+        3586,
+        2004,
+        2004,
+        12660,
+        5216,
+        3304,
+        3304,
+        12533,
+        5342,
+        3327,
+        3327,
+        14098,
+        6655,
+        4169,
+        4169,
+        15263,
+        7820,
+        4904,
+        4904,
+        14544,
+        7012,
+        4382,
+        4382,
+        15829,
+        8242,
+        5182,
+        5182,
+        19209,
+        11004,
+        7499,
+        7499,
+        23556,
+        14575,
+        10353,
+        10353,
+        14082,
+        6639,
+        4153,
+        4153,
+        2719,
+        595,
+        257,
+        257,
+        14992,
+        7431,
+        4776,
+        4656,
+        45413,
+        27768,
+        21254,
+        20566,
+        82973,
+        50642,
+        38767,
+        37391,
+        149475,
+        102376,
+        81860,
+        79349,
+        191985,
+        131440,
+        105279,
+        101931,
+        574575,
+        393033,
+        315187,
+        305143,
+        682160,
+        504342,
+        403163,
+        390248,
+        2719,
+        595,
+        284,
+        284
+      ],
+      "cranelift": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "canonical_vm": [
+        21606,
+        10724,
+        6722,
+        6722,
+        19394,
+        8526,
+        5494,
+        5494,
+        27405,
+        14861,
+        9639,
+        9639,
+        19876,
+        10035,
+        5783,
+        5783,
+        19911,
+        9820,
+        5818,
+        5818,
+        19277,
+        8879,
+        6295,
+        6295,
+        12397,
+        3250,
+        1694,
+        1694,
+        13670,
+        4575,
+        2409,
+        2409,
+        16602,
+        6547,
+        3922,
+        3922,
+        16449,
+        6756,
+        3978,
+        3978,
+        18448,
+        8394,
+        4955,
+        4955,
+        19939,
+        9885,
+        5836,
+        5836,
+        19006,
+        8830,
+        5187,
+        5187,
+        20660,
+        10402,
+        6149,
+        6149,
+        24941,
+        13779,
+        8907,
+        8907,
+        30126,
+        17849,
+        11959,
+        11959,
+        18428,
+        8374,
+        4935,
+        4935,
+        3618,
+        774,
+        321,
+        321,
+        19597,
+        9385,
+        5697,
+        5537,
+        58658,
+        34424,
+        25300,
+        24335,
+        107178,
+        62760,
+        46130,
+        44200,
+        192730,
+        127660,
+        98807,
+        95276,
+        247540,
+        163884,
+        127082,
+        122374,
+        740830,
+        489877,
+        380346,
+        366222,
+        876974,
+        628805,
+        486601,
+        468466,
+        3618,
+        774,
+        357,
+        357
+      ]
+    },
+    "timing_seconds": {
+      "stage0_oracles_and_reference_execution": 45.034573,
+      "direct_vm_emission": 2.647446,
+      "cranelift_execution": 0.120102,
+      "canonical_vm_batch": 12.447387,
+      "whole_frontier": 77.066035
+    },
+    "resource_measurements": {
+      "child_cpu_seconds": 76.159342,
+      "child_peak_rss_kib": 683672,
+      "canonical_vm_peak_rss_kib": 76660,
+      "canonical_vm_calls_bytes": 573752,
+      "canonical_vm_results_bytes": 202278,
+      "cgroup_before": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_after": {
+        "memory.current": null,
+        "memory.max": null,
+        "memory.peak": null
+      },
+      "cgroup_measurements_are_ambient": true
+    },
+    "scope": "The current kernel.parse_header_global callable executes parser.header_global over all frontend header fixtures, a 65-byte page split, a 20-segment header, 100-, 130-, and 400-segment headers, a non-ASCII scalar split across pages, and the documented 1024-iteration fuel boundary (600 segments are rejected). Strides 1, 7, 64, and 1024 agree across Stage-0 checked bounded parser results, the reference interpreter, Cranelift, and one fresh canonical VM artifact. This is a selected helper frontier, not full parser-module verification or succession.",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}

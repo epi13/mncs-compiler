@@ -9236,7 +9236,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-19T02:09:28.141567Z",
+  "evidence_updated_at": "2026-10-19T06:45:47Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -17572,5 +17572,163 @@
     "claim_boundary": "Selected segment.next_token_global and significant_global cases from the existing Stage-0-backed segment corpus preserve token kinds, spans, and diagnostics across page strides 1, 7, 64, and 256. Stage-0 expectations, reference interpreter, Cranelift, and one fresh canonical VM artifact agree. Additional identifier window-boundary, overlong, nonzero-cursor, and malformed page-table cases have explicit expected tokens. This is a selected cursor frontier, not full segment/lexer module verification.",
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_parser_header_global_fuel_1024_20261019": {
+    "status": "passed_selected_parser_frontiers",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "implementation": {
+      "compiler_revision": "b44ee57924c8a958c583d1b59697d5004653c73e",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "commits": [
+        "792139a Expand global parser header frontier",
+        "deaad92 Keep parser fuel case within page capacity",
+        "b44ee57 Bound module parser fixtures to fixed parser capacity"
+      ],
+      "change": "Raise global header parser iterations from 256 to 1024; preserve code 9 beyond the bounded frontier; compare the larger global cases with Stage-0 and the canonical VM."
+    },
+    "focused_global_header_frontier": {
+      "status": "passed",
+      "tested_compiler_revision": "deaad92600a47e5f61ef9968a077460e3061ffc0",
+      "evidence_artifact": "evidence/self-host-parser-header-global-fuel-1024-deaad92.json",
+      "evidence_sha256": "0262868cc3822be6f2857d73893846b9e82ec709d6a6b628505283ac79012ac6",
+      "test_harness_sha256": "2f947c4b3d4baedf61ca5e17a30a6bf9380ded0eca5025b728d3d9ede2381277",
+      "target": "mncs.compiler.kernel.v1::parse_header_global",
+      "artifact_identity": "sha256:b40a44e1c3093e4750a0f21053985314a93f72a12021b4429a86e07504e382fc",
+      "executor_case_counts": {
+        "reference_interpreter": 104,
+        "cranelift": 104,
+        "canonical_vm": 104
+      },
+      "semantic_digests": {
+        "reference_interpreter": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764",
+        "cranelift": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764",
+        "canonical_vm": "13fdad208a03698bb4fc469e8bd2e0d8bcf6bdb8bda1186450cecb90cb140764"
+      },
+      "header_segment_cases": [
+        {
+          "segments": 100,
+          "expected": "parsed"
+        },
+        {
+          "segments": 130,
+          "expected": "parsed"
+        },
+        {
+          "segments": 400,
+          "expected": "parsed"
+        },
+        {
+          "segments": 600,
+          "expected": "fuel_exhausted_code_9"
+        }
+      ],
+      "measurements": {
+        "timing_seconds": {
+          "stage0_oracles_and_reference_execution": 45.034573,
+          "direct_vm_emission": 2.647446,
+          "cranelift_execution": 0.120102,
+          "canonical_vm_batch": 12.447387,
+          "whole_frontier": 77.066035
+        },
+        "resource_measurements": {
+          "child_cpu_seconds": 76.159342,
+          "child_peak_rss_kib": 683672,
+          "canonical_vm_peak_rss_kib": 76660,
+          "canonical_vm_calls_bytes": 573752,
+          "canonical_vm_results_bytes": 202278,
+          "cgroup_before": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_after": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_measurements_are_ambient": true
+        }
+      }
+    },
+    "authenticated_parser_module_frontier": {
+      "status": "passed",
+      "environment_operation_status": "ok",
+      "session_id": "ses_164edc158d9b1637",
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+      "binding_id": "cap_b5abab29a363aad8",
+      "inventory_revision": 44,
+      "contract_revision": "afc3a5c7f9153982",
+      "tested_compiler_revision": "b44ee57924c8a958c583d1b59697d5004653c73e",
+      "evidence_artifact": "evidence/self-host-parser-module-canonical-vm-frontier-fuel-1024-b44ee57-20261019.json",
+      "evidence_sha256": "e4b3c5248e79c637ed1bb64c04a7c22cdb1b9dd0e90d860c9cc3152bec44b258",
+      "target_module": "mncs.compiler.parser.v1",
+      "target_functions": [
+        "header",
+        "finish",
+        "step",
+        "header_global",
+        "finish_global",
+        "step_global",
+        "header_with_locations_global"
+      ],
+      "canonical_vm_case_count": 201,
+      "bounded_case_count": 27,
+      "global_case_count": 108,
+      "header_location_case_count": 61,
+      "artifact_identity": "sha256:9ff447f71503921ebff093f58158521ef9528cb0efa8ddde895c53a4e0579fd8",
+      "semantic_digests": {
+        "bounded": {
+          "reference_interpreter": "dd1733f99e847207d8e2c0088354c6e607827353e224aba6f6e6bc3a5ba47da7",
+          "cranelift": "dd1733f99e847207d8e2c0088354c6e607827353e224aba6f6e6bc3a5ba47da7",
+          "canonical_vm": "dd1733f99e847207d8e2c0088354c6e607827353e224aba6f6e6bc3a5ba47da7"
+        },
+        "global": {
+          "reference_interpreter": "9de996843fdee35ffe851024212699b25936ff01878ecab3fb263a78e5681626",
+          "cranelift": "9de996843fdee35ffe851024212699b25936ff01878ecab3fb263a78e5681626",
+          "canonical_vm": "9de996843fdee35ffe851024212699b25936ff01878ecab3fb263a78e5681626"
+        },
+        "helpers": {
+          "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+          "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+          "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+        },
+        "header_locations": {
+          "reference_interpreter": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+          "cranelift": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+          "canonical_vm": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01"
+        }
+      },
+      "measurements": {
+        "timing_seconds": {
+          "stage0_oracles_and_reference_execution": 37.738057,
+          "direct_vm_emission": 2.581694,
+          "cranelift_execution": 0.100993,
+          "canonical_vm_batch": 10.306645,
+          "whole_frontier": 73.432872
+        },
+        "resource_measurements": {
+          "child_cpu_seconds": 72.681878,
+          "child_peak_rss_kib": 774696,
+          "canonical_vm_peak_rss_kib": 76508,
+          "canonical_vm_calls_bytes": 828591,
+          "canonical_vm_results_bytes": 447879,
+          "cgroup_before": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_after": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_measurements_are_ambient": true
+        }
+      }
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The focused global-root test proves 400-segment success and a 600-segment explicit code-9 rejection over valid page strides, with 104 exact cases across reference execution, Cranelift, and canonical VM. The authenticated current-head module frontier proves all seven selected parser functions at the tested specializations across 27 bounded cases, 108 global cases, 61 location cases, and 201 canonical VM calls. This does not prove full compiler succession or Language verified-fact reuse."
   }
 }

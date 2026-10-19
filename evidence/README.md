@@ -911,3 +911,26 @@ report records a 68.03-second application build (cache hit), a 27.72-second
 canonical VM batch, 2.72 GiB child peak RSS, and 378 MiB VM peak RSS. These
 measurements are specific to this selected compiler workload. Language-owned
 verified facts reused remains zero.
+
+## Global parser header limit 1024 (2026-10-19)
+
+The [focused global-header frontier](self-host-parser-header-global-fuel-1024-deaad92.json)
+raises the MNCS global parser's fixed iteration limit from 256 to 1024. It accepts
+130- and 400-segment module names, while a 600-segment name still returns the
+explicit code-9 fuel-exhaustion result. Across 104 cases, Stage-0 checked results,
+the reference interpreter, Cranelift, and canonical VM have identical semantic
+digests. This focused run took 77.07 seconds overall, 76.16 seconds of child CPU,
+683,672 KiB child peak RSS, and 76,660 KiB canonical-VM peak RSS; cgroup memory
+measurements were unavailable. These figures describe this parser workload.
+
+The full [authenticated parser-module frontier](self-host-parser-module-canonical-vm-frontier-fuel-1024-b44ee57-20261019.json)
+passed Environment verification on Compiler revision `b44ee579`. It directly
+exercised all seven selected parser functions: 27 bounded cases, 108 global cases,
+61 header-location cases, and 201 canonical VM calls. The run took 73.43 seconds
+overall with 774,696 KiB child peak RSS and 76,508 KiB canonical-VM peak RSS;
+cgroup measurements were unavailable. The fixed-size bounded parser test now
+excludes inputs over its 1,024-byte argument capacity; the focused global-root
+test covers the 600-segment rejection on valid page strides.
+
+This advances the selected parser frontier. It does not prove full parser-module
+succession, Stage-1/Stage-2 succession, or Language-owned verified-fact reuse.
