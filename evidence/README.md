@@ -912,7 +912,7 @@ canonical VM batch, 2.72 GiB child peak RSS, and 378 MiB VM peak RSS. These
 measurements are specific to this selected compiler workload. Language-owned
 verified facts reused remains zero.
 
-## Global parser header limit 1024 (2026-10-19)
+## Global parser header limit 1024 (historical, 2026-10-19)
 
 The [focused global-header frontier](self-host-parser-header-global-fuel-1024-deaad92.json)
 raises the MNCS global parser's fixed iteration limit from 256 to 1024. It accepts
@@ -921,7 +921,8 @@ explicit code-9 fuel-exhaustion result. Across 104 cases, Stage-0 checked result
 the reference interpreter, Cranelift, and canonical VM have identical semantic
 digests. This focused run took 77.07 seconds overall, 76.16 seconds of child CPU,
 683,672 KiB child peak RSS, and 76,660 KiB canonical-VM peak RSS; cgroup memory
-measurements were unavailable. These figures describe this parser workload.
+measurements were unavailable. These figures describe this parser workload;
+the current implementation is extended below.
 
 The full [authenticated parser-module frontier](self-host-parser-module-canonical-vm-frontier-fuel-1024-b44ee57-20261019.json)
 passed Environment verification on Compiler revision `b44ee579`. It directly
@@ -934,3 +935,25 @@ test covers the 600-segment rejection on valid page strides.
 
 This advances the selected parser frontier. It does not prove full parser-module
 succession, Stage-1/Stage-2 succession, or Language-owned verified-fact reuse.
+
+## Global parser header fuel in bounded batches (2026-10-19)
+
+The current [4096-token global-header frontier](self-host-parser-header-global-fuel-4096-20261019.json)
+is tested at Compiler revision `3b2cbbee`. It processes four bounded batches of
+1,024 significant-token steps, preserving explicit code-9 exhaustion beyond
+that limit. The previously failing 600-segment header and a 900-segment header
+now parse at strides 2, 7, 64, and 1,024. A 2,047-segment header remains a
+deterministic code-9 failure at strides 7, 64, and 1,024. Long-header spans and
+terminal state are checked against the generated source layout.
+
+All 111 cases have identical semantic digests across the reference interpreter,
+Cranelift, and canonical VM (`154d86c5…12d60894`). The frontier took 157.36
+seconds overall, 155.78 child CPU seconds, and peaked at 563,404 KiB child RSS;
+the canonical VM peaked at 76,856 KiB. Cgroup values were unavailable. This is a
+selected parser helper frontier, not full parser-module verification or a general
+performance claim. The authenticated [parser-module verifier](self-host-parser-module-canonical-vm-frontier-fuel-4096-3b2cbbe-20261019.json)
+also passed on the same revision through the exact registered nested checkout:
+27 bounded cases, 108 global cases, 61 header-location cases, and 201 canonical
+VM calls. It took 74.03 seconds overall with 776,744 KiB child peak RSS and
+76,764 KiB canonical-VM peak RSS; cgroup values were unavailable. Language
+verified facts remain unreused, and Stage-1/Stage-2 succession remain unproven.

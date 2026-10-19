@@ -17729,6 +17729,185 @@
     "language_verified_facts_reused": 0,
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "scope": "The focused global-root test proves 400-segment success and a 600-segment explicit code-9 rejection over valid page strides, with 104 exact cases across reference execution, Cranelift, and canonical VM. The authenticated current-head module frontier proves all seven selected parser functions at the tested specializations across 27 bounded cases, 108 global cases, 61 location cases, and 201 canonical VM calls. This does not prove full compiler succession or Language verified-fact reuse."
+    "scope": "The focused global-root test proves 400-segment success and a 600-segment explicit code-9 rejection over valid page strides, with 104 exact cases across reference execution, Cranelift, and canonical VM. The authenticated current-head module frontier proves all seven selected parser functions at the tested specializations across 27 bounded cases, 108 global cases, 61 location cases, and 201 canonical VM calls. This does not prove full compiler succession or Language verified-fact reuse.",
+    "superseded_by": "current_campaign_parser_header_global_fuel_4096_20261019"
+  },
+  "current_campaign_parser_header_global_fuel_4096_20261019": {
+    "status": "passed_selected_parser_frontier",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "implementation": {
+      "compiler_revision": "3b2cbbee127f158b39420e7af993098f67f67274",
+      "compiler_branch": "campaign/native-application-readiness-20261013",
+      "parent_revision": "a0e294a7b7483f040fb083b0432aa0ef843f0d8e",
+      "commit": "3b2cbbee127f158b39420e7af993098f67f67274",
+      "change": "Run global header parsing in four bounded batches of 1024 token steps; retain code 9 when a header remains incomplete after 4096 steps."
+    },
+    "focused_global_header_frontier": {
+      "status": "passed",
+      "tested_compiler_revision": "3b2cbbee127f158b39420e7af993098f67f67274",
+      "evidence_artifact": "evidence/self-host-parser-header-global-fuel-4096-20261019.json",
+      "evidence_sha256": "b853164110706730a66df6f12ef849f8a47dcb824b5b8dae3d7498ec46bc4741",
+      "test_harness": "tools/test_vm_parser_global_frontier.py",
+      "test_harness_sha256": "0813d6d4e8ebe6192e6d1bf0fea2d45ea679c05eea6b4d08204c857b1c8a6c7c",
+      "target": "mncs.compiler.kernel.v1::parse_header_global",
+      "artifact_identity": "sha256:72350d3392ff0f4c6561f57280a77f1434db591307c046cc10403b1e3971e38a",
+      "executor_case_counts": {
+        "reference_interpreter": 111,
+        "cranelift": 111,
+        "canonical_vm": 111
+      },
+      "semantic_digests": {
+        "reference_interpreter": "154d86c531e130c7fec1de5ae109c88f4ff77504800b6c1b82d5d1c412d60894",
+        "cranelift": "154d86c531e130c7fec1de5ae109c88f4ff77504800b6c1b82d5d1c412d60894",
+        "canonical_vm": "154d86c531e130c7fec1de5ae109c88f4ff77504800b6c1b82d5d1c412d60894"
+      },
+      "header_segment_cases": [
+        {
+          "segments": 100,
+          "expected": "parsed"
+        },
+        {
+          "segments": 130,
+          "expected": "parsed"
+        },
+        {
+          "segments": 400,
+          "expected": "parsed"
+        },
+        {
+          "segments": 600,
+          "expected": "parsed"
+        },
+        {
+          "segments": 900,
+          "expected": "parsed"
+        },
+        {
+          "segments": 2047,
+          "expected": "fuel_exhausted_code_9"
+        }
+      ],
+      "page_strides": {
+        "successful_long_headers": [
+          2,
+          7,
+          64,
+          1024
+        ],
+        "fuel_exhaustion_header": [
+          7,
+          64,
+          1024
+        ]
+      },
+      "measurements": {
+        "timing_seconds": {
+          "stage0_oracles_and_reference_execution": 115.68335,
+          "direct_vm_emission": 2.625305,
+          "cranelift_execution": 0.185431,
+          "canonical_vm_batch": 34.585713,
+          "whole_frontier": 157.361792
+        },
+        "resource_measurements": {
+          "child_cpu_seconds": 155.775631,
+          "child_peak_rss_kib": 563404,
+          "canonical_vm_peak_rss_kib": 76856,
+          "canonical_vm_calls_bytes": 1129168,
+          "canonical_vm_results_bytes": 216132,
+          "cgroup_before": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_after": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_measurements_are_ambient": true
+        }
+      }
+    },
+    "authenticated_environment_verification": {
+      "status": "passed",
+      "environment_operation_status": "ok",
+      "session_id": "ses_164edc158d9b1637",
+      "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+      "binding_id": "cap_b5abab29a363aad8",
+      "inventory_revision": 44,
+      "contract_revision": "afc3a5c7f9153982",
+      "tested_compiler_revision": "3b2cbbee127f158b39420e7af993098f67f67274",
+      "evidence_artifact": "evidence/self-host-parser-module-canonical-vm-frontier-fuel-4096-3b2cbbe-20261019.json",
+      "evidence_sha256": "13295d195e47b16ca86db4f9a98cb92be25512784e94d349a149badab8e51f82",
+      "target_module": "mncs.compiler.parser.v1",
+      "target_functions": [
+        "header",
+        "finish",
+        "step",
+        "header_global",
+        "finish_global",
+        "step_global",
+        "header_with_locations_global"
+      ],
+      "canonical_vm_case_count": 201,
+      "bounded_case_count": 27,
+      "global_case_count": 108,
+      "header_location_case_count": 61,
+      "artifact_identity": "sha256:11c71b15fbed8075498b86d1619e56ab455b72f14881b2f0bd9a0283b9b3cf62",
+      "semantic_digests": {
+        "bounded": {
+          "reference_interpreter": "dd1733f99e847207d8e2c0088354c6e607827353e224aba6f6e6bc3a5ba47da7",
+          "cranelift": "dd1733f99e847207d8e2c0088354c6e607827353e224aba6f6e6bc3a5ba47da7",
+          "canonical_vm": "dd1733f99e847207d8e2c0088354c6e607827353e224aba6f6e6bc3a5ba47da7"
+        },
+        "global": {
+          "reference_interpreter": "9de996843fdee35ffe851024212699b25936ff01878ecab3fb263a78e5681626",
+          "cranelift": "9de996843fdee35ffe851024212699b25936ff01878ecab3fb263a78e5681626",
+          "canonical_vm": "9de996843fdee35ffe851024212699b25936ff01878ecab3fb263a78e5681626"
+        },
+        "helpers": {
+          "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+          "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+          "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+        },
+        "header_locations": {
+          "reference_interpreter": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+          "cranelift": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+          "canonical_vm": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01"
+        }
+      },
+      "measurements": {
+        "timing_seconds": {
+          "stage0_oracles_and_reference_execution": 38.110109,
+          "direct_vm_emission": 2.625455,
+          "cranelift_execution": 0.103964,
+          "canonical_vm_batch": 10.278374,
+          "whole_frontier": 74.025336
+        },
+        "resource_measurements": {
+          "child_cpu_seconds": 73.153312,
+          "child_peak_rss_kib": 776744,
+          "canonical_vm_peak_rss_kib": 76764,
+          "canonical_vm_calls_bytes": 828591,
+          "canonical_vm_results_bytes": 447880,
+          "cgroup_before": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_after": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_measurements_are_ambient": true
+        }
+      },
+      "selection": "Explicit continuation selected campaign cmp_mncs_native_application_readiness_compiler_20261013 using the registered nested worktree cwd."
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The selected global-header callable accepts 600 and 900 segment headers across four page strides while still reporting code 9 for a 2047 segment header beyond 4096 significant-token steps. All 111 cases have matching reference-interpreter, Cranelift, and canonical-VM semantic digests. Long-header module boundaries are checked against generated source bytes. This is not full parser-module verification, Language verified-fact reuse, or compiler succession."
   }
 }
