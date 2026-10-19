@@ -1,0 +1,109 @@
+{
+  "schema_version": "mncs.compiler.project-import-closure-reachability-vector/1",
+  "identity": "ev_compiler_project_import_closure_reachability_vector_20261019",
+  "kind": "project-target-import-closure-implementation",
+  "observed_at": "2026-10-19T03:29:32Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "checkpoint_before_validation": {
+    "identity": "chk_b7c03ed4bfe35ecf",
+    "sequence": 417
+  },
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "base_revision": "f07b0b4cb8823f1dc963fe7fb58bd131b90735c6",
+    "implementation_revision": "ee45ea65f4a54b8054c16d0fc8dc967af1384b4b",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "source": "src/compiler/project.mncs",
+    "source_sha256_before": "51e3fb0ec4381b25e9d715ac216dbc01299e375760add90eff84a597b1be00b3",
+    "source_sha256_after": "1fb5d43669f40439d660bdafa92983e53e36317d0d7ea6d7ab867a3877690316"
+  },
+  "change": {
+    "summary": "Replaced the private linked-list set used by target import-closure discovery and filtering with a fixed 64-entry reachability vector indexed by bounded project source index.",
+    "preserved": [
+      "64-source project bound and 64 closure rounds",
+      "4096 resolved import-link bound and four 1024-link scan segments",
+      "source-order module filtering",
+      "out-of-range target and import indices fail closed"
+    ],
+    "semantic_identity_changed": false,
+    "public_contract_changed": false
+  },
+  "verification": {
+    "status": "verified",
+    "command": "MNCS_PROBE_BIN=tools/stage0-probe/target/release/mncs-compiler-stage0-probe MNCS_PROBE_REQUEST_TIMEOUT_S=300 python3 -u tools/test_project_import_link_capacity.py",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_schema_version": "mncs.compiler.project-import-link-capacity/12",
+    "backend": "cranelift",
+    "probe_request_count": 25,
+    "result_sha256": "53cde7553f499ad9363290fe51261b41ce538b2026ea930bf8c6bf7e9f212869",
+    "connected_source_capacity": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "target_source_index": 63,
+      "target_only_module_count": 1,
+      "target_flow_valid": true,
+      "target_ssa_valid": true,
+      "stage0_oracle_valid": true,
+      "stage0_verified_function_count": 64,
+      "root_import_identity_matches_stage0": true,
+      "warm_request_seconds": 0.401417
+    },
+    "other_checked_behavior": [
+      "per-module and project import limits",
+      "overflow diagnostics and source spans",
+      "interleaved and repeated imports",
+      "negative lookup cache and changed-snapshot invalidation",
+      "long and oversized module-name fallback"
+    ],
+    "canonical_vm_execution": false
+  },
+  "resource_measurement": {
+    "cold_probe_ready_seconds": 274.7,
+    "frontend_elaboration_seconds": 57.188,
+    "cranelift_backend_compilation_seconds": 175.701,
+    "retained_session_admission_seconds": 26.586,
+    "backend_artifact_payload_bytes": 437614313,
+    "sample_count": 3,
+    "peak_rss_bytes": 4653121536,
+    "kernel_rss_high_water_bytes": 5108736000,
+    "cgroup_memory": "unavailable",
+    "cpu_time": "unavailable; telemetry returned zero and zero usage is not inferred",
+    "warm_probe_ready_seconds": 37.1,
+    "warm_backend_artifact_cache_hits": 1,
+    "memory_headroom_during_run": "approximately 20 GiB available; cgroup limit unavailable",
+    "comparison": "No same-revision before/after benchmark was available. Timings are observations, not a measured speedup."
+  },
+  "algorithmic_work_model": {
+    "status": "derived_not_measured",
+    "basis": "The closure still scans at most 4096 links per round for at most 64 rounds. Membership checks now index the fixed vector directly instead of traversing up to 64 linked entries; adding a newly reached source still performs one bounded vector replacement.",
+    "interpretation": "This removes the nested linked-list membership walk from the bounded closure path. VM instruction count and comparative wall-time reduction were not measured."
+  },
+  "environment_claim": {
+    "status": "not_acquired",
+    "live_compiler_claims_before_validation": 0,
+    "reason": "The authenticated Environment MCP bridge rejected acquire/adopt arguments for its claims operation. The existing Control terminal gateway ran in a separate /workspace sandbox and did not expose the host Environment CLI. No Store or claim records were written outside the supported Environment interface."
+  },
+  "scope": {
+    "compiler_self_consumption_frontier_advanced": true,
+    "language_verified_facts_reused": 0,
+    "language_repository_modified": false,
+    "native_application_execution_changed": false,
+    "forge_execution_receipt_published": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "limitations": [
+    "This proves one bounded Project target closure on Stage-0/Cranelift and an independent Stage-0 oracle; it does not prove the whole Project module or canonical-VM execution.",
+    "The harness has no comparative baseline timing for the prior linked-list representation, so no speedup is claimed.",
+    "Language-owned verification-fact reuse and the Forge digest_app route remain unchanged."
+  ],
+  "checkpoint_after_validation": {
+    "identity": "chk_fa20b2b8c8a120cc",
+    "sequence": 418,
+    "created_at": "2026-10-19T03:33:41+00:00"
+  }
+}

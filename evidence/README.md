@@ -31,6 +31,21 @@ worktree fixture also rejects an unregistered lookalike and a symlink escape.
 This validates the Environment and Control continuation path; it does not
 provision Language write scope or a Forge application-execution binding.
 
+## Project import-closure reachability vector (2026-10-19)
+
+The [reachability-vector record](project-import-closure-reachability-vector-20261019.json)
+replaces Project's linked-list membership checks with a fixed 64-entry vector
+for target dependency closure discovery and filtering. The 64-source reversed
+chain passed the Stage-0 oracle and native target Flow/SSA checks across the
+25-case project-capacity harness. The warm 64-source request took 0.401
+seconds; the cold probe admitted its 437.6 MB Cranelift artifact in 274.7
+seconds and sampled 4.65 GB peak RSS. No same-revision before/after timing
+exists, so the record does not claim a speedup. The test ran without a
+worktree claim because the authenticated Environment MCP bridge rejected its
+claim-acquisition arguments; no live Compiler claim was present at the
+pre-run readback. Language verified facts remain unreused, canonical-VM
+execution was not part of this frontier, and Stage-1/Stage-2 remain unproven.
+
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 
 The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the
