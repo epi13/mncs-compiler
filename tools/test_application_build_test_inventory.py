@@ -102,6 +102,120 @@ def frontend_invocations(response: dict) -> int | None:
             .get("front_end_invocations"))
 
 
+def verify_build_assumption_cache_isolation(directory: Path) -> dict:
+    """Exercise capability and effect assumptions through real application builds."""
+    program_cache = directory / "program-cache"
+    application_cache = directory / "application-cache"
+    baseline_request = request(SOURCE)
+    capability_request = request(SOURCE)
+    capability_request["capabilities"] = ["test_artifact.read"]
+    effect_request = request(SOURCE)
+    effect_request["effect_assumptions"] = [{
+        "capability": "test_artifact.read",
+        "policy": "bounded-artifact/1",
+    }]
+
+    probe = app.Probe(
+        program_cache,
+        executable=PROBE,
+        application_cache_dir=application_cache,
+    )
+    try:
+        baseline, baseline_metrics = probe.send(
+            {"compile_application": baseline_request}, timeout=180.0
+        )
+        capability, capability_metrics = probe.send(
+            {"compile_application": capability_request}, timeout=180.0
+        )
+        effect, effect_metrics = probe.send(
+            {"compile_application": effect_request}, timeout=180.0
+        )
+    finally:
+        probe.close()
+
+    exact_probe = app.Probe(
+        program_cache,
+        executable=PROBE,
+        application_cache_dir=application_cache,
+    )
+    try:
+        exact_effect, exact_metrics = exact_probe.send(
+            {"compile_application": effect_request}, timeout=90.0
+        )
+    finally:
+        exact_probe.close()
+
+    responses = {
+        "baseline": baseline,
+        "changed_capabilities": capability,
+        "changed_effect_assumptions": effect,
+    }
+    for label, response in responses.items():
+        if (response.get("schema_version") != "mncs.compiler.application-build/6"
+                or response.get("status") != "verified"
+                or response.get("cache", {}).get("status") != "miss"
+                or frontend_invocations(response) != 1
+                or not isinstance(response.get("artifact", {}).get("value"), dict)):
+            raise AssertionError(
+                f"{label} policy build did not independently verify: "
+                + json.dumps({
+                    "status": response.get("status"),
+                    "cache": response.get("cache"),
+                    "diagnostics": response.get("diagnostics"),
+                }, indent=2)
+            )
+
+    keys = {label: response["cache"]["key"] for label, response in responses.items()}
+    if len(set(keys.values())) != len(keys):
+        raise AssertionError("capability or effect changes shared an application-build cache key")
+    if capability.get("build_assumptions", {}).get("capabilities") != ["test_artifact.read"]:
+        raise AssertionError("capability variant lost its current build assumption")
+    if effect.get("build_assumptions", {}).get("effect_assumptions") != effect_request[
+        "effect_assumptions"
+    ]:
+        raise AssertionError("effect variant lost its current build assumption")
+    artifact_identities = {
+        label: response.get("artifact", {}).get("identity")
+        for label, response in responses.items()
+    }
+    if len(set(artifact_identities.values())) != 1:
+        raise AssertionError("policy metadata changed the executable artifact for identical source")
+    if (exact_effect.get("cache", {}).get("status") != "hit"
+            or frontend_invocations(exact_effect) != 0
+            or exact_effect.get("cache", {}).get("key") != keys["changed_effect_assumptions"]
+            or exact_effect.get("build_assumptions", {}).get("effect_assumptions")
+            != effect_request["effect_assumptions"]
+            or exact_effect.get("artifact", {}).get("identity")
+            != artifact_identities["changed_effect_assumptions"]):
+        raise AssertionError("fresh-process exact policy reuse returned an incompatible build")
+
+    return {
+        "request_schema": baseline_request["schema_version"],
+        "cache_observation_schema": baseline["cache"].get("schema_version"),
+        "source_snapshot_identity": baseline.get("source_snapshot", {}).get("identity"),
+        "application_cache_keys": keys,
+        "artifact_identities": artifact_identities,
+        "fresh_process_exact_hit": {
+            "status": exact_effect.get("cache", {}).get("status"),
+            "front_end_invocations": frontend_invocations(exact_effect),
+            "key": exact_effect.get("cache", {}).get("key"),
+        },
+        "language_verified_facts_reused": 0,
+        "measurements": {
+            "baseline": baseline_metrics,
+            "changed_capabilities": capability_metrics,
+            "changed_effect_assumptions": effect_metrics,
+            "fresh_process_exact_hit": exact_metrics,
+        },
+        "verification_work": {
+            "baseline": baseline.get("cache", {}).get("verification_work"),
+            "changed_capabilities": capability.get("cache", {}).get("verification_work"),
+            "changed_effect_assumptions": effect.get("cache", {}).get("verification_work"),
+            "fresh_process_exact_hit": exact_effect.get("cache", {}).get("verification_work"),
+        },
+    }
+
+
 def execute_inventory_batch(
     artifact: dict, inventory: dict, step_budget: int = 100_000, repeat_count: int = 1
 ) -> tuple[dict, float, int | None]:
@@ -436,6 +550,9 @@ def main() -> None:
         prefix=".application-test-inventory-", dir=ROOT
     ) as raw:
         directory = Path(raw)
+        policy_cache_isolation = verify_build_assumption_cache_isolation(
+            directory / "policy-cache-isolation"
+        )
         program_cache = directory / "program-cache"
         application_cache = directory / "application-cache"
 
@@ -731,6 +848,7 @@ def main() -> None:
                 "wall_seconds": round(selection_elapsed, 6),
                 "process_tree_metrics": selection_metrics,
             },
+            "build_assumption_cache_isolation": policy_cache_isolation,
             "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
@@ -776,6 +894,13 @@ def main() -> None:
                     warm.get("cache", {}).get("status") == "hit"
                     and frontend_invocations(warm) == 0
                     and warm_inventory == cold_inventory
+                ),
+                "build_assumptions_isolate_real_application_cache_entries": (
+                    len(set(policy_cache_isolation["application_cache_keys"].values())) == 3
+                    and policy_cache_isolation["fresh_process_exact_hit"]["status"] == "hit"
+                    and policy_cache_isolation["fresh_process_exact_hit"][
+                        "front_end_invocations"
+                    ] == 0
                 ),
                 "comment_edit_refreshes_locations_only": True,
                 "unselected_test_body_changes_only_its_case_identity": True,
@@ -880,7 +1005,11 @@ def main() -> None:
                 "round matches the first, including six passes and the typed skip result. This does "
                 "not migrate the production runner or add Forge integration."
                 " The Environment provider adapter also publishes /7 after resolving "
-                "the Language-issued source Test identities."
+                "the Language-issued source Test identities. The additional cache policy check "
+                "built the same source under baseline, changed capability, and changed effect-assumption "
+                "requests; each variant received a distinct cache key and ran the frontend, while a "
+                "fresh process reused only the exact effect-assumption request. Language verified-fact "
+                "reuse remains zero."
             ),
         }
         evidence = ROOT / os.environ.get(
