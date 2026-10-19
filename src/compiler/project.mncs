@@ -1809,7 +1809,7 @@ fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], fla
 }
 fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, target_source_index: u64) -> (result: ProjectBuild) {
     let selected: TargetModuleSelection = select_target_module(modules, target_source_index);
-    let dependency_closure: ProjectImportClosure = project_import_closure(imports, target_source_index);
+    let dependency_closure: ProjectImportClosure = project_import_closure(imports, target_source_index, sources.len);
     let dependency_modules: ModuleList = project_modules_in_closure<64>(sources, modules, dependency_closure.reachable);
     return lower_project_modules_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, selected.found);
 }
@@ -1821,10 +1821,15 @@ fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_
 // retains at most 4096 resolved links. Build bounded per-source adjacency once
 // and visit each reachable module once, so reverse-ordered chains do not
 // rescan the complete link list on every fixed-point round.
-fn project_import_closure(imports: ImportList, target_source_index: u64) -> (result: ProjectImportClosure) {
+fn project_import_closure(imports: ImportList, target_source_index: u64, source_count: u64) -> (result: ProjectImportClosure) {
     let empty: [bool; 64] = [false; 64];
     if target_source_index >= empty.len {
         return ProjectImportClosure { reachable: empty, changed: false };
+    }
+    if source_count < empty.len {
+        if target_source_index >= source_count {
+            return ProjectImportClosure { reachable: empty, changed: false };
+        }
     }
     let initial_reachable: [bool; 64] = replace(empty, target_source_index, true);
     // Keep the common shallow-closure path to at most two linear scans. Deeper
@@ -1832,9 +1837,23 @@ fn project_import_closure(imports: ImportList, target_source_index: u64) -> (res
     // for repeated full-project rescans before traversal.
     let first_round: ProjectImportClosure = project_import_closure_round(imports, initial_reachable);
     if !(first_round.changed) { return first_round; }
+    if source_count < empty.len {
+        if project_import_closure_complete_prefix(first_round.reachable, source_count) {
+            return ProjectImportClosure { reachable: first_round.reachable, changed: false };
+        }
+    }
     let second_round: ProjectImportClosure = project_import_closure_round(imports, first_round.reachable);
-    if !(second_round.changed) || project_import_closure_complete(second_round.reachable) {
+    if !(second_round.changed) {
         return ProjectImportClosure { reachable: second_round.reachable, changed: false };
+    }
+    if source_count == empty.len {
+        if project_import_closure_complete(second_round.reachable) {
+            return ProjectImportClosure { reachable: second_round.reachable, changed: false };
+        }
+    } else {
+        if project_import_closure_complete_prefix(second_round.reachable, source_count) {
+            return ProjectImportClosure { reachable: second_round.reachable, changed: false };
+        }
     }
 
     let adjacency: [ImportList; 64] = project_import_adjacency(imports);
@@ -1890,6 +1909,14 @@ fn project_import_closure_link_one(st: ProjectImportClosureWalk, link: ImportLin
 }
 fn project_import_closure_complete(reachable: [bool; 64]) -> (result: bool) {
     iterate i up_to 64 carrying complete: bool = true {
+        if !(reachable[i]) { return false; }
+        next complete = true;
+    }
+    return complete;
+}
+fn project_import_closure_complete_prefix(reachable: [bool; 64], source_count: u64) -> (result: bool) {
+    iterate i up_to 64 carrying complete: bool = true {
+        if i >= source_count { return complete; }
         if !(reachable[i]) { return false; }
         next complete = true;
     }

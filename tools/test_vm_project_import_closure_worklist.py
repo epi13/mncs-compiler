@@ -68,7 +68,12 @@ def source_bundle() -> dict[str, str]:
     return modules
 
 
-def closure_function(name: str, target: int, edges: list[tuple[int, int]]) -> str:
+def closure_function(
+    name: str,
+    target: int,
+    edges: list[tuple[int, int]],
+    source_count: int = 64,
+) -> str:
     links = "project.ImportList.INil"
     for source_index, target_index in reversed(edges):
         link = (
@@ -84,7 +89,7 @@ def closure_function(name: str, target: int, edges: list[tuple[int, int]]) -> st
     return (
         f"fn {name}() -> (result: project.ProjectImportClosure) {{\n"
         f"  let imports: project.ImportList = {links};\n"
-        f"  return project.project_import_closure(imports, {target});\n"
+        f"  return project.project_import_closure(imports, {target}, {source_count});\n"
         "}\n"
     )
 
@@ -100,13 +105,19 @@ def generated_edges(seed: int) -> list[tuple[int, int]]:
     ]
 
 
-def reachable_indices(target: int, edges: list[tuple[int, int]]) -> list[int]:
+def reachable_indices(
+    target: int,
+    edges: list[tuple[int, int]],
+    source_count: int = 64,
+) -> list[int]:
+    if target < 0 or target >= min(source_count, 64):
+        return []
     reachable = {target}
     changed = True
     while changed:
         changed = False
         for source_index, target_index in edges:
-            if source_index >= 64 or target_index >= 64:
+            if source_index >= min(source_count, 64) or target_index >= min(source_count, 64):
                 continue
             if source_index in reachable and target_index not in reachable:
                 reachable.add(target_index)
@@ -129,6 +140,10 @@ def wrapper_source() -> str:
         "record GeneratedClosureSummary { closure: project.ProjectImportClosure, import_count: u64 }\n"
         + closure_function("run", 7, REVERSE_CYCLIC_EDGES)
         + closure_function("run_capacity", 63, CAPACITY_EDGES)
+        + closure_function("run_dense_four_candidate", 3, [(3, 2), (2, 1), (1, 0)], 4)
+        + closure_function("run_dense_four_two_scan_baseline", 3, [(3, 2), (2, 1), (1, 0)])
+        + closure_function("run_source_count_out_of_range", 4, [], 4)
+        + closure_function("run_invalid_target", 64, [])
         + fixed_functions
         + """fn import_target_for_source(source_index: u64) -> (result: u64) {
   if source_index == 0 { return 0; }
@@ -181,12 +196,12 @@ fn build_generated_graph(seed: u64) -> (result: ImportLinkBuild) {
 }
 fn run_full_link_capacity() -> (result: FullClosureSummary) {
   let built: ImportLinkBuild = build_full_link_list();
-  let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, 63);
+  let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, 63, 64);
   return FullClosureSummary { closure: closure, import_count: built.count };
 }
 fn run_generated(seed: u64) -> (result: GeneratedClosureSummary) {
   let built: ImportLinkBuild = build_generated_graph(seed);
-  let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, seed % 64);
+  let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, seed % 64, 64);
   return GeneratedClosureSummary { closure: closure, import_count: built.count };
 }
 """
@@ -202,6 +217,10 @@ def build_request(modules: dict[str, str]) -> dict:
         "callable_roots": [
             {"module": WRAPPER_MODULE, "function": "run"},
             {"module": WRAPPER_MODULE, "function": "run_capacity"},
+            {"module": WRAPPER_MODULE, "function": "run_dense_four_candidate"},
+            {"module": WRAPPER_MODULE, "function": "run_dense_four_two_scan_baseline"},
+            {"module": WRAPPER_MODULE, "function": "run_source_count_out_of_range"},
+            {"module": WRAPPER_MODULE, "function": "run_invalid_target"},
             {"module": WRAPPER_MODULE, "function": "run_full_link_capacity"},
             *[
                 {"module": WRAPPER_MODULE, "function": f"run_{graph['name']}"}
@@ -268,6 +287,22 @@ def main() -> dict:
             {
                 "id": "64-source-cyclic-closure", "function": "run_capacity",
                 "target": 63, "edges": CAPACITY_EDGES,
+            },
+            {
+                "id": "four-source-dense-first-scan", "function": "run_dense_four_candidate",
+                "target": 3, "edges": [(3, 2), (2, 1), (1, 0)], "source_count": 4,
+            },
+            {
+                "id": "four-source-dense-two-scan-baseline", "function": "run_dense_four_two_scan_baseline",
+                "target": 3, "edges": [(3, 2), (2, 1), (1, 0)],
+            },
+            {
+                "id": "source-count-out-of-range-target", "function": "run_source_count_out_of_range",
+                "target": 4, "edges": [], "source_count": 4,
+            },
+            {
+                "id": "out-of-range-target", "function": "run_invalid_target",
+                "target": 64, "edges": [],
             },
             {
                 "id": "4096-link-cyclic-closure", "function": "run_full_link_capacity",
@@ -365,7 +400,9 @@ def main() -> dict:
         actual.append(app.decode_wire(app.vm_to_wire(vm_returned[0])))
     for index, (spec, oracle_result, vm_result) in enumerate(zip(call_specs, expected, actual)):
         closure_result = vm_result.get("closure") if "import_count" in spec else vm_result
-        manual_reachable = reachable_indices(spec["target"], spec["edges"])
+        manual_reachable = reachable_indices(
+            spec["target"], spec["edges"], spec.get("source_count", 64)
+        )
         expected_reachable = [value in manual_reachable for value in range(64)]
         if (vm_result != oracle_result
                 or closure_result.get("reachable") != expected_reachable
@@ -399,8 +436,11 @@ def main() -> dict:
                 "id": spec["id"],
                 "callable": spec["function"],
                 "target_source_index": spec["target"],
+                "source_count": spec.get("source_count", 64),
                 "import_link_count": spec.get("import_count", len(spec["edges"])),
-                "expected_reachable_indices": reachable_indices(spec["target"], spec["edges"]),
+                "expected_reachable_indices": reachable_indices(
+                    spec["target"], spec["edges"], spec.get("source_count", 64)
+                ),
                 "canonical_vm_reachable_indices": [
                     index for index, value in enumerate(
                         (actual[position].get("closure", actual[position])["reachable"])
