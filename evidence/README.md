@@ -1038,3 +1038,26 @@ Source-module verification and compiler succession remain unproven.
 The [current-source frontier](self-host-source-byte-at-global-canonical-vm-20261019T193345Z.json) executes the exact `source.byte_at_global<1024,1024>` body from Compiler revision `2b030b21` through a fresh canonical VM artifact. All 70 byte, EOF, zero-stride, empty-source, missing-page, and short-page cases match the Stage-0 reference and Cranelift. The semantic digest is `f606619d…fc2277da`.
 
 The run took 2.95 seconds overall and 2.53 child CPU seconds; child peak RSS was 140,024 KiB and canonical-VM peak RSS was 44,312 KiB. Host available memory before the run was about 24.1 GB; cgroup readings were unavailable. This is a selected source helper frontier, not full Source-module proof or a general speed claim. Language-owned verified facts reused remains zero; Stage-1 and Stage-2 succession remain unproven.
+
+## Multi-input native Test inventory execution (2026-10-19)
+
+The [multi-input inventory record](application-build-test-inventory-multi-input-20261019.json)
+extends the Compiler's batch adapter to validate several typed `u64` inputs and
+several bounded byte-sequence inputs whose lengths follow multiple Language
+`Nat` parameters. The fixture specializes independent bounds 2 and 3. Wrong
+argument count, wrong integer wire type, wrong specialization arity, and a
+malformed byte sequence are rejected before VM dispatch. The selected calls,
+including both repeated results, match Stage-0.
+
+The same run rebuilt the real `mncs-test` self-suite from its pinned sources:
+one frontend invocation emitted an artifact for seven inventory-selected tests;
+one canonical-VM session ran two rounds (14 calls), with six passes and one
+typed skip. Results match Stage-0 and the repeated round. The VM batch took
+0.073 seconds at 22.2 MiB peak RSS; the build took 0.493 seconds at 0.47 CPU
+seconds and 29.1 MiB peak RSS. The parameterized and generic fixture builds
+used 0.184 and 0.219 seconds respectively, each with one frontend invocation.
+Cgroup memory measurements were unavailable. These are workload-specific
+samples, not general speed claims. The record reports zero Language verified
+facts reused; this advances Compiler test-callable execution and adapter
+validation, not Language incremental verification, Forge execution, or the
+production Test runner migration.

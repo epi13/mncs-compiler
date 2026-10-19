@@ -222,86 +222,105 @@ def inventory_test_arguments(
     arguments_by_test_case: dict[str, list[dict]] | None,
     type_arguments: list[dict],
 ) -> list[dict]:
-    """Validate typed call values against the Language-issued Test signature.
+    """Validate typed values against the Language-issued Test signature.
 
-    The current native Test batch slice admits one u64 input or one bounded
-    ``[byte; N]`` input for a single ``Nat`` specialization. Raw caller JSON
-    is never passed through unchecked.
+    The current native Test batch slice admits multiple u64 inputs and bounded
+    [byte; N] inputs whose lengths follow the Language-issued generic
+    parameter order. Raw caller JSON is never passed through unchecked.
     """
     identity = row.get("test_case_identity")
     if not isinstance(identity, str) or not identity:
         raise AssertionError("Language Test inventory omitted its test-case identity")
-    generic_params = row.get("generic_params") or []
+    generic_params = row.get("generic_params")
+    if generic_params is None:
+        generic_params = []
+    if not isinstance(generic_params, list):
+        raise TypeError(f"Language Test inventory has malformed generic parameters: {row}")
     inputs = row.get("inputs")
     if not isinstance(inputs, list):
-        raise AssertionError(f"Language Test inventory has malformed inputs: {row}")
+        raise TypeError(f"Language Test inventory has malformed inputs: {row}")
     supplied = (arguments_by_test_case or {}).get(identity, [])
     if not isinstance(supplied, list):
-        raise AssertionError(f"typed Test arguments must be a list for {identity}")
+        raise TypeError(f"typed Test arguments must be a list for {identity}")
     if len(inputs) != len(supplied):
         raise AssertionError(
             f"typed Test argument count differs from the Language signature for {identity}"
         )
-    if generic_params:
-        if (len(generic_params) != 1
-                or not isinstance(generic_params[0], dict)
-                or generic_params[0].get("kind") != "nat"
-                or len(type_arguments) != 1
-                or not isinstance(type_arguments[0], dict)
-                or type_arguments[0].get("kind") != "nat"):
-            raise AssertionError(
-                f"only one Nat generic Test parameter is currently admitted: {row}"
-            )
-        parameter_name = generic_params[0].get("name")
-        bound = type_arguments[0].get("value")
-        if (not isinstance(parameter_name, str)
-                or type(bound) is not int
-                or not 1 <= bound <= 64
-                or len(inputs) != 1
-                or not isinstance(inputs[0], dict)
-                or inputs[0].get("type") != f"[byte; {parameter_name}]"):
-            raise AssertionError(
-                f"generic Test must declare one bounded [byte; {parameter_name}] input: {row}"
-            )
-        value = supplied[0]
-        byte_values = (value.get("sequence", {}).get("values")
-                       if isinstance(value, dict) else None)
-        if (not isinstance(value, dict)
-                or set(value) != {"sequence"}
-                or not isinstance(value["sequence"], dict)
-                or set(value["sequence"]) != {"values"}
-                or not isinstance(byte_values, list)
-                or len(byte_values) != bound
-                or any(not isinstance(item, dict)
-                       or set(item) != {"byte"}
-                       or not isinstance(item["byte"], dict)
-                       or set(item["byte"]) != {"value"}
-                       or type(item["byte"].get("value")) is not int
-                       or not 0 <= item["byte"]["value"] <= 255
-                       for item in byte_values)):
-            raise AssertionError(
-                f"Test input for {identity} is not a bounded byte sequence of length {bound}"
-            )
-        return supplied
-    if type_arguments:
-        raise AssertionError(f"non-generic Test {identity} received generic arguments")
-    if not inputs:
-        return []
-    if len(inputs) != 1 or inputs[0].get("type") != "u64":
-        raise AssertionError(
-            f"only one u64 Test input is currently admitted by this batch slice: {row}"
-        )
-    value = supplied[0]
-    if (not isinstance(value, dict)
-            or set(value) != {"integer"}
-            or not isinstance(value["integer"], dict)
-            or set(value["integer"]) != {"type", "value"}
-            or value["integer"].get("type") != {"bits": 64, "signed": False}
-            or type(value["integer"].get("value")) is not int
-            or not 0 <= value["integer"]["value"] <= (1 << 64) - 1):
-        raise AssertionError(f"Test input for {identity} is not a valid typed u64 wire value")
-    return supplied
 
+    bounds: dict[str, int] = {}
+    if generic_params:
+        if len(generic_params) != len(type_arguments):
+            raise AssertionError(
+                f"generic Test type arguments differ from its Language signature: {row}"
+            )
+        for parameter, argument in zip(generic_params, type_arguments):
+            if (not isinstance(parameter, dict)
+                    or parameter.get("kind") != "nat"
+                    or not isinstance(argument, dict)
+                    or argument.get("kind") != "nat"):
+                raise AssertionError(
+                    f"only Nat generic Test parameters are currently admitted: {row}"
+                )
+            name = parameter.get("name")
+            bound = argument.get("value")
+            if (not isinstance(name, str) or not name
+                    or name in bounds
+                    or type(bound) is not int
+                    or not 1 <= bound <= 64):
+                raise AssertionError(
+                    f"generic Test parameters require unique names and bounds in 1..64: {row}"
+                )
+            bounds[name] = bound
+    elif type_arguments:
+        raise AssertionError(f"non-generic Test {identity} received generic arguments")
+
+    for input_row, value in zip(inputs, supplied):
+        if not isinstance(input_row, dict) or not isinstance(input_row.get("type"), str):
+            raise TypeError(f"Language Test inventory has a malformed input: {input_row}")
+        input_type = input_row["type"]
+        if input_type == "u64":
+            if (not isinstance(value, dict)
+                    or set(value) != {"integer"}
+                    or not isinstance(value["integer"], dict)
+                    or set(value["integer"]) != {"type", "value"}
+                    or value["integer"].get("type") != {"bits": 64, "signed": False}
+                    or type(value["integer"].get("value")) is not int
+                    or not 0 <= value["integer"]["value"] <= (1 << 64) - 1):
+                raise AssertionError(
+                    f"Test input for {identity} is not a valid typed u64 wire value"
+                )
+            continue
+
+        sequence_match = re.fullmatch(
+            r"\[byte;\s*([A-Za-z_][A-Za-z0-9_]*)\]", input_type
+        )
+        if sequence_match and sequence_match.group(1) in bounds:
+            bound = bounds[sequence_match.group(1)]
+            byte_values = None
+            sequence = value.get("sequence") if isinstance(value, dict) else None
+            if isinstance(sequence, dict):
+                byte_values = sequence.get("values")
+            if (not isinstance(value, dict)
+                    or set(value) != {"sequence"}
+                    or not isinstance(value["sequence"], dict)
+                    or set(value["sequence"]) != {"values"}
+                    or not isinstance(byte_values, list)
+                    or len(byte_values) != bound
+                    or any(not isinstance(item, dict)
+                           or set(item) != {"byte"}
+                           or not isinstance(item["byte"], dict)
+                           or set(item["byte"]) != {"value"}
+                           or type(item["byte"].get("value")) is not int
+                           or not 0 <= item["byte"]["value"] <= 255
+                           for item in byte_values)):
+                raise AssertionError(
+                    f"Test input for {identity} is not a bounded byte sequence of length {bound}"
+                )
+            continue
+        raise AssertionError(
+            f"Test input for {identity} has an unsupported Language type: {input_type}"
+        )
+    return supplied
 
 def inventory_test_type_arguments(
     row: dict, type_arguments_by_test_case: dict[str, list[dict]] | None
@@ -309,27 +328,47 @@ def inventory_test_type_arguments(
     identity = row.get("test_case_identity")
     if not isinstance(identity, str) or not identity:
         raise AssertionError("Language Test inventory omitted its test-case identity")
-    generic_params = row.get("generic_params") or []
+    generic_params = row.get("generic_params")
+    if generic_params is None:
+        generic_params = []
+    if not isinstance(generic_params, list):
+        raise TypeError(f"Language Test inventory has malformed generic parameters: {row}")
     supplied = (type_arguments_by_test_case or {}).get(identity, [])
     if not isinstance(supplied, list):
-        raise AssertionError(f"Test type arguments must be a list for {identity}")
+        raise TypeError(f"Test type arguments must be a list for {identity}")
     if not generic_params:
         if supplied:
             raise AssertionError(f"non-generic Test {identity} received type arguments")
         return []
-    if (len(generic_params) != 1
-            or not isinstance(generic_params[0], dict)
-            or generic_params[0].get("kind") != "nat"
-            or len(supplied) != 1
-            or not isinstance(supplied[0], dict)
-            or set(supplied[0]) != {"kind", "value"}
-            or supplied[0].get("kind") != "nat"
-            or type(supplied[0].get("value")) is not int
-            or not 1 <= supplied[0]["value"] <= 64):
+    if len(generic_params) != len(supplied):
         raise AssertionError(
-            f"only one Nat generic Test parameter in the range 1..64 is supported: {row}"
+            f"generic Test type arguments differ from its Language signature: {row}"
         )
+    names = set()
+    for parameter, argument in zip(generic_params, supplied):
+        if (not isinstance(parameter, dict)
+                or parameter.get("kind") != "nat"
+                or not isinstance(parameter.get("name"), str)
+                or not parameter["name"]
+                or parameter["name"] in names
+                or not isinstance(argument, dict)
+                or set(argument) != {"kind", "value"}
+                or argument.get("kind") != "nat"
+                or type(argument.get("value")) is not int
+                or not 1 <= argument["value"] <= 64):
+            raise AssertionError(
+                f"generic Test parameters require unique Nat names and bounds in 1..64: {row}"
+            )
+        names.add(parameter["name"])
     return supplied
+
+
+def require_inventory_rejection(description: str, operation) -> None:
+    try:
+        operation()
+    except AssertionError:
+        return
+    raise AssertionError(f"inventory accepted invalid {description}")
 
 
 def execute_inventory_batch(
@@ -417,8 +456,8 @@ module tests.parameterized_inventory;
 use mncs.test.assertions;
 
 fn selected_entry() -> (result: u64) { return 0; }
-test assert_input(value: u64) -> (result: TestResult) {
-    return from_assertion(equals_i64(23, value as i64, 2001));
+test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
+    return from_assertion(equals_i64(expected as i64, actual as i64, 2001));
 }
 """
     assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
@@ -437,9 +476,10 @@ test assert_input(value: u64) -> (result: TestResult) {
         "test_selection": {"kind": "all_source_cases"},
     }
     value = 23
-    typed_arguments = [{
+    typed_value = {
         "integer": {"type": {"bits": 64, "signed": False}, "value": value}
-    }]
+    }
+    typed_arguments = [typed_value, typed_value]
     with tempfile.TemporaryDirectory(prefix="mncs-test-parameterized-case-") as raw:
         directory = Path(raw)
         probe = app.Probe(
@@ -460,10 +500,29 @@ test assert_input(value: u64) -> (result: TestResult) {
             response_schema="mncs.compiler.application-build/7",
         )
         test_row = inventory["tests"][0]
-        if (test_row.get("inputs") != [{"name": "value", "type": "u64"}]
+        if (test_row.get("inputs") != [
+                {"name": "expected", "type": "u64"},
+                {"name": "actual", "type": "u64"},
+        ]
                 or test_row.get("generic_params")
                 or frontend_invocations(built) != 1):
             raise AssertionError("Language inventory did not retain the typed Test signature")
+        test_identity = test_row["test_case_identity"]
+        require_inventory_rejection(
+            "multi-input argument count",
+            lambda: inventory_test_arguments(
+                test_row, {test_identity: [typed_value]}, []
+            ),
+        )
+        wrong_wire_type = {
+            "integer": {"type": {"bits": 32, "signed": False}, "value": value}
+        }
+        require_inventory_rejection(
+            "u64 wire type",
+            lambda: inventory_test_arguments(
+                test_row, {test_identity: [typed_value, wrong_wire_type]}, []
+            ),
+        )
         artifact = built.get("artifact", {}).get("value")
         if not isinstance(artifact, dict):
             raise AssertionError("parameterized Test build omitted its verified VM artifact")
@@ -558,6 +617,8 @@ test assert_input(value: u64) -> (result: TestResult) {
             "canonical_vm_batch_count": len(rows),
             "repeat_results_match": True,
             "stage0_equivalent": True,
+            "invalid_argument_count_rejected": True,
+            "invalid_u64_wire_type_rejected": True,
             "typed_test_result": actual_result,
             "build_frontend_invocations": frontend_invocations(built),
             "build_process_metrics": build_metrics,
@@ -571,20 +632,26 @@ def run_generic_test_case() -> dict:
     """Run a Language-inventoried generic Test through its seeded VM entrypoint."""
     module = "tests.generic_inventory"
     test_name = "bytes"
-    bound = 4
+    first_bound = 2
+    second_bound = 3
     source = """mncs 0.18;
 module tests.generic_inventory;
 use mncs.test.assertions;
 
 fn selected_entry() -> (result: u64) { return 0; }
-test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
-    return from_assertion(equals_bytes<N>(value, value, 2002));
+test bytes<N: Nat, M: Nat>(expected: [byte; N], actual: [byte; M]) -> (result: TestResult) {
+    let first: Assertion = equals_bytes<N>(expected, expected, 2002);
+    let second: Assertion = equals_bytes<M>(actual, actual, 2003);
+    return from_assertion(equals_bool(true, first.passed && second.passed, 2004));
 }
 """
     assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
     assertions_source = assertions_path.read_text(encoding="utf-8")
     modules = {"mncs.test.assertions": assertions_source}
-    type_arguments = [{"kind": "nat", "value": bound}]
+    type_arguments = [
+        {"kind": "nat", "value": first_bound},
+        {"kind": "nat", "value": second_bound},
+    ]
     generic_seed = {
         "module": module,
         "function": test_name,
@@ -602,10 +669,12 @@ test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
         "verification_policy": "application-build-generic-test/1",
         "test_selection": {"kind": "all_source_cases"},
     }
-    byte_values = [0, 1, 2, 3]
-    typed_arguments = [{"sequence": {"values": [
-        {"byte": {"value": item}} for item in byte_values
-    ]}}]
+    first_byte_values = [0, 1]
+    second_byte_values = [2, 3, 4]
+    typed_arguments = [
+        {"sequence": {"values": [{"byte": {"value": item}} for item in first_byte_values]}},
+        {"sequence": {"values": [{"byte": {"value": item}} for item in second_byte_values]}},
+    ]
     with tempfile.TemporaryDirectory(prefix="mncs-test-generic-case-") as raw:
         directory = Path(raw)
         probe = app.Probe(
@@ -626,10 +695,35 @@ test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
             response_schema="mncs.compiler.application-build/7",
         )
         test_row = inventory["tests"][0]
-        if (test_row.get("generic_params") != [{"kind": "nat", "name": "N"}]
-                or test_row.get("inputs") != [{"name": "value", "type": "[byte; N]"}]
+        if (test_row.get("generic_params") != [
+                    {"kind": "nat", "name": "N"},
+                    {"kind": "nat", "name": "M"},
+                ]
+                or test_row.get("inputs") != [
+                    {"name": "expected", "type": "[byte; N]"},
+                    {"name": "actual", "type": "[byte; M]"},
+                ]
                 or frontend_invocations(built) != 1):
             raise AssertionError("Language inventory did not retain the generic Test signature")
+        test_identity = test_row["test_case_identity"]
+        require_inventory_rejection(
+            "generic specialization arity",
+            lambda: inventory_test_type_arguments(
+                test_row, {test_identity: type_arguments[:1]}
+            ),
+        )
+        malformed_sequence_arguments = [
+            typed_arguments[0],
+            {"sequence": []},
+        ]
+        require_inventory_rejection(
+            "generic byte input shape",
+            lambda: inventory_test_arguments(
+                test_row,
+                {test_identity: malformed_sequence_arguments},
+                type_arguments,
+            ),
+        )
         artifact = built.get("artifact", {}).get("value")
         if not isinstance(artifact, dict):
             raise AssertionError(
@@ -643,7 +737,7 @@ test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
         matching_entrypoints = [row for row in generic_entrypoints
                                 if row.get("generic_module") == module
                                 and row.get("generic_function") == test_name
-                                and row.get("args_spellings") == [str(bound)]]
+                                and row.get("args_spellings") == [str(first_bound), str(second_bound)]]
         if len(matching_entrypoints) != 1:
             raise AssertionError(
                 "generic Test artifact omitted its exact Nat specialization entrypoint"
@@ -740,13 +834,18 @@ test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
             "generic_parameters": test_row["generic_params"],
             "input_signature": test_row["inputs"],
             "type_arguments": type_arguments,
-            "input_byte_values": byte_values,
+            "input_byte_values": {
+                "expected": first_byte_values,
+                "actual": second_byte_values,
+            },
             "generic_entrypoint": entrypoint,
             "verified_artifact_identity": built["artifact"]["identity"],
             "canonical_vm_artifact_identity": vm["artifact_id"],
             "canonical_vm_batch_count": len(rows),
             "repeat_results_match": True,
             "stage0_equivalent": True,
+            "invalid_specialization_arity_rejected": True,
+            "malformed_sequence_rejected": True,
             "typed_test_result": actual_result,
             "build_frontend_invocations": frontend_invocations(built),
             "build_process_metrics": build_metrics,
@@ -1704,6 +1803,9 @@ def main() -> None:
                 "probe_sha256": sha(PROBE.read_bytes()),
                 "probe_build": probe_build,
                 "harness_sha256": sha(Path(__file__).read_bytes()),
+                "working_tree_patch_sha256": sha(subprocess.check_output(
+                    ["git", "diff", "--binary", "HEAD"], cwd=ROOT
+                )),
                 "language_revision": json.loads(
                     (ROOT / "mncs-language.lock.json").read_text()
                 )["revision"],
@@ -1833,23 +1935,42 @@ def main() -> None:
                 "selected_test_batch_matches_stage0": True,
                 "typed_test_inputs_follow_language_inventory_and_match_stage0": (
                     parameterized_test_batch["input_signature"]
-                    == [{"name": "value", "type": "u64"}]
+                    == [
+                        {"name": "expected", "type": "u64"},
+                        {"name": "actual", "type": "u64"},
+                    ]
                     and parameterized_test_batch["canonical_vm_batch_count"] == 2
                     and parameterized_test_batch["repeat_results_match"]
                     and parameterized_test_batch["stage0_equivalent"]
+                    and parameterized_test_batch["invalid_argument_count_rejected"]
+                    and parameterized_test_batch["invalid_u64_wire_type_rejected"]
                     and parameterized_test_batch["typed_test_result"]["verdict_code"] == 0
                     and parameterized_test_batch["typed_test_result"]["actual"]
                     == parameterized_test_batch["input_value"]
                 ),
                 "generic_test_seed_resolves_to_a_native_entrypoint": (
                     generic_test_batch["generic_parameters"]
-                    == [{"kind": "nat", "name": "N"}]
+                    == [
+                        {"kind": "nat", "name": "N"},
+                        {"kind": "nat", "name": "M"},
+                    ]
                     and generic_test_batch["type_arguments"]
-                    == [{"kind": "nat", "value": 4}]
-                    and generic_test_batch["generic_entrypoint"]["args_spellings"] == ["4"]
+                    == [
+                        {"kind": "nat", "value": 2},
+                        {"kind": "nat", "value": 3},
+                    ]
+                    and generic_test_batch["generic_entrypoint"]["args_spellings"] == ["2", "3"]
+                    and generic_test_batch["input_signature"] == [
+                        {"name": "expected", "type": "[byte; N]"},
+                        {"name": "actual", "type": "[byte; M]"},
+                    ]
+                    and len(generic_test_batch["input_byte_values"]["expected"]) == 2
+                    and len(generic_test_batch["input_byte_values"]["actual"]) == 3
                     and generic_test_batch["canonical_vm_batch_count"] == 2
                     and generic_test_batch["repeat_results_match"]
                     and generic_test_batch["stage0_equivalent"]
+                    and generic_test_batch["invalid_specialization_arity_rejected"]
+                    and generic_test_batch["malformed_sequence_rejected"]
                     and generic_test_batch["typed_test_result"]["verdict_code"] == 0
                 ),
                 "native_test_failure_does_not_abort_later_inventory_cases": (
@@ -1927,14 +2048,17 @@ def main() -> None:
                 "affected test identity, and invalid input publishes neither inventory nor artifact. "
                 "A selected zero-argument source Test subset can be emitted with the production "
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
-                "with Stage-0 agreement. A bounded parameterized Test slice also binds a typed u64 "
-                "argument to the Language-issued input signature and repeats its typed TestResult "
-                "through the same artifact with Stage-0 agreement. The batch adapter accepts a generic "
+                "with Stage-0 agreement. A bounded parameterized Test slice binds two typed u64 "
+                "arguments to the Language-issued input signature and repeats its typed TestResult "
+                "through the same artifact with Stage-0 agreement; wrong arity and integer wire type "
+                "are rejected before VM dispatch. The batch adapter accepts a generic "
                 "Test only when its seed resolves to a concrete callable. The Compiler removes the "
                 "generic template from executable exports, lowers its verified seeded specialization, "
                 "and admits the selected Test when the exact generic-entrypoint spelling is present. "
-                "A bounded [byte; N] Test with N=4 now executes twice by inventory identity and matches "
-                "Stage-0. A failure-isolation batch then runs a failing typed TestResult followed by "
+                "A generic Test with independent Nat bounds 2 and 3 executes twice by inventory "
+                "identity with two typed byte inputs and matches Stage-0. Wrong specialization arity "
+                "and malformed sequence wire values are rejected. A failure-isolation batch then "
+                "runs a failing typed TestResult followed by "
                 "a passing case, twice on the same artifact; all four results complete and match "
                 "Stage-0. A live canonical VM process is then killed during a bounded inventory "
                 "Test call. It publishes no result file; a fresh VM process executes the next Test "
