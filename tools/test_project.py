@@ -717,13 +717,18 @@ def source_value(identities, source_id, path, page_start, page_count, stride, to
     })
 
 
-def request_value(identities, sources, stride=STRIDE_DEFAULT):
+def request_value(identities, sources, stride=STRIDE_DEFAULT, page_bound=PAGE_BOUND):
     flat = []
     descriptors = []
     for source_id, _, text in sources:
         chunks = chunk(text, stride)
         descriptors.append((source_id, len(flat), len(chunks), stride, len(text)))
         flat.extend(chunks)
+    if page_bound < PAGE_BOUND or len(flat) > page_bound:
+        raise ValueError(
+            f"project page capacity {page_bound} cannot hold {len(flat)} pages "
+            f"(minimum supported capacity is {PAGE_BOUND})"
+        )
     project = record(identities, "ProjectSnapshot", {
         "fingerprint": byte_sequence(hashlib.sha256(
             b"".join(len(source[2]).to_bytes(8, "big") + source[2] for source in sources)
@@ -738,10 +743,9 @@ def request_value(identities, sources, stride=STRIDE_DEFAULT):
         "target": {"module": "mncs.compiler.project.v1", "function": "compile_project"},
         "arguments": [project, pages_value(flat)],
         "type_arguments": [
-            # M bounds the flat page array; N bounds each page. Both sit
-            # at the Profile 0.18 sequence ceiling; per-module bytes stay
-            # exact length inside canonical page compositions.
-            {"kind": "nat", "value": PAGE_BOUND},
+            # M bounds the flat project page array; N bounds each page.
+            # Per-module slices remain bounded independently at PAGE_BOUND.
+            {"kind": "nat", "value": page_bound},
             {"kind": "nat", "value": 1024},
         ],
         "step_budget": 8_000_000,
