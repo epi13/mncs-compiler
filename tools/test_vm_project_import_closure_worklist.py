@@ -53,6 +53,7 @@ GENERATED_SEEDS = tuple(range(16))
 REVERSE_CYCLIC_EDGES = [(index, index - 1) for index in range(1, 7)] + [(6, 7), (7, 6)]
 CAPACITY_EDGES = [(index, index - 1) for index in range(1, 64)] + [(62, 63)]
 SMALL_REVERSE_CHAIN_EDGES = [(index, index - 1) for index in range(1, 8)]
+SMALL_SOURCE_BOUNDARY_EDGES = [(1, 0), (2, 1), (3, 2), (3, 4), (4, 0), (4, 3)]
 
 
 def source_bundle() -> dict[str, str]:
@@ -145,6 +146,8 @@ def wrapper_source() -> str:
         + closure_function("run_dense_four_two_scan_baseline", 3, [(3, 2), (2, 1), (1, 0)])
         + closure_function("run_small_reverse_chain_count_bound", 7, SMALL_REVERSE_CHAIN_EDGES, 8)
         + closure_function("run_small_reverse_chain_capacity_control", 7, SMALL_REVERSE_CHAIN_EDGES)
+        + closure_function("run_small_source_edge_count_bound", 3, SMALL_SOURCE_BOUNDARY_EDGES, 4)
+        + closure_function("run_small_source_edge_capacity_control", 3, SMALL_SOURCE_BOUNDARY_EDGES)
         + closure_function("run_source_count_out_of_range", 4, [], 4)
         + closure_function("run_invalid_target", 64, [])
         + fixed_functions
@@ -224,6 +227,8 @@ def build_request(modules: dict[str, str]) -> dict:
             {"module": WRAPPER_MODULE, "function": "run_dense_four_two_scan_baseline"},
             {"module": WRAPPER_MODULE, "function": "run_small_reverse_chain_count_bound"},
             {"module": WRAPPER_MODULE, "function": "run_small_reverse_chain_capacity_control"},
+            {"module": WRAPPER_MODULE, "function": "run_small_source_edge_count_bound"},
+            {"module": WRAPPER_MODULE, "function": "run_small_source_edge_capacity_control"},
             {"module": WRAPPER_MODULE, "function": "run_source_count_out_of_range"},
             {"module": WRAPPER_MODULE, "function": "run_invalid_target"},
             {"module": WRAPPER_MODULE, "function": "run_full_link_capacity"},
@@ -308,6 +313,14 @@ def main() -> dict:
             {
                 "id": "eight-source-worklist-seed-capacity-control", "function": "run_small_reverse_chain_capacity_control",
                 "target": 7, "edges": SMALL_REVERSE_CHAIN_EDGES,
+            },
+            {
+                "id": "small-source-count-filters-out-of-project-edges", "function": "run_small_source_edge_count_bound",
+                "target": 3, "edges": SMALL_SOURCE_BOUNDARY_EDGES, "source_count": 4,
+            },
+            {
+                "id": "64-slot-control-admits-same-edge-indices", "function": "run_small_source_edge_capacity_control",
+                "target": 3, "edges": SMALL_SOURCE_BOUNDARY_EDGES,
             },
             {
                 "id": "source-count-out-of-range-target", "function": "run_source_count_out_of_range",

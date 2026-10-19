@@ -129,10 +129,10 @@ record ModuleResolutionCacheLookup { rest: ModuleResolutionFactList, source_inde
 // fixed vector so closure discovery and filtering do not repeatedly walk a
 // linked list just to answer whether one source index is present.
 record ProjectImportClosure { reachable: [bool; 64], changed: bool }
-record ProjectImportAdjacencyBuild { rest: ImportList, by_source: [ImportList; 64] }
-record ProjectImportClosureWork { reachable: [bool; 64], pending: [u64; 64], pending_count: u64 }
+record ProjectImportAdjacencyBuild { rest: ImportList, by_source: [ImportList; 64], source_count: u64 }
+record ProjectImportClosureWork { reachable: [bool; 64], pending: [u64; 64], pending_count: u64, source_count: u64 }
 record ProjectImportClosureSeed { pending: [u64; 64], pending_count: u64 }
-record ProjectImportClosureWalk { rest: ImportList, reachable: [bool; 64], changed: bool }
+record ProjectImportClosureWalk { rest: ImportList, reachable: [bool; 64], changed: bool, source_count: u64 }
 record ProjectImportClosureExpansion { rest: ImportList, work: ProjectImportClosureWork }
 record ProjectModuleClosureFilter { rest: ModuleList, reachable: [bool; 64], acc: ModuleList }
 
@@ -1835,14 +1835,14 @@ fn project_import_closure(imports: ImportList, target_source_index: u64, source_
     // Keep the common shallow-closure path to at most two linear scans. Deeper
     // reverse-ordered chains use adjacency plus a worklist instead of paying
     // for repeated full-project rescans before traversal.
-    let first_round: ProjectImportClosure = project_import_closure_round(imports, initial_reachable);
+    let first_round: ProjectImportClosure = project_import_closure_round(imports, initial_reachable, source_count);
     if !(first_round.changed) { return first_round; }
     if source_count < empty.len {
         if project_import_closure_complete_prefix(first_round.reachable, source_count) {
             return ProjectImportClosure { reachable: first_round.reachable, changed: false };
         }
     }
-    let second_round: ProjectImportClosure = project_import_closure_round(imports, first_round.reachable);
+    let second_round: ProjectImportClosure = project_import_closure_round(imports, first_round.reachable, source_count);
     if !(second_round.changed) {
         return ProjectImportClosure { reachable: second_round.reachable, changed: false };
     }
@@ -1856,7 +1856,7 @@ fn project_import_closure(imports: ImportList, target_source_index: u64, source_
         }
     }
 
-    let adjacency: [ImportList; 64] = project_import_adjacency(imports);
+    let adjacency: [ImportList; 64] = project_import_adjacency(imports, source_count);
     let seeded: ProjectImportClosureWork = project_import_closure_seed_work(second_round.reachable, source_count);
     iterate i up_to 64 carrying st: ProjectImportClosureWork = seeded {
         if st.pending_count == 0 {
@@ -1866,15 +1866,16 @@ fn project_import_closure(imports: ImportList, target_source_index: u64, source_
         let popped: ProjectImportClosureWork = ProjectImportClosureWork {
             reachable: st.reachable,
             pending: st.pending,
-            pending_count: st.pending_count - 1
+            pending_count: st.pending_count - 1,
+            source_count: st.source_count
         };
         let outgoing: ImportList = adjacency[source_index];
         next st = project_import_closure_expand(outgoing, popped);
     }
     return ProjectImportClosure { reachable: st.reachable, changed: false };
 }
-fn project_import_closure_round(imports: ImportList, reachable: [bool; 64]) -> (result: ProjectImportClosure) {
-    let initial: ProjectImportClosureWalk = ProjectImportClosureWalk { rest: imports, reachable: reachable, changed: false };
+fn project_import_closure_round(imports: ImportList, reachable: [bool; 64], source_count: u64) -> (result: ProjectImportClosure) {
+    let initial: ProjectImportClosureWalk = ProjectImportClosureWalk { rest: imports, reachable: reachable, changed: false, source_count: source_count };
     iterate batch up_to 4 carrying st: ProjectImportClosureWalk = initial {
         if import_list_empty(st.rest) { return ProjectImportClosure { reachable: st.reachable, changed: st.changed }; }
         next st = project_import_closure_part(st);
@@ -1895,16 +1896,19 @@ fn project_import_closure_link(st: ProjectImportClosureWalk) -> (result: Project
     };
 }
 fn project_import_closure_link_one(st: ProjectImportClosureWalk, link: ImportLink, rest: ImportList) -> (result: ProjectImportClosureWalk) {
-    if link.source_index >= st.reachable.len || link.target_index >= st.reachable.len {
-        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed };
+    // The fixed 64-slot representation is capacity, not membership in this project.
+    if link.source_index >= st.reachable.len || link.target_index >= st.reachable.len
+        || link.source_index >= st.source_count || link.target_index >= st.source_count {
+        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed, source_count: st.source_count };
     }
     if !(st.reachable[link.source_index]) || st.reachable[link.target_index] {
-        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed };
+        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed, source_count: st.source_count };
     }
     return ProjectImportClosureWalk {
         rest: rest,
         reachable: replace(st.reachable, link.target_index, true),
-        changed: true
+        changed: true,
+        source_count: st.source_count
     };
 }
 fn project_import_closure_complete(reachable: [bool; 64]) -> (result: bool) {
@@ -1927,11 +1931,11 @@ fn project_import_closure_seed_work(reachable: [bool; 64], source_count: u64) ->
     let initial: ProjectImportClosureSeed = ProjectImportClosureSeed { pending: empty, pending_count: 0 };
     iterate i up_to 64 carrying st: ProjectImportClosureSeed = initial {
         if i >= source_count {
-            return ProjectImportClosureWork { reachable: reachable, pending: st.pending, pending_count: st.pending_count };
+            return ProjectImportClosureWork { reachable: reachable, pending: st.pending, pending_count: st.pending_count, source_count: source_count };
         }
         next st = project_import_closure_seed_step(reachable, i, st);
     }
-    return ProjectImportClosureWork { reachable: reachable, pending: st.pending, pending_count: st.pending_count };
+    return ProjectImportClosureWork { reachable: reachable, pending: st.pending, pending_count: st.pending_count, source_count: source_count };
 }
 fn project_import_closure_seed_step(reachable: [bool; 64], index: u64, st: ProjectImportClosureSeed) -> (result: ProjectImportClosureSeed) {
     if !(reachable[index]) { return st; }
@@ -1939,9 +1943,9 @@ fn project_import_closure_seed_step(reachable: [bool; 64], index: u64, st: Proje
     return ProjectImportClosureSeed { pending: pending, pending_count: st.pending_count + 1 };
 }
 
-fn project_import_adjacency(imports: ImportList) -> (result: [ImportList; 64]) {
+fn project_import_adjacency(imports: ImportList, source_count: u64) -> (result: [ImportList; 64]) {
     let empty: [ImportList; 64] = [ImportList.INil; 64];
-    let initial: ProjectImportAdjacencyBuild = ProjectImportAdjacencyBuild { rest: imports, by_source: empty };
+    let initial: ProjectImportAdjacencyBuild = ProjectImportAdjacencyBuild { rest: imports, by_source: empty, source_count: source_count };
     iterate batch up_to 4 carrying st: ProjectImportAdjacencyBuild = initial {
         if import_list_empty(st.rest) { return st.by_source; }
         next st = project_import_adjacency_part(st);
@@ -1962,14 +1966,16 @@ fn project_import_adjacency_step(st: ProjectImportAdjacencyBuild) -> (result: Pr
     };
 }
 fn project_import_adjacency_add(st: ProjectImportAdjacencyBuild, link: ImportLink, rest: ImportList) -> (result: ProjectImportAdjacencyBuild) {
-    if link.source_index >= 64 || link.target_index >= 64 {
-        return ProjectImportAdjacencyBuild { rest: rest, by_source: st.by_source };
+    if link.source_index >= 64 || link.target_index >= 64
+        || link.source_index >= st.source_count || link.target_index >= st.source_count {
+        return ProjectImportAdjacencyBuild { rest: rest, by_source: st.by_source, source_count: st.source_count };
     }
     let outgoing: ImportList = st.by_source[link.source_index];
     let updated: ImportList = ImportList.ICons { head: link, tail: outgoing };
     return ProjectImportAdjacencyBuild {
         rest: rest,
-        by_source: replace(st.by_source, link.source_index, updated)
+        by_source: replace(st.by_source, link.source_index, updated),
+        source_count: st.source_count
     };
 }
 
@@ -1988,7 +1994,8 @@ fn project_import_closure_expand_step(st: ProjectImportClosureExpansion) -> (res
     };
 }
 fn project_import_closure_expand_link(st: ProjectImportClosureExpansion, link: ImportLink, rest: ImportList) -> (result: ProjectImportClosureExpansion) {
-    if link.target_index >= st.work.reachable.len || st.work.reachable[link.target_index] || st.work.pending_count >= st.work.pending.len {
+    if link.target_index >= st.work.reachable.len || link.target_index >= st.work.source_count
+        || st.work.reachable[link.target_index] || st.work.pending_count >= st.work.pending.len {
         return ProjectImportClosureExpansion { rest: rest, work: st.work };
     }
     let reachable: [bool; 64] = replace(st.work.reachable, link.target_index, true);
@@ -1998,7 +2005,8 @@ fn project_import_closure_expand_link(st: ProjectImportClosureExpansion, link: I
         work: ProjectImportClosureWork {
             reachable: reachable,
             pending: pending,
-            pending_count: st.work.pending_count + 1
+            pending_count: st.work.pending_count + 1,
+            source_count: st.work.source_count
         }
     };
 }
