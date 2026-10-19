@@ -211,6 +211,7 @@ def source_cases() -> list[dict]:
         "version_span": None,
         "module_span": None,
         "stage0_check": False,
+        "strides": (2, 7, 64, 1024),
     })
     cases.append({
         "id": "non-ascii-scalar-split-across-pages",
@@ -255,7 +256,7 @@ def main() -> None:
             "stride": stride,
             "expected_code": item["expected_code"],
         }
-        for item in inputs for stride in STRIDES
+        for item in inputs for stride in item.get("strides", STRIDES)
     ]
     before_children = resource.getrusage(resource.RUSAGE_CHILDREN)
     memory_before = cgroup_memory_snapshot()
