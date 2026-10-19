@@ -9461,7 +9461,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-19T18:15:43Z",
+  "evidence_updated_at": "2026-10-19T18:23:21Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -18660,6 +18660,71 @@
       "This is lexer transport and tokenization self-ingestion only; parser, proof, Flow, SSA, and project compilation were not run.",
       "The CP-0022 not-token divergence is preserved and counted; it is not reported as exact whole-stream equality.",
       "Cgroup memory may be unavailable; process peak RSS is the canonical VM batch process measurement."
+    ]
+  },
+  "current_campaign_compiler_source_header_canonical_vm_20261019": {
+    "status": "passed_selected_current_source_header_frontier",
+    "observed_at": "2026-10-19T18:23:21Z",
+    "evidence_artifact": "evidence/self-host-compiler-source-header-canonical-vm-20261019T182321Z.json",
+    "evidence_sha256": "18bbc6759f6f87467180d2dfc4339c8c33663ee2c45a3465c3690f76b99b8346",
+    "tested_compiler_revision": "ad4557acf4bf057384c7f7695efccfaecfa5bb74",
+    "tested_compiler_branch": "campaign/native-application-readiness-20261013",
+    "test_harness": "tools/test_vm_compiler_source_header_self_ingestion.py",
+    "test_harness_sha256": "66baf6e8a27347e724f4cc5fadd7c1db807b412975325343b164e6e35a7e6987",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "source_path": "src/compiler/lexer.mncs",
+    "source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+    "source_bytes": 60349,
+    "parser_source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+    "target_module": "mncs.compiler.parser.v1",
+    "target_function": "header_global",
+    "type_arguments": [
+      1024,
+      1024
+    ],
+    "page_stride": 1024,
+    "page_count": 59,
+    "expected_header": {
+      "code": 0,
+      "end": 0,
+      "module_end": 40,
+      "module_start": 18,
+      "next_offset": 41,
+      "start": 0,
+      "state": 8,
+      "version_end": 9,
+      "version_start": 5
+    },
+    "executors": {
+      "cranelift": "cranelift",
+      "reference_interpreter": "reference_interpreter"
+    },
+    "reference_interpreter_matches_expected": true,
+    "cranelift_matches_reference": true,
+    "canonical_vm_matches_reference": true,
+    "canonical_vm_artifact_identity": "sha256:5207d42f6ddf461b9bf2c4591e239f0ff45d1b1b933400dffaf82d6eca37f7e4",
+    "canonical_vm_steps": 687496,
+    "measurements": {
+      "canonical_vm_calls_bytes": 1535289,
+      "canonical_vm_peak_rss_kib": 112720,
+      "canonical_vm_reported_wall_seconds": 3.354616,
+      "canonical_vm_results_bytes": 2187,
+      "canonical_vm_wall_seconds": 3.566902,
+      "child_cpu_seconds": 17.947463,
+      "cranelift_reported_steps": 1,
+      "cranelift_wall_seconds": 7.800853,
+      "reference_and_emission_wall_seconds": 6.904384,
+      "reference_steps": 547934,
+      "total_wall_seconds": 18.293505
+    },
+    "language_verified_facts_reused": 0,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The current lexer source file's declared module header was parsed by the current parser.header_global<P=1024,N=1024> implementation through the reference interpreter, Cranelift, and a fresh canonical VM artifact. This is a selected header parse only; declarations, bodies, semantic verification, Flow, SSA, and project compilation were not run.",
+    "limitations": [
+      "Only the leading MNCS version and module header were parsed; this does not demonstrate full Compiler source parsing.",
+      "This proves no Language-owned verified-fact reuse and does not claim Stage-1 or Stage-2 succession."
     ]
   }
 }
