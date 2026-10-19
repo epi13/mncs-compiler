@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 import time
@@ -911,6 +912,234 @@ test passing_case() -> (result: TestResult) {
         }
 
 
+def run_interrupted_vm_recovery_batch() -> dict:
+    """Recover valid Test calls after killing an active VM batch process."""
+    module = "tests.interrupted_vm_recovery"
+    source = """mncs 0.18;
+module tests.interrupted_vm_recovery;
+use mncs.test.assertions;
+
+fn selected_entry() -> (result: u64) { return 0; }
+test long_case() -> (result: TestResult) {
+    iterate outer up_to 1024 carrying total: u64 = 0 {
+        iterate inner up_to 1024 carrying count: u64 = 0 {
+            next count = count + 1;
+        }
+        next total = total + count;
+    }
+    return from_assertion(equals_i64(1048576, total as i64, 9401));
+}
+test recover_case() -> (result: TestResult) {
+    return from_assertion(equals_i64(23, 23, 9402));
+}
+"""
+    assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
+    assertions_source = assertions_path.read_text(encoding="utf-8")
+    modules = {"mncs.test.assertions": assertions_source}
+    test_names = ["long_case", "recover_case"]
+    build_request = {
+        "schema_version": "mncs.compiler.application-build-request/4",
+        "target": "mncs-vm-0.1",
+        "root_source_id": "tests/interrupted_vm_recovery.mncs",
+        "root_source": source,
+        "callable_roots": [{"module": module, "function": "selected_entry"}],
+        "modules": modules,
+        "generic_seeds": [],
+        "capabilities": [],
+        "verification_policy": "application-build-interrupted-vm-recovery/1",
+        "test_selection": {"kind": "all_source_cases"},
+    }
+    with tempfile.TemporaryDirectory(prefix="mncs-test-interrupted-vm-") as raw:
+        directory = Path(raw)
+        probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            built, build_metrics = probe.send(
+                {"compile_application": build_request}, timeout=180.0
+            )
+        finally:
+            probe.close()
+        inventory = require_inventory(
+            built,
+            set(test_names),
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/7",
+        )
+        tests = inventory["tests"]
+        if ([row.get("name") for row in tests] != test_names
+                or frontend_invocations(built) != 1):
+            raise AssertionError("interruption recovery Tests were not selected from one Language inventory")
+        artifact = built.get("artifact", {}).get("value")
+        if (built.get("status") != "verified"
+                or built.get("unresolved_obligations") != []
+                or not isinstance(artifact, dict)):
+            raise AssertionError("interruption recovery Tests did not produce one verified VM artifact")
+
+        artifact_path = directory / "application.vm.json"
+        calls_path = directory / "interrupted.calls.json"
+        interrupted_output_path = directory / "interrupted.results.json"
+        artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8")
+        interrupted_call = [{
+            "id": "interrupted-long-case",
+            "request": {
+                "schema_version": "0.1",
+                "target": {"module": module, "function": "long_case"},
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 100_000_000,
+            },
+        }]
+        calls_path.write_text(json.dumps(interrupted_call, sort_keys=True) + "\n", encoding="utf-8")
+        interrupted_started = time.monotonic()
+        process = subprocess.Popen(
+            [str(app.VM_BIN), "batch", "--artifact", str(artifact_path),
+             "--calls", str(calls_path), "--output", str(interrupted_output_path)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        was_running = False
+        return_code = None
+        try:
+            time.sleep(0.02)
+            was_running = process.poll() is None
+            if was_running:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            return_code = process.wait(timeout=5.0)
+        finally:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                process.wait(timeout=5.0)
+        interrupted_wall = time.monotonic() - interrupted_started
+        if (not was_running
+                or return_code != -signal.SIGKILL
+                or interrupted_output_path.exists()):
+            raise AssertionError(
+                "interrupted VM batch did not stop before publishing a result: "
+                f"running={was_running}, returncode={return_code}, "
+                f"result_exists={interrupted_output_path.exists()}"
+            )
+
+        recovery_calls = [{
+            "id": f"{tests[1]['test_case_identity']}:recovery:{index + 1}",
+            "request": {
+                "schema_version": "0.1",
+                "target": {"module": module, "function": "recover_case"},
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 100_000,
+            },
+        } for index in range(2)]
+        oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
+        try:
+            oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
+                "root": source,
+                "modules": modules,
+                "calls": [{
+                    "schema_version": "0.1",
+                    "target": {"module": module, "function": "recover_case"},
+                    "arguments": [],
+                    "type_arguments": [],
+                    "step_budget": 100_000,
+                } for _ in range(2)],
+            }}, timeout=180.0)
+        finally:
+            oracle_probe.close()
+        if (not oracle.get("valid") or len(oracle.get("executions", [])) != 2):
+            raise AssertionError("Stage-0 did not complete both post-interruption recovery calls")
+
+        recovery_calls_path = directory / "recovery.calls.json"
+        recovery_output_path = directory / "recovery.results.json"
+        recovery_calls_path.write_text(
+            json.dumps(recovery_calls, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        recovery_started = time.monotonic()
+        recovered = subprocess.run(
+            ["/usr/bin/time", "-v", str(app.VM_BIN), "batch",
+             "--artifact", str(artifact_path), "--calls", str(recovery_calls_path),
+             "--output", str(recovery_output_path)],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10.0,
+        )
+        recovery_wall = time.monotonic() - recovery_started
+        if recovered.returncode != 0 or not recovery_output_path.is_file():
+            raise AssertionError(
+                f"fresh VM process failed to recover on the same artifact: {recovered.stderr[-2000:]}"
+            )
+        rss_match = re.search(
+            r"Maximum resident set size \(kbytes\): (\d+)", recovered.stderr
+        )
+        recovery_peak_rss = int(rss_match.group(1)) if rss_match else None
+        vm = json.loads(recovery_output_path.read_text(encoding="utf-8"))
+        results = vm.get("results", [])
+        if (vm.get("artifact_id") != artifact.get("artifact_id")
+                or len(results) != 2
+                or built.get("artifact", {}).get("identity") != artifact.get("artifact_id")):
+            raise AssertionError("post-interruption recovery changed artifact identity or call count")
+
+        observed = []
+        for actual_row, expected_row, request_value in zip(
+            results, oracle["executions"], recovery_calls
+        ):
+            if (actual_row.get("id") != request_value["id"]
+                    or actual_row.get("outcome") != {"kind": "completed"}
+                    or actual_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
+                raise AssertionError(f"post-interruption Test did not complete: {actual_row}")
+            actual_values = actual_row.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if len(actual_values) != 1 or len(expected_values) != 1:
+                raise AssertionError("post-interruption TestResult returned the wrong arity")
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected:
+                raise AssertionError("post-interruption canonical VM result differs from Stage-0")
+            if (actual.get("verdict_code") != 0
+                    or actual.get("failure_code") != 0
+                    or actual.get("assertions") != 1
+                    or actual.get("failures") != 0):
+                raise AssertionError(f"post-interruption Test did not return a passing result: {actual}")
+            observed.append(actual)
+        if observed[0] != observed[1]:
+            raise AssertionError("post-interruption recovery results were not deterministic")
+
+        return {
+            "test_case_identities": {
+                row["name"]: row["test_case_identity"] for row in tests
+            },
+            "verified_artifact_identity": built["artifact"]["identity"],
+            "canonical_vm_artifact_identity": vm["artifact_id"],
+            "build_frontend_invocations": frontend_invocations(built),
+            "interruption": {
+                "signal": "SIGKILL",
+                "returncode": return_code,
+                "process_was_active_before_signal": was_running,
+                "result_file_published": interrupted_output_path.exists(),
+                "wall_seconds": round(interrupted_wall, 6),
+            },
+            "recovery_call_count": len(results),
+            "recovery_results_match": True,
+            "recovery_results_deterministic": True,
+            "stage0_equivalent": True,
+            "recovered_test_result": observed[0],
+            "build_process_metrics": build_metrics,
+            "stage0_oracle_metrics": oracle_metrics,
+            "recovery_batch_wall_seconds": round(recovery_wall, 6),
+            "recovery_batch_peak_rss_kib": recovery_peak_rss,
+        }
+
+
 def run_real_mncs_test_suite() -> dict:
     module = "tests.self_suite"
     root_path = app.TEST_ROOT / "tests/self_suite.mncs"
@@ -1297,6 +1526,7 @@ def main() -> None:
         parameterized_test_batch = run_parameterized_test_case()
         generic_test_batch = run_generic_test_case()
         failure_isolation_test_batch = run_failure_isolation_test_batch()
+        interrupted_vm_recovery_batch = run_interrupted_vm_recovery_batch()
         real_mncs_test_suite = run_real_mncs_test_suite()
 
         warm_probe = app.Probe(program_cache, executable=PROBE,
@@ -1497,6 +1727,7 @@ def main() -> None:
             "parameterized_test_batch": parameterized_test_batch,
             "generic_test_batch": generic_test_batch,
             "failure_isolation_test_batch": failure_isolation_test_batch,
+            "interrupted_vm_recovery_batch": interrupted_vm_recovery_batch,
             "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
@@ -1632,6 +1863,19 @@ def main() -> None:
                     and failure_isolation_test_batch["repeat_results_match"]
                     and failure_isolation_test_batch["stage0_equivalent"]
                 ),
+                "interrupted_vm_batch_publishes_no_result_and_recovers_same_artifact": (
+                    interrupted_vm_recovery_batch["build_frontend_invocations"] == 1
+                    and interrupted_vm_recovery_batch["interruption"]["signal"] == "SIGKILL"
+                    and interrupted_vm_recovery_batch["interruption"]["process_was_active_before_signal"]
+                    and interrupted_vm_recovery_batch["interruption"]["returncode"] == -signal.SIGKILL
+                    and not interrupted_vm_recovery_batch["interruption"]["result_file_published"]
+                    and interrupted_vm_recovery_batch["recovery_call_count"] == 2
+                    and interrupted_vm_recovery_batch["verified_artifact_identity"]
+                    == interrupted_vm_recovery_batch["canonical_vm_artifact_identity"]
+                    and interrupted_vm_recovery_batch["recovery_results_match"]
+                    and interrupted_vm_recovery_batch["recovery_results_deterministic"]
+                    and interrupted_vm_recovery_batch["stage0_equivalent"]
+                ),
                 "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
                     and real_mncs_test_suite["canonical_vm_batch_count"] == 14
@@ -1663,6 +1907,8 @@ def main() -> None:
                 "generic_test_oracle": generic_test_batch["stage0_oracle_metrics"],
                 "failure_isolation_test_build": failure_isolation_test_batch["build_process_metrics"],
                 "failure_isolation_test_oracle": failure_isolation_test_batch["stage0_oracle_metrics"],
+                "interrupted_vm_recovery_build": interrupted_vm_recovery_batch["build_process_metrics"],
+                "interrupted_vm_recovery_oracle": interrupted_vm_recovery_batch["stage0_oracle_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -1690,8 +1936,12 @@ def main() -> None:
                 "A bounded [byte; N] Test with N=4 now executes twice by inventory identity and matches "
                 "Stage-0. A failure-isolation batch then runs a failing typed TestResult followed by "
                 "a passing case, twice on the same artifact; all four results complete and match "
-                "Stage-0. This does not implement Language verification-fact reuse or change the "
-                "production mncs-test consumer. A second workload reads the real "
+                "Stage-0. A live canonical VM process is then killed during a bounded inventory "
+                "Test call. It publishes no result file; a fresh VM process executes the next Test "
+                "twice from the exact same artifact and matches Stage-0. This proves process "
+                "interruption recovery for this batch adapter; it does not prove durable Forge/Environment "
+                "session recovery. Language verified-fact reuse remains zero, and the production "
+                "mncs-test consumer is unchanged. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
                 "revision. One application-build/7 all-source selection resolves all seven "
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "
