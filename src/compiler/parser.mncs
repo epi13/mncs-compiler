@@ -7,7 +7,7 @@ use mncs.compiler.source.v1 as source;
 // code: 0 success; 1 lexical; 2 expected mncs; 3 expected version;
 // 4 expected semicolon; 5 expected module; 6 expected identifier;
 // 7 expected dot or semicolon; 8 unsupported non-ASCII source;
-// 9 header exceeds the 1024-iteration bounded fuel (global form only).
+// 9 header exceeds the 4096-token bounded fuel (global form only).
 record Header { code: u64, start: u64, end: u64, version_start: u64, version_end: u64, module_start: u64, module_end: u64, next_offset: u64, state: u64 }
 record HeaderLocation { header: Header, mapped: bool, start: source.LineCol, end: source.LineCol }
 
@@ -63,14 +63,23 @@ fn step<N: Nat>(text: [byte; up_to N], st: Header) -> (result: Header) {
 fn header_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: Header) {
     let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     if source.ascii_global<P, N>(pages, stride, total) {
-        iterate i up_to 1024 carrying st: Header = seed {
-            let advanced: Header = step_global<P, N>(pages, stride, total, st);
-            if advanced.code != 0 || advanced.state == 8 { return advanced; }
-            next st = advanced;
-        }
-        return finish_global<P, N>(pages, stride, total, st);
+        let scanned: Header = scan_header_global<P, N>(pages, stride, total, seed);
+        return finish_global<P, N>(pages, stride, total, scanned);
     }
     return Header { ..seed, code: 8, end: total };
+}
+// Keep each verified loop within the language's 1024-step bound while
+// allowing a useful module-name frontier to span four token batches.
+fn scan_header_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: Header) -> (result: Header) {
+    iterate batch up_to 4 carrying outer: Header = initial {
+        iterate token up_to 1024 carrying inner: Header = outer {
+            let advanced: Header = step_global<P, N>(pages, stride, total, inner);
+            if advanced.code != 0 || advanced.state == 8 { return advanced; }
+            next inner = advanced;
+        }
+        next outer = inner;
+    }
+    return outer;
 }
 fn finish_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Header) -> (result: Header) {
     if st.code != 0 || st.state == 8 { return st; }
