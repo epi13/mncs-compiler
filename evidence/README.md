@@ -1061,3 +1061,17 @@ samples, not general speed claims. The record reports zero Language verified
 facts reused; this advances Compiler test-callable execution and adapter
 validation, not Language incremental verification, Forge execution, or the
 production Test runner migration.
+
+## Current-head Source self-host frontier refresh (2026-10-19)
+
+The [current self-host matrix](SELF-HOST-MATRIX.json) now records a rerun at
+Compiler commit `8bde1f77`. The exact `source.byte_at_global<1024,1024>` body
+again passed 70 reference-interpreter, Cranelift, and canonical-VM cases with
+matching semantic digest `f606619d…fc2277da`. The [run record](self-host-source-byte-at-global-20261019T200453.513955Z-2313721.json)
+took 2.95 seconds overall (2.53 child CPU seconds), with 136.4 MiB child peak
+RSS and 43.3 MiB canonical-VM peak RSS. Available host memory was 22.7 GiB;
+cgroup measurements were unavailable. All nine MNCS compiler-module source
+hashes match the previous matrix revalidation; this refresh updates the
+selected Source frontier and source identity, not full-module coverage.
+Language verified facts reused remains zero, and Stage-1/Stage-2 succession
+remain unproven.

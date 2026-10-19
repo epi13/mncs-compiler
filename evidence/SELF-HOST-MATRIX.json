@@ -10,8 +10,8 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-19T17:53:12.197649+00:00",
-    "compiler_revision": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
+    "observed_at": "2026-10-19T20:04:53.207470Z",
+    "compiler_revision": "8bde1f77e5588db4cf14f526da7554bd76644784",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
@@ -25,9 +25,7 @@
       "ssa": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709",
       "project": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7"
     },
-    "changed_since_previous_matrix_hashes": [
-      "lexer"
-    ],
+    "changed_since_previous_matrix_hashes": [],
     "targeted_checks": {
       "flow_cfg_differential": {
         "status": "passed",
@@ -436,7 +434,61 @@
         "comparison_evidence_sha256": "a22867fc18762f7e1c2a96c32d361e39bab8c02541085123d423135fc2d8d030",
         "canonical_vm_steps_reduced_percent": 19.317,
         "scope": "Selected lexer batch specialization: empty and short source completion, 1,024-token cap, paginated continuation, and final EOF across fresh canonical VM artifact and Stage-0. Not full lexer-module proof or compiler succession."
+      },
+      "source_byte_at_global_current_head": {
+        "status": "passed_selected_current_source_frontier",
+        "tested_compiler_revision": "8bde1f77e5588db4cf14f526da7554bd76644784",
+        "target_module": "mncs.compiler.source.v1",
+        "target_function": "byte_at_global",
+        "generic_arguments": [
+          1024,
+          1024
+        ],
+        "source_module_sha256": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+        "function_sha256": "a9ead46cf4b6bacaefb654bad6db7aa487bf07c3a5310b1cfe3b7a3bdfd8640c",
+        "harness": "tools/test_vm_source_byte_at_global_frontier.py",
+        "harness_sha256": "1a0a5db5d34dcb53a0de4f60137b86ae82697d02952c859e35f1ddb874423d4a",
+        "evidence_artifact": "evidence/self-host-source-byte-at-global-20261019T200453.513955Z-2313721.json",
+        "evidence_sha256": "c15ad367cf62ca0a9a0158515859b31c115ee5f002d46535114f0590d065e031",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "canonical_vm_artifact_identity": "sha256:51ef387c67c151e4e938002bd16bb99053b8262da8b09105be1676eac8677b2a",
+        "case_count": 70,
+        "semantic_digest_sha256": "f606619d8899b7aee331ba99eb73e7c92ee12529353c0dc55190d069fc2277da",
+        "language_verified_facts_reused": 0,
+        "measurements": {
+          "canonical_vm_batch_seconds": 0.732428,
+          "whole_frontier_seconds": 2.951426,
+          "child_cpu_seconds": 2.529718,
+          "child_peak_rss_kib": 139716,
+          "canonical_vm_peak_rss_kib": 44380,
+          "host_memory_before": {
+            "total_bytes": 33411579904,
+            "available_bytes": 24348442624
+          },
+          "cgroup_memory_before": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_memory_after": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "canonical_vm_batch_bytes": {
+            "calls": 57393,
+            "results": 80615
+          }
+        },
+        "scope": "Directly executes the exact current source.byte_at_global definition through a fresh canonical VM artifact. Valid pages cover six strides and every byte offset through two past EOF; bounded malformed layouts cover zero stride, empty input, absent page, and short-page edge sentinels. Reference interpreter, Cranelift, and canonical VM agree. This does not prove the full Source module, Language-owned fact reuse, or compiler succession."
       }
+    },
+    "source_hash_equivalence_basis": {
+      "previous_compiler_revision": "5eb2c36a1a3f42a11c2b1c62d0c73f33164b4524",
+      "current_compiler_revision": "8bde1f77e5588db4cf14f526da7554bd76644784",
+      "all_nine_matrix_module_hashes_unchanged": true,
+      "scope": "The existing targeted checks remain bound to their own report revisions and these unchanged MNCS module hashes; the selected Source frontier below was rerun at the current campaign head."
     }
   },
   "modules": {
