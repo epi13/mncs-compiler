@@ -1,0 +1,88 @@
+{
+  "schema_version": "mncs.compiler.stage0-backend-root-closure-evidence/1",
+  "identity": "ev_compiler_stage0_backend_root_closure_20261018",
+  "status": "observed",
+  "campaign": {
+    "identity": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "prior_checkpoint_id": "chk_48bbf6d4b6988193",
+    "selected_claim": "clm_114aa3ca85241038",
+    "claim_scope": "worktree",
+    "checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013"
+  },
+  "implementation": {
+    "repository": "mncs-compiler",
+    "base_revision": "45be0c39f9fda107cd8676627200826cdb2bc9b8",
+    "revision": "00bb3ac0b791f0aae9f7865970ff0cd883d56250",
+    "feature": "opt-in Stage-0 backend compilation and canonical VM artifact emission for exact callable roots and their transitive executable closure",
+    "configuration": "MNCS_PROBE_BACKEND_ROOTS",
+    "cache_identity_domain": "probe-backend-root-closure/2",
+    "probe_executable_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76"
+  },
+  "semantic_contract": {
+    "frontend_elaboration": "unchanged full Program elaboration and validation; backend projection is applied only after frontend verification",
+    "call_edges": "BodyOperationKind::Call and bounded-iteration callee identities",
+    "generic_roots": "retain generic declarations as specialization provenance and compile selected concrete specialization bodies",
+    "vm_artifact": "exports selected callable roots and retains only their reachable executable closure",
+    "invalid_root": "missing or ambiguous selectors are rejected; ambiguous names require namespace::function",
+    "language_verified_facts_reused": 0
+  },
+  "workload": {
+    "module": "mncs.compiler.ssa.v1",
+    "roots": [
+      "mncs:0.2:function:mncs.compiler.ssa.v1::lower_value_ssa",
+      "mncs:0.2:function:mncs.compiler.ssa.v1::verify_function"
+    ],
+    "full_program_function_count": 2906,
+    "retained_function_declaration_count": 2658,
+    "retained_executable_body_count": 1539,
+    "retained_specialization_count": 1119,
+    "executable_body_reduction": 1367,
+    "executable_body_reduction_fraction": 0.4704
+  },
+  "measurements": {
+    "cold_backend_compile": {
+      "status": "completed",
+      "wall_seconds": 128.4,
+      "maximum_rss_kib": 4158228,
+      "cgroup_peak_memory_bytes": null,
+      "backend_artifact_payload_bytes": 365380110,
+      "backend_cache": "miss"
+    },
+    "fresh_process_backend_artifact_reuse": {
+      "status": "completed",
+      "wall_seconds": 28.2,
+      "maximum_rss_kib": 2815368,
+      "cgroup_peak_memory_bytes": null,
+      "backend_cache": "hit",
+      "backend_recompilation": false
+    }
+  },
+  "validation": {
+    "cargo_fmt_check": "passed",
+    "git_diff_check": "passed",
+    "python_bytecode_compile": "passed for test_ssa_sequence_length.py and test_ssa_record_construct.py",
+    "stage0_probe_release_build": "passed",
+    "stage0_probe_release_tests": {
+      "passed": 47,
+      "failed": 0
+    },
+    "backend_root_unit_tests": 5,
+    "record_construction_probe_fixture": {
+      "status": "interrupted",
+      "reason": "Flow backend root lower_unit retained 1916 of 2152 functions, making this fixture close to a whole-module compile; execution was stopped before a result",
+      "passed": false
+    },
+    "canonical_vm_execution_equivalence": false,
+    "effectful_digest_application_execution": false,
+    "self_host_matrix_advanced": false
+  },
+  "limitations": [
+    "This change narrows backend code generation and VM artifact emission; it does not reuse Language-owned verified semantic facts.",
+    "The measured compiler SSA root closure still compiles 1539 executable bodies and has high peak memory use.",
+    "The fresh-process hit proves executable artifact reuse only; it does not establish source-level semantic reuse or canonical VM behavior equivalence.",
+    "The broad record-construction fixture was interrupted and is not reported as passing.",
+    "Gate B remains partial; no Language write scope was present in the selected campaign."
+  ]
+}
