@@ -224,8 +224,8 @@ def inventory_test_arguments(
 ) -> list[dict]:
     """Validate typed values against the Language-issued Test signature.
 
-    The current native Test batch slice admits multiple u64 inputs and bounded
-    [byte; N] inputs whose lengths follow the Language-issued generic
+    The current native Test batch slice admits multiple u64 and i64 inputs and
+    bounded [byte; N] inputs whose lengths follow the Language-issued generic
     parameter order. Raw caller JSON is never passed through unchecked.
     """
     identity = row.get("test_case_identity")
@@ -288,6 +288,19 @@ def inventory_test_arguments(
                     or not 0 <= value["integer"]["value"] <= (1 << 64) - 1):
                 raise AssertionError(
                     f"Test input for {identity} is not a valid typed u64 wire value"
+                )
+            continue
+
+        if input_type == "i64":
+            if (not isinstance(value, dict)
+                    or set(value) != {"integer"}
+                    or not isinstance(value["integer"], dict)
+                    or set(value["integer"]) != {"type", "value"}
+                    or value["integer"].get("type") != {"bits": 64, "signed": True}
+                    or type(value["integer"].get("value")) is not int
+                    or not -(1 << 63) <= value["integer"]["value"] <= (1 << 63) - 1):
+                raise AssertionError(
+                    f"Test input for {identity} is not a valid typed i64 wire value"
                 )
             continue
 
@@ -456,8 +469,10 @@ module tests.parameterized_inventory;
 use mncs.test.assertions;
 
 fn selected_entry() -> (result: u64) { return 0; }
-test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
-    return from_assertion(equals_i64(expected as i64, actual as i64, 2001));
+test assert_input(expected: u64, actual: u64, signed: i64) -> (result: TestResult) {
+    let unsigned_pair: Assertion = equals_i64(expected as i64, actual as i64, 2001);
+    let signed_pair: Assertion = equals_i64(signed, -17, 2002);
+    return from_assertion(equals_bool(true, unsigned_pair.passed && signed_pair.passed, 2003));
 }
 """
     assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
@@ -479,7 +494,11 @@ test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
     typed_value = {
         "integer": {"type": {"bits": 64, "signed": False}, "value": value}
     }
-    typed_arguments = [typed_value, typed_value]
+    signed_value = -17
+    typed_signed_value = {
+        "integer": {"type": {"bits": 64, "signed": True}, "value": signed_value}
+    }
+    typed_arguments = [typed_value, typed_value, typed_signed_value]
     with tempfile.TemporaryDirectory(prefix="mncs-test-parameterized-case-") as raw:
         directory = Path(raw)
         probe = app.Probe(
@@ -503,6 +522,7 @@ test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
         if (test_row.get("inputs") != [
                 {"name": "expected", "type": "u64"},
                 {"name": "actual", "type": "u64"},
+                {"name": "signed", "type": "i64"},
         ]
                 or test_row.get("generic_params")
                 or frontend_invocations(built) != 1):
@@ -520,7 +540,31 @@ test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
         require_inventory_rejection(
             "u64 wire type",
             lambda: inventory_test_arguments(
-                test_row, {test_identity: [typed_value, wrong_wire_type]}, []
+                test_row,
+                {test_identity: [typed_value, wrong_wire_type, typed_signed_value]},
+                [],
+            ),
+        )
+        wrong_signed_type = {
+            "integer": {"type": {"bits": 64, "signed": False}, "value": signed_value}
+        }
+        require_inventory_rejection(
+            "i64 signed wire type",
+            lambda: inventory_test_arguments(
+                test_row,
+                {test_identity: [typed_value, typed_value, wrong_signed_type]},
+                [],
+            ),
+        )
+        out_of_range_signed_value = {
+            "integer": {"type": {"bits": 64, "signed": True}, "value": 1 << 63}
+        }
+        require_inventory_rejection(
+            "i64 range",
+            lambda: inventory_test_arguments(
+                test_row,
+                {test_identity: [typed_value, typed_value, out_of_range_signed_value]},
+                [],
             ),
         )
         artifact = built.get("artifact", {}).get("value")
@@ -591,8 +635,8 @@ test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
                     or actual.get("verdict_code") != 0
                     or actual.get("assertions") != 1
                     or actual.get("failures") != 0
-                    or actual.get("expected") != value
-                    or actual.get("actual") != value):
+                    or actual.get("expected") != 1
+                    or actual.get("actual") != 1):
                 raise AssertionError(
                     f"typed Test did not return the expected passing TestResult: {actual}"
                 )
@@ -611,7 +655,7 @@ test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
             },
             "test_case_identity": test_row["test_case_identity"],
             "input_signature": test_row["inputs"],
-            "input_value": value,
+            "input_values": {"expected": value, "actual": value, "signed": signed_value},
             "verified_artifact_identity": built["artifact"]["identity"],
             "canonical_vm_artifact_identity": vm["artifact_id"],
             "canonical_vm_batch_count": len(rows),
@@ -619,6 +663,8 @@ test assert_input(expected: u64, actual: u64) -> (result: TestResult) {
             "stage0_equivalent": True,
             "invalid_argument_count_rejected": True,
             "invalid_u64_wire_type_rejected": True,
+            "invalid_i64_wire_type_rejected": True,
+            "out_of_range_i64_rejected": True,
             "typed_test_result": actual_result,
             "build_frontend_invocations": frontend_invocations(built),
             "build_process_metrics": build_metrics,
@@ -1938,15 +1984,20 @@ def main() -> None:
                     == [
                         {"name": "expected", "type": "u64"},
                         {"name": "actual", "type": "u64"},
+                        {"name": "signed", "type": "i64"},
                     ]
+                    and parameterized_test_batch["input_values"]
+                    == {"expected": 23, "actual": 23, "signed": -17}
                     and parameterized_test_batch["canonical_vm_batch_count"] == 2
                     and parameterized_test_batch["repeat_results_match"]
                     and parameterized_test_batch["stage0_equivalent"]
                     and parameterized_test_batch["invalid_argument_count_rejected"]
                     and parameterized_test_batch["invalid_u64_wire_type_rejected"]
+                    and parameterized_test_batch["invalid_i64_wire_type_rejected"]
+                    and parameterized_test_batch["out_of_range_i64_rejected"]
                     and parameterized_test_batch["typed_test_result"]["verdict_code"] == 0
-                    and parameterized_test_batch["typed_test_result"]["actual"]
-                    == parameterized_test_batch["input_value"]
+                    and parameterized_test_batch["typed_test_result"]["expected"] == 1
+                    and parameterized_test_batch["typed_test_result"]["actual"] == 1
                 ),
                 "generic_test_seed_resolves_to_a_native_entrypoint": (
                     generic_test_batch["generic_parameters"]
@@ -2049,7 +2100,8 @@ def main() -> None:
                 "A selected zero-argument source Test subset can be emitted with the production "
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
                 "with Stage-0 agreement. A bounded parameterized Test slice binds two typed u64 "
-                "arguments to the Language-issued input signature and repeats its typed TestResult "
+                "inputs and one signed i64 input to the Language-issued signature and repeats "
+                "its typed TestResult "
                 "through the same artifact with Stage-0 agreement; wrong arity and integer wire type "
                 "are rejected before VM dispatch. The batch adapter accepts a generic "
                 "Test only when its seed resolves to a concrete callable. The Compiler removes the "
@@ -2081,6 +2133,16 @@ def main() -> None:
                 "reuse remains zero."
             ),
         }
+        failed_boolean_checks = [
+            name for name, result in report["checks"].items()
+            if type(result) is bool and not result
+        ]
+        if failed_boolean_checks:
+            raise AssertionError(
+                "application-build Test inventory proof has failed checks: "
+                + ", ".join(failed_boolean_checks)
+            )
+
         evidence = ROOT / os.environ.get(
             "MNCS_TEST_INVENTORY_EVIDENCE_PATH",
             "evidence/application-build-test-inventory-20261017.json",

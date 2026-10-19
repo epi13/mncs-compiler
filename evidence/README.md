@@ -1075,3 +1075,25 @@ hashes match the previous matrix revalidation; this refresh updates the
 selected Source frontier and source identity, not full-module coverage.
 Language verified facts reused remains zero, and Stage-1/Stage-2 succession
 remain unproven.
+
+## Signed integer native Test inputs (2026-10-19)
+
+The [signed-input inventory report](application-build-test-inventory-signed-inputs-final-20261019.json)
+extends typed Test calls to accept `i64` wire values with the exact signed
+64-bit schema and range. Its three-input fixture binds two `u64` values and
+`i64(-17)` from the Language-issued inventory signature, repeats the same
+verified artifact twice in the canonical VM, and matches Stage-0. Wrong arity,
+wrong `u64` and `i64` wire types, and an out-of-range signed value are rejected
+before dispatch. The focused build used one frontend invocation and took
+0.220 seconds at 15.9 MiB peak RSS; its two canonical-VM calls took 0.019
+seconds at 20.6 MiB peak RSS. Cgroup measurements were unavailable.
+
+The full inventory harness then passed every boolean proof check, including
+cache isolation, fresh-process artifact reuse, generic two-`Nat` byte inputs,
+failure isolation, interrupted-call recovery, and the real `mncs-test`
+self-suite. One canonical-VM session ran seven inventory-selected tests twice
+(14 calls); all results matched Stage-0, with six passes and one typed skip.
+The real suite build took 0.586 seconds at 28.7 MiB peak RSS; its canonical-VM
+batch took 0.075 seconds at 22.4 MiB peak RSS. Cgroup measurements were
+unavailable. Language verified facts reused remains zero. The harness now
+refuses to publish evidence when any boolean proof check is false.
