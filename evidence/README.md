@@ -1114,3 +1114,21 @@ real `mncs-test` self-suite again ran seven selected tests twice (14 calls) with
 Stage-0 agreement; the VM batch took 0.073 seconds at 22.7 MiB peak RSS. The
 record reports zero Language verified facts reused, and the production Test
 runner remains on its existing host orchestration.
+
+## Standalone byte native Test input validation (2026-10-19)
+
+The [primitive-input inventory report](application-build-test-inventory-primitive-wire-20261019.json)
+adds exact `byte` wire validation with the range 0..255. Its five-input Test
+fixture binds two `u64` values, `i64(-17)`, `true`, and `byte(255)` from the
+Language inventory and returns the same typed result twice on one verified
+artifact; both calls match Stage-0. Malformed Boolean data and out-of-range
+byte, signed integer, and unsigned integer values are rejected before dispatch.
+The build used one frontend invocation and took 0.232 seconds at 16.7 MiB peak
+RSS; the two VM calls took 0.019 seconds at 21.0 MiB peak RSS. Cgroup memory
+measurements were unavailable.
+
+Every boolean check in the guarded full inventory harness passed. The real
+seven-test `mncs-test` self-suite again completed 14 canonical-VM calls with
+Stage-0 agreement, taking 0.074 seconds at 22.6 MiB peak RSS. Language verified
+facts reused remains zero; production runner migration and Forge execution are
+still separate frontiers.

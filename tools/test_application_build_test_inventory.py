@@ -224,9 +224,9 @@ def inventory_test_arguments(
 ) -> list[dict]:
     """Validate typed values against the Language-issued Test signature.
 
-    The current native Test batch slice admits u64, i64, and bool inputs plus
-    bounded [byte; N] inputs whose lengths follow the Language-issued generic
-    parameter order. Raw caller JSON is never passed through unchecked.
+    The current native Test batch slice admits u64, i64, bool, and byte inputs
+    plus bounded [byte; N] inputs whose lengths follow the Language-issued
+    generic parameter order. Raw caller JSON is never passed through unchecked.
     """
     identity = row.get("test_case_identity")
     if not isinstance(identity, str) or not identity:
@@ -312,6 +312,18 @@ def inventory_test_arguments(
                     or type(value["boolean"].get("value")) is not bool):
                 raise AssertionError(
                     f"Test input for {identity} is not a valid typed bool wire value"
+                )
+            continue
+
+        if input_type == "byte":
+            if (not isinstance(value, dict)
+                    or set(value) != {"byte"}
+                    or not isinstance(value["byte"], dict)
+                    or set(value["byte"]) != {"value"}
+                    or type(value["byte"].get("value")) is not int
+                    or not 0 <= value["byte"]["value"] <= 255):
+                raise AssertionError(
+                    f"Test input for {identity} is not a valid typed byte wire value"
                 )
             continue
 
@@ -480,12 +492,15 @@ module tests.parameterized_inventory;
 use mncs.test.assertions;
 
 fn selected_entry() -> (result: u64) { return 0; }
-test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (result: TestResult) {
+test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool, marker: byte) -> (result: TestResult) {
     let unsigned_pair: Assertion = equals_i64(expected as i64, actual as i64, 2001);
     let signed_pair: Assertion = equals_i64(signed, -17, 2002);
     let bool_pair: Assertion = equals_bool(true, enabled, 2003);
+    let byte_pair: Assertion = equals_i64(marker as i64, 255, 2005);
     return from_assertion(equals_bool(
-        true, unsigned_pair.passed && signed_pair.passed && bool_pair.passed, 2004
+        true,
+        unsigned_pair.passed && signed_pair.passed && bool_pair.passed && byte_pair.passed,
+        2006
     ));
 }
 """
@@ -513,7 +528,10 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
         "integer": {"type": {"bits": 64, "signed": True}, "value": signed_value}
     }
     typed_bool_value = {"boolean": {"value": True}}
-    typed_arguments = [typed_value, typed_value, typed_signed_value, typed_bool_value]
+    typed_byte_value = {"byte": {"value": 255}}
+    typed_arguments = [
+        typed_value, typed_value, typed_signed_value, typed_bool_value, typed_byte_value
+    ]
     with tempfile.TemporaryDirectory(prefix="mncs-test-parameterized-case-") as raw:
         directory = Path(raw)
         probe = app.Probe(
@@ -539,6 +557,7 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
                 {"name": "actual", "type": "u64"},
                 {"name": "signed", "type": "i64"},
                 {"name": "enabled", "type": "bool"},
+                {"name": "marker", "type": "byte"},
         ]
                 or test_row.get("generic_params")
                 or frontend_invocations(built) != 1):
@@ -559,7 +578,8 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
                 test_row,
                 {
                     test_identity: [
-                        typed_value, wrong_wire_type, typed_signed_value, typed_bool_value
+                        typed_value, wrong_wire_type, typed_signed_value,
+                        typed_bool_value, typed_byte_value
                     ]
                 },
                 [],
@@ -572,7 +592,12 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
             "i64 signed wire type",
             lambda: inventory_test_arguments(
                 test_row,
-                {test_identity: [typed_value, typed_value, wrong_signed_type, typed_bool_value]},
+                {
+                    test_identity: [
+                        typed_value, typed_value, wrong_signed_type,
+                        typed_bool_value, typed_byte_value
+                    ]
+                },
                 [],
             ),
         )
@@ -583,9 +608,12 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
             "i64 range",
             lambda: inventory_test_arguments(
                 test_row,
-                {test_identity: [
-                    typed_value, typed_value, out_of_range_signed_value, typed_bool_value
-                ]},
+                {
+                    test_identity: [
+                        typed_value, typed_value, out_of_range_signed_value,
+                        typed_bool_value, typed_byte_value
+                    ]
+                },
                 [],
             ),
         )
@@ -594,7 +622,26 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
             "bool wire value type",
             lambda: inventory_test_arguments(
                 test_row,
-                {test_identity: [typed_value, typed_value, typed_signed_value, malformed_bool_value]},
+                {
+                    test_identity: [
+                        typed_value, typed_value, typed_signed_value,
+                        malformed_bool_value, typed_byte_value
+                    ]
+                },
+                [],
+            ),
+        )
+        out_of_range_byte_value = {"byte": {"value": 256}}
+        require_inventory_rejection(
+            "byte range",
+            lambda: inventory_test_arguments(
+                test_row,
+                {
+                    test_identity: [
+                        typed_value, typed_value, typed_signed_value,
+                        typed_bool_value, out_of_range_byte_value
+                    ]
+                },
                 [],
             ),
         )
@@ -691,6 +738,7 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
                 "actual": value,
                 "signed": signed_value,
                 "enabled": True,
+                "marker": 255,
             },
             "verified_artifact_identity": built["artifact"]["identity"],
             "canonical_vm_artifact_identity": vm["artifact_id"],
@@ -702,6 +750,7 @@ test assert_input(expected: u64, actual: u64, signed: i64, enabled: bool) -> (re
             "invalid_i64_wire_type_rejected": True,
             "out_of_range_i64_rejected": True,
             "invalid_bool_wire_value_rejected": True,
+            "out_of_range_byte_rejected": True,
             "typed_test_result": actual_result,
             "build_frontend_invocations": frontend_invocations(built),
             "build_process_metrics": build_metrics,
@@ -2023,6 +2072,7 @@ def main() -> None:
                         {"name": "actual", "type": "u64"},
                         {"name": "signed", "type": "i64"},
                         {"name": "enabled", "type": "bool"},
+                        {"name": "marker", "type": "byte"},
                     ]
                     and parameterized_test_batch["input_values"]
                     == {
@@ -2030,6 +2080,7 @@ def main() -> None:
                         "actual": 23,
                         "signed": -17,
                         "enabled": True,
+                        "marker": 255,
                     }
                     and parameterized_test_batch["canonical_vm_batch_count"] == 2
                     and parameterized_test_batch["repeat_results_match"]
@@ -2039,6 +2090,7 @@ def main() -> None:
                     and parameterized_test_batch["invalid_i64_wire_type_rejected"]
                     and parameterized_test_batch["out_of_range_i64_rejected"]
                     and parameterized_test_batch["invalid_bool_wire_value_rejected"]
+                    and parameterized_test_batch["out_of_range_byte_rejected"]
                     and parameterized_test_batch["typed_test_result"]["verdict_code"] == 0
                     and parameterized_test_batch["typed_test_result"]["expected"] == 1
                     and parameterized_test_batch["typed_test_result"]["actual"] == 1
@@ -2144,7 +2196,7 @@ def main() -> None:
                 "A selected zero-argument source Test subset can be emitted with the production "
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
                 "with Stage-0 agreement. A bounded parameterized Test slice binds two typed u64 "
-                "inputs, one signed i64, and one bool input to the Language-issued signature and repeats "
+                "inputs, one signed i64, one bool, and one byte input to the Language-issued signature and repeats "
                 "its typed TestResult "
                 "through the same artifact with Stage-0 agreement; wrong arity and integer wire type "
                 "are rejected before VM dispatch. The batch adapter accepts a generic "
