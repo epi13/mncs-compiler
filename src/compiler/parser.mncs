@@ -7,7 +7,7 @@ use mncs.compiler.source.v1 as source;
 // code: 0 success; 1 lexical; 2 expected mncs; 3 expected version;
 // 4 expected semicolon; 5 expected module; 6 expected identifier;
 // 7 expected dot or semicolon; 8 unsupported non-ASCII source;
-// 9 header exceeds the 256-step bounded fuel (global form only).
+// 9 header exceeds the 1024-iteration bounded fuel (global form only).
 record Header { code: u64, start: u64, end: u64, version_start: u64, version_end: u64, module_start: u64, module_end: u64, next_offset: u64, state: u64 }
 record HeaderLocation { header: Header, mapped: bool, start: source.LineCol, end: source.LineCol }
 
@@ -58,12 +58,12 @@ fn step<N: Nat>(text: [byte; up_to N], st: Header) -> (result: Header) {
 
 // Logical-source header fact (CP-0001): the same eight-state machine over
 // global offsets. A header completes in about one step per significant
-// token, so fixed 256-step fuel bounds long module names; code 9 marks
+// token, so fixed 1024-iteration fuel bounds long module names; code 9 marks
 // the fuel-exhausted remainder honestly instead of reporting success.
 fn header_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: Header) {
     let seed: Header = Header { code: 0, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
     if source.ascii_global<P, N>(pages, stride, total) {
-        iterate i up_to 256 carrying st: Header = seed {
+        iterate i up_to 1024 carrying st: Header = seed {
             let advanced: Header = step_global<P, N>(pages, stride, total, st);
             if advanced.code != 0 || advanced.state == 8 { return advanced; }
             next st = advanced;

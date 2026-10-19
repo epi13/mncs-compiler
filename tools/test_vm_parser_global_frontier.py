@@ -185,9 +185,27 @@ def source_cases() -> list[dict]:
         "module_span": None,
         "stage0_check": True,
     })
-    over_budget = b"mncs 0.18; module " + b".".join(b"x" for _ in range(130)) + b";"
+    one_thirty = b"mncs 0.18; module " + b".".join(b"x" for _ in range(130)) + b";"
     cases.append({
-        "id": "one-hundred-thirty-segment-header-fuel-exhaustion",
+        "id": "one-hundred-thirty-segment-header-within-extended-fuel",
+        "raw": one_thirty,
+        "expected_code": 0,
+        "version_span": None,
+        "module_span": None,
+        "stage0_check": True,
+    })
+    four_hundred = b"mncs 0.18; module " + b".".join(b"x" for _ in range(400)) + b";"
+    cases.append({
+        "id": "four-hundred-segment-header-within-fuel",
+        "raw": four_hundred,
+        "expected_code": 0,
+        "version_span": None,
+        "module_span": None,
+        "stage0_check": True,
+    })
+    over_budget = b"mncs 0.18; module " + b".".join(b"x" for _ in range(600)) + b";"
+    cases.append({
+        "id": "six-hundred-segment-header-fuel-exhaustion",
         "raw": over_budget,
         "expected_code": 9,
         "version_span": None,
@@ -437,7 +455,8 @@ def main() -> None:
         "scope": (
             "The current kernel.parse_header_global callable executes parser.header_global "
             "over all frontend header fixtures, a 65-byte page split, a 20-segment header, "
-            "a non-ASCII scalar split across pages, and the documented 256-step fuel boundary. "
+            "100-, 130-, and 400-segment headers, a non-ASCII scalar split across pages, "
+            "and the documented 1024-iteration fuel boundary (600 segments are rejected). "
             "Strides 1, 7, 64, and 1024 agree across Stage-0 checked bounded parser results, "
             "the reference interpreter, Cranelift, and one fresh canonical VM artifact. This "
             "is a selected helper frontier, not full parser-module verification or succession."
