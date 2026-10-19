@@ -1097,3 +1097,20 @@ The real suite build took 0.586 seconds at 28.7 MiB peak RSS; its canonical-VM
 batch took 0.075 seconds at 22.4 MiB peak RSS. Cgroup measurements were
 unavailable. Language verified facts reused remains zero. The harness now
 refuses to publish evidence when any boolean proof check is false.
+
+## Boolean native Test input validation (2026-10-19)
+
+The [Boolean-input inventory report](application-build-test-inventory-bool-signed-20261019.json)
+extends the same Language-issued Test signature to accept an exact typed `bool`
+wire value alongside two `u64` inputs and one signed `i64`. The four-input Test
+runs twice on one verified canonical-VM artifact and matches Stage-0. A Boolean
+whose wire value is integer `1` is rejected before VM dispatch. The build used
+one frontend invocation and took 0.228 seconds at 16.0 MiB peak RSS; the two VM
+calls took 0.017 seconds at 20.9 MiB peak RSS. Cgroup measurements were
+unavailable.
+
+All boolean proof checks in the full guarded inventory harness passed. Its
+real `mncs-test` self-suite again ran seven selected tests twice (14 calls) with
+Stage-0 agreement; the VM batch took 0.073 seconds at 22.7 MiB peak RSS. The
+record reports zero Language verified facts reused, and the production Test
+runner remains on its existing host orchestration.
