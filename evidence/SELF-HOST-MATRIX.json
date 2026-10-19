@@ -10,8 +10,8 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-19T00:38:16.630738Z",
-    "compiler_revision": "7eba57d0ac34f968eb18a1a848d33843cde22503",
+    "observed_at": "2026-10-19T00:56:27.607903Z",
+    "compiler_revision": "42a624c07318c6626ed368c12563243967ed39cb",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
@@ -73,6 +73,40 @@
         "canonical_vm_peak_rss_kib": 378672,
         "language_verified_facts_reused": 0,
         "scope": "One tiny identity-program input exercised the selected lower_value_ssa and verify_function roots. The canonical VM result matched the Cranelift summary and verification returned true. This is a selected callable frontier, not full SSA-module proof, Language fact reuse, or Stage-1/Stage-2 succession."
+      },
+      "flow_proven_unit_canonical_vm_frontier": {
+        "status": "completed_with_known_diagnostic_divergence",
+        "evidence_artifact": "evidence/self-host-flow-proven-unit-20261019T005450.514938Z-1962479.json",
+        "evidence_sha256": "5ef1b87e5998a456a6a175277937537911c2e5608e7c9147e081b7d7a012a67a",
+        "tested_compiler_revision": "42a624c07318c6626ed368c12563243967ed39cb",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "target_module": "mncs.compiler.flow.v1",
+        "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+        "selected_modules": [
+          "source",
+          "lexer",
+          "parser",
+          "segment",
+          "decl",
+          "flow"
+        ],
+        "selected_case_count": 10,
+        "canonical_vm_artifact_identity": "sha256:aecf62d521f3720d8b214ae665bb0f464224b9faee04ba73b4c0dc30354135bf",
+        "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+        "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": true,
+        "stage0_diagnostics_match_vm_flow_diagnostics": false,
+        "language_verified_facts_reused": 0,
+        "measurements": {
+          "whole_frontier_seconds": 97.453194,
+          "child_cpu_seconds": 94.798666,
+          "child_peak_rss_kib": 2410376,
+          "canonical_vm_batch_seconds": 49.78683,
+          "canonical_vm_peak_rss_kib": 465468,
+          "host_available_before_bytes": 24915787776,
+          "cgroup_measurements": "unavailable"
+        },
+        "scope": "Current-source selected proof-to-Flow canonical VM frontier. Nine selected positive/structural cases completed; the unreachable loop-join negative case retains a known Stage-0/Flow diagnostic mismatch and is excluded from diagnostic parity. This is not full Flow-module proof, Language fact reuse, Cranelift differential coverage, or succession."
       }
     }
   },
@@ -1731,6 +1765,40 @@
           "canonical_vm_peak_rss_kib": 462972,
           "cgroup_peak_attributable_to_test": false,
           "scope": "This selected current-source Flow frontier executes flow.lower_unit, whose MNCS implementation passes decl.prove_unit output to flow.lower_proven_unit. The fresh canonical VM graph accounts for every typed proof operation in executable blocks or explicit elided-expression records, matches selected Stage-0 diagnostics and SSA shape, reports the bounded unreachable-join diagnostic, and preserves counted, sequence, and nested iteration headers and backedges against Stage-0 metadata, including multiple conditional exits in counted and sequence loops. The unreachable loop-join negative case completes on the canonical VM, retains its verified next-state operations without adding an unreachable backedge, and has one recorded Stage-0/Flow diagnostic mismatch; it is excluded from the diagnostic parity claim. It does not establish full flow-module proof, Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+        },
+        "current_source_selected_proven_unit_canonical_vm_frontier": {
+          "status": "completed_with_known_diagnostic_divergence",
+          "evidence_artifact": "evidence/self-host-flow-proven-unit-20261019T005450.514938Z-1962479.json",
+          "evidence_sha256": "5ef1b87e5998a456a6a175277937537911c2e5608e7c9147e081b7d7a012a67a",
+          "tested_compiler_revision": "42a624c07318c6626ed368c12563243967ed39cb",
+          "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+          "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+          "target_module": "mncs.compiler.flow.v1",
+          "target_function": "lower_unit<1024,1024> -> lower_proven_unit<1024,1024>",
+          "selected_modules": [
+            "source",
+            "lexer",
+            "parser",
+            "segment",
+            "decl",
+            "flow"
+          ],
+          "selected_case_count": 10,
+          "canonical_vm_artifact_identity": "sha256:aecf62d521f3720d8b214ae665bb0f464224b9faee04ba73b4c0dc30354135bf",
+          "proof_passed_to_lower_proven_unit_by_mncs_source": true,
+          "typed_proof_ops_accounted_for_in_cfg_or_elided_expressions": true,
+          "stage0_diagnostics_match_vm_flow_diagnostics": false,
+          "language_verified_facts_reused": 0,
+          "measurements": {
+            "whole_frontier_seconds": 97.453194,
+            "child_cpu_seconds": 94.798666,
+            "child_peak_rss_kib": 2410376,
+            "canonical_vm_batch_seconds": 49.78683,
+            "canonical_vm_peak_rss_kib": 465468,
+            "host_available_before_bytes": 24915787776,
+            "cgroup_measurements": "unavailable"
+          },
+          "scope": "Current-source selected proof-to-Flow canonical VM frontier. Nine selected positive/structural cases completed; the unreachable loop-join negative case retains a known Stage-0/Flow diagnostic mismatch and is excluded from diagnostic parity. This is not full Flow-module proof, Language fact reuse, Cranelift differential coverage, or succession."
         }
       }
     },
