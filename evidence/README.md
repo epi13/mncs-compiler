@@ -144,6 +144,45 @@ The [current direct parser-module frontier](self-host-parser-module-canonical-vm
 
 The full frontier took 25.41 seconds, with 24.75 seconds child CPU, 650,032 KiB peak child RSS, and 76,596 KiB canonical-VM peak RSS. Cgroup measurements were unavailable. Language verified facts remain unreused, and this selected specialization frontier does not establish full parser-module coverage, Stage-1, or Stage-2 succession.
 
+## Extended global header fuel (2026-10-19)
+
+The [current parser frontier](self-host-parser-global-header-fuel-256-e9ff30b.json)
+raises the bounded `parser.header_global` token budget from 64 to 256. Valid
+40- and 100-segment
+module headers now parse; a 130-segment header still returns the explicit
+fuel-exhaustion code. All seven selected parser functions agree across the
+reference interpreter, Cranelift, and canonical VM for 196 calls, including 61
+source-location cases. The authenticated Environment verifier passed at
+inventory revision 44.
+
+The frontier took 36.25 seconds (35.46 seconds child CPU), with 651,284 KiB
+child peak RSS and 76,504 KiB canonical VM peak RSS. Cgroup measurements were
+unavailable. This is one workload-specific run, not a general speedup claim.
+Language verified facts remain unreused, and full parser-module coverage plus
+Stage-1/Stage-2 succession remain unproven.
+
+## Retained native Test workflow (2026-10-19)
+
+The [retained workflow record](native-app-readiness-native-test-workflow-20261019T053813Z-2074631.json)
+uses a four-module, 35-function application. A seven-call Test subset matches
+the Stage-0 oracle; a single retained VM session then handles nine calls,
+including a budget exhaustion and invalid typed input followed by successful
+calls. Fresh-process executable-artifact reuse, comment-edit artifact reuse
+after a full frontend pass, reachable dependency invalidation, and tampered
+cache rejection are recorded. This revision reused no Language verification
+facts and did not emit a Forge execution receipt.
+
+## Local effectful digest application (2026-10-19)
+
+The [digest application record](native-app-readiness-test-digest-app-20261019T023709.640317Z-2003347.json)
+captures three Stage-0/canonical-VM result matches for the real
+`mncs.test.digest::digest_app` source and its bounded `structured_read` and
+`structured_write` effects. The artifact is 619,051 bytes and exercises
+capability identity checks, invalid typed input, budget exhaustion, rejected
+output writes, and later successful calls in one retained session. The local
+Provider API test adapter handled the effects; this evidence is not a Forge
+execution or Store receipt.
+
 ## Compiler-parity snapshot (2026-09-29)
 
 This snapshot used Stage-0 pin `a3ac17df69e68f6373cbff336db0a572667d73da`,

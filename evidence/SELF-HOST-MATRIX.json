@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "kind": "mncs-compiler-self-host-matrix",
-  "observed_at": "2026-10-17T23:11:06Z",
+  "observed_at": "2026-10-19T06:20:30.964730+00:00",
   "compiler_head": "44fe937dca0cecaf5cc562a4b3e18127e6399d1c",
   "compiler_head_role": "Historical compiler candidate/base identity captured at observed_at; it is not the current tested candidate or delivered main revision. Current tested-source and delivery identities are recorded in identity_ledger.",
   "compiler_branch": "campaign/qualified-finite-patterns-20261006",
@@ -10,14 +10,14 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-19T03:31:16Z",
-    "compiler_revision": "ee45ea65f4a54b8054c16d0fc8dc967af1384b4b",
+    "observed_at": "2026-10-19T06:20:30.964730+00:00",
+    "compiler_revision": "e9ff30b02eed83a70c88a4e471af2acfbbb96f38",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
       "source": "78b78f1c73d92de174f138d5c351c5ffa6372590890daf53aec3e828d5c0c398",
       "lexer": "1e9af64bda5d18929a873a3470aa8efe526ffb82148c9b83e3c4ca2053a79215",
-      "parser": "1b8f10e45f5467e7569262ce7c249424b55921d8227a9cf9329d26b5e946bb4a",
+      "parser": "524b3c0431181eee71eca0296c2f585a9a50180f2aa1f095e2225f54b9c71344",
       "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
       "kernel": "03fe2398d7e40eb35f62010403cc7cea14f339b7a6c962739be80e8250b148a2",
       "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
@@ -26,6 +26,7 @@
       "project": "1fb5d43669f40439d660bdafa92983e53e36317d0d7ea6d7ab867a3877690316"
     },
     "changed_since_previous_matrix_hashes": [
+      "parser",
       "project"
     ],
     "targeted_checks": {
@@ -145,6 +146,102 @@
         },
         "language_verified_facts_reused": 0,
         "scope": "Functional Stage-0/Flow/SSA parity holds at 64 sources. One target request sample was lower after the vector change, but end-to-end readiness and backend compile time did not improve measurably; no speedup is claimed."
+      },
+      "parser_module_canonical_vm_frontier": {
+        "status": "passed",
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+        "binding_id": "cap_b5abab29a363aad8",
+        "inventory_revision": 44,
+        "contract_revision": "afc3a5c7f9153982",
+        "tested_compiler_revision": "e9ff30b02eed83a70c88a4e471af2acfbbb96f38",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "target_module": "mncs.compiler.parser.v1",
+        "target_functions": [
+          "header",
+          "finish",
+          "step",
+          "header_global",
+          "finish_global",
+          "step_global",
+          "header_with_locations_global"
+        ],
+        "header_fuel_change": {
+          "previous_step_limit": 64,
+          "new_step_limit": 256,
+          "cases": [
+            {
+              "module_segments": 40,
+              "expected": "parsed"
+            },
+            {
+              "module_segments": 100,
+              "expected": "parsed"
+            },
+            {
+              "module_segments": 130,
+              "expected": "fuel_exhausted_code_9"
+            }
+          ]
+        },
+        "bounded_case_count": 26,
+        "global_case_count": 104,
+        "header_location_case_count": 61,
+        "canonical_vm_case_count": 196,
+        "artifact_identity": "sha256:aed99ffd3ae3c343d3c65d984e55cdb99cd0478d4698d9ae0b01f7081feb9d79",
+        "semantic_digests": {
+          "bounded": {
+            "reference_interpreter": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360",
+            "cranelift": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360",
+            "canonical_vm": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360"
+          },
+          "global": {
+            "reference_interpreter": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7",
+            "cranelift": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7",
+            "canonical_vm": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7"
+          },
+          "helpers": {
+            "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+            "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+            "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+          },
+          "header_locations": {
+            "reference_interpreter": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+            "cranelift": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+            "canonical_vm": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01"
+          }
+        },
+        "timing_seconds": {
+          "stage0_oracles_and_reference_execution": 22.008174,
+          "direct_vm_emission": 2.600407,
+          "cranelift_execution": 0.137133,
+          "canonical_vm_batch": 6.487322,
+          "whole_frontier": 36.253961
+        },
+        "resource_measurements": {
+          "child_cpu_seconds": 35.46071,
+          "child_peak_rss_kib": 651284,
+          "canonical_vm_peak_rss_kib": 76504,
+          "canonical_vm_calls_bytes": 695532,
+          "canonical_vm_results_bytes": 438071,
+          "cgroup_before": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_after": {
+            "memory.current": null,
+            "memory.max": null,
+            "memory.peak": null
+          },
+          "cgroup_measurements_are_ambient": true
+        },
+        "language_verified_facts_reused": 0,
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "evidence_artifact": "evidence/self-host-parser-global-header-fuel-256-e9ff30b.json",
+        "evidence_sha256": "27f2cf99496730579b8a9689bf325aa8451d29c2e9468c3d07cb6641b863e367",
+        "scope": "Selected parser functions agree across Stage-0, the reference interpreter, Cranelift, and canonical VM at the tested specializations. 40- and 100-segment headers now parse; a 130-segment header still returns the explicit code-9 fuel exhaustion result. This is not full parser-module coverage, Language fact reuse, or compiler succession."
       }
     }
   },
@@ -253,7 +350,7 @@
         "ssa_verified_function_count": 6,
         "ssa_value_count": 717,
         "ssa_instruction_count": 290,
-        "current_source_sha256": "1b8f10e45f5467e7569262ce7c249424b55921d8227a9cf9329d26b5e946bb4a",
+        "current_source_sha256": "524b3c0431181eee71eca0296c2f585a9a50180f2aa1f095e2225f54b9c71344",
         "signature_facts_suite": "tools/test_decl.py",
         "signature_facts_result_sha256": "87c9ef1cd2259e08064a403270e786e9dbf0cc1a2bb77067177c5bdc14b073f7",
         "selected_canonical_vm_frontier": {
@@ -547,6 +644,64 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "All seven current parser functions have executable selected specializations and are called directly in a fresh canonical VM batch. header and header_global agree with Stage-0 project checks where the bounded global fuel policy permits completion, Cranelift, and canonical VM across frontend header fixtures, long dotted module names, all tested page strides, non-ASCII input, and the fuel boundary. Direct header_with_locations_global maps the two byte offsets of each parser diagnostic through Source.line_col_span_global and agrees with a byte-based location oracle across reference interpreter, Cranelift, and canonical VM, including a zero-stride page. Direct finish/step helper calls use typed Header states and agree across the reference interpreter, Cranelift, and canonical VM. This covers every parser function at the listed specializations and selected states; it does not prove all type arguments, full compiler succession, Stage-1, or Stage-2."
+        },
+        "selected_current_source_extended_header_fuel_frontier": {
+          "status": "passed",
+          "tested_compiler_revision": "e9ff30b02eed83a70c88a4e471af2acfbbb96f38",
+          "target_module": "mncs.compiler.parser.v1",
+          "target_functions": [
+            "header",
+            "finish",
+            "step",
+            "header_global",
+            "finish_global",
+            "step_global",
+            "header_with_locations_global"
+          ],
+          "previous_global_step_limit": 64,
+          "new_global_step_limit": 256,
+          "supported_module_segment_counts": [
+            40,
+            100
+          ],
+          "fuel_exhaustion_module_segment_count": 130,
+          "canonical_vm_case_count": 196,
+          "artifact_identity": "sha256:aed99ffd3ae3c343d3c65d984e55cdb99cd0478d4698d9ae0b01f7081feb9d79",
+          "semantic_digests": {
+            "bounded": {
+              "reference_interpreter": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360",
+              "cranelift": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360",
+              "canonical_vm": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360"
+            },
+            "global": {
+              "reference_interpreter": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7",
+              "cranelift": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7",
+              "canonical_vm": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7"
+            },
+            "helpers": {
+              "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+              "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+              "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+            },
+            "header_locations": {
+              "reference_interpreter": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+              "cranelift": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+              "canonical_vm": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01"
+            }
+          },
+          "environment_verification": {
+            "status": "passed",
+            "session_id": "ses_164edc158d9b1637",
+            "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+            "binding_id": "cap_b5abab29a363aad8",
+            "inventory_revision": 44,
+            "contract_revision": "afc3a5c7f9153982",
+            "returncode": 0,
+            "ephemeral_report": ".build/self-host-parser-module-canonical-vm-frontier.json"
+          },
+          "evidence_artifact": "evidence/self-host-parser-global-header-fuel-256-e9ff30b.json",
+          "evidence_sha256": "27f2cf99496730579b8a9689bf325aa8451d29c2e9468c3d07cb6641b863e367",
+          "scope": "Selected parser callables and specializations only; the full parser-module canonical VM status remains not-proven."
         }
       }
     },
@@ -819,7 +974,7 @@
             "canonical_vm_total_steps_change_percent": -19.57,
             "canonical_vm_wall_change_percent": -18.09,
             "maximum_steps_per_call_change_percent": 0.06,
-            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
             "canonical_vm_candidate_wall_seconds_samples": [
               9.22781,
               9.320808
@@ -2424,7 +2579,7 @@
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
   "previous_next_frontier_before_20261018_decl_parse": "Current-head bounded decl.check_unit and decl.prove_unit frontiers pass on canonical VM with reference/Cranelift agreement and explicit UNKNOWN obligations. Continue smaller Compiler self-consumption closures; Language-owned fact reuse and Forge digest_app execution still require their matching authenticated scopes.",
-  "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available.",
+  "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -4287,7 +4442,7 @@
         "delivered_revision_source": "compiler telemetry delivery commit"
       }
     },
-    "updated_at": "2026-10-18T20:54:43Z",
+    "updated_at": "2026-10-19T06:20:30.964730+00:00",
     "import_signature_cache_campaign_20261009": {
       "observed_at": "2026-10-09T06:06:20.805256+00:00",
       "entry_delivered_main_revision": "581c8154008b56b968a67e85882a6d5eab0a18b3",
@@ -8563,7 +8718,7 @@
         "canonical_vm_total_steps_change_percent": -19.57,
         "canonical_vm_wall_change_percent": -18.09,
         "maximum_steps_per_call_change_percent": 0.06,
-        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
         "canonical_vm_candidate_wall_seconds_samples": [
           9.22781,
           9.320808
@@ -8856,6 +9011,83 @@
       "scope": "Selected Source line_col_global, line_col_span_global, and line_cols_global callables agree across the pinned Stage-0 reference interpreter, Cranelift, and a canonical VM artifact for newline/page edges, UTF-8 byte columns, clamped and duplicate offsets, out-of-order batches, a dense 64-query 16 KiB input, and a 64 KiB source. Monotone batch advancement now skips pages before the previous query cursor. Dense-case reference and canonical VM transition counts are compared with an exact pre-change input set and semantic-digest baseline. This remains a selected Source frontier: full Source module canonical-VM proof, Language verified-fact reuse, Stage-1, and Stage-2 are not established.",
       "observed_at": "2026-10-18T20:54:43Z",
       "branch": "campaign/native-application-readiness-20261013"
+    },
+    "native_application_readiness_20261013_parser_header_extended_fuel_20261019": {
+      "observed_at": "2026-10-19T06:20:30.964730+00:00",
+      "tested_compiler_revision": "e9ff30b02eed83a70c88a4e471af2acfbbb96f38",
+      "tested_compiler_branch": "campaign/native-application-readiness-20261013",
+      "tested_source_identity": {
+        "parser_sha256": "524b3c0431181eee71eca0296c2f585a9a50180f2aa1f095e2225f54b9c71344",
+        "test_harness_sha256": "678bb434d16cf284bbadf10b29da1e4216d74538fff7e90c043bcc1e94b45fb4",
+        "test_harness_dependency_sha256": "e1f968ca973ef870e156618b0db6c907ef284b84d33e1645eaf93f79670e9731"
+      },
+      "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "environment_verification": {
+        "status": "passed",
+        "session_id": "ses_164edc158d9b1637",
+        "capability": "mncs-compiler:verification-executor/mncs-compiler.parser-module-canonical-vm-frontier",
+        "binding_id": "cap_b5abab29a363aad8",
+        "inventory_revision": 44,
+        "contract_revision": "afc3a5c7f9153982",
+        "returncode": 0,
+        "ephemeral_report": ".build/self-host-parser-module-canonical-vm-frontier.json"
+      },
+      "artifact_identity": "sha256:aed99ffd3ae3c343d3c65d984e55cdb99cd0478d4698d9ae0b01f7081feb9d79",
+      "canonical_vm_case_count": 196,
+      "semantic_digests": {
+        "bounded": {
+          "reference_interpreter": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360",
+          "cranelift": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360",
+          "canonical_vm": "57001622156f9594b8d97c9054636640e487102922122d91b7bfa19bc5309360"
+        },
+        "global": {
+          "reference_interpreter": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7",
+          "cranelift": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7",
+          "canonical_vm": "75d4b190175650ddca81876f3ac9ff57e4b2ee6d246c1c2dacfabde1f4b5fbc7"
+        },
+        "helpers": {
+          "reference_interpreter": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+          "cranelift": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8",
+          "canonical_vm": "adae379833d7c2f86dbefb3bcc1093a640c5e5f830365544269709e2b0c543b8"
+        },
+        "header_locations": {
+          "reference_interpreter": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+          "cranelift": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01",
+          "canonical_vm": "64560225a303a15121f4a3a024ae88b915b2c0a6d759f407b0cd6d5336e8ea01"
+        }
+      },
+      "timing_seconds": {
+        "stage0_oracles_and_reference_execution": 22.008174,
+        "direct_vm_emission": 2.600407,
+        "cranelift_execution": 0.137133,
+        "canonical_vm_batch": 6.487322,
+        "whole_frontier": 36.253961
+      },
+      "resource_measurements": {
+        "child_cpu_seconds": 35.46071,
+        "child_peak_rss_kib": 651284,
+        "canonical_vm_peak_rss_kib": 76504,
+        "canonical_vm_calls_bytes": 695532,
+        "canonical_vm_results_bytes": 438071,
+        "cgroup_before": {
+          "memory.current": null,
+          "memory.max": null,
+          "memory.peak": null
+        },
+        "cgroup_after": {
+          "memory.current": null,
+          "memory.max": null,
+          "memory.peak": null
+        },
+        "cgroup_measurements_are_ambient": true
+      },
+      "language_verified_facts_reused": 0,
+      "stage1_claimed": false,
+      "stage2_claimed": false,
+      "evidence_artifact": "evidence/self-host-parser-global-header-fuel-256-e9ff30b.json",
+      "evidence_sha256": "27f2cf99496730579b8a9689bf325aa8451d29c2e9468c3d07cb6641b863e367",
+      "scope": "The global header token fuel increased from 64 to 256. Valid 40- and 100-segment module headers parse; the 130-segment case remains explicitly fuel-limited. This is a selected callable frontier, not full parser proof."
     }
   },
   "current_campaign_decl_parse_unit_frontier_20261018": {
@@ -9190,7 +9422,7 @@
       "selected_intent_repositories": [
         "mncs-compiler"
       ],
-      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
+      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
       "language_write_attempted": false
     },
     "environment_continuity": {
@@ -9201,7 +9433,7 @@
     },
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+    "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
   },
   "campaign_frontier_history": [
     {
@@ -13155,7 +13387,7 @@
         "selected_intent_repositories": [
           "mncs-compiler"
         ],
-        "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
+        "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
         "language_write_attempted": false
       },
       "environment_continuity": {
@@ -13166,7 +13398,7 @@
       },
       "stage1_claimed": false,
       "stage2_claimed": false,
-      "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+      "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {
@@ -17016,7 +17248,7 @@
       "selected_intent_repositories": [
         "mncs-compiler"
       ],
-      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
+      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
       "language_write_attempted": false
     },
     "environment_continuity": {
@@ -17027,7 +17259,7 @@
     },
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+    "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
   },
   "current_campaign_effectful_digest_app_canonical_vm_20261019": {
     "kind": "mncs.compiler.native-test-digest-canonical-vm-execution",
