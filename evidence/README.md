@@ -1173,3 +1173,24 @@ nominal case, and rejected a fresh missing field with matching diagnostics.
 Language verified facts reused remains zero; this improves a narrow Compiler
 resolver path and does not establish Forge execution, production Test migration,
 full Project-module proof, or succession.
+
+## Source-count-bounded Project worklist seeding (2026-10-19)
+
+Compiler revision 7cec1c1095a5307c1896c7dc9c858d40d9d271f8 now bounds worklist seeding to the selected
+project source count. The [canonical-VM record](project-import-closure-worklist-seed-bound-20261019.json)
+contains a paired deep eight-module graph: both paths reach the same eight
+modules, while the bounded path uses 3,003 steps versus 4,138 for the 64-slot
+control (27.4% fewer). The full 31-case corpus matched the Python oracle and
+Stage-0.
+
+The target-dependency integration also passed on this revision: with 20
+unrelated record modules present, it lowered only the selected target module;
+the transitive nominal case matched Stage-0, and a fresh missing-field case
+retained the matching diagnostic span. The target probe took about 7.0 minutes;
+periodic sampling observed at most 6.2 GiB RSS while at least 15.9 GiB remained
+available. Cgroup measurements were unavailable.
+
+The run's canonical-VM batch took 59.95 seconds at 37.3 MiB peak RSS. Stage-0
+oracle work took 193.6 seconds and peaked at 1.9 GiB RSS. Language verified
+facts reused remains zero; Forge-routed execution and Stage-1/Stage-2 succession
+remain unproven.
