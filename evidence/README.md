@@ -1032,3 +1032,9 @@ also passed seven proof cases on a fresh canonical VM artifact, with the same
 source function and semantic digest as the prior run. The hardened harness
 does not change Compiler semantics or add Language verified-fact reuse; full
 Source-module verification and compiler succession remain unproven.
+
+## Source byte_at_global canonical VM frontier (2026-10-19)
+
+The [current-source frontier](self-host-source-byte-at-global-canonical-vm-20261019T193345Z.json) executes the exact `source.byte_at_global<1024,1024>` body from Compiler revision `2b030b21` through a fresh canonical VM artifact. All 70 byte, EOF, zero-stride, empty-source, missing-page, and short-page cases match the Stage-0 reference and Cranelift. The semantic digest is `f606619d…fc2277da`.
+
+The run took 2.95 seconds overall and 2.53 child CPU seconds; child peak RSS was 140,024 KiB and canonical-VM peak RSS was 44,312 KiB. Host available memory before the run was about 24.1 GB; cgroup readings were unavailable. This is a selected source helper frontier, not full Source-module proof or a general speed claim. Language-owned verified facts reused remains zero; Stage-1 and Stage-2 succession remain unproven.
