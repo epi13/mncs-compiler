@@ -19,10 +19,9 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src" / "compiler"
 DEFAULT_STEP_BUDGET = 8_000_000
-# Keep this campaign probe to at most 2 MiB of page data while admitting the
-# current whole-compiler snapshot (1.27 MiB). This is a workload guard, not a
-# limit in the generic Project entry point.
-PROJECT_PROBE_PAGE_CAPACITY_LIMIT = 2048
+# Profile 0.18 limits generic Nat sequence bounds to 1024. The probe uses a
+# 1024-byte stride, so a single Project request can carry at most 1 MiB.
+PROJECT_PROBE_PAGE_CAPACITY_LIMIT = 1024
 
 
 def _source_module_name(source, module):
@@ -222,12 +221,12 @@ def run_imported_signature_cache_fixture(step_budget=DEFAULT_STEP_BUDGET):
         probe.close()
 
 
-def _seed_project_specialization(page_capacity, *, target_only=False):
+def _seed_target_specialization(*, target_only=False):
     seed = {
         "module": project.PROJECT_MODULE,
-        "function": "compile_project_target" if target_only else "compile_project",
+        "function": "compile_project_target",
         "type_arguments": [
-            {"kind": "nat", "value": page_capacity},
+            {"kind": "nat", "value": project.PAGE_BOUND},
             {"kind": "nat", "value": 1024},
         ],
     }
@@ -243,18 +242,12 @@ def _seed_project_specialization(page_capacity, *, target_only=False):
             isinstance(item, dict)
             and (
                 (item.get("module") == project.PROJECT_MODULE
-                 and item.get("function") in {"compile_project", "compile_project_target"})
+                 and item.get("function") == "compile_project")
                 or (item.get("module") == project.SSA_MODULE
                     and item.get("function") == "verify_function")
             )
         )]
         os.environ["MNCS_PROBE_EXECUTION_MODULES"] = project.PROJECT_MODULE
-    else:
-        seeds = [item for item in seeds if not (
-            isinstance(item, dict)
-            and item.get("module") == project.PROJECT_MODULE
-            and item.get("function") == "compile_project"
-        )]
     if not any(item.get("module") == seed["module"]
                and item.get("function") == seed["function"]
                and item.get("type_arguments") == seed["type_arguments"]
@@ -275,10 +268,11 @@ def _project_page_capacity(sources):
     total_pages = sum(per_source_page_counts)
     if total_pages > PROJECT_PROBE_PAGE_CAPACITY_LIMIT:
         raise ValueError(
-            f"whole-project probe is limited to {PROJECT_PROBE_PAGE_CAPACITY_LIMIT} pages; "
-            f"snapshot requires {total_pages}"
+            f"Project input needs {total_pages} pages, exceeding Profile 0.18's "
+            f"generic sequence ceiling of {PROJECT_PROBE_PAGE_CAPACITY_LIMIT}; "
+            "select a smaller dependency closure"
         )
-    return max(project.PAGE_BOUND, total_pages), total_pages
+    return PROJECT_PROBE_PAGE_CAPACITY_LIMIT, total_pages
 
 
 def _target_execution_started(phase_timings_ns, response):
@@ -333,7 +327,8 @@ def run(
     sources = _load_sources(module_names)
     phase_timings_ns["source_resolution_and_dependency_selection"] = time.monotonic_ns() - phase_started
     page_bound, page_count = _project_page_capacity(sources)
-    _seed_project_specialization(page_bound, target_only=target_last)
+    if target_last:
+        _seed_target_specialization(target_only=True)
     source_identity = hashlib.sha256(b"".join(
         source_id.encode() + b"\0" + hashlib.sha256(source).digest()
         for source_id, _, source in sources
@@ -409,9 +404,7 @@ def run(
         request = None
         if transport_failure is None and not prepare_program_cache_only and not admission_only:
             phase_started = time.monotonic_ns()
-            request = project.request_value(
-                identities, sources, page_bound=page_bound
-            )
+            request = project.request_value(identities, sources)
             request["step_budget"] = step_budget
             if target_last:
                 request["target"] = {"module": project.PROJECT_MODULE, "function": "compile_project_target"}
@@ -520,7 +513,7 @@ def run(
             "input_total_page_count_at_stride_1024": page_count,
             "input_page_bound": page_bound,
             "input_page_capacity_limit": PROJECT_PROBE_PAGE_CAPACITY_LIMIT,
-            "input_page_capacity_selection": "max(1024, exact page count), bounded by the 2048-page campaign probe guard",
+            "input_page_capacity_selection": "fixed Profile 0.18 limit; select a smaller source closure above 1024 pages",
             "compiler_source_sha256": source_identity,
             "compiler_source_identity_kind": "sha256 of selected compiler module ids and bytes",
             "execution_backend_requested": os.environ.get("MNCS_PROBE_BACKEND"),
