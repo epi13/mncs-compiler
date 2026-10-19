@@ -25,6 +25,34 @@ STEP_BUDGET = 2_000_000
 FULL_LINK_STEP_BUDGET = 8_000_000
 BUILD_DIR = ROOT / ".build/project-import-closure-worklist-vm"
 
+FIXED_GRAPHS = [
+    {"name": "empty", "target": 5, "edges": []},
+    {"name": "self_loop", "target": 7, "edges": [(7, 7)]},
+    {
+        "name": "diamond_with_cycle",
+        "target": 11,
+        "edges": [(11, 10), (11, 9), (10, 8), (9, 8), (8, 11)],
+    },
+    {
+        "name": "invalid_and_disconnected_edges",
+        "target": 5,
+        "edges": [(5, 4), (4, 3), (64, 2), (3, 64), (20, 21)],
+    },
+    {
+        "name": "four_round_reverse_chain",
+        "target": 4,
+        "edges": [(1, 0), (2, 1), (3, 2), (4, 3)],
+    },
+    {
+        "name": "duplicate_edges",
+        "target": 12,
+        "edges": [(12, 11), (12, 11), (11, 10), (11, 10)],
+    },
+]
+GENERATED_SEEDS = tuple(range(16))
+REVERSE_CYCLIC_EDGES = [(index, index - 1) for index in range(1, 7)] + [(6, 7), (7, 6)]
+CAPACITY_EDGES = [(index, index - 1) for index in range(1, 64)] + [(62, 63)]
+
 
 def source_bundle() -> dict[str, str]:
     modules = {}
@@ -61,18 +89,47 @@ def closure_function(name: str, target: int, edges: list[tuple[int, int]]) -> st
     )
 
 
+def generated_edges(seed: int) -> list[tuple[int, int]]:
+    return [
+        edge
+        for source_index in range(64)
+        for edge in (
+            (source_index, (source_index * 13 + seed) % 64),
+            (source_index, (source_index * 29 + seed * 7 + 1) % 64),
+        )
+    ]
+
+
+def reachable_indices(target: int, edges: list[tuple[int, int]]) -> list[int]:
+    reachable = {target}
+    changed = True
+    while changed:
+        changed = False
+        for source_index, target_index in edges:
+            if source_index >= 64 or target_index >= 64:
+                continue
+            if source_index in reachable and target_index not in reachable:
+                reachable.add(target_index)
+                changed = True
+    return sorted(reachable)
+
+
 def wrapper_source() -> str:
     # In each graph, ascending link order makes each of the first four full
     # scans discover at most one new source. Both graphs then need the worklist.
-    cycle_edges = [(index, index - 1) for index in range(1, 7)] + [(6, 7), (7, 6)]
-    capacity_edges = [(index, index - 1) for index in range(1, 64)] + [(62, 63)]
+    fixed_functions = "".join(
+        closure_function(f"run_{graph['name']}", graph["target"], graph["edges"])
+        for graph in FIXED_GRAPHS
+    )
     return (
         "mncs 0.18; module probe.project_closure_worklist;\n"
         "use mncs.compiler.project.v1 as project;\n"
         "record ImportLinkBuild { imports: project.ImportList, count: u64 }\n"
         "record FullClosureSummary { closure: project.ProjectImportClosure, import_count: u64 }\n"
-        + closure_function("run", 7, cycle_edges)
-        + closure_function("run_capacity", 63, capacity_edges)
+        "record GeneratedClosureSummary { closure: project.ProjectImportClosure, import_count: u64 }\n"
+        + closure_function("run", 7, REVERSE_CYCLIC_EDGES)
+        + closure_function("run_capacity", 63, CAPACITY_EDGES)
+        + fixed_functions
         + """fn import_target_for_source(source_index: u64) -> (result: u64) {
   if source_index == 0 { return 0; }
   return source_index - 1;
@@ -98,10 +155,39 @@ fn build_full_link_list() -> (result: ImportLinkBuild) {
   }
   return st;
 }
+fn append_generated_source(seed: u64, source_index: u64, initial: ImportLinkBuild) -> (result: ImportLinkBuild) {
+  let first_target: u64 = (source_index * 13 + seed) % 64;
+  let second_target: u64 = (source_index * 29 + seed * 7 + 1) % 64;
+  let first_link: project.ImportLink = project.ImportLink {
+    source_index: source_index, target_index: first_target,
+    module_start: 0, module_end: 0, alias_start: 0, alias_end: 0,
+    has_alias: false
+  };
+  let second_link: project.ImportLink = project.ImportLink {
+    source_index: source_index, target_index: second_target,
+    module_start: 0, module_end: 0, alias_start: 0, alias_end: 0,
+    has_alias: false
+  };
+  let first_import: project.ImportList = project.ImportList.ICons { head: first_link, tail: initial.imports };
+  let imports: project.ImportList = project.ImportList.ICons { head: second_link, tail: first_import };
+  return ImportLinkBuild { imports: imports, count: initial.count + 2 };
+}
+fn build_generated_graph(seed: u64) -> (result: ImportLinkBuild) {
+  let initial: ImportLinkBuild = ImportLinkBuild { imports: project.ImportList.INil, count: 0 };
+  iterate i up_to 64 carrying st: ImportLinkBuild = initial {
+    next st = append_generated_source(seed, i, st);
+  }
+  return st;
+}
 fn run_full_link_capacity() -> (result: FullClosureSummary) {
   let built: ImportLinkBuild = build_full_link_list();
   let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, 63);
   return FullClosureSummary { closure: closure, import_count: built.count };
+}
+fn run_generated(seed: u64) -> (result: GeneratedClosureSummary) {
+  let built: ImportLinkBuild = build_generated_graph(seed);
+  let closure: project.ProjectImportClosure = project.project_import_closure(built.imports, seed % 64);
+  return GeneratedClosureSummary { closure: closure, import_count: built.count };
 }
 """
     )
@@ -117,6 +203,11 @@ def build_request(modules: dict[str, str]) -> dict:
             {"module": WRAPPER_MODULE, "function": "run"},
             {"module": WRAPPER_MODULE, "function": "run_capacity"},
             {"module": WRAPPER_MODULE, "function": "run_full_link_capacity"},
+            *[
+                {"module": WRAPPER_MODULE, "function": f"run_{graph['name']}"}
+                for graph in FIXED_GRAPHS
+            ],
+            {"module": WRAPPER_MODULE, "function": "run_generated"},
         ],
         "modules": modules,
         "generic_seeds": [],
@@ -125,14 +216,22 @@ def build_request(modules: dict[str, str]) -> dict:
     }
 
 
-def target_call(function: str, step_budget: int = STEP_BUDGET) -> dict:
+def target_call(
+    function: str,
+    step_budget: int = STEP_BUDGET,
+    arguments: list[dict] | None = None,
+) -> dict:
     return {
         "schema_version": "0.1",
         "target": {"module": WRAPPER_MODULE, "function": function},
-        "arguments": [],
+        "arguments": [] if arguments is None else arguments,
         "type_arguments": [],
         "step_budget": step_budget,
     }
+
+
+def integer_argument(value: int) -> dict:
+    return {"integer": {"type": {"bits": 64, "signed": False}, "value": value}}
 
 
 def main() -> dict:
@@ -161,10 +260,50 @@ def main() -> dict:
         if not isinstance(artifact, dict):
             raise AssertionError("application build omitted its canonical VM artifact")
 
+        call_specs = [
+            {
+                "id": "reverse-cyclic-closure", "function": "run",
+                "target": 7, "edges": REVERSE_CYCLIC_EDGES,
+            },
+            {
+                "id": "64-source-cyclic-closure", "function": "run_capacity",
+                "target": 63, "edges": CAPACITY_EDGES,
+            },
+            {
+                "id": "4096-link-cyclic-closure", "function": "run_full_link_capacity",
+                "target": 63,
+                "edges": [
+                    edge
+                    for source in range(64)
+                    for edge in [(source, source - 1 if source > 0 else 0)]
+                    for _ in range(64)
+                ],
+                "import_count": 4096,
+            },
+        ]
+        for graph in FIXED_GRAPHS:
+            call_specs.append({
+                "id": graph["name"],
+                "function": f"run_{graph['name']}",
+                "target": graph["target"],
+                "edges": graph["edges"],
+            })
+        for seed in GENERATED_SEEDS:
+            call_specs.append({
+                "id": f"generated-64-source-seed-{seed}",
+                "function": "run_generated",
+                "arguments": [integer_argument(seed)],
+                "target": seed % 64,
+                "edges": generated_edges(seed),
+                "import_count": 128,
+            })
         calls = [
-            target_call("run"),
-            target_call("run_capacity"),
-            target_call("run_full_link_capacity", FULL_LINK_STEP_BUDGET),
+            target_call(
+                spec["function"],
+                FULL_LINK_STEP_BUDGET if spec["id"] == "4096-link-cyclic-closure" else STEP_BUDGET,
+                spec.get("arguments"),
+            )
+            for spec in call_specs
         ]
         oracle, oracle_metrics = probe.send({"project_oracle": {
             "root": source,
@@ -188,11 +327,15 @@ def main() -> dict:
     calls_path = BUILD_DIR / "calls.json"
     results_path = BUILD_DIR / "results.json"
     calls_path.write_text(json.dumps([
-        {"id": "reverse-cyclic-closure", "request": target_call("run")},
-        {"id": "64-source-cyclic-closure", "request": target_call("run_capacity")},
-        {"id": "4096-link-cyclic-closure", "request": target_call(
-            "run_full_link_capacity", FULL_LINK_STEP_BUDGET,
-        )},
+        {
+            "id": spec["id"],
+            "request": target_call(
+                spec["function"],
+                FULL_LINK_STEP_BUDGET if spec["id"] == "4096-link-cyclic-closure" else STEP_BUDGET,
+                spec.get("arguments"),
+            ),
+        }
+        for spec in call_specs
     ]))
 
     started = time.monotonic()
@@ -212,7 +355,7 @@ def main() -> dict:
         })
     document = json.loads(results_path.read_text())
     rows = document.get("results", [])
-    if len(rows) != 3 or any(row.get("outcome") != {"kind": "completed"} for row in rows):
+    if len(rows) != len(call_specs) or any(row.get("outcome") != {"kind": "completed"} for row in rows):
         raise AssertionError({"canonical_vm_results": rows})
     actual = []
     for vm_row in rows:
@@ -220,26 +363,32 @@ def main() -> dict:
         if len(vm_returned) != 1:
             raise AssertionError({"canonical_vm_returned": vm_returned})
         actual.append(app.decode_wire(app.vm_to_wire(vm_returned[0])))
-    expected_reachable = [
-        [index < 8 for index in range(64)],
-        [True for _ in range(64)],
-        [True for _ in range(64)],
-    ]
-    for index, (oracle_result, vm_result) in enumerate(zip(expected, actual)):
-        closure_result = vm_result.get("closure") if index == 2 else vm_result
+    for index, (spec, oracle_result, vm_result) in enumerate(zip(call_specs, expected, actual)):
+        closure_result = vm_result.get("closure") if "import_count" in spec else vm_result
+        manual_reachable = reachable_indices(spec["target"], spec["edges"])
+        expected_reachable = [value in manual_reachable for value in range(64)]
         if (vm_result != oracle_result
-                or closure_result.get("reachable") != expected_reachable[index]
+                or closure_result.get("reachable") != expected_reachable
                 or closure_result.get("changed") is not False):
-            raise AssertionError({"stage0": oracle_result, "canonical_vm": vm_result})
-    if actual[2].get("import_count") != 4096:
-        raise AssertionError({"generated_import_count": actual[2].get("import_count")})
+            raise AssertionError({
+                "scenario": spec["id"],
+                "manual_reachable_indices": manual_reachable,
+                "stage0": oracle_result,
+                "canonical_vm": vm_result,
+            })
+        if "import_count" in spec and vm_result.get("import_count") != spec["import_count"]:
+            raise AssertionError({
+                "scenario": spec["id"],
+                "expected_import_count": spec["import_count"],
+                "generated_import_count": vm_result.get("import_count"),
+            })
 
     peak_rss_kib = None
     for line in vm_run.stderr.splitlines():
         if "Maximum resident set size" in line:
             peak_rss_kib = int(line.split(":", 1)[1].strip().split()[0])
     return {
-        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/3",
+        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/5",
         "status": "verified",
         "compiler_source_root": str(ROOT),
         "wrapper_module": WRAPPER_MODULE,
@@ -247,40 +396,27 @@ def main() -> dict:
         "source_count": len(modules),
         "scenarios": [
             {
-                "callable": "run",
-                "import_link_count": 8,
-                "target_source_index": 7,
-                "cycle_edges": [[6, 7], [7, 6]],
-                "reachable_indices": [
-                    index for index, value in enumerate(actual[0]["reachable"]) if value
+                "id": spec["id"],
+                "callable": spec["function"],
+                "target_source_index": spec["target"],
+                "import_link_count": spec.get("import_count", len(spec["edges"])),
+                "expected_reachable_indices": reachable_indices(spec["target"], spec["edges"]),
+                "canonical_vm_reachable_indices": [
+                    index for index, value in enumerate(
+                        (actual[position].get("closure", actual[position])["reachable"])
+                    ) if value
                 ],
-            },
-            {
-                "callable": "run_capacity",
-                "import_link_count": 64,
-                "target_source_index": 63,
-                "cycle_edges": [[62, 63], [63, 62]],
-                "reachable_indices": [
-                    index for index, value in enumerate(actual[1]["reachable"]) if value
-                ],
-            },
-            {
-                "callable": "run_full_link_capacity",
-                "source_index_capacity": 64,
-                "import_link_count": actual[2]["import_count"],
-                "target_source_index": 63,
-                "cycle_edges": [[62, 63], [63, 62]],
-                "reachable_indices": [
-                    index for index, value in enumerate(actual[2]["closure"]["reachable"])
-                    if value
-                ],
-                "step_budget": FULL_LINK_STEP_BUDGET,
-            },
+            }
+            for position, spec in enumerate(call_specs)
         ],
+        "scenario_count": len(call_specs),
+        "generated_graph_seed_count": len(GENERATED_SEEDS),
+        "generated_graph_edges_per_seed": 128,
         "worklist_fallback_exercised_by_graph_depth": True,
+        "three_way_equivalent": True,
         "stage0_valid": oracle["valid"],
-        "stage0_execution": expected,
-        "canonical_vm_execution": actual,
+        "stage0_execution_count": len(expected),
+        "canonical_vm_execution_count": len(actual),
         "stage0_vm_equivalent": actual == expected,
         "artifact_id": artifact["artifact_id"],
         "artifact_json_bytes": artifact_path.stat().st_size,
@@ -296,4 +432,10 @@ def main() -> dict:
 
 
 if __name__ == "__main__":
-    print(json.dumps(main(), indent=2, sort_keys=True))
+    report = main()
+    rendered = json.dumps(report, indent=2, sort_keys=True)
+    report_path = BUILD_DIR / "project-import-closure-graph-corpus-result.json"
+    temporary_report = report_path.with_suffix(".json.tmp")
+    temporary_report.write_text(rendered + "\n")
+    os.replace(temporary_report, report_path)
+    print(rendered)

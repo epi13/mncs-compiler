@@ -100,6 +100,17 @@ peak RSS; the Stage-0 oracle took 82.56 seconds at 1.89 GB peak RSS. Cgroup
 measurements were unavailable. This proves one maximum-size topology, not all
 possible 4,096-link graphs.
 
+The [deterministic graph-corpus record](project-import-closure-graph-corpus-20261019.json)
+adds six focused edge cases and sixteen generated 64-node graphs with 128 links
+each. An independent Python breadth-first oracle, Stage-0, and the canonical VM
+agree on all 25 results, including empty closures, self-cycles, diamonds,
+duplicate edges, invalid and disconnected indices, and the four-round path.
+The VM batch used 2,567,263 steps total; its largest call used 1,741,056 steps
+and 221,590 memory cells. The batch took 91.92 seconds at 35.7 MiB peak RSS.
+Stage-0 took 157.46 seconds at 1.81 GB peak RSS. Cgroup measurements were
+unavailable. This is deterministic bounded graph coverage, not enumeration of
+all possible import graphs or full Project-module proof.
+
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 
 The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the
