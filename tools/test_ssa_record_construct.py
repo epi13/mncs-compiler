@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import tempfile
 import time
 
@@ -40,7 +41,10 @@ def suite():
     raw = SOURCE.encode()
     args = module_args(raw)
 
-    flow = Probe("mncs.compiler.flow.v1", ["lower_unit"], backend="cranelift")
+    flow = Probe(
+        "mncs.compiler.flow.v1", ["lower_unit"], backend="cranelift",
+        backend_roots=["lower_unit"],
+    )
     flow_result = call(flow, "mncs.compiler.flow.v1", "lower_unit", args)
     flow_wire = flow_result["returned"][0]
     proof = field(flow_wire, "proof")
@@ -50,13 +54,19 @@ def suite():
     unit_wire = field(proof, "unit")
     flow_stderr = flow.close()
 
-    decl = Probe("mncs.compiler.decl.v1", ["local_nominal_type_identities"], backend="cranelift")
+    decl = Probe(
+        "mncs.compiler.decl.v1", ["local_nominal_type_identities"], backend="cranelift",
+        backend_roots=["local_nominal_type_identities"],
+    )
     nominal_wire = call(
         decl, "mncs.compiler.decl.v1", "local_nominal_type_identities", [*args, unit_wire]
     )["returned"][0]
     decl_stderr = decl.close()
 
-    ssa = Probe(SSA_MODULE, ["lower_value_ssa", "verify_function"], backend="cranelift")
+    ssa = Probe(
+        SSA_MODULE, ["lower_value_ssa", "verify_function"], backend="cranelift",
+        backend_roots=["lower_value_ssa", "verify_function"],
+    )
     lowered = call(ssa, SSA_MODULE, "lower_value_ssa", [*args, flow_wire, nominal_wire])
     native_wire = lowered["returned"][0]
     native = decode(native_wire)
@@ -142,6 +152,15 @@ def suite():
 
     artifact = ssa.send({"emit_vm_artifact": {"module": SSA_MODULE}})["artifact"]
     ssa_stderr = ssa.close()
+    selection = re.search(
+        r"mncs-stage0-probe backend_function_selection module=mncs\.compiler\.ssa\.v1 "
+        r"selected=(\d+) bodies=(\d+) total=(\d+).*cache_hit=(true|false)",
+        ssa_stderr,
+    )
+    assert selection, f"backend root selection was not reported: {ssa_stderr}"
+    selected_count, body_count, total_count = map(int, selection.groups()[:3])
+    backend_cache_hit = selection.group(4) == "true"
+    assert body_count < total_count, (selected_count, body_count, total_count, ssa_stderr)
     cases = [
         {
             "id": "ssa-record-update-verify",
@@ -194,6 +213,14 @@ def suite():
         },
         "vm_peak_rss_kb": vm_rss,
         "vm_wall_seconds": round(vm_wall, 6),
+        "backend_function_selection": {
+            "selected_function_count": selected_count,
+            "compiled_body_function_count": body_count,
+            "full_module_function_count": None if backend_cache_hit else total_count,
+            "cache_program_function_count": total_count if backend_cache_hit else None,
+            "backend_artifact_cache_hit": backend_cache_hit,
+            "reduced": body_count < total_count,
+        },
         "cache_observations": [
             line for stderr in (flow_stderr, decl_stderr, ssa_stderr)
             for line in stderr.splitlines() if "mncs-stage0-probe" in line

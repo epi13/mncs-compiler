@@ -117,7 +117,10 @@ def wire_linked(value):
 
 
 class Probe:
-    def __init__(self, module, functions, backend=None, *, timeout_seconds=PROBE_TIMEOUT_SECONDS):
+    def __init__(
+        self, module, functions, backend=None, *, timeout_seconds=PROBE_TIMEOUT_SECONDS,
+        backend_roots=None,
+    ):
         env = dict(os.environ)
         if backend is None or backend == "reference_interpreter":
             env.pop("MNCS_PROBE_BACKEND", None)
@@ -129,6 +132,8 @@ class Probe:
             {"module": module, "function": function, "type_arguments": TYPE_ARGS}
             for function in functions
         ])
+        if backend_roots is not None:
+            env["MNCS_PROBE_BACKEND_ROOTS"] = ",".join(backend_roots)
         env.setdefault("MNCS_PROBE_CACHE_DIR", str(ROOT / ".build" / "probe-cache"))
         self.stderr_file = tempfile.TemporaryFile(mode="w+t")
         self.timeout_seconds = timeout_seconds

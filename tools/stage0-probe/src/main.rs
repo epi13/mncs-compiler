@@ -283,6 +283,362 @@ struct ProbeCacheBackendEntry {
 /// again for diagnostic summaries or retained-session construction.
 struct VerifiedBackendArtifact(mncs_model::BackendArtifact);
 
+/// Optional exact callable roots for backend-only compilation. Frontend
+/// elaboration still produces and validates the complete Program; this
+/// projection only narrows the executable artifact to those roots and their
+/// semantic call closure.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct BackendRootSelection {
+    selectors: Vec<String>,
+}
+
+#[derive(Debug)]
+struct BackendProgramProjection {
+    program: mncs_model::Program,
+    root_function_identities: Vec<String>,
+    included_function_identities: Vec<String>,
+    body_function_count: usize,
+    original_function_count: usize,
+    retained_specialization_count: usize,
+}
+
+fn parse_backend_root_selection(
+    raw: Option<String>,
+) -> Result<Option<BackendRootSelection>, String> {
+    let Some(raw) = raw else {
+        return Ok(None);
+    };
+    let mut selectors: Vec<String> = raw
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_owned)
+        .collect();
+    selectors.sort();
+    selectors.dedup();
+    if selectors.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(BackendRootSelection { selectors }))
+}
+
+fn backend_root_cache_key(base_key: &str, selection: &BackendRootSelection) -> String {
+    let selectors =
+        serde_json::to_string(&selection.selectors).expect("backend root selectors serialize");
+    // This version covers both the requested roots and the projection rule:
+    // generic declarations remain as provenance, with their template bodies
+    // excluded when concrete specializations provide the executable bodies.
+    let input = format!("probe-backend-root-closure/2\n{base_key}\n{selectors}");
+    mncs_model::sha256_hex(input.as_bytes())
+}
+
+fn select_backend_root_functions<'a>(
+    program: &'a mncs_model::Program,
+    selection: &BackendRootSelection,
+) -> Result<
+    (
+        BTreeMap<mncs_model::SemanticId, &'a mncs_model::Function>,
+        BTreeSet<mncs_model::SemanticId>,
+    ),
+    String,
+> {
+    use mncs_model::function_id;
+
+    let mut functions_by_identity = BTreeMap::new();
+    let mut identities_by_name: BTreeMap<&str, Vec<mncs_model::SemanticId>> = BTreeMap::new();
+    for function in &program.functions {
+        let identity = function_id(function.identity_namespace(&program.module), &function.name);
+        if functions_by_identity
+            .insert(identity.clone(), function)
+            .is_some()
+        {
+            return Err(format!(
+                "Program contains duplicate function identity {}",
+                identity.0
+            ));
+        }
+        identities_by_name
+            .entry(function.name.as_str())
+            .or_default()
+            .push(identity);
+    }
+
+    let mut selected_roots = BTreeSet::new();
+    for selector in &selection.selectors {
+        let (requested_namespace, requested_name) = selector
+            .rsplit_once("::")
+            .map_or((None, selector.as_str()), |(namespace, name)| {
+                (Some(namespace), name)
+            });
+        let candidates: Vec<_> = identities_by_name
+            .get(requested_name)
+            .into_iter()
+            .flatten()
+            .filter(|identity| {
+                requested_namespace.is_none_or(|namespace| {
+                    let function = functions_by_identity
+                        .get(*identity)
+                        .expect("identity index is consistent");
+                    function.identity_namespace(&program.module) == namespace
+                })
+            })
+            .cloned()
+            .collect();
+        match candidates.as_slice() {
+            [identity] => {
+                selected_roots.insert(identity.clone());
+            }
+            [] => {
+                return Err(format!(
+                    "backend root selector {selector:?} does not identify a function in {}",
+                    program.module
+                ));
+            }
+            _ => {
+                return Err(format!(
+                    "backend root selector {selector:?} is ambiguous; use namespace::function (candidates: {})",
+                    candidates
+                        .iter()
+                        .map(|identity| identity.0.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ));
+            }
+        }
+    }
+    Ok((functions_by_identity, selected_roots))
+}
+
+fn executable_backend_root_exports(
+    program: &mncs_model::Program,
+    selection: &BackendRootSelection,
+) -> Result<BTreeSet<(String, String)>, String> {
+    let (functions_by_identity, roots) = select_backend_root_functions(program, selection)?;
+    let mut executable_roots = BTreeSet::new();
+    for root in roots {
+        let function = functions_by_identity
+            .get(&root)
+            .expect("selected root exists");
+        if function.generic_params.is_empty() {
+            executable_roots.insert(root);
+            continue;
+        }
+        let specializations: Vec<_> = program
+            .generic_specializations
+            .iter()
+            .filter(|record| record.generic_function == root)
+            .map(|record| record.specialization_function.clone())
+            .collect();
+        if specializations.is_empty() {
+            return Err(format!(
+                "generic backend root {} has no concrete specialization in this Program",
+                root.0
+            ));
+        }
+        executable_roots.extend(specializations);
+    }
+    executable_roots
+        .into_iter()
+        .map(|identity| {
+            let function = functions_by_identity.get(&identity).ok_or_else(|| {
+                format!(
+                    "backend executable root {} has no function declaration",
+                    identity.0
+                )
+            })?;
+            Ok((
+                function.identity_namespace(&program.module).to_owned(),
+                function.name.clone(),
+            ))
+        })
+        .collect()
+}
+
+fn backend_program_projection(
+    program: mncs_model::Program,
+    selection: &BackendRootSelection,
+) -> Result<BackendProgramProjection, String> {
+    use mncs_model::{function_id, BodyOperationKind};
+
+    let program_module = program.module.clone();
+    let original_function_count = program.functions.len();
+    let function_identity = |function: &mncs_model::Function| {
+        function_id(function.identity_namespace(&program_module), &function.name)
+    };
+    let (functions_by_identity, selected_roots) =
+        select_backend_root_functions(&program, selection)?;
+
+    // Selecting a generic declaration means selecting its current concrete
+    // specializations as executable roots. Keep the declaration itself too:
+    // specialization provenance is part of the Program contract.
+    let mut metadata_only = BTreeSet::new();
+    let mut pending = Vec::new();
+    for root in &selected_roots {
+        let function = functions_by_identity
+            .get(root)
+            .expect("selected root exists");
+        if !function.generic_params.is_empty() {
+            let specializations: Vec<_> = program
+                .generic_specializations
+                .iter()
+                .filter(|record| &record.generic_function == root)
+                .map(|record| record.specialization_function.clone())
+                .collect();
+            if specializations.is_empty() {
+                return Err(format!(
+                    "generic backend root {} has no concrete specialization in this Program",
+                    root.0
+                ));
+            }
+            metadata_only.insert(root.clone());
+            pending.extend(specializations);
+        } else {
+            pending.push(root.clone());
+        }
+    }
+
+    let mut included = metadata_only.clone();
+    let mut body_closure = BTreeSet::new();
+    while let Some(identity) = pending.pop() {
+        if !body_closure.insert(identity.clone()) {
+            continue;
+        }
+        included.insert(identity.clone());
+        metadata_only.remove(&identity);
+        let function = functions_by_identity.get(&identity).ok_or_else(|| {
+            format!(
+                "backend call closure references missing function identity {}",
+                identity.0
+            )
+        })?;
+
+        // Retain each generic declaration that owns a selected specialization
+        // so the corresponding specialization record remains auditable.
+        for record in program
+            .generic_specializations
+            .iter()
+            .filter(|record| record.specialization_function == identity)
+        {
+            included.insert(record.generic_function.clone());
+            metadata_only.insert(record.generic_function.clone());
+        }
+
+        let Some(body) = &function.body else {
+            continue;
+        };
+        for block in &body.blocks {
+            for operation in &block.operations {
+                if let BodyOperationKind::Call { function, .. } = &operation.kind {
+                    pending.push(function.clone());
+                }
+            }
+        }
+        for iteration in &body.bounded_iterations {
+            pending.extend(iteration.callees.iter().cloned());
+        }
+    }
+
+    let root_function_identities: Vec<_> = selected_roots
+        .iter()
+        .map(|identity| identity.0.clone())
+        .collect();
+    let included_function_identities: Vec<_> =
+        included.iter().map(|identity| identity.0.clone()).collect();
+    let mut projected = program;
+    projected.functions.retain_mut(|function| {
+        let identity = function_identity(function);
+        if !included.contains(&identity) {
+            return false;
+        }
+        if metadata_only.contains(&identity) && !body_closure.contains(&identity) {
+            // The complete source Program has already gone through frontend
+            // verification. Generic declarations remain as specialization
+            // provenance and signature dependencies; their concrete,
+            // rewritten instances carry the executable bodies for this root.
+            function.body = None;
+        }
+        true
+    });
+    projected.generic_specializations.retain(|record| {
+        included.contains(&record.generic_function)
+            && included.contains(&record.specialization_function)
+    });
+    let body_function_count = projected
+        .functions
+        .iter()
+        .filter(|function| function.body.is_some())
+        .count();
+    let retained_specialization_count = projected.generic_specializations.len();
+    let validation = projected.validate();
+    if !validation.valid {
+        return Err(format!(
+            "backend root closure is not a valid semantic Program: {}",
+            validation
+                .errors
+                .iter()
+                .map(|error| format!("{} at {}: {}", error.code, error.path, error.message))
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+    }
+    Ok(BackendProgramProjection {
+        program: projected,
+        root_function_identities,
+        included_function_identities,
+        body_function_count,
+        original_function_count,
+        retained_specialization_count,
+    })
+}
+
+fn compile_backend_program(
+    compiler: &ReferenceCompiler,
+    backend: &str,
+    module: &str,
+    program: &mncs_model::Program,
+) -> VerifiedBackendArtifact {
+    let emit = backend_probe_emissions();
+    let request_started = Instant::now();
+    let request = compiler
+        .request_for_program_with_backend(program, emit, backend)
+        .unwrap_or_else(|error| panic!("{backend} request for {module}: {error:?}"));
+    trace_phase(
+        "backend_request_construction",
+        request_started,
+        json!({"module": module, "backend": backend}),
+    );
+    trace_event(json!({
+        "event": "phase_begin",
+        "phase": "backend_compilation",
+        "module": module,
+        "backend": backend
+    }));
+    let compile_started = Instant::now();
+    let mut result = compiler.compile(request, program);
+    let artifact = result
+        .emissions
+        .backend
+        .take()
+        .unwrap_or_else(|| panic!("{backend} emitted no artifact for {module}: {result:?}"));
+    drop(result);
+    let payload_bytes = artifact.bytes_hex.len() / 2;
+    let artifact = VerifiedBackendArtifact::verify(artifact);
+    trace_phase(
+        "backend_compilation",
+        compile_started,
+        json!({
+            "module": module,
+            "backend": backend,
+            "artifact_kind": artifact.as_ref().map(|artifact| artifact.artifact().artifact_kind.as_str()),
+            "artifact_payload_bytes": payload_bytes,
+            "identity_valid": artifact.is_ok()
+        }),
+    );
+    artifact.unwrap_or_else(|_| {
+        panic!("{backend} emitted an artifact with an invalid identity for {module}")
+    })
+}
+
 impl VerifiedBackendArtifact {
     fn verify(artifact: mncs_model::BackendArtifact) -> Result<Self, mncs_model::BackendArtifact> {
         if artifact.identity_is_valid() {
@@ -697,6 +1053,21 @@ fn parse_cache_entry_reader<R: Read>(
 fn short_hash(value: &str) -> &str {
     &value[..value.len().min(12)]
 }
+
+fn emit_vm_artifact_for_probe(
+    compiler: &ReferenceCompiler,
+    program: &mncs_model::Program,
+    roots: Option<&BackendRootSelection>,
+) -> Result<Value, String> {
+    match roots {
+        Some(roots) => {
+            let exports = executable_backend_root_exports(program, roots)?;
+            vm_emit::emit_vm_artifact_with_roots(compiler, program, &exports)
+        }
+        None => vm_emit::emit_vm_artifact(compiler, program),
+    }
+}
+
 fn main() {
     if std::env::args().any(|arg| arg == "--producer-info") {
         println!("{}", provider::producer());
@@ -781,6 +1152,12 @@ fn main() {
         json!({"module_count": sources.0.len(), "source_bytes": loaded_source_bytes}),
     );
     let backend_name = std::env::var("MNCS_PROBE_BACKEND").ok();
+    let backend_roots =
+        parse_backend_root_selection(std::env::var("MNCS_PROBE_BACKEND_ROOTS").ok())
+            .unwrap_or_else(|error| panic!("invalid MNCS_PROBE_BACKEND_ROOTS: {error}"));
+    if backend_roots.is_some() && backend_name.is_none() {
+        panic!("MNCS_PROBE_BACKEND_ROOTS requires MNCS_PROBE_BACKEND");
+    }
     // Content-addressed readiness cache: backend artifacts retain their
     // existing backend-specific key, while frontend Programs also have a
     // backend-independent key over the Stage-0/compiler identity, resolver
@@ -845,14 +1222,18 @@ fn main() {
     let mut backend_artifact_cache_hits = 0u32;
     let mut frontend_program_cache_hits = 0u32;
     let cache_key = |module: &str| -> String {
-        cache_key_hex(
+        let base = cache_key_hex(
             toolchain
                 .as_ref()
                 .expect("toolchain identity is gathered whenever the cache is enabled"),
             module,
             &closure,
             &seeds_raw,
-        )
+        );
+        backend_roots
+            .as_ref()
+            .map(|selection| backend_root_cache_key(&base, selection))
+            .unwrap_or(base)
     };
     let frontend_cache_key = |module: &str, module_seeds: &[HostGenericSeedRequest]| -> String {
         let module_source = closure
@@ -1158,12 +1539,55 @@ fn main() {
                 if let Some((program, artifact, _frontend)) = cached {
                     cache_hits += 1;
                     backend_artifact_cache_hits += u32::from(artifact.is_some());
+                    let (program, migrate_root_cache) = if let Some(selection) = &backend_roots {
+                        let projection = backend_program_projection(program, selection)
+                            .unwrap_or_else(|error| {
+                                panic!("cached backend root closure for {name}: {error}")
+                            });
+                        trace_event(json!({
+                            "event": "backend_root_closure",
+                            "module": name,
+                            "cache_hit": true,
+                            "roots": &projection.root_function_identities,
+                            "selected_function_count": projection.included_function_identities.len(),
+                            "body_function_count": projection.body_function_count,
+                            "original_function_count": projection.original_function_count,
+                            "retained_specialization_count": projection.retained_specialization_count
+                        }));
+                        eprintln!(
+                            "mncs-stage0-probe backend_function_selection module={name} selected={} bodies={} total={} roots={:?} cache_hit=true",
+                            projection.included_function_identities.len(),
+                            projection.body_function_count,
+                            projection.original_function_count,
+                            projection.root_function_identities
+                        );
+                        let migrate = projection.original_function_count
+                            > projection.included_function_identities.len();
+                        (projection.program, migrate)
+                    } else {
+                        (program, false)
+                    };
+                    if migrate_root_cache {
+                        if let Some(artifact) = &artifact {
+                            // Migrate an older root-cache entry that retained
+                            // the full frontend Program. The separately keyed
+                            // frontend cache still owns that complete value.
+                            cache_store(
+                                &key,
+                                ".json.gz",
+                                identity,
+                                &program,
+                                Some(artifact.artifact()),
+                                None,
+                            );
+                        }
+                    }
                     let frontend_key = frontend_cache_key(name, &module_seeds);
                     let frontend_path = format!(
                         "{}/{frontend_key}.program.json.gz",
                         cache_dir.as_ref().unwrap()
                     );
-                    if !std::path::Path::new(&frontend_path).is_file() {
+                    if backend_roots.is_none() && !std::path::Path::new(&frontend_path).is_file() {
                         cache_store(
                             &frontend_key,
                             ".program.json.gz",
@@ -1308,77 +1732,75 @@ fn main() {
     // once, retain its backend session, then answer the same requests through
     // that executable artifact. The ordinary interpreter remains available
     // as the independent comparison path.
-    let backend_artifacts: BTreeMap<_, _> = backend_name
-        .as_deref()
-        .map(|backend| {
-            let compiler = ReferenceCompiler::default();
-            programs
-                .iter()
-                .map(|(name, program)| {
-                    if let Some(artifact) = cached_artifacts.remove(name) {
-                        trace_event(json!({
-                            "event": "artifact_reuse",
-                            "phase": "backend_compile",
-                            "module": name,
-                            "source": "content_addressed_cache"
-                        }));
-                        return (name.clone(), artifact);
-                    }
-                    let emit = backend_probe_emissions();
-                    let request_started = Instant::now();
-                    let request = compiler
-                        .request_for_program_with_backend(program, emit, backend)
-                        .unwrap_or_else(|error| panic!("{backend} request for {name}: {error:?}"));
-                    trace_phase(
-                        "backend_request_construction",
-                        request_started,
-                        json!({"module": name, "backend": backend}),
+    let mut backend_artifacts = BTreeMap::new();
+    if let Some(backend) = backend_name.as_deref() {
+        let compiler = ReferenceCompiler::default();
+        let input_programs = std::mem::take(&mut programs);
+        for (name, program) in input_programs {
+            if let Some(artifact) = cached_artifacts.remove(&name) {
+                trace_event(json!({
+                    "event": "artifact_reuse",
+                    "phase": "backend_compile",
+                    "module": name,
+                    "source": "content_addressed_cache"
+                }));
+                programs.insert(name.clone(), program);
+                backend_artifacts.insert(name, artifact);
+                continue;
+            }
+
+            let artifact = if let Some(selection) = &backend_roots {
+                let projection = backend_program_projection(program, selection)
+                    .unwrap_or_else(|error| panic!("backend root closure for {name}: {error}"));
+                trace_event(json!({
+                    "event": "backend_root_closure",
+                    "module": name,
+                    "cache_hit": false,
+                    "roots": &projection.root_function_identities,
+                    "selected_function_count": projection.included_function_identities.len(),
+                    "body_function_count": projection.body_function_count,
+                    "original_function_count": projection.original_function_count,
+                    "retained_specialization_count": projection.retained_specialization_count
+                }));
+                eprintln!(
+                    "mncs-stage0-probe backend_function_selection module={name} selected={} bodies={} total={} roots={:?} cache_hit=false",
+                    projection.included_function_identities.len(),
+                    projection.body_function_count,
+                    projection.original_function_count,
+                    projection.root_function_identities
+                );
+                let artifact =
+                    compile_backend_program(&compiler, backend, &name, &projection.program);
+                if cache_dir.is_some() {
+                    cache_store(
+                        &cache_key(&name),
+                        ".json.gz",
+                        toolchain.as_ref().unwrap(),
+                        &projection.program,
+                        Some(artifact.artifact()),
+                        None,
                     );
-                    trace_event(json!({
-                        "event": "phase_begin",
-                        "phase": "backend_compilation",
-                        "module": name,
-                        "backend": backend
-                    }));
-                    let compile_started = Instant::now();
-                    let mut result = compiler.compile(request, program);
-                    let artifact = result.emissions.backend.take().unwrap_or_else(|| {
-                        panic!("{backend} emitted no artifact for {name}: {result:?}")
-                    });
-                    // The retained artifact is the only compiler emission
-                    // needed below; release the rest before cache encoding.
-                    drop(result);
-                    let payload_bytes = artifact.bytes_hex.len() / 2;
-                    let artifact = VerifiedBackendArtifact::verify(artifact);
-                    trace_phase(
-                        "backend_compilation",
-                        compile_started,
-                        json!({
-                            "module": name,
-                            "backend": backend,
-                            "artifact_kind": artifact.as_ref().map(|artifact| artifact.artifact().artifact_kind.as_str()),
-                            "artifact_payload_bytes": payload_bytes,
-                            "identity_valid": artifact.is_ok()
-                        }),
+                }
+                programs.insert(name.clone(), projection.program);
+                artifact
+            } else {
+                let artifact = compile_backend_program(&compiler, backend, &name, &program);
+                if cache_dir.is_some() {
+                    cache_store(
+                        &cache_key(&name),
+                        ".json.gz",
+                        toolchain.as_ref().unwrap(),
+                        &program,
+                        Some(artifact.artifact()),
+                        None,
                     );
-                    let artifact = artifact.unwrap_or_else(|_| {
-                        panic!("{backend} emitted an artifact with an invalid identity for {name}")
-                    });
-                    if cache_dir.is_some() {
-                        cache_store(
-                            &cache_key(name),
-                            ".json.gz",
-                            toolchain.as_ref().unwrap(),
-                            program,
-                            Some(artifact.artifact()),
-                            None,
-                        );
-                    }
-                    (name.clone(), artifact)
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+                }
+                programs.insert(name.clone(), program);
+                artifact
+            };
+            backend_artifacts.insert(name, artifact);
+        }
+    }
     let artifact_summaries = backend_artifacts
         .iter()
         .map(|(name, artifact)| {
@@ -1445,7 +1867,8 @@ fn main() {
             .get(&module)
             .unwrap_or_else(|| panic!("--emit-vm-artifact for unknown module {module}"));
         let compiler = ReferenceCompiler::default();
-        let artifact = vm_emit::emit_vm_artifact(&compiler, program).expect("direct VM emission");
+        let artifact = emit_vm_artifact_for_probe(&compiler, program, backend_roots.as_ref())
+            .expect("direct VM emission");
         println!("{}", json!({"module": module, "artifact": artifact}));
         return;
     }
@@ -1760,8 +2183,8 @@ fn main() {
                 .get(module)
                 .unwrap_or_else(|| panic!("emit_vm_artifact for unknown module {module}"));
             let compiler = ReferenceCompiler::default();
-            let artifact =
-                vm_emit::emit_vm_artifact(&compiler, program).expect("direct VM emission");
+            let artifact = emit_vm_artifact_for_probe(&compiler, program, backend_roots.as_ref())
+                .expect("direct VM emission");
             json!({"module": module, "artifact": artifact})
         } else if let Some(text) = input.get("elaborate").and_then(Value::as_str) {
             let result = ReferenceCompiler::default()
@@ -2008,6 +2431,124 @@ mod tests {
             result.diagnostics
         );
         result.program.unwrap()
+    }
+
+    fn callable_closure_program() -> mncs_model::Program {
+        let text = "mncs 0.10; module probe.closure; fn leaf(x: u64) -> (result: u64) { return x; } fn helper(x: u64) -> (result: u64) { return leaf(x); } fn root(x: u64) -> (result: u64) { return helper(x); } fn unrelated(x: u64) -> (result: u64) { return x + 1; }";
+        let result = ReferenceCompiler::default()
+            .front_end_with_resolver(envelope(text.to_owned()), &NullResolver);
+        assert!(
+            result.is_valid(),
+            "callable closure Program valid: {:?}",
+            result.diagnostics
+        );
+        result.program.unwrap()
+    }
+
+    #[test]
+    fn backend_root_projection_keeps_transitive_calls_and_excludes_unrelated_functions() {
+        let program = callable_closure_program();
+        let selection = parse_backend_root_selection(Some("root".to_owned()))
+            .unwrap()
+            .unwrap();
+        let projection = backend_program_projection(program, &selection).unwrap();
+
+        let names: BTreeSet<_> = projection
+            .program
+            .functions
+            .iter()
+            .map(|function| function.name.as_str())
+            .collect();
+        assert_eq!(names, BTreeSet::from(["helper", "leaf", "root"]));
+        assert_eq!(projection.original_function_count, 4);
+        assert_eq!(projection.included_function_identities.len(), 3);
+        assert!(projection.program.validate().valid);
+    }
+
+    #[test]
+    fn direct_vm_artifact_emits_only_selected_backend_roots() {
+        let program = callable_closure_program();
+        let roots = BTreeSet::from([("probe.closure".to_owned(), "root".to_owned())]);
+        let artifact =
+            vm_emit::emit_vm_artifact_with_roots(&ReferenceCompiler::default(), &program, &roots)
+                .expect("selected-root VM artifact");
+        let callables: BTreeSet<_> = artifact["callables"]
+            .as_array()
+            .expect("artifact callable list")
+            .iter()
+            .map(|callable| callable["name"].as_str().expect("callable name"))
+            .collect();
+
+        assert_eq!(callables, BTreeSet::from(["root"]));
+        assert!(artifact["unsupported"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn backend_root_projection_requires_an_unambiguous_existing_root() {
+        let program = callable_closure_program();
+        let missing = parse_backend_root_selection(Some("missing".to_owned()))
+            .unwrap()
+            .unwrap();
+        assert!(backend_program_projection(program, &missing)
+            .unwrap_err()
+            .contains("does not identify a function"));
+    }
+
+    #[test]
+    fn generic_backend_root_uses_concrete_specialization_body_and_retains_provenance() {
+        let text = "mncs 0.10; module probe.generic; fn identity<N: Nat>(x: u64) -> (result: u64) { return x; } fn unrelated(x: u64) -> (result: u64) { return x + 1; }";
+        let result = ReferenceCompiler::default().front_end_with_seeds(
+            envelope(text.to_owned()),
+            &[test_seed("probe.generic", "identity", 4)],
+        );
+        assert!(
+            result.is_valid(),
+            "generic root Program valid: {:?}",
+            result.diagnostics
+        );
+        let program = result.program.unwrap();
+        let selection = parse_backend_root_selection(Some("identity".to_owned()))
+            .unwrap()
+            .unwrap();
+        let root_exports = executable_backend_root_exports(&program, &selection).unwrap();
+        let projection = backend_program_projection(program, &selection).unwrap();
+
+        assert_eq!(projection.body_function_count, 1);
+        assert_eq!(projection.retained_specialization_count, 1);
+        assert_eq!(root_exports.len(), 1);
+        assert!(projection
+            .program
+            .functions
+            .iter()
+            .any(|function| function.name == "identity" && function.body.is_none()));
+        assert!(projection
+            .program
+            .functions
+            .iter()
+            .any(|function| function.name != "identity" && function.body.is_some()));
+        assert!(projection.program.validate().valid);
+    }
+
+    #[test]
+    fn backend_root_cache_identity_is_order_independent_and_isolated() {
+        let base = "base-backend-key";
+        let first = parse_backend_root_selection(Some("root,helper".to_owned()))
+            .unwrap()
+            .unwrap();
+        let same = parse_backend_root_selection(Some("helper,root,root".to_owned()))
+            .unwrap()
+            .unwrap();
+        let different = parse_backend_root_selection(Some("root".to_owned()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            backend_root_cache_key(base, &first),
+            backend_root_cache_key(base, &same)
+        );
+        assert_ne!(
+            backend_root_cache_key(base, &first),
+            backend_root_cache_key(base, &different)
+        );
     }
 
     fn test_artifact() -> BackendArtifact {

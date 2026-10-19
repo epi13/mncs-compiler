@@ -208,6 +208,19 @@ pub fn emit_vm_artifact(
     emit_vm_artifact_with_producer(compiler, program, None)
 }
 
+/// Emit one canonical VM artifact for a selected set of callable roots and
+/// their verified source call closure. The complete Program is validated
+/// before the backend projection, while the artifact contains only the
+/// requested callables and reachable executable bodies.
+pub fn emit_vm_artifact_with_roots(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    roots: &BTreeSet<(String, String)>,
+) -> Result<serde_json::Value, String> {
+    emit_vm_artifact_scoped(compiler, program, None, None, Some(roots), None)
+        .map(|(artifact, _, _, _)| artifact)
+}
+
 pub fn emit_vm_artifact_with_producer(
     compiler: &ReferenceCompiler,
     program: &Program,
