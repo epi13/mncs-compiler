@@ -13,38 +13,26 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-from pathlib import Path
 import resource
 import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 import test_sem as sem
-from test_vm_segment import run_batch, vm_to_wire, test_vm_emit
-
+from mncs_source import extract_mncs_function, write_json_exclusive
+from test_vm_segment import run_batch, test_vm_emit, vm_to_wire
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.decl.v1"
 SOURCE_PATH = "src/compiler/source.mncs"
 SOURCE_RAW = (ROOT / SOURCE_PATH).read_bytes()
-SOURCE_FUNCTION_NAME = b"span_valid_global"
+SOURCE_FUNCTION_NAME = "span_valid_global"
 SOURCE_FUNCTION_CASE = "compiler-source-span-valid-global"
-SOURCE_FUNCTION_START = SOURCE_RAW.index(b"fn " + SOURCE_FUNCTION_NAME + b"(")
-SOURCE_FUNCTION_OPEN = SOURCE_RAW.index(b"{", SOURCE_FUNCTION_START)
-_brace_depth = 0
-SOURCE_FUNCTION_END = None
-for _offset in range(SOURCE_FUNCTION_OPEN, len(SOURCE_RAW)):
-    if SOURCE_RAW[_offset] == ord("{"):
-        _brace_depth += 1
-    elif SOURCE_RAW[_offset] == ord("}"):
-        _brace_depth -= 1
-        if _brace_depth == 0:
-            SOURCE_FUNCTION_END = _offset + 1
-            break
-if SOURCE_FUNCTION_END is None:
-    raise RuntimeError("could not find the end of current source.span_valid_global")
-SOURCE_FUNCTION_BYTES = SOURCE_RAW[SOURCE_FUNCTION_START:SOURCE_FUNCTION_END]
+SOURCE_FUNCTION_BYTES, SOURCE_FUNCTION_START, SOURCE_FUNCTION_END = extract_mncs_function(
+    SOURCE_RAW, SOURCE_FUNCTION_NAME
+)
 SOURCE_FUNCTION_TEXT = (
     "mncs 0.18;\nmodule self.compiler_source;\n\n"
     + SOURCE_FUNCTION_BYTES.decode("ascii")
@@ -309,7 +297,7 @@ def main() -> None:
         "current_source_semantic_probe": {
             "source_path": SOURCE_PATH,
             "module_source_sha256": hashlib.sha256(SOURCE_RAW).hexdigest(),
-            "function_name": SOURCE_FUNCTION_NAME.decode("ascii"),
+            "function_name": SOURCE_FUNCTION_NAME,
             "function_span": [SOURCE_FUNCTION_START, SOURCE_FUNCTION_END],
             "function_source_sha256": hashlib.sha256(SOURCE_FUNCTION_BYTES).hexdigest(),
             "standalone_unit_sha256": hashlib.sha256(SOURCE_FUNCTION_TEXT.encode()).hexdigest(),
@@ -379,7 +367,7 @@ def main() -> None:
     }
     report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(report, indent=2) + "\n")
+    write_json_exclusive(output, report)
     performance_path = ROOT / ".build/vm-efficiency/decl-proof-frontier.json"
     performance_path.parent.mkdir(parents=True, exist_ok=True)
     performance_path.write_text(json.dumps(report, indent=2) + "\n")

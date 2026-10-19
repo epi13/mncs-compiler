@@ -1015,3 +1015,20 @@ also passed on the same revision through the exact registered nested checkout:
 VM calls. It took 74.03 seconds overall with 776,744 KiB child peak RSS and
 76,764 KiB canonical-VM peak RSS; cgroup values were unavailable. Language
 verified facts remain unreused, and Stage-1/Stage-2 succession remain unproven.
+
+## Declaration proof harness integrity (2026-10-19)
+
+The [harness integrity check](decl-proof-harness-integrity-20261019.json)
+hardens the selected current-source declaration proof. Its source extractor
+ignores line comments, nested block comments, and quoted literals; rejects
+duplicate or incomplete definitions; and confirms the exact current
+`source.span_valid_global` bytes. Evidence publication now writes and syncs a
+temporary JSON file before atomically linking it into the immutable evidence
+path. Existing paths are preserved, failed publication leaves no artifact,
+and a two-writer race admits exactly one complete result.
+
+Eight focused checks passed. The authenticated [declaration frontier rerun](self-host-decl-prove-unit-current-20261019T191720.375142Z-2291618.json)
+also passed seven proof cases on a fresh canonical VM artifact, with the same
+source function and semantic digest as the prior run. The hardened harness
+does not change Compiler semantics or add Language verified-fact reuse; full
+Source-module verification and compiler succession remain unproven.

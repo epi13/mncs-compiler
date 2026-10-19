@@ -1,0 +1,51 @@
+{
+  "schema_version": "mncs.compiler.tooling-integrity-check/1",
+  "kind": "decl-proof-harness-integrity",
+  "observed_at": "2026-10-19T19:19:06.948608Z",
+  "status": "passed",
+  "candidate": {
+    "base_revision": "cbcc38cffb981d3c64cf0197e2d9236d641a507a",
+    "branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "changed_source_sha256": {
+      "tools/mncs_source.py": "6fd28197860c35546cc798f809f97c791e5e449007c66bc5feb034d7f224e73d",
+      "tools/test_mncs_source.py": "8f80288ffdf0f2d5f56a38a66417cd60c36feb475381f32f0a2446a198087fd4",
+      "tools/test_vm_decl_proof_frontier.py": "146c78b79cd4672135a50467ba65e760a7bf0e8bd08b415cfd8db70d7fbe1b36"
+    }
+  },
+  "source_extraction": {
+    "source_path": "src/compiler/source.mncs",
+    "source_sha256": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+    "function": "span_valid_global",
+    "byte_span": [
+      50881,
+      50998
+    ],
+    "function_sha256": "5473c51be247103bbf64acf84f8ff059c20f9202ea0c9d3f2c4d5b2f1056ce9b",
+    "current_definition_extracted_exactly": true
+  },
+  "checks": {
+    "command": "python3 tools/test_mncs_source.py",
+    "unit_tests": {
+      "passed": 8,
+      "failed": 0
+    },
+    "cases": [
+      "exact extraction of current compiler source definition",
+      "ignore function lookalikes in line comments, nested block comments, and literals",
+      "reject duplicate, missing, and unterminated function definitions",
+      "publish private complete JSON and remove temporary files",
+      "refuse existing evidence without modifying it",
+      "leave no artifact after a failed atomic link",
+      "allow only one concurrent publisher for the same evidence path"
+    ],
+    "ruff": "passed with EXE001 ignored because the proof harness is invoked by Python and its tracked mode is non-executable",
+    "py_compile": "passed for all touched Python files",
+    "git_diff_check": "passed"
+  },
+  "evidence_publication": {
+    "method": "write complete temporary JSON, fsync, then hard-link to a new destination; existing paths fail closed",
+    "concurrent_writer_test": "exactly one writer succeeded and the published JSON parsed completely"
+  },
+  "scope": "This hardens the Compiler self-consumption proof harness input selection and evidence publication. It changes no Compiler semantic implementation, does not add Language verified-fact reuse, and does not claim native application or succession progress."
+}
