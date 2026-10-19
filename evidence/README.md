@@ -342,6 +342,12 @@ and both ordered VM artifact chunks are recorded with their exact Store
 reference and SHA-256 values in the [latest readback evidence](native-app-readiness-digest-app-store-readback-20261017.json).
 This remains Compiler verifier output, not a Forge execution receipt.
 
+### Pushed Compiler-source digest application rerun (2026-10-19)
+
+The [current digest application report](native-app-readiness-test-digest-app-20261019T034010.166758Z-2034183.json) reruns the three-module-import `mncs.test.digest::digest_app` workload on pushed Compiler revision `fd04fb2`. All three canonical-VM cases matched the Stage-0 oracle, including bounded `structured_read` and `structured_write` effects. Seven isolated calls ran in one retained process (0.033 seconds, 15.5 MB peak RSS). Missing or mismatched capability identity, dispatch alias, and artifact identity, invalid typed input, rejected output, and step-budget interruption failed closed.
+
+The cold application build took 0.889 seconds (0.70 CPU seconds, 42.6 MB peak RSS); a fresh-process exact-snapshot hit took 0.126 seconds with zero frontend invocations. A comment-only imported-module edit took 0.662 seconds, reran the frontend, and reused the executable artifact while reusing zero Language facts. The typed verifier result and VM artifact were read back through a separate authenticated Environment request from canonical Store with matching hashes. This remains canonical-VM verifier output, not a Forge receipt; the Forge route is still the next application-execution frontier.
+
 ## Current declaration parser frontier (2026-10-16)
 
 The [current `decl.parse_unit` frontier](self-host-decl-parse-expanded-canonical-vm-current-8817cdb-20261016.json)
