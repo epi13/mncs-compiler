@@ -1,0 +1,133 @@
+{
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "change": {
+    "current_shallow_fast_path_rounds": 2,
+    "deep_closure_path": "One bounded adjacency build followed by a worklist seeded with the two-round reachable set.",
+    "previous_shallow_fast_path_rounds": 4,
+    "semantic_contract": "The result is the same reachable-source-index vector with changed=false; each newly discovered node is marked before enqueueing and can enter the worklist at most once."
+  },
+  "compiler": {
+    "branch": "campaign/native-application-readiness-20261013",
+    "harness": "tools/test_vm_project_import_closure_worklist.py",
+    "harness_sha256": "e6bb3fb40c7f8402a14785f7a6c90f6376b7e201e42c774ec4a26951e06cd5b3",
+    "previous_revision": "c561372cab68087e329f13dd4b918eb820a518e7",
+    "project_source": "src/compiler/project.mncs",
+    "project_source_sha256": "90d817e6afafff3cb5cd215d3a2840c133ca59105fa00c0b5a59eb8a1002068d",
+    "repository": "mncs-compiler",
+    "revision": "a5bfdc61ad92115dcfc7de8c1af1ea529971b3d8",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler"
+  },
+  "identity": "ev_project_import_closure_two_scan_fast_path_20261019",
+  "kind": "project-import-closure-two-scan-fast-path-canonical-vm",
+  "observed_at": "2026-10-19T21:01:01+00:00",
+  "performance_comparison": {
+    "baseline": {
+      "canonical_vm_max_memory_cells": 221590,
+      "canonical_vm_max_steps_per_call": 1741056,
+      "canonical_vm_peak_rss_kib": 36568,
+      "canonical_vm_steps_total": 2567263,
+      "canonical_vm_wall_seconds": 91.922176,
+      "scenario_steps": {
+        "4096-link-cyclic-closure": 1741056,
+        "64-source-cyclic-closure": 32267,
+        "four_round_reverse_chain": 3563,
+        "reverse-cyclic-closure": 5337
+      }
+    },
+    "baseline_evidence": "evidence/project-import-closure-graph-corpus-20261019.json",
+    "baseline_evidence_sha256": "d7c56aceffb937e01f5effd6c3d7156f3e0923553d8d2e9cd6dc22af87781896",
+    "baseline_harness_sha256": "61829b4195083eb927a234f67755b024c2961e56ab5123b7c4f3f6a6a96bd0a0",
+    "baseline_source_sha256": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7",
+    "candidate": {
+      "canonical_vm_max_memory_cells": 221590,
+      "canonical_vm_max_steps_per_call": 1175474,
+      "canonical_vm_peak_rss_kib": 36152,
+      "canonical_vm_steps_total": 1887794,
+      "canonical_vm_wall_seconds": 60.143588,
+      "scenario_steps": {
+        "4096-link-cyclic-closure": 1175474,
+        "64-source-cyclic-closure": 23271,
+        "four_round_reverse_chain": 2767,
+        "reverse-cyclic-closure": 4069
+      }
+    },
+    "candidate_cold_application_build": {
+      "cpu_seconds": 63.45,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 1841684480,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 63.838206
+    },
+    "candidate_stage0_oracle": {
+      "cpu_seconds": 168.66,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 3,
+      "peak_rss_bytes": 1988415488,
+      "peak_threads": 1,
+      "request_sequence": 2,
+      "wall_seconds": 169.843716
+    },
+    "reduction_percent": {
+      "4096_link_call_vm_steps": 32.48,
+      "all_25_calls_vm_steps": 26.47,
+      "batch_wall_seconds": 34.57
+    },
+    "resource_context": {
+      "available_system_memory_before_run_gib": 22,
+      "cgroup_memory_measurements_available": false,
+      "interpretation": "Single bounded fixture observations; VM step counts are deterministic for this artifact and VM revision. Build/oracle timing and RSS are not general performance guarantees."
+    },
+    "same_canonical_vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "selected_scenario_comparisons": [
+      {
+        "after_steps": 4069,
+        "before_steps": 5337,
+        "reduction_percent": 23.76,
+        "scenario": "reverse-cyclic-closure"
+      },
+      {
+        "after_steps": 23271,
+        "before_steps": 32267,
+        "reduction_percent": 27.88,
+        "scenario": "64-source-cyclic-closure"
+      },
+      {
+        "after_steps": 1175474,
+        "before_steps": 1741056,
+        "reduction_percent": 32.48,
+        "scenario": "4096-link-cyclic-closure"
+      },
+      {
+        "after_steps": 2767,
+        "before_steps": 3563,
+        "reduction_percent": 22.34,
+        "scenario": "four_round_reverse_chain"
+      }
+    ]
+  },
+  "schema_version": "mncs.compiler.project-import-closure-fast-path/1",
+  "scope": "Selected self-hosted Project import-closure callable. This does not prove the full Project module, full compile_project_target path, Language fact reuse, Forge execution, or compiler succession.",
+  "verification": {
+    "all_vm_results_completed": true,
+    "canonical_vm_artifact_identity": "sha256:13a882ad31bbf0dbfecb2eec1b1e7885a7485cbbfb02414d9254c282a26eb3c6",
+    "canonical_vm_artifact_sha256": "e633aa3bcb4f4a2383c45fc8b8f031eeed5257a1a6360fc4a7dc72427436a166",
+    "canonical_vm_execution_count": 25,
+    "canonical_vm_results_sha256": "adb7e7bb28225598c899bd3cfb53b7e61462297b10479b5e06bb594d9cea039b",
+    "forge_execution_receipt_published": false,
+    "harness_result_sha256": "17dba6b281d1e5b296af3d25955f8d194138da6e7d29e931f92fa886a4d0b9ed",
+    "harness_schema": "mncs.compiler.project-import-closure-worklist-vm/6",
+    "language_verified_facts_reused": 0,
+    "manual_breadth_first_oracle_matches": true,
+    "maximum_import_links": 4096,
+    "maximum_source_indices": 64,
+    "scenario_count": 25,
+    "stage0_execution_count": 25,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "status": "verified"
+  }
+}
