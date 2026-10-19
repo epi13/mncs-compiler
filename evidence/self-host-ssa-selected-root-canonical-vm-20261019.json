@@ -1,0 +1,76 @@
+{
+  "schema_version": "mncs.compiler.self-host-selected-callable-canonical-vm/1",
+  "identity": "ev_compiler_self_host_ssa_selected_root_canonical_vm_20261019",
+  "status": "passed_selected_callable_frontier",
+  "observed_at": "2026-10-19T00:29:07Z",
+  "campaign": {
+    "identity": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637",
+    "checkpoint_before_run": "chk_7f77854fabd30270",
+    "selected_claim": "clm_114aa3ca85241038",
+    "repository": "mncs-compiler",
+    "checkout": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013"
+  },
+  "implementation": {
+    "tested_compiler_revision": "a304506f547e12f8b3aae56add2c9620bdd6f6f1",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "implementation": "MNCS_PROBE_BACKEND_ROOTS root-scoped Stage-0 backend compilation and canonical VM artifact emission",
+    "backend_cache_namespace": "probe-backend-root-closure/2"
+  },
+  "workload": {
+    "target_module": "mncs.compiler.ssa.v1",
+    "implementation_source": "src/compiler/ssa.mncs",
+    "implementation_source_sha256": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709",
+    "root_functions": [
+      "lower_value_ssa",
+      "verify_function"
+    ],
+    "input_program_module": "frontier.ssa",
+    "input_program_source": "mncs 0.18; module frontier.ssa; fn identity(x: u64) -> (r: u64) { return x; }",
+    "input_program_sha256": "5987c22ac49895cdef0e080bf1202de0fb49c7ad2efdcbaa16b888ab83434e0a",
+    "input_program_functions": [
+      "identity"
+    ],
+    "backend_root_closure": {
+      "selected_declarations": 2658,
+      "executable_bodies": 1539,
+      "generic_specializations": 1119,
+      "fresh_process_projection_cache_hit": true
+    }
+  },
+  "verification": {
+    "canonical_vm_artifact_identity": "sha256:8d6bb12d1a396d2052a75317277899a419e0e9ae7cc19b5ba602cce736e31a74",
+    "canonical_vm_invocations": [
+      {
+        "function": "lower_value_ssa",
+        "status": "returned",
+        "comparison": "decoded canonical VM result exactly equaled the Cranelift summary"
+      },
+      {
+        "function": "verify_function",
+        "status": "returned",
+        "result": true
+      }
+    ],
+    "stage0_flow_and_declaration_inputs": "The pinned Stage-0 reference Flow and declaration helpers produced the wires consumed by the selected SSA roots.",
+    "compiler_language_verified_facts_reused": 0,
+    "execution_equivalence": "Selected SSA results agreed between Cranelift and the canonical VM for the identity-program input."
+  },
+  "measurements": {
+    "canonical_vm_batch_wall_seconds": 11.315,
+    "canonical_vm_peak_rss_kib": 378672,
+    "calls_json_bytes": 45615,
+    "results_json_bytes": 25685,
+    "artifact_file_size_bytes": null,
+    "cpu_time_seconds": null,
+    "cgroup_memory_peak_bytes": null
+  },
+  "limitations": [
+    "This is one tiny identity-program input and two selected SSA root invocations, not full SSA-module canonical VM proof.",
+    "The selected backend root closure still retains 1539 executable bodies and has high compilation memory use.",
+    "The fresh-process hit is executable backend projection reuse only; it is not Language-owned semantic fact reuse.",
+    "Language verified-fact reuse, application-build incremental semantic reuse, Stage-1 succession, and Stage-2 succession remain unproven."
+  ]
+}

@@ -10,8 +10,8 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-18T23:07:13Z",
-    "compiler_revision": "134149b8dde532431e4fb1995c6d57dbfbc304f9",
+    "observed_at": "2026-10-19T00:29:07Z",
+    "compiler_revision": "a304506f547e12f8b3aae56add2c9620bdd6f6f1",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
@@ -45,7 +45,34 @@
         "status": "outcome_unavailable",
         "capability": "mncs-compiler:verification-executor/mncs-compiler.value-ssa-differential",
         "binding_id": "cap_1667364b2898aca6",
-        "scope": "The verification operation returned without a structured receipt and no current invocation record was published in checkpoint 397. Current SSA behavior remains unverified; no SSA or succession proof is claimed."
+        "scope": "This differential verification operation returned without a structured receipt or current invocation record. A separate selected callable canonical-VM frontier is recorded below; full SSA-module behavior and succession remain unproven."
+      },
+      "selected_ssa_root_canonical_vm_frontier": {
+        "status": "passed_selected_callable_frontier",
+        "evidence_artifact": "evidence/self-host-ssa-selected-root-canonical-vm-20261019.json",
+        "evidence_sha256": "b2fbc5f3b5fb5cbfe3e8bad65a9ac8134f3c5fb89d66805115f7e068f4df6472",
+        "tested_compiler_revision": "a304506f547e12f8b3aae56add2c9620bdd6f6f1",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "target_module": "mncs.compiler.ssa.v1",
+        "target_functions": [
+          "lower_value_ssa",
+          "verify_function"
+        ],
+        "input_program_sha256": "5987c22ac49895cdef0e080bf1202de0fb49c7ad2efdcbaa16b888ab83434e0a",
+        "module_source_sha256": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709",
+        "canonical_vm_artifact_identity": "sha256:8d6bb12d1a396d2052a75317277899a419e0e9ae7cc19b5ba602cce736e31a74",
+        "canonical_vm_invocations": 2,
+        "backend_root_closure": {
+          "selected_declarations": 2658,
+          "executable_bodies": 1539,
+          "generic_specializations": 1119,
+          "fresh_process_projection_cache_hit": true
+        },
+        "canonical_vm_batch_wall_seconds": 11.315,
+        "canonical_vm_peak_rss_kib": 378672,
+        "language_verified_facts_reused": 0,
+        "scope": "One tiny identity-program input exercised the selected lower_value_ssa and verify_function roots. The canonical VM result matched the Cranelift summary and verification returned true. This is a selected callable frontier, not full SSA-module proof, Language fact reuse, or Stage-1/Stage-2 succession."
       }
     }
   },
@@ -2051,6 +2078,42 @@
           "stage1_claimed": false,
           "stage2_claimed": false,
           "scope": "This selected application artifact contains the wrapper entry, its reachable compiler callable closure, and the explicit lower_flow_unit_value_ssa<1024,1024> specialization. The canonical VM batch starts each case from logical source pages; MNCS source runs flow.lower_unit, derives local nominal identities from the returned proof unit, and passes that exact Flow result to value SSA. Function, conditional-branch, and return counts match the pinned Stage-0 oracle. Jumps, failures, switches, blocks, and instructions are reported separately so structural differences remain explicit. This does not establish full CFG/IR parity or Language-owned verified-fact reuse, Cranelift differential coverage, or compiler succession."
+        },
+        "selected_ssa_root_canonical_vm_frontier": {
+          "status": "passed_selected_callable_frontier",
+          "observed_at": "2026-10-19T00:29:07Z",
+          "tested_compiler_revision": "a304506f547e12f8b3aae56add2c9620bdd6f6f1",
+          "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+          "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+          "target_module": "mncs.compiler.ssa.v1",
+          "target_functions": [
+            "lower_value_ssa",
+            "verify_function"
+          ],
+          "implementation_source": "src/compiler/ssa.mncs",
+          "implementation_source_sha256": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709",
+          "input_program_source_sha256": "5987c22ac49895cdef0e080bf1202de0fb49c7ad2efdcbaa16b888ab83434e0a",
+          "canonical_vm_case_count": 1,
+          "canonical_vm_invocations": 2,
+          "canonical_vm_artifact_identity": "sha256:8d6bb12d1a396d2052a75317277899a419e0e9ae7cc19b5ba602cce736e31a74",
+          "semantic_result": {
+            "lower_value_ssa_equals_cranelift_summary": true,
+            "verify_function_result": true
+          },
+          "backend_root_closure": {
+            "selected_declarations": 2658,
+            "executable_bodies": 1539,
+            "generic_specializations": 1119,
+            "fresh_process_projection_cache_hit": true
+          },
+          "evidence_artifact": "evidence/self-host-ssa-selected-root-canonical-vm-20261019.json",
+          "evidence_sha256": "b2fbc5f3b5fb5cbfe3e8bad65a9ac8134f3c5fb89d66805115f7e068f4df6472",
+          "canonical_vm_batch_wall_seconds": 11.315,
+          "canonical_vm_peak_rss_kib": 378672,
+          "language_verified_facts_reused": 0,
+          "stage1_claimed": false,
+          "stage2_claimed": false,
+          "scope": "One tiny identity-program input exercised the selected SSA lowering and verification roots through a root-scoped canonical VM artifact. Full SSA-module proof, Language-owned verified-fact reuse, and compiler succession remain unproven."
         }
       }
     },
