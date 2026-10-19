@@ -949,6 +949,16 @@ The check is registered as `mncs-compiler.native-test-provider-app-boundary`
 in verification inventory revision 41, with the JSON proof exported as a
 bounded Environment shareable artifact for fresh-process readback.
 
+The follow-up [eight-case provider report](native-test-provider-app-boundary-eight-case-20261019.json)
+executes all seven real `mncs-test` self-suite cases together with a case
+compiled from a separate Test module in one canonical VM application call.
+The provider returns seven passing assertions, including the typed skip, and
+its result and check match Stage-0 exactly. Rebinding the cross-module row to
+the other valid artifact identity returns typed `UNSUPPORTED` with failure
+code 9001. The call took 81 ms at 34.3 MiB peak RSS. This still uses the local
+bounded structured-file adapter; Forge invocation, canonical Store
+publication, and fresh-process Store readback remain unproven.
+
 ## Counted-loop SSA instruction accounting (2026-10-18)
 
 The [loop accounting report](self-host-flow-ssa-loop-accounting-delivery-20261018.json)

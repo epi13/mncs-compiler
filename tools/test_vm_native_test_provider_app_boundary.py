@@ -1118,7 +1118,7 @@ def main() -> None:
             )
             if self_suite_case is None:
                 raise AssertionError("real mncs-test self-suite omitted its arithmetic callable")
-            heterogeneous_cases = [self_suite_case, cross_case]
+            heterogeneous_cases = [*real_cases, cross_case]
             heterogeneous_artifact_identities = sorted({
                 case["artifact_identity"] for case in heterogeneous_cases
             })
@@ -1241,11 +1241,11 @@ def main() -> None:
                 or heterogeneous_returned[0].get("exit_code") != 0
                 or heterogeneous_published_result != heterogeneous_stage0.get("test_result")
                 or heterogeneous_published_check != heterogeneous_stage0.get("check_result")
-                or heterogeneous_published_result.get("selection_count") != 2
+                or heterogeneous_published_result.get("selection_count") != len(heterogeneous_cases)
                 or heterogeneous_published_result.get("selected_test_identities")
                 != [list(identity.encode()) for identity in heterogeneous_test_identities]
                 or heterogeneous_native_result.get("verdict_code") != 0
-                or heterogeneous_native_result.get("assertions") != 2
+                or heterogeneous_native_result.get("assertions") != 7
                 or heterogeneous_native_result.get("failures") != 0
                 or heterogeneous_published_check.get("test_result_identity")
                 != heterogeneous_published_result.get("result_identity")
@@ -1260,7 +1260,7 @@ def main() -> None:
                     "stage0": heterogeneous_stage0,
                 }, indent=2)[:16000])
             heterogeneous_batch_proof = {
-                "selection_count": 2,
+                "selection_count": len(heterogeneous_cases),
                 "test_case_identities": heterogeneous_test_identities,
                 "test_module_artifact_identities": [
                     case["artifact_identity"] for case in heterogeneous_cases
@@ -1434,11 +1434,11 @@ def main() -> None:
             invalid_execution_values = invalid_request_fields[
                 "selected_test_executions"
             ]["sequence"]["values"]
-            invalid_execution_fields = record_fields(invalid_execution_values[1])
+            invalid_execution_fields = record_fields(invalid_execution_values[-1])
             invalid_execution_fields["artifact_identity"] = byte_sequence(
                 self_suite_case["artifact_identity"]
             )
-            invalid_execution_values[1] = wire_record(
+            invalid_execution_values[-1] = wire_record(
                 "ProviderTestExecution", invalid_execution_fields,
                 record_identity(protocol_interface, "ProviderTestExecution"),
             )
@@ -1779,7 +1779,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "The local bounded structured-file provider completes single-test, two-test, heterogeneous-artifact, and real seven-case mncs-test self-suite paths; this does not prove invocation through Forge, Environment, and canonical Store or fresh-process Store readback."
+                    "The local bounded structured-file provider completes single-test and two-test paths, a combined eight-case heterogeneous-artifact batch, and a separate real seven-case mncs-test self-suite path; execution still uses the local adapter rather than Forge, Environment, and canonical Store, and it does not prove fresh-process Store readback."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,

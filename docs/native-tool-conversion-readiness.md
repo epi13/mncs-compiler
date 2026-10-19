@@ -218,8 +218,11 @@ the refreshed digest-app evidence at
 `1a3d0a60b1cef17f62b43777163099cab10a89549aa8ad370187455d347dca45`).
 All three pin Compiler `cd2fc1bd760fb020c75fd2da97ad58b6a356408a`. No
 Language verified facts were reused and the self-consumption frontier did not
-advance. The positive provider-batch result, Forge/Environment/Store execution,
-and canonical Store readback remain outstanding.
+advance. The local provider now passes an eight-case heterogeneous batch that
+combines the seven-case `mncs-test` self-suite with a separately compiled Test
+module. See `evidence/native-test-provider-app-boundary-eight-case-20261019.json`
+for its Stage-0-matched result and artifact-identity rejection evidence. The
+Forge/Environment/Store route and canonical Store readback remain outstanding.
 
 The active campaign's selected Environment definition lists only
 `mncs-compiler` as a writable repository and protects `mncs-language`.
