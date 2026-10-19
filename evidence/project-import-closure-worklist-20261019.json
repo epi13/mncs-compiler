@@ -1,0 +1,122 @@
+{
+  "schema_version": "mncs.compiler.project-import-closure-worklist/1",
+  "identity": "ev_compiler_project_import_closure_worklist_20261019",
+  "kind": "project-target-import-closure-worklist",
+  "observed_at": "2026-10-19T15:07:54Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "checkpoint_before_validation": {
+    "identity": "chk_a72c2fd9a84cca92",
+    "sequence": 441
+  },
+  "compiler": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "base_revision": "2f2f83c1a159be04939b179dc58f9dd6201e4a85",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "source": "src/compiler/project.mncs",
+    "source_sha256_before": "1fb5d43669f40439d660bdafa92983e53e36317d0d7ea6d7ab867a3877690316",
+    "source_sha256_after": "127d6d0c1b82f3687fe2f9e86e92c2d86b6774fa052e728b2dfd3864651dc9a7"
+  },
+  "change": {
+    "summary": "Keep up to four full import-link closure scans for shallow targets, then build bounded per-source adjacency and visit each reachable source once with a 64-entry worklist.",
+    "bounds_preserved": {
+      "project_sources": 64,
+      "links_per_source": 1024,
+      "project_import_links": 4096,
+      "closure_worklist_entries": 64
+    },
+    "invalid_source_or_target_indices": "ignored",
+    "semantic_identity_changed": false,
+    "public_contract_changed": false
+  },
+  "verification": {
+    "status": "verified",
+    "command": "python3 -u tools/test_project_import_link_capacity.py",
+    "test_harness": "tools/test_project_import_link_capacity.py",
+    "test_harness_sha256": "a231e33cbfa681a29a890054b2569bc7d7ccaf28dbccc21d5147ce4a9174187e",
+    "test_schema_version": "mncs.compiler.project-import-link-capacity/13",
+    "backend": "cranelift",
+    "probe_request_count": 27,
+    "result_sha256": "b94073d64d116d9019a8f7c7ce2c43ba83bc3bb9a08caea3f3a0654a8cff77d6",
+    "result_file_sha256": "909f262a6d15ba9c178dcb5eccfe277d28e538349c1494c2cf65021b62b34946",
+    "result_file": ".build/project-import-link-capacity-worklist-schema-candidate.json",
+    "connected_source_capacity": {
+      "source_count": 64,
+      "module_count": 64,
+      "import_links": 63,
+      "target_source_index": 63,
+      "target_flow_valid": true,
+      "target_ssa_valid": true,
+      "stage0_oracle_valid": true,
+      "stage0_verified_function_count": 64,
+      "request_seconds": 0.383848
+    },
+    "reverse_nominal_schema_closure": {
+      "source_count": 8,
+      "module_count": 8,
+      "import_links": 8,
+      "target_source_index": 7,
+      "target_flow_valid": true,
+      "target_ssa_valid": true,
+      "cycle_edge_resolved": true,
+      "all_nested_nominal_projections_verified": true,
+      "stage0_acyclic_equivalent_oracle_valid": true,
+      "request_seconds": 0.108085
+    },
+    "preserved_regressions": [
+      "per-module and project import bounds and overflow diagnostics",
+      "invalid indices, changed-snapshot diagnostics, interleaved imports, and long-name fallbacks",
+      "Stage-0 agreement for the connected 64-module function chain"
+    ],
+    "canonical_vm_execution": false
+  },
+  "measurements": {
+    "comparison_baseline_revision": "2f2f83c1a159be04939b179dc58f9dd6201e4a85",
+    "baseline_source_sha256": "1fb5d43669f40439d660bdafa92983e53e36317d0d7ea6d7ab867a3877690316",
+    "baseline_harness_schema": "mncs.compiler.project-import-link-capacity/12",
+    "baseline_test_result_file_sha256": "ed3814e08bcdb6f9e222c3a08f0de4ab3c9007cbb877d0a215d84915998ffc72",
+    "sample_count_per_path": 1,
+    "request_seconds": {
+      "64_source_target": {
+        "baseline": 0.41099,
+        "candidate": 0.383848,
+        "observed_change_percent": -6.604
+      },
+      "4096_import_links": {
+        "baseline": 0.56621,
+        "candidate": 0.54567,
+        "observed_change_percent": -3.628
+      },
+      "1024_imports_one_module": {
+        "baseline": 0.20477,
+        "candidate": 0.170966,
+        "observed_change_percent": -16.508
+      },
+      "long_module_name": {
+        "baseline": 0.039319,
+        "candidate": 0.036148,
+        "observed_change_percent": -8.065
+      }
+    },
+    "cpu_time": "unavailable; no usage is inferred",
+    "peak_rss": "unavailable; harness reported no resource samples",
+    "cgroup_memory": "unavailable",
+    "interpretation": "Each candidate request sample was lower, but single sequential samples do not establish a general speedup or memory reduction."
+  },
+  "scope": {
+    "compiler_project_frontier_advanced": true,
+    "language_verified_facts_reused": 0,
+    "language_repository_modified": false,
+    "native_application_execution_changed": false,
+    "forge_execution_receipt_published": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "limitations": [
+    "The test exercises the Compiler Project target through Cranelift and Stage-0; canonical VM execution of this worklist is not established.",
+    "Stage-0 rejects cyclic module graphs, so the native cyclic closure is checked separately from its acyclic nominal-projection oracle counterpart.",
+    "Language-owned verified-fact reuse and Forge-routed digest_app execution remain unchanged."
+  ]
+}

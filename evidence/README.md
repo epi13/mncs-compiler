@@ -53,6 +53,25 @@ not a general speedup claim; details are in the
 Language verified facts remain unreused, canonical-VM execution was not part
 of this frontier, and Stage-1/Stage-2 remain unproven.
 
+## Project import-closure worklist (2026-10-19)
+
+The [worklist record](project-import-closure-worklist-20261019.json) keeps up
+to four whole-link scans for shallow closures, then builds bounded source
+adjacency and visits reachable sources once. The 27-request Project capacity
+harness passes, including a reverse-ordered 64-module target, a cyclic
+eight-module nominal-schema closure whose nested projections pass Flow/SSA,
+and the existing import-limit and fresh-diagnostic regressions. Stage-0
+confirms the 64-module function chain and an acyclic counterpart of the
+nominal-schema fixture; its frontend rejects the cyclic graph by policy.
+
+One sample per path measured 0.384 seconds for the 64-source target and 0.546
+seconds for the 4,096-link input, versus 0.411 and 0.566 seconds on the
+pre-worklist source. The 1,024-import and long-name samples were also lower.
+These sequential observations do not establish a general speedup. CPU, RSS,
+and cgroup samples were unavailable. This was a Cranelift/Stage-0 Project
+frontier, not a canonical-VM run. Language verified facts remain unreused;
+Forge execution, Stage-1, and Stage-2 remain unproven.
+
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 
 The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the

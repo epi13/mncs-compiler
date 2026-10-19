@@ -104,6 +104,48 @@ def _connected_source_capacity_project(source_count: int = 64) -> tuple[list, di
     return sources, modules, sources[-1][2].decode()
 
 
+def _reverse_nominal_schema_closure_project(
+    source_count: int = 8, *, include_cycle: bool = True,
+) -> tuple[list, dict, str]:
+    """Put the target first in link traversal order and require every schema."""
+    sources = []
+    modules = {}
+    for index in range(source_count):
+        module_name = f"demo.nominal{index:03d}"
+        source_id = f"{index:03d}-nominal{index:03d}.mncs"
+        if index == 0:
+            source = (
+                f"mncs 0.18; module {module_name};\n"
+                "record R000 { value: u64 }\n"
+            )
+        elif index + 1 < source_count:
+            prior = f"demo.nominal{index - 1:03d}"
+            back_edge = (
+                f"use demo.nominal{source_count - 1:03d} as back;\n"
+                if include_cycle and index + 2 == source_count else ""
+            )
+            source = (
+                f"mncs 0.18; module {module_name};\n"
+                f"use {prior} as prior;\n"
+                f"{back_edge}"
+                f"record R{index:03d} {{ next: prior.R{index - 1:03d} }}\n"
+            )
+        else:
+            prior = f"demo.nominal{index - 1:03d}"
+            projections = ".next" * (source_count - 2)
+            source = (
+                f"mncs 0.18; module {module_name};\n"
+                f"use {prior} as prior;\n"
+                "fn read(value: prior.R"
+                f"{index - 1:03d}) -> (result: u64) {{ "
+                f"return value{projections}.value; }}\n"
+            )
+        sources.append((source_id, Path(source_id), source.encode()))
+        if index + 1 < source_count:
+            modules[module_name] = source
+    return sources, modules, sources[-1][2].decode()
+
+
 def run():
     # This suite invokes compile_project_target and a non-generic guard. Do
     # not retain the unrelated whole-project compiler or standalone SSA JITs.
@@ -674,6 +716,52 @@ def run():
             stage0_chain_calls[("demo.chain062", "value")]
         ], (native_chain_calls, stage0_chain_calls)
 
+        # The reverse-ordered nominal chain needs the transitive imported
+        # schemas while lowering the selected root. Its back edge also checks
+        # that closure discovery terminates on a cyclic import graph.
+        nominal_sources, nominal_modules, nominal_root = (
+            _reverse_nominal_schema_closure_project()
+        )
+        nominal_target_index = len(nominal_sources) - 1
+        nominal_request = _target_request(
+            project.request_value(identities, nominal_sources),
+            nominal_target_index,
+        )
+        nominal_request_started = time.monotonic()
+        nominal_response = probe.send(nominal_request)
+        nominal_request_seconds = round(time.monotonic() - nominal_request_started, 6)
+        assert nominal_response.get("status") == "returned", nominal_response
+        nominal_native = project.decode(nominal_response["returned"][0])
+        nominal_imports = project.flist(nominal_native["imports"])
+        nominal_target = project.flist(nominal_native["modules"])
+        cycle_edge_resolved = any(
+            link["source_index"] == len(nominal_sources) - 2
+            and link["target_index"] == len(nominal_sources) - 1
+            for link in nominal_imports
+        )
+        assert nominal_native["valid"] and nominal_native["value_ssa_valid"], nominal_native
+        assert nominal_native["source_count"] == 8 and nominal_native["module_count"] == 8, nominal_native
+        assert len(nominal_imports) == 8, nominal_imports
+        assert cycle_edge_resolved, nominal_imports
+        assert len(nominal_target) == 1 and nominal_target[0]["source_index"] == nominal_target_index
+        assert nominal_target[0]["flow"]["proof"]["ok"] is True
+        assert nominal_target[0]["value_ssa"]["valid"] is True
+        # The reference Language frontend rejects cyclic module imports. Keep
+        # that policy boundary explicit: compare the same projection chain
+        # under Stage 0 with only the unused cycle edge removed.
+        _, nominal_oracle_modules, nominal_oracle_root = (
+            _reverse_nominal_schema_closure_project(include_cycle=False)
+        )
+        assert nominal_oracle_root == nominal_root
+        nominal_oracle = probe.send({
+            "project_oracle": {
+                "root": nominal_oracle_root,
+                "modules": nominal_oracle_modules,
+            }
+        })
+        assert nominal_oracle.get("valid") is True, nominal_oracle
+        assert len(nominal_oracle["program"]["functions"]) == 1, nominal_oracle
+
         # Keep the guard predicate covered at the threshold as a focused check.
         limit_results = {}
         for count, expected_reached in ((4095, False), (4096, True)):
@@ -706,7 +794,7 @@ def run():
             if (summary := observation.get("resource_summary")) is not None
         ]
         return {
-            "schema_version": "mncs.compiler.project-import-link-capacity/12",
+            "schema_version": "mncs.compiler.project-import-link-capacity/13",
             "status": "verified",
             "resource_measurements": resource_measurements,
             "backend": execution["backend"],
@@ -785,6 +873,18 @@ def run():
                 "root_import_identity_matches_stage0": True,
                 "request_seconds": capacity_request_seconds,
                 "one_use_signature_scan_noop_iterations_avoided_model": 1023,
+            },
+            "reverse_nominal_schema_closure": {
+                "source_count": nominal_native["source_count"],
+                "module_count": nominal_native["module_count"],
+                "import_links": nominal_native["import_count"],
+                "target_source_index": nominal_target_index,
+                "target_flow_valid": nominal_target[0]["flow"]["proof"]["ok"],
+                "target_ssa_valid": nominal_target[0]["value_ssa"]["valid"],
+                "stage0_oracle_valid": nominal_oracle["valid"],
+                "request_seconds": nominal_request_seconds,
+                "cycle_edge_resolved": cycle_edge_resolved,
+                "all_nested_nominal_projections_verified": True,
             },
             "project_import_link_limit": 4096,
             "global_limit_guard_below_boundary": not limit_results[4095],
