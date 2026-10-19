@@ -125,11 +125,12 @@ enum ImportList { INil, ICons { head: ImportLink, tail: ImportList } }
 record ModuleResolutionFact { module_start: u64, module_end: u64, target_found: bool, target_index: u64 }
 enum ModuleResolutionFactList { MRNil, MRCons { head: ModuleResolutionFact, tail: ModuleResolutionFactList } }
 record ModuleResolutionCacheLookup { rest: ModuleResolutionFactList, source_index: u64, module_start: u64, module_end: u64, found: bool, target_found: bool, target_index: u64 }
-enum ProjectIndexList { PINil, PICons { head: u64, tail: ProjectIndexList } }
-record ProjectIndexContains { rest: ProjectIndexList, wanted: u64, found: bool }
-record ProjectImportClosure { indices: ProjectIndexList, changed: bool }
-record ProjectImportClosureWalk { rest: ImportList, indices: ProjectIndexList, changed: bool }
-record ProjectModuleClosureFilter { rest: ModuleList, indices: ProjectIndexList, acc: ModuleList }
+// Project source indices are bounded to values less than 64. Keep membership in this
+// fixed vector so closure discovery and filtering do not repeatedly walk a
+// linked list just to answer whether one source index is present.
+record ProjectImportClosure { reachable: [bool; 64], changed: bool }
+record ProjectImportClosureWalk { rest: ImportList, reachable: [bool; 64], changed: bool }
+record ProjectModuleClosureFilter { rest: ModuleList, reachable: [bool; 64], acc: ModuleList }
 
 enum ProjectDiagnostic {
     SourceOrder { source_index: u64 },
@@ -1804,8 +1805,8 @@ fn lower_project_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], fla
 }
 fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, target_source_index: u64) -> (result: ProjectBuild) {
     let selected: TargetModuleSelection = select_target_module(modules, target_source_index);
-    let dependency_indices: ProjectIndexList = project_import_closure(imports, target_source_index);
-    let dependency_modules: ModuleList = project_modules_in_closure<64>(sources, modules, dependency_indices);
+    let dependency_closure: ProjectImportClosure = project_import_closure(imports, target_source_index);
+    let dependency_modules: ModuleList = project_modules_in_closure<64>(sources, modules, dependency_closure.reachable);
     return lower_project_modules_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, selected.found);
 }
 
@@ -1815,20 +1816,27 @@ fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_
 // selected module. Each module admits at most 1024 uses, while the project
 // retains at most 4096 resolved links. Repeated passes handle source ordering
 // and cycles within that project-wide bound.
-fn project_import_closure(imports: ImportList, target_source_index: u64) -> (result: ProjectIndexList) {
-    let first: ProjectImportClosure = ProjectImportClosure { indices: ProjectIndexList.PICons { head: target_source_index, tail: ProjectIndexList.PINil }, changed: true };
-    iterate i up_to 64 carrying st: ProjectImportClosure = first {
-        if !(st.changed) { return st.indices; }
-        next st = project_import_closure_round(imports, st.indices);
+fn project_import_closure(imports: ImportList, target_source_index: u64) -> (result: ProjectImportClosure) {
+    let empty: [bool; 64] = [false; 64];
+    if target_source_index >= empty.len {
+        return ProjectImportClosure { reachable: empty, changed: false };
     }
-    return st.indices;
+    let initial_reachable: [bool; 64] = replace(empty, target_source_index, true);
+    let first: ProjectImportClosure = ProjectImportClosure { reachable: initial_reachable, changed: true };
+    iterate i up_to 64 carrying st: ProjectImportClosure = first {
+        if !(st.changed) { return st; }
+        next st = project_import_closure_round(imports, st.reachable);
+    }
+    return st;
 }
-fn project_import_closure_round(imports: ImportList, indices: ProjectIndexList) -> (result: ProjectImportClosure) {
-    let first: ProjectImportClosureWalk = project_import_closure_part(ProjectImportClosureWalk { rest: imports, indices: indices, changed: false });
+fn project_import_closure_round(imports: ImportList, reachable: [bool; 64]) -> (result: ProjectImportClosure) {
+    let first: ProjectImportClosureWalk = project_import_closure_part(
+        ProjectImportClosureWalk { rest: imports, reachable: reachable, changed: false }
+    );
     let second: ProjectImportClosureWalk = project_import_closure_part(first);
     let third: ProjectImportClosureWalk = project_import_closure_part(second);
     let fourth: ProjectImportClosureWalk = project_import_closure_part(third);
-    return ProjectImportClosure { indices: fourth.indices, changed: fourth.changed };
+    return ProjectImportClosure { reachable: fourth.reachable, changed: fourth.changed };
 }
 fn project_import_closure_part(initial: ProjectImportClosureWalk) -> (result: ProjectImportClosureWalk) {
     iterate i up_to 1024 carrying st: ProjectImportClosureWalk = initial {
@@ -1847,35 +1855,27 @@ fn project_import_closure_link(st: ProjectImportClosureWalk) -> (result: Project
     };
 }
 fn project_import_closure_link_one(st: ProjectImportClosureWalk, link: ImportLink, rest: ImportList) -> (result: ProjectImportClosureWalk) {
-    let reachable: bool = project_index_contains(st.indices, link.source_index);
-    if !(reachable) { return ProjectImportClosureWalk { rest: rest, indices: st.indices, changed: st.changed }; }
-    let already_included: bool = project_index_contains(st.indices, link.target_index);
-    if already_included { return ProjectImportClosureWalk { rest: rest, indices: st.indices, changed: st.changed }; }
+    if link.source_index >= st.reachable.len || link.target_index >= st.reachable.len {
+        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed };
+    }
+    if !(st.reachable[link.source_index]) {
+        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed };
+    }
+    if st.reachable[link.target_index] {
+        return ProjectImportClosureWalk { rest: rest, reachable: st.reachable, changed: st.changed };
+    }
     return ProjectImportClosureWalk {
         rest: rest,
-        indices: ProjectIndexList.PICons { head: link.target_index, tail: st.indices },
+        reachable: replace(st.reachable, link.target_index, true),
         changed: true
     };
 }
-fn project_index_contains(indices: ProjectIndexList, wanted: u64) -> (result: bool) {
-    iterate i up_to 64 carrying st: ProjectIndexContains = ProjectIndexContains { rest: indices, wanted: wanted, found: false } {
-        if st.found { return true; }
-        next st = project_index_contains_step(st);
-    }
-    return st.found;
-}
-fn project_index_contains_step(st: ProjectIndexContains) -> (result: ProjectIndexContains) {
-    return match st.rest {
-        PINil => st,
-        PICons { head: index, tail: rest } => project_index_contains_one(st, index, rest)
-    };
-}
-fn project_index_contains_one(st: ProjectIndexContains, index: u64, rest: ProjectIndexList) -> (result: ProjectIndexContains) {
-    if index == st.wanted { return ProjectIndexContains { rest: ProjectIndexList.PINil, wanted: st.wanted, found: true }; }
-    return ProjectIndexContains { rest: rest, wanted: st.wanted, found: false };
-}
-fn project_modules_in_closure<M: Nat>(sources: [ProjectSource; up_to M], modules: ModuleList, indices: ProjectIndexList) -> (result: ModuleList) {
-    iterate i over sources carrying st: ProjectModuleClosureFilter = ProjectModuleClosureFilter { rest: modules, indices: indices, acc: ModuleList.MNil } {
+fn project_modules_in_closure<M: Nat>(sources: [ProjectSource; up_to M], modules: ModuleList, reachable: [bool; 64]) -> (result: ModuleList) {
+    iterate i over sources carrying st: ProjectModuleClosureFilter = ProjectModuleClosureFilter {
+        rest: modules,
+        reachable: reachable,
+        acc: ModuleList.MNil
+    } {
         if module_list_empty(st.rest) { return reverse_modules<M>(sources, st.acc); }
         next st = project_module_closure_filter_step(st);
     }
@@ -1888,9 +1888,17 @@ fn project_module_closure_filter_step(st: ProjectModuleClosureFilter) -> (result
     };
 }
 fn project_module_closure_filter_one(st: ProjectModuleClosureFilter, parsed: ParsedModule, rest: ModuleList) -> (result: ProjectModuleClosureFilter) {
-    let included: bool = project_index_contains(st.indices, parsed.source_index);
-    if !(included) { return ProjectModuleClosureFilter { rest: rest, indices: st.indices, acc: st.acc }; }
-    return ProjectModuleClosureFilter { rest: rest, indices: st.indices, acc: ModuleList.MCons { head: parsed, tail: st.acc } };
+    if parsed.source_index >= st.reachable.len {
+        return ProjectModuleClosureFilter { rest: rest, reachable: st.reachable, acc: st.acc };
+    }
+    if !(st.reachable[parsed.source_index]) {
+        return ProjectModuleClosureFilter { rest: rest, reachable: st.reachable, acc: st.acc };
+    }
+    return ProjectModuleClosureFilter {
+        rest: rest,
+        reachable: st.reachable,
+        acc: ModuleList.MCons { head: parsed, tail: st.acc }
+    };
 }
 
 fn lower_project_modules_selected<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, to_lower: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, target_found: bool) -> (result: ProjectBuild) {
