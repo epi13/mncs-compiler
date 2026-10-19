@@ -169,8 +169,26 @@ def source_cases() -> list[dict]:
         f"s{index:02d}".encode() for index in range(40)
     ) + b";"
     cases.append({
-        "id": "forty-segment-header-fuel-exhaustion",
+        "id": "forty-segment-header-within-extended-fuel",
         "raw": forty,
+        "expected_code": 0,
+        "version_span": None,
+        "module_span": None,
+        "stage0_check": True,
+    })
+    hundred = b"mncs 0.18; module " + b".".join(b"x" for _ in range(100)) + b";"
+    cases.append({
+        "id": "hundred-segment-header-within-fuel",
+        "raw": hundred,
+        "expected_code": 0,
+        "version_span": None,
+        "module_span": None,
+        "stage0_check": True,
+    })
+    over_budget = b"mncs 0.18; module " + b".".join(b"x" for _ in range(130)) + b";"
+    cases.append({
+        "id": "one-hundred-thirty-segment-header-fuel-exhaustion",
+        "raw": over_budget,
         "expected_code": 9,
         "version_span": None,
         "module_span": None,
@@ -419,7 +437,7 @@ def main() -> None:
         "scope": (
             "The current kernel.parse_header_global callable executes parser.header_global "
             "over all frontend header fixtures, a 65-byte page split, a 20-segment header, "
-            "a non-ASCII scalar split across pages, and the documented 64-step fuel boundary. "
+            "a non-ASCII scalar split across pages, and the documented 256-step fuel boundary. "
             "Strides 1, 7, 64, and 1024 agree across Stage-0 checked bounded parser results, "
             "the reference interpreter, Cranelift, and one fresh canonical VM artifact. This "
             "is a selected helper frontier, not full parser-module verification or succession."
