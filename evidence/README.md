@@ -1194,3 +1194,17 @@ The run's canonical-VM batch took 59.95 seconds at 37.3 MiB peak RSS. Stage-0
 oracle work took 193.6 seconds and peaked at 1.9 GiB RSS. Language verified
 facts reused remains zero; Forge-routed execution and Stage-1/Stage-2 succession
 remain unproven.
+
+## Project import-closure source domain (2026-10-19)
+
+The [source-domain boundary record](project-import-closure-source-domain-boundary-20261019.json)
+closes a correctness gap between Project's 64-slot storage capacity and the
+selected project's actual `source_count`. The closure scan, adjacency builder,
+and worklist expansion now reject edges whose source or target is outside that
+project. The 33-case independent-oracle/Stage-0/canonical-VM corpus passes;
+its paired four-source case excludes index 4 while the same edges in a
+64-source control include it. The 21-source target integration lowered only
+the target module, matched Stage-0 for transitive nominal verification, and
+rejected the missing-field case with fresh span [108, 114]. This change makes
+no general performance claim. Language verified facts remain unreused; Forge
+execution and Stage-1/Stage-2 succession remain unproven.

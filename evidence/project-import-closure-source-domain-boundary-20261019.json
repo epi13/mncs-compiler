@@ -1,0 +1,134 @@
+{
+  "schema_version": 1,
+  "kind": "mncs.compiler.project-import-closure-source-domain-boundary/1",
+  "observed_at": "2026-10-19T23:15:24.646024Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "base_revision": "b99ff25f3a1880000eb99d318a0a8e753c844a32",
+  "tested_compiler_revision": "2845900b4724cf5b18f82ac0eec61cc059339a07",
+  "source": {
+    "path": "src/compiler/project.mncs",
+    "sha256": "9753f0f4ef04d72cade170bdaa46141f6eafe71af71896cc1289430d807dfa64"
+  },
+  "harness": {
+    "path": "tools/test_vm_project_import_closure_worklist.py",
+    "sha256": "1fc85477e6b629340f7417cefca1786532785b3374037020015c59dbf52b1efa"
+  },
+  "integration_harness": {
+    "path": "tools/test_project_target_dependency_closure.py",
+    "sha256": "12ee6aaa43ef6520665ed2a07ed8a49c043ad01146576e2ed728bd52a396dc8c"
+  },
+  "toolchain": {
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "canonical_vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+  },
+  "corpus": {
+    "result": "passed_three_way",
+    "scenario_count": 33,
+    "independent_oracle_stage0_canonical_vm_agree": true,
+    "stage0_valid": true,
+    "stage0_execution_count": 33,
+    "canonical_vm_execution_count": 33,
+    "report_sha256": "98383552c7e78e7ecfd899331813bdbb71d4e0c770f174a9a9a6649bc0989933",
+    "artifact_id": "sha256:6ab517b313626361b041318059c8a1fdd3432c24e170b423febccc1b5561fcd1",
+    "artifact_json_sha256": "f307cfb5fc83f057a0dbf3953c8416c6ab300f87e64012b06e5b7a8a69ed1d11",
+    "candidate_small_project_boundary": {
+      "id": "small-source-count-filters-out-of-project-edges",
+      "source_count": 4,
+      "target_source_index": 3,
+      "canonical_vm_reachable_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "expected_reachable_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "canonical_vm_steps": 2261,
+      "canonical_vm_max_memory_cells": 737
+    },
+    "same_edges_64_slot_control": {
+      "id": "64-slot-control-admits-same-edge-indices",
+      "source_count": 64,
+      "target_source_index": 3,
+      "canonical_vm_reachable_indices": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "expected_reachable_indices": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "canonical_vm_steps": 3926,
+      "canonical_vm_max_memory_cells": 744
+    },
+    "application_build": {
+      "cpu_seconds": 64.13,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 5,
+      "peak_rss_bytes": 1864921088,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 64.432856
+    },
+    "stage0_oracle": {
+      "cpu_seconds": 198.85,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 3,
+      "peak_rss_bytes": 1991680000,
+      "peak_threads": 1,
+      "request_sequence": 2,
+      "wall_seconds": 199.742828
+    },
+    "canonical_vm": {
+      "wall_seconds": 61.830559,
+      "peak_rss_kib": 38156,
+      "return_code": 0
+    }
+  },
+  "target_dependency_integration": {
+    "status": "verified",
+    "report_sha256": "01bdc9760c19b631e54b16de6647d3c0e700348379da939b22b63be87525532d",
+    "job_wall_seconds": 416.227,
+    "unrelated_record_modules": 20,
+    "target_source_count": 21,
+    "target_lowered_module_count": 1,
+    "transitive_nominal_verified_functions": 1,
+    "stage0_transitive_nominal_parity": true,
+    "fresh_missing_field_rejected_by_native_and_stage0": true,
+    "fresh_missing_field_span": [
+      108,
+      114
+    ],
+    "simple_target_wall_seconds": 0.230614,
+    "transitive_nominal_target_wall_seconds": 0.261442,
+    "negative_target_wall_seconds": 0.22289
+  },
+  "resource_observations": {
+    "application_build_peak_rss_bytes": 1864921088,
+    "stage0_peak_rss_bytes": 1991680000,
+    "canonical_vm_peak_rss_kib": 38156,
+    "cgroup_measurements_available": false,
+    "target_integration_process_peak_rss_bytes": null
+  },
+  "limitations": {
+    "language_verified_facts_reused": 0,
+    "native_application_execution_improved": false,
+    "forge_execution": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "Project import-edge membership is bounded by the actual source_count in both scan and worklist paths. This establishes a selected Project closure correctness frontier, not Language fact reuse, Forge execution, complete Project-module proof, or compiler succession."
+  }
+}
