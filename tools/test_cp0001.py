@@ -460,7 +460,7 @@ FIXED_SAMPLES = [
 
 SMALL_STRIDES = [1, 2, 3, 5, 7, 8, 13, 16, 31, 32, 33, 63, 64, 65, 127, 128,
                  255, 256]
-NONASCII = [b"mncs 0.18; module caf\xc3\xa9;", b"\xff", b"a\x80b"]
+NONASCII = [b"\xff", b"a\x80b"]
 
 
 def tier_a(probe, kinds_inv, stats):

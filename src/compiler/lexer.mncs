@@ -6,7 +6,7 @@ use mncs.compiler.source.v1 as source;
 // diagnostic: 0 none, 1 MNL001, 2 MNL002, 3 invalid UTF-8 scalar,
 // 4 invalid cursor. EOF is kind 0 and has an empty span.
 record Token { kind: u64, start: u64, end: u64, diagnostic: u64 }
-record Scan { end: u64, depth: u64, dotted: bool, done: bool, page_index: u64, page_intra: u64 }
+record Scan { end: u64, depth: u64, dotted: bool, done: bool, page_index: u64, page_intra: u64, scan_error: u64, error_start: u64 }
 
 fn digit(c: u64) -> (result: bool) { return c >= 48 && c <= 57; }
 fn letter(c: u64) -> (result: bool) {
@@ -228,9 +228,12 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
     let ws: bool = a == 32 || (a >= 9 && a <= 13) || unicode_whitespace;
     if line || block || word || number || ws {
         let initial_width: u64 = select(a >= 128, first_scalar.next - start, select(line || block, 2, 1));
-        let seed: Scan = Scan { end: start + initial_width, depth: select(block, 1, 0), dotted: false, done: false, page_index: 0, page_intra: 0 };
+        let seed: Scan = Scan { end: start + initial_width, depth: select(block, 1, 0), dotted: false, done: false, page_index: 0, page_intra: 0, scan_error: 0, error_start: start };
         iterate i over text[start..text.len] carrying st: Scan = seed {
             let advanced: Scan = scan_step<N>(text, st, line, block, word, number, ws);
+            if advanced.scan_error != 0 {
+                return Token { kind: 7, start: advanced.error_start, end: advanced.end, diagnostic: advanced.scan_error };
+            }
             if advanced.done || advanced.end >= text.len {
                 let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword<N>(text, start, advanced.end), select(advanced.dotted, 6, 5)))));
                 return Token { kind: kind, start: start, end: advanced.end, diagnostic: select(block && advanced.depth > 0, 1, 0) };
@@ -238,6 +241,9 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
             next st = advanced;
         }
         let kind: u64 = select(ws, 1, select(line, 2, select(block, 3, select(word, keyword<N>(text, start, st.end), select(st.dotted, 6, 5)))));
+        if st.scan_error != 0 {
+            return Token { kind: 7, start: st.error_start, end: st.end, diagnostic: st.scan_error };
+        }
         return Token { kind: kind, start: start, end: st.end, diagnostic: select(block && st.depth > 0, 1, 0) };
     }
     let kind: u64 = punctuation(a, b);
@@ -248,12 +254,26 @@ fn scan_step<N: Nat>(text: [byte; up_to N], st: Scan, line: bool, block: bool, w
     if st.done || st.end >= text.len { return st; }
     let a: u64 = source.byte_at<N>(text, st.end);
     if block {
+        if a >= 128 {
+            let scalar: source.Utf8Scalar = source.utf8_scalar<N>(text, st.end);
+            if !scalar.valid {
+                return Scan { ..st, end: scalar.next, done: true, scan_error: 3, error_start: st.end };
+            }
+            return Scan { ..st, end: scalar.next };
+        }
         let b: u64 = source.byte_at<N>(text, st.end + 1);
         if a == 47 && b == 42 { return Scan { ..st, end: st.end + 2, depth: st.depth + 1 }; }
         if a == 42 && b == 47 { return Scan { ..st, end: st.end + 2, depth: st.depth - 1, done: st.depth == 1 }; }
         return Scan { ..st, end: st.end + 1 };
     }
     if line {
+        if a >= 128 {
+            let scalar: source.Utf8Scalar = source.utf8_scalar<N>(text, st.end);
+            if !scalar.valid {
+                return Scan { ..st, end: scalar.next, done: true, scan_error: 3, error_start: st.end };
+            }
+            return Scan { ..st, end: scalar.next };
+        }
         let advance: bool = a != 10;
         return Scan { ..st, end: st.end + select(advance, 1, 0), done: !advance };
     }
@@ -488,6 +508,9 @@ fn token_from_word_scan_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     return Token { kind: kind, start: start, end: st.end, diagnostic: 0 };
 }
 fn token_from_nonword_scan(start: u64, st: Scan, line: bool, block: bool, ws: bool) -> (result: Token) {
+    if st.scan_error != 0 {
+        return Token { kind: 7, start: st.error_start, end: st.end, diagnostic: st.scan_error };
+    }
     let diagnostic: u64 = select(block && st.depth > 0, 1, 0);
     if ws { return Token { kind: 1, start: start, end: st.end, diagnostic: diagnostic }; }
     if line { return Token { kind: 2, start: start, end: st.end, diagnostic: diagnostic }; }
@@ -499,6 +522,7 @@ fn scan_chunk_window(total: u64, window: source.ByteWindow4, st: Scan, line: boo
     let a0: u64 = window.b0;
     if block {
         let b0: u64 = window.b1;
+        if b0 >= 128 { return Scan { ..st, end: st.end + 1 }; }
         let open0: bool = a0 == 47 && b0 == 42;
         let close0: bool = a0 == 42 && b0 == 47;
         let end1: u64 = st.end + select(open0 || close0, 2, 1);
@@ -508,6 +532,7 @@ fn scan_chunk_window(total: u64, window: source.ByteWindow4, st: Scan, line: boo
         if end1 >= total { return first; }
         let a1: u64 = select(open0 || close0, window.b2, b0);
         let b1: u64 = select(open0 || close0, window.b3, window.b2);
+        if a1 >= 128 { return first; }
         let open1: bool = a1 == 47 && b1 == 42;
         let close1: bool = a1 == 42 && b1 == 47;
         let end2: u64 = end1 + select(open1 || close1, 2, 1);
@@ -637,7 +662,7 @@ fn scan_line_comment_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
                 }
             }
         };
-        let advanced: Scan = scan_chunk_window(total, window, inner, true, false, false, false, false);
+        let advanced: Scan = scan_line_comment_window<P, N>(pages, stride, total, inner, window);
         if advanced.done || advanced.end >= total { return advanced; }
         let continues: bool = advanced.end - inner.end == 4 && advanced.end < total;
         let tail_window: source.ByteWindow4 = match select(continues, 1, 0) {
@@ -655,7 +680,7 @@ fn scan_line_comment_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
         };
         let extended: Scan = match select(continues, 1, 0) {
             0 => advanced,
-            _ => scan_chunk_window(total, tail_window, advanced, true, false, false, false, false)
+            _ => scan_line_comment_window<P, N>(pages, stride, total, advanced, tail_window)
         };
         if extended.done || extended.end >= total { return extended; }
         let delta: u64 = extended.end - inner.end;
@@ -671,10 +696,44 @@ fn scan_line_comment_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     return inner;
 }
 
+// Consume up to four ASCII bytes at a time, stopping before a non-ASCII lead
+// byte so the next iteration can validate that complete UTF-8 scalar.
+fn scan_line_comment_window<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, window: source.ByteWindow4) -> (result: Scan) {
+    if window.b0 == 10 { return Scan { ..st, done: true }; }
+    if window.b0 >= 128 {
+        let scalar: source.Utf8Scalar = source.utf8_scalar_global<P, N>(pages, stride, total, st.end);
+        if !scalar.valid {
+            return Scan { ..st, end: scalar.next, done: true, scan_error: 3, error_start: st.end };
+        }
+        return Scan { ..st, end: scalar.next };
+    }
+    let end1: u64 = st.end + 1;
+    if end1 >= total { return Scan { ..st, end: end1 }; }
+    if window.b1 == 10 { return Scan { ..st, end: end1, done: true }; }
+    if window.b1 >= 128 { return Scan { ..st, end: end1 }; }
+    let end2: u64 = st.end + 2;
+    if end2 >= total { return Scan { ..st, end: end2 }; }
+    if window.b2 == 10 { return Scan { ..st, end: end2, done: true }; }
+    if window.b2 >= 128 { return Scan { ..st, end: end2 }; }
+    let end3: u64 = st.end + 3;
+    if end3 >= total { return Scan { ..st, end: end3 }; }
+    if window.b3 == 10 { return Scan { ..st, end: end3, done: true }; }
+    if window.b3 >= 128 { return Scan { ..st, end: end3 }; }
+    return Scan { ..st, end: end3 + 1 };
+}
+
 fn scan_unicode_scalar_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, word: bool, ws: bool) -> (result: Scan) {
     let scalar: source.Utf8Scalar = source.utf8_scalar_global<P, N>(pages, stride, total, st.end);
     let accepted: bool = scalar.valid && ((word && source.identifier_continue_scalar(scalar.scalar)) || (ws && source.whitespace_scalar(scalar.scalar)));
     return Scan { ..st, end: select(accepted, scalar.next, st.end), done: !accepted };
+}
+
+fn scan_block_comment_scalar_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan) -> (result: Scan) {
+    let scalar: source.Utf8Scalar = source.utf8_scalar_global<P, N>(pages, stride, total, st.end);
+    if !scalar.valid {
+        return Scan { ..st, end: scalar.next, done: true, scan_error: 3, error_start: st.end };
+    }
+    return Scan { ..st, end: scalar.next };
 }
 
 fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: Token) {
@@ -723,7 +782,7 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     let ws: bool = a == 32 || (a >= 9 && a <= 13) || unicode_whitespace;
     if line {
         let comment_start: u64 = start + 2;
-        let comment_seed: Scan = Scan { end: comment_start, depth: 0, dotted: false, done: false, page_index: comment_start / stride, page_intra: comment_start % stride };
+        let comment_seed: Scan = Scan { end: comment_start, depth: 0, dotted: false, done: false, page_index: comment_start / stride, page_intra: comment_start % stride, scan_error: 0, error_start: comment_start };
         let comment: Scan = scan_line_comment_global<P, N>(pages, stride, total, comment_seed);
         if comment.done || comment.end >= total {
             return token_from_nonword_scan(start, comment, true, false, false);
@@ -732,7 +791,7 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     }
     if block || word || number || ws {
         let first_width: u64 = select(a >= 128, first_scalar.next - start, select(block, 2, 1));
-        let seed: Scan = Scan { end: start + first_width, depth: select(block, 1, 0), dotted: false, done: false, page_index: (start + first_width) / stride, page_intra: (start + first_width) % stride };
+        let seed: Scan = Scan { end: start + first_width, depth: select(block, 1, 0), dotted: false, done: false, page_index: (start + first_width) / stride, page_intra: (start + first_width) % stride, scan_error: 0, error_start: start };
         // Keep each scan window in the current page when it fits. Passing the
         // entire page table to byte_window4_global for every chunk made frame
         // setup scale with the number of source pages; only page-edge and
@@ -772,7 +831,9 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                 // Word scanning is the common chunk path. Keep the sequential
                 // stop checks local without asking the native declaration
                 // parser to consume boolean match patterns.
-                let advanced: Scan = match select((word || ws) && window.b0 >= 128, 1, 0) {
+                let advanced: Scan = match select(block && window.b0 >= 128, 1, 0) {
+                    1 => scan_block_comment_scalar_global<P, N>(pages, stride, total, inner),
+                    _ => match select((word || ws) && window.b0 >= 128, 1, 0) {
                     1 => scan_unicode_scalar_global<P, N>(pages, stride, total, inner, word, ws),
                     _ => match select(word, 1, 0) {
                     0 => scan_chunk_window(total, window, inner, line, block, word, number, ws),
@@ -808,7 +869,11 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
                         }
                     }
                     }
+                    }
                 };
+                if advanced.scan_error != 0 {
+                    return Token { kind: 7, start: advanced.error_start, end: advanced.end, diagnostic: advanced.scan_error };
+                }
                 // Only fetch and scan a second four-byte window after the
                 // first window proved to contain four continuing word bytes.
                 // Short identifiers keep the original one-window path.

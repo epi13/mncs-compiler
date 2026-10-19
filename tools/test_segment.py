@@ -130,7 +130,7 @@ def samples(smoke=False):
     ]
 
 
-NONASCII = [b'mncs 0.13; module caf\xc3\xa9;', b'\xff', b'a\x80b']
+NONASCII = [b'\xff', b'a\x80b']
 
 
 def suite(smoke=False):

@@ -38,6 +38,11 @@ TEXTS = [
     "a😀b",
     "\u200bname",
 ]
+MALFORMED_COMMENT_CASES = [
+    ("line-comment-bad-continuation", b"// ok \xe2(\xa1\n", 6),
+    ("block-comment-invalid-lead", b"/* ok \xff */", 6),
+    ("block-comment-truncated-scalar", b"/* ok \xf0\x9f", 6),
+]
 HEADERS = [
     "mncs 0.18; module café.demo;",
     "mncs 0.18; module 𐐀.demo;",
@@ -90,7 +95,11 @@ def probe_seeds() -> list[dict]:
     return [
         {"module": SEGMENT, "function": "next_token",
          "type_arguments": [cp.nat_arg(VIEW_BOUND)]},
+        {"module": SEGMENT, "function": "significant",
+         "type_arguments": [cp.nat_arg(VIEW_BOUND)]},
         {"module": SEGMENT, "function": "next_token_global",
+         "type_arguments": [cp.nat_arg(PAGE_BOUND), cp.nat_arg(VIEW_BOUND)]},
+        {"module": SEGMENT, "function": "significant_global",
          "type_arguments": [cp.nat_arg(PAGE_BOUND), cp.nat_arg(VIEW_BOUND)]},
         {"module": PARSER, "function": "header",
          "type_arguments": [cp.nat_arg(VIEW_BOUND)]},
@@ -175,6 +184,7 @@ def main() -> dict:
     vm_tokens: list[dict] = []
     vm_headers: list[dict] = []
     vm_locations: list[dict] = []
+    malformed_comment_summaries: list[dict] = []
     token_count = 0
     try:
         reference.send({"execution_status": True})
@@ -247,6 +257,55 @@ def main() -> dict:
             source_cases.append({"text": text, "tokens": len(expected),
                                  "location_offsets": len(locations)})
 
+        for case_id, raw, error_offset in MALFORMED_COMMENT_CASES:
+            expected = {"kind": 7, "start": error_offset,
+                        "end": error_offset + 1, "diagnostic": 3}
+            bounded_rows = {}
+            for function in ("next_token", "significant"):
+                actual = reference.run_single(
+                    SEGMENT, function, raw, extra=(cp.integer(0),), bound=VIEW_BOUND,
+                )
+                if actual != expected:
+                    raise AssertionError({"case": case_id, "function": function,
+                                          "expected": expected, "actual": actual})
+                bounded_rows[function] = actual
+                vm_tokens.append({
+                    "id": f"malformed-comment:{case_id}:bounded:{function}",
+                    "function": function,
+                    "args": [cp.byte_sequence(raw), cp.integer(0)],
+                    "type_args": [cp.nat_arg(VIEW_BOUND)],
+                    "step_budget": STEP_BUDGET,
+                    "expected": expected,
+                })
+            global_case_count = 0
+            for stride in STRIDES:
+                pages = cp.chunk(raw, stride)
+                for function in ("next_token_global", "significant_global"):
+                    actual = reference.run_global(
+                        SEGMENT, function, pages, stride, len(raw),
+                        extra=(cp.integer(0),),
+                    )
+                    if actual != expected:
+                        raise AssertionError({"case": case_id, "stride": stride,
+                                              "function": function,
+                                              "expected": expected, "actual": actual})
+                    vm_tokens.append({
+                        "id": f"malformed-comment:{case_id}:global:{stride}:{function}",
+                        "function": function,
+                        "args": [cp.pages_value(pages), cp.integer(stride),
+                                 cp.integer(len(raw)), cp.integer(0)],
+                        "type_args": [cp.nat_arg(PAGE_BOUND), cp.nat_arg(VIEW_BOUND)],
+                        "step_budget": STEP_BUDGET,
+                        "expected": expected,
+                    })
+                    global_case_count += 1
+            malformed_comment_summaries.append({
+                "id": case_id, "input_sha256": hashlib.sha256(raw).hexdigest(),
+                "error_offset": error_offset, "expected": expected,
+                "bounded_functions": sorted(bounded_rows),
+                "global_function_stride_cases": global_case_count,
+            })
+
         for header_index, text in enumerate(HEADERS):
             raw = text.encode("utf-8")
             bounded = reference.run_single(PARSER, "header", raw, bound=VIEW_BOUND)
@@ -318,6 +377,28 @@ def main() -> dict:
                     )
                     if global_value != {"line": line, "col": column}:
                         raise AssertionError((text, stride, offset, global_value))
+        for case_id, raw, error_offset in MALFORMED_COMMENT_CASES:
+            expected = {"kind": 7, "start": error_offset,
+                        "end": error_offset + 1, "diagnostic": 3}
+            for function in ("next_token", "significant"):
+                actual = cranelift.run_single(
+                    SEGMENT, function, raw, extra=(cp.integer(0),), bound=VIEW_BOUND,
+                )
+                if actual != expected:
+                    raise AssertionError({"backend": "cranelift", "case": case_id,
+                                          "function": function, "expected": expected,
+                                          "actual": actual})
+            for stride in STRIDES:
+                pages = cp.chunk(raw, stride)
+                for function in ("next_token_global", "significant_global"):
+                    actual = cranelift.run_global(
+                        SEGMENT, function, pages, stride, len(raw),
+                        extra=(cp.integer(0),),
+                    )
+                    if actual != expected:
+                        raise AssertionError({"backend": "cranelift", "case": case_id,
+                                              "stride": stride, "function": function,
+                                              "expected": expected, "actual": actual})
         for text in HEADERS:
             raw = text.encode("utf-8")
             bounded = cranelift.run_single(PARSER, "header", raw, bound=VIEW_BOUND)
@@ -386,12 +467,15 @@ def main() -> dict:
                      "tools/generate_unicode_classifier.rs")
     }
     result = {
-        "schema_version": "mncs.compiler.unicode-lexer-frontier/1",
+        "schema_version": "mncs.compiler.unicode-lexer-frontier/2",
         "status": "verified",
         "rustc": subprocess.run(["rustc", "--version"], capture_output=True,
                                  text=True, check=True).stdout.strip(),
+        "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "source_hashes": source_hashes,
         "sample_count": len(TEXTS),
+        "malformed_comment_case_count": len(malformed_comment_summaries),
+        "malformed_comment_cases": malformed_comment_summaries,
         "header_count": len(HEADERS),
         "strides": list(STRIDES),
         "token_count_per_backend": token_count,
@@ -405,6 +489,7 @@ def main() -> dict:
             "canonical_vm_tokens": True,
             "unicode_scalar_columns": True,
             "unicode_module_headers": True,
+            "invalid_utf8_inside_comments": True,
         },
         "artifact_ids": {
             "segment": segment_artifact["artifact_id"],
@@ -420,11 +505,12 @@ def main() -> dict:
         "elapsed_seconds": round(time.monotonic() - started, 6),
         "limitations": [
             "This proves selected Unicode scalar properties and lexer/parser/source-location paths across the listed corpus and page strides.",
+            "Malformed UTF-8 inside line and block comments is reported as a diagnostic in bounded and paged lexer entrypoints; this direct lexer check uses explicit byte expectations because Rust strings cannot represent malformed UTF-8.",
             "A separate Project check covers one Unicode module through SSA; this corpus does not establish arbitrary multi-module application execution.",
             "Language-owned verified-fact reuse is not implemented or measured by these checks.",
         ],
     }
-    evidence_path = ROOT / "evidence/unicode-lexer-frontier-20261019.json"
+    evidence_path = ROOT / "evidence/unicode-comment-utf8-scan-state-20261019.json"
     evidence_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     return result
 
