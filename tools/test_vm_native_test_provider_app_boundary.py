@@ -1582,6 +1582,156 @@ def main() -> None:
                 ),
             }
 
+            retained_cases = [
+                ("valid", heterogeneous_request, heterogeneous_published_result,
+                 heterogeneous_published_check),
+                ("artifact-identity-mismatch", invalid_request_value,
+                 invalid_published_result, invalid_published_check),
+                ("valid-repeat", heterogeneous_request, heterogeneous_published_result,
+                 heterogeneous_published_check),
+            ]
+            retained_dir = call_dir / "retained-eight-case-provider-session"
+            retained_dir.mkdir()
+            retained_manifest_rows = []
+            retained_paths = []
+            for index, (label, request_value, _, _) in enumerate(retained_cases):
+                row_dir = retained_dir / f"{index:02d}-{label}"
+                row_dir.mkdir()
+                row_input = row_dir / "request.json"
+                row_output = row_dir / "result.json"
+                row_check = row_dir / "check.json"
+                row_execution = row_dir / "execution.json"
+                row_input.write_text(
+                    json.dumps(request_value, sort_keys=True, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+                row_context = application_context(
+                    interface, row_dir,
+                    artifact_paths=[row_input, row_output, row_check],
+                )
+                row_execution.write_text(
+                    json.dumps(call_request(row_context), sort_keys=True, separators=(",", ":")),
+                    encoding="utf-8",
+                )
+                retained_paths.append((row_output, row_check))
+                retained_manifest_rows.append({
+                    "request_path": str(row_execution),
+                    "input_path": str(row_input),
+                    "output_path": str(row_output),
+                    "check_path": str(row_check),
+                    "provider_mode": "success",
+                })
+            retained_manifest = retained_dir / "batch.json"
+            retained_manifest.write_text(json.dumps({
+                "schema_version": "mncs.compiler.native-application-batch-request/1",
+                "calls": retained_manifest_rows,
+            }, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+            retained_started = time.monotonic()
+            retained_process = subprocess.run([
+                "/usr/bin/time", "-v", str(binary), str(artifact_path),
+                f"{artifact_identity_for_files};{artifact_identity_for_digest}",
+                "provider_artifact;provider_digest", "batch", str(retained_manifest),
+            ], cwd=ROOT, capture_output=True, text=True, check=False)
+            retained_wall_seconds = time.monotonic() - retained_started
+            if retained_process.returncode != 0:
+                raise AssertionError(
+                    "canonical VM rejected the retained three-call provider session: "
+                    f"rc={retained_process.returncode}, stderr={retained_process.stderr[-5000:]}"
+                )
+            retained_document = json.loads(retained_process.stdout)
+            retained_rows = retained_document.get("calls", [])
+            retained_rss_match = re.search(
+                r"Maximum resident set size \(kbytes\): (\d+)", retained_process.stderr
+            )
+            retained_result_identities = []
+            retained_labels = []
+            for index, ((label, _, expected_result, expected_check), row,
+                        (row_output, row_check)) in enumerate(zip(
+                            retained_cases, retained_rows, retained_paths
+                        )):
+                call_result = row.get("result", {})
+                call_record = call_result.get("record", {})
+                call_effects = call_record.get("effects", [])
+                call_returned = [digest_app.support.decode_wire(value)
+                                 for value in call_result.get("returned_wire", [])]
+                if not row_output.is_file() or not row_check.is_file():
+                    raise AssertionError(f"retained provider call {index} omitted output publication")
+                call_published_result = digest_app.support.decode_wire(json.loads(
+                    row_output.read_text(encoding="utf-8")
+                ))
+                call_published_check = digest_app.support.decode_wire(json.loads(
+                    row_check.read_text(encoding="utf-8")
+                ))
+                if (
+                    row.get("call_index") != index
+                    or call_result.get("outcome", {}).get("kind") != "completed"
+                    or call_record.get("admitted_capabilities") != expected_heterogeneous_admitted
+                    or len(call_effects) != 8
+                    or any(effect.get("outcome_tag") != "completed" for effect in call_effects)
+                    or len(call_returned) != 1
+                    or call_returned[0].get("exit_code") != 0
+                    or call_published_result != expected_result
+                    or call_published_check != expected_check
+                    or call_published_check.get("test_result_identity")
+                    != call_published_result.get("result_identity")
+                ):
+                    raise AssertionError(json.dumps({
+                        "call_index": index,
+                        "label": label,
+                        "outcome": call_result.get("outcome"),
+                        "returned": call_returned,
+                        "effects": call_effects,
+                        "published_result": call_published_result,
+                        "published_check": call_published_check,
+                        "expected_result": expected_result,
+                    }, indent=2)[:14000])
+                retained_labels.append(label)
+                retained_result_identities.append(call_published_result.get("result_identity"))
+            if (
+                retained_document.get("schema_version")
+                != "mncs.compiler.native-application-batch-result/1"
+                or retained_document.get("artifact_id") != artifact_identity
+                or retained_document.get("runtime_id") != f"mncs-vm-runtime:{artifact_identity}"
+                or retained_document.get("call_count") != len(retained_cases)
+                or len(retained_rows) != len(retained_cases)
+                or retained_labels != ["valid", "artifact-identity-mismatch", "valid-repeat"]
+                or retained_result_identities != [
+                    heterogeneous_published_result.get("result_identity"),
+                    invalid_published_result.get("result_identity"),
+                    heterogeneous_published_result.get("result_identity"),
+                ]
+            ):
+                raise AssertionError(json.dumps({
+                    "schema_version": retained_document.get("schema_version"),
+                    "artifact_id": retained_document.get("artifact_id"),
+                    "runtime_id": retained_document.get("runtime_id"),
+                    "call_count": retained_document.get("call_count"),
+                    "labels": retained_labels,
+                    "result_identities": retained_result_identities,
+                }, indent=2))
+            retained_session_proof = {
+                "runner_invocations": 1,
+                "artifact_admissions": 1,
+                "retained_vm_session_count": 1,
+                "call_count": len(retained_rows),
+                "call_order": retained_labels,
+                "artifact_identity": retained_document.get("artifact_id"),
+                "runtime_identity": retained_document.get("runtime_id"),
+                "result_identities": retained_result_identities,
+                "valid_result_repeats_after_typed_rejection": (
+                    retained_result_identities[0] == retained_result_identities[2]
+                ),
+                "each_call_matches_stage0": True,
+                "output_paths_isolated": len({
+                    str(path) for pair in retained_paths for path in pair
+                }) == 2 * len(retained_paths),
+                "wall_seconds": round(retained_wall_seconds, 6),
+                "peak_rss_bytes": (
+                    int(retained_rss_match.group(1)) * 1024
+                    if retained_rss_match else None
+                ),
+            }
+
             rss_match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", process.stderr)
             user_match = re.search(r"User time \(seconds\): ([0-9.]+)", process.stderr)
             sys_match = re.search(r"System time \(seconds\): ([0-9.]+)", process.stderr)
@@ -1756,6 +1906,7 @@ def main() -> None:
                     ),
                 },
                 "heterogeneous_artifact_batch": heterogeneous_batch_proof,
+                "retained_session_batch": retained_session_proof,
                 "rejected_publication": {
                     "application_exit": failed_write_returned[0],
                     "effect_operations": [
@@ -1779,7 +1930,7 @@ def main() -> None:
                     "no_result_publication": not any(path.exists() for path in digest_paths[1:]),
                 },
                 "limitations": [
-                    "The local bounded structured-file provider completes single-test and two-test paths, a combined eight-case heterogeneous-artifact batch, and a separate real seven-case mncs-test self-suite path; execution still uses the local adapter rather than Forge, Environment, and canonical Store, and it does not prove fresh-process Store readback."
+                    "The local bounded structured-file provider completes single-test and two-test paths, a combined eight-case heterogeneous-artifact batch, and a three-call retained VM session over that batch; the seven-case mncs-test self-suite is also exercised separately. Execution still uses the local adapter rather than Forge, Environment, and canonical Store, and it does not prove fresh-process Store readback."
                 ],
                 "language_verified_facts_reused": 0,
                 "self_consumption_frontier_advanced": False,

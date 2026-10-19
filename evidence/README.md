@@ -959,6 +959,13 @@ code 9001. The call took 81 ms at 34.3 MiB peak RSS. This still uses the local
 bounded structured-file adapter; Forge invocation, canonical Store
 publication, and fresh-process Store readback remain unproven.
 
+The [retained-session follow-up](native-test-provider-app-retained-session-20261019.json)
+uses one runner process, one artifact admission, and one retained VM session
+for three isolated calls: valid, wrong artifact identity, then valid again.
+All three match Stage-0, and the valid result identity is unchanged after the
+typed rejection. The batch took 217 ms at 112.7 MiB peak RSS. This remains a
+local VM runner proof; Forge and Store routing are still unproven.
+
 ## Counted-loop SSA instruction accounting (2026-10-18)
 
 The [loop accounting report](self-host-flow-ssa-loop-accounting-delivery-20261018.json)

@@ -222,7 +222,11 @@ advance. The local provider now passes an eight-case heterogeneous batch that
 combines the seven-case `mncs-test` self-suite with a separately compiled Test
 module. See `evidence/native-test-provider-app-boundary-eight-case-20261019.json`
 for its Stage-0-matched result and artifact-identity rejection evidence. The
-Forge/Environment/Store route and canonical Store readback remain outstanding.
+retained-session follow-up at
+`evidence/native-test-provider-app-retained-session-20261019.json` passes the
+same valid batch, a wrong-identity batch, and the valid batch again through one
+admitted VM artifact. Forge/Environment/Store routing and canonical Store
+readback remain outstanding.
 
 The active campaign's selected Environment definition lists only
 `mncs-compiler` as a writable repository and protects `mncs-language`.
