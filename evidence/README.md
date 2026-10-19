@@ -43,8 +43,15 @@ seconds and sampled 4.65 GB peak RSS. No same-revision before/after timing
 exists, so the record does not claim a speedup. The test ran without a
 worktree claim because the authenticated Environment MCP bridge rejected its
 claim-acquisition arguments; no live Compiler claim was present at the
-pre-run readback. Language verified facts remain unreused, canonical-VM
-execution was not part of this frontier, and Stage-1/Stage-2 remain unproven.
+pre-run readback. A later isolated one-run baseline comparison against
+`f07b0b4` passed the same harness on both revisions. The candidate's one
+64-source request sample was 0.392 seconds versus 0.414 seconds at baseline,
+but cold readiness was 250.4 seconds versus 249.2 seconds and backend
+compilation was effectively unchanged. The runs were sequential, so this is
+not a general speedup claim; details are in the
+[baseline comparison](project-import-closure-baseline-comparison-20261019.json).
+Language verified facts remain unreused, canonical-VM execution was not part
+of this frontier, and Stage-1/Stage-2 remain unproven.
 
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 

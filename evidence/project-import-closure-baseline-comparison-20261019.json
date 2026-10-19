@@ -1,0 +1,109 @@
+{
+  "schema_version": "mncs.compiler.project-import-closure-baseline-comparison/1",
+  "identity": "ev_compiler_project_import_closure_baseline_comparison_20261019",
+  "kind": "project-import-closure-reachability-baseline-comparison",
+  "observed_at": "2026-10-19T04:00:45Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "harness": {
+    "path": "tools/test_project_import_link_capacity.py",
+    "sha256": "1bf485f4464d5ab76f421f286d8f86d3ed618eb7abea9d109422eb810ac94588",
+    "schema_version": "mncs.compiler.project-import-link-capacity/12",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_probe_binary_sha256": "6a1d411cf619623af01d880075212a200e15842f86a049c23a195b71da459ee2",
+    "cache_policy": "separate fresh MNCS_PROBE_CACHE_DIR for each revision; tests run sequentially baseline first, candidate second",
+    "requests_per_revision": 25
+  },
+  "revisions": {
+    "baseline": {
+      "compiler_revision": "f07b0b4cb8823f1dc963fe7fb58bd131b90735c6",
+      "project_source_sha256": "51e3fb0ec4381b25e9d715ac216dbc01299e375760add90eff84a597b1be00b3",
+      "worktree": "mncs-compiler/.worktrees/import-closure-baseline-f07",
+      "worktree_clean_after_run": true,
+      "test_result_sha256": "ca88e59725e89ab882fcdbfe75640c90995c158bafe7ddb7deb0732611949397",
+      "test_result_file_sha256": "1f9ac02210bd80b2ea1e05f2d18ff737c924c408eefeb6af01cc3bbcb5a1683a"
+    },
+    "candidate": {
+      "implementation_commit": "ee45ea65f4a54b8054c16d0fc8dc967af1384b4b",
+      "compiler_revision": "2507d81513c292182ed2a090ab17386f2828a06a",
+      "project_source_sha256": "1fb5d43669f40439d660bdafa92983e53e36317d0d7ea6d7ab867a3877690316",
+      "worktree": "mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "test_result_sha256": "53cde7553f499ad9363290fe51261b41ce538b2026ea930bf8c6bf7e9f212869",
+      "test_result_file_sha256": "87933e19ddb2a3e103e24e29a7f09f54c7d2146e6006779bd96f028c86037a0a"
+    }
+  },
+  "functional_result": {
+    "baseline_status": "verified",
+    "candidate_status": "verified",
+    "source_count": 64,
+    "module_count": 64,
+    "import_links": 63,
+    "target_source_index": 63,
+    "target_flow_valid_both": true,
+    "target_ssa_valid_both": true,
+    "stage0_oracle_valid_both": true,
+    "stage0_verified_function_count_both": 64,
+    "root_import_identity_matches_stage0_both": true,
+    "semantic_identity_changed": false,
+    "language_verified_facts_reused": 0
+  },
+  "measurements": {
+    "target_capacity_request_seconds": {
+      "baseline": 0.414439,
+      "candidate": 0.392208,
+      "candidate_change_percent": -5.365,
+      "sample_count_per_revision": 1
+    },
+    "cold_project_readiness_seconds": {
+      "baseline": 249.223,
+      "candidate": 250.444,
+      "candidate_change_percent": 0.49
+    },
+    "frontend_elaboration_seconds": {
+      "baseline": 52.224085,
+      "candidate": 52.291446
+    },
+    "cranelift_backend_compilation_seconds": {
+      "baseline": 158.201995,
+      "candidate": 159.69016
+    },
+    "retained_session_admission_seconds": {
+      "baseline": 24.525088,
+      "candidate": 24.428992
+    },
+    "artifact_payload_bytes": {
+      "baseline": 437721978,
+      "candidate": 437614313,
+      "candidate_change_percent": -0.0246
+    },
+    "peak_rss_bytes": {
+      "baseline": 4655599616,
+      "candidate": 4653244416
+    },
+    "kernel_rss_high_water_bytes": {
+      "baseline": 5111361536,
+      "candidate": 5108883456
+    },
+    "sample_count": 3,
+    "cpu_time": "unavailable; probe telemetry returned zero and no usage is inferred",
+    "cgroup_memory": "unavailable",
+    "test_output_paths": {
+      "baseline": "mncs-compiler/.worktrees/import-closure-baseline-f07/.build/project-import-closure-baseline-f07.json",
+      "candidate": "mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/project-import-closure-current-2507.json"
+    }
+  },
+  "comparison_limits": [
+    "The target request timing is one sample at each revision; the 5.365% lower candidate sample is observational, not a speedup claim.",
+    "The full candidate readiness time was 1.221 seconds slower, while frontend/backend phases were effectively unchanged within this sequential run.",
+    "The runs were sequential and the candidate followed the baseline with a warm OS page cache. Toolchain identity roots also resolved to different registered worktree paths despite the same pinned Stage-0 revision.",
+    "The test input differs by the 401-byte Project source refactor; the harness and Stage-0 binary hashes were identical."
+  ],
+  "interpretation": {
+    "status": "functional_improvement_with_inconclusive_end_to_end_timing",
+    "summary": "Both revisions pass the same 25-case capacity suite. The candidate removes linked-list membership traversal and the selected target request was one sample lower, but end-to-end readiness and Cranelift time did not improve measurably. Keep the implementation as a bounded algorithmic simplification; do not claim a general wall-time gain.",
+    "full_project_self_consumption_proven": false,
+    "canonical_vm_execution": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  }
+}
