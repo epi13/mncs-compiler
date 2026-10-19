@@ -3576,13 +3576,36 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    let artifact_generic_entrypoints = artifact
+        .get("generic_entrypoints")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let callable_availability = callable_roots
         .iter()
         .map(|(module, function)| {
-            artifact_callables.iter().any(|row| {
+            let direct_callable = artifact_callables.iter().any(|row| {
                 row.get("module").and_then(Value::as_str) == Some(module)
                     && row.get("name").and_then(Value::as_str) == Some(function)
-            })
+            });
+            let seeded_generic_callable = generic_seeds.iter().any(|seed| {
+                if seed.module != *module || seed.function != *function {
+                    return false;
+                }
+                let expected_spellings = Value::Array(
+                    seed.type_arguments
+                        .iter()
+                        .map(|argument| Value::String(argument.normalized_spelling()))
+                        .collect(),
+                );
+                artifact_generic_entrypoints.iter().any(|row| {
+                    row.get("generic_module").and_then(Value::as_str) == Some(module)
+                        && row.get("generic_function").and_then(Value::as_str)
+                            == Some(function)
+                        && row.get("args_spellings") == Some(&expected_spellings)
+                })
+            });
+            direct_callable || seeded_generic_callable
         })
         .collect::<Vec<_>>();
     let entry_available = callable_availability.first().copied().unwrap_or(false);

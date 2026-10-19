@@ -217,19 +217,20 @@ def verify_build_assumption_cache_isolation(directory: Path) -> dict:
 
 
 def inventory_test_arguments(
-    row: dict, arguments_by_test_case: dict[str, list[dict]] | None
+    row: dict,
+    arguments_by_test_case: dict[str, list[dict]] | None,
+    type_arguments: list[dict],
 ) -> list[dict]:
     """Validate typed call values against the Language-issued Test signature.
 
-    The current native Test batch slice admits one unsigned 64-bit input per
-    case. Expanding this boundary requires adding explicit wire encoders for
-    the new Language types; raw caller JSON is never passed through unchecked.
+    The current native Test batch slice admits one u64 input or one bounded
+    ``[byte; N]`` input for a single ``Nat`` specialization. Raw caller JSON
+    is never passed through unchecked.
     """
     identity = row.get("test_case_identity")
     if not isinstance(identity, str) or not identity:
         raise AssertionError("Language Test inventory omitted its test-case identity")
-    if row.get("generic_params"):
-        raise AssertionError(f"generic Test specialization is outside this batch slice: {row}")
+    generic_params = row.get("generic_params") or []
     inputs = row.get("inputs")
     if not isinstance(inputs, list):
         raise AssertionError(f"Language Test inventory has malformed inputs: {row}")
@@ -240,6 +241,49 @@ def inventory_test_arguments(
         raise AssertionError(
             f"typed Test argument count differs from the Language signature for {identity}"
         )
+    if generic_params:
+        if (len(generic_params) != 1
+                or not isinstance(generic_params[0], dict)
+                or generic_params[0].get("kind") != "nat"
+                or len(type_arguments) != 1
+                or not isinstance(type_arguments[0], dict)
+                or type_arguments[0].get("kind") != "nat"):
+            raise AssertionError(
+                f"only one Nat generic Test parameter is currently admitted: {row}"
+            )
+        parameter_name = generic_params[0].get("name")
+        bound = type_arguments[0].get("value")
+        if (not isinstance(parameter_name, str)
+                or type(bound) is not int
+                or not 1 <= bound <= 64
+                or len(inputs) != 1
+                or not isinstance(inputs[0], dict)
+                or inputs[0].get("type") != f"[byte; {parameter_name}]"):
+            raise AssertionError(
+                f"generic Test must declare one bounded [byte; {parameter_name}] input: {row}"
+            )
+        value = supplied[0]
+        byte_values = (value.get("sequence", {}).get("values")
+                       if isinstance(value, dict) else None)
+        if (not isinstance(value, dict)
+                or set(value) != {"sequence"}
+                or not isinstance(value["sequence"], dict)
+                or set(value["sequence"]) != {"values"}
+                or not isinstance(byte_values, list)
+                or len(byte_values) != bound
+                or any(not isinstance(item, dict)
+                       or set(item) != {"byte"}
+                       or not isinstance(item["byte"], dict)
+                       or set(item["byte"]) != {"value"}
+                       or type(item["byte"].get("value")) is not int
+                       or not 0 <= item["byte"]["value"] <= 255
+                       for item in byte_values)):
+            raise AssertionError(
+                f"Test input for {identity} is not a bounded byte sequence of length {bound}"
+            )
+        return supplied
+    if type_arguments:
+        raise AssertionError(f"non-generic Test {identity} received generic arguments")
     if not inputs:
         return []
     if len(inputs) != 1 or inputs[0].get("type") != "u64":
@@ -258,12 +302,42 @@ def inventory_test_arguments(
     return supplied
 
 
+def inventory_test_type_arguments(
+    row: dict, type_arguments_by_test_case: dict[str, list[dict]] | None
+) -> list[dict]:
+    identity = row.get("test_case_identity")
+    if not isinstance(identity, str) or not identity:
+        raise AssertionError("Language Test inventory omitted its test-case identity")
+    generic_params = row.get("generic_params") or []
+    supplied = (type_arguments_by_test_case or {}).get(identity, [])
+    if not isinstance(supplied, list):
+        raise AssertionError(f"Test type arguments must be a list for {identity}")
+    if not generic_params:
+        if supplied:
+            raise AssertionError(f"non-generic Test {identity} received type arguments")
+        return []
+    if (len(generic_params) != 1
+            or not isinstance(generic_params[0], dict)
+            or generic_params[0].get("kind") != "nat"
+            or len(supplied) != 1
+            or not isinstance(supplied[0], dict)
+            or set(supplied[0]) != {"kind", "value"}
+            or supplied[0].get("kind") != "nat"
+            or type(supplied[0].get("value")) is not int
+            or not 1 <= supplied[0]["value"] <= 64):
+        raise AssertionError(
+            f"only one Nat generic Test parameter in the range 1..64 is supported: {row}"
+        )
+    return supplied
+
+
 def execute_inventory_batch(
     artifact: dict,
     inventory: dict,
     step_budget: int = 100_000,
     repeat_count: int = 1,
     arguments_by_test_case: dict[str, list[dict]] | None = None,
+    type_arguments_by_test_case: dict[str, list[dict]] | None = None,
 ) -> tuple[dict, float, int | None]:
     tests = inventory.get("tests", [])
     inventory_module = inventory.get("module")
@@ -282,6 +356,12 @@ def execute_inventory_batch(
             "typed Test arguments name identities outside the Language inventory: "
             f"{sorted(unknown_arguments)}"
         )
+    unknown_type_arguments = set(type_arguments_by_test_case or {}) - test_identities
+    if unknown_type_arguments:
+        raise AssertionError(
+            "Test type arguments name identities outside the Language inventory: "
+            f"{sorted(unknown_type_arguments)}"
+        )
     calls = []
     for repeat_index in range(repeat_count):
         for row in tests:
@@ -290,13 +370,16 @@ def execute_inventory_batch(
             call_id = row["test_case_identity"]
             if repeat_count > 1:
                 call_id = f"{call_id}:round:{repeat_index + 1}"
+            type_arguments = inventory_test_type_arguments(row, type_arguments_by_test_case)
             calls.append({
                 "id": call_id,
                 "request": {
                     "schema_version": "0.1",
                     "target": {"module": row["module"], "function": row["name"]},
-                    "arguments": inventory_test_arguments(row, arguments_by_test_case),
-                    "type_arguments": [],
+                    "arguments": inventory_test_arguments(
+                        row, arguments_by_test_case, type_arguments
+                    ),
+                    "type_arguments": type_arguments,
                     "step_budget": step_budget,
                 },
             })
@@ -469,6 +552,195 @@ test assert_input(value: u64) -> (result: TestResult) {
             "test_case_identity": test_row["test_case_identity"],
             "input_signature": test_row["inputs"],
             "input_value": value,
+            "verified_artifact_identity": built["artifact"]["identity"],
+            "canonical_vm_artifact_identity": vm["artifact_id"],
+            "canonical_vm_batch_count": len(rows),
+            "repeat_results_match": True,
+            "stage0_equivalent": True,
+            "typed_test_result": actual_result,
+            "build_frontend_invocations": frontend_invocations(built),
+            "build_process_metrics": build_metrics,
+            "stage0_oracle_metrics": oracle_metrics,
+            "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
+            "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
+        }
+
+
+def run_generic_test_case() -> dict:
+    """Run a Language-inventoried generic Test through its seeded VM entrypoint."""
+    module = "tests.generic_inventory"
+    test_name = "bytes"
+    bound = 4
+    source = """mncs 0.18;
+module tests.generic_inventory;
+use mncs.test.assertions;
+
+fn selected_entry() -> (result: u64) { return 0; }
+test bytes<N: Nat>(value: [byte; N]) -> (result: TestResult) {
+    return from_assertion(equals_bytes<N>(value, value, 2002));
+}
+"""
+    assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
+    assertions_source = assertions_path.read_text(encoding="utf-8")
+    modules = {"mncs.test.assertions": assertions_source}
+    type_arguments = [{"kind": "nat", "value": bound}]
+    generic_seed = {
+        "module": module,
+        "function": test_name,
+        "type_arguments": type_arguments,
+    }
+    build_request = {
+        "schema_version": "mncs.compiler.application-build-request/4",
+        "target": "mncs-vm-0.1",
+        "root_source_id": "tests/generic_inventory.mncs",
+        "root_source": source,
+        "callable_roots": [{"module": module, "function": "selected_entry"}],
+        "modules": modules,
+        "generic_seeds": [generic_seed],
+        "capabilities": [],
+        "verification_policy": "application-build-generic-test/1",
+        "test_selection": {"kind": "all_source_cases"},
+    }
+    byte_values = [0, 1, 2, 3]
+    typed_arguments = [{"sequence": {"values": [
+        {"byte": {"value": item}} for item in byte_values
+    ]}}]
+    with tempfile.TemporaryDirectory(prefix="mncs-test-generic-case-") as raw:
+        directory = Path(raw)
+        probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            built, build_metrics = probe.send(
+                {"compile_application": build_request}, timeout=180.0
+            )
+        finally:
+            probe.close()
+        inventory = require_inventory(
+            built,
+            {test_name},
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/7",
+        )
+        test_row = inventory["tests"][0]
+        if (test_row.get("generic_params") != [{"kind": "nat", "name": "N"}]
+                or test_row.get("inputs") != [{"name": "value", "type": "[byte; N]"}]
+                or frontend_invocations(built) != 1):
+            raise AssertionError("Language inventory did not retain the generic Test signature")
+        artifact = built.get("artifact", {}).get("value")
+        if not isinstance(artifact, dict):
+            raise AssertionError(
+                "generic Test build did not emit a verified specialization: "
+                + json.dumps({
+                    "status": built.get("status"),
+                    "unresolved_obligations": built.get("unresolved_obligations"),
+                }, sort_keys=True)
+            )
+        generic_entrypoints = artifact.get("generic_entrypoints", [])
+        matching_entrypoints = [row for row in generic_entrypoints
+                                if row.get("generic_module") == module
+                                and row.get("generic_function") == test_name
+                                and row.get("args_spellings") == [str(bound)]]
+        if len(matching_entrypoints) != 1:
+            raise AssertionError(
+                "generic Test artifact omitted its exact Nat specialization entrypoint"
+            )
+        entrypoint = matching_entrypoints[0]
+        if not any(row.get("function") == entrypoint.get("function")
+                   for row in artifact.get("callables", [])):
+            raise AssertionError("generic Test entrypoint does not name an emitted callable")
+        selected_roots = built.get("callable_scope", {}).get("callable_roots", [])
+        selected_test = next((row for row in selected_roots
+                              if row.get("module") == module
+                              and row.get("function") == test_name), None)
+        if (built.get("status") != "verified"
+                or built.get("unresolved_obligations") != []
+                or selected_test is None
+                or selected_test.get("status") != "verified"):
+            raise AssertionError("Compiler did not bind the selected generic Test to its seed")
+
+        repeat_count = 2
+        test_identity = test_row["test_case_identity"]
+        arguments_by_test_case = {test_identity: typed_arguments}
+        type_arguments_by_test_case = {test_identity: type_arguments}
+        calls = [{
+            "schema_version": "0.1",
+            "target": {"module": module, "function": test_name},
+            "arguments": typed_arguments,
+            "type_arguments": type_arguments,
+            "step_budget": 100_000,
+        } for _ in range(repeat_count)]
+        oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
+        try:
+            oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
+                "root": source,
+                "modules": modules,
+                "generic_seeds": [generic_seed],
+                "calls": calls,
+            }}, timeout=180.0)
+        finally:
+            oracle_probe.close()
+        if (not oracle.get("valid")
+                or len(oracle.get("executions", [])) != repeat_count):
+            raise AssertionError("Stage-0 did not execute both generic Test calls")
+
+        vm, vm_wall, vm_peak_rss = execute_inventory_batch(
+            artifact,
+            inventory,
+            repeat_count=repeat_count,
+            arguments_by_test_case=arguments_by_test_case,
+            type_arguments_by_test_case=type_arguments_by_test_case,
+        )
+        rows = vm.get("results", [])
+        if (vm.get("artifact_id") != artifact.get("artifact_id")
+                or len(rows) != repeat_count
+                or built.get("artifact", {}).get("identity") != artifact.get("artifact_id")):
+            raise AssertionError("generic Test batch changed its verified artifact identity")
+        actual_result = None
+        for repeat_index, (actual_row, expected_row) in enumerate(zip(
+            rows, oracle["executions"]
+        )):
+            expected_id = test_identity
+            if repeat_count > 1:
+                expected_id = f"{expected_id}:round:{repeat_index + 1}"
+            if (actual_row.get("id") != expected_id
+                    or actual_row.get("outcome") != {"kind": "completed"}
+                    or actual_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
+                raise AssertionError("generic Test call did not complete under its inventory identity")
+            actual_values = actual_row.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if len(actual_values) != 1 or len(expected_values) != 1:
+                raise AssertionError("generic Test returned the wrong result arity")
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected:
+                raise AssertionError("canonical VM generic Test result differs from Stage-0")
+            if (not isinstance(actual, dict)
+                    or actual.get("verdict_code") != 0
+                    or actual.get("assertions") != 1
+                    or actual.get("failures") != 0):
+                raise AssertionError(f"generic Test did not return a passing TestResult: {actual}")
+            if actual_result is None:
+                actual_result = actual
+            elif actual_result != actual:
+                raise AssertionError("repeated generic Test invocation changed its result")
+
+        return {
+            "test_repository_revision": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
+            ).strip(),
+            "assertions_source": {
+                "path": "native/mncs/test/assertions.mncs",
+                "sha256": sha(assertions_source.encode("utf-8")),
+            },
+            "test_case_identity": test_identity,
+            "generic_parameters": test_row["generic_params"],
+            "input_signature": test_row["inputs"],
+            "type_arguments": type_arguments,
+            "input_byte_values": byte_values,
+            "generic_entrypoint": entrypoint,
             "verified_artifact_identity": built["artifact"]["identity"],
             "canonical_vm_artifact_identity": vm["artifact_id"],
             "canonical_vm_batch_count": len(rows),
@@ -867,6 +1139,7 @@ def main() -> None:
             raise AssertionError(f"selected inventory Test results were unexpected: {inventory_results}")
 
         parameterized_test_batch = run_parameterized_test_case()
+        generic_test_batch = run_generic_test_case()
         real_mncs_test_suite = run_real_mncs_test_suite()
 
         warm_probe = app.Probe(program_cache, executable=PROBE,
@@ -1065,6 +1338,7 @@ def main() -> None:
             },
             "build_assumption_cache_isolation": policy_cache_isolation,
             "parameterized_test_batch": parameterized_test_batch,
+            "generic_test_batch": generic_test_batch,
             "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
@@ -1178,6 +1452,17 @@ def main() -> None:
                     and parameterized_test_batch["typed_test_result"]["actual"]
                     == parameterized_test_batch["input_value"]
                 ),
+                "generic_test_seed_resolves_to_a_native_entrypoint": (
+                    generic_test_batch["generic_parameters"]
+                    == [{"kind": "nat", "name": "N"}]
+                    and generic_test_batch["type_arguments"]
+                    == [{"kind": "nat", "value": 4}]
+                    and generic_test_batch["generic_entrypoint"]["args_spellings"] == ["4"]
+                    and generic_test_batch["canonical_vm_batch_count"] == 2
+                    and generic_test_batch["repeat_results_match"]
+                    and generic_test_batch["stage0_equivalent"]
+                    and generic_test_batch["typed_test_result"]["verdict_code"] == 0
+                ),
                 "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
                     and real_mncs_test_suite["canonical_vm_batch_count"] == 14
@@ -1205,6 +1490,8 @@ def main() -> None:
                 "identity_selection_provider": selection_metrics,
                 "parameterized_test_build": parameterized_test_batch["build_process_metrics"],
                 "parameterized_test_oracle": parameterized_test_batch["stage0_oracle_metrics"],
+                "generic_test_build": generic_test_batch["build_process_metrics"],
+                "generic_test_oracle": generic_test_batch["stage0_oracle_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -1226,8 +1513,12 @@ def main() -> None:
                 "with Stage-0 agreement. A bounded parameterized Test slice also binds a typed u64 "
                 "argument to the Language-issued input signature and repeats its typed TestResult "
                 "through the same artifact with Stage-0 agreement. The batch adapter rejects generic "
-                "tests until seeds are resolved to concrete callables. This does not implement "
-                "Language verification-fact reuse or change the production mncs-test consumer. A second workload reads the real "
+                "tests until seeds are resolved to concrete callables. The Compiler now removes the "
+                "generic template from executable exports, lowers its verified seeded specialization, "
+                "and admits the selected Test when the exact generic-entrypoint spelling is present. "
+                "A bounded [byte; N] Test with N=4 now executes twice by inventory identity and matches "
+                "Stage-0. This does not implement Language verification-fact reuse or change the "
+                "production mncs-test consumer. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
                 "revision. One application-build/7 all-source selection resolves all seven "
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "

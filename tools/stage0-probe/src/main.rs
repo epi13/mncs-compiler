@@ -2115,6 +2115,13 @@ fn main() {
             json!(programs[module].record_types)
         } else if let Some(request) = input.get("project_oracle") {
             let root = request["root"].as_str().expect("project root source");
+            let generic_seeds = request
+                .get("generic_seeds")
+                .cloned()
+                .map(serde_json::from_value::<Vec<HostGenericSeedRequest>>)
+                .transpose()
+                .expect("project oracle generic seeds")
+                .unwrap_or_default();
             let mut imported = BTreeMap::new();
             for (module, text) in request["modules"].as_object().expect("project modules") {
                 imported.insert(
@@ -2123,8 +2130,11 @@ fn main() {
                 );
             }
             let resolver = Sources(imported);
-            let result = ReferenceCompiler::default()
-                .front_end_with_resolver(envelope(root.to_owned()), &resolver);
+            let result = ReferenceCompiler::default().front_end_with_resolver_and_seeds(
+                envelope(root.to_owned()),
+                &resolver,
+                &generic_seeds,
+            );
             let ssa = result
                 .program
                 .as_ref()

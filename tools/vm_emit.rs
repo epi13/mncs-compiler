@@ -289,6 +289,10 @@ pub fn emit_vm_application_artifact_for_callables_with_producer(
     }
     let mut selected_exports = callable_roots.clone();
     for (generic_module, generic_function) in generic_seed_functions {
+        // A generic template is a source identity, not an executable export.
+        // Keep its concrete seed entry in the generic-entrypoint table below
+        // and lower only the matching specialization bodies.
+        selected_exports.remove(&(generic_module.clone(), generic_function.clone()));
         let generic_identity = mncs_model::function_id(generic_module, generic_function);
         for record in &program.generic_specializations {
             if record.generic_function != generic_identity {
