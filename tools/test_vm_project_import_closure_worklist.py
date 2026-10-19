@@ -52,6 +52,7 @@ FIXED_GRAPHS = [
 GENERATED_SEEDS = tuple(range(16))
 REVERSE_CYCLIC_EDGES = [(index, index - 1) for index in range(1, 7)] + [(6, 7), (7, 6)]
 CAPACITY_EDGES = [(index, index - 1) for index in range(1, 64)] + [(62, 63)]
+SMALL_REVERSE_CHAIN_EDGES = [(index, index - 1) for index in range(1, 8)]
 
 
 def source_bundle() -> dict[str, str]:
@@ -142,6 +143,8 @@ def wrapper_source() -> str:
         + closure_function("run_capacity", 63, CAPACITY_EDGES)
         + closure_function("run_dense_four_candidate", 3, [(3, 2), (2, 1), (1, 0)], 4)
         + closure_function("run_dense_four_two_scan_baseline", 3, [(3, 2), (2, 1), (1, 0)])
+        + closure_function("run_small_reverse_chain_count_bound", 7, SMALL_REVERSE_CHAIN_EDGES, 8)
+        + closure_function("run_small_reverse_chain_capacity_control", 7, SMALL_REVERSE_CHAIN_EDGES)
         + closure_function("run_source_count_out_of_range", 4, [], 4)
         + closure_function("run_invalid_target", 64, [])
         + fixed_functions
@@ -219,6 +222,8 @@ def build_request(modules: dict[str, str]) -> dict:
             {"module": WRAPPER_MODULE, "function": "run_capacity"},
             {"module": WRAPPER_MODULE, "function": "run_dense_four_candidate"},
             {"module": WRAPPER_MODULE, "function": "run_dense_four_two_scan_baseline"},
+            {"module": WRAPPER_MODULE, "function": "run_small_reverse_chain_count_bound"},
+            {"module": WRAPPER_MODULE, "function": "run_small_reverse_chain_capacity_control"},
             {"module": WRAPPER_MODULE, "function": "run_source_count_out_of_range"},
             {"module": WRAPPER_MODULE, "function": "run_invalid_target"},
             {"module": WRAPPER_MODULE, "function": "run_full_link_capacity"},
@@ -295,6 +300,14 @@ def main() -> dict:
             {
                 "id": "four-source-dense-two-scan-baseline", "function": "run_dense_four_two_scan_baseline",
                 "target": 3, "edges": [(3, 2), (2, 1), (1, 0)],
+            },
+            {
+                "id": "eight-source-worklist-seed-count-bound", "function": "run_small_reverse_chain_count_bound",
+                "target": 7, "edges": SMALL_REVERSE_CHAIN_EDGES, "source_count": 8,
+            },
+            {
+                "id": "eight-source-worklist-seed-capacity-control", "function": "run_small_reverse_chain_capacity_control",
+                "target": 7, "edges": SMALL_REVERSE_CHAIN_EDGES,
             },
             {
                 "id": "source-count-out-of-range-target", "function": "run_source_count_out_of_range",

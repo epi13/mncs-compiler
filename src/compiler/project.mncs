@@ -1857,7 +1857,7 @@ fn project_import_closure(imports: ImportList, target_source_index: u64, source_
     }
 
     let adjacency: [ImportList; 64] = project_import_adjacency(imports);
-    let seeded: ProjectImportClosureWork = project_import_closure_seed_work(second_round.reachable);
+    let seeded: ProjectImportClosureWork = project_import_closure_seed_work(second_round.reachable, source_count);
     iterate i up_to 64 carrying st: ProjectImportClosureWork = seeded {
         if st.pending_count == 0 {
             return ProjectImportClosure { reachable: st.reachable, changed: false };
@@ -1922,10 +1922,13 @@ fn project_import_closure_complete_prefix(reachable: [bool; 64], source_count: u
     }
     return complete;
 }
-fn project_import_closure_seed_work(reachable: [bool; 64]) -> (result: ProjectImportClosureWork) {
+fn project_import_closure_seed_work(reachable: [bool; 64], source_count: u64) -> (result: ProjectImportClosureWork) {
     let empty: [u64; 64] = [0; 64];
     let initial: ProjectImportClosureSeed = ProjectImportClosureSeed { pending: empty, pending_count: 0 };
     iterate i up_to 64 carrying st: ProjectImportClosureSeed = initial {
+        if i >= source_count {
+            return ProjectImportClosureWork { reachable: reachable, pending: st.pending, pending_count: st.pending_count };
+        }
         next st = project_import_closure_seed_step(reachable, i, st);
     }
     return ProjectImportClosureWork { reachable: reachable, pending: st.pending, pending_count: st.pending_count };
