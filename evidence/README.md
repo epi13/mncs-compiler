@@ -81,6 +81,15 @@ generation took 61.21 seconds at 1.78 GB peak RSS; Stage-0 execution took
 peak RSS. Cgroup measurements were unavailable. This proves the selected
 callable for this graph, not the whole Project module or a Forge route.
 
+The [maximum-capacity VM record](project-import-closure-worklist-max-capacity-vm-20261019.json)
+extends the same artifact to a second callable with 64 import links over all
+64 source indices and a 62↔63 cycle. Both that case and the eight-link case
+match Stage-0 exactly; all 64 indices are reachable in the maximum case. The
+1.13 MB artifact ran both calls in one VM batch in 0.273 seconds at 27 MiB
+peak RSS. Stage-0 took 78.38 seconds and peaked at 1.80 GB RSS. The repeat
+application-build request returned the same artifact in 0.143 seconds. This
+does not test every 4,096-link topology or complete a Forge route.
+
 ## Current-source Flow-to-value-SSA counted-loop frontier (2026-10-17)
 
 The [Flow-to-SSA report](self-host-flow-ssa-current-20261017.json) carries the

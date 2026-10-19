@@ -39,10 +39,7 @@ def source_bundle() -> dict[str, str]:
     return modules
 
 
-def wrapper_source() -> str:
-    # Link order makes each full scan discover at most one new source. The
-    # 6 -> 7 back edge gives the worklist a cycle to close after its fallback.
-    edges = [(index, index - 1) for index in range(1, 7)] + [(6, 7), (7, 6)]
+def closure_function(name: str, target: int, edges: list[tuple[int, int]]) -> str:
     links = "project.ImportList.INil"
     for source_index, target_index in reversed(edges):
         link = (
@@ -56,12 +53,23 @@ def wrapper_source() -> str:
             f"head: {link}, tail: {links} }}"
         )
     return (
+        f"fn {name}() -> (result: project.ProjectImportClosure) {{\n"
+        f"  let imports: project.ImportList = {links};\n"
+        f"  return project.project_import_closure(imports, {target});\n"
+        "}\n"
+    )
+
+
+def wrapper_source() -> str:
+    # In each graph, ascending link order makes each of the first four full
+    # scans discover at most one new source. Both graphs then need the worklist.
+    cycle_edges = [(index, index - 1) for index in range(1, 7)] + [(6, 7), (7, 6)]
+    capacity_edges = [(index, index - 1) for index in range(1, 64)] + [(62, 63)]
+    return (
         "mncs 0.18; module probe.project_closure_worklist;\n"
         "use mncs.compiler.project.v1 as project;\n"
-        "fn run() -> (result: project.ProjectImportClosure) {\n"
-        f"  let imports: project.ImportList = {links};\n"
-        "  return project.project_import_closure(imports, 7);\n"
-        "}\n"
+        + closure_function("run", 7, cycle_edges)
+        + closure_function("run_capacity", 63, capacity_edges)
     )
 
 
@@ -71,7 +79,10 @@ def build_request(modules: dict[str, str]) -> dict:
         "target": "mncs-vm-0.1",
         "root_source_id": "probe/project_closure_worklist.mncs",
         "root_source": wrapper_source(),
-        "callable_roots": [{"module": WRAPPER_MODULE, "function": "run"}],
+        "callable_roots": [
+            {"module": WRAPPER_MODULE, "function": "run"},
+            {"module": WRAPPER_MODULE, "function": "run_capacity"},
+        ],
         "modules": modules,
         "generic_seeds": [],
         "capabilities": [],
@@ -79,10 +90,10 @@ def build_request(modules: dict[str, str]) -> dict:
     }
 
 
-def target_call() -> dict:
+def target_call(function: str) -> dict:
     return {
         "schema_version": "0.1",
-        "target": {"module": WRAPPER_MODULE, "function": "run"},
+        "target": {"module": WRAPPER_MODULE, "function": function},
         "arguments": [],
         "type_arguments": [],
         "step_budget": STEP_BUDGET,
@@ -115,17 +126,19 @@ def main() -> dict:
         if not isinstance(artifact, dict):
             raise AssertionError("application build omitted its canonical VM artifact")
 
+        calls = [target_call("run"), target_call("run_capacity")]
         oracle, oracle_metrics = probe.send({"project_oracle": {
             "root": source,
             "modules": modules,
-            "calls": [target_call()],
+            "calls": calls,
         }}, timeout=300.0)
-        if oracle.get("valid") is not True or len(oracle.get("executions", [])) != 1:
+        if oracle.get("valid") is not True or len(oracle.get("executions", [])) != len(calls):
             raise AssertionError({"stage0_project_oracle": oracle})
-        oracle_execution = oracle["executions"][0]
-        if oracle_execution.get("status") != "returned":
-            raise AssertionError({"stage0_execution": oracle_execution})
-        expected = app.decode_wire(oracle_execution["returned"][0])
+        expected = []
+        for oracle_execution in oracle["executions"]:
+            if oracle_execution.get("status") != "returned":
+                raise AssertionError({"stage0_execution": oracle_execution})
+            expected.append(app.decode_wire(oracle_execution["returned"][0]))
     finally:
         probe_stderr = probe.close()
 
@@ -135,7 +148,10 @@ def main() -> dict:
     os.replace(temporary_artifact, artifact_path)
     calls_path = BUILD_DIR / "calls.json"
     results_path = BUILD_DIR / "results.json"
-    calls_path.write_text(json.dumps([{"id": "reverse-cyclic-closure", "request": target_call()}]))
+    calls_path.write_text(json.dumps([
+        {"id": "reverse-cyclic-closure", "request": target_call("run")},
+        {"id": "64-source-cyclic-closure", "request": target_call("run_capacity")},
+    ]))
 
     started = time.monotonic()
     vm_run = subprocess.run(
@@ -154,33 +170,56 @@ def main() -> dict:
         })
     document = json.loads(results_path.read_text())
     rows = document.get("results", [])
-    if len(rows) != 1 or rows[0].get("outcome") != {"kind": "completed"}:
+    if len(rows) != 2 or any(row.get("outcome") != {"kind": "completed"} for row in rows):
         raise AssertionError({"canonical_vm_results": rows})
-    vm_returned = rows[0].get("record", {}).get("returned", [])
-    if len(vm_returned) != 1:
-        raise AssertionError({"canonical_vm_returned": vm_returned})
-    actual = app.decode_wire(app.vm_to_wire(vm_returned[0]))
-    reachable = actual.get("reachable")
-    expected_reachable = [index < 8 for index in range(64)]
-    if actual != expected or reachable != expected_reachable or actual.get("changed") is not False:
-        raise AssertionError({"stage0": expected, "canonical_vm": actual})
+    actual = []
+    for vm_row in rows:
+        vm_returned = vm_row.get("record", {}).get("returned", [])
+        if len(vm_returned) != 1:
+            raise AssertionError({"canonical_vm_returned": vm_returned})
+        actual.append(app.decode_wire(app.vm_to_wire(vm_returned[0])))
+    expected_reachable = [
+        [index < 8 for index in range(64)],
+        [True for _ in range(64)],
+    ]
+    for index, (oracle_result, vm_result) in enumerate(zip(expected, actual)):
+        if (vm_result != oracle_result
+                or vm_result.get("reachable") != expected_reachable[index]
+                or vm_result.get("changed") is not False):
+            raise AssertionError({"stage0": oracle_result, "canonical_vm": vm_result})
 
     peak_rss_kib = None
     for line in vm_run.stderr.splitlines():
         if "Maximum resident set size" in line:
             peak_rss_kib = int(line.split(":", 1)[1].strip().split()[0])
     return {
-        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/1",
+        "schema_version": "mncs.compiler.project-import-closure-worklist-vm/2",
         "status": "verified",
         "compiler_source_root": str(ROOT),
         "wrapper_module": WRAPPER_MODULE,
         "project_module": PROJECT_MODULE,
         "source_count": len(modules),
-        "import_link_count": 8,
-        "target_source_index": 7,
-        "cycle_edge": [6, 7],
+        "scenarios": [
+            {
+                "callable": "run",
+                "import_link_count": 8,
+                "target_source_index": 7,
+                "cycle_edges": [[6, 7], [7, 6]],
+                "reachable_indices": [
+                    index for index, value in enumerate(actual[0]["reachable"]) if value
+                ],
+            },
+            {
+                "callable": "run_capacity",
+                "import_link_count": 64,
+                "target_source_index": 63,
+                "cycle_edges": [[62, 63], [63, 62]],
+                "reachable_indices": [
+                    index for index, value in enumerate(actual[1]["reachable"]) if value
+                ],
+            },
+        ],
         "worklist_fallback_exercised_by_graph_depth": True,
-        "reachable_indices": [index for index, value in enumerate(reachable) if value],
         "stage0_valid": oracle["valid"],
         "stage0_execution": expected,
         "canonical_vm_execution": actual,
