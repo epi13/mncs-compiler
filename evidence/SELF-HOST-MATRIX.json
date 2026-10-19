@@ -135,6 +135,46 @@
         },
         "scope": "This rerun binds the selected proof-and-lowering result to Compiler head 6165541 and current source hashes. Nine cases match Stage-0 diagnostics and all selected graph/iteration checks pass. The unreachable_loop_join negative case retains one known diagnostic difference: Stage-0 reports two MNB010, two MNB017, and one MNB038, while the canonical VM Flow path reports MNB038. This is a bounded current-source Flow frontier, not full-module proof, Language fact reuse, or succession."
       },
+      "decl_current_source_semantic_canonical_vm": {
+        "status": "passed_selected_current_source_semantic_frontier",
+        "tested_compiler_revision": "6992b490b34e75500c05407689421d1d5d8043d0",
+        "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "harness": "tools/test_vm_decl_proof_frontier.py",
+        "harness_sha256": "7f69892d861f5c4b3811f6c38f43a7faf65ea32c7c368f1f71d5184cc1e196ae",
+        "evidence_artifact": "evidence/self-host-decl-prove-unit-current-20261019T190048.141059Z-2286118.json",
+        "evidence_sha256": "8fdf8a715539a2af38a9d669d31efc7932404e217ee0e52318e175b4faed16cd",
+        "target_module": "mncs.compiler.decl.v1",
+        "target_function": "prove_unit<1024,1024>",
+        "canonical_vm_artifact_identity": "sha256:ed2338e195529aae8eea10629d286db39d2afaf63b7a5a3c491c5d79019aa698",
+        "selected_case_count": 7,
+        "current_compiler_source_function": {
+          "source_path": "src/compiler/source.mncs",
+          "module_source_sha256": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+          "function_name": "span_valid_global",
+          "source_span": [50881, 50998],
+          "function_source_sha256": "5473c51be247103bbf64acf84f8ff059c20f9202ea0c9d3f2c4d5b2f1056ce9b",
+          "standalone_unit_sha256": "197c4d619c33c6eb1d773a788110c52f91240d37f38024e8078a7ea96582ddf0",
+          "imports": [],
+          "unknown_obligations": []
+        },
+        "stage0_diagnostics_match_fail_obligations": true,
+        "canonical_vm_proof_cases": 7,
+        "canonical_vm_semantic_digest": "4c9f3aa95d33837da08903ec35fa3c3e896a3ac4af5afabdf3e973cdb91e64d1",
+        "language_verified_facts_reused": 0,
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "measurements": {
+          "canonical_vm_batch_seconds": 27.563435,
+          "whole_frontier_seconds": 98.137482,
+          "child_cpu_seconds": 95.404832,
+          "child_peak_rss_kib": 2401860,
+          "canonical_vm_peak_rss_kib": 472344,
+          "host_memory_available_before_bytes": 23550398464,
+          "cgroup_measurement_available": false
+        },
+        "scope": "The canonical VM decl.prove_unit result matches Stage-0 for six semantic fixtures plus the exact import-free span_valid_global function extracted from current Compiler source. That source function has no FAIL or UNKNOWN obligations. The declaration is embedded in a small standalone unit, so this verifies its body but not the full Source module or imported interfaces. This is not Language-owned fact reuse or compiler succession."
+      },
       "project_import_closure_reachability_vector": {
         "status": "passed",
         "evidence_artifact": "evidence/project-import-closure-reachability-vector-20261019.json",

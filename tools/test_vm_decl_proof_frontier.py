@@ -5,6 +5,8 @@ Stage-0 supplies independent oracle and elaboration diagnostics and emits the
 current-source VM artifact. The proof implementation itself runs only in the
 canonical VM batch. This keeps the bounded frontier inside Environment's
 fixed invocation window without presenting backend startup as proof evidence.
+One case embeds an exact, import-free declaration from current Compiler source
+in a standalone unit so the current declaration verifier checks its body.
 """
 from __future__ import annotations
 
@@ -24,6 +26,30 @@ from test_vm_segment import run_batch, vm_to_wire, test_vm_emit
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = "mncs.compiler.decl.v1"
+SOURCE_PATH = "src/compiler/source.mncs"
+SOURCE_RAW = (ROOT / SOURCE_PATH).read_bytes()
+SOURCE_FUNCTION_NAME = b"span_valid_global"
+SOURCE_FUNCTION_CASE = "compiler-source-span-valid-global"
+SOURCE_FUNCTION_START = SOURCE_RAW.index(b"fn " + SOURCE_FUNCTION_NAME + b"(")
+SOURCE_FUNCTION_OPEN = SOURCE_RAW.index(b"{", SOURCE_FUNCTION_START)
+_brace_depth = 0
+SOURCE_FUNCTION_END = None
+for _offset in range(SOURCE_FUNCTION_OPEN, len(SOURCE_RAW)):
+    if SOURCE_RAW[_offset] == ord("{"):
+        _brace_depth += 1
+    elif SOURCE_RAW[_offset] == ord("}"):
+        _brace_depth -= 1
+        if _brace_depth == 0:
+            SOURCE_FUNCTION_END = _offset + 1
+            break
+if SOURCE_FUNCTION_END is None:
+    raise RuntimeError("could not find the end of current source.span_valid_global")
+SOURCE_FUNCTION_BYTES = SOURCE_RAW[SOURCE_FUNCTION_START:SOURCE_FUNCTION_END]
+SOURCE_FUNCTION_TEXT = (
+    "mncs 0.18;\nmodule self.compiler_source;\n\n"
+    + SOURCE_FUNCTION_BYTES.decode("ascii")
+    + "\n"
+)
 SELECTED_CASES = (
     "clean-add",
     "clean-div-nonlit",
@@ -31,8 +57,10 @@ SELECTED_CASES = (
     "clean-if",
     "clean-record-proj",
     "generic-kind-type-as-nat",
+    SOURCE_FUNCTION_CASE,
 )
 CASE_BY_NAME = {name: (text, unknowns) for name, text, unknowns in sem.CASES}
+CASE_BY_NAME[SOURCE_FUNCTION_CASE] = (SOURCE_FUNCTION_TEXT, set())
 PROBE = Path(os.environ.get(
     "MNCS_PROBE_BIN", ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"
 ))
@@ -127,6 +155,10 @@ def check_result(
         raise AssertionError(f"{name} failures differ from Stage-0: {failures} != {diagnostics}")
     if not unknowns <= sem.UNKNOWN_KINDS:
         raise AssertionError(f"{name} has unclassified UNKNOWN obligations: {unknowns}")
+    if name == SOURCE_FUNCTION_CASE and unknowns:
+        raise AssertionError(
+            f"{name} contains UNKNOWN obligations instead of a complete body proof: {unknowns}"
+        )
     if not expected_unknowns <= unknowns:
         raise AssertionError(f"{name} lost expected UNKNOWN obligations: {unknowns}")
     if value["ok"] != (not diagnostics):
@@ -166,9 +198,33 @@ def cgroup_snapshot() -> dict:
     return result
 
 
+def evidence_output_path() -> Path:
+    configured = os.environ.get("MNCS_DECL_PROOF_FRONTIER_EVIDENCE_PATH")
+    if configured:
+        output = Path(configured)
+        if not output.is_absolute():
+            output = ROOT / output
+        if output.exists() or output.is_symlink():
+            raise SystemExit(f"refusing to overwrite immutable evidence: {output}")
+    else:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S.%fZ")
+        output = ROOT / "evidence" / f"self-host-decl-prove-unit-current-{stamp}-{os.getpid()}.json"
+    try:
+        output = output.resolve(strict=False)
+        output.relative_to(ROOT.resolve())
+    except (OSError, ValueError) as error:
+        raise SystemExit(
+            f"declaration proof evidence path must remain inside the Compiler checkout: {output}"
+        ) from error
+    if output.exists() or output.is_symlink():
+        raise SystemExit(f"refusing to overwrite immutable evidence: {output}")
+    return output
+
+
 def main() -> None:
     if not PROBE.exists():
         raise SystemExit(f"Stage-0 probe missing: {PROBE}")
+    output = evidence_output_path()
     memory_before = host_memory_snapshot()
     cgroup_before = cgroup_snapshot()
     child_before = resource.getrusage(resource.RUSAGE_CHILDREN)
@@ -250,6 +306,16 @@ def main() -> None:
             "test_harness": "tools/test_vm_decl_proof_frontier.py",
             "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         },
+        "current_source_semantic_probe": {
+            "source_path": SOURCE_PATH,
+            "module_source_sha256": hashlib.sha256(SOURCE_RAW).hexdigest(),
+            "function_name": SOURCE_FUNCTION_NAME.decode("ascii"),
+            "function_span": [SOURCE_FUNCTION_START, SOURCE_FUNCTION_END],
+            "function_source_sha256": hashlib.sha256(SOURCE_FUNCTION_BYTES).hexdigest(),
+            "standalone_unit_sha256": hashlib.sha256(SOURCE_FUNCTION_TEXT.encode()).hexdigest(),
+            "imports": [],
+            "proof_result_requires_no_unknown_obligations": True,
+        },
         "toolchains": {
             "stage0_probe": str(PROBE),
             "stage0_probe_sha256": hashlib.sha256(PROBE.read_bytes()).hexdigest(),
@@ -304,20 +370,19 @@ def main() -> None:
         "claim_boundary": (
             "This is a selected current-source decl.prove_unit semantic frontier: Stage-0 MNE "
             "diagnostics match canonical VM FAIL obligations, UNKNOWN obligations stay explicit, "
-            "and the proof implementation runs on a fresh canonical VM artifact. It does not "
-            "claim Cranelift differential coverage, full decl-module verification, "
-            "Language-owned verified-fact reuse, or compiler succession."
+            "and the proof implementation runs on a fresh canonical VM artifact. One case embeds "
+            "the exact import-free source.span_valid_global declaration and requires a complete "
+            "body proof with no UNKNOWN obligations. The standalone wrapper does not prove the "
+            "full Source module or its imported interfaces. This does not claim Cranelift "
+            "differential coverage, Language-owned verified-fact reuse, or compiler succession."
         ),
     }
-    output = ROOT / os.environ.get(
-        "MNCS_DECL_PROOF_FRONTIER_EVIDENCE_PATH",
-        "evidence/self-host-decl-prove-unit-canonical-vm-20261016.json",
-    )
+    report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
+    output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
     performance_path = ROOT / ".build/vm-efficiency/decl-proof-frontier.json"
     performance_path.parent.mkdir(parents=True, exist_ok=True)
     performance_path.write_text(json.dumps(report, indent=2) + "\n")
-    report["evidence_artifact"] = output.relative_to(ROOT).as_posix()
     print(json.dumps(report, indent=2))
 
 
