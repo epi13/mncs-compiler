@@ -1,4 +1,4 @@
-"""Verify application-build/6 inventory and /7 identity selection contracts.
+"""Verify application-build/6 inventory, /7 selection, and Test batch contracts.
 
 The inventory is derived by mncs-language during the same frontend invocation
 that verifies callable roots and emits the VM artifact. This exercises exact
@@ -216,8 +216,54 @@ def verify_build_assumption_cache_isolation(directory: Path) -> dict:
     }
 
 
+def inventory_test_arguments(
+    row: dict, arguments_by_test_case: dict[str, list[dict]] | None
+) -> list[dict]:
+    """Validate typed call values against the Language-issued Test signature.
+
+    The current native Test batch slice admits one unsigned 64-bit input per
+    case. Expanding this boundary requires adding explicit wire encoders for
+    the new Language types; raw caller JSON is never passed through unchecked.
+    """
+    identity = row.get("test_case_identity")
+    if not isinstance(identity, str) or not identity:
+        raise AssertionError("Language Test inventory omitted its test-case identity")
+    if row.get("generic_params"):
+        raise AssertionError(f"generic Test specialization is outside this batch slice: {row}")
+    inputs = row.get("inputs")
+    if not isinstance(inputs, list):
+        raise AssertionError(f"Language Test inventory has malformed inputs: {row}")
+    supplied = (arguments_by_test_case or {}).get(identity, [])
+    if not isinstance(supplied, list):
+        raise AssertionError(f"typed Test arguments must be a list for {identity}")
+    if len(inputs) != len(supplied):
+        raise AssertionError(
+            f"typed Test argument count differs from the Language signature for {identity}"
+        )
+    if not inputs:
+        return []
+    if len(inputs) != 1 or inputs[0].get("type") != "u64":
+        raise AssertionError(
+            f"only one u64 Test input is currently admitted by this batch slice: {row}"
+        )
+    value = supplied[0]
+    if (not isinstance(value, dict)
+            or set(value) != {"integer"}
+            or not isinstance(value["integer"], dict)
+            or set(value["integer"]) != {"type", "value"}
+            or value["integer"].get("type") != {"bits": 64, "signed": False}
+            or type(value["integer"].get("value")) is not int
+            or not 0 <= value["integer"]["value"] <= (1 << 64) - 1):
+        raise AssertionError(f"Test input for {identity} is not a valid typed u64 wire value")
+    return supplied
+
+
 def execute_inventory_batch(
-    artifact: dict, inventory: dict, step_budget: int = 100_000, repeat_count: int = 1
+    artifact: dict,
+    inventory: dict,
+    step_budget: int = 100_000,
+    repeat_count: int = 1,
+    arguments_by_test_case: dict[str, list[dict]] | None = None,
 ) -> tuple[dict, float, int | None]:
     tests = inventory.get("tests", [])
     inventory_module = inventory.get("module")
@@ -225,13 +271,22 @@ def execute_inventory_batch(
         raise AssertionError("source Test inventory omitted its module identity")
     if type(repeat_count) is not int or not 1 <= repeat_count <= 8:
         raise ValueError("inventory batch repeat count must be between 1 and 8")
+    test_identities = {
+        row.get("test_case_identity")
+        for row in tests
+        if isinstance(row, dict) and isinstance(row.get("test_case_identity"), str)
+    }
+    unknown_arguments = set(arguments_by_test_case or {}) - test_identities
+    if unknown_arguments:
+        raise AssertionError(
+            "typed Test arguments name identities outside the Language inventory: "
+            f"{sorted(unknown_arguments)}"
+        )
     calls = []
     for repeat_index in range(repeat_count):
         for row in tests:
-            if (row.get("module") != inventory_module
-                    or row.get("generic_params")
-                    or row.get("inputs")):
-                raise AssertionError(f"inventory test is outside the supported zero-argument slice: {row}")
+            if row.get("module") != inventory_module:
+                raise AssertionError(f"inventory test is outside its source module: {row}")
             call_id = row["test_case_identity"]
             if repeat_count > 1:
                 call_id = f"{call_id}:round:{repeat_index + 1}"
@@ -240,7 +295,7 @@ def execute_inventory_batch(
                 "request": {
                     "schema_version": "0.1",
                     "target": {"module": row["module"], "function": row["name"]},
-                    "arguments": [],
+                    "arguments": inventory_test_arguments(row, arguments_by_test_case),
                     "type_arguments": [],
                     "step_budget": step_budget,
                 },
@@ -267,6 +322,165 @@ def execute_inventory_batch(
         match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", completed.stderr)
         peak_rss = int(match.group(1)) if match else None
         return json.loads(output_path.read_text(encoding="utf-8")), wall, peak_rss
+
+
+def run_parameterized_test_case() -> dict:
+    """Run one typed source Test through the compiled artifact and Stage-0 oracle."""
+    module = "tests.parameterized_inventory"
+    test_name = "assert_input"
+    source = """mncs 0.18;
+module tests.parameterized_inventory;
+use mncs.test.assertions;
+
+fn selected_entry() -> (result: u64) { return 0; }
+test assert_input(value: u64) -> (result: TestResult) {
+    return from_assertion(equals_i64(23, value as i64, 2001));
+}
+"""
+    assertions_path = app.TEST_ROOT / "native/mncs/test/assertions.mncs"
+    assertions_source = assertions_path.read_text(encoding="utf-8")
+    modules = {"mncs.test.assertions": assertions_source}
+    build_request = {
+        "schema_version": "mncs.compiler.application-build-request/4",
+        "target": "mncs-vm-0.1",
+        "root_source_id": "tests/parameterized_inventory.mncs",
+        "root_source": source,
+        "callable_roots": [{"module": module, "function": "selected_entry"}],
+        "modules": modules,
+        "generic_seeds": [],
+        "capabilities": [],
+        "verification_policy": "application-build-parameterized-test/1",
+        "test_selection": {"kind": "all_source_cases"},
+    }
+    value = 23
+    typed_arguments = [{
+        "integer": {"type": {"bits": 64, "signed": False}, "value": value}
+    }]
+    with tempfile.TemporaryDirectory(prefix="mncs-test-parameterized-case-") as raw:
+        directory = Path(raw)
+        probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            built, build_metrics = probe.send(
+                {"compile_application": build_request}, timeout=180.0
+            )
+        finally:
+            probe.close()
+        inventory = require_inventory(
+            built,
+            {test_name},
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/7",
+        )
+        test_row = inventory["tests"][0]
+        if (test_row.get("inputs") != [{"name": "value", "type": "u64"}]
+                or test_row.get("generic_params")
+                or frontend_invocations(built) != 1):
+            raise AssertionError("Language inventory did not retain the typed Test signature")
+        artifact = built.get("artifact", {}).get("value")
+        if not isinstance(artifact, dict):
+            raise AssertionError("parameterized Test build omitted its verified VM artifact")
+        artifact_callables = {
+            (row.get("module"), row.get("name"))
+            for row in artifact.get("callables", [])
+        }
+        if (module, test_name) not in artifact_callables:
+            raise AssertionError("verified application omitted the selected parameterized Test")
+
+        repeat_count = 2
+        arguments_by_test_case = {
+            test_row["test_case_identity"]: typed_arguments,
+        }
+        calls = [{
+            "schema_version": "0.1",
+            "target": {"module": module, "function": test_name},
+            "arguments": typed_arguments,
+            "type_arguments": [],
+            "step_budget": 100_000,
+        } for _ in range(repeat_count)]
+        oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
+        try:
+            oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
+                "root": source,
+                "modules": modules,
+                "calls": calls,
+            }}, timeout=180.0)
+        finally:
+            oracle_probe.close()
+        if (not oracle.get("valid")
+                or len(oracle.get("executions", [])) != repeat_count):
+            raise AssertionError("Stage-0 did not execute both typed Test input calls")
+
+        vm, vm_wall, vm_peak_rss = execute_inventory_batch(
+            artifact,
+            inventory,
+            repeat_count=repeat_count,
+            arguments_by_test_case=arguments_by_test_case,
+        )
+        rows = vm.get("results", [])
+        if (vm.get("artifact_id") != artifact.get("artifact_id")
+                or len(rows) != repeat_count
+                or built.get("artifact", {}).get("identity") != artifact.get("artifact_id")):
+            raise AssertionError("typed Test batch did not retain its verified artifact identity")
+        actual_result = None
+        for repeat_index, (actual_row, expected_row) in enumerate(zip(
+            rows, oracle["executions"]
+        )):
+            expected_id = test_row["test_case_identity"]
+            if repeat_count > 1:
+                expected_id = f"{expected_id}:round:{repeat_index + 1}"
+            if (actual_row.get("id") != expected_id
+                    or actual_row.get("outcome") != {"kind": "completed"}
+                    or actual_row.get("record", {}).get("artifact_id") != artifact.get("artifact_id")):
+                raise AssertionError("typed Test invocation did not complete under its inventory identity")
+            actual_values = actual_row.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if len(actual_values) != 1 or len(expected_values) != 1:
+                raise AssertionError("typed Test returned the wrong result arity")
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected:
+                raise AssertionError("canonical VM typed Test result differs from Stage-0")
+            if (not isinstance(actual, dict)
+                    or actual.get("verdict_code") != 0
+                    or actual.get("assertions") != 1
+                    or actual.get("failures") != 0
+                    or actual.get("expected") != value
+                    or actual.get("actual") != value):
+                raise AssertionError(
+                    f"typed Test did not return the expected passing TestResult: {actual}"
+                )
+            if actual_result is None:
+                actual_result = actual
+            elif actual_result != actual:
+                raise AssertionError("repeated typed Test invocation changed its result")
+
+        return {
+            "test_repository_revision": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
+            ).strip(),
+            "assertions_source": {
+                "path": "native/mncs/test/assertions.mncs",
+                "sha256": sha(assertions_source.encode("utf-8")),
+            },
+            "test_case_identity": test_row["test_case_identity"],
+            "input_signature": test_row["inputs"],
+            "input_value": value,
+            "verified_artifact_identity": built["artifact"]["identity"],
+            "canonical_vm_artifact_identity": vm["artifact_id"],
+            "canonical_vm_batch_count": len(rows),
+            "repeat_results_match": True,
+            "stage0_equivalent": True,
+            "typed_test_result": actual_result,
+            "build_frontend_invocations": frontend_invocations(built),
+            "build_process_metrics": build_metrics,
+            "stage0_oracle_metrics": oracle_metrics,
+            "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
+            "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
+        }
 
 
 def run_real_mncs_test_suite() -> dict:
@@ -652,6 +866,7 @@ def main() -> None:
         if inventory_results != {"first_case": 1, "second_case": 2}:
             raise AssertionError(f"selected inventory Test results were unexpected: {inventory_results}")
 
+        parameterized_test_batch = run_parameterized_test_case()
         real_mncs_test_suite = run_real_mncs_test_suite()
 
         warm_probe = app.Probe(program_cache, executable=PROBE,
@@ -849,6 +1064,7 @@ def main() -> None:
                 "process_tree_metrics": selection_metrics,
             },
             "build_assumption_cache_isolation": policy_cache_isolation,
+            "parameterized_test_batch": parameterized_test_batch,
             "real_mncs_test_self_suite_batch": real_mncs_test_suite,
             "inventory_selected_batch": {
                 "build_frontend_invocations": frontend_invocations(runner_build),
@@ -952,6 +1168,16 @@ def main() -> None:
                     and inventory_vm.get("artifact_id") == runner_artifact.get("artifact_id")
                 ),
                 "selected_test_batch_matches_stage0": True,
+                "typed_test_inputs_follow_language_inventory_and_match_stage0": (
+                    parameterized_test_batch["input_signature"]
+                    == [{"name": "value", "type": "u64"}]
+                    and parameterized_test_batch["canonical_vm_batch_count"] == 2
+                    and parameterized_test_batch["repeat_results_match"]
+                    and parameterized_test_batch["stage0_equivalent"]
+                    and parameterized_test_batch["typed_test_result"]["verdict_code"] == 0
+                    and parameterized_test_batch["typed_test_result"]["actual"]
+                    == parameterized_test_batch["input_value"]
+                ),
                 "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
                     and real_mncs_test_suite["canonical_vm_batch_count"] == 14
@@ -977,6 +1203,8 @@ def main() -> None:
                 "invalid_source": invalid_metrics,
                 "valid_source_without_tests": empty_metrics,
                 "identity_selection_provider": selection_metrics,
+                "parameterized_test_build": parameterized_test_batch["build_process_metrics"],
+                "parameterized_test_oracle": parameterized_test_batch["stage0_oracle_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -993,10 +1221,13 @@ def main() -> None:
                 "still runs the full frontend before executable-closure reuse. Exact fresh-process "
                 "reuse preserves the inventory; edits refresh source spans or the "
                 "affected test identity, and invalid input publishes neither inventory nor artifact. "
-                "A selected zero-argument source Test subset can now be emitted with the production "
+                "A selected zero-argument source Test subset can be emitted with the production "
                 "entry, selected from the returned inventory, and executed in one canonical VM batch "
-                "with Stage-0 agreement. This does not implement Language verification-fact reuse "
-                "or change the production mncs-test consumer. A second workload reads the real "
+                "with Stage-0 agreement. A bounded parameterized Test slice also binds a typed u64 "
+                "argument to the Language-issued input signature and repeats its typed TestResult "
+                "through the same artifact with Stage-0 agreement. The batch adapter rejects generic "
+                "tests until seeds are resolved to concrete callables. This does not implement "
+                "Language verification-fact reuse or change the production mncs-test consumer. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
                 "revision. One application-build/7 all-source selection resolves all seven "
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "
