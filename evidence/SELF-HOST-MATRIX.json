@@ -9461,7 +9461,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-19T17:40:27Z",
+  "evidence_updated_at": "2026-10-19T18:15:43Z",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -18609,5 +18609,57 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "The real multi-module mncs-test readiness application demonstrates exact-snapshot reuse, dependency-closure executable-artifact reuse, fresh diagnostics, correct interface and generic invalidation, and interruption recovery. Every changed resolved source still invokes the full frontend and reports zero Language facts reused. Gate B remains partial; this is not Language semantic fact reuse or compiler succession."
+  },
+  "current_campaign_lexer_current_source_canonical_vm_20261019": {
+    "status": "passed_selected_current_source_canonical_vm_frontier_with_known_cp0022_divergence",
+    "observed_at": "2026-10-19T18:15:43Z",
+    "evidence_artifact": "evidence/self-host-lexer-current-source-canonical-vm-20261019T181543Z.json",
+    "evidence_sha256": "47e259bf8392ef1cf5d1eef7c37294b2e03bd61b85b49a0d5ddacdaaccc1eee0",
+    "tested_compiler_revision": "f079681f31f6b639cdc0f8436e0eb89784bb45a5",
+    "tested_compiler_branch": "campaign/native-application-readiness-20261013",
+    "test_harness": "tools/test_vm_lexer_source_self_ingestion.py",
+    "test_harness_sha256": "9b726ad2adbfb1fd195332279dba89999b30a6cdef1cc798761837a35516c964",
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_execution_backend": "cranelift",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "target_module": "mncs.compiler.lexer.v1",
+    "target_function": "lex_tokens_from",
+    "type_arguments": [
+      64,
+      1024
+    ],
+    "source_path": "src/compiler/lexer.mncs",
+    "source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+    "source_bytes": 60349,
+    "source_pages": 59,
+    "stage0_batches": 23,
+    "stage0_token_count": 23492,
+    "canonical_vm_batch_results_match_stage0": true,
+    "canonical_vm_artifact_identity": "sha256:8b699c063917ab50b4bd75347512dd867ba1cdf6f2edd76815f6696a7e7c73ca",
+    "canonical_vm_steps_total": 15469956,
+    "canonical_vm_wall_seconds": 94.975407,
+    "canonical_vm_peak_rss_kib": 647544,
+    "child_cpu_seconds": 106.864841,
+    "stage0_oracle_stream": {
+      "status": "matched_with_known_cp0022_not_divergence",
+      "native_token_count": 23492,
+      "oracle_token_count": 23492,
+      "known_not_divergences": 35,
+      "first_divergence_span": [
+        10338,
+        10339
+      ],
+      "other_divergences": 0
+    },
+    "language_verified_facts_reused": 0,
+    "parser_proof_flow_ssa_and_project_compilation_run": false,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The selected lex_tokens_from<64,1024> specialization tokenized the current 60349-byte Compiler lexer source in 23 paginated batches on the configured cranelift Stage-0 backend. Every fresh canonical VM batch matched the Stage-0 batch result. The combined token stream matched the Stage-0 oracle except for the 35 already classified CP-0022 `not` token differences.",
+    "limitations": [
+      "This is lexer transport and tokenization self-ingestion only; parser, proof, Flow, SSA, and project compilation were not run.",
+      "The CP-0022 not-token divergence is preserved and counted; it is not reported as exact whole-stream equality.",
+      "Cgroup memory may be unavailable; process peak RSS is the canonical VM batch process measurement."
+    ]
   }
 }
