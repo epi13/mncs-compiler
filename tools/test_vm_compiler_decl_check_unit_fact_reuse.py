@@ -300,7 +300,15 @@ def main() -> dict:
             if subject.startswith(base_subject + "__spec_")
         }
         root_subject = f"mncs:0.2:body:{ROOT_MODULE}::run"
-        expected_recomputed = {base_subject, root_subject} | changed_specializations
+        root_specializations = {
+            subject for subject in recomputed
+            if subject.startswith(root_subject + "__spec_")
+        }
+        expected_recomputed = (
+            {base_subject, root_subject}
+            | changed_specializations
+            | root_specializations
+        )
         reasons = {
             row["subject"]: row["reason"]
             for row in body_work["semantic_fact_recomputation_reasons"]
@@ -311,11 +319,14 @@ def main() -> dict:
                 != "recomputed_with_language_fact_reuse"
                 or base_subject not in recomputed
                 or not changed_specializations
+                or not root_specializations
                 or recomputed != expected_recomputed
                 or reasons.get(base_subject) != "subject_changed"
                 or any(reasons.get(subject) != "subject_changed"
                        for subject in changed_specializations)
                 or reasons.get(root_subject) != "dependencies_changed"
+                or any(reasons.get(subject) != "dependencies_changed"
+                       for subject in root_specializations)
                 or not reused
                 or body_work["recomputed_declaration_facts"]
                 or body.get("artifact", {}).get("identity")
