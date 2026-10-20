@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import subprocess
@@ -14,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_vm_native_application as app
 import test_native_application_incremental as incremental
+import test_vm_test_digest_app as digest_app
 
 ROOT = app.ROOT
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
@@ -68,6 +70,81 @@ def build_request(root: str, modules: dict[str, str]) -> dict:
         "effect_assumptions": [],
         "optimization_policy": "default",
         "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1",
+    }
+
+
+def build_digest_app_request() -> dict:
+    return {
+        "schema_version": REQUEST_SCHEMA,
+        "target": "mncs-vm-0.1",
+        "root_source_id": "native/mncs/test/digest.mncs",
+        "root_source": digest_app.ROOT_SOURCE_PATH.read_text(encoding="utf-8"),
+        "callable_roots": [{"module": "mncs.test.digest", "function": "digest_app"}],
+        "test_selection": {"kind": "all_source_cases"},
+        "modules": {
+            name: path.read_text(encoding="utf-8")
+            for name, path in digest_app.MODULE_PATHS.items()
+        },
+        "generic_seeds": [],
+        "capabilities": ["test_artifact"],
+        "effect_assumptions": [],
+        "optimization_policy": "default",
+        "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1",
+    }
+
+
+def verify_digest_app_variant_execution(
+    stage: dict,
+    label: str,
+    runner: Path,
+    argument: dict,
+    expected_result: dict,
+    artifact_path: Path,
+) -> dict:
+    response = stage["response"]
+    artifact = response.get("artifact", {}).get("value")
+    interface = response.get("entry", {}).get("interface")
+    if response.get("status") != "verified" or not isinstance(artifact, dict):
+        raise AssertionError(f"{label} did not produce an executable digest_app artifact")
+    if not isinstance(interface, dict):
+        raise AssertionError(f"{label} omitted the digest_app callable interface")
+    required_capabilities = artifact.get("requirements", {}).get("capabilities", [])
+    if len(required_capabilities) != 1:
+        raise AssertionError(f"{label} changed the used capability set: {required_capabilities}")
+    dispatch = response.get("capability_dispatch", {}).get("bindings", [])
+    aliases = sorted({row.get("runtime_capability_key") for row in dispatch})
+    if aliases != ["test_artifact"]:
+        raise AssertionError(f"{label} changed the runtime dispatch alias: {aliases}")
+    artifact_path.write_text(
+        json.dumps(artifact, sort_keys=True, separators=(",", ":")),
+        encoding="utf-8",
+    )
+    digest_app.current_interface = interface
+    document, results, outputs, metrics, _paths = digest_app.sample_runner_batch(
+        runner,
+        required_capabilities[0],
+        aliases[0],
+        [{"case": label, "provider_mode": "success", "argument": argument}],
+        artifact_path=artifact_path,
+    )
+    result = results[0]
+    returned = [app.decode_wire(value) for value in result.get("returned_wire", [])]
+    if (document.get("artifact_id") != artifact.get("artifact_id")
+            or result.get("outcome", {}).get("kind") != "completed"
+            or len(returned) != 1
+            or returned[0].get("exit_code") != 0
+            or outputs[0] is None
+            or app.decode_wire(outputs[0]) != expected_result):
+        raise AssertionError(f"{label} changed effectful digest_app VM behavior: {result}")
+    return {
+        "status": "passed",
+        "artifact_identity": artifact.get("artifact_id"),
+        "application_exit": returned[0],
+        "result_matches_stage0": True,
+        "output_sha256": hashlib.sha256(
+            json.dumps(outputs[0], sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+        "vm_metrics": metrics,
     }
 
 
@@ -642,6 +719,178 @@ def main() -> None:
         if invalid_entry.exists():
             raise AssertionError("rejected finite-type verification published a reusable cache entry")
 
+        digest_request = build_digest_app_request()
+        digest_body_identity = "mncs:0.2:body:mncs.test.digest::digest_app"
+        digest_fixture = json.loads(digest_app.FIXTURE_PATH.read_text(encoding="utf-8"))
+        digest_argument = digest_fixture["execution"]["inputs"][0]
+        digest_expected_result = digest_fixture["execution"]["stage0_results"][0][0]
+        digest_stages = {}
+
+        policy_cache = cache_root / "digest-app-policy-assumptions"
+        policy_baseline = measure_build(
+            "digest_app_policy_baseline", digest_request, policy_cache,
+            compare_execution=False,
+        )
+        stages["digest_app_policy_baseline"] = policy_baseline
+        policy_baseline_work = policy_baseline["verification_work"]
+        if (policy_baseline["response"].get("status") != "verified"
+                or digest_body_identity not in policy_baseline_work["recomputed_semantic_facts"]):
+            raise AssertionError("cold effectful digest_app build did not verify its Language body")
+        policy_variant_request = copy.deepcopy(digest_request)
+        policy_variant_request["capabilities"] = ["test_artifact", "test_artifact.metadata"]
+        policy_variant_request["effect_assumptions"] = [{
+            "capability": "test_artifact",
+            "policy": "bounded-artifact/2",
+        }]
+        policy_variant = measure_build(
+            "digest_app_changed_host_assumptions", policy_variant_request,
+            policy_cache, compare_execution=False,
+        )
+        stages["digest_app_changed_host_assumptions"] = policy_variant
+        policy_work = policy_variant["verification_work"]
+        if (policy_variant["response"].get("status") != "verified"
+                or policy_variant["response"].get("cache", {}).get("key")
+                == policy_baseline["response"].get("cache", {}).get("key")
+                or policy_work.get("front_end_invocations") != 1
+                or policy_work.get("recomputed_semantic_facts")
+                or set(policy_work.get("reused_semantic_facts", []))
+                != set(policy_baseline_work.get("recomputed_semantic_facts", []))
+                or policy_work.get("backend_artifact") == "reused"):
+            raise AssertionError(
+                "changed host admission assumptions must reuse guarded Language facts "
+                "while rebuilding the request-specific artifact"
+            )
+        digest_stages["changed_host_assumptions"] = {
+            "source_snapshot_unchanged": (
+                policy_variant["response"].get("source_snapshot", {}).get("identity")
+                == policy_baseline["response"].get("source_snapshot", {}).get("identity")
+            ),
+            "artifact_identity_unchanged": (
+                policy_variant["response"].get("artifact", {}).get("identity")
+                == policy_baseline["response"].get("artifact", {}).get("identity")
+            ),
+            "reused_semantic_facts": policy_work["reused_semantic_facts"],
+            "recomputed_semantic_facts": policy_work["recomputed_semantic_facts"],
+            "front_end_invocations": policy_work["front_end_invocations"],
+            "backend_artifact": policy_work["backend_artifact"],
+        }
+
+        effect_cache = cache_root / "digest-app-effect-declaration"
+        effect_baseline = measure_build(
+            "digest_app_effect_baseline", digest_request, effect_cache,
+            compare_execution=False,
+        )
+        stages["digest_app_effect_baseline"] = effect_baseline
+        effect_variant_request = copy.deepcopy(digest_request)
+        old_effects = (
+            "    effect structured_read authorized_by test_artifact\n"
+            "    effect structured_write authorized_by test_artifact"
+        )
+        new_effects = (
+            "    effect structured_write authorized_by test_artifact\n"
+            "    effect structured_read authorized_by test_artifact"
+        )
+        if effect_variant_request["root_source"].count(old_effects) != 1:
+            raise AssertionError("digest_app effect declaration block changed unexpectedly")
+        effect_variant_request["root_source"] = effect_variant_request["root_source"].replace(
+            old_effects, new_effects, 1
+        )
+        effect_variant = measure_build(
+            "digest_app_effect_declaration_edit", effect_variant_request,
+            effect_cache, compare_execution=False,
+        )
+        stages["digest_app_effect_declaration_edit"] = effect_variant
+        effect_work = effect_variant["verification_work"]
+        effect_reasons = effect_work.get("semantic_fact_recomputation_reasons", [])
+        if (effect_variant["response"].get("status") != "verified"
+                or effect_work.get("recomputed_semantic_facts") != [digest_body_identity]
+                or not any(row.get("subject") == digest_body_identity
+                           and row.get("reason") == "effect_assumptions_changed"
+                           for row in effect_reasons)
+                or digest_body_identity not in effect_baseline["verification_work"].get(
+                    "recomputed_semantic_facts", [])):
+            raise AssertionError(
+                "effect declaration edit did not isolate body-fact invalidation: "
+                f"{effect_reasons}"
+            )
+        if set(effect_work.get("reused_semantic_facts", [])) != (
+                set(effect_baseline["verification_work"].get("recomputed_semantic_facts", []))
+                - {digest_body_identity}):
+            raise AssertionError("effect declaration edit failed to reuse independent body facts")
+        digest_stages["effect_declaration_edit"] = {
+            "recomputed_semantic_facts": effect_work["recomputed_semantic_facts"],
+            "recomputation_reasons": effect_reasons,
+            "reused_semantic_fact_count": len(effect_work["reused_semantic_facts"]),
+            "backend_artifact": effect_work["backend_artifact"],
+        }
+
+        capability_cache = cache_root / "digest-app-capability-declaration"
+        capability_baseline = measure_build(
+            "digest_app_capability_baseline", digest_request, capability_cache,
+            compare_execution=False,
+        )
+        stages["digest_app_capability_baseline"] = capability_baseline
+        capability_variant_request = copy.deepcopy(digest_request)
+        old_capability = "    capability test_artifact\n"
+        if capability_variant_request["root_source"].count(old_capability) != 1:
+            raise AssertionError("digest_app capability declaration changed unexpectedly")
+        capability_variant_request["root_source"] = capability_variant_request[
+            "root_source"
+        ].replace(old_capability, old_capability + "    capability digest_probe\n", 1)
+        capability_variant_request["capabilities"] = ["test_artifact", "digest_probe"]
+        capability_variant = measure_build(
+            "digest_app_capability_declaration_edit", capability_variant_request,
+            capability_cache, compare_execution=False,
+        )
+        stages["digest_app_capability_declaration_edit"] = capability_variant
+        capability_work = capability_variant["verification_work"]
+        capability_reasons = capability_work.get(
+            "semantic_fact_recomputation_reasons", []
+        )
+        if (capability_variant["response"].get("status") != "verified"
+                or capability_work.get("recomputed_semantic_facts") != [digest_body_identity]
+                or not any(row.get("subject") == digest_body_identity
+                           and row.get("reason") == "capability_assumptions_changed"
+                           for row in capability_reasons)):
+            raise AssertionError(
+                "capability declaration edit did not isolate body-fact invalidation: "
+                f"{capability_reasons}"
+            )
+        if set(capability_work.get("reused_semantic_facts", [])) != (
+                set(capability_baseline["verification_work"].get(
+                    "recomputed_semantic_facts", [])) - {digest_body_identity}):
+            raise AssertionError("capability declaration edit failed to reuse independent body facts")
+        digest_stages["capability_declaration_edit"] = {
+            "recomputed_semantic_facts": capability_work["recomputed_semantic_facts"],
+            "recomputation_reasons": capability_reasons,
+            "reused_semantic_fact_count": len(capability_work["reused_semantic_facts"]),
+            "backend_artifact": capability_work["backend_artifact"],
+        }
+
+        digest_runner, digest_runner_sha, digest_runner_lock_sha = digest_app.build_runner()
+        digest_vm_checks = []
+        with tempfile.TemporaryDirectory(prefix="digest-app-fact-vm-", dir=ROOT / ".build") as raw:
+            artifact_path = Path(raw) / "digest-app.vm.json"
+            for label, stage in (
+                ("changed_host_assumptions", policy_variant),
+                ("effect_declaration_edit", effect_variant),
+                ("capability_declaration_edit", capability_variant),
+            ):
+                digest_vm_checks.append(verify_digest_app_variant_execution(
+                    stage,
+                    label,
+                    digest_runner,
+                    digest_argument,
+                    digest_expected_result,
+                    artifact_path,
+                ))
+                digest_vm_checks[-1]["stage"] = label
+        digest_stages["canonical_vm_provider"] = {
+            "runner_sha256": digest_runner_sha,
+            "runner_lock_sha256": digest_runner_lock_sha,
+            "checks": digest_vm_checks,
+        }
+
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text(encoding="utf-8"))
         evidence = {
             "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/3",
@@ -665,6 +914,7 @@ def main() -> None:
                 "cache_entry_schema": "mncs.compiler.application-build-cache-entry/8",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
+            "effectful_digest_app_fact_reuse": digest_stages,
             "execution_checks": execution_checks,
             "source_location_refresh": {
                 "status": "verified",

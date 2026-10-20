@@ -471,6 +471,39 @@ fn application_cache_index_key(
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
 
+/// Selects a prior cache entry only as a source of Language-owned facts and
+/// parse results. External capability admission and effect assumptions stay
+/// bound to the exact executable-artifact index; Language rechecks each
+/// candidate fact against the current program before skipping validation.
+fn language_fact_cache_index_key(
+    request: &Value,
+    contract: &str,
+    root_id: &str,
+    callable_roots: &[(String, String)],
+    source_test_selection: Option<&Value>,
+    toolchain: Option<&ToolchainIdentity>,
+    probe_identity: &str,
+) -> String {
+    let identity = json!({
+        "schema_version": "mncs.compiler.application-build-language-fact-index-key/1",
+        "contract": contract,
+        "root_source_id": root_id,
+        "callable_roots": callable_roots,
+        "source_test_selection": source_test_selection,
+        "compiler_semantics": toolchain
+            .and_then(|identity| serde_json::to_value(identity).ok()),
+        "compiler_implementation": probe_identity,
+        "backend": "mncs-vm-direct",
+        "target": request.get("target").cloned().unwrap_or(Value::Null),
+        "optimization_policy": request.get("optimization_policy").cloned().unwrap_or(json!("default")),
+        "verification_policy": request.get("verification_policy").cloned().unwrap_or(json!("default")),
+        "entry": request.get("entry").cloned().unwrap_or(Value::Null),
+    });
+    let mut bytes = b"mncs.compiler.application-build-language-fact-index/1\0".to_vec();
+    bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
+    format!("sha256:{}", mncs_model::sha256_hex(&bytes))
+}
+
 fn application_cache_root_from(
     application_root: Option<std::ffi::OsString>,
     probe_root: Option<std::ffi::OsString>,
@@ -508,6 +541,14 @@ fn application_cache_index_path_at(root: &Path, key: &str) -> Option<PathBuf> {
     )
 }
 
+fn language_fact_cache_index_path_at(root: &Path, key: &str) -> Option<PathBuf> {
+    let hex = sha256_cache_key_hex(key)?;
+    Some(
+        root.join("application-build-fact-indexes")
+            .join(format!("{hex}.json")),
+    )
+}
+
 fn application_cache_path(key: &str) -> Option<PathBuf> {
     let root = application_cache_root()?;
     application_cache_path_at(&root, key)
@@ -516,6 +557,11 @@ fn application_cache_path(key: &str) -> Option<PathBuf> {
 fn application_cache_index_path(key: &str) -> Option<PathBuf> {
     let root = application_cache_root()?;
     application_cache_index_path_at(&root, key)
+}
+
+fn language_fact_cache_index_path(key: &str) -> Option<PathBuf> {
+    let root = application_cache_root()?;
+    language_fact_cache_index_path_at(&root, key)
 }
 
 fn annotate_cache(
@@ -2196,7 +2242,8 @@ mod tests {
         annotate_artifact_emission_failure, application_cache_index_key,
         application_cache_index_path_at, application_cache_key, application_cache_path_at,
         application_cache_root_from, application_executable_closure_identity,
-        application_semantic_identity, callable_interface, envelope, parse_source_test_selection,
+        application_semantic_identity, callable_interface, envelope, language_fact_cache_index_key,
+        language_fact_cache_index_path_at, parse_source_test_selection,
         resolve_source_test_selection, sha256_serialized, ApplicationSources, SourceParseCache,
         CONTRACT_V2, CONTRACT_V4, VM_TARGET,
     };
@@ -2390,6 +2437,15 @@ mod tests {
                     None,
                     "sha256:compiler-probe",
                 ),
+                language_fact_cache_index_key(
+                    request,
+                    CONTRACT_V2,
+                    root_id,
+                    &callable_roots,
+                    None,
+                    None,
+                    "sha256:compiler-probe",
+                ),
             )
         };
 
@@ -2408,6 +2464,7 @@ mod tests {
         let changed_capability_keys = keys_for(&changed_capability);
         assert_ne!(baseline_keys.0, changed_capability_keys.0);
         assert_ne!(baseline_keys.1, changed_capability_keys.1);
+        assert_eq!(baseline_keys.2, changed_capability_keys.2);
 
         let mut changed_effect_assumption = baseline;
         changed_effect_assumption["effect_assumptions"] = json!([{
@@ -2417,6 +2474,26 @@ mod tests {
         let changed_effect_keys = keys_for(&changed_effect_assumption);
         assert_ne!(baseline_keys.0, changed_effect_keys.0);
         assert_ne!(baseline_keys.1, changed_effect_keys.1);
+        assert_eq!(baseline_keys.2, changed_effect_keys.2);
+
+        let mut changed_verification_policy = changed_effect_assumption.clone();
+        changed_verification_policy["verification_policy"] = json!("semantic-check/2");
+        let changed_verification_policy_keys = keys_for(&changed_verification_policy);
+        assert_ne!(baseline_keys.2, changed_verification_policy_keys.2);
+    }
+
+    #[test]
+    fn language_fact_index_has_a_separate_bounded_cache_path() {
+        let root = Path::new("/tmp/mncs-application-cache");
+        let key = format!("sha256:{}", "a".repeat(64));
+        assert_eq!(
+            language_fact_cache_index_path_at(root, &key),
+            Some(
+                root.join("application-build-fact-indexes")
+                    .join(format!("{}.json", "a".repeat(64)))
+            ),
+        );
+        assert_eq!(language_fact_cache_index_path_at(root, "../outside"), None,);
     }
 
     #[test]
@@ -3660,6 +3737,15 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         toolchain,
         &probe_identity,
     );
+    let fact_index_key = language_fact_cache_index_key(
+        request,
+        contract,
+        root_id,
+        &callable_roots,
+        source_test_selection_value.as_ref(),
+        toolchain,
+        &probe_identity,
+    );
     let cache_path = application_cache_path(&cache_key);
     // The index only locates a previously verified artifact candidate. A
     // changed snapshot still runs current parsing and resolution; request /5
@@ -3668,6 +3754,14 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     // selected callable interface, and the Language artifact interface to
     // match.
     let cache_index_path = application_cache_index_path(&cache_index_key);
+    // Language facts have their own candidate index because external host
+    // capability/effect assumptions change the application build key but do
+    // not change the Language subject. The Language verifier still validates
+    // every declaration, dependency, effect, capability, profile, and policy
+    // guard against the current source before a fact can be reused.
+    let fact_index_path = reuse_declaration_facts
+        .then(|| language_fact_cache_index_path(&fact_index_key))
+        .flatten();
     crate::trace_phase(
         "application_cache_identity",
         cache_identity_started,
@@ -3711,6 +3805,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         Vec<DeclarationVerificationFact>,
         Vec<DeclarationVerificationFact>,
         SourceParseCache,
+        bool,
     )> = None;
     if let (Some(index_path), Some(_)) = (cache_index_path.as_ref(), cache_path.as_ref()) {
         if let Some(candidate_key) = read_application_cache_index(index_path, &cache_index_key) {
@@ -3759,7 +3854,40 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         declaration_verification_facts,
                         record_type_declaration_verification_facts,
                         source_parse_cache,
+                        true,
                     ));
+                }
+            }
+        }
+    }
+    if semantic_cache_candidate.is_none() {
+        if let (Some(index_path), Some(_)) = (fact_index_path.as_ref(), cache_path.as_ref()) {
+            if let Some(candidate_key) = read_application_cache_index(index_path, &fact_index_key) {
+                if let Some(candidate_path) = application_cache_path(&candidate_key) {
+                    if let Some((
+                        candidate,
+                        verification_facts,
+                        declaration_verification_facts,
+                        record_type_declaration_verification_facts,
+                        source_parse_cache,
+                    )) = read_application_cache_with_facts(
+                        &candidate_path,
+                        &candidate_key,
+                        contract,
+                        None,
+                        &probe_identity,
+                        toolchain,
+                    ) {
+                        semantic_cache_candidate = Some((
+                            candidate,
+                            candidate_key,
+                            verification_facts,
+                            declaration_verification_facts,
+                            record_type_declaration_verification_facts,
+                            source_parse_cache,
+                            false,
+                        ));
+                    }
                 }
             }
         }
@@ -3770,6 +3898,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         json!({
             "candidate_loaded": semantic_cache_candidate.is_some(),
             "index_configured": cache_index_path.is_some(),
+            "language_fact_index_configured": fact_index_path.is_some(),
             "cache_configured": cache_path.is_some(),
         }),
     );
@@ -3783,13 +3912,13 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let compiler = ReferenceCompiler::default();
     let prior_facts = semantic_cache_candidate
         .as_ref()
-        .map(|(_, _, facts, _, _, _)| facts.clone())
+        .map(|(_, _, facts, _, _, _, _)| facts.clone())
         .unwrap_or_default();
     let prior_declaration_facts = if reuse_declaration_facts || reuse_finite_type_declaration_facts
     {
         semantic_cache_candidate
             .as_ref()
-            .map(|(_, _, _, facts, _, _)| facts.clone())
+            .map(|(_, _, _, facts, _, _, _)| facts.clone())
             .unwrap_or_default()
     } else {
         Vec::new()
@@ -3797,7 +3926,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let prior_record_type_declaration_facts = if reuse_record_type_declaration_facts {
         semantic_cache_candidate
             .as_ref()
-            .map(|(_, _, _, _, facts, _)| facts.clone())
+            .map(|(_, _, _, _, facts, _, _)| facts.clone())
             .unwrap_or_default()
     } else {
         Vec::new()
@@ -3813,7 +3942,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let frontend_started = Instant::now();
     let mut source_parse_cache = semantic_cache_candidate
         .as_ref()
-        .map(|(_, _, _, _, _, cache)| cache.clone())
+        .map(|(_, _, _, _, _, cache, _)| cache.clone())
         .unwrap_or_default();
     let frontend = if reuse_source_parse_cache {
         compiler.front_end_with_verified_facts_and_source_parse_cache(
@@ -4239,6 +4368,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             _candidate_declaration_facts,
             _candidate_record_type_declaration_facts,
             _candidate_source_parse_cache,
+            artifact_cache_eligible,
         )),
         Some(semantic_identity),
         Some(executable_closure_identity),
@@ -4275,7 +4405,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             interface.get("status").and_then(Value::as_str) == Some("verified");
         let artifact_interface_match = cached_artifact_interface_identity
             == Some(current_artifact_interface_identity.as_str());
-        let candidate_admitted = candidate_verified
+        let candidate_admitted = artifact_cache_eligible
+            && candidate_verified
             && executable_closure_match
             && selected_entry_verified
             && selected_interfaces_match
@@ -4305,6 +4436,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             candidate_validation_started,
             json!({
                 "candidate_key": candidate_key,
+                "artifact_cache_eligible": artifact_cache_eligible,
                 "candidate_verified": candidate_verified,
                 "executable_closure_match": executable_closure_match,
                 "selected_entry_verified": selected_entry_verified,
@@ -4334,6 +4466,13 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                                 let _ = publish_application_cache_index(
                                     index_path,
                                     &cache_index_key,
+                                    &cache_key,
+                                );
+                            }
+                            if let Some(index_path) = fact_index_path.as_ref() {
+                                let _ = publish_application_cache_index(
+                                    index_path,
+                                    &fact_index_key,
                                     &cache_key,
                                 );
                             }
@@ -4738,6 +4877,13 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         let _ = publish_application_cache_index(
                             index_path,
                             &cache_index_key,
+                            &cache_key,
+                        );
+                    }
+                    if let Some(index_path) = fact_index_path.as_ref() {
+                        let _ = publish_application_cache_index(
+                            index_path,
+                            &fact_index_key,
                             &cache_key,
                         );
                     }
