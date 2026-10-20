@@ -54,10 +54,19 @@ MODULE_PATHS = {
     'mncs.std.application.v1': STDLIB_ROOT / 'library/std/application.mncs',
 }
 FIXTURE_PATH = ROOT / 'evidence/native-app-readiness-test-digest.json'
-ARTIFACT_PATH = ROOT / '.build/native-app-readiness/test-digest-app.vm.json'
+ARTIFACT_PATH = ROOT / os.environ.get(
+    'MNCS_TEST_DIGEST_APP_ARTIFACT_PATH',
+    '.build/native-app-readiness/test-digest-app.vm.json',
+)
 RUNNER_SOURCE = ROOT / 'tools/native_app_vm_runner.rs'
-RUNNER_MANIFEST = ROOT / '.build/native-app-readiness/vm-capability-runner-batch/Cargo.toml'
-RUNNER_TARGET = ROOT / '.build/native-app-readiness/vm-capability-target-batch'
+RUNNER_MANIFEST = ROOT / os.environ.get(
+    'MNCS_TEST_DIGEST_APP_RUNNER_MANIFEST',
+    '.build/native-app-readiness/vm-capability-runner-batch/Cargo.toml',
+)
+RUNNER_TARGET = ROOT / os.environ.get(
+    'MNCS_TEST_DIGEST_APP_RUNNER_TARGET',
+    '.build/native-app-readiness/vm-capability-target-batch',
+)
 EVIDENCE_PATH = ROOT / os.environ.get(
     'MNCS_TEST_DIGEST_APP_EVIDENCE_PATH',
     "evidence/native-app-readiness-test-digest-app-"
@@ -178,6 +187,19 @@ def compile_request(root: str, modules: dict[str, str]) -> dict:
         'capabilities': ['test_artifact'],
         'verification_policy': 'stage0-semantic-check+canonical-vm-artifact/1',
     }
+
+
+def require_language_fact_v3(build: dict, label: str) -> dict:
+    work = build.get('cache', {}).get('verification_work', {})
+    if work.get('language_verification_fact_schema') != 'mncs.language-verification-fact/3':
+        raise AssertionError(
+            f'{label} did not consume Language verification fact v3: {work}'
+        )
+    if (not isinstance(work.get('reused_semantic_facts'), list)
+            or not isinstance(work.get('recomputed_semantic_facts'), list)
+            or type(work.get('produced_semantic_fact_count')) is not int):
+        raise AssertionError(f'{label} omitted actual Language fact work: {work}')
+    return work
 
 
 def oracle_call(argument: dict) -> dict:
@@ -447,6 +469,9 @@ def main() -> None:
                     'unresolved_obligations': built.get('unresolved_obligations'),
                     'diagnostics': built.get('diagnostics'),
                 }, indent=2)[:9000])
+            cold_work = require_language_fact_v3(built, 'cold digest application build')
+            if cold_work['produced_semantic_fact_count'] <= 0:
+                raise AssertionError('cold digest application did not produce Language body facts')
             signature = current_interface.get('signature', {})
             effects = sorted((row.get('kind'), row.get('capability'))
                              for row in signature.get('effects', []))
@@ -537,7 +562,7 @@ def main() -> None:
             )
         finally:
             warm_probe.close()
-        warm_work = warm_build.get('cache', {}).get('verification_work', {})
+        warm_work = require_language_fact_v3(warm_build, 'fresh-process warm build')
         if (
             warm_build.get('status') != 'verified'
             or warm_build.get('cache', {}).get('status') != 'hit'
@@ -562,7 +587,7 @@ def main() -> None:
             )
         finally:
             comment_probe.close()
-        comment_work = comment_build.get('cache', {}).get('verification_work', {})
+        comment_work = require_language_fact_v3(comment_build, 'comment-only source edit')
         for label, work in (
             ('cold', built.get('cache', {}).get('verification_work', {})),
             ('fresh_process_warm', warm_work),
@@ -587,6 +612,11 @@ def main() -> None:
         ):
             raise AssertionError(
                 'comment-only digest app edit did not refresh its source snapshot and reuse the unchanged artifact'
+            )
+        if (not comment_work['reused_semantic_facts']
+                or comment_work['recomputed_semantic_facts']):
+            raise AssertionError(
+                'comment-only digest app edit must reuse verified body facts without rechecking bodies'
             )
         comment_source = next((
             row for row in comment_build.get('source_snapshot', {}).get('files', [])
@@ -806,6 +836,9 @@ def main() -> None:
                     'reuse_basis': built.get('cache', {}).get('reuse_basis'),
                     'front_end_invocations': built.get('cache', {}).get('verification_work', {}).get('front_end_invocations'),
                     'backend_artifact': built.get('cache', {}).get('verification_work', {}).get('backend_artifact'),
+                    'language_verification_fact_schema': cold_work.get('language_verification_fact_schema'),
+                    'produced_semantic_fact_count': cold_work.get('produced_semantic_fact_count'),
+                    'recomputed_semantic_fact_count': len(cold_work.get('recomputed_semantic_facts', [])),
                     'reused_semantic_facts': built.get('cache', {}).get('verification_work', {}).get('reused_semantic_facts', []),
                     'reused_semantic_fact_count': len(built.get('cache', {}).get('verification_work', {}).get('reused_semantic_facts', [])),
                     'metrics': build_metrics,
@@ -818,6 +851,9 @@ def main() -> None:
                     'reuse_basis': warm_build.get('cache', {}).get('reuse_basis'),
                     'front_end_invocations': warm_work.get('front_end_invocations'),
                     'backend_artifact': warm_work.get('backend_artifact'),
+                    'language_verification_fact_schema': warm_work.get('language_verification_fact_schema'),
+                    'produced_semantic_fact_count': warm_work.get('produced_semantic_fact_count'),
+                    'recomputed_semantic_fact_count': len(warm_work.get('recomputed_semantic_facts', [])),
                     'reused_semantic_facts': warm_work.get('reused_semantic_facts', []),
                     'reused_semantic_fact_count': len(warm_work.get('reused_semantic_facts', [])),
                     'metrics': warm_metrics,
@@ -830,6 +866,9 @@ def main() -> None:
                     'reuse_basis': comment_build.get('cache', {}).get('reuse_basis'),
                     'front_end_invocations': comment_work.get('front_end_invocations'),
                     'backend_artifact': comment_work.get('backend_artifact'),
+                    'language_verification_fact_schema': comment_work.get('language_verification_fact_schema'),
+                    'produced_semantic_fact_count': comment_work.get('produced_semantic_fact_count'),
+                    'recomputed_semantic_fact_count': len(comment_work.get('recomputed_semantic_facts', [])),
                     'reused_semantic_facts': comment_work.get('reused_semantic_facts', []),
                     'reused_semantic_fact_count': len(comment_work.get('reused_semantic_facts', [])),
                     'metrics': comment_metrics,
@@ -921,8 +960,9 @@ def main() -> None:
         },
         'feature_evidence': [
             'real mncs-test source module with three imported modules',
+            'cold digest application body facts are produced by Language verification fact v3',
             'the effectful digest application artifact is reused from a fresh probe process without invoking the frontend',
-            'a comment-only edit in an imported Test module reruns the frontend and reuses identical executable artifact bytes',
+            'a comment-only edit in an imported Test module reruns the frontend, reuses every verified body fact, and retains identical executable artifact bytes',
             'nominal structured request and result with bounded nested sequences',
             'native pass/fail/skip aggregation and bounded first-failure selection',
             'explicit structured_read and structured_write effects through the VM Provider API',
@@ -934,6 +974,7 @@ def main() -> None:
         ],
         'limitations': [
             'The file provider is a bounded test adapter for the canonical VM Provider API; it is not a production MNCS service provider.',
+            'This digest-specific run proves comment-only Language v3 fact reuse; changed-body and dependency invalidation are measured in the native incremental Gate B workload.',
             'The pure digest body is compared to Stage-0; this does not prove full mncs-test command parity or compiler succession.',
             'The provider harness is a separate Rust test program in the Compiler repository; it performs bounded structured file transport and validates the capability mapping from admitted SSA.',
             'The digest application itself does not execute through Forge; Environment publication here stores verifier outputs, not a Forge application-execution receipt.',
