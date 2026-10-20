@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_vm_native_application as app
+import test_native_application_incremental as incremental
 import test_vm_native_application_batch as batch_app
 import test_vm_test_digest_app as digest_app
 import application_build_provider as provider
@@ -736,6 +737,151 @@ def main() -> None:
                 "canonical VM behavior changed after an uncalled mncs-test body edit"
             )
 
+        # Rename an imported generic function's output field in the real Test
+        # suite. The source call remains type-correct, but Language must
+        # invalidate the callee interface, its specialization, and the actual
+        # application caller while retaining independent imported facts.
+        signature_edit_request = dict(function_edit_request)
+        signature_edit_request["modules"] = dict(function_edit_request["modules"])
+        suite_source = signature_edit_request["modules"]["mncs.test.suite"]
+        old_summarize_signature = (
+            "fn summarize<N: Nat>(tests: [TestResult; N]) -> (result: SuiteSummary)"
+        )
+        new_summarize_signature = (
+            "fn summarize<N: Nat>(tests: [TestResult; N]) -> (updated: SuiteSummary)"
+        )
+        if suite_source.count(old_summarize_signature) != 1:
+            raise AssertionError("selected mncs-test suite signature changed unexpectedly")
+        signature_edit_request["modules"]["mncs.test.suite"] = suite_source.replace(
+            old_summarize_signature, new_summarize_signature, 1
+        )
+        signature_edit_path = base / "source-parse-signature-edit-request.json"
+        write_json(signature_edit_path, signature_edit_request)
+        signature_edit_dir = base / "source-parse-signature-edit-output"
+        signature_edit_dir.mkdir()
+        signature_edit, signature_edit_response, signature_edit_elapsed, signature_edit_metrics = invoke(
+            ["--request-file", signature_edit_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", parse_cache_arg],
+            output_dir=signature_edit_dir,
+            cache_dir=parse_cache_dir,
+        )
+        signature_edit_work = signature_edit_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        signature_edit_parse = signature_edit_work.get("source_parse_cache", {}).get(
+            "observation", {}
+        )
+        signature_reused_facts = signature_edit_work.get("reused_semantic_facts", [])
+        signature_recomputed_facts = signature_edit_work.get(
+            "recomputed_semantic_facts", []
+        )
+        signature_recomputed_declarations = signature_edit_work.get(
+            "recomputed_declaration_facts", []
+        )
+        signature_reused_declarations = signature_edit_work.get(
+            "reused_declaration_facts", []
+        )
+        summarize_fact = "mncs:0.2:body:mncs.test.suite::summarize"
+        application_caller_fact = "mncs:0.2:body:tests.native_readiness::run"
+        expected_signature_recomputed = {
+            summarize_fact,
+            application_caller_fact,
+        }
+        specialized_summarize = [
+            subject for subject in signature_recomputed_facts
+            if subject.startswith(summarize_fact + "__spec_")
+        ]
+        signature_reasons = {
+            row["subject"]: row["reason"]
+            for row in signature_edit_work.get(
+                "semantic_fact_recomputation_reasons", []
+            )
+        }
+        signature_declaration_reasons = {
+            row["subject"]: row["reason"]
+            for row in signature_edit_work.get(
+                "declaration_fact_recomputation_reasons", []
+            )
+        }
+        expected_signature_declarations = {
+            "mncs:0.2:function:mncs.test.suite::summarize",
+        }
+        specialized_summarize_declaration = [
+            subject for subject in signature_recomputed_declarations
+            if subject.startswith(
+                "mncs:0.2:function:mncs.test.suite::summarize__spec_"
+            )
+        ]
+        if (signature_edit_response.get("schema_version") != SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
+                or signature_edit_response.get("status") != "verified"
+                or signature_edit_response.get("cache", {}).get("status") != "miss"
+                or signature_edit_work.get("schema_version")
+                != "mncs.compiler.application-build-verification-work/4"
+                or signature_edit_work.get("function_body_verification")
+                != "recomputed_with_language_fact_reuse"
+                or len(signature_edit_parse.get("parsed_source_identities", [])) != 1
+                or len(signature_edit_parse.get("reused_source_identities", [])) != 4
+                or summarize_fact not in signature_recomputed_facts
+                or application_caller_fact not in signature_recomputed_facts
+                or len(specialized_summarize) != 1
+                or set(signature_recomputed_facts)
+                != (expected_signature_recomputed | set(specialized_summarize))
+                or signature_reasons.get(summarize_fact)
+                != "declaration_interface_changed"
+                or signature_reasons.get(specialized_summarize[0])
+                != "declaration_interface_changed"
+                or signature_reasons.get(application_caller_fact)
+                != "dependencies_changed"
+                or signature_edit_work.get(
+                    "language_declaration_verification_fact_schema"
+                ) != "mncs.language-declaration-verification-fact/1"
+                or len(specialized_summarize_declaration) != 1
+                or set(signature_recomputed_declarations)
+                != (expected_signature_declarations
+                    | set(specialized_summarize_declaration))
+                or signature_declaration_reasons.get(
+                    "mncs:0.2:function:mncs.test.suite::summarize"
+                ) != "subject_changed"
+                or signature_declaration_reasons.get(
+                    specialized_summarize_declaration[0]
+                ) != "subject_changed"
+                or "mncs:0.2:function:tests.native_readiness::run"
+                not in signature_reused_declarations
+                or "mncs:0.2:body:mncs.test.snapshot::same"
+                not in signature_reused_facts):
+            raise AssertionError(
+                "real mncs-test imported interface edit did not invalidate its exact Language dependency closure: "
+                + json.dumps(signature_edit_work, sort_keys=True)[:5000]
+            )
+        if (signature_edit_response.get("artifact", {}).get("identity")
+                == parse_comment_response.get("artifact", {}).get("identity")):
+            raise AssertionError(
+                "an imported callable-interface edit reused the old executable closure"
+            )
+        signature_oracle_probe = app.Probe(
+            cache_dir=base / "signature-oracle-probe-cache"
+        )
+        try:
+            _, signature_execution, signature_oracle_metrics = incremental.oracle_one(
+                signature_oracle_probe,
+                signature_edit_request["root_source"],
+                signature_edit_request["modules"],
+            )
+        finally:
+            signature_oracle_probe.close()
+        signature_vm_document, signature_vm_metrics, signature_vm_returned = (
+            incremental.run_and_compare(
+                signature_edit_response["artifact"]["value"], signature_execution
+            )
+        )
+        parse_cold_normalized = [
+            app.decode_wire(app.vm_to_wire(row)) for row in parse_cold_returned
+        ]
+        if signature_vm_returned != parse_cold_normalized:
+            raise AssertionError(
+                "the imported interface-only edit changed the real mncs-test result"
+            )
+
         batch_roots = batch_app.ROOTS
         batch_request = batch_app.build_request(batch_roots)
         batch_request_path = base / "multi-callable-request.json"
@@ -1186,6 +1332,42 @@ def main() -> None:
                     "provider_metrics": function_edit_metrics,
                     "canonical_vm_returned": function_edit_returned,
                 },
+                "imported_signature_edit": {
+                    "cache_status": signature_edit_response.get("cache", {}).get("status"),
+                    "changed_module": "mncs.test.suite",
+                    "changed_function": "mncs.test.suite::summarize",
+                    "source_parse_cache": signature_edit_work.get("source_parse_cache"),
+                    "verification_work": signature_edit_work,
+                    "recomputed_semantic_facts": signature_recomputed_facts,
+                    "recomputation_reasons": signature_reasons,
+                    "reused_semantic_fact_count": len(signature_reused_facts),
+                    "recomputed_declaration_facts": signature_recomputed_declarations,
+                    "declaration_recomputation_reasons": signature_declaration_reasons,
+                    "reused_declaration_fact_count": len(signature_reused_declarations),
+                    "caller_fact": application_caller_fact,
+                    "specialization_facts": specialized_summarize,
+                    "artifact_identity": signature_edit_response.get("artifact", {}).get(
+                        "identity"
+                    ),
+                    "artifact_replaced": (
+                        signature_edit_response.get("artifact", {}).get("identity")
+                        != parse_comment_response.get("artifact", {}).get("identity")
+                    ),
+                    "provider_wall_seconds": round(signature_edit_elapsed, 6),
+                    "provider_metrics": signature_edit_metrics,
+                    "stage0_wall_seconds": signature_oracle_metrics.get("wall_seconds"),
+                    "stage0_metrics": signature_oracle_metrics,
+                    "canonical_vm_wall_seconds": signature_vm_metrics.get("wall_seconds"),
+                    "canonical_vm_peak_rss_bytes": signature_vm_metrics.get(
+                        "peak_rss_bytes"
+                    ),
+                    "canonical_vm_artifact_id": signature_vm_document.get(
+                        "record", {}
+                    ).get("artifact_id"),
+                    "canonical_vm_metrics": signature_vm_metrics,
+                    "stage0_canonical_vm_match": True,
+                    "unchanged_application_result": True,
+                },
                 "provider_summary_status": parse_cold.get("status"),
             },
             "limitations": [
@@ -1238,6 +1420,32 @@ def main() -> None:
                     == parse_comment_response.get("artifact", {}).get("identity")
                     and parse_cold_returned == function_edit_returned
                 ),
+                "language_imported_signature_invalidated_exact_fact_closure": (
+                    set(signature_recomputed_facts)
+                    == (expected_signature_recomputed | set(specialized_summarize))
+                    and signature_reasons.get(summarize_fact)
+                    == "declaration_interface_changed"
+                    and signature_reasons.get(application_caller_fact)
+                    == "dependencies_changed"
+                ),
+                "language_imported_signature_invalidated_exact_declaration_facts": (
+                    set(signature_recomputed_declarations)
+                    == (expected_signature_declarations
+                        | set(specialized_summarize_declaration))
+                    and "mncs:0.2:function:tests.native_readiness::run"
+                    in signature_reused_declarations
+                ),
+                "language_independent_body_facts_reused_after_signature_edit": (
+                    "mncs:0.2:body:mncs.test.snapshot::same"
+                    in signature_reused_facts
+                ),
+                "signature_edit_regenerated_executable_closure": (
+                    signature_edit_response.get("artifact", {}).get("identity")
+                    != parse_comment_response.get("artifact", {}).get("identity")
+                ),
+                "signature_edit_matches_stage0_and_preserves_application_result": (
+                    signature_vm_returned == parse_cold_normalized
+                ),
                 "store_input_artifact_reused": store_response["cache"]["status"] == "hit",
                 "invalid_source_precise_rejection": diagnostic_codes,
                 "invalid_success_publication": invalid_response["cache"]["publication"],
@@ -1256,6 +1464,7 @@ def main() -> None:
                 "language_source_parse_cold": parse_cold_work,
                 "language_source_parse_comment_edit": parse_comment_work,
                 "language_source_parse_uncalled_body_edit": function_edit_work,
+                "language_source_parse_imported_signature_edit": signature_edit_work,
             },
             "wall_seconds": {
                 "cold": round(cold_elapsed, 6),
@@ -1269,6 +1478,10 @@ def main() -> None:
                 "language_source_parse_cold": round(parse_cold_elapsed, 6),
                 "language_source_parse_comment_edit": round(parse_comment_elapsed, 6),
                 "language_source_parse_uncalled_body_edit": round(function_edit_elapsed, 6),
+                "language_source_parse_imported_signature_edit": round(
+                    signature_edit_elapsed, 6
+                ),
+                "signature_edit_canonical_vm": signature_vm_metrics.get("wall_seconds"),
             },
             "process_tree_metrics": {
                 "method": "sampled /proc process tree at 10 ms intervals",
@@ -1282,6 +1495,7 @@ def main() -> None:
                 "language_source_parse_cold": parse_cold_metrics,
                 "language_source_parse_comment_edit": parse_comment_metrics,
                 "language_source_parse_uncalled_body_edit": function_edit_metrics,
+                "language_source_parse_imported_signature_edit": signature_edit_metrics,
             },
         }
         if DIGEST_EVIDENCE_PATH.exists():

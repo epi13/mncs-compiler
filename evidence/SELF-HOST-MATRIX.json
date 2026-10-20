@@ -9878,7 +9878,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-20T14:30:06.187672+00:00",
+  "evidence_updated_at": "2026-10-20T14:43:05.910012+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -21394,5 +21394,102 @@
     "scope": "These are direct Language frontend regression tests. They establish imported callable-interface and nominal-type invalidation with exact independent fact reuse and fresh diagnostics. They do not test Compiler application-build for these specific fixtures, full Compiler self-consumption, Stage-1, or Stage-2 succession.",
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_native_test_imported_signature_fact_invalidation_20261020": {
+    "application_build_response_schema": "mncs.compiler.application-build/4",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_revision": "d85f3cbdeafe91a989d4e83424fb2ab380153c6a",
+    "evidence_artifact": "evidence/native-app-readiness-mncs-test-imported-signature-fact-invalidation-20261020.json",
+    "evidence_sha256": "7932608e2e98940fd1b8eedd382a59f7fbef978d0597ccd82eb2b6fb098487ed",
+    "executable": {
+      "application_result_unchanged": true,
+      "artifact_identity_after": "sha256:2d053e6f6fec22d3140be9308818288bdaddf4ef9f7a3c8fe7ddb1113a4ec252",
+      "artifact_identity_before": "sha256:5617687e80fd13626fcdb33580d3145ee6242d4ab887386f22e945bce73ebc89",
+      "artifact_replaced": true,
+      "canonical_vm_matches_stage0": true
+    },
+    "imported_signature_change": {
+      "body_fact_count_before": 24,
+      "body_facts_recomputed": [
+        "mncs:0.2:body:mncs.test.suite::summarize",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+        "mncs:0.2:body:tests.native_readiness::run"
+      ],
+      "body_facts_reused": 21,
+      "declaration_facts_recomputed": [
+        "mncs:0.2:function:mncs.test.suite::summarize",
+        "mncs:0.2:function:mncs.test.suite::summarize__spec_f10cf230"
+      ],
+      "declaration_facts_reused": 22,
+      "declaration_recomputation_reasons": {
+        "mncs:0.2:function:mncs.test.suite::summarize": "subject_changed",
+        "mncs:0.2:function:mncs.test.suite::summarize__spec_f10cf230": "subject_changed"
+      },
+      "edited_interface": "mncs.test.suite::summarize<N: Nat>(tests: [TestResult; N]) -> (result: SuiteSummary) renamed to output field updated",
+      "parsed_sources": 1,
+      "recomputation_reasons": {
+        "mncs:0.2:body:mncs.test.suite::summarize": "declaration_interface_changed",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230": "declaration_interface_changed",
+        "mncs:0.2:body:tests.native_readiness::run": "dependencies_changed"
+      },
+      "reused_sources": 4
+    },
+    "language_fact_schema": "mncs.language-verification-fact/3",
+    "language_revision": "4b20e007dcdacc5ffe5464004dbdd9cfcf5a3ed5",
+    "measurements": {
+      "comment_edit": {
+        "body_facts_recomputed": 0,
+        "body_facts_reused": 24,
+        "provider_cpu_seconds": 1.19,
+        "provider_peak_rss_bytes": 76238848,
+        "provider_wall_seconds": 1.290582
+      },
+      "imported_signature_edit": {
+        "body_facts_recomputed": [
+          "mncs:0.2:body:mncs.test.suite::summarize",
+          "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+          "mncs:0.2:body:tests.native_readiness::run"
+        ],
+        "body_facts_reused": 21,
+        "provider_cpu_seconds": 1.56,
+        "provider_peak_rss_bytes": 76210176,
+        "provider_wall_seconds": 1.676557
+      },
+      "uncalled_body_edit": {
+        "body_facts_recomputed": [
+          "mncs:0.2:body:mncs.test.snapshot::same"
+        ],
+        "body_facts_reused": 23,
+        "provider_cpu_seconds": 1.21,
+        "provider_peak_rss_bytes": 76460032,
+        "provider_wall_seconds": 1.325187
+      }
+    },
+    "observed_at": "2026-10-20T14:43:05.910012+00:00",
+    "provider_report_sha256": "1e006bc574acffd079a08d8120733d2cee259d00580da150686e7de466ced3e6",
+    "scope": "The five-module mncs-test native application used Language fact v3 under application-build/9. An imported generic output interface edit recomputed exactly its function, specialization, and root application caller while retaining independent verified facts, regenerated the executable, and preserved Stage-0/canonical-VM behavior. This does not establish full Compiler self-consumption, Forge-routed execution, native Test-runner conversion, or Stage-1/Stage-2 succession.",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "status": "passed_language_fact_v3_imported_signature_invalidation_through_application_build",
+    "test_harness": "tools/test_application_build_provider.py",
+    "test_harness_sha256": "0c976da275dfa8d34558d189d87a55fac99415a1f02293c371f3be3b8a3fbd6c",
+    "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "workload": {
+      "callable": "tests.native_readiness::run",
+      "imported_modules": [
+        "mncs.test.assertions",
+        "mncs.test.generative",
+        "mncs.test.snapshot",
+        "mncs.test.suite"
+      ],
+      "program_function_count": 24,
+      "repository": "mncs-test",
+      "request_schema": "mncs.compiler.application-build-request/1",
+      "resolved_module_count": 5,
+      "response_schema": "mncs.compiler.application-build/4",
+      "root_module": "tests.native_readiness",
+      "verification_work_schema": "mncs.compiler.application-build-verification-work/4"
+    }
   }
 }
