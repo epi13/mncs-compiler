@@ -740,6 +740,130 @@ def main() -> None:
                 "cache_entry_published": generic_invalid_entry.exists(),
             },
         }
+
+        generic_argument_modules = {
+            "lib.generic_arguments": (
+                "mncs 0.10;\n"
+                "module lib.generic_arguments;\n"
+                "fn first<N: Nat>(values: [u64; N]) -> (result: u64) "
+                "{ return values[0]; }\n"
+                "fn independent(value: u64) -> (result: u64) "
+                "{ return value; }\n"
+            ),
+        }
+        generic_argument_root = (
+            "mncs 0.10;\n"
+            "module app.generic_arguments;\n"
+            "use lib.generic_arguments as g;\n"
+            "fn entry_two(values: [u64; 2]) -> (result: u64) "
+            "{ return g.first<2>(values); }\n"
+            "fn entry_three(values: [u64; 3]) -> (result: u64) "
+            "{ return g.first<3>(values); }\n"
+            "fn other(value: u64) -> (result: u64) "
+            "{ return g.independent(value); }\n"
+        )
+        generic_argument_request = {
+            "schema_version": REQUEST_SCHEMA,
+            "target": "mncs-vm-0.1",
+            "root_source_id": "tests/native_generic_arguments.mncs",
+            "root_source": generic_argument_root,
+            "callable_roots": [
+                {"module": "app.generic_arguments", "function": name}
+                for name in ("entry_two", "entry_three", "other")
+            ],
+            "test_selection": {"kind": "all_source_cases"},
+            "modules": generic_argument_modules,
+            "generic_seeds": [],
+            "capabilities": [],
+            "effect_assumptions": [],
+            "optimization_policy": "default",
+            "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1",
+        }
+        generic_argument_variant = copy.deepcopy(generic_argument_request)
+        old_generic_argument_call = (
+            "fn entry_three(values: [u64; 3]) -> (result: u64) "
+            "{ return g.first<3>(values); }"
+        )
+        new_generic_argument_call = (
+            "fn entry_three(values: [u64; 4]) -> (result: u64) "
+            "{ return g.first<4>(values); }"
+        )
+        if generic_argument_variant["root_source"].count(old_generic_argument_call) != 1:
+            raise AssertionError("generic argument fixture lost its entry_three specialization")
+        generic_argument_variant["root_source"] = generic_argument_variant[
+            "root_source"
+        ].replace(old_generic_argument_call, new_generic_argument_call, 1)
+        generic_argument_cache = cache_root / "generic-argument-edit"
+        generic_argument_baseline = measure_build(
+            "generic_argument_baseline", generic_argument_request,
+            generic_argument_cache, compare_execution=False,
+        )
+        generic_argument_edit = measure_build(
+            "generic_argument_edit", generic_argument_variant,
+            generic_argument_cache, compare_execution=False,
+        )
+        stages["generic_argument_edit"] = generic_argument_edit
+        generic_argument_work = generic_argument_edit["verification_work"]
+        generic_argument_recomputed = set(
+            generic_argument_work.get("recomputed_semantic_facts", [])
+        )
+        generic_argument_reused = set(
+            generic_argument_work.get("reused_semantic_facts", [])
+        )
+        new_generic_specializations = {
+            subject for subject in generic_argument_recomputed
+            if "lib.generic_arguments::first__spec_" in subject
+        }
+        changed_generic_caller = "mncs:0.2:body:app.generic_arguments::entry_three"
+        expected_generic_argument_recomputed = {
+            changed_generic_caller,
+            *new_generic_specializations,
+        }
+        generic_argument_reasons = generic_argument_work.get(
+            "semantic_fact_recomputation_reasons", []
+        )
+        reused_generic_specializations = {
+            subject for subject in generic_argument_reused
+            if "lib.generic_arguments::first__spec_" in subject
+        }
+        if (generic_argument_baseline["response"].get("status") != "verified"
+                or generic_argument_edit["response"].get("status") != "verified"
+                or generic_argument_work.get("front_end_invocations") != 1
+                or len(new_generic_specializations) != 1
+                or generic_argument_recomputed != expected_generic_argument_recomputed
+                or len(reused_generic_specializations) != 1
+                or not any(subject.endswith("::entry_two") for subject in generic_argument_reused)
+                or not any(subject.endswith("::other") for subject in generic_argument_reused)
+                or not any(row.get("subject") == changed_generic_caller
+                           and row.get("reason") == "subject_changed"
+                           for row in generic_argument_reasons)
+                or not any(row.get("subject") in new_generic_specializations
+                           and row.get("reason") == "missing"
+                           for row in generic_argument_reasons)):
+            raise AssertionError(
+                "generic argument edit did not isolate the new specialization and caller: "
+                f"recomputed={sorted(generic_argument_recomputed)}, "
+                f"reused={sorted(generic_argument_reused)}, reasons={generic_argument_reasons}"
+            )
+        if (generic_argument_edit["response"].get("artifact", {}).get("identity")
+                == generic_argument_baseline["response"].get("artifact", {}).get("identity")):
+            raise AssertionError("generic argument edit reused an artifact with a stale closure")
+        generic_specialization_evidence["generic_argument_edit"] = {
+            "baseline_cache_key": generic_argument_baseline["response"].get(
+                "cache", {}
+            ).get("key"),
+            "changed_cache_key": generic_argument_edit["response"].get(
+                "cache", {}
+            ).get("key"),
+            "recomputed_semantic_facts": sorted(generic_argument_recomputed),
+            "recomputation_reasons": generic_argument_reasons,
+            "reused_specialization_fact": next(iter(reused_generic_specializations)),
+            "reused_independent_callers": sorted(
+                subject for subject in generic_argument_reused
+                if subject.endswith("::entry_two") or subject.endswith("::other")
+            ),
+            "artifact_regenerated": True,
+        }
         execution_checks.append({
             "stage": "generic_specialization_body_edit", "stage0_vm_equal": True,
         })
