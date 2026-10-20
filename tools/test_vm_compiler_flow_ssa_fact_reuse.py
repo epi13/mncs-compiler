@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -273,7 +274,16 @@ def main() -> dict:
         raise AssertionError("comment fixture did not move current source locations")
     started = time.monotonic()
 
-    with tempfile.TemporaryDirectory(prefix="mncs-flow-ssa-language-fact-reuse-") as raw:
+    persistent_cache = os.environ.get("MNCS_FLOW_SSA_FACT_CACHE_DIR")
+    if persistent_cache:
+        cache_root = Path(persistent_cache).expanduser().resolve()
+        cache_root.mkdir(parents=True, exist_ok=True)
+        cache_context = nullcontext(str(cache_root))
+    else:
+        cache_context = tempfile.TemporaryDirectory(
+            prefix="mncs-flow-ssa-language-fact-reuse-"
+        )
+    with cache_context as raw:
         cache = Path(raw)
         cold, cold_metrics = compile_once(build_request(modules), cache / "cold", "cold Flow-to-SSA build")
         cold_work = require_work(cold, "cold Flow-to-SSA build")
@@ -312,31 +322,42 @@ def main() -> dict:
             subject for subject in recomputed
             if subject.startswith(lower_unit_subject + "__spec_")
         }
+        ssa_unit_subject = "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa"
+        ssa_unit_specializations = {
+            subject for subject in recomputed
+            if subject.startswith(ssa_unit_subject + "__spec_")
+        }
+        root_subject = f"mncs:0.2:body:{ROOT_MODULE}::{ROOT_FUNCTION}"
+        dependency_changed_subjects = {
+            lower_unit_subject,
+            *lower_unit_specializations,
+            ssa_unit_subject,
+            *ssa_unit_specializations,
+            "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas",
+            "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function",
+            "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function_source_flow",
+            root_subject,
+        }
         expected_recomputed = {
             changed_subject,
-            lower_unit_subject,
-            "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas",
-            "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function_source_flow",
-        } | flow_specializations | lower_unit_specializations
+        } | flow_specializations | dependency_changed_subjects
         if (edited.get("status") != "verified"
                 or edited.get("cache", {}).get("status") != "miss"
                 or not flow_specializations
                 or not lower_unit_specializations
+                or not ssa_unit_specializations
                 or recomputed != expected_recomputed
                 or changed_subject not in recomputed
                 or reasons.get(changed_subject) != "subject_changed"
                 or any(reasons.get(subject) != "subject_changed"
                        for subject in flow_specializations)
                 or any(reasons.get(subject) != "dependencies_changed"
-                       for subject in ({lower_unit_subject,
-                                        "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas",
-                                        "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function_source_flow"}
-                                       | lower_unit_specializations))
+                       for subject in dependency_changed_subjects)
                 or not edit_work["reused_semantic_facts"]
                 or edit_work["recomputed_declaration_facts"]
                 or edited.get("artifact", {}).get("identity")
                 == cold.get("artifact", {}).get("identity")):
-            raise AssertionError("Flow body edit did not preserve and invalidate Language facts correctly: "
+            raise AssertionError("Flow body edit did not preserve and invalidate the actual Language dependency closure: "
                                  + json.dumps({"recomputed": sorted(recomputed), "reasons": reasons}, sort_keys=True)[:6000])
         if len(edit_work["reused_semantic_facts"]) + len(recomputed) != cold_work["produced_semantic_fact_count"]:
             raise AssertionError("Flow body edit lost independent verified body facts")
