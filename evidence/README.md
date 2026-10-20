@@ -1328,3 +1328,18 @@ cgroup measurements were unavailable. This covers selected Source callables,
 not the full Source module. Language verified facts reused remains zero, and
 Stage-1/Stage-2 succession remains unproven. Evidence SHA-256:
 `7794a02d386885bfd34f32a2e86b147d5e2683c3d78e9cf234448e835fde8880`.
+
+## Fresh-process native Test provider cache reuse (2026-10-20)
+
+The [provider cache run](native-test-provider-app-boundary-20261020T020218.167569Z-2435417.json)
+reopens the Compiler probe after its cold multi-callable `/2` build and reuses
+the same bounded application cache. The fresh process returned a cache hit
+with zero frontend invocations, the same artifact identity, both original
+callable interface identities, unchanged capability dispatch, and the same
+source snapshot identity. The cold build measured 1.203 seconds wall, 1.15
+seconds CPU, and 60.9 MB peak RSS; the warm process measured 0.127 seconds,
+0.10 seconds CPU, and 25.4 MB peak RSS. Cgroup memory was unavailable. These
+are workload-specific cache measurements, not Language verified-fact reuse.
+The real seven-case `mncs-test` provider run again matched Stage-0. Execution
+still uses the local provider adapter; Forge execution, canonical Store
+publication/readback, and Compiler self-consumption remain separate frontiers.

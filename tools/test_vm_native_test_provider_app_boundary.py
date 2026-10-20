@@ -582,6 +582,71 @@ def main() -> None:
         finally:
             probe.close()
 
+        warm_probe = support.Probe(
+            cache / "program-cache",
+            executable=support.PROBE,
+            application_cache_dir=cache / "application-cache",
+        )
+        try:
+            warm_built, warm_build_metrics = warm_probe.send(
+                {"compile_application": request}, timeout=90,
+            )
+        finally:
+            warm_probe.close()
+        warm_roots = warm_built.get("callable_scope", {}).get("callable_roots", [])
+        cold_interface_rows = [
+            (row.get("module"), row.get("function"),
+             row.get("interface", {}).get("identity"))
+            for row in callable_rows
+        ]
+        warm_interface_rows = [
+            (row.get("module"), row.get("function"),
+             row.get("interface", {}).get("identity"))
+            for row in warm_roots
+        ]
+        warm_cache_status = warm_built.get("cache", {}).get("status")
+        warm_frontend_invocations = test_inventory.frontend_invocations(warm_built)
+        warm_artifact = warm_built.get("artifact", {}).get("value")
+        warm_artifact_identity = warm_built.get("artifact", {}).get("identity")
+        if (
+            warm_built.get("schema_version") != "mncs.compiler.application-build/5"
+            or warm_built.get("status") != "verified"
+            or warm_cache_status != "hit"
+            or warm_frontend_invocations != 0
+            or warm_artifact_identity != artifact_identity
+            or not isinstance(warm_artifact, dict)
+            or warm_artifact.get("artifact_id") != artifact_identity
+            or warm_interface_rows != cold_interface_rows
+            or warm_built.get("capability_dispatch") != dispatch
+            or warm_built.get("source_snapshot", {}).get("identity")
+            != built.get("source_snapshot", {}).get("identity")
+        ):
+            raise AssertionError(json.dumps({
+                "schema_version": warm_built.get("schema_version"),
+                "status": warm_built.get("status"),
+                "cache_status": warm_cache_status,
+                "frontend_invocations": warm_frontend_invocations,
+                "artifact_identity": warm_artifact_identity,
+                "expected_artifact_identity": artifact_identity,
+                "callable_interfaces": warm_interface_rows,
+                "expected_callable_interfaces": cold_interface_rows,
+                "capability_dispatch_matches": warm_built.get("capability_dispatch") == dispatch,
+                "source_snapshot_matches": (
+                    warm_built.get("source_snapshot", {}).get("identity")
+                    == built.get("source_snapshot", {}).get("identity")
+                ),
+            }, indent=2)[:10000])
+        warm_reuse = {
+            "cache_status": warm_cache_status,
+            "frontend_invocations": warm_frontend_invocations,
+            "artifact_identity": warm_artifact_identity,
+            "callable_interfaces_match": warm_interface_rows == cold_interface_rows,
+            "capability_dispatch_matches": warm_built.get("capability_dispatch") == dispatch,
+            "source_snapshot_identity": warm_built.get("source_snapshot", {}).get("identity"),
+            "fresh_probe_process": True,
+            "metrics": warm_build_metrics,
+        }
+
     binary, runner_sha, runner_lock_sha = digest_app.build_runner()
     artifact_fd, artifact_name = tempfile.mkstemp(prefix="provider-app-", suffix=".vm.json")
     os.close(artifact_fd)
@@ -1801,6 +1866,7 @@ def main() -> None:
                     "application_build_requests": 1,
                     "application_artifact_count": 1,
                     "frontend_invocations": test_inventory.frontend_invocations(built),
+                    "fresh_process_warm_reuse": warm_reuse,
                     "artifact_identity": artifact_identity,
                     "artifact_sha256": sha(artifact_bytes),
                     "artifact_bytes": len(artifact_bytes),
