@@ -620,6 +620,15 @@ def main() -> None:
                 or parse_cold_observation.get("schema_version") != "mncs.language-source-parse-cache-observation/1"
                 or not parse_cold_observation.get("parsed_source_identities")):
             raise AssertionError("provider /9 response omitted Language parse execution evidence")
+        parse_cold_reused_facts = parse_cold_work.get("reused_semantic_facts", [])
+        parse_cold_recomputed_facts = parse_cold_work.get("recomputed_semantic_facts", [])
+        if (not isinstance(parse_cold_reused_facts, list)
+                or not isinstance(parse_cold_recomputed_facts, list)
+                or not parse_cold_recomputed_facts
+                or parse_cold_reused_facts):
+            raise AssertionError(
+                "real mncs-test cold build did not report its Language body-verification units"
+            )
 
         parse_comment_request = dict(parse_request)
         parse_comment_request["root_source"] = (
@@ -641,6 +650,91 @@ def main() -> None:
                 or not parse_comment_observation.get("reused_source_identities")
                 or not parse_comment_observation.get("parsed_source_identities")):
             raise AssertionError("provider /9 fresh process did not reuse unchanged imported parses")
+        parse_comment_reused_facts = parse_comment_work.get("reused_semantic_facts", [])
+        parse_comment_recomputed_facts = parse_comment_work.get("recomputed_semantic_facts", [])
+        if (not isinstance(parse_comment_reused_facts, list)
+                or not isinstance(parse_comment_recomputed_facts, list)
+                or not parse_comment_reused_facts
+                or len(parse_comment_recomputed_facts) >= len(parse_cold_recomputed_facts)
+                or parse_comment_work.get("function_body_verification")
+                != "recomputed_with_language_fact_reuse"):
+            raise AssertionError(
+                "real mncs-test comment edit did not avoid Language function-body verification"
+            )
+
+        # Change one uncalled function body in the real imported Test modules.
+        # The reordered equality is semantically equivalent, but its body
+        # fingerprint changes, so Language must reverify that unit while
+        # reusing independent bodies. The root readiness workload does not
+        # call mncs.test.snapshot::same.
+        function_edit_request = dict(parse_comment_request)
+        function_edit_request["modules"] = dict(parse_comment_request["modules"])
+        snapshot_source = function_edit_request["modules"]["mncs.test.snapshot"]
+        old_snapshot_body = (
+            "return left.length == right.length && left.checksum == right.checksum;"
+        )
+        new_snapshot_body = (
+            "return left.checksum == right.checksum && left.length == right.length;"
+        )
+        if snapshot_source.count(old_snapshot_body) != 1:
+            raise AssertionError("selected mncs-test snapshot source changed unexpectedly")
+        function_edit_request["modules"]["mncs.test.snapshot"] = snapshot_source.replace(
+            old_snapshot_body, new_snapshot_body, 1
+        )
+        function_edit_path = base / "source-parse-function-edit-request.json"
+        write_json(function_edit_path, function_edit_request)
+        function_edit_dir = base / "source-parse-function-edit-output"
+        function_edit_dir.mkdir()
+        function_edit, function_edit_response, function_edit_elapsed, function_edit_metrics = invoke(
+            ["--request-file", function_edit_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", parse_cache_arg],
+            output_dir=function_edit_dir,
+            cache_dir=parse_cache_dir,
+        )
+        function_edit_work = function_edit_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        function_edit_observation = function_edit_work.get(
+            "source_parse_cache", {}
+        ).get("observation", {})
+        function_edit_reused_facts = function_edit_work.get("reused_semantic_facts", [])
+        function_edit_recomputed_facts = function_edit_work.get(
+            "recomputed_semantic_facts", []
+        )
+        edited_body_identity = "mncs:0.2:body:mncs.test.snapshot::same"
+        if (function_edit_response.get("schema_version") != SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
+                or function_edit_response.get("status") != "verified"
+                or len(function_edit_observation.get("parsed_source_identities", [])) != 1
+                or len(function_edit_observation.get("reused_source_identities", [])) != 4
+                or edited_body_identity not in function_edit_recomputed_facts
+                or edited_body_identity in function_edit_reused_facts
+                or not function_edit_reused_facts
+                or len(function_edit_recomputed_facts) >= len(parse_cold_recomputed_facts)
+                or function_edit_work.get("function_body_verification")
+                != "recomputed_with_language_fact_reuse"):
+            raise AssertionError(
+                "real mncs-test uncalled body edit did not isolate Language revalidation: "
+                + json.dumps(function_edit_work, sort_keys=True)[:5000]
+            )
+        if (function_edit_response.get("artifact", {}).get("identity")
+                != parse_comment_response.get("artifact", {}).get("identity")):
+            raise AssertionError(
+                "an uncalled mncs-test body edit changed the selected executable artifact"
+            )
+        parse_cold_vm, _ = app.run_vm(
+            parse_cold_response.get("artifact", {}).get("value"),
+            app.call_request()["arguments"],
+        )
+        function_edit_vm, _ = app.run_vm(
+            function_edit_response.get("artifact", {}).get("value"),
+            app.call_request()["arguments"],
+        )
+        parse_cold_returned = parse_cold_vm.get("record", {}).get("returned")
+        function_edit_returned = function_edit_vm.get("record", {}).get("returned")
+        if not parse_cold_returned or parse_cold_returned != function_edit_returned:
+            raise AssertionError(
+                "canonical VM behavior changed after an uncalled mncs-test body edit"
+            )
 
         batch_roots = batch_app.ROOTS
         batch_request = batch_app.build_request(batch_roots)
@@ -1079,8 +1173,18 @@ def main() -> None:
                     "source_parse_cache": parse_comment_response.get("cache", {}).get(
                         "verification_work", {}
                     ).get("source_parse_cache"),
+                    "verification_work": parse_comment_work,
                     "provider_wall_seconds": round(parse_comment_elapsed, 6),
                     "provider_metrics": parse_comment_metrics,
+                },
+                "uncalled_body_edit": {
+                    "cache_status": function_edit_response.get("cache", {}).get("status"),
+                    "source_parse_cache": function_edit_work.get("source_parse_cache"),
+                    "verification_work": function_edit_work,
+                    "edited_body_identity": edited_body_identity,
+                    "provider_wall_seconds": round(function_edit_elapsed, 6),
+                    "provider_metrics": function_edit_metrics,
+                    "canonical_vm_returned": function_edit_returned,
                 },
                 "provider_summary_status": parse_cold.get("status"),
             },
@@ -1115,6 +1219,25 @@ def main() -> None:
                     .get("observation", {})
                     .get("reused_source_identities")
                 ),
+                "language_function_body_facts_reused_after_comment_edit": bool(
+                    parse_comment_reused_facts
+                ),
+                "language_function_body_reverification_reduced_after_comment_edit": (
+                    len(parse_comment_recomputed_facts)
+                    < len(parse_cold_recomputed_facts)
+                ),
+                "language_uncalled_body_edit_invalidated_exact_fact": (
+                    edited_body_identity in function_edit_recomputed_facts
+                    and edited_body_identity not in function_edit_reused_facts
+                ),
+                "language_independent_body_facts_reused_after_uncalled_edit": bool(
+                    function_edit_reused_facts
+                ),
+                "uncalled_body_edit_preserved_executable_and_vm_behavior": (
+                    function_edit_response.get("artifact", {}).get("identity")
+                    == parse_comment_response.get("artifact", {}).get("identity")
+                    and parse_cold_returned == function_edit_returned
+                ),
                 "store_input_artifact_reused": store_response["cache"]["status"] == "hit",
                 "invalid_source_precise_rejection": diagnostic_codes,
                 "invalid_success_publication": invalid_response["cache"]["publication"],
@@ -1130,6 +1253,9 @@ def main() -> None:
                 "digest_app_cold": digest_cold_work,
                 "digest_app_warm_exact_snapshot": digest_warm_work,
                 "multi_callable_provider_build": batch_work,
+                "language_source_parse_cold": parse_cold_work,
+                "language_source_parse_comment_edit": parse_comment_work,
+                "language_source_parse_uncalled_body_edit": function_edit_work,
             },
             "wall_seconds": {
                 "cold": round(cold_elapsed, 6),
@@ -1142,6 +1268,7 @@ def main() -> None:
                 "multi_callable_vm_batch": round(batch_vm_elapsed, 6),
                 "language_source_parse_cold": round(parse_cold_elapsed, 6),
                 "language_source_parse_comment_edit": round(parse_comment_elapsed, 6),
+                "language_source_parse_uncalled_body_edit": round(function_edit_elapsed, 6),
             },
             "process_tree_metrics": {
                 "method": "sampled /proc process tree at 10 ms intervals",
@@ -1154,6 +1281,7 @@ def main() -> None:
                 "multi_callable_provider": batch_metrics,
                 "language_source_parse_cold": parse_cold_metrics,
                 "language_source_parse_comment_edit": parse_comment_metrics,
+                "language_source_parse_uncalled_body_edit": function_edit_metrics,
             },
         }
         if DIGEST_EVIDENCE_PATH.exists():
