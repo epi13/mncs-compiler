@@ -10,8 +10,8 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-20T05:10:34.375297+00:00",
-    "compiler_revision": "be021b4e498612d6e3a38af5cc7cd354d842655d",
+    "observed_at": "2026-10-20T05:21:03.184229+00:00",
+    "compiler_revision": "7a40525874f1d4bcd557398c557b78c0b640774b",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
@@ -505,8 +505,8 @@
         "store_artifact_published_by_verifier": false
       },
       "full_source_lexer_segment_fact_reuse": {
-        "status": "passed_full_source_lexer_segment_module_fact_reuse",
-        "tested_compiler_revision": "be021b4e498612d6e3a38af5cc7cd354d842655d",
+        "status": "passed_full_source_lexer_segment_fact_reuse_and_dependency_invalidation",
+        "tested_compiler_revision": "7a40525874f1d4bcd557398c557b78c0b640774b",
         "compiler_branch": "campaign/native-application-readiness-20261013",
         "stage0_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
         "language_fact_implementation_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
@@ -531,12 +531,27 @@
             "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
           }
         ],
-        "language_profile": "0.19",
         "full_module_admission": {
           "cold_verified_fact_count": 103,
           "program_function_count": 103,
           "resolved_module_count": 4,
           "status": "verified"
+        },
+        "profile_018_baseline": {
+          "diagnostic_count": 19,
+          "measurement": {
+            "cpu_seconds": 0.22,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 54149120,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 0.255552
+          },
+          "profile_bound_diagnostic_count": 9,
+          "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+          "status": "rejected_by_profile_018_traversal_bound"
         },
         "verified_fact_reuse": {
           "artifact_reused_for_unchanged_closure": true,
@@ -556,6 +571,96 @@
             "mncs:0.2:body:tests.compiler_source_frontier::check_ascii",
             "mncs:0.2:body:tests.compiler_source_frontier::check_span"
           ]
+        },
+        "imported_interface_invalidation": {
+          "all_recomputation_reasons": [
+            {
+              "reason": "dependencies_changed",
+              "subject": "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global"
+            },
+            {
+              "reason": "dependencies_changed",
+              "subject": "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global"
+            },
+            {
+              "reason": "dependencies_changed",
+              "subject": "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global_delta"
+            },
+            {
+              "reason": "dependencies_changed",
+              "subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global"
+            },
+            {
+              "reason": "dependencies_changed",
+              "subject": "mncs:0.2:body:mncs.compiler.source.v1::validate_utf8_global"
+            }
+          ],
+          "all_recomputed_subjects": [
+            "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global",
+            "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global",
+            "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global",
+            "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global_delta",
+            "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global",
+            "mncs:0.2:body:mncs.compiler.source.v1::validate_utf8_global"
+          ],
+          "application_build_verified": true,
+          "canonical_vm_matches_stage0": true,
+          "changed_subject": "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global",
+          "changed_subject_reason": "subject_changed",
+          "dependency_changed_subjects": [
+            "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global",
+            "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global",
+            "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global"
+          ],
+          "edit": "renamed input total to source_length; positional callsites unchanged",
+          "exported_function": "byte_at_global",
+          "fresh_diagnostics": [],
+          "recomputed_fact_count": 6,
+          "reused_fact_count": 97,
+          "reused_independent_subjects": [
+            "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+            "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+            "mncs:0.2:body:tests.compiler_source_frontier::check_ascii",
+            "mncs:0.2:body:tests.compiler_source_frontier::check_span"
+          ],
+          "source_module": "mncs.compiler.source.v1"
+        },
+        "invalid_changed_body": {
+          "cache_publication": "not_published",
+          "diagnostics": [
+            {
+              "code": "MNE172",
+              "message": "imported module 'mncs.compiler.segment.v1' failed to load [MNE172]"
+            },
+            {
+              "code": "MNE172",
+              "message": "imported module 'mncs.compiler.source.v1' failed to elaborate [MNE122, MNE103]"
+            },
+            {
+              "code": "MNE122",
+              "message": "boolean literal cannot satisfy the required expression type"
+            },
+            {
+              "code": "MNE103",
+              "message": "returned value type does not match the declared output type"
+            }
+          ],
+          "edit": "changed the u64 body return expression to a bool",
+          "expected_diagnostic_code": "MNE103",
+          "exported_function": "byte_at_global",
+          "front_end_invocations": 1,
+          "front_end_outcome": "rejected",
+          "language_fact_reuse_not_attempted_before_frontend_rejection": true,
+          "prior_success_did_not_mask_error": true,
+          "produced_facts": 0,
+          "recomputed_facts": [],
+          "reused_facts": [],
+          "source_module": "mncs.compiler.source.v1",
+          "status": "rejected"
         },
         "application": {
           "artifact_identity": "sha256:ebae7465bbe3f4551710d0c0893574e82241b3b70f843ee650e68c21ac9d4de2",
@@ -578,20 +683,20 @@
         },
         "measurements": {
           "body_edit_build": {
-            "cpu_seconds": 2.86,
+            "cpu_seconds": 2.72,
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 4,
-            "peak_rss_bytes": 155496448,
+            "peak_rss_bytes": 155578368,
             "peak_threads": 1,
             "request_sequence": 1,
-            "wall_seconds": 2.923889
+            "wall_seconds": 2.75393
           },
           "canonical_vm_execution": {
             "calls_bytes": 2823,
-            "peak_rss_kib": 24124,
+            "peak_rss_kib": 24148,
             "results_bytes": 6745,
-            "wall_seconds": 0.090867
+            "wall_seconds": 0.096929
           },
           "cgroup_measurement_available": false,
           "cold_full_module_build": {
@@ -599,40 +704,66 @@
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 4,
-            "peak_rss_bytes": 146886656,
+            "peak_rss_bytes": 146804736,
             "peak_threads": 1,
             "request_sequence": 1,
-            "wall_seconds": 3.563231
+            "wall_seconds": 3.550556
           },
           "comment_edit_build": {
-            "cpu_seconds": 2.75,
+            "cpu_seconds": 2.73,
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 4,
-            "peak_rss_bytes": 155496448,
+            "peak_rss_bytes": 155230208,
             "peak_threads": 1,
             "request_sequence": 1,
-            "wall_seconds": 2.81577
+            "wall_seconds": 2.774225
+          },
+          "interface_baseline_build": {
+            "cpu_seconds": 3.46,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 146526208,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 3.512215
+          },
+          "interface_canonical_vm_execution": {
+            "calls_bytes": 2823,
+            "peak_rss_kib": 23900,
+            "results_bytes": 6745,
+            "wall_seconds": 0.090226
+          },
+          "interface_edit_build": {
+            "cpu_seconds": 2.74,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 155238400,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 2.801563
           },
           "profile_018_attempt": {
-            "cpu_seconds": 0.23,
+            "cpu_seconds": 0.22,
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 4,
-            "peak_rss_bytes": 54476800,
+            "peak_rss_bytes": 54149120,
             "peak_threads": 1,
             "request_sequence": 1,
-            "wall_seconds": 0.258673
+            "wall_seconds": 0.255552
           },
-          "whole_frontier_wall_seconds": 16.309444
+          "whole_frontier_wall_seconds": 31.839234
         },
         "harness": "tools/test_vm_compiler_full_module_fact_reuse.py",
-        "harness_sha256": "efb9fca6763bcfae53db27c0103dc900a831815753dcfcde82bf6ed3457272c6",
-        "evidence_artifact": "evidence/self-host-full-module-fact-reuse-20261020T051034Z.json",
-        "evidence_sha256": "aab4b71d297c6009a0a61240224dc0555c40b9344a124b6e329e450216c7c3a0",
+        "harness_sha256": "9fc0bea5c7e95d035fb4ae2936b4ddf9f5a518dfb112b271d9c4462fbba69aa8",
+        "evidence_artifact": "evidence/self-host-full-module-fact-reuse-20261020T052103Z.json",
+        "evidence_sha256": "ee9ffdc16b4131e14e950da41bd00bb1eb978e1ddca90081971d4283176bab59",
         "stage1_claimed": false,
         "stage2_claimed": false,
-        "scope": "The full current Compiler Source, Lexer, and Segment modules now declare Profile 0.19 and pass application-build verification together. Across fresh processes, a comment edit reuses every Language body fact; changing one unreachable UTF-8 validator recomputes only that body and reuses the remaining facts. A native application executes selected Source and Segment functions in the canonical VM, with all six typed results matching Stage-0.",
+        "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, one-body recomputation, and precise invalidation of direct callers after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
         "limitations": [
           "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
           "The changed UTF-8 function is outside the selected executable closure; its body is reverified while callable-path bodies are reused.",
@@ -20388,6 +20519,276 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "The full current Compiler Source, Lexer, and Segment modules now declare Profile 0.19 and pass application-build verification together. Across fresh processes, a comment edit reuses every Language body fact; changing one unreachable UTF-8 validator recomputes only that body and reuses the remaining facts. A native application executes selected Source and Segment functions in the canonical VM, with all six typed results matching Stage-0.",
+    "limitations": [
+      "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
+      "The changed UTF-8 function is outside the selected executable closure; its body is reverified while callable-path bodies are reused.",
+      "Profile 0.19 raises the sequence/view ceiling to 4096; its literal iteration ceiling remains 1024.",
+      "This does not establish Stage-1 or Stage-2 succession."
+    ]
+  },
+  "current_campaign_full_source_lexer_segment_dependency_invalidation_20261020": {
+    "status": "passed_full_source_lexer_segment_fact_reuse_frontier",
+    "observed_at": "2026-10-20T05:21:03.184229+00:00",
+    "tested_compiler_revision": "7a40525874f1d4bcd557398c557b78c0b640774b",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "stage0_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+    "language_fact_implementation_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "language_profile": "0.19",
+    "modules": [
+      {
+        "language_profile": "0.19",
+        "module": "mncs.compiler.source.v1",
+        "source_path": "src/compiler/source.mncs",
+        "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+      },
+      {
+        "language_profile": "0.19",
+        "module": "mncs.compiler.lexer.v1",
+        "source_path": "src/compiler/lexer.mncs",
+        "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+      },
+      {
+        "language_profile": "0.19",
+        "module": "mncs.compiler.segment.v1",
+        "source_path": "src/compiler/segment.mncs",
+        "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+      }
+    ],
+    "full_module_admission": {
+      "cold_verified_fact_count": 103,
+      "program_function_count": 103,
+      "resolved_module_count": 4,
+      "status": "verified"
+    },
+    "profile_018_baseline": {
+      "diagnostic_count": 19,
+      "measurement": {
+        "cpu_seconds": 0.22,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54149120,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.255552
+      },
+      "profile_bound_diagnostic_count": 9,
+      "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+      "status": "rejected_by_profile_018_traversal_bound"
+    },
+    "verified_fact_reuse": {
+      "artifact_reused_for_unchanged_closure": true,
+      "body_edit_recomputed": [
+        "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid"
+      ],
+      "body_edit_reused": 102,
+      "cold_facts_produced": 103,
+      "comment_edit_recomputed": 0,
+      "comment_edit_reused": 103,
+      "contract": "mncs.language-verification-fact/1",
+      "edited_subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid",
+      "fresh_process_per_snapshot": true,
+      "unchanged_execution_path_reused": [
+        "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+        "mncs:0.2:body:tests.compiler_source_frontier::check_ascii",
+        "mncs:0.2:body:tests.compiler_source_frontier::check_span"
+      ]
+    },
+    "imported_interface_invalidation": {
+      "all_recomputation_reasons": [
+        {
+          "reason": "dependencies_changed",
+          "subject": "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global"
+        },
+        {
+          "reason": "dependencies_changed",
+          "subject": "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global"
+        },
+        {
+          "reason": "subject_changed",
+          "subject": "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global"
+        },
+        {
+          "reason": "dependencies_changed",
+          "subject": "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global_delta"
+        },
+        {
+          "reason": "dependencies_changed",
+          "subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global"
+        },
+        {
+          "reason": "dependencies_changed",
+          "subject": "mncs:0.2:body:mncs.compiler.source.v1::validate_utf8_global"
+        }
+      ],
+      "all_recomputed_subjects": [
+        "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global",
+        "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global_delta",
+        "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::validate_utf8_global"
+      ],
+      "application_build_verified": true,
+      "canonical_vm_matches_stage0": true,
+      "changed_subject": "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global",
+      "changed_subject_reason": "subject_changed",
+      "dependency_changed_subjects": [
+        "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global",
+        "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global"
+      ],
+      "edit": "renamed input total to source_length; positional callsites unchanged",
+      "exported_function": "byte_at_global",
+      "fresh_diagnostics": [],
+      "recomputed_fact_count": 6,
+      "reused_fact_count": 97,
+      "reused_independent_subjects": [
+        "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+        "mncs:0.2:body:tests.compiler_source_frontier::check_ascii",
+        "mncs:0.2:body:tests.compiler_source_frontier::check_span"
+      ],
+      "source_module": "mncs.compiler.source.v1"
+    },
+    "invalid_changed_body": {
+      "cache_publication": "not_published",
+      "diagnostics": [
+        {
+          "code": "MNE172",
+          "message": "imported module 'mncs.compiler.segment.v1' failed to load [MNE172]"
+        },
+        {
+          "code": "MNE172",
+          "message": "imported module 'mncs.compiler.source.v1' failed to elaborate [MNE122, MNE103]"
+        },
+        {
+          "code": "MNE122",
+          "message": "boolean literal cannot satisfy the required expression type"
+        },
+        {
+          "code": "MNE103",
+          "message": "returned value type does not match the declared output type"
+        }
+      ],
+      "edit": "changed the u64 body return expression to a bool",
+      "expected_diagnostic_code": "MNE103",
+      "exported_function": "byte_at_global",
+      "front_end_invocations": 1,
+      "front_end_outcome": "rejected",
+      "language_fact_reuse_not_attempted_before_frontend_rejection": true,
+      "prior_success_did_not_mask_error": true,
+      "produced_facts": 0,
+      "recomputed_facts": [],
+      "reused_facts": [],
+      "source_module": "mncs.compiler.source.v1",
+      "status": "rejected"
+    },
+    "application": {
+      "artifact_identity": "sha256:ebae7465bbe3f4551710d0c0893574e82241b3b70f843ee650e68c21ac9d4de2",
+      "artifact_json_bytes": 445164,
+      "callable_roots": [
+        "check_span",
+        "check_ascii"
+      ],
+      "canonical_vm_invocations": 6,
+      "canonical_vm_matches_stage0": true,
+      "returned_values": [
+        true,
+        false,
+        false,
+        true,
+        false,
+        true
+      ],
+      "source_module_count": 3
+    },
+    "measurements": {
+      "body_edit_build": {
+        "cpu_seconds": 2.72,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 155578368,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 2.75393
+      },
+      "canonical_vm_execution": {
+        "calls_bytes": 2823,
+        "peak_rss_kib": 24148,
+        "results_bytes": 6745,
+        "wall_seconds": 0.096929
+      },
+      "cgroup_measurement_available": false,
+      "cold_full_module_build": {
+        "cpu_seconds": 3.49,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 146804736,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 3.550556
+      },
+      "comment_edit_build": {
+        "cpu_seconds": 2.73,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 155230208,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 2.774225
+      },
+      "interface_baseline_build": {
+        "cpu_seconds": 3.46,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 146526208,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 3.512215
+      },
+      "interface_canonical_vm_execution": {
+        "calls_bytes": 2823,
+        "peak_rss_kib": 23900,
+        "results_bytes": 6745,
+        "wall_seconds": 0.090226
+      },
+      "interface_edit_build": {
+        "cpu_seconds": 2.74,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 155238400,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 2.801563
+      },
+      "profile_018_attempt": {
+        "cpu_seconds": 0.22,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54149120,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.255552
+      },
+      "whole_frontier_wall_seconds": 31.839234
+    },
+    "harness": "tools/test_vm_compiler_full_module_fact_reuse.py",
+    "harness_sha256": "9fc0bea5c7e95d035fb4ae2936b4ddf9f5a518dfb112b271d9c4462fbba69aa8",
+    "evidence_artifact": "evidence/self-host-full-module-fact-reuse-20261020T052103Z.json",
+    "evidence_sha256": "ee9ffdc16b4131e14e950da41bd00bb1eb978e1ddca90081971d4283176bab59",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, one-body recomputation, and precise invalidation of direct callers after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
     "limitations": [
       "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
       "The changed UTF-8 function is outside the selected executable closure; its body is reverified while callable-path bodies are reused.",
