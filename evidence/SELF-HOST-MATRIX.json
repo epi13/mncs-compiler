@@ -10,15 +10,15 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-20T01:36:51.282248Z",
-    "compiler_revision": "4cf9d354c4349db0e486e7f7a4382a98cea88528",
+    "observed_at": "2026-10-20T05:10:34.375297+00:00",
+    "compiler_revision": "be021b4e498612d6e3a38af5cc7cd354d842655d",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
     "module_source_sha256": {
-      "source": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
-      "lexer": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+      "source": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771",
+      "lexer": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7",
       "parser": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
-      "segment": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "segment": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5",
       "kernel": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
       "decl": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
       "flow": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
@@ -26,7 +26,10 @@
       "project": "9753f0f4ef04d72cade170bdaa46141f6eafe71af71896cc1289430d807dfa64"
     },
     "changed_since_previous_matrix_hashes": [
-      "project"
+      "lexer",
+      "project",
+      "segment",
+      "source"
     ],
     "targeted_checks": {
       "flow_cfg_differential": {
@@ -500,6 +503,142 @@
           "stage2_claimed": false
         },
         "store_artifact_published_by_verifier": false
+      },
+      "full_source_lexer_segment_fact_reuse": {
+        "status": "passed_full_source_lexer_segment_module_fact_reuse",
+        "tested_compiler_revision": "be021b4e498612d6e3a38af5cc7cd354d842655d",
+        "compiler_branch": "campaign/native-application-readiness-20261013",
+        "stage0_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+        "language_fact_implementation_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+        "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+        "modules": [
+          {
+            "language_profile": "0.19",
+            "module": "mncs.compiler.source.v1",
+            "source_path": "src/compiler/source.mncs",
+            "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+          },
+          {
+            "language_profile": "0.19",
+            "module": "mncs.compiler.lexer.v1",
+            "source_path": "src/compiler/lexer.mncs",
+            "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+          },
+          {
+            "language_profile": "0.19",
+            "module": "mncs.compiler.segment.v1",
+            "source_path": "src/compiler/segment.mncs",
+            "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+          }
+        ],
+        "language_profile": "0.19",
+        "full_module_admission": {
+          "cold_verified_fact_count": 103,
+          "program_function_count": 103,
+          "resolved_module_count": 4,
+          "status": "verified"
+        },
+        "verified_fact_reuse": {
+          "artifact_reused_for_unchanged_closure": true,
+          "body_edit_recomputed": [
+            "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid"
+          ],
+          "body_edit_reused": 102,
+          "cold_facts_produced": 103,
+          "comment_edit_recomputed": 0,
+          "comment_edit_reused": 103,
+          "contract": "mncs.language-verification-fact/1",
+          "edited_subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid",
+          "fresh_process_per_snapshot": true,
+          "unchanged_execution_path_reused": [
+            "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+            "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+            "mncs:0.2:body:tests.compiler_source_frontier::check_ascii",
+            "mncs:0.2:body:tests.compiler_source_frontier::check_span"
+          ]
+        },
+        "application": {
+          "artifact_identity": "sha256:ebae7465bbe3f4551710d0c0893574e82241b3b70f843ee650e68c21ac9d4de2",
+          "artifact_json_bytes": 445164,
+          "callable_roots": [
+            "check_span",
+            "check_ascii"
+          ],
+          "canonical_vm_invocations": 6,
+          "canonical_vm_matches_stage0": true,
+          "returned_values": [
+            true,
+            false,
+            false,
+            true,
+            false,
+            true
+          ],
+          "source_module_count": 3
+        },
+        "measurements": {
+          "body_edit_build": {
+            "cpu_seconds": 2.86,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 155496448,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 2.923889
+          },
+          "canonical_vm_execution": {
+            "calls_bytes": 2823,
+            "peak_rss_kib": 24124,
+            "results_bytes": 6745,
+            "wall_seconds": 0.090867
+          },
+          "cgroup_measurement_available": false,
+          "cold_full_module_build": {
+            "cpu_seconds": 3.49,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 146886656,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 3.563231
+          },
+          "comment_edit_build": {
+            "cpu_seconds": 2.75,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 155496448,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 2.81577
+          },
+          "profile_018_attempt": {
+            "cpu_seconds": 0.23,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 4,
+            "peak_rss_bytes": 54476800,
+            "peak_threads": 1,
+            "request_sequence": 1,
+            "wall_seconds": 0.258673
+          },
+          "whole_frontier_wall_seconds": 16.309444
+        },
+        "harness": "tools/test_vm_compiler_full_module_fact_reuse.py",
+        "harness_sha256": "efb9fca6763bcfae53db27c0103dc900a831815753dcfcde82bf6ed3457272c6",
+        "evidence_artifact": "evidence/self-host-full-module-fact-reuse-20261020T051034Z.json",
+        "evidence_sha256": "aab4b71d297c6009a0a61240224dc0555c40b9344a124b6e329e450216c7c3a0",
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "scope": "The full current Compiler Source, Lexer, and Segment modules now declare Profile 0.19 and pass application-build verification together. Across fresh processes, a comment edit reuses every Language body fact; changing one unreachable UTF-8 validator recomputes only that body and reuses the remaining facts. A native application executes selected Source and Segment functions in the canonical VM, with all six typed results matching Stage-0.",
+        "limitations": [
+          "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
+          "The changed UTF-8 function is outside the selected executable closure; its body is reverified while callable-path bodies are reused.",
+          "Profile 0.19 raises the sequence/view ceiling to 4096; its literal iteration ceiling remains 1024.",
+          "This does not establish Stage-1 or Stage-2 succession."
+        ]
       }
     },
     "source_hash_equivalence_basis": {
@@ -1239,7 +1378,7 @@
             "canonical_vm_total_steps_change_percent": -19.57,
             "canonical_vm_wall_change_percent": -18.09,
             "maximum_steps_per_call_change_percent": 0.06,
-            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
             "canonical_vm_candidate_wall_seconds_samples": [
               9.22781,
               9.320808
@@ -9028,7 +9167,7 @@
         "canonical_vm_total_steps_change_percent": -19.57,
         "canonical_vm_wall_change_percent": -18.09,
         "maximum_steps_per_call_change_percent": 0.06,
-        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
         "canonical_vm_candidate_wall_seconds_samples": [
           9.22781,
           9.320808
@@ -9794,7 +9933,7 @@
       "selected_intent_repositories": [
         "mncs-compiler"
       ],
-      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
+      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
       "language_write_attempted": false
     },
     "environment_continuity": {
@@ -9805,7 +9944,7 @@
     },
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+    "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
   },
   "campaign_frontier_history": [
     {
@@ -13759,7 +13898,7 @@
         "selected_intent_repositories": [
           "mncs-compiler"
         ],
-        "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
+        "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
         "language_write_attempted": false
       },
       "environment_continuity": {
@@ -13770,7 +13909,7 @@
       },
       "stage1_claimed": false,
       "stage2_claimed": false,
-      "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+      "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
     }
   ],
   "retained_legacy_campaign_frontier_update_20261017": {
@@ -17620,7 +17759,7 @@
       "selected_intent_repositories": [
         "mncs-compiler"
       ],
-      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
+      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
       "language_write_attempted": false
     },
     "environment_continuity": {
@@ -17631,7 +17770,7 @@
     },
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+    "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
   },
   "current_campaign_effectful_digest_app_canonical_vm_20261019": {
     "kind": "mncs.compiler.native-test-digest-canonical-vm-execution",
@@ -18486,7 +18625,7 @@
     "tokens_compared": 3161,
     "elapsed_seconds": 12.322,
     "execution_mode": "retained_cranelift",
-    "scope": "The complete focused Segment suite matched locked Stage-0 lexical facts. The malformed-byte fixtures remain; the valid caf\u00e9 module header is no longer misclassified as malformed UTF-8."
+    "scope": "The complete focused Segment suite matched locked Stage-0 lexical facts. The malformed-byte fixtures remain; the valid café module header is no longer misclassified as malformed UTF-8."
   },
   "current_campaign_cp0001_smoke_revalidation_20261019": {
     "kind": "cp0001-current-source-smoke-revalidation",
@@ -19897,7 +20036,7 @@
     "limitations": [
       "The local bounded structured-file provider completes single-test and two-test paths, a combined eight-case heterogeneous-artifact batch, and a three-call retained VM session over that batch; the seven-case mncs-test self-suite is also exercised separately. Execution still uses the local adapter rather than Forge, Environment, and canonical Store, and it does not prove fresh-process Store readback."
     ],
-    "scope": "The harness now preserves a unique immutable checkout report per run while exporting the verifier payload under the exact declared shareable name into each invocation\u2019s isolated artifact directory. Two back-to-back authenticated verification runs passed. Store readback covers the verifier report; provider execution remains on the bounded local canonical-VM adapter and does not establish Forge execution."
+    "scope": "The harness now preserves a unique immutable checkout report per run while exporting the verifier payload under the exact declared shareable name into each invocation’s isolated artifact directory. Two back-to-back authenticated verification runs passed. Store readback covers the verifier report; provider execution remains on the bounded local canonical-VM adapter and does not establish Forge execution."
   },
   "current_campaign_source_byte_at_global_frontier_20261020": {
     "kind": "source-byte-at-global-canonical-vm-frontier",
@@ -20101,5 +20240,159 @@
       ],
       "wall_seconds": 0.254612
     }
+  },
+  "current_campaign_full_source_lexer_segment_fact_reuse_20261020": {
+    "status": "passed_full_source_lexer_segment_fact_reuse_frontier",
+    "observed_at": "2026-10-20T05:10:34.375297+00:00",
+    "tested_compiler_revision": "be021b4e498612d6e3a38af5cc7cd354d842655d",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "selected_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "stage0_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+    "language_fact_implementation_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "language_profile": "0.19",
+    "modules": [
+      {
+        "language_profile": "0.19",
+        "module": "mncs.compiler.source.v1",
+        "source_path": "src/compiler/source.mncs",
+        "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+      },
+      {
+        "language_profile": "0.19",
+        "module": "mncs.compiler.lexer.v1",
+        "source_path": "src/compiler/lexer.mncs",
+        "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+      },
+      {
+        "language_profile": "0.19",
+        "module": "mncs.compiler.segment.v1",
+        "source_path": "src/compiler/segment.mncs",
+        "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+      }
+    ],
+    "full_module_admission": {
+      "cold_verified_fact_count": 103,
+      "program_function_count": 103,
+      "resolved_module_count": 4,
+      "status": "verified"
+    },
+    "profile_018_baseline": {
+      "diagnostic_count": 19,
+      "measurement": {
+        "cpu_seconds": 0.23,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54476800,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.258673
+      },
+      "profile_bound_diagnostic_count": 9,
+      "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+      "status": "rejected_by_profile_018_traversal_bound"
+    },
+    "verified_fact_reuse": {
+      "artifact_reused_for_unchanged_closure": true,
+      "body_edit_recomputed": [
+        "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid"
+      ],
+      "body_edit_reused": 102,
+      "cold_facts_produced": 103,
+      "comment_edit_recomputed": 0,
+      "comment_edit_reused": 103,
+      "contract": "mncs.language-verification-fact/1",
+      "edited_subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid",
+      "fresh_process_per_snapshot": true,
+      "unchanged_execution_path_reused": [
+        "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+        "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+        "mncs:0.2:body:tests.compiler_source_frontier::check_ascii",
+        "mncs:0.2:body:tests.compiler_source_frontier::check_span"
+      ]
+    },
+    "application": {
+      "artifact_identity": "sha256:ebae7465bbe3f4551710d0c0893574e82241b3b70f843ee650e68c21ac9d4de2",
+      "artifact_json_bytes": 445164,
+      "callable_roots": [
+        "check_span",
+        "check_ascii"
+      ],
+      "canonical_vm_invocations": 6,
+      "canonical_vm_matches_stage0": true,
+      "returned_values": [
+        true,
+        false,
+        false,
+        true,
+        false,
+        true
+      ],
+      "source_module_count": 3
+    },
+    "measurements": {
+      "body_edit_build": {
+        "cpu_seconds": 2.86,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 155496448,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 2.923889
+      },
+      "canonical_vm_execution": {
+        "calls_bytes": 2823,
+        "peak_rss_kib": 24124,
+        "results_bytes": 6745,
+        "wall_seconds": 0.090867
+      },
+      "cgroup_measurement_available": false,
+      "cold_full_module_build": {
+        "cpu_seconds": 3.49,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 146886656,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 3.563231
+      },
+      "comment_edit_build": {
+        "cpu_seconds": 2.75,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 155496448,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 2.81577
+      },
+      "profile_018_attempt": {
+        "cpu_seconds": 0.23,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54476800,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.258673
+      },
+      "whole_frontier_wall_seconds": 16.309444
+    },
+    "harness": "tools/test_vm_compiler_full_module_fact_reuse.py",
+    "harness_sha256": "efb9fca6763bcfae53db27c0103dc900a831815753dcfcde82bf6ed3457272c6",
+    "evidence_artifact": "evidence/self-host-full-module-fact-reuse-20261020T051034Z.json",
+    "evidence_sha256": "aab4b71d297c6009a0a61240224dc0555c40b9344a124b6e329e450216c7c3a0",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The full current Compiler Source, Lexer, and Segment modules now declare Profile 0.19 and pass application-build verification together. Across fresh processes, a comment edit reuses every Language body fact; changing one unreachable UTF-8 validator recomputes only that body and reuses the remaining facts. A native application executes selected Source and Segment functions in the canonical VM, with all six typed results matching Stage-0.",
+    "limitations": [
+      "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
+      "The changed UTF-8 function is outside the selected executable closure; its body is reverified while callable-path bodies are reused.",
+      "Profile 0.19 raises the sequence/view ceiling to 4096; its literal iteration ceiling remains 1024.",
+      "This does not establish Stage-1 or Stage-2 succession."
+    ]
   }
 }
