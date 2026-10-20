@@ -56,6 +56,9 @@ ROOTS = [
     {"module": AUTOMATION_MODULE, "function": "evaluate_tick"},
     {"module": AUTOMATION_MODULE, "function": "evaluate_resource_headroom"},
 ]
+LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
+LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/2"
 
 
 def sha(data: bytes) -> str:
@@ -753,9 +756,18 @@ def main() -> None:
         "imported_nominal_record_with_updated_consumers": record_updated_work,
         "reachable_body_edit": reachable_work,
     }
+    for name, work in verified_fact_work.items():
+        if (work.get("schema_version") != VERIFICATION_WORK_SCHEMA
+                or work.get("language_verification_fact_schema") != LANGUAGE_FACT_SCHEMA):
+            raise AssertionError(
+                f"{name} omitted the current versioned Language fact telemetry: {work}"
+            )
     language_verified_facts_reused = sum(
         len(work.get("reused_semantic_facts", []))
         for work in verified_fact_work.values()
+    )
+    language_lock = json.loads(
+        (ROOT / "mncs-language.lock.json").read_text(encoding="utf-8")
     )
     evidence = {
         "schema_version": 1,
@@ -770,6 +782,11 @@ def main() -> None:
             "probe_sha256": sha(PROBE.read_bytes()),
             "verification_engine_identity": cold.get("cache", {}).get(
                 "verification_work", {}).get("verification_engine_identity"),
+        },
+        "language": {
+            "implementation_revision": language_lock["revision"],
+            "verification_fact_schema": LANGUAGE_FACT_SCHEMA,
+            "verification_fact_verifier_identity": LANGUAGE_FACT_VERIFIER_ID,
         },
         "automation": {
             "revision": git(AUTOMATION_ROOT, "rev-parse", "HEAD"),
@@ -789,6 +806,7 @@ def main() -> None:
         "application": {
             "request_schema": "mncs.compiler.application-build-request/2",
             "response_schema": cold.get("schema_version"),
+            "verification_work_schema": VERIFICATION_WORK_SCHEMA,
             "selected_callables": ROOTS,
             "source_snapshot_identity": cold.get("source_snapshot", {}).get("identity"),
             "semantic_identity": cold.get("dependency_graph", {}).get("semantic_identity"),
