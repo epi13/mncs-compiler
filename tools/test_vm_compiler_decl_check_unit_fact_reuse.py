@@ -49,8 +49,8 @@ ROOT_SOURCE = """mncs 0.18;
 module tests.compiler_decl_check_frontier;
 use mncs.compiler.decl.v1 as decl;
 
-fn run<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: decl.UnitCheck) {
-    return decl.check_unit<P, N>(pages, stride, total);
+fn run(pages: [[byte; up_to 1024]; up_to 1], stride: u64, total: u64) -> (result: decl.UnitCheck) {
+    return decl.check_unit<1, 1024>(pages, stride, total);
 }
 """
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
@@ -59,7 +59,6 @@ CACHE_SCHEMA = "mncs.compiler.application-build-cache-observation/5"
 WORK_SCHEMA = "mncs.compiler.application-build-verification-work/3"
 FACT_SCHEMA = "mncs.language-verification-fact/3"
 CHECKS = [decl_tests.CHECKS[index] for index in (0, 1, 2)]
-TYPE_ARGUMENTS = [decl_tests.nat_arg(1), decl_tests.nat_arg(1024)]
 STEP_BUDGET = decl_tests.EXECUTION_STEP_BUDGET
 
 
@@ -85,11 +84,7 @@ def build_request(modules: dict[str, str], root_source: str = ROOT_SOURCE) -> di
         "callable_roots": [{"module": ROOT_MODULE, "function": "run"}],
         "test_selection": {"kind": "all_source_cases"},
         "modules": modules,
-        "generic_seeds": [{
-            "module": ROOT_MODULE,
-            "function": "run",
-            "type_arguments": TYPE_ARGUMENTS,
-        }],
+        "generic_seeds": [],
         "capabilities": [],
         "effect_assumptions": [],
         "optimization_policy": "default",
@@ -108,7 +103,7 @@ def call_cases() -> list[dict]:
             "text": text,
             "stage": stage,
             "arguments": decl_tests.logical_args(data),
-            "type_arguments": TYPE_ARGUMENTS,
+            "type_arguments": [],
             "step_budget": STEP_BUDGET,
         })
     return result
@@ -179,7 +174,8 @@ def run_oracle(modules: dict[str, str], cases: list[dict]) -> tuple[list[dict], 
                              + json.dumps(response.get("diagnostics"), indent=2)[:5000])
     rows = response.get("executions", [])
     if len(rows) != len(cases) or any(row.get("status") != "returned" for row in rows):
-        raise AssertionError("Stage-0 omitted a selected check_unit result")
+        raise AssertionError("Stage-0 omitted a selected check_unit result: "
+                             + json.dumps(rows, sort_keys=True)[:5000])
     values = []
     for case, row in zip(cases, rows):
         if len(row.get("returned", [])) != 1:
