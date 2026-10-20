@@ -1,4 +1,4 @@
-"""Verify application-build/6 inventory, /7 selection, and Test batch contracts.
+"""Verify application-build inventory, selection, and Test batch contracts.
 
 The inventory is derived by mncs-language during the same frontend invocation
 that verifies callable roots and emits the VM artifact. This exercises exact
@@ -101,6 +101,17 @@ def require_inventory(
 def frontend_invocations(response: dict) -> int | None:
     return (response.get("cache", {}).get("verification_work", {})
             .get("front_end_invocations"))
+
+
+def require_language_fact_v3(response: dict, label: str) -> dict:
+    work = response.get("cache", {}).get("verification_work", {})
+    if work.get("language_verification_fact_schema") != "mncs.language-verification-fact/3":
+        raise AssertionError(f"{label} did not consume Language fact v3: {work}")
+    if (not isinstance(work.get("reused_semantic_facts"), list)
+            or not isinstance(work.get("recomputed_semantic_facts"), list)
+            or type(work.get("produced_semantic_fact_count")) is not int):
+        raise AssertionError(f"{label} omitted actual Language fact work: {work}")
+    return work
 
 
 def verify_build_assumption_cache_isolation(directory: Path) -> dict:
@@ -1509,7 +1520,7 @@ def run_real_mncs_test_suite() -> dict:
                 root_source_id="mncs-test/tests/self_suite.mncs",
                 modules=module_sources,
             )
-            build_request["schema_version"] = "mncs.compiler.application-build-request/4"
+            build_request["schema_version"] = "mncs.compiler.application-build-request/5"
             build_request["test_selection"] = {"kind": "all_source_cases"}
             built, build_metrics = probe.send(
                 {"compile_application": build_request},
@@ -1522,8 +1533,13 @@ def run_real_mncs_test_suite() -> dict:
             built,
             expected_names,
             expected_module=module,
-            response_schema="mncs.compiler.application-build/7",
+            response_schema="mncs.compiler.application-build/8",
         )
+        cold_fact_work = require_language_fact_v3(
+            built, "cold real mncs-test self-suite build"
+        )
+        if cold_fact_work["produced_semantic_fact_count"] <= 0:
+            raise AssertionError("real mncs-test self-suite produced no Language body facts")
         selection = built.get("test_case_selection", {})
         selected_callables = built.get("callable_scope", {}).get("callable_roots", [])
         if (selection.get("status") != "verified"
@@ -1546,6 +1562,70 @@ def run_real_mncs_test_suite() -> dict:
         selected = {(module, name) for name in expected_names}
         if not selected <= artifact_callables:
             raise AssertionError("real Test inventory roots are absent from the verified artifact")
+
+        location_marker = "test arithmetic()"
+        if source.count(location_marker) != 1:
+            raise AssertionError("real mncs-test source no longer has one arithmetic Test declaration")
+        comment_source = source.replace(
+            location_marker,
+            "// Language fact v3 source-location refresh\n" + location_marker,
+            1,
+        )
+        comment_request = request(
+            comment_source,
+            [],
+            root_source_id="mncs-test/tests/self_suite.mncs",
+            modules=module_sources,
+        )
+        comment_request["schema_version"] = "mncs.compiler.application-build-request/5"
+        comment_request["test_selection"] = {"kind": "all_source_cases"}
+        comment_probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            comment_build, comment_build_metrics = comment_probe.send(
+                {"compile_application": comment_request}, timeout=180.0
+            )
+        finally:
+            comment_probe.close()
+        comment_inventory = require_inventory(
+            comment_build,
+            expected_names,
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/8",
+        )
+        comment_fact_work = require_language_fact_v3(
+            comment_build, "comment-edited real mncs-test self-suite build"
+        )
+        before_tests = {row["name"]: row for row in inventory["tests"]}
+        after_tests = {row["name"]: row for row in comment_inventory["tests"]}
+        reused_count = len(comment_fact_work["reused_semantic_facts"])
+        if (
+            comment_build.get("cache", {}).get("status") != "hit"
+            or comment_build.get("cache", {}).get("reuse_basis")
+            != "verified_application_executable_closure"
+            or frontend_invocations(comment_build) != 1
+            or comment_build.get("artifact", {}).get("identity")
+            != built.get("artifact", {}).get("identity")
+            or comment_fact_work.get("backend_artifact") != "reused"
+            or not comment_fact_work["reused_semantic_facts"]
+            or comment_fact_work["recomputed_semantic_facts"]
+            or reused_count != comment_fact_work["produced_semantic_fact_count"]
+            or comment_build.get("source_snapshot", {}).get("identity")
+            == built.get("source_snapshot", {}).get("identity")
+            or any(
+                after_tests[name].get("test_case_identity")
+                != before_tests[name].get("test_case_identity")
+                or after_tests[name].get("source_span", {}).get("start", -1)
+                <= before_tests[name].get("source_span", {}).get("start", -1)
+                for name in before_tests
+            )
+        ):
+            raise AssertionError(
+                "real self-suite comment edit did not reuse all v3 facts and refresh current Test locations"
+            )
 
         repeat_count = 2
         oracle_calls = [{
@@ -1817,11 +1897,37 @@ def run_real_mncs_test_suite() -> dict:
                 "module": module,
             },
             "dependency_sources": module_provenance,
-            "request_schema": "mncs.compiler.application-build-request/4",
+            "request_schema": "mncs.compiler.application-build-request/5",
             "response_schema": built.get("schema_version"),
             "inventory_schema": inventory.get("schema_version"),
             "frontend_invocations": frontend_invocations(built),
             "verification_work": built.get("cache", {}).get("verification_work"),
+            "language_fact_v3_reuse": {
+                "schema": comment_fact_work.get("language_verification_fact_schema"),
+                "cold_facts_produced": cold_fact_work.get("produced_semantic_fact_count"),
+                "cold_facts_recomputed": len(cold_fact_work.get("recomputed_semantic_facts", [])),
+                "comment_edit_frontend_invocations": frontend_invocations(comment_build),
+                "comment_edit_facts_produced": comment_fact_work.get("produced_semantic_fact_count"),
+                "comment_edit_facts_reused": reused_count,
+                "comment_edit_facts_recomputed": len(comment_fact_work["recomputed_semantic_facts"]),
+                "comment_edit_reused_all_facts": (
+                    reused_count == comment_fact_work.get("produced_semantic_fact_count")
+                ),
+                "comment_edit_backend_artifact": comment_fact_work.get("backend_artifact"),
+                "comment_edit_artifact_identity": comment_build.get("artifact", {}).get("identity"),
+                "test_case_identities_stable": all(
+                    after_tests[name].get("test_case_identity")
+                    == before_tests[name].get("test_case_identity")
+                    for name in before_tests
+                ),
+                "test_source_spans_refreshed": all(
+                    after_tests[name].get("source_span", {}).get("start", -1)
+                    > before_tests[name].get("source_span", {}).get("start", -1)
+                    for name in before_tests
+                ),
+                "comment_build_process_metrics": comment_build_metrics,
+                "verification_work": comment_fact_work,
+            },
             "test_case_identities": {
                 row["name"]: row["test_case_identity"] for row in inventory["tests"]
             },
@@ -1868,7 +1974,7 @@ def run_real_mncs_test_suite() -> dict:
                 "canonical_vm_batch_wall_seconds": round(selected_vm_wall, 6),
                 "canonical_vm_batch_peak_rss_kib": selected_vm_peak_rss,
             },
-            "language_verified_facts_reused": 0,
+            "language_verified_facts_reused": reused_count,
         }
 
 
@@ -2412,6 +2518,19 @@ def main() -> None:
                      "assertions", "failures"} <= set(result)
                     for result in real_mncs_test_suite["canonical_vm_results"].values()
                 ),
+                "real_mncs_test_self_suite_reuses_language_v3_facts_and_refreshes_locations": (
+                    real_mncs_test_suite["language_fact_v3_reuse"]["schema"]
+                    == "mncs.language-verification-fact/3"
+                    and real_mncs_test_suite["language_fact_v3_reuse"][
+                        "comment_edit_reused_all_facts"
+                    ]
+                    and real_mncs_test_suite["language_fact_v3_reuse"][
+                        "test_case_identities_stable"
+                    ]
+                    and real_mncs_test_suite["language_fact_v3_reuse"][
+                        "test_source_spans_refreshed"
+                    ]
+                ),
                 "real_mncs_test_identity_selection_executes_only_requested_cases": (
                     real_mncs_test_suite["identity_selected_subset_batch"][
                         "source_test_count"
@@ -2455,7 +2574,9 @@ def main() -> None:
                         "unselected_case_arguments_rejected"
                     ]
                 ),
-                "language_verified_facts_reused": 0,
+                "language_verified_facts_reused": real_mncs_test_suite[
+                    "language_verified_facts_reused"
+                ],
             },
             "measurements": {
                 "cold_build": cold_metrics,
@@ -2479,6 +2600,9 @@ def main() -> None:
                 "real_self_suite_identity_selected_oracle": real_mncs_test_suite[
                     "identity_selected_subset_batch"
                 ]["stage0_oracle_metrics"],
+                "real_self_suite_comment_edit": real_mncs_test_suite[
+                    "language_fact_v3_reuse"
+                ]["comment_build_process_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -2487,6 +2611,9 @@ def main() -> None:
                 "unselected_test_body_edit": body_response.get("cache", {}).get("verification_work"),
                 "invalid_source": invalid_response.get("cache", {}).get("verification_work"),
                 "valid_source_without_tests": empty_response.get("cache", {}).get("verification_work"),
+                "real_self_suite_comment_edit": real_mncs_test_suite[
+                    "language_fact_v3_reuse"
+                ]["verification_work"],
             },
             "scope": (
                 "The Compiler returns the Language-owned source_module test inventory from the same "
@@ -2518,21 +2645,23 @@ def main() -> None:
                 "Test call. It publishes no result file; a fresh VM process executes the next Test "
                 "twice from the exact same artifact and matches Stage-0. This proves process "
                 "interruption recovery for this batch adapter; it does not prove durable Forge/Environment "
-                "session recovery. Language verified-fact reuse remains zero, and the production "
+                "session recovery. These focused compatibility cases do not measure Language fact reuse, "
                 "mncs-test consumer is unchanged. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
-                "revision. One application-build/7 all-source selection resolves all seven "
+                "revision. One application-build/8 all-source selection resolves all seven "
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "
                 "verified artifact; one canonical VM batch runs two rounds of all seven tests "
                 "in the same admitted artifact/session. All 14 results match Stage-0 and the second "
-                "round matches the first, including six passes and the typed skip result. This does "
-                "not migrate the production runner or add Forge integration."
+                "round matches the first, including six passes and the typed skip result. A comment-only "
+                "source shift in the real suite reuses every produced Language v3 body fact while refreshing "
+                "all current Test source spans and preserving semantic Test identities and the executable "
+                "artifact. This does not migrate the production runner or add Forge integration."
                 " The Environment provider adapter also publishes /7 after resolving "
                 "the Language-issued source Test identities. The additional cache policy check "
                 "built the same source under baseline, changed capability, and changed effect-assumption "
                 "requests; each variant received a distinct cache key and ran the frontend, while a "
                 "fresh process reused only the exact effect-assumption request. Language verified-fact "
-                "reuse remains zero."
+                "reuse is recorded by the real self-suite comment-edit workload above."
             ),
         }
         failed_boolean_checks = [

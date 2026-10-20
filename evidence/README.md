@@ -1413,3 +1413,27 @@ claim or execution request was attempted. Exact identities and limitations
 are recorded under
 `current_campaign_effectful_digest_app_language_fact_v3_20261020` in
 [`SELF-HOST-MATRIX.json`](SELF-HOST-MATRIX.json).
+
+## Native Test inventory reuse of Language fact v3 (2026-10-20)
+
+The [final self-suite inventory report](application-build-test-inventory-fact-v3-self-suite-final-20261020.json)
+uses application-build request `/5` and response `/8` with the Compiler-pinned
+Language revision `f03bdc1`. The cold real `mncs-test` self-suite build
+produced and checked 41 Language v3 body facts. After inserting a comment
+before the first Test declaration, the Language frontend reused all 41 facts
+and recomputed none; the Compiler refreshed every Test source span, preserved
+all Test identities, and reused the same executable artifact. The comment-edit
+build took 0.631 seconds wall time, 0.59 CPU seconds, and 54.6 MB peak RSS.
+
+The same artifact ran the seven real self-suite cases twice in one canonical
+VM batch (14 calls). All results matched Stage-0: six passes and one typed
+skip per round. The batch took 0.072 seconds at 22.3 MiB peak RSS. All
+boolean checks in the full guarded inventory harness passed. Cgroup memory readings
+were unavailable. This demonstrates actual Language-owned semantic work
+avoided on a real multi-module Test application; the production Test runner
+remains unchanged, and Forge execution and Store publication remain separate
+frontiers. The first report
+(`application-build-test-inventory-fact-v3-self-suite-20261020.json`) is
+retained but superseded after its scope summary was corrected; use the
+final-named report above as the canonical evidence. The matrix records it under
+`current_campaign_test_inventory_language_fact_v3_20261020`.
