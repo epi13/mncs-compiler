@@ -36,12 +36,13 @@ def clear_cache() -> None:
 
 def request_for(root: str, modules: dict[str, str]) -> dict:
     return {
-        'schema_version': 'mncs.compiler.application-build-request/1',
+        'schema_version': 'mncs.compiler.application-build-request/5',
         'target': 'mncs-vm-0.1',
         'root_source_id': app.APP_SOURCE_ID,
         'root_source': root,
-        'entry': {'module': app.APP_MODULE, 'function': 'run'},
+        'callable_roots': [{'module': app.APP_MODULE, 'function': 'run'}],
         'modules': modules,
+        'test_selection': {'kind': 'all_source_cases'},
         'generic_seeds': [
             {'module': 'mncs.test.assertions', 'function': 'equals_bytes',
              'type_arguments': [{'kind': 'nat', 'value': 4}]},
@@ -107,17 +108,28 @@ def require_verification_work(
 ) -> dict:
     cache = build.get('cache', {})
     work = cache.get('verification_work', {})
-    if (cache.get('schema_version') != 'mncs.compiler.application-build-cache-observation/4'
-            or work.get('schema_version') != 'mncs.compiler.application-build-verification-work/2'):
+    if (cache.get('schema_version') != 'mncs.compiler.application-build-cache-observation/5'
+            or work.get('schema_version') != 'mncs.compiler.application-build-verification-work/3'):
         raise AssertionError(f'{label} omitted the versioned verification-work observation')
     if work.get('front_end_invocations') != frontend_invocations:
         raise AssertionError(f'{label} frontend invocation count is inaccurate: {work}')
     expected_stage = 'recomputed_by_full_frontend' if frontend_invocations else 'not_run'
-    for stage in ('source_parsing', 'declaration_resolution', 'signature_verification'):
+    for stage in ('source_parsing', 'declaration_resolution'):
         if work.get(stage) != expected_stage:
             raise AssertionError(f'{label} has an unexpected {stage} state: {work}')
     if not isinstance(work.get('reused_semantic_facts'), list):
         raise AssertionError(f'{label} omitted the Language fact-reference list: {work}')
+    if (not isinstance(work.get('reused_declaration_facts'), list)
+            or not isinstance(work.get('recomputed_declaration_facts'), list)):
+        raise AssertionError(f'{label} omitted Language declaration-fact work: {work}')
+    expected_signature_stage = (
+        'not_run' if not frontend_invocations else
+        'recomputed_with_language_declaration_fact_reuse'
+        if work['reused_declaration_facts'] else expected_stage
+    )
+    if work.get('signature_verification') != expected_signature_stage:
+        raise AssertionError(
+            f'{label} has an unexpected signature verification state: {work}')
     expected_body_stage = (
         'not_run' if not frontend_invocations else
         'recomputed_with_language_fact_reuse' if work['reused_semantic_facts'] else
@@ -229,14 +241,27 @@ def main() -> None:
         raise
     if cold.get('cache', {}).get('status') != 'miss' or cold.get('cache', {}).get('publication') != 'stored':
         raise AssertionError('cold run was not compiled and atomically published')
-    if cold.get('schema_version') != 'mncs.compiler.application-build/4':
-        raise AssertionError('incremental experiment did not use application-build/4')
+    if cold.get('schema_version') != 'mncs.compiler.application-build/8':
+        raise AssertionError('incremental experiment did not use application-build/8')
     if cold.get('status') != 'verified' or cold.get('entry', {}).get('status') != 'verified':
         raise AssertionError('cold selected application scope was not verified')
     if cold.get('unresolved_obligations') != []:
         raise AssertionError('selected application scope retained unresolved obligations')
-    if cold.get('callable_scope', {}).get('kind') != 'entry_and_explicit_generic_seeds':
-        raise AssertionError('incremental evidence omitted selected callable scope')
+    cold_scope = cold.get('callable_scope', {})
+    cold_roots = {
+        (row.get('module'), row.get('function'))
+        for row in cold_scope.get('callable_roots', [])
+    }
+    if (cold_scope.get('kind')
+            != 'source_test_case_selection_and_explicit_callable_roots_and_generic_seeds'
+            or cold_roots != {(app.APP_MODULE, 'run')}
+            or cold_scope.get('generic_seed_functions') != [
+                ['mncs.test.assertions', 'equals_bytes'],
+                ['mncs.test.suite', 'summarize'],
+            ]
+            or cold_scope.get('test_case_selection', {}).get('selection')
+            != {'kind': 'all_source_cases'}):
+        raise AssertionError('incremental evidence omitted its source-test callable scope')
     artifact = cold['artifact']['value']
 
     # A new process proves the host cache survives session teardown.
@@ -467,6 +492,147 @@ fn value() -> (result: u64) { return 1; }'''
             unrelated_function_build['artifact']['value'], unrelated_function_exec)
         if compact_oracle(unrelated_function_exec) != compact_result(unrelated_function_actual[0]):
             raise AssertionError('unreachable function cache reuse changed application semantics')
+
+        # Language facts also guard authority assumptions. Changing an
+        # uncalled function's capability and effect surface must reverify that
+        # body while retaining independent facts from the same modules.
+        effect_cache_dir = CACHE_DIR / 'effect-capability-isolated'
+        shutil.rmtree(effect_cache_dir, ignore_errors=True)
+        effect_probe, effect_startup_metrics = ready_probe(effect_cache_dir)
+        try:
+            effect_seed, effect_seed_metrics = compile_one(effect_probe, original_request)
+            if (effect_seed.get('status') != 'verified'
+                    or effect_seed.get('artifact', {}).get('identity')
+                    != cold.get('artifact', {}).get('identity')):
+                raise AssertionError('effect/capability fixture could not seed current Language facts')
+
+            generative_source = modules['mncs.test.generative']
+            old_shrink_declaration = 'fn shrink(value: u64) -> (result: u64) {'
+            capability_shrink_declaration = (
+                'fn shrink(value: u64) -> (result: u64)\n'
+                '    capability test_artifact\n'
+                '{'
+            )
+            if generative_source.count(old_shrink_declaration) != 1:
+                raise AssertionError('capability fact invalidation fixture no longer matches source')
+            capability_modules = dict(modules)
+            capability_modules['mncs.test.generative'] = generative_source.replace(
+                old_shrink_declaration, capability_shrink_declaration, 1)
+            capability_request = request_for(app.APP_SOURCE, capability_modules)
+            capability_oracle, capability_exec, capability_oracle_metrics = oracle_one(
+                effect_probe, app.APP_SOURCE, capability_modules)
+            capability_build, capability_metrics = compile_one(effect_probe, capability_request)
+            capability_work = capability_build.get('cache', {}).get('verification_work', {})
+            capability_recomputed = set(capability_work.get('recomputed_semantic_facts', []))
+            capability_reasons = capability_work.get('semantic_fact_recomputation_reasons', [])
+            capability_shrink = next((row for row in capability_reasons
+                                      if str(row.get('subject', '')).endswith(
+                                          'mncs.test.generative::shrink')), None)
+            if (capability_build.get('status') != 'verified'
+                    or capability_work.get('front_end_invocations') != 1
+                    or capability_work.get('function_body_verification')
+                    != 'recomputed_with_language_fact_reuse'
+                    or not capability_work.get('reused_semantic_facts')
+                    or not any(subject.endswith('mncs.test.generative::shrink')
+                               for subject in capability_recomputed)
+                    or capability_shrink is None
+                    or capability_shrink.get('reason') != 'capability_assumptions_changed'):
+                raise AssertionError(
+                    'capability edit did not selectively reverify its Language body fact: '
+                    f'{capability_work}')
+            _capability_vm, capability_vm_metrics, capability_actual = run_and_compare(
+                capability_build['artifact']['value'], capability_exec)
+            if compact_oracle(capability_exec) != compact_result(capability_actual[0]):
+                raise AssertionError('capability-fact reuse changed canonical VM behavior')
+
+            effect_source = capability_modules['mncs.test.generative']
+            old_capability_declaration = (
+                'fn shrink(value: u64) -> (result: u64)\n'
+                '    capability test_artifact\n'
+                '{'
+            )
+            effect_shrink_declaration = (
+                'fn shrink(value: u64) -> (result: u64)\n'
+                '    capability test_artifact\n'
+                '    effect structured_read authorized_by test_artifact\n'
+                '{'
+            )
+            if effect_source.count(old_capability_declaration) != 1:
+                raise AssertionError('effect fact invalidation fixture no longer matches source')
+            effect_modules = dict(capability_modules)
+            effect_modules['mncs.test.generative'] = effect_source.replace(
+                old_capability_declaration, effect_shrink_declaration, 1)
+            effect_request = request_for(app.APP_SOURCE, effect_modules)
+            effect_oracle, effect_exec, effect_oracle_metrics = oracle_one(
+                effect_probe, app.APP_SOURCE, effect_modules)
+            effect_build, effect_metrics = compile_one(effect_probe, effect_request)
+            effect_work = effect_build.get('cache', {}).get('verification_work', {})
+            effect_recomputed = set(effect_work.get('recomputed_semantic_facts', []))
+            effect_reasons = effect_work.get('semantic_fact_recomputation_reasons', [])
+            effect_shrink = next((row for row in effect_reasons
+                                  if str(row.get('subject', '')).endswith(
+                                      'mncs.test.generative::shrink')), None)
+            if (effect_build.get('status') != 'verified'
+                    or effect_work.get('front_end_invocations') != 1
+                    or effect_work.get('function_body_verification')
+                    != 'recomputed_with_language_fact_reuse'
+                    or not effect_work.get('reused_semantic_facts')
+                    or not any(subject.endswith('mncs.test.generative::shrink')
+                               for subject in effect_recomputed)
+                    or effect_shrink is None
+                    or effect_shrink.get('reason') != 'effect_assumptions_changed'):
+                raise AssertionError(
+                    'effect edit did not selectively reverify its Language body fact: '
+                    f'{effect_work}')
+            _effect_vm, effect_vm_metrics, effect_actual = run_and_compare(
+                effect_build['artifact']['value'], effect_exec)
+            if compact_oracle(effect_exec) != compact_result(effect_actual[0]):
+                raise AssertionError('effect-fact reuse changed canonical VM behavior')
+            effect_capability_reuse = {
+                'seed_cache': effect_seed.get('cache'),
+                'seed_compile_metrics': effect_seed_metrics,
+                'process_startup_metrics': effect_startup_metrics,
+                'capability_edit': {
+                    'source_sha256': app.sha(capability_modules[
+                        'mncs.test.generative'].encode()),
+                    'cache': capability_build.get('cache'),
+                    'reused_semantic_facts': capability_work.get('reused_semantic_facts'),
+                    'recomputed_semantic_facts': capability_work.get('recomputed_semantic_facts'),
+                    'recomputation_reasons': capability_reasons,
+                    'artifact_identity': capability_build.get('artifact', {}).get('identity'),
+                    'oracle_valid': capability_oracle.get('valid'),
+                    'oracle_result': compact_oracle(capability_exec),
+                    'vm_result': compact_result(capability_actual[0]),
+                    'oracle_matches_vm': compact_oracle(capability_exec)
+                    == compact_result(capability_actual[0]),
+                    'oracle_metrics': capability_oracle_metrics,
+                    'compile_metrics': capability_metrics,
+                    'vm_metrics': capability_vm_metrics,
+                },
+                'effect_edit': {
+                    'source_sha256': app.sha(effect_modules[
+                        'mncs.test.generative'].encode()),
+                    'cache': effect_build.get('cache'),
+                    'reused_semantic_facts': effect_work.get('reused_semantic_facts'),
+                    'recomputed_semantic_facts': effect_work.get('recomputed_semantic_facts'),
+                    'recomputation_reasons': effect_reasons,
+                    'artifact_identity': effect_build.get('artifact', {}).get('identity'),
+                    'oracle_valid': effect_oracle.get('valid'),
+                    'oracle_result': compact_oracle(effect_exec),
+                    'vm_result': compact_result(effect_actual[0]),
+                    'oracle_matches_vm': compact_oracle(effect_exec)
+                    == compact_result(effect_actual[0]),
+                    'oracle_metrics': effect_oracle_metrics,
+                    'compile_metrics': effect_metrics,
+                    'vm_metrics': effect_vm_metrics,
+                },
+            }
+            tails.append(effect_probe.close())
+        except BaseException:
+            if effect_probe.proc.poll() is None:
+                effect_probe.proc.kill()
+                effect_probe.proc.wait(timeout=5)
+            raise
 
         # The executable closure remains the same after an unrelated exported
         # signature edit, but the artifact also advertises the whole program
@@ -995,6 +1161,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
                 'vm_metrics': generic_specialization_vm_metrics,
                 'process_startup_metrics': generic_startup_metrics,
             },
+            'effect_capability_fact_invalidation': effect_capability_reuse,
             'unreachable_function_edit': {
                 'changed_module': 'mncs.test.generative',
                 'changed_function': 'shrink',
@@ -1139,7 +1306,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
             'process_metrics': 'sampled from /proc for probe and VM processes; wall and CPU use process deltas',
         },
         'verification_work_observation': {
-            'schema_version': 'mncs.compiler.application-build-verification-work/2',
+            'schema_version': 'mncs.compiler.application-build-verification-work/3',
             'cold_build': cold_work,
             'warm_exact_snapshot': warm.get('cache', {}).get('verification_work'),
             'source_only_dependency_edit': semantic_edit.get('cache', {}).get('verification_work'),
@@ -1147,6 +1314,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
                 'cache', {}).get('verification_work'),
             'unreachable_function_body_edit': unrelated_function_build.get(
                 'cache', {}).get('verification_work'),
+            'effect_capability_fact_invalidation': effect_capability_reuse,
             'reachable_dependency_edit': dependency.get('cache', {}).get('verification_work'),
             'invalid_source': invalid.get('cache', {}).get('verification_work'),
             'fresh_process_readback': retry_warm_work,
@@ -1157,7 +1325,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         },
         'fine_grained_invalidation': {
             'status': 'language_function_body_fact_reuse_verified',
-            'detail': (f'Changed snapshots invoke parsing, module resolution, and declaration verification, then reuse only Language facts whose subject, verifier, policy, profile, callable interface, semantic dependencies, specialization, and effect assumptions still match. A dependency edit reused {len(dependency.get("cache", {}).get("verification_work", {}).get("reused_semantic_facts", []))} independent body facts and reverified {len(dependency.get("cache", {}).get("verification_work", {}).get("recomputed_semantic_facts", []))} dependent bodies in {dependency_metrics["wall_seconds"]:.3f} s; canonical VM execution matched the Stage-0 oracle. A reachable root edit took {small_metrics["wall_seconds"]:.3f} s, an unreachable body edit reused independent facts and reverified only the changed body, and a fresh-process root comment edit reused {len(root_comment_work.get("reused_semantic_facts", []))} facts. Nominal edits reverified affected users; a generic body edit reverified its declaration, concrete specialization, and dependent caller while retaining independent facts. SSA/backend identity remains separate and is regenerated when executable semantics change.'),
+            'detail': (f'Changed snapshots invoke parsing, module resolution, and declaration verification, then reuse only Language facts whose subject, verifier, policy, profile, callable interface, semantic dependencies, specialization, and effect/capability assumptions still match. A dependency edit reused {len(dependency.get("cache", {}).get("verification_work", {}).get("reused_semantic_facts", []))} independent body facts and reverified {len(dependency.get("cache", {}).get("verification_work", {}).get("recomputed_semantic_facts", []))} dependent bodies in {dependency_metrics["wall_seconds"]:.3f} s; canonical VM execution matched the Stage-0 oracle. Effect and capability changes independently reverified the affected Language body fact while reusing other bodies; both updated applications matched the canonical VM and Stage-0 oracle. A reachable root edit took {small_metrics["wall_seconds"]:.3f} s, an unreachable body edit reused independent facts and reverified only the changed body, and a fresh-process root comment edit reused {len(root_comment_work.get("reused_semantic_facts", []))} facts. Nominal edits reverified affected users; a generic body edit reverified its declaration, concrete specialization, and dependent caller while retaining independent facts. SSA/backend identity remains separate and is regenerated when executable semantics change.'),
         },
         'gate_a': 'pass',
         'gate_b': 'pass',
@@ -1177,6 +1345,12 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         'dependency_cache': dependency.get('cache', {}).get('status'),
         'exported_interface_cache': interface_build.get('cache', {}).get('status'),
         'generic_specialization_cache': generic_specialization_build.get('cache', {}).get('status'),
+        'capability_fact_recomputed': any(
+            row.get('reason') == 'capability_assumptions_changed'
+            for row in effect_capability_reuse['capability_edit']['recomputation_reasons']),
+        'effect_fact_recomputed': any(
+            row.get('reason') == 'effect_assumptions_changed'
+            for row in effect_capability_reuse['effect_edit']['recomputation_reasons']),
         'exported_interface_identity_changed': interface_before != interface_after,
         'unreachable_function_cache': unrelated_function_build.get('cache', {}).get('status'),
         'unrelated_signature_cache': unrelated_signature_build.get('cache', {}).get('status'),
