@@ -1,0 +1,157 @@
+{
+  "application": {
+    "artifact_identity": "sha256:181fea0b7129aa6835b3ef43409f601e012e5ea89d717c9b0ff0c8501e6f260e",
+    "artifact_json_bytes": 14378,
+    "canonical_vm_invocations": 3,
+    "canonical_vm_matches_stage0": true,
+    "entry": "tests.compiler_source_frontier::check_span",
+    "returned_values": [
+      true,
+      false,
+      false
+    ],
+    "source_module_count": 2
+  },
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "compiler_revision": "c6d3a95dfc9cecd38b45c27eecea5f4b7519a959",
+  "full_module_admission": {
+    "diagnostic_count": 19,
+    "measurement": {
+      "cpu_seconds": 0.23,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 54718464,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.255867
+    },
+    "profile_bound_diagnostic_count": 9,
+    "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+    "source_modules": [
+      {
+        "module": "mncs.compiler.source.v1",
+        "source_path": "src/compiler/source.mncs",
+        "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+      },
+      {
+        "module": "mncs.compiler.segment.v1",
+        "source_path": "src/compiler/segment.mncs",
+        "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+      },
+      {
+        "module": "mncs.compiler.lexer.v1",
+        "source_path": "src/compiler/lexer.mncs",
+        "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+      }
+    ],
+    "status": "rejected_by_current_profile_traversal_bound"
+  },
+  "harness": "tools/test_vm_compiler_source_fact_reuse.py",
+  "harness_sha256": "e14529b73ba00344a45d36ff86b7887fb49a40fbd10364acefd50697966bf6e2",
+  "language_fact_implementation_revision": "f03bdc1f8323c98d685a7dc37fa666d483e3d031",
+  "limitations": [
+    "This compiles a selected dependency slice extracted from the actual Compiler source and segment modules; it does not compile the full modules or full Compiler.",
+    "The edited UTF-8 validator is outside the selected executable closure; its changed body is reverified while the source-span path is reused.",
+    "This does not establish Stage-1 or Stage-2 succession."
+  ],
+  "measurements": {
+    "body_edit_build": {
+      "cpu_seconds": 0.21,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 54861824,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.242308
+    },
+    "canonical_vm_execution": {
+      "calls_bytes": 1207,
+      "peak_rss_kib": 20200,
+      "results_bytes": 3485,
+      "wall_seconds": 0.006497
+    },
+    "cgroup_measurement_available": false,
+    "cold_build": {
+      "cpu_seconds": 0.22,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 54722560,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.272332
+    },
+    "comment_edit_build": {
+      "cpu_seconds": 0.22,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 1,
+      "peak_open_file_descriptors": 5,
+      "peak_rss_bytes": 54255616,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.247244
+    },
+    "full_module_attempt": {
+      "cpu_seconds": 0.23,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 54718464,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.255867
+    },
+    "whole_frontier_wall_seconds": 1.489385
+  },
+  "observed_at": "2026-10-20T10:16:43.660327+00:00",
+  "schema_version": "mncs.compiler.self-consumption-source-fact-reuse/1",
+  "scope": "A verified dependency slice extracted from the current Compiler source and segment modules was built as one native application. A fresh process reused Language verification facts after a comment-only snapshot change. A second fresh process reverified the edited UTF-8 function, reused the unchanged source-span execution path, and retained the same executable closure. Three canonical VM calls matched the Stage-0 oracle.",
+  "stage0_probe_sha256": "324b6fd6a5ea2e0ed163efbfbb892e64ab1918cf4a5e3150d023c5fa3d9df062",
+  "stage0_revision": "f03bdc1f8323c98d685a7dc37fa666d483e3d031",
+  "status": "passed_real_compiler_module_fact_reuse_frontier",
+  "target_modules": [
+    {
+      "full_source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771",
+      "module": "mncs.compiler.source.v1",
+      "selected_functions": [
+        "utf8_continuation",
+        "utf8_first_continuation_valid",
+        "span_valid_global"
+      ],
+      "source_path": "src/compiler/source.mncs",
+      "verified_fragment_sha256": "c2c6cb8c097734475a284c8a9e0eb618f165afcf6bd1a118feafa4e08aff2443"
+    },
+    {
+      "full_source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5",
+      "module": "mncs.compiler.segment.v1",
+      "selected_functions": [
+        "span_valid_global"
+      ],
+      "source_path": "src/compiler/segment.mncs",
+      "verified_fragment_sha256": "3a89d33c363d9ed1ec70397bdc7f56c5ee5581ab4eeec63ca7d87e3824011852"
+    }
+  ],
+  "verified_fact_reuse": {
+    "artifact_reused_for_unchanged_closure": true,
+    "body_edit_recomputed": [
+      "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid"
+    ],
+    "body_edit_reused": 4,
+    "cold_facts_produced": 5,
+    "comment_edit_recomputed": 0,
+    "comment_edit_reused": 5,
+    "contract": "mncs.language-verification-fact/3",
+    "edited_subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid",
+    "fresh_process_per_snapshot": true,
+    "unchanged_execution_path_reused": [
+      "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+      "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+      "mncs:0.2:body:tests.compiler_source_frontier::check_span"
+    ],
+    "verifier_identity": "mncs-language-function-body-validator/3"
+  },
+  "vm_binary_sha256": "1f3f52ac3db092b7f342eff6222c5cd60850419fbe68aff00912b080c5307583",
+  "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+}

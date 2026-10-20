@@ -1343,3 +1343,34 @@ are workload-specific cache measurements, not Language verified-fact reuse.
 The real seven-case `mncs-test` provider run again matched Stage-0. Execution
 still uses the local provider adapter; Forge execution, canonical Store
 publication/readback, and Compiler self-consumption remain separate frontiers.
+
+## Language-owned verification fact v3 reuse (2026-10-20)
+
+Language v3 facts now include a separate callable-implementation dependency in
+addition to the callable interface. Editing a callee body invalidates its
+direct callers while unrelated facts remain reusable. The [full Parser
+dependency run](self-host-parser-module-fact-reuse-20261020T101638Z.json)
+produced 108 facts, reused all 108 after a comment-only edit, and on a reachable
+`finish` edit reverified `finish`, its generic specialization, and the two
+dependent `header` bodies while reusing 104 facts. All four canonical VM
+results matched Stage-0.
+
+The [full Source, Lexer, and Segment run](self-host-full-module-fact-reuse-20261020T101606Z.json)
+produced 103 facts, reused all 103 after a comment edit, and reverified the
+changed UTF-8 helper plus its three direct callers while reusing 99 independent
+facts. An imported interface edit reverified six dependent facts and reused
+97. Canonical VM behavior matched Stage-0. The [Source slice
+run](self-host-source-module-fact-reuse-20261020T101643Z.json) produced five
+facts; its comment edit reused all five, and its isolated body edit reverified
+one while reusing four.
+
+Parser cold/comment/reachable-edit builds measured 7.124/5.077/6.936 seconds
+wall time and up to 273 MB RSS. The complete Source/Lexer/Segment builds
+measured 3.554/2.806/2.837 seconds and up to 156 MB RSS. The Source slice
+measured 0.272/0.247/0.242 seconds and about 55 MB RSS. Cgroup memory readings
+were unavailable. These are workload-specific measurements. The exact
+evidence identities and reuse counts are recorded under
+`current_campaign_language_verification_fact_v3_reuse_20261020` in
+[`SELF-HOST-MATRIX.json`](SELF-HOST-MATRIX.json). This verifies actual
+Language-owned body fact reuse; it does not establish full Compiler
+self-hosting or Stage-1/Stage-2 succession.
