@@ -349,6 +349,7 @@ def main() -> None:
     original = build_request(app.APP_SOURCE, modules)
     stages: dict[str, dict] = {}
     execution_checks: list[dict] = []
+    generic_specialization_evidence: dict | None = None
 
     with tempfile.TemporaryDirectory(prefix=".language-record-fact-reuse-", dir=ROOT) as raw:
         cache_root = Path(raw)
@@ -604,6 +605,143 @@ def main() -> None:
             raise AssertionError("reachable imported body edit reused the prior executable artifact")
         execution_checks.append({
             "stage": "reachable_imported_body_edit", "stage0_vm_equal": True,
+        })
+
+        generic_request = copy.deepcopy(original)
+        generic_assertions = generic_request["modules"]["mncs.test.assertions"]
+        old_generic_body = "next same = same && expected[i] == actual[i];"
+        new_generic_body = "next same = same && expected[i] == expected[i];"
+        if generic_assertions.count(old_generic_body) != 1:
+            raise AssertionError("generic equals_bytes body changed unexpectedly")
+        generic_variant_request = copy.deepcopy(generic_request)
+        generic_variant_request["modules"]["mncs.test.assertions"] = (
+            generic_assertions.replace(old_generic_body, new_generic_body, 1)
+        )
+        generic_cache = cache_root / "generic-specialization"
+        generic_baseline = measure_build(
+            "generic_specialization_baseline", generic_request,
+            generic_cache, compare_execution=True,
+        )
+        generic_edit = measure_build(
+            "generic_specialization_body_edit", generic_variant_request,
+            generic_cache, compare_execution=True,
+        )
+        stages["generic_specialization_body_edit"] = generic_edit
+        generic_work = generic_edit["verification_work"]
+        generic_recomputed = set(generic_work.get("recomputed_semantic_facts", []))
+        generic_reused = set(generic_work.get("reused_semantic_facts", []))
+        generic_specialized_subjects = {
+            subject for subject in generic_recomputed
+            if "mncs.test.assertions::equals_bytes__spec_" in subject
+        }
+        generic_changed_subject = "mncs:0.2:body:mncs.test.assertions::equals_bytes"
+        generic_consumer_subject = "mncs:0.2:body:tests.native_readiness::run"
+        expected_generic_recomputed = {
+            generic_changed_subject,
+            generic_consumer_subject,
+            *generic_specialized_subjects,
+        }
+        generic_reasons = generic_work.get("semantic_fact_recomputation_reasons", [])
+        if (generic_edit["response"].get("status") != "verified"
+                or generic_work.get("front_end_invocations") != 1
+                or len(generic_specialized_subjects) != 1
+                or generic_recomputed != expected_generic_recomputed
+                or not any(row.get("subject") == generic_changed_subject
+                           and row.get("reason") == "subject_changed"
+                           for row in generic_reasons)
+                or not any(row.get("subject") in generic_specialized_subjects
+                           and row.get("reason") == "subject_changed"
+                           for row in generic_reasons)
+                or not any(row.get("subject") == generic_consumer_subject
+                           and row.get("reason") == "dependencies_changed"
+                           for row in generic_reasons)):
+            raise AssertionError(
+                "generic implementation edit did not reverify its specialization and "
+                f"consumer precisely: facts={sorted(generic_recomputed)}, reasons={generic_reasons}"
+            )
+        generic_baseline_facts = set(
+            generic_baseline["verification_work"].get("recomputed_semantic_facts", [])
+        )
+        if generic_reused != generic_baseline_facts - expected_generic_recomputed:
+            raise AssertionError(
+                "generic implementation edit did not reuse every independent body fact"
+            )
+        if not any("mncs.test.generative::shrink" in subject for subject in generic_reused):
+            raise AssertionError("generic edit failed to reuse independent Test body facts")
+        if (generic_edit["response"].get("artifact", {}).get("identity")
+                == generic_baseline["response"].get("artifact", {}).get("identity")):
+            raise AssertionError("generic implementation edit reused a stale executable artifact")
+        generic_success_entry = cache_entry(
+            generic_cache / "application-cache", generic_edit["response"]
+        )
+        generic_invalid_request = copy.deepcopy(generic_variant_request)
+        generic_suite = generic_invalid_request["modules"]["mncs.test.suite"]
+        generic_old_enum = "enum SuiteClassification { PASSED, TEST_FAILURE, UNSUPPORTED }"
+        generic_invalid_enum = (
+            "enum SuiteClassification { PASSED, TEST_FAILURE, UNSUPPORTED, "
+            "UNSUPPORTED }"
+        )
+        if generic_suite.count(generic_old_enum) != 1:
+            raise AssertionError("generic candidate fixture lost SuiteClassification")
+        generic_invalid_request["modules"]["mncs.test.suite"] = generic_suite.replace(
+            generic_old_enum, generic_invalid_enum, 1
+        )
+        generic_invalid = measure_build(
+            "invalid_source_with_prior_language_facts", generic_invalid_request,
+            generic_cache, compare_execution=False,
+        )
+        stages["invalid_source_with_prior_language_facts"] = generic_invalid
+        generic_invalid_response = generic_invalid["response"]
+        if (generic_invalid_response.get("status") != "rejected"
+                or generic_invalid_response.get("artifact") is not None):
+            raise AssertionError(
+                "invalid source reused prior verified facts or executable artifacts"
+            )
+        if not any(
+            row.get("code") == "MNE172"
+            and any(
+                related.get("code") == "MNE121"
+                and "finite variant is duplicated" in str(related.get("message"))
+                for related in row.get("related", [])
+            )
+            for row in generic_invalid_response.get("diagnostics", [])
+        ):
+            raise AssertionError(
+                "invalid source with a prior fact candidate omitted its fresh diagnostic"
+            )
+        generic_invalid_key = generic_invalid_response.get("cache", {}).get(
+            "key", ""
+        ).removeprefix("sha256:")
+        generic_invalid_entry = (
+            generic_cache / "application-cache" / "application-builds"
+            / f"{generic_invalid_key}.json"
+        )
+        if generic_invalid_entry.exists():
+            raise AssertionError("rejected source published a reusable application cache entry")
+        generic_specialization_evidence = {
+            "baseline_cache_key": generic_baseline["response"].get("cache", {}).get("key"),
+            "changed_cache_key": generic_edit["response"].get("cache", {}).get("key"),
+            "prior_verified_entry_reused_as_candidate_source": bool(generic_success_entry),
+            "recomputed_semantic_facts": sorted(generic_recomputed),
+            "recomputation_reasons": generic_reasons,
+            "reused_semantic_fact_count": len(generic_reused),
+            "reused_independent_example": next(
+                subject for subject in sorted(generic_reused)
+                if "mncs.test.generative::shrink" in subject
+            ),
+            "artifact_regenerated": True,
+            "stage0_oracle_valid": generic_edit["oracle_valid"],
+            "stage0_vm_equal": True,
+            "invalid_source_candidate": {
+                "status": generic_invalid_response.get("status"),
+                "diagnostic_code": "MNE172",
+                "related_diagnostic_code": "MNE121",
+                "artifact_published": False,
+                "cache_entry_published": generic_invalid_entry.exists(),
+            },
+        }
+        execution_checks.append({
+            "stage": "generic_specialization_body_edit", "stage0_vm_equal": True,
         })
 
         interface_request = copy.deepcopy(body_request)
@@ -914,6 +1052,7 @@ def main() -> None:
                 "cache_entry_schema": "mncs.compiler.application-build-cache-entry/8",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
+            "generic_specialization_fact_reuse": generic_specialization_evidence,
             "effectful_digest_app_fact_reuse": digest_stages,
             "execution_checks": execution_checks,
             "source_location_refresh": {
