@@ -268,6 +268,63 @@ def main() -> None:
             raise AssertionError("uncalled body edit changed the selected executable artifact")
         execution_checks.append({"stage": "uncalled_body_edit", "stage0_vm_equal": True})
 
+        reachable_request = copy.deepcopy(comment_request)
+        generative = reachable_request["modules"]["mncs.test.generative"]
+        old_advance = "return state *% 6364136223846793005 +% 1442695040888963407;"
+        new_advance = "return state *% 6364136223846793006 +% 1442695040888963407;"
+        if generative.count(old_advance) != 1:
+            raise AssertionError("the selected Test fixture no longer has the expected advance_random body")
+        reachable_request["modules"]["mncs.test.generative"] = generative.replace(
+            old_advance, new_advance, 1
+        )
+        reachable_baseline = measure_build(
+            "reachable_body_baseline", comment_request,
+            cache_root / "reachable", compare_execution=True,
+        )
+        stages["reachable_body_baseline"] = reachable_baseline
+        reachable_body_edit = measure_build(
+            "reachable_imported_body_edit", reachable_request,
+            cache_root / "reachable", compare_execution=True,
+        )
+        stages["reachable_imported_body_edit"] = reachable_body_edit
+        reachable_work = reachable_body_edit["verification_work"]
+        reachable_recomputed = [
+            str(row) for row in reachable_work.get("recomputed_semantic_facts", [])
+        ]
+        reachable_reused = [
+            str(row) for row in reachable_work.get("reused_semantic_facts", [])
+        ]
+        expected_recomputed = {
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+        }
+        if set(reachable_recomputed) != expected_recomputed:
+            raise AssertionError(
+                "reachable imported body edit did not reverify exactly its changed "
+                f"function and direct caller: {reachable_recomputed}"
+            )
+        baseline_facts = {
+            str(row) for row in reachable_baseline["verification_work"].get(
+                "recomputed_semantic_facts", []
+            )
+        }
+        if set(reachable_reused) != baseline_facts - expected_recomputed:
+            raise AssertionError(
+                "reachable imported body edit did not reuse every independent body "
+                f"fact: reused={reachable_reused}, baseline={sorted(baseline_facts)}"
+            )
+        if not any("mncs.test.generative::shrink" in row for row in reachable_reused):
+            raise AssertionError("reachable imported body edit failed to reuse independent shrink fact")
+        if (not reachable_work.get("reused_declaration_facts")
+                or reachable_work.get("recomputed_declaration_facts")):
+            raise AssertionError("reachable body edit did not reuse unchanged declaration facts")
+        if (reachable_body_edit["response"].get("artifact", {}).get("identity")
+                == reachable_baseline["response"].get("artifact", {}).get("identity")):
+            raise AssertionError("reachable imported body edit reused the prior executable artifact")
+        execution_checks.append({
+            "stage": "reachable_imported_body_edit", "stage0_vm_equal": True,
+        })
+
         interface_request = copy.deepcopy(body_request)
         generative = interface_request["modules"]["mncs.test.generative"]
         old_signature = "fn shrink(value: u64) -> (result: u64)"
@@ -325,12 +382,31 @@ def main() -> None:
                 "comment_edit_recomputed": len(comment_work["recomputed_declaration_facts"]),
                 "uncalled_body_edit_reused": len(body_work["reused_declaration_facts"]),
                 "uncalled_body_edit_recomputed": len(body_work["recomputed_declaration_facts"]),
+                "reachable_body_edit_reused": len(
+                    reachable_work.get("reused_declaration_facts", [])),
+                "reachable_body_edit_recomputed": len(
+                    reachable_work.get("recomputed_declaration_facts", [])),
                 "imported_interface_edit_reused": len(interface_work["reused_declaration_facts"]),
                 "imported_interface_edit_recomputed": len(interface_work["recomputed_declaration_facts"]),
-            "imported_interface_edit_artifact_identity_changed": (
-                interface["response"].get("artifact", {}).get("identity")
-                != cold["response"].get("artifact", {}).get("identity")
-            ),
+                "imported_interface_edit_artifact_identity_changed": (
+                    interface["response"].get("artifact", {}).get("identity")
+                    != cold["response"].get("artifact", {}).get("identity")
+                ),
+            },
+            "reachable_imported_body_dependency_invalidation": {
+                "changed_module": "mncs.test.generative",
+                "changed_function": "advance_random",
+                "reused_semantic_facts": reachable_work.get("reused_semantic_facts", []),
+                "recomputed_semantic_facts": reachable_work.get("recomputed_semantic_facts", []),
+                "declaration_fact_reuse": {
+                    "reused": reachable_work.get("reused_declaration_facts", []),
+                    "recomputed": reachable_work.get("recomputed_declaration_facts", []),
+                },
+                "artifact_identity_changed": (
+                    reachable_body_edit["response"].get("artifact", {}).get("identity")
+                    != reachable_baseline["response"].get("artifact", {}).get("identity")
+                ),
+                "stage0_vm_equal": True,
             },
             "artifact_equivalence": "stage0-oracle equals canonical VM for every changed snapshot",
         }

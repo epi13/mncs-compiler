@@ -1437,3 +1437,25 @@ frontiers. The first report
 retained but superseded after its scope summary was corrected; use the
 final-named report above as the canonical evidence. The matrix records it under
 `current_campaign_test_inventory_language_fact_v3_20261020`.
+
+## Imported body invalidation through Compiler application-build/8 (2026-10-20)
+
+The [application-build report](language-declaration-fact-reuse-20261020T113820.917023Z.json)
+extends the `mncs-test` assertion, generative, suite, and snapshot modules
+with a reachable edit to imported `mncs.test.generative::advance_random`.
+Fresh Stage-0 processes shared the persistent application cache. Language v3
+recomputed exactly the edited function and its direct caller
+`draw_case` (2 of 24 body facts), reused the other 22—including `shrink`,
+`replay`, and the root `run` body—and reused all 24 declaration facts. The
+executable artifact identity changed, and canonical VM results matched the
+Stage-0 oracle.
+
+The isolated baseline took 0.712 seconds wall time, 0.69 CPU seconds, and
+54.5 MB peak RSS. The changed build took 0.733 seconds, 0.70 CPU seconds, and
+54.6 MB peak RSS. Cgroup readings were unavailable. These runs show selective
+verification work, not a wall-time improvement. The earlier report
+(`language-declaration-fact-reuse-20261020T113732.228303Z.json`) is retained;
+the later report is canonical because its harness asserts the exact changed
+and reused body-fact sets. This does not establish production Test-runner
+migration or compiler succession. The matrix records the exact identities
+under `current_campaign_native_app_imported_body_fact_v3_reuse_20261020`.
