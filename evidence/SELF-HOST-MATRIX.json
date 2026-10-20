@@ -20020,5 +20020,86 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "Selected current-head Source location frontiers only. This does not prove the full Source module, Language fact reuse, Stage-1, or Stage-2 succession."
+  },
+  "current_campaign_source_module_fact_reuse_20261020": {
+    "status": "passed_selected_compiler_source_segment_dependency_slice",
+    "tested_compiler_revision": "c0b63c86f213bdf0859293f37c2447cf215bd401",
+    "stage0_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "modules": [
+      {
+        "module": "mncs.compiler.source.v1",
+        "source_path": "src/compiler/source.mncs",
+        "source_sha256": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+        "selected_functions": [
+          "utf8_continuation",
+          "utf8_first_continuation_valid",
+          "span_valid_global"
+        ]
+      },
+      {
+        "module": "mncs.compiler.segment.v1",
+        "source_path": "src/compiler/segment.mncs",
+        "source_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "selected_functions": [
+          "span_valid_global"
+        ]
+      }
+    ],
+    "application_entry": "tests.compiler_source_frontier::check_span",
+    "application_artifact_identity": "sha256:82e7ea5c6bff0e94c258beb5f2c73a1bf661a480008e5d549aab0fabffb795a9",
+    "application_artifact_json_bytes": 14378,
+    "canonical_vm_matches_stage0": true,
+    "verified_fact_reuse": {
+      "contract": "mncs.language-verification-fact/1",
+      "cold_facts_produced": 5,
+      "comment_edit_reused": 5,
+      "comment_edit_recomputed": 0,
+      "body_edit_subject": "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid",
+      "body_edit_reused": 4,
+      "body_edit_recomputed": 1,
+      "unchanged_source_segment_and_application_functions_reused": true,
+      "fresh_process_per_snapshot": true
+    },
+    "measurements": {
+      "cold_build_wall_seconds": 0.280515,
+      "comment_edit_build_wall_seconds": 0.395765,
+      "body_edit_build_wall_seconds": 0.244466,
+      "full_module_attempt_wall_seconds": 0.254612,
+      "canonical_vm_three_call_batch_wall_seconds": 0.006609,
+      "canonical_vm_peak_rss_kib": 20928,
+      "cgroup_measurement_available": false
+    },
+    "harness": "tools/test_vm_compiler_source_fact_reuse.py",
+    "harness_sha256": "8f07ce2fbaadf56d94135550e5da1f4cf281be1411fc831bdc493fa942aa73f2",
+    "evidence_artifact": "evidence/self-host-source-module-fact-reuse-20261020T045918Z.json",
+    "evidence_sha256": "d6dca0e97bd46d5bb7b738bb5d60ebfa28afb06ecedaa57f0fd921adaaef703e",
+    "language_verified_facts_reused": 4,
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "A full-module source attempt was rejected because constructs in Compiler source.mncs exceed the current application profile's traversal-bound ceiling. This verified dependency slice compiles four selected functions from the actual source and segment modules. Language reused all five body facts after a comment-only edit, then recomputed only the edited UTF-8 validation body while reusing four independent facts. Three canonical VM calls matched Stage-0. This is a selected module dependency slice, not full-module verification or Stage-1/Stage-2 succession.",
+    "full_module_admission": {
+      "status": "rejected_by_current_profile_traversal_bound",
+      "profile_bound_diagnostic_count": 9,
+      "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+      "source_modules": [
+        {
+          "module": "mncs.compiler.source.v1",
+          "source_path": "src/compiler/source.mncs",
+          "source_sha256": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22"
+        },
+        {
+          "module": "mncs.compiler.segment.v1",
+          "source_path": "src/compiler/segment.mncs",
+          "source_sha256": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff"
+        },
+        {
+          "module": "mncs.compiler.lexer.v1",
+          "source_path": "src/compiler/lexer.mncs",
+          "source_sha256": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692"
+        }
+      ],
+      "wall_seconds": 0.254612
+    }
   }
 }
