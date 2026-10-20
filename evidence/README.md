@@ -1226,3 +1226,17 @@ the verifier output to its exact inputs. The [full Project result](project-full-
 preserves the complete suite report. These checks exercise Project resolution
 and SSA fixtures; they do not run the canonical VM, reuse Language verified
 facts, or establish compiler succession.
+
+## Project resolver resource observations (2026-10-20)
+
+The [focused resolution report](project-resolution-resource-observation-20261020.json)
+now retains the opt-in per-child process telemetry already collected by the
+Project harness. The 18-request retained-Cranelift run matched the prior
+deterministic result digest and locked Stage-0 callable identities. It took
+67.087 seconds wall time and 66.230 seconds of Stage-0 child CPU. At 500 ms
+sampling, the child reached 6,238,470,144 bytes sampled RSS and a kernel
+VmHWM of 6,239,125,504 bytes; it peaked at four file descriptors and three
+threads. Cgroup memory metrics were unavailable and remain unknown. The report
+identifies the Compiler, nine MNCS source files, Language lock, Stage-0 binary,
+and modified harness by revision or hash. It reports no Language verified
+facts reused.

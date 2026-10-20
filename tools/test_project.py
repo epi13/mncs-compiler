@@ -1058,6 +1058,102 @@ class _FixtureRun:
         return False
 
 
+def _probe_resource_observation(probe):
+    """Summarize opt-in per-child measurements without inventing missing values."""
+    if not probe._telemetry:
+        return {
+            "schema_version": "mncs.compiler.project-resource-observation/1",
+            "status": "UNKNOWN",
+            "reason": "MNCS_PROBE_TELEMETRY is disabled",
+        }
+
+    children = {}
+    cgroups = {}
+    aggregate_maxima = (
+        ("peak_rss_bytes", "peak_sampled_rss_bytes"),
+        ("max_kernel_rss_high_water_bytes", "kernel_rss_high_water_bytes"),
+        ("peak_fd_count", "peak_fd_count"),
+        ("peak_threads", "peak_threads"),
+    )
+    additive = (
+        ("cpu_time_delta_ns", "cpu_time_delta_ns"),
+        ("io_read_bytes_delta", "io_read_bytes_delta"),
+        ("io_write_bytes_delta", "io_write_bytes_delta"),
+        ("sample_count", "observed_process_samples"),
+    )
+    for observation in probe.request_observations:
+        summary = observation.get("resource_summary")
+        if not isinstance(summary, dict):
+            continue
+        process = observation.get("process") or {}
+        pid = process.get("pid")
+        if pid is None:
+            continue
+        key = str(pid)
+        child = children.setdefault(key, {
+            "process": process,
+            "status": "OBSERVED",
+            "peak_sampled_rss_bytes": None,
+            "kernel_rss_high_water_bytes": None,
+            "peak_fd_count": None,
+            "peak_threads": None,
+            "cpu_time_delta_ns": 0,
+            "io_read_bytes_delta": 0,
+            "io_write_bytes_delta": 0,
+            "observed_process_samples": 0,
+        })
+        for source, target in aggregate_maxima:
+            value = summary.get(source)
+            if isinstance(value, int):
+                child[target] = max(child[target] or 0, value)
+        for source, target in additive:
+            value = summary.get(source)
+            if isinstance(value, int):
+                child[target] += value
+
+        before = observation.get("cgroup_before")
+        after = observation.get("cgroup_after")
+        if isinstance(before, dict) or isinstance(after, dict):
+            before = before if isinstance(before, dict) else {}
+            after = after if isinstance(after, dict) else {}
+            path_value = after.get("path") or before.get("path")
+            cgroup = cgroups.setdefault(str(path_value or "unknown"), {
+                "path": path_value,
+                "attribution": "shared cgroup scope; values are not assigned to this child",
+                "memory_current_bytes_before": None,
+                "memory_current_bytes_after": None,
+                "memory_max_bytes": None,
+                "cpu_stat_before": None,
+                "cpu_stat_after": None,
+            })
+            for field, source in (
+                ("memory_current_bytes_before", before),
+                ("memory_current_bytes_after", after),
+            ):
+                raw = source.get("memory_current")
+                try:
+                    cgroup[field] = int(raw)
+                except (TypeError, ValueError):
+                    pass
+            for field, source, name in (
+                ("memory_max_bytes", after, "memory_max"),
+                ("cpu_stat_before", before, "cpu_stat"),
+                ("cpu_stat_after", after, "cpu_stat"),
+            ):
+                value = source.get(name)
+                if isinstance(value, str):
+                    cgroup[field] = value
+
+    return {
+        "schema_version": "mncs.compiler.project-resource-observation/1",
+        "status": "OBSERVED" if children else "UNKNOWN",
+        "sampling_interval_ms": 500,
+        "process_measurement": "per-child /proc samples and kernel VmHWM; CPU and I/O deltas are summed across non-overlapping requests",
+        "children": [children[key] for key in sorted(children, key=int)],
+        "cgroup_scopes": [cgroups[key] for key in sorted(cgroups)],
+    }
+
+
 def _mode_common(run):
     return {
         "requests": run.probe.requests,
@@ -1067,6 +1163,7 @@ def _mode_common(run):
         "execution_mode": ("retained_" + (run.execution_status["backend"] or "unknown")) if run.execution_status["retained_sessions"] else "reference_interpreter",
         "requested_execution_backend": os.environ.get("MNCS_PROBE_BACKEND"),
         "retained_execution_sessions": run.execution_status["retained_sessions"],
+        "probe_resources": _probe_resource_observation(run.probe),
     }
 
 
@@ -2824,6 +2921,7 @@ def run_route(changed_paths, select_all=False):
         report["shared_probe"]["exit_digest"] = run.probe.digest.copy().hexdigest()
         report["shared_probe"]["requests"] = run.probe.requests
         report["shared_probe"]["steps_total"] = sum(run.probe.steps)
+        report["probe_resources"] = _probe_resource_observation(run.probe)
     report["elapsed_seconds"] = round(time.monotonic() - started, 3)
     report["suppressed"] = False
     return report

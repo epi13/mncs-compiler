@@ -1,0 +1,242 @@
+{
+  "requests": 18,
+  "result_sha256": "4171c2c1afc79b35cb6efd8e90dd26ebf3f78a3dee72198b4d8f95a96a69bf31",
+  "native_execution_steps_total": 9,
+  "native_execution_steps_max": 1,
+  "execution_mode": "retained_cranelift",
+  "requested_execution_backend": "cranelift",
+  "retained_execution_sessions": 2,
+  "probe_resources": {
+    "schema_version": "mncs.compiler.project-resource-observation/1",
+    "status": "OBSERVED",
+    "sampling_interval_ms": 500,
+    "process_measurement": "per-child /proc samples and kernel VmHWM; CPU and I/O deltas are summed across non-overlapping requests",
+    "children": [
+      {
+        "process": {
+          "pid": 34,
+          "start_ticks": 42935007,
+          "executable": "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+          "cmdline": [
+            "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe"
+          ]
+        },
+        "status": "OBSERVED",
+        "peak_sampled_rss_bytes": 6238470144,
+        "kernel_rss_high_water_bytes": 6239125504,
+        "peak_fd_count": 4,
+        "peak_threads": 3,
+        "cpu_time_delta_ns": 66230000000,
+        "io_read_bytes_delta": 7217152,
+        "io_write_bytes_delta": 0,
+        "observed_process_samples": 186
+      }
+    ],
+    "cgroup_scopes": [
+      {
+        "path": "/",
+        "attribution": "shared cgroup scope; values are not assigned to this child",
+        "memory_current_bytes_before": null,
+        "memory_current_bytes_after": null,
+        "memory_max_bytes": "UNKNOWN",
+        "cpu_stat_before": "UNKNOWN",
+        "cpu_stat_after": "UNKNOWN"
+      }
+    ]
+  },
+  "snapshot_source_count": 2,
+  "snapshot_bytes": 1103,
+  "former_unit_boundary_crossed": true,
+  "native_modules": [
+    {
+      "module": "demo.dep",
+      "functions": 1,
+      "verified": true
+    },
+    {
+      "module": "demo.root",
+      "functions": 1,
+      "verified": true
+    }
+  ],
+  "native_imports": [
+    {
+      "source_index": 1,
+      "target_index": 0,
+      "has_alias": true
+    }
+  ],
+  "stage0_module_resolutions": 1,
+  "stage0_linked_functions": 2,
+  "stage0_ssa_functions": 2,
+  "native_signatures_matched_stage0": [
+    "demo.dep::answer",
+    "demo.root::main"
+  ],
+  "transitive_import_links": [
+    [
+      1,
+      2
+    ],
+    [
+      2,
+      0
+    ]
+  ],
+  "stage0_transitive_linked_functions": 3,
+  "resolution_edge_cases": {
+    "same_short_name_owners": {
+      "native_valid": true,
+      "stage0_valid": true,
+      "canonical_call_identities": [
+        "mncs:0.2:function:demo.dep::answer",
+        "mncs:0.2:function:demo.flags::answer",
+        "mncs:0.2:function:demo.names::answer"
+      ],
+      "local_and_two_imported_answers_resolved_separately": true,
+      "stage0_function_count": 6
+    },
+    "missing_import": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 3,
+          "$p": {
+            "end": 47,
+            "source_index": 0,
+            "start": 36
+          }
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNE173",
+          "expected": [],
+          "found": null,
+          "message": "imported module 'demo.absent' is unavailable to the resolver",
+          "severity": "error",
+          "span": {
+            "column": 37,
+            "end": 47,
+            "line": 1,
+            "start": 36
+          },
+          "stage": "elaboration"
+        }
+      ]
+    },
+    "duplicate_module_definitions": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 2,
+          "$p": {
+            "end": 32,
+            "source_index": 1,
+            "start": 18
+          }
+        }
+      ],
+      "stage0_single_key_source_valid": true,
+      "oracle_duplicate_key_limit": "Stage-0 resolver map represents one source per declared module name"
+    },
+    "missing_imported_member": {
+      "native_valid": false,
+      "native_proof_obligations": [
+        {
+          "end": 111,
+          "kind": 32,
+          "start": 91,
+          "status": 1
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNE131",
+          "expected": [],
+          "found": null,
+          "message": "call target does not resolve to a function in this module",
+          "severity": "error",
+          "span": {
+            "column": 92,
+            "end": 111,
+            "line": 1,
+            "start": 91
+          },
+          "stage": "elaboration"
+        }
+      ]
+    },
+    "parse_failure_explains_itself": {
+      "native_valid": false,
+      "native_diagnostics": [
+        {
+          "$v": 4,
+          "$p": {
+            "end": 42,
+            "source_index": 0,
+            "start": 40
+          }
+        }
+      ],
+      "stage0_valid": false,
+      "stage0_diagnostics": [
+        {
+          "code": "MNP024",
+          "expected": [
+            "right_paren"
+          ],
+          "found": "arrow",
+          "message": "expected ')' after input parameters",
+          "severity": "error",
+          "span": {
+            "column": 41,
+            "end": 42,
+            "line": 1,
+            "start": 40
+          },
+          "stage": "parsing"
+        }
+      ]
+    }
+  },
+  "deterministic_repetitions": 2,
+  "mode": "resolution",
+  "schema_version": 1,
+  "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+  "stage0_reference_mode": "locked",
+  "source_profile": "0.18",
+  "elapsed_seconds": 67.087,
+  "verification_provenance": {
+    "schema_version": "mncs.compiler.project-verification-provenance/1",
+    "compiler": {
+      "git_root": "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "revision": "f9955a7f773d9590c89d05fcb14a87960ce4edc4",
+      "branch": "campaign/native-application-readiness-20261013"
+    },
+    "compiler_sources": {
+      "root": "src/compiler",
+      "count": 9,
+      "sha256": {
+        "src/compiler/decl.mncs": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+        "src/compiler/flow.mncs": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
+        "src/compiler/kernel.mncs": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+        "src/compiler/lexer.mncs": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+        "src/compiler/parser.mncs": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+        "src/compiler/project.mncs": "9753f0f4ef04d72cade170bdaa46141f6eafe71af71896cc1289430d807dfa64",
+        "src/compiler/segment.mncs": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+        "src/compiler/source.mncs": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+        "src/compiler/ssa.mncs": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709"
+      }
+    },
+    "stage0": {
+      "locked_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+      "lock_sha256": "5f2e67c56f1371a860a82db47a00f4237fa80dce886e4c4c22424210202c7698",
+      "probe_path": "/workspace/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+      "probe_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76"
+    },
+    "harness_sha256": "a055cd3828c0ff5ea6aacc1a340c6441e2d72e8e5032c15aec3ea133eaca5169"
+  }
+}
