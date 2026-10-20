@@ -2914,6 +2914,7 @@ def main() -> None:
         "mncs.compiler.application-build-request/4": "mncs.compiler.application-build/7",
         "mncs.compiler.application-build-request/5": "mncs.compiler.application-build/8",
         "mncs.compiler.application-build-request/6": "mncs.compiler.application-build/9",
+        "mncs.compiler.application-build-request/7": "mncs.compiler.application-build/10",
     }
     if provider.RESPONSE_SCHEMA_BY_REQUEST != expected_pairs:
         raise AssertionError("Environment provider does not accept all versioned build contracts")
@@ -2922,10 +2923,10 @@ def main() -> None:
         row for row in manifest.get("contracts", {}).get("provides", [])
         if isinstance(row, dict) and row.get("contract") == "native-application-build"
     ]
-    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "9"
+    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "10"
             or contract_rows[0].get("artifact_contract", {}).get("request_schema")
-            != "mncs.compiler.application-build-request/6"):
-        raise AssertionError("Compiler manifest does not advertise application-build/9")
+            != "mncs.compiler.application-build-request/7"):
+        raise AssertionError("Compiler manifest does not advertise application-build/10")
     provider_tests.validate_environment_contract_descriptor()
 
     with tempfile.TemporaryDirectory(
@@ -3782,6 +3783,10 @@ def main() -> None:
             if type(result) is bool and not result
         ]
         if failed_boolean_checks:
+            if "real_mncs_test_production_vm_transport_runs_compiler_artifact" in failed_boolean_checks:
+                print(json.dumps(
+                    real_mncs_test_suite["production_test_vm_transport"], indent=2
+                ))
             raise AssertionError(
                 "application-build Test inventory proof has failed checks: "
                 + ", ".join(failed_boolean_checks)

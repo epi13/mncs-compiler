@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language declaration-fact reuse through application-build/8."""
+"""Exercise Language declaration-fact reuse through application-build/10."""
 from __future__ import annotations
 
 import copy
@@ -16,11 +16,14 @@ import test_vm_native_application as app
 import test_native_application_incremental as incremental
 
 ROOT = app.ROOT
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
-CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/5"
-VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/3"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/7"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/10"
+CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/6"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/5"
 FACT_SCHEMA = "mncs.language-declaration-verification-fact/1"
+FUNCTION_DECLARATION_VERIFIER = "mncs-language-function-declaration-validator/1"
+FINITE_TYPE_VERIFIER = "mncs-language-finite-type-validator/1"
+FINITE_TYPE_POLICY = "mncs-language-finite-type-policy/1"
 PROBE = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROBE_BIN",
     str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
@@ -29,10 +32,13 @@ VM_BIN = Path(os.environ.get(
     "MNCS_NATIVE_APP_VM_BIN",
     str(ROOT / ".build/native-app-readiness/mncs-vm"),
 )).expanduser().resolve()
-EVIDENCE = ROOT / "evidence" / (
-    f"language-declaration-fact-reuse-"
-    f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}.json"
-)
+EVIDENCE = Path(os.environ.get(
+    "MNCS_LANGUAGE_FACT_REUSE_EVIDENCE",
+    str(ROOT / "evidence" / (
+        f"language-declaration-fact-reuse-"
+        f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}.json"
+    )),
+)).expanduser().resolve()
 
 
 def git(*args: str, cwd: Path = ROOT) -> str:
@@ -82,12 +88,21 @@ def require_contract(label: str, response: dict) -> tuple[dict, dict]:
         raise AssertionError(f"{label} omitted declaration-fact work telemetry")
     if work.get("language_declaration_verification_fact_schema") != FACT_SCHEMA:
         raise AssertionError(f"{label} did not identify Language's declaration-fact contract")
+    if work.get("language_finite_type_declaration_verification_fact_schema") != FACT_SCHEMA:
+        raise AssertionError(f"{label} did not identify Language's finite-type fact contract")
     for field in ("reused_declaration_facts", "recomputed_declaration_facts",
                   "declaration_fact_recomputation_reasons"):
         if not isinstance(work.get(field), list):
             raise AssertionError(f"{label} omitted actual {field}")
     if type(work.get("produced_declaration_fact_count")) is not int:
         raise AssertionError(f"{label} omitted produced declaration-fact count")
+    for field in ("reused_finite_type_declaration_facts",
+                  "recomputed_finite_type_declaration_facts",
+                  "finite_type_declaration_fact_recomputation_reasons"):
+        if not isinstance(work.get(field), list):
+            raise AssertionError(f"{label} omitted actual {field}")
+    if type(work.get("produced_finite_type_declaration_fact_count")) is not int:
+        raise AssertionError(f"{label} omitted produced finite-type fact count")
     return cache, work
 
 
@@ -97,15 +112,30 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("application response omitted its exact cache identity")
     path = cache_dir / "application-builds" / f"{key.removeprefix('sha256:')}.json"
     entry = json.loads(path.read_text(encoding="utf-8"))
-    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/6":
-        raise AssertionError("V6 application cache omitted Language verification facts")
+    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/7":
+        raise AssertionError("V7 application cache omitted separately bound finite-type facts")
     facts = entry.get("declaration_verification_facts")
     if not isinstance(facts, list) or not all(
-            isinstance(row, dict) and row.get("schema_version") == FACT_SCHEMA
+            isinstance(row, dict)
+            and row.get("schema_version") == FACT_SCHEMA
+            and row.get("verifier_identity") == FUNCTION_DECLARATION_VERIFIER
             for row in facts):
         raise AssertionError("cache entry contains malformed Language declaration facts")
     if not entry.get("declaration_verification_facts_sha256"):
         raise AssertionError("cache entry does not bind declaration-fact bytes")
+    finite_type_facts = entry.get("finite_type_declaration_verification_facts")
+    if (not isinstance(finite_type_facts, list)
+            or not finite_type_facts
+            or not all(isinstance(row, dict)
+                       and row.get("schema_version") == FACT_SCHEMA
+                       and row.get("verifier_identity") == FINITE_TYPE_VERIFIER
+                       and row.get("policy_identity") == FINITE_TYPE_POLICY
+                       and row.get("result") == "verified"
+                       and row.get("verification_witness_identity")
+                       for row in finite_type_facts)):
+        raise AssertionError("cache entry contains malformed Language finite-type facts")
+    if not entry.get("finite_type_declaration_verification_facts_sha256"):
+        raise AssertionError("cache entry does not bind finite-type fact bytes")
     source_parse_cache = entry.get("source_parse_cache")
     if (not isinstance(source_parse_cache, dict)
             or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/1"
@@ -118,6 +148,7 @@ def fact_locations(entry: dict) -> dict[str, str | None]:
     return {
         json.dumps(row.get("subject"), sort_keys=True): row.get("source_location_identity")
         for row in entry["declaration_verification_facts"]
+        + entry["finite_type_declaration_verification_facts"]
     }
 
 
@@ -167,6 +198,7 @@ def measure_build(
 
 def compact(stage: dict) -> dict:
     response = stage["response"]
+    artifact = response.get("artifact")
     work = stage["verification_work"]
     return {
         "response_schema": response.get("schema_version"),
@@ -176,9 +208,15 @@ def compact(stage: dict) -> dict:
         "reused_declaration_fact_count": len(work["reused_declaration_facts"]),
         "recomputed_declaration_fact_count": len(work["recomputed_declaration_facts"]),
         "produced_declaration_fact_count": work["produced_declaration_fact_count"],
+        "reused_finite_type_fact_count": len(work["reused_finite_type_declaration_facts"]),
+        "recomputed_finite_type_fact_count": len(work["recomputed_finite_type_declaration_facts"]),
+        "produced_finite_type_fact_count": work["produced_finite_type_declaration_fact_count"],
+        "finite_type_declaration_verification": work[
+            "finite_type_declaration_verification"
+        ],
         "reused_function_body_fact_count": len(work.get("reused_semantic_facts", [])),
         "recomputed_function_body_fact_count": len(work.get("recomputed_semantic_facts", [])),
-        "artifact_id": response.get("artifact", {}).get("identity"),
+        "artifact_id": artifact.get("identity") if isinstance(artifact, dict) else None,
         "build_metrics": stage["build_metrics"],
         "oracle_valid": stage["oracle_valid"],
         "vm_metrics": stage["vm_metrics"],
@@ -208,8 +246,14 @@ def main() -> None:
             raise AssertionError("cold build did not run one verified Language frontend")
         if cold_work["produced_declaration_fact_count"] < 1:
             raise AssertionError("cold build did not produce Language declaration facts")
+        if cold_work["produced_finite_type_declaration_fact_count"] < 1:
+            raise AssertionError("cold build did not produce Language finite-type declaration facts")
         if cold_work["reused_declaration_facts"]:
             raise AssertionError("cold build reported declaration facts reused without prior evidence")
+        if cold_work["reused_finite_type_declaration_facts"]:
+            raise AssertionError("cold build reported finite-type facts reused without prior evidence")
+        if cold_work["finite_type_declaration_verification"] != "recomputed":
+            raise AssertionError("cold finite-type work was not reported as recomputed")
         execution_checks.append({"stage": "cold", "stage0_vm_equal": True})
         application_cache = cache_root / "cold" / "application-cache"
         entry_before = cache_entry(application_cache, cold["response"])
@@ -222,6 +266,10 @@ def main() -> None:
                 or unchanged["verification_work"].get("front_end_invocations") != 0
                 or unchanged["verification_work"]["reused_declaration_facts"]):
             raise AssertionError("exact artifact hit inaccurately reported Language fact reuse")
+        if unchanged["verification_work"]["reused_finite_type_declaration_facts"]:
+            raise AssertionError("exact artifact hit inaccurately reported finite-type fact reuse")
+        if unchanged["verification_work"]["finite_type_declaration_verification"] != "not_run":
+            raise AssertionError("exact artifact hit reported Language finite-type checking")
 
         comment_request = copy.deepcopy(original)
         comment_request["root_source"] = "// location refresh across a comment-only edit\n" + app.APP_SOURCE
@@ -236,6 +284,12 @@ def main() -> None:
             raise AssertionError("comment edit did not reuse any Language declaration facts")
         if comment_work["recomputed_declaration_facts"]:
             raise AssertionError("comment edit unnecessarily recomputed a declaration fact")
+        if not comment_work["reused_finite_type_declaration_facts"]:
+            raise AssertionError("comment edit did not reuse Language finite-type declaration facts")
+        if comment_work["recomputed_finite_type_declaration_facts"]:
+            raise AssertionError("comment edit unnecessarily recomputed a finite-type fact")
+        if comment_work["finite_type_declaration_verification"] != "reused_with_language_finite_type_facts":
+            raise AssertionError("comment edit did not report finite-type fact reuse accurately")
         entry_after = cache_entry(application_cache, comment["response"])
         before_locations = fact_locations(entry_before)
         after_locations = fact_locations(entry_after)
@@ -268,6 +322,11 @@ def main() -> None:
             raise AssertionError("uncalled shrink body edit did not recompute its Language body fact")
         if not body_work["reused_declaration_facts"] or body_work["recomputed_declaration_facts"]:
             raise AssertionError("body-only edit did not retain unchanged declaration facts")
+        if (not body_work["reused_finite_type_declaration_facts"]
+                or body_work["recomputed_finite_type_declaration_facts"]):
+            raise AssertionError("body-only edit did not retain finite-type declaration facts")
+        if body_work["finite_type_declaration_verification"] != "reused_with_language_finite_type_facts":
+            raise AssertionError("body-only edit did not report finite-type fact reuse accurately")
         if (body_edit["response"].get("artifact", {}).get("identity")
                 != cold["response"].get("artifact", {}).get("identity")):
             raise AssertionError("uncalled body edit changed the selected executable artifact")
@@ -302,11 +361,13 @@ def main() -> None:
         expected_recomputed = {
             "mncs:0.2:body:mncs.test.generative::advance_random",
             "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:tests.native_readiness::run",
         }
         if set(reachable_recomputed) != expected_recomputed:
             raise AssertionError(
-                "reachable imported body edit did not reverify exactly its changed "
-                f"function and direct caller: {reachable_recomputed}"
+                "reachable imported body edit did not reverify exactly its current "
+                f"dependent closure: {reachable_recomputed}"
             )
         baseline_facts = {
             str(row) for row in reachable_baseline["verification_work"].get(
@@ -353,9 +414,99 @@ def main() -> None:
             "stage": "uncalled_imported_interface_edit", "stage0_vm_equal": True,
         })
 
+        finite_type_request = copy.deepcopy(original)
+        suite = finite_type_request["modules"]["mncs.test.suite"]
+        old_enum = "enum SuiteClassification { PASSED, TEST_FAILURE, UNSUPPORTED }"
+        new_enum = (
+            "enum SuiteClassification { PASSED, TEST_FAILURE, UNSUPPORTED, "
+            "INCREMENTAL_FACT_PROBE }"
+        )
+        if suite.count(old_enum) != 1:
+            raise AssertionError("the selected Test fixture no longer has SuiteClassification")
+        finite_type_request["modules"]["mncs.test.suite"] = suite.replace(old_enum, new_enum, 1)
+        finite_type_edit = measure_build(
+            "imported_finite_type_edit", finite_type_request,
+            cache_root / "cold", compare_execution=True,
+        )
+        stages["imported_finite_type_edit"] = finite_type_edit
+        finite_type_work = finite_type_edit["verification_work"]
+        changed_type_facts = [
+            str(subject)
+            for subject in finite_type_work["recomputed_finite_type_declaration_facts"]
+            if "SuiteClassification" in str(subject)
+        ]
+        if len(changed_type_facts) != 1:
+            raise AssertionError(
+                "the imported finite-type edit did not reverify its exact declaration: "
+                f"{finite_type_work['recomputed_finite_type_declaration_facts']}"
+            )
+        if not finite_type_work["reused_finite_type_declaration_facts"]:
+            raise AssertionError("finite-type edit failed to reuse independent verified types")
+        if len(finite_type_work["recomputed_finite_type_declaration_facts"]) != 1:
+            raise AssertionError("finite-type edit invalidated unrelated type declarations")
+        finite_type_reasons = finite_type_work["finite_type_declaration_fact_recomputation_reasons"]
+        if not any(
+            "SuiteClassification" in str(row.get("subject"))
+            and row.get("reason") == "subject_changed"
+            for row in finite_type_reasons
+        ):
+            raise AssertionError("finite-type edit omitted its subject-fingerprint invalidation reason")
+        if finite_type_work["finite_type_declaration_verification"] != "recomputed_with_language_finite_type_fact_reuse":
+            raise AssertionError("finite-type edit reported its mixed reuse and recomputation inaccurately")
+        execution_checks.append({
+            "stage": "imported_finite_type_edit", "stage0_vm_equal": True,
+            "recomputed_finite_type": changed_type_facts[0],
+        })
+
+        invalid_type_request = copy.deepcopy(original)
+        suite = invalid_type_request["modules"]["mncs.test.suite"]
+        invalid_enum = (
+            "enum SuiteClassification { PASSED, TEST_FAILURE, UNSUPPORTED, "
+            "UNSUPPORTED }"
+        )
+        invalid_type_request["modules"]["mncs.test.suite"] = suite.replace(
+            old_enum, invalid_enum, 1
+        )
+        invalid_cache_root = cache_root / "invalid-type"
+        invalid_type = measure_build(
+            "invalid_finite_type_edit", invalid_type_request,
+            invalid_cache_root, compare_execution=False,
+        )
+        stages["invalid_finite_type_edit"] = invalid_type
+        invalid_response = invalid_type["response"]
+        if invalid_response.get("status") != "rejected":
+            raise AssertionError("invalid finite-type source was accepted from prior facts")
+        if (invalid_response.get("cache", {}).get("verification_work", {}).get(
+                "finite_type_declaration_verification") != "not_reported"):
+            raise AssertionError(
+                "rejected source claimed finite-type fact work that Language did not report"
+            )
+        if invalid_response.get("artifact") is not None:
+            raise AssertionError("invalid finite-type source reused an executable artifact")
+        if not any(
+            row.get("code") == "MNE172"
+            and any(
+                related.get("code") == "MNE121"
+                and "finite variant is duplicated" in str(related.get("message"))
+                for related in row.get("related", [])
+            )
+            for row in invalid_response.get("diagnostics", [])
+        ):
+            raise AssertionError(
+                "invalid finite-type edit omitted its fresh duplicate-variant diagnostic: "
+                f"{invalid_response.get('diagnostics')}"
+            )
+        invalid_key = invalid_response.get("cache", {}).get("key", "").removeprefix("sha256:")
+        invalid_entry = (
+            invalid_cache_root / "application-cache" / "application-builds"
+            / f"{invalid_key}.json"
+        )
+        if invalid_entry.exists():
+            raise AssertionError("rejected finite-type verification published a reusable cache entry")
+
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text(encoding="utf-8"))
         evidence = {
-            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/1",
+            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/2",
             "recorded_at": datetime.now(timezone.utc).isoformat(),
             "compiler": {
                 "repository": "mncs-compiler",
@@ -373,7 +524,7 @@ def main() -> None:
                 "root_module": app.APP_MODULE,
                 "callable_roots": [{"module": app.APP_MODULE, "function": "run"}],
                 "selected_tests": "all_source_cases",
-                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/6",
+                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/7",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
             "execution_checks": execution_checks,
@@ -397,6 +548,21 @@ def main() -> None:
                     interface["response"].get("artifact", {}).get("identity")
                     != cold["response"].get("artifact", {}).get("identity")
                 ),
+            },
+            "finite_type_declaration_fact_reuse": {
+                "comment_edit_reused": len(comment_work["reused_finite_type_declaration_facts"]),
+                "comment_edit_recomputed": len(comment_work["recomputed_finite_type_declaration_facts"]),
+                "body_edit_reused": len(body_work["reused_finite_type_declaration_facts"]),
+                "body_edit_recomputed": len(body_work["recomputed_finite_type_declaration_facts"]),
+                "imported_type_edit_reused": len(
+                    finite_type_work["reused_finite_type_declaration_facts"]),
+                "imported_type_edit_recomputed": finite_type_work[
+                    "recomputed_finite_type_declaration_facts"],
+                "imported_type_edit_recomputation_reasons": finite_type_reasons,
+                "imported_type_edit_vm_equal": True,
+                "invalid_type_edit_status": invalid_response.get("status"),
+                "invalid_type_edit_fresh_diagnostic": "MNE121",
+                "invalid_type_edit_cache_published": invalid_entry.exists(),
             },
             "reachable_imported_body_dependency_invalidation": {
                 "changed_module": "mncs.test.generative",

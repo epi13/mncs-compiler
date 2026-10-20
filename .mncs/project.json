@@ -125,7 +125,7 @@
       },
       {
         "contract": "native-application-build",
-        "version": "9",
+        "version": "10",
         "kind": "compiler-application-build-provider",
         "stability": "experimental",
         "effects": [
@@ -136,8 +136,8 @@
         ],
         "output_limit_bytes": 16384,
         "artifact_contract": {
-          "request_schema": "mncs.compiler.application-build-request/6",
-          "response_schema": "mncs.compiler.application-build/9",
+          "request_schema": "mncs.compiler.application-build-request/7",
+          "response_schema": "mncs.compiler.application-build/10",
           "supported_request_response_pairs": [
             {
               "request_schema": "mncs.compiler.application-build-request/1",
@@ -162,6 +162,10 @@
             {
               "request_schema": "mncs.compiler.application-build-request/6",
               "response_schema": "mncs.compiler.application-build/9"
+            },
+            {
+              "request_schema": "mncs.compiler.application-build-request/7",
+              "response_schema": "mncs.compiler.application-build/10"
             }
           ],
           "callable_root_maximum_count": 256,
@@ -176,8 +180,12 @@
           "source_test_inventory_scope": "source_module",
           "source_test_selection_schema": "mncs.compiler.source-test-case-selection/1",
           "source_test_selection_maximum_count": 256,
-          "verification_work_schema": "mncs.compiler.application-build-verification-work/4",
+          "verification_work_schema": "mncs.compiler.application-build-verification-work/5",
           "declaration_verification_fact_schema": "mncs.language-declaration-verification-fact/1",
+          "finite_type_declaration_fact_schema": "mncs.language-declaration-verification-fact/1",
+          "finite_type_declaration_fact_verifier_identity": "mncs-language-finite-type-validator/1",
+          "finite_type_declaration_fact_policy_identity": "mncs-language-finite-type-policy/1",
+          "application_build_cache_entry_schema": "mncs.compiler.application-build-cache-entry/7",
           "source_parse_cache_schema": "mncs.language-source-parse-cache/1",
           "source_parse_cache_observation_schema": "mncs.language-source-parse-cache-observation/1",
           "source_parse_policy_identity": "mncs-language-source-parser/1",
@@ -199,6 +207,7 @@
           "tools/test_vm_native_application.py",
           "tools/test_native_application_incremental.py",
           "tools/test_vm_language_declaration_fact_reuse.py",
+          "docs/native-application-build-contract.md",
           "tools/test_vm_language_source_parse_cache.py",
           "tools/stage0-probe/src/application.rs",
           "tools/stage0-probe/src/main.rs",

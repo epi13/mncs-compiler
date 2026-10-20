@@ -45,6 +45,10 @@ struct ApplicationCacheEntry<'a> {
     source_parse_cache_sha256: Option<&'a str>,
     #[serde(default)]
     source_parse_cache: Option<&'a serde_json::value::RawValue>,
+    #[serde(default)]
+    finite_type_declaration_verification_facts_sha256: Option<&'a str>,
+    #[serde(default)]
+    finite_type_declaration_verification_facts: Option<&'a serde_json::value::RawValue>,
 }
 
 #[derive(serde::Serialize)]
@@ -59,6 +63,10 @@ struct ApplicationCachePublishEntry<'a> {
     declaration_verification_facts: &'a [DeclarationVerificationFact],
     source_parse_cache_sha256: String,
     source_parse_cache: &'a SourceParseCache,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finite_type_declaration_verification_facts_sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    finite_type_declaration_verification_facts: Option<&'a [DeclarationVerificationFact]>,
 }
 
 struct Sha256Writer(Sha256);
@@ -86,6 +94,7 @@ const CONTRACT_V3: &str = "mncs.compiler.application-build/6";
 const CONTRACT_V4: &str = "mncs.compiler.application-build/7";
 const CONTRACT_V5: &str = "mncs.compiler.application-build/8";
 const CONTRACT_V6: &str = "mncs.compiler.application-build/9";
+const CONTRACT_V7: &str = "mncs.compiler.application-build/10";
 const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
 const REQUEST_V1: &str = "mncs.compiler.application-build-request/1";
 const REQUEST_V2: &str = "mncs.compiler.application-build-request/2";
@@ -93,6 +102,7 @@ const REQUEST_V3: &str = "mncs.compiler.application-build-request/3";
 const REQUEST_V4: &str = "mncs.compiler.application-build-request/4";
 const REQUEST_V5: &str = "mncs.compiler.application-build-request/5";
 const REQUEST_V6: &str = "mncs.compiler.application-build-request/6";
+const REQUEST_V7: &str = "mncs.compiler.application-build-request/7";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
@@ -207,13 +217,18 @@ fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Va
         || contract == CONTRACT_V4
         || contract == CONTRACT_V5
         || contract == CONTRACT_V6
+        || contract == CONTRACT_V7
     {
         response
             .as_object_mut()
             .expect("application response object")
             .insert("source_test_inventory".to_owned(), Value::Null);
     }
-    if contract == CONTRACT_V4 || contract == CONTRACT_V5 || contract == CONTRACT_V6 {
+    if contract == CONTRACT_V4
+        || contract == CONTRACT_V5
+        || contract == CONTRACT_V6
+        || contract == CONTRACT_V7
+    {
         response
             .as_object_mut()
             .expect("application response object")
@@ -531,10 +546,18 @@ fn annotate_cache_with_basis(
         .pointer("/producer/probe/probe_executable_sha256")
         .cloned()
         .unwrap_or(Value::Null);
-    let response_contract = response.get("schema_version").and_then(Value::as_str);
-    let declaration_facts_contract =
-        response_contract == Some(CONTRACT_V5) || response_contract == Some(CONTRACT_V6);
-    let source_parse_cache_contract = response_contract == Some(CONTRACT_V6);
+    let response_contract = response
+        .get("schema_version")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let declaration_facts_contract = matches!(
+        response_contract.as_deref(),
+        Some(CONTRACT_V5 | CONTRACT_V6 | CONTRACT_V7)
+    );
+    let source_parse_cache_contract = matches!(
+        response_contract.as_deref(),
+        Some(CONTRACT_V6 | CONTRACT_V7)
+    );
     if let Some(object) = response.as_object_mut() {
         let frontend_invoked = recomputed_units.contains(&"source_semantic_check");
         let source_stage = if frontend_invoked {
@@ -608,7 +631,9 @@ fn annotate_cache_with_basis(
                 "recomputed_units": recomputed_units,
                 "verification_work": {
                     "schema_version": if declaration_facts_contract {
-                        if source_parse_cache_contract {
+                        if response_contract.as_deref() == Some(CONTRACT_V7) {
+                            "mncs.compiler.application-build-verification-work/5"
+                        } else if source_parse_cache_contract {
                             "mncs.compiler.application-build-verification-work/4"
                         } else {
                             "mncs.compiler.application-build-verification-work/3"
@@ -671,6 +696,40 @@ fn annotate_cache_with_basis(
                 );
             }
         }
+        if response_contract.as_deref() == Some(CONTRACT_V7) {
+            if let Some(work) = object
+                .get_mut("cache")
+                .and_then(Value::as_object_mut)
+                .and_then(|cache| cache.get_mut("verification_work"))
+                .and_then(Value::as_object_mut)
+            {
+                work.insert("reused_finite_type_declaration_facts".to_owned(), json!([]));
+                work.insert(
+                    "recomputed_finite_type_declaration_facts".to_owned(),
+                    json!([]),
+                );
+                work.insert(
+                    "finite_type_declaration_fact_recomputation_reasons".to_owned(),
+                    json!([]),
+                );
+                work.insert(
+                    "produced_finite_type_declaration_fact_count".to_owned(),
+                    json!(0),
+                );
+                work.insert(
+                    "finite_type_declaration_verification".to_owned(),
+                    json!(if frontend_invoked {
+                        "not_reported"
+                    } else {
+                        "not_run"
+                    }),
+                );
+                work.insert(
+                    "language_finite_type_declaration_verification_fact_schema".to_owned(),
+                    json!(mncs_model::DECLARATION_FACT_SCHEMA_VERSION),
+                );
+            }
+        }
     }
     response
 }
@@ -705,6 +764,8 @@ fn annotate_language_fact_work(
     reuse: Option<&VerificationFactReuseObservation>,
     declaration_facts: &[DeclarationVerificationFact],
     declaration_reuse: Option<&DeclarationFactReuseObservation>,
+    finite_type_declaration_facts: &[DeclarationVerificationFact],
+    finite_type_declaration_reuse: Option<&DeclarationFactReuseObservation>,
     source_parse_cache_reuse: Option<&SourceParseCacheObservation>,
 ) -> Value {
     let Some(work) = response
@@ -748,6 +809,7 @@ fn annotate_language_fact_work(
         Some(
             "mncs.compiler.application-build-verification-work/3"
                 | "mncs.compiler.application-build-verification-work/4"
+                | "mncs.compiler.application-build-verification-work/5"
         )
     ) {
         if let Some(declaration_reuse) = declaration_reuse {
@@ -789,6 +851,58 @@ fn annotate_language_fact_work(
             }
         }
     }
+    if work_schema.as_deref() == Some("mncs.compiler.application-build-verification-work/5") {
+        if let Some(reuse) = finite_type_declaration_reuse {
+            work.insert(
+                "reused_finite_type_declaration_facts".to_owned(),
+                json!(reuse
+                    .reused
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()),
+            );
+            work.insert(
+                "recomputed_finite_type_declaration_facts".to_owned(),
+                json!(reuse
+                    .recomputed
+                    .iter()
+                    .map(|row| row.subject.to_string())
+                    .collect::<Vec<_>>()),
+            );
+            work.insert(
+                "finite_type_declaration_fact_recomputation_reasons".to_owned(),
+                serde_json::to_value(&reuse.recomputed).unwrap_or_else(|_| json!([])),
+            );
+            work.insert(
+                "produced_finite_type_declaration_fact_count".to_owned(),
+                json!(finite_type_declaration_facts.len()),
+            );
+            let finite_type_verification =
+                match (reuse.reused.is_empty(), reuse.recomputed.is_empty()) {
+                    (false, true) => "reused_with_language_finite_type_facts",
+                    (false, false) => "recomputed_with_language_finite_type_fact_reuse",
+                    (true, false) => "recomputed",
+                    (true, true) => "not_applicable",
+                };
+            work.insert(
+                "finite_type_declaration_verification".to_owned(),
+                json!(finite_type_verification),
+            );
+            if !reuse.reused.is_empty() {
+                if declaration_reuse.is_none_or(|reuse| reuse.reused.is_empty())
+                    && work
+                        .get("reused_semantic_facts")
+                        .and_then(Value::as_array)
+                        .is_none_or(Vec::is_empty)
+                {
+                    work.insert(
+                        "semantic_reverification_reason".to_owned(),
+                        json!("current_language_finite_type_facts_checked_and_independent_units_recomputed"),
+                    );
+                }
+            }
+        }
+    }
     if let Some(reuse) = reuse {
         if !reuse.reused.is_empty() {
             work.insert(
@@ -806,7 +920,13 @@ fn annotate_language_fact_work(
             );
         }
     }
-    if work_schema.as_deref() == Some("mncs.compiler.application-build-verification-work/4") {
+    if matches!(
+        work_schema.as_deref(),
+        Some(
+            "mncs.compiler.application-build-verification-work/4"
+                | "mncs.compiler.application-build-verification-work/5"
+        )
+    ) {
         work.insert(
             "source_parse_cache".to_owned(),
             source_parse_cache_work_value(source_parse_cache_reuse),
@@ -951,6 +1071,7 @@ fn read_application_cache_with_facts(
         "mncs.compiler.application-build-cache-entry/4"
             | "mncs.compiler.application-build-cache-entry/5"
             | "mncs.compiler.application-build-cache-entry/6"
+            | "mncs.compiler.application-build-cache-entry/7"
     ) || entry.key != key
     {
         return None;
@@ -994,7 +1115,12 @@ fn read_application_cache_with_facts(
         entry.source_parse_cache,
         entry.schema_version,
     ) {
-        (Some(expected_digest), Some(raw), "mncs.compiler.application-build-cache-entry/6") => {
+        (
+            Some(expected_digest),
+            Some(raw),
+            "mncs.compiler.application-build-cache-entry/6"
+            | "mncs.compiler.application-build-cache-entry/7",
+        ) => {
             let raw = raw.get();
             let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
             if expected_digest != actual_digest {
@@ -1008,6 +1134,26 @@ fn read_application_cache_with_facts(
         }
         _ => return None,
     };
+    let finite_type_declaration_verification_facts = match (
+        entry.finite_type_declaration_verification_facts_sha256,
+        entry.finite_type_declaration_verification_facts,
+        entry.schema_version,
+    ) {
+        (Some(expected_digest), Some(raw), "mncs.compiler.application-build-cache-entry/7") => {
+            let raw = raw.get();
+            let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
+            if expected_digest != actual_digest {
+                return None;
+            }
+            serde_json::from_str::<Vec<DeclarationVerificationFact>>(raw).ok()?
+        }
+        (None, None, "mncs.compiler.application-build-cache-entry/4")
+        | (None, None, "mncs.compiler.application-build-cache-entry/5")
+        | (None, None, "mncs.compiler.application-build-cache-entry/6") => Vec::new(),
+        _ => return None,
+    };
+    let mut declaration_verification_facts = declaration_verification_facts;
+    declaration_verification_facts.extend(finite_type_declaration_verification_facts);
     let response_decode_started = Instant::now();
     let response: Value = serde_json::from_str(response_raw).ok()?;
     crate::trace_phase(
@@ -1623,14 +1769,26 @@ fn publish_application_cache(
     response: &Value,
     verification_facts: &[VerificationFact],
     declaration_verification_facts: &[DeclarationVerificationFact],
+    finite_type_declaration_verification_facts: Option<&[DeclarationVerificationFact]>,
     source_parse_cache: &SourceParseCache,
 ) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "cache path has no parent".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| format!("create cache directory: {error}"))?;
+    let finite_type_declaration_verification_facts_sha256 =
+        finite_type_declaration_verification_facts
+            .map(sha256_serialized)
+            .transpose()
+            .map_err(|error| {
+                format!("hash cached Language finite-type declaration facts: {error}")
+            })?;
     let entry = ApplicationCachePublishEntry {
-        schema_version: "mncs.compiler.application-build-cache-entry/6",
+        schema_version: if finite_type_declaration_verification_facts.is_some() {
+            "mncs.compiler.application-build-cache-entry/7"
+        } else {
+            "mncs.compiler.application-build-cache-entry/6"
+        },
         key,
         response_sha256: sha256_serialized(response)
             .map_err(|error| format!("hash cached response: {error}"))?,
@@ -1644,6 +1802,8 @@ fn publish_application_cache(
         source_parse_cache_sha256: sha256_serialized(source_parse_cache)
             .map_err(|error| format!("hash cached Language source parse cache: {error}"))?,
         source_parse_cache,
+        finite_type_declaration_verification_facts_sha256,
+        finite_type_declaration_verification_facts,
     };
     let nonce = CACHE_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = SystemTime::now()
@@ -2392,6 +2552,7 @@ mod tests {
                             &response,
                             &[],
                             &[],
+                            None,
                             &SourceParseCache::default(),
                         )
                         .expect("publish cache entry atomically");
@@ -2475,6 +2636,7 @@ mod tests {
             &response,
             &[],
             &[],
+            None,
             &SourceParseCache::default(),
         )
         .expect("publish test cache response");
@@ -2931,13 +3093,15 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         select_test_cases,
         reuse_declaration_facts,
         reuse_source_parse_cache,
+        reuse_finite_type_declaration_facts,
     ) = match request.get("schema_version").and_then(Value::as_str) {
-        Some(REQUEST_V1) => (CONTRACT_V1, false, false, false, false, false),
-        Some(REQUEST_V2) => (CONTRACT_V2, true, false, false, false, false),
-        Some(REQUEST_V3) => (CONTRACT_V3, true, true, false, false, false),
-        Some(REQUEST_V4) => (CONTRACT_V4, true, true, true, false, false),
-        Some(REQUEST_V5) => (CONTRACT_V5, true, true, true, true, false),
-        Some(REQUEST_V6) => (CONTRACT_V6, true, true, true, true, true),
+        Some(REQUEST_V1) => (CONTRACT_V1, false, false, false, false, false, false),
+        Some(REQUEST_V2) => (CONTRACT_V2, true, false, false, false, false, false),
+        Some(REQUEST_V3) => (CONTRACT_V3, true, true, false, false, false, false),
+        Some(REQUEST_V4) => (CONTRACT_V4, true, true, true, false, false, false),
+        Some(REQUEST_V5) => (CONTRACT_V5, true, true, true, true, false, false),
+        Some(REQUEST_V6) => (CONTRACT_V6, true, true, true, true, true, false),
+        Some(REQUEST_V7) => (CONTRACT_V7, true, true, true, true, true, true),
         _ => {
             return error_contract(
                 CONTRACT_V1,
@@ -2955,9 +3119,9 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 "MCA113",
                 if matches!(
                     request.get("schema_version").and_then(Value::as_str),
-                    Some(REQUEST_V5 | REQUEST_V6)
+                    Some(REQUEST_V5 | REQUEST_V6 | REQUEST_V7)
                 ) {
-                    "test_selection is required for application-build-request/5 or /6"
+                    "test_selection is required for application-build-request/5, /6, or /7"
                 } else {
                     "test_selection is required for application-build-request/4"
                 },
@@ -3358,7 +3522,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         .as_ref()
         .map(|(_, _, facts, _, _)| facts.clone())
         .unwrap_or_default();
-    let prior_declaration_facts = if reuse_declaration_facts {
+    let prior_declaration_facts = if reuse_declaration_facts || reuse_finite_type_declaration_facts
+    {
         semantic_cache_candidate
             .as_ref()
             .map(|(_, _, _, facts, _)| facts.clone())
@@ -3504,6 +3669,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             frontend.verification_fact_reuse.as_ref(),
             &frontend.declaration_verification_facts,
             frontend.declaration_fact_reuse.as_ref(),
+            &frontend.finite_type_declaration_verification_facts,
+            frontend.finite_type_declaration_fact_reuse.as_ref(),
             source_parse_cache_reuse.as_ref(),
         );
     }
@@ -3512,6 +3679,10 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let language_fact_reuse = frontend.verification_fact_reuse.clone();
     let language_declaration_facts = frontend.declaration_verification_facts.clone();
     let language_declaration_fact_reuse = frontend.declaration_fact_reuse.clone();
+    let language_finite_type_declaration_facts =
+        frontend.finite_type_declaration_verification_facts.clone();
+    let language_finite_type_declaration_fact_reuse =
+        frontend.finite_type_declaration_fact_reuse.clone();
     let source_parse_cache_reuse = source_parse_cache_reuse.clone();
     let mncs_compiler::SourceFrontEndResult {
         program: Some(program),
@@ -3873,6 +4044,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         &response,
                         &language_facts,
                         &language_declaration_facts,
+                        reuse_finite_type_declaration_facts
+                            .then_some(language_finite_type_declaration_facts.as_slice()),
                         &source_parse_cache,
                     ) {
                         Ok(()) => {
@@ -3915,6 +4088,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 language_fact_reuse.as_ref(),
                 &language_declaration_facts,
                 language_declaration_fact_reuse.as_ref(),
+                &language_finite_type_declaration_facts,
+                language_finite_type_declaration_fact_reuse.as_ref(),
                 source_parse_cache_reuse.as_ref(),
             );
         }
@@ -4269,6 +4444,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 &response,
                 &language_facts,
                 &language_declaration_facts,
+                reuse_finite_type_declaration_facts
+                    .then_some(language_finite_type_declaration_facts.as_slice()),
                 &source_parse_cache,
             ) {
                 Ok(()) => {
@@ -4311,6 +4488,8 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         language_fact_reuse.as_ref(),
         &language_declaration_facts,
         language_declaration_fact_reuse.as_ref(),
+        &language_finite_type_declaration_facts,
+        language_finite_type_declaration_fact_reuse.as_ref(),
         source_parse_cache_reuse.as_ref(),
     )
 }

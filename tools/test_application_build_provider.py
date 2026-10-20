@@ -40,6 +40,8 @@ DECLARATION_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
 DECLARATION_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
 SOURCE_PARSE_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-request/6"
 SOURCE_PARSE_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/9"
+FINITE_TYPE_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/7"
+FINITE_TYPE_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/10"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -72,20 +74,21 @@ def validate_environment_contract_descriptor() -> None:
         (TEST_SELECTION_REQUEST_SCHEMA, TEST_SELECTION_RESPONSE_SCHEMA),
         (DECLARATION_FACT_REQUEST_SCHEMA, DECLARATION_FACT_RESPONSE_SCHEMA),
         (SOURCE_PARSE_CACHE_REQUEST_SCHEMA, SOURCE_PARSE_CACHE_RESPONSE_SCHEMA),
+        (FINITE_TYPE_FACT_REQUEST_SCHEMA, FINITE_TYPE_FACT_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "9":
-        raise AssertionError("Compiler capability revision must match application-build/9")
+    if contract.get("version") != "10":
+        raise AssertionError("Compiler capability revision must match application-build/10")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        SOURCE_PARSE_CACHE_REQUEST_SCHEMA, SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
+        FINITE_TYPE_FACT_REQUEST_SCHEMA, FINITE_TYPE_FACT_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/9 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/10 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /9 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /10 request-response pairs")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
@@ -99,6 +102,7 @@ def validate_environment_contract_descriptor() -> None:
         TEST_SELECTION_REQUEST_SCHEMA: TEST_SELECTION_RESPONSE_SCHEMA,
         DECLARATION_FACT_REQUEST_SCHEMA: DECLARATION_FACT_RESPONSE_SCHEMA,
         SOURCE_PARSE_CACHE_REQUEST_SCHEMA: SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
+        FINITE_TYPE_FACT_REQUEST_SCHEMA: FINITE_TYPE_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -401,7 +405,9 @@ def invoke(
         MULTI_RESPONSE_SCHEMA,
         INVENTORY_RESPONSE_SCHEMA,
         TEST_SELECTION_RESPONSE_SCHEMA,
+        DECLARATION_FACT_RESPONSE_SCHEMA,
         SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
+        FINITE_TYPE_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):
@@ -630,6 +636,71 @@ def main() -> None:
             raise AssertionError(
                 "real mncs-test cold build did not report its Language body-verification units"
             )
+
+        finite_type_request = dict(parse_request)
+        finite_type_request["schema_version"] = FINITE_TYPE_FACT_REQUEST_SCHEMA
+        finite_type_request_path = base / "finite-type-fact-request.json"
+        write_json(finite_type_request_path, finite_type_request)
+        finite_type_cache_dir = base / "finite-type-fact-cache"
+        finite_type_cache_arg = finite_type_cache_dir.relative_to(ROOT).as_posix()
+        finite_type_cold_dir = base / "finite-type-fact-cold-output"
+        finite_type_cold_dir.mkdir()
+        finite_type_cold, finite_type_cold_response, finite_type_cold_elapsed, finite_type_cold_metrics = invoke(
+            ["--request-file", finite_type_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", finite_type_cache_arg],
+            output_dir=finite_type_cold_dir,
+            cache_dir=finite_type_cache_dir,
+        )
+        finite_type_work = finite_type_cold_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        if (finite_type_cold_response.get("schema_version") != FINITE_TYPE_FACT_RESPONSE_SCHEMA
+                or finite_type_cold_response.get("status") != "verified"
+                or finite_type_work.get("schema_version")
+                != "mncs.compiler.application-build-verification-work/5"
+                or finite_type_work.get("front_end_invocations") != 1
+                or not finite_type_work.get("recomputed_finite_type_declaration_facts")
+                or finite_type_work.get("reused_finite_type_declaration_facts")
+                or finite_type_work.get("finite_type_declaration_verification") != "recomputed"):
+            raise AssertionError(
+                "Environment provider did not route /7 through verified finite-type Language work: "
+                + json.dumps(finite_type_work, sort_keys=True)[:4000]
+            )
+        finite_type_key = finite_type_cold_response.get("cache", {}).get("key", "")
+        finite_type_entry_path = (
+            finite_type_cache_dir / "application-builds"
+            / f"{finite_type_key.removeprefix('sha256:')}.json"
+        )
+        finite_type_entry = json.loads(finite_type_entry_path.read_text(encoding="utf-8"))
+        finite_type_cached_facts = finite_type_entry.get(
+            "finite_type_declaration_verification_facts"
+        )
+        if (finite_type_entry.get("schema_version")
+                != "mncs.compiler.application-build-cache-entry/7"
+                or not isinstance(finite_type_cached_facts, list)
+                or not finite_type_cached_facts
+                or not finite_type_entry.get(
+                    "finite_type_declaration_verification_facts_sha256"
+                )):
+            raise AssertionError("Environment provider did not publish separately bound finite-type facts")
+
+        finite_type_warm_dir = base / "finite-type-fact-warm-output"
+        finite_type_warm_dir.mkdir()
+        finite_type_warm, finite_type_warm_response, finite_type_warm_elapsed, finite_type_warm_metrics = invoke(
+            ["--request-file", finite_type_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", finite_type_cache_arg],
+            output_dir=finite_type_warm_dir,
+            cache_dir=finite_type_cache_dir,
+        )
+        finite_type_warm_work = finite_type_warm_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        if (finite_type_warm_response.get("schema_version") != FINITE_TYPE_FACT_RESPONSE_SCHEMA
+                or finite_type_warm_response.get("cache", {}).get("status") != "hit"
+                or finite_type_warm_work.get("front_end_invocations") != 0
+                or finite_type_warm_work.get("reused_finite_type_declaration_facts")
+                or finite_type_warm_work.get("finite_type_declaration_verification") != "not_run"):
+            raise AssertionError("Environment exact cache hit claimed Language finite-type verification")
 
         parse_comment_request = dict(parse_request)
         parse_comment_request["root_source"] = (
@@ -1370,6 +1441,32 @@ def main() -> None:
                 },
                 "provider_summary_status": parse_cold.get("status"),
             },
+            "language_finite_type_declaration_fact_reuse": {
+                "request_schema": FINITE_TYPE_FACT_REQUEST_SCHEMA,
+                "response_schema": finite_type_cold_response.get("schema_version"),
+                "cache_entry_schema": finite_type_entry.get("schema_version"),
+                "cold": {
+                    "provider_status": finite_type_cold.get("status"),
+                    "cache_status": finite_type_cold_response.get("cache", {}).get("status"),
+                    "recomputed_finite_type_fact_count": len(
+                        finite_type_work.get("recomputed_finite_type_declaration_facts", [])
+                    ),
+                    "stored_finite_type_fact_count": len(finite_type_cached_facts),
+                    "artifact_identity": finite_type_cold_response.get("artifact", {}).get("identity"),
+                    "provider_wall_seconds": round(finite_type_cold_elapsed, 6),
+                    "provider_metrics": finite_type_cold_metrics,
+                },
+                "fresh_process_warm": {
+                    "provider_status": finite_type_warm.get("status"),
+                    "cache_status": finite_type_warm_response.get("cache", {}).get("status"),
+                    "front_end_invocations": finite_type_warm_work.get("front_end_invocations"),
+                    "finite_type_declaration_verification": finite_type_warm_work.get(
+                        "finite_type_declaration_verification"
+                    ),
+                    "provider_wall_seconds": round(finite_type_warm_elapsed, 6),
+                    "provider_metrics": finite_type_warm_metrics,
+                },
+            },
             "limitations": [
                 "This invokes the local canonical VM but does not exercise Forge, the live Environment provider route, or canonical Store execution.",
                 "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
@@ -1393,6 +1490,22 @@ def main() -> None:
                 and all(row.get("outcome") == {"kind": "completed"} for row in batch_vm_rows),
                 "language_source_parse_contract_routed": (
                     parse_cold_response.get("schema_version") == SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
+                ),
+                "language_finite_type_fact_contract_routed": (
+                    finite_type_cold_response.get("schema_version")
+                    == FINITE_TYPE_FACT_RESPONSE_SCHEMA
+                ),
+                "language_finite_type_facts_stored_separately": (
+                    finite_type_entry.get("schema_version")
+                    == "mncs.compiler.application-build-cache-entry/7"
+                    and bool(finite_type_cached_facts)
+                ),
+                "language_finite_type_exact_cache_hit_did_not_claim_reuse": (
+                    finite_type_warm_response.get("cache", {}).get("status") == "hit"
+                    and finite_type_warm_work.get("front_end_invocations") == 0
+                    and not finite_type_warm_work.get(
+                        "reused_finite_type_declaration_facts"
+                    )
                 ),
                 "fresh_process_reused_unchanged_import_parse": bool(
                     parse_comment_response.get("cache", {})
@@ -1465,6 +1578,8 @@ def main() -> None:
                 "language_source_parse_comment_edit": parse_comment_work,
                 "language_source_parse_uncalled_body_edit": function_edit_work,
                 "language_source_parse_imported_signature_edit": signature_edit_work,
+                "language_finite_type_fact_cold": finite_type_work,
+                "language_finite_type_fact_warm_exact_hit": finite_type_warm_work,
             },
             "wall_seconds": {
                 "cold": round(cold_elapsed, 6),
@@ -1481,6 +1596,8 @@ def main() -> None:
                 "language_source_parse_imported_signature_edit": round(
                     signature_edit_elapsed, 6
                 ),
+                "language_finite_type_fact_cold": round(finite_type_cold_elapsed, 6),
+                "language_finite_type_fact_warm": round(finite_type_warm_elapsed, 6),
                 "signature_edit_canonical_vm": signature_vm_metrics.get("wall_seconds"),
             },
             "process_tree_metrics": {
@@ -1496,6 +1613,8 @@ def main() -> None:
                 "language_source_parse_comment_edit": parse_comment_metrics,
                 "language_source_parse_uncalled_body_edit": function_edit_metrics,
                 "language_source_parse_imported_signature_edit": signature_edit_metrics,
+                "language_finite_type_fact_cold": finite_type_cold_metrics,
+                "language_finite_type_fact_warm": finite_type_warm_metrics,
             },
         }
         if DIGEST_EVIDENCE_PATH.exists():

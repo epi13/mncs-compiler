@@ -90,8 +90,9 @@ the selected SSA closure and artifact. The
 an uncalled imported body edit takes the full-frontend path while preserving
 the digest executable artifact. The Environment provider accepts request `/1`
 with response `/4`, request `/2` with response `/5`, request `/3` with
-response `/6`, request `/4` with response `/7`, and request `/5` with
-response `/8`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
+response `/6`, request `/4` with response `/7`, request `/5` with
+response `/8`, request `/6` with response `/9`, and request `/7` with
+response `/10`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
 bound. For large selections it reports the root count and points to the
 shareable result artifact, which retains the complete typed interfaces. The
 focused direct compiler proof is
@@ -99,8 +100,8 @@ focused direct compiler proof is
 also sends `/2` through the adapter and calls `snapshot_witness` from its
 seven-callable Test-core artifact in one canonical VM batch.
 
-The Environment descriptor advertises request `/6` and response `/9` as
-current while retaining all six request-response pairs.
+The Environment descriptor advertises request `/7` and response `/10` as
+current while retaining all seven request-response pairs.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only
@@ -216,10 +217,12 @@ resolution, and complete semantic-program path.
 
 The Stage-0 application cache stores Language facts in separate checksummed
 body-fact and declaration-fact fields under cache-entry `/5`; cache-entry `/6`
-adds the serialized Language parse cache with its own digest. The reader accepts
-`/4` as body-only evidence and `/5` as body-plus-declaration evidence, and never
-invents missing facts. Changed `/4` and `/5` snapshots pass their existing
-verified facts back to Language, and
+adds the serialized Language parse cache with its own digest, and `/7` adds a
+separately checksummed finite-type declaration-fact field. The reader accepts
+`/4` as body-only evidence, `/5` as body-plus-declaration evidence, `/6` with
+the parse cache, and `/7` with the parse cache and finite-type facts. It never
+invents missing facts. Changed snapshots pass their available verified facts
+back to Language, and
 `verification_work.reused_semantic_facts` contains only facts Language actually
 matched and reused. Tests cover body, callable-interface, nominal-type,
 profile, verifier, and policy changes, fresh diagnostics, and serialization
@@ -238,19 +241,48 @@ artifact cache hit reports no Language fact reuse because Language did not
 evaluate the guards.
 
 `python3 tools/test_vm_language_declaration_fact_reuse.py` exercises the real
-multi-module `mncs-test` readiness application through request `/5` and a fresh
+multi-module `mncs-test` readiness application through request `/7` and a fresh
 probe process for each build. It checks cold fact production, honest exact
 artifact hits, declaration reuse after a comment edit with refreshed source
-locations, body-only invalidation for an uncalled imported function, and
-reverification of that function's changed imported declaration. Each changed
-snapshot is compared with Stage-0 oracle output and canonical VM execution;
-the workload writes its process and per-stage timings to a new evidence file.
+locations, body-only invalidation for an uncalled imported function, an
+affected reachable call chain, imported function signature invalidation, and
+finite-type declaration invalidation. Each changed snapshot is compared with
+Stage-0 oracle output and canonical VM execution; invalid source must produce a
+fresh diagnostic and no cache publication. The workload writes its process and
+per-stage timings to a new evidence file.
+
+Request `/7` returns application-build `/10`, preserving request `/6`'s
+callable, Test selection, declaration-fact, and Language parse-cache behavior.
+It also reuses Language-owned
+`mncs.language-declaration-verification-fact/1` facts for finite-type
+declarations. The fact's subject fingerprint, witness, verifier
+`mncs-language-finite-type-validator/1`, policy
+`mncs-language-finite-type-policy/1`, language profile, and dependency guards
+must match. The finite-type facts are stored in their own digest-bound field in
+cache-entry `/7`; earlier `/6` receipts keep their existing meaning and do not
+masquerade as finite-type evidence. Language refreshes the current source
+locations independently of the reusable fact. A source edit still parses and
+resolves through the current frontend; this slice skips only finite-type
+declaration validation when Language establishes that its verified fact
+remains valid. Verification-work `/5` reports the finite-type facts actually
+reused, recomputed, produced, and their invalidation reasons. An exact artifact
+hit reports `not_run`, because Language did not check the fact guards. A failed
+frontend that returns a diagnostic without a complete fact observation reports
+`not_reported`; it does not imply fact reuse or successful verification.
+
+The workload-specific measurement in
+`evidence/language-declaration-fact-reuse-20261020T203906.970341Z.json` records
+9 finite-type facts reused on a comment edit, one recomputed and eight reused
+after an imported enum change, and a fresh rejection for an invalid duplicate
+variant. Parsing and dependency resolution still dominate changed-snapshot
+wall time, so these results establish avoided semantic work rather than a
+general build-time speedup.
 
 ## Environment capability
 
-The Compiler manifest declares revision 8 of the contract as
-`mncs-compiler:native-application-build`, advertises request `/5` and response
-`/8` as current, and retains all five request-response pairs. The provider accepts a request from the selected
+The Compiler manifest declares revision 10 of the contract as
+`mncs-compiler:native-application-build`, advertises request `/7` and response
+`/10` as current, and retains all seven request-response pairs. The provider accepts a request from the selected
 Compiler checkout with `--request-file PATH`, or from a canonical Store input
 artifact with `--request-artifact NAME`. It writes the complete response as
 the shareable `native-application-build.json` invocation artifact and keeps
@@ -291,8 +323,9 @@ semantics. The workload-specific measurement is recorded in
 Cache entry validation hashes the exact stored response and Language fact bytes
 before decoding them into the current result. It does not reinterpret
 `application-build-cache-entry/3`; `/4` binds the response and body-fact
-payloads, while `/5` adds a separate digest for declaration facts. A mismatched
-digest remains a cache miss and triggers source
+payloads, `/5` adds a separate digest for function declaration facts, `/6`
+adds the serialized parse cache, and `/7` adds a separate digest for finite-type
+declaration facts. A mismatched digest remains a cache miss and triggers source
 verification; the digest batch includes a tampered-entry recovery case.
 
 `mncs.compiler.application-build-request/6` returns
@@ -304,8 +337,9 @@ only when its exact sealed source envelope, parser policy, syntax schemas, and
 source-profile registry still match. `/9` reports parsed and reused source
 identities under `verification_work.source_parse_cache`; these counts come
 from Language's parse adapter. Exact application artifact hits report parsing
-as not run. The provider descriptor retains `/4` through `/9`, advertising
-request `/6` and response `/9` as current. The focused fresh-process proof is
+as not run. The provider descriptor retains request `/1` through `/7`,
+advertising request `/7` and response `/10` as current. The focused
+fresh-process proof is
 `python3 tools/test_vm_language_source_parse_cache.py`: it checks cold parsing,
 comment-only root edits with imported parse reuse, changed-import invalidation,
 fresh diagnostics, and Stage-0/canonical-VM result equivalence.
