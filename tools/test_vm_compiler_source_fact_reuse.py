@@ -155,7 +155,10 @@ def diagnostic_tree(rows: list[dict]) -> list[dict]:
 
 
 def full_module_attempt(cache: Path) -> tuple[dict, dict]:
-    modules = {name: path.read_text() for name, path in FULL_MODULE_FILES.items()}
+    modules = {
+        name: path.read_text().replace("mncs 0.19;", "mncs 0.18;", 1)
+        for name, path in FULL_MODULE_FILES.items()
+    }
     probe = app.Probe(cache_dir=cache / "probe-cache",
                       application_cache_dir=cache / "application-cache")
     try:
