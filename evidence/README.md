@@ -452,6 +452,14 @@ The [current digest application report](native-app-readiness-test-digest-app-202
 
 The cold application build took 0.889 seconds (0.70 CPU seconds, 42.6 MB peak RSS); a fresh-process exact-snapshot hit took 0.126 seconds with zero frontend invocations. A comment-only imported-module edit took 0.662 seconds, reran the frontend, and reused the executable artifact while reusing zero Language facts. The typed verifier result and VM artifact were read back through a separate authenticated Environment request from canonical Store with matching hashes. This remains canonical-VM verifier output, not a Forge receipt; the Forge route is still the next application-execution frontier.
 
+### Environment-bound effectful digest rerun and Store readback (2026-10-20)
+
+The [canonical VM report](native-app-readiness-test-digest-app-20261020T004551.957312Z-2407786.json) and [incremental-cache report](native-app-readiness-test-digest-app-20261020T004613.711987Z-2407918.json) compile and execute the real `mncs.test.digest::digest_app` with its three imported MNCS modules. All three successful canonical-VM cases match the pinned Stage-0 results. The verifier checks the two admitted `test_artifact` dispatch operations (`structured_read` and `structured_write`), denied or mismatched capability identities, mismatched dispatch alias, incorrect artifact identity, invalid typed input, rejected output, and step-budget interruption. Seven isolated calls complete in one retained VM process.
+
+The incremental-cache run cold-built in 0.704 seconds (0.66 CPU seconds, 42.6 MB peak RSS), reused the artifact in a fresh process in 0.116 seconds with zero frontend invocations, and handled a comment-only imported-module edit in 0.517 seconds. That edit invoked the full frontend once and reused the same executable artifact. It reused zero Language verified facts. Cgroup memory readings were unavailable.
+
+Environment published the verifier report and 619,051-byte VM artifact in a 648,719-byte canonical Store bundle. Fresh authenticated reads returned the exact 29,668-byte report (`dc2a1e477103ce808008ba2c81097a3a2de4f3474b8b9af16ca605ae9ce739ea`) and artifact (`d2e5d7485cc6b7f5ad459aebacc03b7b253cc8a4aa9b50b7d90a4bbc30e3df2b`); see the [Store readback record](native-app-readiness-digest-app-store-readback-20261020.json). This remains a canonical-VM verifier run through the bounded host adapter. The Store bundle contains verifier outputs, not a Forge application-execution receipt or a published application result.
+
 ## Current declaration parser frontier (2026-10-16)
 
 The [current `decl.parse_unit` frontier](self-host-decl-parse-expanded-canonical-vm-current-8817cdb-20261016.json)
