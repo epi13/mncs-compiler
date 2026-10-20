@@ -153,13 +153,18 @@ def verification_work(build: dict, label: str) -> dict:
     return work
 
 
-def compile_fresh(request_value: dict, cache: Path, label: str) -> tuple[dict, dict]:
+def compile_attempt(request_value: dict, cache: Path) -> tuple[dict, dict]:
     probe = app.Probe(cache_dir=cache / "probe-cache",
                       application_cache_dir=cache / "application-cache")
     try:
         build, metrics = probe.send({"compile_application": request_value}, timeout=300.0)
     finally:
         probe.close()
+    return build, metrics
+
+
+def compile_fresh(request_value: dict, cache: Path, label: str) -> tuple[dict, dict]:
+    build, metrics = compile_attempt(request_value, cache)
     if (build.get("status") != "verified"
             or build.get("schema_version") != "mncs.compiler.application-build/5"
             or build.get("unresolved_obligations") != []):
@@ -213,6 +218,21 @@ def interface_edit(modules: dict[str, str]) -> dict[str, str]:
     changed["mncs.compiler.source.v1"] = (
         source[:start] + function.replace("total", "source_length") + source[end:]
     )
+    return changed
+
+
+def invalid_body_edit(modules: dict[str, str]) -> dict[str, str]:
+    """Introduce a fresh body type error while retaining prior successful facts."""
+    changed = dict(modules)
+    source = changed["mncs.compiler.source.v1"]
+    start = source.index("fn byte_at_global<")
+    end = source.index("\n}\n", start) + 2
+    function = source[start:end]
+    if (function.count("-> (result: u64)") != 1
+            or function.count("return view[intra] as u64;") != 1):
+        raise AssertionError("Compiler source invalid-body edit anchor changed")
+    function = function.replace("return view[intra] as u64;", "return true;", 1)
+    changed["mncs.compiler.source.v1"] = source[:start] + function + source[end:]
     return changed
 
 
@@ -378,6 +398,31 @@ def main() -> dict:
                 or len(interface_recomputed) >= interface_baseline_work["produced_semantic_fact_count"]):
             raise AssertionError("interface edit failed to preserve independent verified facts")
 
+        invalid_modules = invalid_body_edit(modules)
+        invalid_cache = cache / "invalid-body-cache"
+        invalid_baseline, _ = compile_fresh(
+            request(modules), invalid_cache, "invalid-body baseline")
+        if (invalid_baseline.get("cache", {}).get("verification_work", {}).get(
+                "produced_semantic_fact_count") != 103):
+            raise AssertionError("invalid-body baseline did not publish its prior facts")
+        invalid_build, _ = compile_attempt(request(invalid_modules), invalid_cache)
+        invalid_work = invalid_build.get("cache", {}).get("verification_work", {})
+        invalid_diagnostics = diagnostic_tree(invalid_build.get("diagnostics", []))
+        if (invalid_build.get("status") != "rejected"
+                or not any(row.get("code") == "MNE103" for row in invalid_diagnostics)
+                or invalid_work.get("front_end_invocations") != 1
+                or invalid_work.get("front_end_outcome") != "rejected"
+                or invalid_build.get("artifact") is not None
+                or invalid_build.get("cache", {}).get("publication") != "not_published"):
+            raise AssertionError("invalid body did not produce fresh frontend diagnostics without publication: "
+                                 + json.dumps({"status": invalid_build.get("status"),
+                                               "work": invalid_work,
+                                               "diagnostics": invalid_diagnostics[:20]}, indent=2))
+        invalid_recomputed = set(invalid_work.get("recomputed_semantic_facts", []))
+        invalid_reused = set(invalid_work.get("reused_semantic_facts", []))
+        if invalid_recomputed or invalid_reused or invalid_work.get("produced_semantic_fact_count") != 0:
+            raise AssertionError("frontend-rejected source reused or published prior Language facts")
+
         expected = oracle(edited_modules, cache, workload)
         with tempfile.TemporaryDirectory(prefix="mncs-compiler-full-module-vm-") as vm_name:
             vm_values, vm_metrics = execute_vm(
@@ -466,6 +511,22 @@ def main() -> dict:
                 "fresh_diagnostics": interface_build.get("diagnostics", []),
                 "application_build_verified": interface_build.get("status") == "verified",
                 "canonical_vm_matches_stage0": True,
+            },
+            "invalid_changed_body": {
+                "source_module": "mncs.compiler.source.v1",
+                "exported_function": "byte_at_global",
+                "edit": "changed the u64 body return expression to a bool",
+                "status": invalid_build.get("status"),
+                "diagnostics": invalid_diagnostics,
+                "expected_diagnostic_code": "MNE103",
+                "front_end_invocations": invalid_work.get("front_end_invocations"),
+                "front_end_outcome": invalid_work.get("front_end_outcome"),
+                "language_fact_reuse_not_attempted_before_frontend_rejection": True,
+                "produced_facts": invalid_work.get("produced_semantic_fact_count"),
+                "reused_facts": sorted(invalid_reused),
+                "recomputed_facts": sorted(invalid_recomputed),
+                "cache_publication": invalid_build.get("cache", {}).get("publication"),
+                "prior_success_did_not_mask_error": True,
             },
             "measurements": {
                 "profile_018_attempt": profile_018_metrics,
