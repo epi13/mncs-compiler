@@ -65,6 +65,10 @@ fn run(sources: [project.ProjectSource; up_to 64],
         sources, flat_pages, source_index, left_start, left_end,
         right_start, right_end);
 }
+
+fn unused_snapshot_helper(value: u64) -> (result: u64) {
+    return value;
+}
 """
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
@@ -73,6 +77,9 @@ WORK_SCHEMA = "mncs.compiler.application-build-verification-work/3"
 FACT_SCHEMA = "mncs.language-verification-fact/3"
 TARGET_SUBJECT = (
     "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal"
+)
+UNREACHABLE_SUBJECT = (
+    "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper"
 )
 STEP_BUDGET = reference.STEP_BUDGET
 
@@ -230,6 +237,14 @@ def edit_project_body(modules: dict[str, str]) -> dict[str, str]:
     return changed
 
 
+def edit_unreachable_body(root_source: str) -> str:
+    old = "fn unused_snapshot_helper(value: u64) -> (result: u64) {\n    return value;\n}"
+    new = "fn unused_snapshot_helper(value: u64) -> (result: u64) {\n    return 0;\n}"
+    if root_source.count(old) != 1:
+        raise AssertionError("uncalled Project snapshot helper edit anchor changed")
+    return root_source.replace(old, new, 1)
+
+
 def source_hashes() -> list[dict]:
     return [{
         "module": module,
@@ -248,13 +263,18 @@ def main() -> dict:
     print("Running Stage-0 Project reference cases...", flush=True)
     reference_status, cases, expected = reference_cases()
     print(f"Stage-0 Project reference passed {len(cases)} cases.", flush=True)
+    sys.path.insert(0, str(test_vm_emit.VM_REPO / "python"))
+    from mncs_vm_client import inspect_runtime  # noqa: E402
+
+    vm_runtime = inspect_runtime(test_vm_emit.VM_BIN)
     comment_root = ROOT_SOURCE.replace(
         "fn run(", "// Refresh root locations after a comment-only edit.\nfn run(", 1)
     if comment_root == ROOT_SOURCE:
         raise AssertionError("comment fixture failed to move current source locations")
-    invalid_root = ROOT_SOURCE.replace(
+    unreachable_root = edit_unreachable_body(ROOT_SOURCE)
+    invalid_root = unreachable_root.replace(
         "-> (result: bool)", "-> (result: u64)", 1)
-    if invalid_root == ROOT_SOURCE:
+    if invalid_root == unreachable_root:
         raise AssertionError("invalid root fixture did not change the return type")
 
     started = time.monotonic()
@@ -281,8 +301,37 @@ def main() -> dict:
                 != cold.get("artifact", {}).get("identity")):
             raise AssertionError("Project comment edit did not reuse all verified facts")
 
+        unreachable, unreachable_metrics = compile_once(
+            build_request(modules, unreachable_root), cache,
+            "uncalled Project snapshot helper body edit")
+        unreachable_work = require_work(
+            unreachable, "uncalled Project snapshot helper body edit")
+        unreachable_reasons = {
+            row["subject"]: row["reason"]
+            for row in unreachable_work["semantic_fact_recomputation_reasons"]
+        }
+        if (unreachable.get("status") != "verified"
+                or unreachable_work["recomputed_semantic_facts"] != [UNREACHABLE_SUBJECT]
+                or unreachable_reasons.get(UNREACHABLE_SUBJECT) != "subject_changed"
+                or unreachable_work["recomputed_declaration_facts"]
+                or len(unreachable_work["reused_semantic_facts"])
+                != cold_work["produced_semantic_fact_count"] - 1
+                or UNREACHABLE_SUBJECT in unreachable_work["reused_semantic_facts"]
+                or len(set(unreachable_work["reused_semantic_facts"]))
+                != len(unreachable_work["reused_semantic_facts"])
+                or len(unreachable_work["reused_semantic_facts"]) + 1
+                != cold_work["produced_semantic_fact_count"]):
+            raise AssertionError(
+                "uncalled Project body edit did not reverify only its own Language fact: "
+                + json.dumps({
+                    "recomputed": unreachable_work["recomputed_semantic_facts"],
+                    "reasons": unreachable_reasons,
+                }, sort_keys=True)[:4000]
+            )
+
         edited, edit_metrics = compile_once(
-            build_request(edited_modules), cache, "Project helper body edit")
+            build_request(edited_modules, unreachable_root), cache,
+            "Project helper body edit")
         edit_work = require_work(edited, "Project helper body edit")
         recomputed = set(edit_work["recomputed_semantic_facts"])
         reasons = {row["subject"]: row["reason"]
@@ -339,6 +388,12 @@ def main() -> dict:
                 ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
             ).strip(),
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
+            "vm_runtime_build_origin": {
+                "status": vm_runtime.get("build_origin", {}).get("status"),
+                "source_revisions": vm_runtime.get("build_origin", {}).get("source_revisions"),
+                "mismatch_count": vm_runtime.get("build_origin", {}).get("mismatch_count"),
+                "mismatches": vm_runtime.get("build_origin", {}).get("mismatches"),
+            },
             "harness": str(Path(__file__).relative_to(ROOT)),
             "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
             "contracts": {"request": REQUEST_SCHEMA, "response": RESPONSE_SCHEMA,
@@ -360,6 +415,13 @@ def main() -> dict:
                 "comment_recomputed_body_facts": comment_work["recomputed_semantic_facts"],
                 "comment_reused_declaration_fact_count": len(comment_work["reused_declaration_facts"]),
                 "comment_recomputed_declaration_facts": comment_work["recomputed_declaration_facts"],
+                "uncalled_body_edit_subject": UNREACHABLE_SUBJECT,
+                "uncalled_body_edit_recomputed": unreachable_work["recomputed_semantic_facts"],
+                "uncalled_body_edit_recomputation_reasons": unreachable_reasons,
+                "uncalled_body_edit_reused_body_fact_count": len(
+                    unreachable_work["reused_semantic_facts"]),
+                "uncalled_body_edit_recomputed_declaration_facts": (
+                    unreachable_work["recomputed_declaration_facts"]),
                 "body_edit_subject": TARGET_SUBJECT,
                 "body_edit_recomputed": sorted(recomputed),
                 "body_edit_recomputation_reasons": reasons,
@@ -387,6 +449,7 @@ def main() -> dict:
                 "total_wall_seconds": round(total_wall, 6),
                 "cold_build": cold_metrics,
                 "comment_edit": comment_metrics,
+                "uncalled_body_edit": unreachable_metrics,
                 "body_edit": edit_metrics,
                 "invalid_source": invalid_metrics,
                 "isolated_cgroup_peak_bytes": None,
