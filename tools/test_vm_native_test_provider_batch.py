@@ -33,6 +33,9 @@ VM_BIN = Path(os.environ.get(
 CACHE_DIR = ROOT / ".build/native-app-readiness/provider-fold-cache" / f"run-{os.getpid()}-{time.time_ns()}"
 MODULE = "tests.native_provider_fold_batch"
 SOURCE_ID = "tests/native_provider_fold_batch.mncs"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/6"
 MODULE_FILES = {
     "mncs.test.assertions": TEST_ROOT / "native/mncs/test/assertions.mncs",
     "mncs.test.provider": TEST_ROOT / "native/mncs/test/provider.mncs",
@@ -145,7 +148,7 @@ def sha(data: bytes) -> str:
 def request(test_selection: dict | None = None) -> dict:
     modules = {name: path.read_text(encoding="utf-8") for name, path in MODULE_FILES.items()}
     return {
-        "schema_version": "mncs.compiler.application-build-request/4",
+        "schema_version": REQUEST_SCHEMA,
         "target": "mncs-vm-0.1",
         "root_source_id": SOURCE_ID,
         "root_source": SOURCE,
@@ -154,6 +157,8 @@ def request(test_selection: dict | None = None) -> dict:
         "modules": modules,
         "generic_seeds": [],
         "capabilities": [],
+        "effect_assumptions": [],
+        "optimization_policy": "default",
         "verification_policy": "mncs-test-provider-status-fold/1",
     }
 
@@ -197,7 +202,7 @@ def main() -> None:
         inventory_build, inventory_build_metrics = probe.send(
             {"compile_application": inventory_request}, timeout=180.0
         )
-        if (inventory_build.get("schema_version") != "mncs.compiler.application-build/7"
+        if (inventory_build.get("schema_version") != RESPONSE_SCHEMA
                 or inventory_build.get("status") != "verified"
                 or inventory_build.get("cache", {}).get("status") != "miss"):
             raise AssertionError("provider fold inventory build failed: " + json.dumps({
@@ -231,7 +236,7 @@ def main() -> None:
             )
         finally:
             selection_probe.close()
-        if (built.get("schema_version") != "mncs.compiler.application-build/7"
+        if (built.get("schema_version") != RESPONSE_SCHEMA
                 or built.get("status") != "verified"
                 or built.get("cache", {}).get("status") != "miss"):
             raise AssertionError("provider fold identity-selected build failed: " + json.dumps({
@@ -320,6 +325,7 @@ def main() -> None:
             for row in comment_selection.get("cases", [])
         }
         if (comment_response.get("status") != "verified"
+                or comment_response.get("schema_version") != RESPONSE_SCHEMA
                 or comment_selection.get("status") != "verified"
                 or set(after_by_id) != set(before_by_id)
                 or after_by_id[shifted_id]["source_span"]["start"]
@@ -327,6 +333,18 @@ def main() -> None:
                 or selected_after_comment[shifted_id]["source_span"]["start"]
                 != after_by_id[shifted_id]["source_span"]["start"]):
             raise AssertionError("selected Test identities did not refresh to the current source locations")
+        comment_work = comment_response.get("cache", {}).get("verification_work", {})
+        comment_reused_facts = comment_work.get("reused_semantic_facts", [])
+        comment_recomputed_facts = comment_work.get("recomputed_semantic_facts", [])
+        if (comment_work.get("schema_version") != VERIFICATION_WORK_SCHEMA
+                or comment_work.get("front_end_invocations") != 1
+                or not comment_reused_facts
+                or comment_recomputed_facts):
+            raise AssertionError(
+                "comment-only Test source edit did not reuse Language body facts "
+                "while refreshing source locations: "
+                f"reused={comment_reused_facts}, recomputed={comment_recomputed_facts}"
+            )
 
         stale_request = request(build_request["test_selection"])
         stale_request["root_source"] = SOURCE.replace(
@@ -510,7 +528,19 @@ def main() -> None:
             "typed_results_match": True,
             "fresh_process_cache_hit": warm.get("cache", {}).get("status"),
             "fresh_process_frontend_invocations": warm.get("cache", {}).get("verification_work", {}).get("front_end_invocations"),
-            "language_verified_facts_reused": 0,
+            "language_verified_facts_reused": len(comment_reused_facts),
+            "language_verified_fact_reuse": {
+                "stage": "comment_edit_selection_rebind",
+                "reused_semantic_facts": comment_reused_facts,
+                "recomputed_semantic_facts": comment_recomputed_facts,
+                "front_end_invocations": comment_work.get("front_end_invocations"),
+                "reused_declaration_fact_count": len(
+                    comment_work.get("reused_declaration_facts", [])
+                ),
+                "reused_finite_type_fact_count": len(
+                    comment_work.get("reused_finite_type_declaration_facts", [])
+                ),
+            },
             "native_provider_status_cases": [
                 "RETURNED success",
                 "RETURNED assertion failure",
@@ -535,8 +565,8 @@ def main() -> None:
             "canonical_vm_session_model": "one artifact admission and one retained VM Session for all calls",
         },
         "scope": (
-            "One application-build/7 all-source selection returned the current Language-issued root-module "
-            "Test inventory. A second application-build/7 request selected all four tests by exact "
+            "One application-build/11 all-source selection returned the current Language-issued root-module "
+            "Test inventory. A second application-build/11 request selected all four tests by exact "
             "test_case_identity and emitted one artifact exporting the repeated provider callable plus the "
             "selected Test declarations. One "
             "canonical VM batch invoked fold_status_scenario four times with distinct typed byte inputs "
@@ -548,7 +578,7 @@ def main() -> None:
     }
     evidence_path = ROOT / os.environ.get(
         "MNCS_TEST_PROVIDER_BATCH_EVIDENCE_PATH",
-        "evidence/native-test-provider-fold-batch-20261017.json",
+        "evidence/native-test-provider-fold-batch-20261020-v2.json",
     )
     if evidence_path.exists():
         raise SystemExit(f"refusing to overwrite immutable evidence: {evidence_path}")
