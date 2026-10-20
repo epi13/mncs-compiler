@@ -1349,6 +1349,65 @@ test passing_case() -> (result: TestResult) {
                 or passed[0] != passed[1]):
             raise AssertionError("native Test failure or later passing result was not deterministic")
 
+        retained = execute_inventory_retained_session(
+            artifact, inventory, step_budget=100_000, repeat_count=repeat_count
+        )
+        retained_rows = retained["results"]
+        if (retained["artifact_identity"] != artifact.get("artifact_id")
+                or len(retained_rows) != expected_count
+                or not retained["same_process_for_all_calls"]
+                or not retained["mismatched_test_identity_rejected"]):
+            raise AssertionError("retained failure-isolation session lost its artifact or call bindings")
+        retained_results_by_case: dict[str, list[dict]] = {name: [] for name in test_names}
+        for index, (test, session_response, expected_row) in enumerate(zip(
+            repeated_rows, retained_rows, oracle["executions"]
+        )):
+            repeat_index = index // len(tests)
+            expected_id = test["test_case_identity"]
+            if repeat_count > 1:
+                expected_id = f"{expected_id}:round:{repeat_index + 1}"
+            result = session_response.get("result", {})
+            execution = result.get("execution", {})
+            actual_values = result.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if (session_response.get("id") != expected_id
+                    or execution.get("status") != "returned"
+                    or execution.get("artifact_identity") != artifact.get("artifact_id")
+                    or len(actual_values) != 1
+                    or len(expected_values) != 1):
+                raise AssertionError(
+                    f"retained failure-isolation call did not complete for {test['name']}"
+                )
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected or actual != results_by_case[test["name"]][repeat_index]:
+                raise AssertionError(
+                    f"retained TestResult differs from Stage-0 or batch for {test['name']}"
+                )
+            retained_results_by_case[test["name"]].append(actual)
+
+        retained_failure = retained_results_by_case["failing_case"]
+        retained_pass = retained_results_by_case["passing_case"]
+        if (retained_failure != failure or retained_pass != passed):
+            raise AssertionError("retained Test failure changed later per-test results")
+        retained_failure_isolation = {
+            "session_schema": retained["session_schema"],
+            "artifact_identity": retained["artifact_identity"],
+            "test_count": len(tests),
+            "call_count": len(retained_rows),
+            "repeat_round_count": repeat_count,
+            "same_process_for_all_calls": retained["same_process_for_all_calls"],
+            "mismatched_test_identity_rejected": retained[
+                "mismatched_test_identity_rejected"
+            ],
+            "failing_result": retained_failure[0],
+            "passing_result_after_failure": retained_pass[0],
+            "failure_does_not_abort_later_case": True,
+            "repeat_results_match": True,
+            "stage0_equivalent": True,
+            "process_metrics": retained["process_metrics"],
+        }
+
         return {
             "test_repository_revision": subprocess.check_output(
                 ["git", "rev-parse", "HEAD"], cwd=app.TEST_ROOT, text=True
@@ -1365,6 +1424,7 @@ test passing_case() -> (result: TestResult) {
             "failure_does_not_abort_later_case": True,
             "repeat_results_match": True,
             "stage0_equivalent": True,
+            "retained_vm_session": retained_failure_isolation,
             "build_frontend_invocations": frontend_invocations(built),
             "build_process_metrics": build_metrics,
             "stage0_oracle_metrics": oracle_metrics,
@@ -2866,6 +2926,30 @@ def main() -> None:
                     and failure_isolation_test_batch["repeat_results_match"]
                     and failure_isolation_test_batch["stage0_equivalent"]
                 ),
+                "native_test_failure_does_not_abort_later_retained_session_cases": (
+                    failure_isolation_test_batch["retained_vm_session"]["call_count"] == 4
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "same_process_for_all_calls"
+                    ]
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "mismatched_test_identity_rejected"
+                    ]
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "failing_result"
+                    ]["verdict_code"] == 1
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "failing_result"
+                    ]["failure_code"] == 9301
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "passing_result_after_failure"
+                    ]["verdict_code"] == 0
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "repeat_results_match"
+                    ]
+                    and failure_isolation_test_batch["retained_vm_session"][
+                        "stage0_equivalent"
+                    ]
+                ),
                 "interrupted_vm_batch_publishes_no_result_and_recovers_same_artifact": (
                     interrupted_vm_recovery_batch["build_frontend_invocations"] == 1
                     and interrupted_vm_recovery_batch["interruption"]["signal"] == "SIGKILL"
@@ -3009,6 +3093,9 @@ def main() -> None:
                 "generic_test_oracle": generic_test_batch["stage0_oracle_metrics"],
                 "failure_isolation_test_build": failure_isolation_test_batch["build_process_metrics"],
                 "failure_isolation_test_oracle": failure_isolation_test_batch["stage0_oracle_metrics"],
+                "failure_isolation_test_retained_session": failure_isolation_test_batch[
+                    "retained_vm_session"
+                ]["process_metrics"],
                 "interrupted_vm_recovery_build": interrupted_vm_recovery_batch["build_process_metrics"],
                 "interrupted_vm_recovery_oracle": interrupted_vm_recovery_batch["stage0_oracle_metrics"],
                 "real_self_suite_identity_selected_build": real_mncs_test_suite[
@@ -3064,10 +3151,11 @@ def main() -> None:
                 "and admits the selected Test when the exact generic-entrypoint spelling is present. "
                 "A generic Test with independent Nat bounds 2 and 3 executes twice by inventory "
                 "identity with two typed byte inputs and matches Stage-0. Wrong specialization arity "
-                "and malformed sequence wire values are rejected. A failure-isolation batch then "
-                "runs a failing typed TestResult followed by "
-                "a passing case, twice on the same artifact; all four results complete and match "
-                "Stage-0. A live canonical VM process is then killed during a bounded inventory "
+                "and malformed sequence wire values are rejected. A controlled failure-isolation "
+                "inventory runs a failing typed TestResult followed by a passing case, twice in "
+                "the batch adapter and twice in one retained VM process; all four results complete "
+                "and match Stage-0, and the typed failure does not stop later session calls. A "
+                "live canonical VM process is then killed during a bounded inventory "
                 "Test call. It publishes no result file; a fresh VM process executes the next Test "
                 "twice from the exact same artifact and matches Stage-0. This proves process "
                 "interruption recovery for this batch adapter; it does not prove durable Forge/Environment "
