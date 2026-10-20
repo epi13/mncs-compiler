@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
+LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
@@ -44,6 +45,12 @@ fn check_ascii(pages: [[byte; up_to 8]; up_to 2], stride: u64, total: u64) -> (r
 }
 """
 CHANGED_FUNCTION = "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid"
+EXPECTED_BODY_RECOMPUTED = {
+    CHANGED_FUNCTION,
+    "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar",
+    "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global",
+    "mncs:0.2:body:mncs.compiler.source.v1::utf8_validation_step",
+}
 CHANGED_INTERFACE_FUNCTION = "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global"
 REUSED_EXECUTION_PATH = {
     "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
@@ -150,6 +157,8 @@ def verification_work(build: dict, label: str) -> dict:
     if (not isinstance(work.get("reused_semantic_facts"), list)
             or not isinstance(work.get("recomputed_semantic_facts"), list)):
         raise AssertionError(f"{label} omitted actual Language fact identities")
+    if work.get("language_verification_fact_schema") != LANGUAGE_FACT_SCHEMA:
+        raise AssertionError(f"{label} reported an unexpected Language fact schema: {work}")
     return work
 
 
@@ -332,15 +341,14 @@ def main() -> dict:
             raise AssertionError("comment edit did not reuse every verified body fact")
 
         edited_build, edited_metrics = compile_fresh(
-            request(edited_modules), cache, "full-module unreachable body edit")
-        edited_work = verification_work(edited_build, "full-module unreachable body edit")
+            request(edited_modules), cache, "full-module non-root helper body edit")
+        edited_work = verification_work(edited_build, "full-module non-root helper body edit")
         reused = set(edited_work["reused_semantic_facts"])
         recomputed = set(edited_work["recomputed_semantic_facts"])
-        if CHANGED_FUNCTION not in recomputed:
-            raise AssertionError("edited Compiler UTF-8 body was not reverified")
-        if len(recomputed) != 1 or not REUSED_EXECUTION_PATH.issubset(reused):
-            raise AssertionError("full Compiler modules did not isolate the changed body: "
+        if recomputed != EXPECTED_BODY_RECOMPUTED or not REUSED_EXECUTION_PATH.issubset(reused):
+            raise AssertionError("full Compiler modules did not reverify the exact changed-body dependency closure: "
                                  + json.dumps({"recomputed": sorted(recomputed),
+                                               "expected_recomputed": sorted(EXPECTED_BODY_RECOMPUTED),
                                                "missing_execution_path": sorted(
                                                    REUSED_EXECUTION_PATH - reused)}, indent=2))
         if (cold.get("artifact", {}).get("identity")
@@ -451,6 +459,7 @@ def main() -> dict:
             "compiler_branch": subprocess.check_output(
                 ["git", "branch", "--show-current"], cwd=ROOT, text=True).strip(),
             "stage0_revision": language_lock["revision"],
+            "language_fact_implementation_revision": language_lock["revision"],
             "stage0_probe_sha256": hashlib.sha256(app.PROBE.read_bytes()).hexdigest(),
             "vm_revision": vm_revision,
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
@@ -482,7 +491,8 @@ def main() -> dict:
                 "returned_values": [row[0]["boolean"]["value"] for row in vm_values],
             },
             "verified_fact_reuse": {
-                "contract": "mncs.language-verification-fact/1",
+                "contract": LANGUAGE_FACT_SCHEMA,
+                "verifier_identity": "mncs-language-function-body-validator/3",
                 "cold_facts_produced": cold_work["produced_semantic_fact_count"],
                 "comment_edit_reused": len(comment_work["reused_semantic_facts"]),
                 "comment_edit_recomputed": len(comment_work["recomputed_semantic_facts"]),
@@ -542,11 +552,11 @@ def main() -> dict:
             },
             "limitations": [
                 "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
-                "The changed UTF-8 function is outside the selected executable closure; its body is reverified while callable-path bodies are reused.",
+                "The changed UTF-8 helper is outside the selected executable closure; it and its direct body dependents are reverified while independent bodies are reused.",
                 "Profile 0.19 raises the sequence/view ceiling to 4096; its literal iteration ceiling remains 1024.",
                 "This does not establish Stage-1 or Stage-2 succession.",
             ],
-            "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, one-body recomputation, and precise invalidation of direct callers after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
+            "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, exact invalidation of a changed UTF-8 helper and its direct body dependents, and precise invalidation of direct callers after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
         }
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence = ROOT / f"evidence/self-host-full-module-fact-reuse-{stamp}.json"

@@ -292,6 +292,7 @@ def main() -> dict:
             "compiler_branch": subprocess.check_output(
                 ["git", "branch", "--show-current"], cwd=ROOT, text=True).strip(),
             "stage0_revision": lock["revision"],
+            "language_fact_implementation_revision": lock["revision"],
             "stage0_probe_sha256": hashlib.sha256(common.app.PROBE.read_bytes()).hexdigest(),
             "vm_revision": subprocess.check_output(
                 ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
@@ -322,7 +323,8 @@ def main() -> dict:
                 "artifact_identity": edited_build["artifact"]["identity"],
             },
             "verified_fact_reuse": {
-                "contract": "mncs.language-verification-fact/1",
+                "contract": "mncs.language-verification-fact/3",
+                "verifier_identity": "mncs-language-function-body-validator/3",
                 "cold_facts_produced": fact_count,
                 "comment_edit_reused": len(comment_work["reused_semantic_facts"]),
                 "comment_edit_recomputed": len(comment_work["recomputed_semantic_facts"]),

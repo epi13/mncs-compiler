@@ -13,6 +13,7 @@ import time
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
+LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
@@ -122,6 +123,8 @@ def verification_work(build: dict, label: str) -> dict:
         raise AssertionError(f"{label} omitted actual reused fact identities")
     if not isinstance(work.get("recomputed_semantic_facts"), list):
         raise AssertionError(f"{label} omitted actual recomputed fact identities")
+    if work.get("language_verification_fact_schema") != LANGUAGE_FACT_SCHEMA:
+        raise AssertionError(f"{label} reported an unexpected Language fact schema: {work}")
     return work
 
 
@@ -349,6 +352,7 @@ def main() -> dict:
             "compiler_branch": subprocess.check_output(
                 ["git", "branch", "--show-current"], cwd=ROOT, text=True).strip(),
             "stage0_revision": language_lock["revision"],
+            "language_fact_implementation_revision": language_lock["revision"],
             "stage0_probe_sha256": hashlib.sha256(app.PROBE.read_bytes()).hexdigest(),
             "vm_revision": vm_revision,
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
@@ -388,7 +392,8 @@ def main() -> dict:
                 "returned_values": [row[0]["boolean"]["value"] for row in vm_values],
             },
             "verified_fact_reuse": {
-                "contract": "mncs.language-verification-fact/1",
+                "contract": LANGUAGE_FACT_SCHEMA,
+                "verifier_identity": "mncs-language-function-body-validator/3",
                 "cold_facts_produced": cold_work["produced_semantic_fact_count"],
                 "comment_edit_reused": len(comment_work["reused_semantic_facts"]),
                 "comment_edit_recomputed": len(comment_work["recomputed_semantic_facts"]),
