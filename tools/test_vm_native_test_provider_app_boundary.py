@@ -36,10 +36,17 @@ MODULE_PATHS = {
     "mncs.core.sequences.v1": STDLIB_ROOT / "library/core/sequences.mncs",
     "mncs.std.application.v1": STDLIB_ROOT / "library/std/application.mncs",
 }
+RUN_EVIDENCE_NAME = (
+    "native-test-provider-app-boundary-"
+    f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')}-{os.getpid()}.json"
+)
 EVIDENCE_PATH = ROOT / os.environ.get(
     "MNCS_NATIVE_TEST_PROVIDER_APP_EVIDENCE_PATH",
-    "evidence/native-test-provider-app-boundary-20261017.json",
+    f"evidence/{RUN_EVIDENCE_NAME}",
 )
+# Environment snapshots this exact shareable name into a fresh Store bundle
+# per invocation. The repository report above stays immutable and unique.
+ENVIRONMENT_ARTIFACT_NAME = "native-test-provider-app-boundary-20261017.json"
 PROVIDER_INTERFACE_IDENTITY = bytes([
     239, 160, 50, 155, 9, 221, 240, 227, 220, 117, 104, 17, 134, 215, 15, 192,
     206, 150, 165, 44, 250, 237, 241, 7, 176, 213, 182, 151, 52, 146, 186, 101,
@@ -265,7 +272,7 @@ def publish_environment_artifacts(payload: bytes) -> list[dict]:
     try:
         if not stat.S_ISDIR(os.fstat(root_descriptor).st_mode):
             raise RuntimeError("Environment artifact root must be a real directory")
-        name = EVIDENCE_PATH.name
+        name = ENVIRONMENT_ARTIFACT_NAME
         try:
             existing = os.stat(name, dir_fd=root_descriptor, follow_symlinks=False)
         except FileNotFoundError:

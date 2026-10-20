@@ -972,7 +972,36 @@ uses one runner process, one artifact admission, and one retained VM session
 for three isolated calls: valid, wrong artifact identity, then valid again.
 All three match Stage-0, and the valid result identity is unchanged after the
 typed rejection. The batch took 217 ms at 112.7 MiB peak RSS. This remains a
-local VM runner proof; Forge and Store routing are still unproven.
+local VM runner proof; Forge application execution and application-result
+Store publication are still unproven.
+
+### Repeatable provider-boundary verification and Store readback (2026-10-20)
+
+The provider-boundary harness previously stopped because its fixed repository
+evidence path already existed. It now gives each checkout report a timestamped,
+process-qualified immutable path while retaining the manifest’s exact
+shareable filename inside each fresh Environment invocation artifact
+directory. Two consecutive registered verifications passed without changing
+or replacing the earlier report.
+
+The [first run](native-test-provider-app-boundary-20261020T005912.107431Z-2414522.json)
+and [second run](native-test-provider-app-boundary-20261020T005957.505338Z-2414811.json)
+bind the same harness SHA-256
+(`2eb9275cd9f410d9b2d396ed0347fe3df9293df0c119cd307c59ae7d94a1872e`) to
+Compiler `25b46d1f0c233532e7d5187545688c1c4acadbe5`. The real seven-case
+`mncs-test` self-suite matches Stage-0; its provider application call took
+0.068 seconds at 33.5 MB peak RSS. An eight-case heterogeneous batch across two
+valid Test artifacts matches Stage-0 in 0.073 seconds at 35.9 MB peak RSS. A
+retained VM session admitted one artifact and completed valid,
+mismatched-artifact, valid-again calls in 0.217 seconds at 117.4 MB peak RSS.
+
+The second verifier bundle was read back through a fresh authenticated
+Environment operation from canonical Store. Its 135,488-byte report matched
+SHA-256 `481367ec39d6f4d85aa3a8c919d18b7c4dbf9331050629e3cd92f5123439684f`;
+see the [Store readback record](native-test-provider-app-boundary-store-readback-20261020.json).
+These executions use the bounded local canonical-VM adapter. They do not
+establish Forge execution or application-result publication. Language verified
+facts reused remain zero, and this does not advance compiler self-consumption.
 
 ## Counted-loop SSA instruction accounting (2026-10-18)
 
