@@ -20979,5 +20979,53 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "Language v3 facts were persisted across fresh processes and independently checked against current function bodies, callable interfaces and implementations, generic specialization, nominal, effect, capability, verifier, policy, and profile dependencies. Comment edits reused every body fact; changed bodies reverified exactly their semantic dependents; imported interface changes reverified consumers; independent units remained reusable. Generated Parser and Source/Lexer/Segment applications matched canonical VM execution with Stage-0. The Compiler project remains only partially self-consumed, and this does not establish Stage-1 or Stage-2 succession."
+  },
+  "current_campaign_native_application_fact_v3_incremental_revalidation_20261020": {
+    "status": "passed_language_fact_v3_incremental_application_revalidation",
+    "observed_at": "2026-10-20T10:29:53.477663+00:00",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "tested_compiler_revision": "0ded8c9c6a7e2dfb7806756dbdc990d16fe60617",
+    "language_revision": "f03bdc1f8323c98d685a7dc37fa666d483e3d031",
+    "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "language_fact_schema": "mncs.language-verification-fact/3",
+    "compiler_work_schema": "mncs.compiler.application-build-verification-work/3",
+    "initial_observation": {
+      "tested_compiler_revision": "6081308174da534dd33468302f8094b477b65643",
+      "harness_sha256": "611f129194962b7ec608f0d2dcf98af58683656ab16bed372cf28434f23063a0",
+      "evidence_artifact": "evidence/native-app-readiness-gate-b-20261020T102747.589952Z-2763707.json",
+      "evidence_sha256": "824e978700075b7a29af802087b4a5b7a3f1227ae8701017814614cabe9114e4",
+      "scope": "An initial passing run established the same v3 runtime behavior before the harness added the explicit schema assertion; the following run is the enforced result."
+    },
+    "harness": "tools/test_native_application_incremental.py",
+    "harness_sha256": "285874a5f790640edb472307cb853f400dec3102a9acb729e1360510ed3cb67f",
+    "evidence_artifact": "evidence/native-app-readiness-gate-b-20261020T102934.660273Z-2764455.json",
+    "evidence_sha256": "340486ad673a8b5f467f82bb6a263b0b5b6570fe1329ed30a6afbc6968550bea",
+    "application": {
+      "entry": "tests.native_readiness::run",
+      "resolved_module_count": 5,
+      "program_function_count": 24,
+      "canonical_vm_matches_stage0": true
+    },
+    "verification_work": {
+      "cold_facts_produced": 24,
+      "cold_wall_seconds": 0.718242,
+      "cold_cpu_seconds": 0.7,
+      "cold_peak_rss_bytes": 54644736,
+      "warm_fresh_process_wall_seconds": 0.105116,
+      "warm_frontend_invocations": 0,
+      "fresh_process_comment_edit_facts_reused": 24,
+      "dependency_edit_facts_reused": 21,
+      "dependency_edit_facts_recomputed": 3,
+      "unreachable_body_edit_facts_reused": 23,
+      "unreachable_body_edit_facts_recomputed": 1,
+      "invalid_source_fresh_diagnostic": true,
+      "interrupted_verification_published_no_partial_artifact": true,
+      "effect_capability_nominal_and_generic_invalidation_verified": true
+    },
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "The enforced incremental gate compiles the real five-module mncs-test readiness application and proves Compiler consumes Language v3 facts. It reuses independent facts on dependency, unreachable-body, nominal, generic, effect, capability, and comment edits while rechecking affected units; interrupted and invalid builds do not publish false success. Cold and warm timings are single workload samples. The selected application matches Stage-0 through the canonical VM; full Compiler self-consumption and Stage-1/Stage-2 succession remain unproven."
   }
 }

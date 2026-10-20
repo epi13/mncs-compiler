@@ -1374,3 +1374,23 @@ evidence identities and reuse counts are recorded under
 [`SELF-HOST-MATRIX.json`](SELF-HOST-MATRIX.json). This verifies actual
 Language-owned body fact reuse; it does not establish full Compiler
 self-hosting or Stage-1/Stage-2 succession.
+
+## Native `mncs-test` incremental application with Language fact v3 (2026-10-20)
+
+The [current incremental application record](native-app-readiness-gate-b-20261020T102934.660273Z-2764455.json)
+revalidates the five-module, 24-function `tests.native_readiness::run`
+application with an explicit harness assertion that Compiler consumed
+`mncs.language-verification-fact/3`. The cold build produced 24 verified body
+facts in 0.718 seconds (0.7 CPU seconds, 54.6 MB peak RSS); a fresh-process
+warm build took 0.105 seconds with no frontend invocation. A fresh-process
+comment edit reused all 24 facts. A dependency edit reused 21 and recomputed
+the three affected facts; an unreachable body edit reused 23 and recomputed
+one. Nominal, generic-specialization, effect, and capability edits reverified
+their affected units while preserving independent facts. Invalid source
+returned a fresh diagnostic, interrupted verification published no partial
+artifact, and canonical VM behavior matched Stage-0. Cgroup memory was
+unavailable. These are workload-specific measurements, not a general speedup
+claim; full Compiler self-consumption and Stage-1/Stage-2 succession remain
+unproven. The harness and evidence identities are recorded under
+`current_campaign_native_application_fact_v3_incremental_revalidation_20261020`
+in [`SELF-HOST-MATRIX.json`](SELF-HOST-MATRIX.json).
