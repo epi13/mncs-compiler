@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import select
 import signal
 import subprocess
 import tempfile
@@ -521,6 +522,195 @@ def execute_inventory_batch(
         match = re.search(r"Maximum resident set size \(kbytes\): (\d+)", completed.stderr)
         peak_rss = int(match.group(1)) if match else None
         return json.loads(output_path.read_text(encoding="utf-8")), wall, peak_rss
+
+
+def execute_inventory_retained_session(
+    artifact: dict,
+    inventory: dict,
+    step_budget: int = 100_000,
+    repeat_count: int = 1,
+    timeout_seconds: float = 30.0,
+) -> dict:
+    """Call Language-inventoried Tests over one long-lived canonical VM session."""
+    tests = inventory.get("tests", [])
+    module = inventory.get("module")
+    artifact_identity = artifact.get("artifact_id")
+    if not isinstance(module, str) or not module or not isinstance(tests, list):
+        raise AssertionError("retained Test session requires a current Language inventory")
+    if not isinstance(artifact_identity, str) or not artifact_identity:
+        raise AssertionError("retained Test session requires a verified artifact identity")
+    if type(repeat_count) is not int or not 1 <= repeat_count <= 8:
+        raise ValueError("retained Test repeat count must be between 1 and 8")
+
+    artifact_callables = {
+        (row.get("module"), row.get("name")): row
+        for row in artifact.get("callables", [])
+        if isinstance(row, dict)
+    }
+    references: dict[str, dict] = {}
+    for test in tests:
+        if not isinstance(test, dict) or test.get("module") != module:
+            raise AssertionError("retained Test inventory contains a case outside its module")
+        test_identity = test.get("test_case_identity")
+        if not isinstance(test_identity, str) or not test_identity or test_identity in references:
+            raise AssertionError("retained Test inventory contains a missing or duplicate identity")
+        callable_row = artifact_callables.get((module, test.get("name")))
+        binding = callable_row.get("test_binding") if callable_row else None
+        required = {
+            "callable_identity", "declaration_identity", "test_case_identity", "signature_identity"
+        }
+        if not isinstance(binding, dict) or not required <= set(binding):
+            raise AssertionError(f"artifact omitted a complete Test binding for {test.get('name')}")
+        if (binding.get("callable_identity") != test.get("function_identity")
+                or binding.get("declaration_identity") != test.get("declaration_identity")
+                or binding.get("test_case_identity") != test_identity):
+            raise AssertionError(f"artifact Test binding drifted from Language inventory: {test.get('name')}")
+        references[test_identity] = {
+            "artifact_identity": artifact_identity,
+            "callable_identity": binding["callable_identity"],
+            "declaration_identity": binding["declaration_identity"],
+            "test_case_identity": binding["test_case_identity"],
+            "signature_identity": binding["signature_identity"],
+        }
+
+    calls = []
+    for round_index in range(repeat_count):
+        for test in tests:
+            identity = test["test_case_identity"]
+            call_id = f"{identity}:round:{round_index + 1}" if repeat_count > 1 else identity
+            type_arguments = inventory_test_type_arguments(test, None)
+            calls.append({
+                "schema_version": "mncs.vm.session/1",
+                "id": call_id,
+                "request": {
+                    "schema_version": "0.1",
+                    "target": {"module": module, "function": test["name"]},
+                    "arguments": inventory_test_arguments(test, None, type_arguments),
+                    "type_arguments": type_arguments,
+                    "step_budget": step_budget,
+                },
+                "callable_reference": references[identity],
+            })
+
+    with tempfile.TemporaryDirectory(prefix="mncs-test-inventory-session-") as raw:
+        artifact_path = Path(raw) / "application.vm.json"
+        artifact_path.write_text(
+            json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        stderr_file = tempfile.TemporaryFile(mode="w+t")
+        started = time.monotonic()
+        process = subprocess.Popen(
+            [str(app.VM_BIN), "serve", "--artifact", str(artifact_path)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=True,
+            bufsize=1,
+        )
+        samples = [app.process_sample(process.pid)]
+        initial_cpu = samples[0].get("cpu_seconds", 0.0)
+
+        def receive(label: str) -> dict:
+            deadline = time.monotonic() + timeout_seconds
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select(
+                    [process.stdout], [], [], min(0.05, max(0.0, deadline - time.monotonic()))
+                )
+                samples.append(app.process_sample(process.pid))
+                if ready:
+                    line = process.stdout.readline()
+                    if line:
+                        try:
+                            value = json.loads(line)
+                        except json.JSONDecodeError as error:
+                            raise AssertionError(f"VM session returned invalid JSON for {label}: {line!r}") from error
+                        if not isinstance(value, dict):
+                            raise AssertionError(f"VM session returned a non-object for {label}")
+                        return value
+                if process.poll() is not None:
+                    break
+            stderr_file.seek(0)
+            raise AssertionError(
+                f"VM retained session ended or timed out while waiting for {label}; "
+                f"rc={process.poll()} stderr={stderr_file.read()[-2500:]}"
+            )
+
+        responses = []
+        same_process_for_all_calls = True
+        try:
+            ready = receive("session readiness")
+            if (ready.get("schema_version") != "mncs.vm.session/1"
+                    or ready.get("status") != "ready"
+                    or ready.get("artifact_id") != artifact_identity):
+                raise AssertionError(f"VM session admitted the wrong artifact: {ready}")
+
+            first_test = tests[0]
+            bad_reference = dict(references[first_test["test_case_identity"]])
+            bad_reference["test_case_identity"] = "mncs:tampered:test-case"
+            bad_request = {
+                **calls[0],
+                "id": "negative-mismatched-test-identity",
+                "callable_reference": bad_reference,
+            }
+            if process.stdin is None or process.stdout is None:
+                raise AssertionError("VM retained session pipes were unavailable")
+            process.stdin.write(json.dumps(bad_request, separators=(",", ":")) + "\n")
+            process.stdin.flush()
+            rejected_identity = receive("mismatched Test identity rejection")
+            identity_rejection_passed = (
+                rejected_identity.get("id") == bad_request["id"]
+                and rejected_identity.get("schema_version") == "mncs.vm.session/1"
+                and rejected_identity.get("ok") is False
+                and rejected_identity.get("reason") == "test callable identity reference mismatch"
+            )
+            if not identity_rejection_passed:
+                raise AssertionError(f"VM session accepted a mismatched Test identity: {rejected_identity}")
+
+            for call in calls:
+                if process.poll() is not None:
+                    same_process_for_all_calls = False
+                    raise AssertionError("VM retained session exited between Test calls")
+                process.stdin.write(json.dumps(call, separators=(",", ":")) + "\n")
+                process.stdin.flush()
+                response = receive(f"Test call {call['id']}")
+                result = response.get("result", {})
+                execution = result.get("execution", {})
+                if (response.get("id") != call["id"]
+                        or response.get("schema_version") != "mncs.vm.session/1"
+                        or response.get("ok") is not True
+                        or execution.get("status") != "returned"
+                        or execution.get("artifact_identity") != artifact_identity
+                        or execution.get("invoked_callable") != call["callable_reference"]):
+                    raise AssertionError(f"VM retained session returned an invalid Test receipt: {response}")
+                responses.append(response)
+
+            process.stdin.close()
+            returncode = process.wait(timeout=10)
+            if returncode != 0:
+                stderr_file.seek(0)
+                raise AssertionError(f"VM retained session exited {returncode}: {stderr_file.read()[-2500:]}")
+            wall = time.monotonic() - started
+            metrics = app.summarize_samples(samples, wall, initial_cpu)
+            return {
+                "session_schema": "mncs.vm.session/1",
+                "ready_artifact_identity": ready["artifact_id"],
+                "artifact_identity": artifact_identity,
+                "call_count": len(responses),
+                "response_ids": [row["id"] for row in responses],
+                "results": responses,
+                "mismatched_test_identity_rejected": identity_rejection_passed,
+                "same_process_for_all_calls": same_process_for_all_calls,
+                "process_metrics": metrics,
+            }
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=10)
+            if process.stdin is not None and not process.stdin.closed:
+                process.stdin.close()
+            if process.stdout is not None:
+                process.stdout.close()
+            stderr_file.close()
 
 
 def run_parameterized_test_case() -> dict:
@@ -1790,6 +1980,44 @@ def run_real_mncs_test_suite() -> dict:
             elif results.get(test["name"]) != actual:
                 raise AssertionError(f"repeated native TestResult changed for {test['name']}: {actual}")
 
+        retained_vm_session = execute_inventory_retained_session(
+            artifact, inventory, step_budget=200_000, repeat_count=repeat_count
+        )
+        retained_rows = retained_vm_session["results"]
+        if (retained_vm_session["artifact_identity"] != artifact.get("artifact_id")
+                or len(retained_rows) != expected_batch_count
+                or not retained_vm_session["same_process_for_all_calls"]
+                or not retained_vm_session["mismatched_test_identity_rejected"]):
+            raise AssertionError("real mncs-test retained VM session lost its artifact or call bindings")
+        retained_results: dict[str, dict] = {}
+        for index, (test, session_response, expected_row) in enumerate(zip(
+            test_rows, retained_rows, oracle["executions"]
+        )):
+            round_index = index // len(inventory["tests"])
+            expected_call_id = test["test_case_identity"]
+            if repeat_count > 1:
+                expected_call_id = f"{expected_call_id}:round:{round_index + 1}"
+            result = session_response.get("result", {})
+            actual_values = result.get("record", {}).get("returned", [])
+            expected_values = expected_row.get("returned", [])
+            if (session_response.get("id") != expected_call_id
+                    or result.get("execution", {}).get("status") != "returned"
+                    or len(actual_values) != 1
+                    or len(expected_values) != 1):
+                raise AssertionError(
+                    f"retained VM session returned an invalid TestResult for {test['name']}"
+                )
+            actual = app.decode_wire(app.vm_to_wire(actual_values[0]))
+            expected = app.decode_wire(expected_values[0])
+            if actual != expected or actual != results[test["name"]]:
+                raise AssertionError(
+                    f"retained VM session result differs from Stage-0 or batch execution for {test['name']}"
+                )
+            if round_index == 0:
+                retained_results[test["name"]] = actual
+            elif retained_results.get(test["name"]) != actual:
+                raise AssertionError(f"retained TestResult changed across session rounds: {test['name']}")
+
         selected_names = {"arithmetic", "skipped"}
         selected_identities = [
             row["test_case_identity"]
@@ -2079,6 +2307,23 @@ def run_real_mncs_test_suite() -> dict:
             "stage0_oracle_metrics": oracle_metrics,
             "canonical_vm_batch_wall_seconds": round(vm_wall, 6),
             "canonical_vm_batch_peak_rss_kib": vm_peak_rss,
+            "retained_vm_session": {
+                "schema": retained_vm_session["session_schema"],
+                "ready_artifact_identity": retained_vm_session["ready_artifact_identity"],
+                "artifact_identity": retained_vm_session["artifact_identity"],
+                "call_count": retained_vm_session["call_count"],
+                "repeat_round_count": repeat_count,
+                "same_process_for_all_calls": retained_vm_session[
+                    "same_process_for_all_calls"
+                ],
+                "mismatched_test_identity_rejected": retained_vm_session[
+                    "mismatched_test_identity_rejected"
+                ],
+                "repeat_results_match": True,
+                "stage0_equivalent": True,
+                "typed_results": retained_results,
+                "process_metrics": retained_vm_session["process_metrics"],
+            },
             "identity_selected_subset_batch": {
                 "source_test_count": len(selected_inventory["tests"]),
                 "selected_test_count": len(selected_cases),
@@ -2649,6 +2894,27 @@ def main() -> None:
                      "assertions", "failures"} <= set(result)
                     for result in real_mncs_test_suite["canonical_vm_results"].values()
                 ),
+                "real_mncs_test_self_suite_runs_in_retained_vm_session": (
+                    real_mncs_test_suite["retained_vm_session"]["schema"]
+                    == "mncs.vm.session/1"
+                    and real_mncs_test_suite["retained_vm_session"]["call_count"] == 14
+                    and real_mncs_test_suite["retained_vm_session"][
+                        "same_process_for_all_calls"
+                    ]
+                    and real_mncs_test_suite["retained_vm_session"][
+                        "ready_artifact_identity"
+                    ] == real_mncs_test_suite["canonical_vm_artifact_identity"]
+                    and real_mncs_test_suite["retained_vm_session"][
+                        "artifact_identity"
+                    ] == real_mncs_test_suite["canonical_vm_artifact_identity"]
+                    and real_mncs_test_suite["retained_vm_session"]["repeat_results_match"]
+                    and real_mncs_test_suite["retained_vm_session"]["stage0_equivalent"]
+                ),
+                "real_mncs_test_wrong_session_identity_reference_is_rejected": (
+                    real_mncs_test_suite["retained_vm_session"][
+                        "mismatched_test_identity_rejected"
+                    ]
+                ),
                 "real_mncs_test_self_suite_reuses_language_v3_facts_and_refreshes_locations": (
                     real_mncs_test_suite["language_fact_v3_reuse"]["schema"]
                     == "mncs.language-verification-fact/3"
@@ -2757,6 +3023,9 @@ def main() -> None:
                 "real_self_suite_reachable_body_edit": real_mncs_test_suite[
                     "language_fact_v3_reuse"
                 ]["reachable_body_edit"]["build_process_metrics"],
+                "real_self_suite_retained_vm_session": real_mncs_test_suite[
+                    "retained_vm_session"
+                ]["process_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -2808,7 +3077,11 @@ def main() -> None:
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "
                 "verified artifact; one canonical VM batch runs two rounds of all seven tests "
                 "in the same admitted artifact/session. All 14 results match Stage-0 and the second "
-                "round matches the first, including six passes and the typed skip result. A comment-only "
+                "round matches the first, including six passes and the typed skip result. A second "
+                "mncs.vm.session/1 serve process then executes the same 14 individual calls across "
+                "two rounds with artifact-bound Language Test identities; a mismatched Test identity "
+                "is rejected without stopping the retained session, and every typed result matches "
+                "both the batch path and Stage-0. A comment-only "
                 "source shift in the real suite reuses every produced Language v3 body fact while refreshing "
                 "all current Test source spans and preserving semantic Test identities and the executable "
                 "artifact. A semantics-preserving edit to the imported assertions.from_assertion helper "
