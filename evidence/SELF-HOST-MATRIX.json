@@ -21237,5 +21237,105 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "A real four-module mncs-test source dependency graph builds through application-build/8. A reachable imported helper edit rechecks exactly the changed function and its direct caller, reuses every other verified body and all declaration facts, changes the executable artifact, and matches Stage-0 through the canonical VM. The measured runs show reduced verification work but no wall-time improvement. This does not establish production Test-runner migration or Compiler succession."
+  },
+  "current_campaign_parser_dependency_fact_reuse_repeat_20261020": {
+    "status": "passed_current_parser_self_consumption_language_fact_v3",
+    "observed_at": "2026-10-20T11:50:10.131662+00:00",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "tested_compiler_revision": "6273a28b2fa7fbfd93dca658b4df290c849f75c3",
+    "language_fact_implementation_revision": "f03bdc1f8323c98d685a7dc37fa666d483e3d031",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "stage0_probe_sha256": "752eb6479701544de1ba15f73c2e48a3a0fa0baad2698f4d01ef8b6279f4fd5d",
+    "vm_binary_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "harness": "tools/test_vm_compiler_parser_module_fact_reuse.py",
+    "harness_sha256": "281d71e370bfbf2c6450bc2fcc7c4f7cbb91945dd10635295faad2b991723c10",
+    "evidence_artifact": "evidence/self-host-parser-module-fact-reuse-20261020T115010Z.json",
+    "evidence_sha256": "8597ec031303a26a325300754784f35b75b6638557b5757d351e15a25bb4a807",
+    "source_profiles": {
+      "source": "0.19",
+      "lexer": "0.19",
+      "parser": "0.18"
+    },
+    "source_sha256": {
+      "mncs.compiler.source.v1": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771",
+      "mncs.compiler.lexer.v1": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7",
+      "mncs.compiler.parser.v1": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3a718932b60aafb51e9745"
+    },
+    "full_module_admission": {
+      "status": "verified",
+      "resolved_module_count": 4,
+      "program_function_count": 108,
+      "cold_verified_fact_count": 108
+    },
+    "application": {
+      "callable_root": "tests.compiler_parser_frontier::header_code",
+      "selected_parser_function": "mncs.compiler.parser.v1::header<64>",
+      "case_count": 4,
+      "expected_codes": [0, 2, 4, 8],
+      "artifact_identity": "sha256:c8c777cee8f031b8e608b9be5245c93511b05f8cd428658bd099d5912a0f087b",
+      "canonical_vm_matches_stage0": true
+    },
+    "verified_fact_reuse": {
+      "contract": "mncs.language-verification-fact/3",
+      "verifier_identity": "mncs-language-function-body-validator/3",
+      "comment_edit_reused": 108,
+      "comment_edit_recomputed": 0,
+      "reachable_body_edit_subject": "mncs:0.2:body:mncs.compiler.parser.v1::finish",
+      "reachable_body_edit_reused": 104,
+      "reachable_body_edit_recomputed": [
+        "mncs:0.2:body:mncs.compiler.parser.v1::finish",
+        "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1",
+        "mncs:0.2:body:mncs.compiler.parser.v1::header",
+        "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1"
+      ],
+      "recomputation_reasons": {
+        "mncs:0.2:body:mncs.compiler.parser.v1::finish": "subject_changed",
+        "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1": "subject_changed",
+        "mncs:0.2:body:mncs.compiler.parser.v1::header": "dependencies_changed",
+        "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1": "dependencies_changed"
+      },
+      "reused_parser_and_application_callers": [
+        "mncs:0.2:body:mncs.compiler.parser.v1::step",
+        "mncs:0.2:body:tests.compiler_parser_frontier::header_code"
+      ],
+      "fresh_process_per_snapshot": true
+    },
+    "measurements": {
+      "cold_build": {
+        "wall_seconds": 7.056024,
+        "cpu_seconds": 7.0,
+        "peak_rss_bytes": 252121088,
+        "peak_cgroup_memory_bytes": null
+      },
+      "comment_edit_build": {
+        "wall_seconds": 4.999264,
+        "cpu_seconds": 4.94,
+        "peak_rss_bytes": 272379904,
+        "peak_cgroup_memory_bytes": null
+      },
+      "reachable_body_edit_build": {
+        "wall_seconds": 6.909671,
+        "cpu_seconds": 6.85,
+        "peak_rss_bytes": 272613376,
+        "peak_cgroup_memory_bytes": null
+      },
+      "canonical_vm_execution": {
+        "wall_seconds": 1.025096,
+        "peak_rss_kib": 51076
+      },
+      "whole_frontier_wall_seconds": 27.085957,
+      "cgroup_measurement_available": false
+    },
+    "profile_018_baseline": {
+      "status": "rejected_by_profile_018_traversal_bound",
+      "diagnostic_count": 20,
+      "profile_bound_diagnostic_count": 9,
+      "wall_seconds": 0.269262,
+      "peak_rss_bytes": 54464512
+    },
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "A current Compiler application fully verifies the 108-function Parser, Source, and Lexer dependency closure under Language fact v3. A comment edit reuses every fact; an equivalent reachable finish-body edit recomputes that body, its specialization, and the exact dependent header bodies while reusing 104 independent facts. Four Parser header cases match Stage-0 through canonical VM. This does not verify the full Compiler project or establish succession."
   }
 }

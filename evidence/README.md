@@ -1375,6 +1375,18 @@ evidence identities and reuse counts are recorded under
 Language-owned body fact reuse; it does not establish full Compiler
 self-hosting or Stage-1/Stage-2 succession.
 
+The [current Compiler-worktree Parser rerun](self-host-parser-module-fact-reuse-20261020T115010Z.json)
+reconfirmed this behavior at Compiler revision `6273a28` against Language
+revision `f03bdc1`. The cold application produced 108 facts; a comment edit
+reused all 108. Editing `Parser.finish` recomputed exactly four facts—`finish`,
+its concrete specialization, and the two dependent `header` bodies—while
+reusing 104 facts, including the Parser `step` and application `header_code`
+bodies. All four canonical VM calls matched Stage-0. Cold/comment/reachable
+builds took 7.056/4.999/6.910 seconds wall time and peaked at 252/272/273 MB
+RSS; the VM batch took 1.025 seconds at 51 MiB peak RSS. Cgroup measurements
+were unavailable. This advances the selected Parser application frontier,
+not a full Compiler build or succession proof.
+
 ## Native `mncs-test` incremental application with Language fact v3 (2026-10-20)
 
 The [current incremental application record](native-app-readiness-gate-b-20261020T102934.660273Z-2764455.json)
