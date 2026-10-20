@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler.project-verification-provenance-record",
+  "observed_at": "2026-10-20T00:12:19Z",
+  "implementation": {
+    "repository": "mncs-compiler",
+    "path": "tools/test_project.py",
+    "commit": "fb4aa81f72755180010a00619dd65ebe525216cf",
+    "branch": "campaign/native-application-readiness-20261013",
+    "harness_sha256": "a600d8f765305eec903aaa7f7fda6953eaecca4b1c4851745e864efd45b23af4"
+  },
+  "bound_environment_verification": {
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.project-source-differential",
+    "binding_id": "cap_3aca3abfb1c762ca",
+    "status": "passed",
+    "returncode": 0,
+    "mode": "resolution",
+    "elapsed_seconds": 66.86,
+    "result_sha256": "4171c2c1afc79b35cb6efd8e90dd26ebf3f78a3dee72198b4d8f95a96a69bf31",
+    "execution_mode": "retained_cranelift",
+    "requested_backend": "cranelift",
+    "retained_sessions": 2,
+    "requests": 18,
+    "native_execution_steps_total": 9,
+    "native_execution_steps_max": 1,
+    "snapshot_source_count": 2,
+    "snapshot_bytes": 1103,
+    "native_import_count": 1,
+    "native_verified_modules": [
+      "demo.dep",
+      "demo.root"
+    ],
+    "native_and_stage0_callable_identities_match": [
+      "mncs:0.2:function:demo.dep::answer",
+      "mncs:0.2:function:demo.root::main"
+    ],
+    "resolution_negative_cases": [
+      "missing import rejected",
+      "duplicate module rejected",
+      "missing imported member rejected",
+      "parse failure returned"
+    ]
+  },
+  "verification_input_provenance": {
+    "git_head_at_invocation": "550d0aeb924a20d053f78afcc9e1f334fdb2d7bb",
+    "committed_harness_sha256_matches_invocation": true,
+    "compiler_source_count": 9,
+    "compiler_source_sha256": {
+      "src/compiler/decl.mncs": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0",
+      "src/compiler/flow.mncs": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
+      "src/compiler/kernel.mncs": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+      "src/compiler/lexer.mncs": "cf0a4d097ed4c2bf43f6fa883922be94c7b5552d17b2339faa1747e3fec46692",
+      "src/compiler/parser.mncs": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+      "src/compiler/project.mncs": "9753f0f4ef04d72cade170bdaa46141f6eafe71af71896cc1289430d807dfa64",
+      "src/compiler/segment.mncs": "44e0e0b2e7b917553ac90843cddcc810701b446d93cc6fbb122b1d94c88445ff",
+      "src/compiler/source.mncs": "927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22",
+      "src/compiler/ssa.mncs": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709"
+    },
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e",
+    "stage0_lock_sha256": "5f2e67c56f1371a860a82db47a00f4237fa80dce886e4c4c22424210202c7698",
+    "stage0_probe_sha256": "5645834ad1b54f340a959046d0000c9e0749eef31a37affe46953fc6d336bc76"
+  },
+  "full_project_differential": {
+    "status": "passed",
+    "terminal_job_id": "term-6af3354871b3cc2d52f1eaeb",
+    "returncode": 0,
+    "git_head_at_invocation": "550d0aeb924a20d053f78afcc9e1f334fdb2d7bb",
+    "elapsed_seconds": 407.733,
+    "report_path": "evidence/project-full-closure-current-20261020.json",
+    "report_sha256": "a98caaf0ced11e5f956036e4f370a50238264615281c71525e79d3a456845e9b",
+    "result_sha256": "50192f5a0fb1af67915cff7ddfd036e62836194f1542782f0e6670586693c7ca",
+    "execution_mode": "retained_cranelift",
+    "retained_sessions": 2,
+    "native_execution_steps_total": 27,
+    "stage0_revision": "e8f8a5f8659c71b33cd32c964d4982bec1a9668e"
+  },
+  "resource_observations": {
+    "host_available_memory_before": "22 GiB, rounded",
+    "host_available_memory_during": "11-12 GiB, rounded",
+    "host_available_memory_after": "22 GiB, rounded",
+    "simultaneous_probe_rss_samples_kib": [
+      5784284,
+      6052016
+    ],
+    "observed_probe_peak_rss_kib": 6092944,
+    "control_tunnel_service_cgroup_peak_bytes": 13198262272,
+    "cgroup_scope": "whole mncs-control-tunnel.service, shared rather than per-job",
+    "orphaned_test_children_after_completion": 0
+  },
+  "limitations": {
+    "canonical_vm": "not exercised by these Project resolver differential tests",
+    "language_verified_facts_reused": "not measured by this verifier",
+    "forge_application_execution": "not exercised",
+    "compiler_self_host_succession": "not established",
+    "stage1_or_stage2_claimed": false
+  }
+}

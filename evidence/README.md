@@ -1208,3 +1208,21 @@ the target module, matched Stage-0 for transitive nominal verification, and
 rejected the missing-field case with fresh span [108, 114]. This change makes
 no general performance claim. Language verified facts remain unreused; Forge
 execution and Stage-1/Stage-2 succession remain unproven.
+
+## Project verification provenance (2026-10-20)
+
+The Project verifier now emits the
+mncs.compiler.project-verification-provenance/1 schema with the Compiler
+revision and branch, hashes for all nine src/compiler/*.mncs files, the
+Language lock and Stage-0 probe hashes, and the harness hash. The bound
+resolution verifier passed 18 requests in retained Cranelift sessions; its
+native callable identities matched the locked Stage-0 identities, and missing
+imports, duplicate modules, missing imported members, and parse failures were
+rejected or returned as expected. The full Project differential also passed at
+the same Compiler source revision in 407.733 seconds.
+
+The [provenance record](project-verification-provenance-20261020.json) binds
+the verifier output to its exact inputs. The [full Project result](project-full-closure-current-20261020.json)
+preserves the complete suite report. These checks exercise Project resolution
+and SSA fixtures; they do not run the canonical VM, reuse Language verified
+facts, or establish compiler succession.
