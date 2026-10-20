@@ -37,6 +37,8 @@ TEST_SELECTION_REQUEST_SCHEMA = "mncs.compiler.application-build-request/4"
 TEST_SELECTION_RESPONSE_SCHEMA = "mncs.compiler.application-build/7"
 DECLARATION_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
 DECLARATION_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
+SOURCE_PARSE_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-request/6"
+SOURCE_PARSE_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/9"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -68,20 +70,21 @@ def validate_environment_contract_descriptor() -> None:
         (INVENTORY_REQUEST_SCHEMA, INVENTORY_RESPONSE_SCHEMA),
         (TEST_SELECTION_REQUEST_SCHEMA, TEST_SELECTION_RESPONSE_SCHEMA),
         (DECLARATION_FACT_REQUEST_SCHEMA, DECLARATION_FACT_RESPONSE_SCHEMA),
+        (SOURCE_PARSE_CACHE_REQUEST_SCHEMA, SOURCE_PARSE_CACHE_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "8":
-        raise AssertionError("Compiler capability revision must match application-build/8")
+    if contract.get("version") != "9":
+        raise AssertionError("Compiler capability revision must match application-build/9")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        DECLARATION_FACT_REQUEST_SCHEMA, DECLARATION_FACT_RESPONSE_SCHEMA
+        SOURCE_PARSE_CACHE_REQUEST_SCHEMA, SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/8 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/9 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /8 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /9 request-response pairs")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
@@ -94,6 +97,7 @@ def validate_environment_contract_descriptor() -> None:
         INVENTORY_REQUEST_SCHEMA: INVENTORY_RESPONSE_SCHEMA,
         TEST_SELECTION_REQUEST_SCHEMA: TEST_SELECTION_RESPONSE_SCHEMA,
         DECLARATION_FACT_REQUEST_SCHEMA: DECLARATION_FACT_RESPONSE_SCHEMA,
+        SOURCE_PARSE_CACHE_REQUEST_SCHEMA: SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -396,6 +400,7 @@ def invoke(
         MULTI_RESPONSE_SCHEMA,
         INVENTORY_RESPONSE_SCHEMA,
         TEST_SELECTION_RESPONSE_SCHEMA,
+        SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
     }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):
@@ -589,6 +594,53 @@ def main() -> None:
         )
         if warm_response.get("artifact", {}).get("identity") != artifact.get("identity"):
             raise AssertionError("warm provider build changed the canonical artifact identity")
+
+        parse_request = dict(request)
+        parse_request["schema_version"] = SOURCE_PARSE_CACHE_REQUEST_SCHEMA
+        parse_request.pop("entry", None)
+        parse_request["callable_roots"] = [{"module": app.APP_MODULE, "function": "run"}]
+        parse_request["test_selection"] = {"kind": "all_source_cases"}
+        parse_request_path = base / "source-parse-request.json"
+        write_json(parse_request_path, parse_request)
+        parse_cache_dir = base / "source-parse-cache"
+        parse_cache_arg = parse_cache_dir.relative_to(ROOT).as_posix()
+        parse_cold_dir = base / "source-parse-cold-output"
+        parse_cold_dir.mkdir()
+        parse_cold, parse_cold_response, parse_cold_elapsed, parse_cold_metrics = invoke(
+            ["--request-file", parse_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", parse_cache_arg],
+            output_dir=parse_cold_dir,
+            cache_dir=parse_cache_dir,
+        )
+        if parse_cold_response.get("schema_version") != SOURCE_PARSE_CACHE_RESPONSE_SCHEMA:
+            raise AssertionError("provider did not route request /6 to response /9")
+        parse_cold_work = parse_cold_response.get("cache", {}).get("verification_work", {})
+        parse_cold_observation = parse_cold_work.get("source_parse_cache", {}).get("observation", {})
+        if (parse_cold_work.get("schema_version") != "mncs.compiler.application-build-verification-work/4"
+                or parse_cold_observation.get("schema_version") != "mncs.language-source-parse-cache-observation/1"
+                or not parse_cold_observation.get("parsed_source_identities")):
+            raise AssertionError("provider /9 response omitted Language parse execution evidence")
+
+        parse_comment_request = dict(parse_request)
+        parse_comment_request["root_source"] = (
+            "// source cache comment edit\n" + parse_request["root_source"]
+        )
+        parse_comment_path = base / "source-parse-comment-request.json"
+        write_json(parse_comment_path, parse_comment_request)
+        parse_comment_dir = base / "source-parse-comment-output"
+        parse_comment_dir.mkdir()
+        parse_comment, parse_comment_response, parse_comment_elapsed, parse_comment_metrics = invoke(
+            ["--request-file", parse_comment_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", parse_cache_arg],
+            output_dir=parse_comment_dir,
+            cache_dir=parse_cache_dir,
+        )
+        parse_comment_work = parse_comment_response.get("cache", {}).get("verification_work", {})
+        parse_comment_observation = parse_comment_work.get("source_parse_cache", {}).get("observation", {})
+        if (parse_comment_response.get("schema_version") != SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
+                or not parse_comment_observation.get("reused_source_identities")
+                or not parse_comment_observation.get("parsed_source_identities")):
+            raise AssertionError("provider /9 fresh process did not reuse unchanged imported parses")
 
         batch_roots = batch_app.ROOTS
         batch_request = batch_app.build_request(batch_roots)
@@ -1011,6 +1063,27 @@ def main() -> None:
                     ],
                 },
             },
+            "language_source_parse_cache": {
+                "request_schema": SOURCE_PARSE_CACHE_REQUEST_SCHEMA,
+                "response_schema": parse_cold_response.get("schema_version"),
+                "cold": {
+                    "cache_status": parse_cold_response.get("cache", {}).get("status"),
+                    "source_parse_cache": parse_cold_response.get("cache", {}).get(
+                        "verification_work", {}
+                    ).get("source_parse_cache"),
+                    "provider_wall_seconds": round(parse_cold_elapsed, 6),
+                    "provider_metrics": parse_cold_metrics,
+                },
+                "comment_edit": {
+                    "cache_status": parse_comment_response.get("cache", {}).get("status"),
+                    "source_parse_cache": parse_comment_response.get("cache", {}).get(
+                        "verification_work", {}
+                    ).get("source_parse_cache"),
+                    "provider_wall_seconds": round(parse_comment_elapsed, 6),
+                    "provider_metrics": parse_comment_metrics,
+                },
+                "provider_summary_status": parse_cold.get("status"),
+            },
             "limitations": [
                 "This invokes the local canonical VM but does not exercise Forge, the live Environment provider route, or canonical Store execution.",
                 "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
@@ -1032,6 +1105,16 @@ def main() -> None:
                 ),
                 "provider_multi_callable_vm_batch_completed": len(batch_vm_rows) == 1
                 and all(row.get("outcome") == {"kind": "completed"} for row in batch_vm_rows),
+                "language_source_parse_contract_routed": (
+                    parse_cold_response.get("schema_version") == SOURCE_PARSE_CACHE_RESPONSE_SCHEMA
+                ),
+                "fresh_process_reused_unchanged_import_parse": bool(
+                    parse_comment_response.get("cache", {})
+                    .get("verification_work", {})
+                    .get("source_parse_cache", {})
+                    .get("observation", {})
+                    .get("reused_source_identities")
+                ),
                 "store_input_artifact_reused": store_response["cache"]["status"] == "hit",
                 "invalid_source_precise_rejection": diagnostic_codes,
                 "invalid_success_publication": invalid_response["cache"]["publication"],
@@ -1057,6 +1140,8 @@ def main() -> None:
                 "digest_app_warm": round(digest_warm_elapsed, 6),
                 "multi_callable_provider": round(batch_elapsed, 6),
                 "multi_callable_vm_batch": round(batch_vm_elapsed, 6),
+                "language_source_parse_cold": round(parse_cold_elapsed, 6),
+                "language_source_parse_comment_edit": round(parse_comment_elapsed, 6),
             },
             "process_tree_metrics": {
                 "method": "sampled /proc process tree at 10 ms intervals",
@@ -1067,6 +1152,8 @@ def main() -> None:
                 "digest_app_cold": digest_cold_metrics,
                 "digest_app_warm": digest_warm_metrics,
                 "multi_callable_provider": batch_metrics,
+                "language_source_parse_cold": parse_cold_metrics,
+                "language_source_parse_comment_edit": parse_comment_metrics,
             },
         }
         if DIGEST_EVIDENCE_PATH.exists():

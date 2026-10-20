@@ -99,8 +99,8 @@ focused direct compiler proof is
 also sends `/2` through the adapter and calls `snapshot_witness` from its
 seven-callable Test-core artifact in one canonical VM batch.
 
-The Environment descriptor advertises request `/5` and response `/8` as
-current while retaining all five request-response pairs.
+The Environment descriptor advertises request `/6` and response `/9` as
+current while retaining all six request-response pairs.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only
@@ -214,11 +214,12 @@ bodies receive fresh diagnostics and produce no success fact.
 and source artifact for each linked module while retaining the normal parse,
 resolution, and complete semantic-program path.
 
-The Stage-0 application cache stores Language facts in a separate checksummed
-body-fact field under cache-entry `/4`; cache-entry `/5` stores body and
-declaration facts in separate checksummed fields. The reader accepts `/4` as
-a body-only entry and never invents declaration evidence. Changed `/4`
-snapshots pass body facts back to Language, and
+The Stage-0 application cache stores Language facts in separate checksummed
+body-fact and declaration-fact fields under cache-entry `/5`; cache-entry `/6`
+adds the serialized Language parse cache with its own digest. The reader accepts
+`/4` as body-only evidence and `/5` as body-plus-declaration evidence, and never
+invents missing facts. Changed `/4` and `/5` snapshots pass their existing
+verified facts back to Language, and
 `verification_work.reused_semantic_facts` contains only facts Language actually
 matched and reused. Tests cover body, callable-interface, nominal-type,
 profile, verifier, and policy changes, fresh diagnostics, and serialization
@@ -293,3 +294,18 @@ before decoding them into the current result. It does not reinterpret
 payloads, while `/5` adds a separate digest for declaration facts. A mismatched
 digest remains a cache miss and triggers source
 verification; the digest batch includes a tampered-entry recovery case.
+
+`mncs.compiler.application-build-request/6` returns
+`mncs.compiler.application-build/9`. It retains the `/5` callable, Test
+selection, and declaration-fact behavior, and enables the Language-owned
+`mncs.language-source-parse-cache/1`. The Compiler persists this bounded cache
+inside its checksummed application-cache entry. Language admits a parse result
+only when its exact sealed source envelope, parser policy, syntax schemas, and
+source-profile registry still match. `/9` reports parsed and reused source
+identities under `verification_work.source_parse_cache`; these counts come
+from Language's parse adapter. Exact application artifact hits report parsing
+as not run. The provider descriptor retains `/4` through `/9`, advertising
+request `/6` and response `/9` as current. The focused fresh-process proof is
+`python3 tools/test_vm_language_source_parse_cache.py`: it checks cold parsing,
+comment-only root edits with imported parse reuse, changed-import invalidation,
+fresh diagnostics, and Stage-0/canonical-VM result equivalence.
