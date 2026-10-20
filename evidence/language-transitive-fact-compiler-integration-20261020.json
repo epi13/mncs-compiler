@@ -1,0 +1,121 @@
+{
+  "schema_version": "mncs.compiler.language-fact-integration-evidence/1",
+  "identity": "ev_compiler_transitive_language_fact_integration_20261020",
+  "recorded_at": "2026-10-20T18:14:06Z",
+  "producer": {
+    "repository": "mncs-compiler",
+    "branch": "campaign/native-application-readiness-20261013",
+    "revision": "1d4b6e2523ff76c8dfe84d78060622211eaa8c22",
+    "worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+    "working_tree_patch_sha256": "sha256:acc3c1a93facd224162a68dd185bca9a6059cf9699fa946434203613f3d4b276"
+  },
+  "language_pin": {
+    "lock_path": "mncs-language.lock.json",
+    "locked_revision": "844104d39cfe2685464e5bc078bd162e8a4924ab",
+    "locked_revision_is_pushed_on_language_main": true,
+    "runtime_build_checkout_revision": "ad79f3f025f39bbc0979afae728b24f19362b6ee",
+    "runtime_build_checkout_contains_locked_revision": true
+  },
+  "semantic_verification_reuse": {
+    "owner": "mncs-language",
+    "fact_schema": "mncs.language-verification-fact/3",
+    "verifier_identity": "mncs-language-function-body-validator/4",
+    "workload": "Compiler application-build over the real seven-case mncs-test self-suite and its imported MNCS support modules",
+    "comment_only_edit": {
+      "body_facts_produced": 41,
+      "body_facts_reused": 41,
+      "body_facts_recomputed": 0,
+      "source_locations_refreshed": true,
+      "artifact_reused": true
+    },
+    "reachable_imported_helper_edit": {
+      "changed_subject": "mncs:0.2:body:mncs.test.assertions::from_assertion",
+      "body_facts_recomputed": 7,
+      "recomputed_subjects": [
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:tests.self_suite::arithmetic",
+        "mncs:0.2:body:tests.self_suite::boolean",
+        "mncs:0.2:body:tests.self_suite::native_runner_policy",
+        "mncs:0.2:body:tests.self_suite::property_replay",
+        "mncs:0.2:body:tests.self_suite::snapshot_witness",
+        "mncs:0.2:body:tests.self_suite::task_lifecycle"
+      ],
+      "unrelated_body_facts_reused": 34,
+      "declaration_facts_reused": 41,
+      "declaration_facts_recomputed": 0,
+      "frontend_invocations": 1,
+      "backend_artifact_regenerated": true,
+      "wall_seconds": 0.815045,
+      "cpu_seconds": 0.79,
+      "peak_rss_bytes": 54394880,
+      "peak_cgroup_memory_bytes": null
+    }
+  },
+  "native_test_execution": {
+    "test_repository_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "transport_source": "mncs-test/tools/vm_transport.py",
+    "transport_source_sha256": "sha256:f675727fe22e192e69d5cfcea9eed03c64ecc8f4c9478f52ca02b66b2c62c392",
+    "application_artifact_identity": "sha256:c97edfd8bc200117baf689d538f064514c1c62550c3a13664a4f920dc611faf6",
+    "selected_test_count": 7,
+    "call_count": 14,
+    "one_retained_vm_process": true,
+    "calls_reusing_session": 13,
+    "test_results_match_stage0_batch_and_retained_session": true,
+    "canonical_vm_batch_wall_seconds": 0.009062,
+    "canonical_vm_process_peak_rss_bytes": 8458240,
+    "canonical_vm_process_peak_cgroup_memory_bytes": null
+  },
+  "vm_runtime_provenance": {
+    "initial_stale_runtime_diagnostic": {
+      "executable_sha256": "2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+      "status": "stale-inputs",
+      "embedded_compiler_revision": "4e4bf038b46b6090900994bce7121dbe5eafd44f",
+      "embedded_language_revision": "3cfbc094f1a1770fc2409b990f3f7d8912f49bc7",
+      "embedded_vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+      "dirty_input_count": 0,
+      "mismatch_count": 92,
+      "semantic_results_matched": true,
+      "harness_gate": "failed only the production runtime provenance assertion; no success evidence was published by that attempt"
+    },
+    "rebuilt_runtime": {
+      "command": "CARGO_BUILD_JOBS=2 CARGO_TARGET_DIR=/home/epi13/Documents/Projects/mncs-vm/target cargo build --offline --locked --release --manifest-path /home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-vm/Cargo.toml",
+      "exit_code": 0,
+      "elapsed_wall_seconds": 233.4,
+      "process_user_seconds": 452.68,
+      "process_system_seconds": 6.69,
+      "peak_rss_kib": 1495372,
+      "cgroup_peak_bytes": null,
+      "binary_sha256": "b6fd0d0b862bcfc1307c3724e4f1e14d774061a4c1043cd92f1f9cb8738836cb",
+      "receipt_identity": "sha256:1089809f5c632de38526d02d54e188bc4abcee978d6b14498daa79a0559ca9de",
+      "status": "matches-embedded-inputs",
+      "source_revisions": {
+        "mncs-compiler": "1d4b6e2523ff76c8dfe84d78060622211eaa8c22",
+        "mncs-language": "ad79f3f025f39bbc0979afae728b24f19362b6ee",
+        "mncs-vm": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+      },
+      "dirty_input_count": 0,
+      "mismatch_count": 0
+    }
+  },
+  "verification": {
+    "command": "CARGO_BUILD_JOBS=2 MNCS_NATIVE_APP_VM_BIN=/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm MNCS_TEST_INVENTORY_EVIDENCE_PATH=evidence/application-build-test-inventory-transitive-facts-20261020.json python tools/test_application_build_test_inventory.py",
+    "exit_code": 0,
+    "elapsed_wall_seconds": 10.28,
+    "process_user_seconds": 8.85,
+    "process_system_seconds": 1.62,
+    "peak_rss_kib": 74692,
+    "cgroup_peak_bytes": null,
+    "harness_evidence_path": "evidence/application-build-test-inventory-transitive-facts-20261020.json",
+    "harness_evidence_sha256": "sha256:9b74eab44acfa34fcc2a2629bb32a4c59d8a1f575775f3be1d77eda95be9d526",
+    "assertion_count": 31,
+    "failed_boolean_assertions": 0,
+    "language_verified_facts_reused": 34,
+    "fresh_diagnostics_and_invalid_source_checks_passed": true,
+    "artifact_identity_and_stage0_execution_checks_passed": true
+  },
+  "source_hashes": {
+    "mncs-language.lock.json": "sha256:2946e8f5b7f32e9014924ca6a4aa01c741b711ac08d2a942782145b97fa7cfc0",
+    "evidence/application-build-test-inventory-transitive-facts-20261020.json": "sha256:9b74eab44acfa34fcc2a2629bb32a4c59d8a1f575775f3be1d77eda95be9d526"
+  },
+  "limitations": "This Compiler integration consumed Language-owned verified body facts for a real mncs-test application workload and preserved Stage-0 behavior. The frontend still runs for each changed source snapshot. This does not prove semantic reuse across a fresh process, SSA reuse for changed builds, Forge provider publication, digest_app execution, or full native Test conversion."
+}
