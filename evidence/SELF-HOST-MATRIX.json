@@ -21925,5 +21925,110 @@
     "evidence_identity": "ev_flow_ssa_language_fact_reuse_20261020",
     "evidence_sha256": "68a731473e188026eed645ea49325d839391016836d3fe1f95acde9e50623da1",
     "test_harness_sha256": "ec7f35d56a9e501c084bdd34e107f2ddc670ba30c928fc3ca2d51e70565155d1"
+  },
+  "current_campaign_test_inventory_reachable_body_fact_invalidation_20261020": {
+    "status": "passed_real_mncs_test_reachable_body_fact_invalidation",
+    "observed_at": "2026-10-20T15:50:25.064058+00:00",
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "tested_compiler_revision": "bbaa0075ead68ded464eef77d8f57ab4f0562594",
+    "harness": "tools/test_application_build_test_inventory.py",
+    "harness_sha256": "8c4cf0e31dbe4422d19214c9259b9abdba1f767b7b5736599be1a5018a865474",
+    "working_tree_patch_sha256": "17907adcb482fb9c74e9155d54e7de5d51f9a49feff22d0ab6c04e59c1e839fd",
+    "evidence_artifact": "evidence/application-build-test-inventory-fact-v3-reachable-body-edit-20261020.json",
+    "evidence_sha256": "5d69bf3da1092fbc3551cf35890aee5a850aa911dea2e33ee9c028016188fb07",
+    "language_fact_schema": "mncs.language-verification-fact/3",
+    "language_declaration_fact_schema": "mncs.language-declaration-verification-fact/1",
+    "language_locked_revision": "4b20e007dcdacc5ffe5464004dbdd9cfcf5a3ed5",
+    "language_source_resolver_checkout_head": "07a9fd347a22c837f581f6757b6650240ef28809",
+    "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "request_schema": "mncs.compiler.application-build-request/5",
+    "response_schema": "mncs.compiler.application-build/8",
+    "verification_work_schema": "mncs.compiler.application-build-verification-work/3",
+    "reachable_body_edit": {
+      "changed_subject": "mncs:0.2:body:mncs.test.assertions::from_assertion",
+      "recomputed_subjects": [
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:tests.self_suite::arithmetic",
+        "mncs:0.2:body:tests.self_suite::boolean",
+        "mncs:0.2:body:tests.self_suite::native_runner_policy",
+        "mncs:0.2:body:tests.self_suite::property_replay",
+        "mncs:0.2:body:tests.self_suite::snapshot_witness",
+        "mncs:0.2:body:tests.self_suite::task_lifecycle"
+      ],
+      "recomputation_reasons": {
+        "mncs:0.2:body:mncs.test.assertions::from_assertion": "subject_changed",
+        "mncs:0.2:body:tests.self_suite::arithmetic": "dependencies_changed",
+        "mncs:0.2:body:tests.self_suite::boolean": "dependencies_changed",
+        "mncs:0.2:body:tests.self_suite::native_runner_policy": "dependencies_changed",
+        "mncs:0.2:body:tests.self_suite::property_replay": "dependencies_changed",
+        "mncs:0.2:body:tests.self_suite::snapshot_witness": "dependencies_changed",
+        "mncs:0.2:body:tests.self_suite::task_lifecycle": "dependencies_changed"
+      },
+      "recomputed_body_facts": 7,
+      "reused_independent_body_facts": 34,
+      "recomputed_declaration_facts": 0,
+      "reused_declaration_facts": 41,
+      "frontend_invocations": 1,
+      "artifact_regenerated": true,
+      "artifact_before": "sha256:4c8f7ba4cbb44f452585902daa77511835131492261749c5fae5a37c41a7843b",
+      "artifact_after": "sha256:325ec1e9ed0a7054b3c3502b652f3aea395dc2d570c73afb1f42f7a6e59d9761",
+      "test_case_identities_stable": true
+    },
+    "comment_edit": {
+      "facts_reused": 41,
+      "facts_recomputed": 0,
+      "source_spans_refreshed": true,
+      "test_case_identities_stable": true,
+      "artifact": "reused"
+    },
+    "execution": {
+      "test_count": 7,
+      "call_count": 14,
+      "rounds": 2,
+      "repeat_results_match": true,
+      "stage0_equivalent": true,
+      "passes_per_round": 6,
+      "skips_per_round": 1
+    },
+    "measurements": {
+      "cold_build": {
+        "wall_seconds": 0.245031,
+        "cpu_seconds": 0.22,
+        "peak_rss_bytes": 54734848,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 5,
+        "peak_threads": 1,
+        "peak_child_processes": 1,
+        "request_sequence": 1
+      },
+      "comment_edit": {
+        "wall_seconds": 0.667072,
+        "cpu_seconds": 0.62,
+        "peak_rss_bytes": 54648832,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 4,
+        "peak_threads": 1,
+        "peak_child_processes": 0,
+        "request_sequence": 1
+      },
+      "reachable_body_edit": {
+        "wall_seconds": 0.833028,
+        "cpu_seconds": 0.79,
+        "peak_rss_bytes": 54304768,
+        "peak_cgroup_memory_bytes": null,
+        "peak_open_file_descriptors": 5,
+        "peak_threads": 1,
+        "peak_child_processes": 1,
+        "request_sequence": 1
+      },
+      "canonical_vm_batch_wall_seconds": 0.083419,
+      "canonical_vm_batch_peak_rss_kib": 22932,
+      "cgroup_memory_measurement_available": false
+    },
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "limitations": "This proves Language-owned semantic fact reuse and exact dependency invalidation for the selected real Test workload. It does not migrate the production Test runner or prove Forge routing, canonical Store publication, or compiler succession.",
+    "next_frontier": "Continue production native Test provider and retained-session work, including the Forge and Environment capability route; extend exact invalidation coverage to real imported interface, generic specialization, and effect/capability edits while advancing a compiler self-consumption workload."
   }
 }

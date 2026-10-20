@@ -1535,6 +1535,7 @@ def run_real_mncs_test_suite() -> dict:
             expected_module=module,
             response_schema="mncs.compiler.application-build/8",
         )
+        original_inventory = inventory
         cold_fact_work = require_language_fact_v3(
             built, "cold real mncs-test self-suite build"
         )
@@ -1627,6 +1628,96 @@ def run_real_mncs_test_suite() -> dict:
                 "real self-suite comment edit did not reuse all v3 facts and refresh current Test locations"
             )
 
+        # Change one shared imported Test semantic helper without changing its
+        # callable interface. Language must recheck the helper and the actual
+        # self-suite callers that depend on its implementation, while reusing
+        # every unrelated body and declaration fact.
+        body_modules = dict(module_sources)
+        assertions_source = body_modules["mncs.test.assertions"]
+        changed_body_anchor = "if assertion.passed {"
+        if assertions_source.count(changed_body_anchor) != 1:
+            raise AssertionError("shared Test assertion helper edit anchor changed")
+        body_modules["mncs.test.assertions"] = assertions_source.replace(
+            changed_body_anchor, "if assertion.passed == true {", 1
+        )
+        body_request = request(
+            source,
+            [],
+            root_source_id="mncs-test/tests/self_suite.mncs",
+            modules=body_modules,
+        )
+        body_request["schema_version"] = "mncs.compiler.application-build-request/5"
+        body_request["test_selection"] = {"kind": "all_source_cases"}
+        body_probe = app.Probe(
+            directory / "program-cache",
+            executable=PROBE,
+            application_cache_dir=directory / "application-cache",
+        )
+        try:
+            body_build, body_build_metrics = body_probe.send(
+                {"compile_application": body_request}, timeout=180.0
+            )
+        finally:
+            body_probe.close()
+        body_inventory = require_inventory(
+            body_build,
+            expected_names,
+            expected_module=module,
+            response_schema="mncs.compiler.application-build/8",
+        )
+        body_fact_work = require_language_fact_v3(
+            body_build, "reachable imported assertion-helper body edit"
+        )
+        changed_subject = "mncs:0.2:body:mncs.test.assertions::from_assertion"
+        expected_dependents = {
+            "mncs:0.2:body:tests.self_suite::arithmetic",
+            "mncs:0.2:body:tests.self_suite::boolean",
+            "mncs:0.2:body:tests.self_suite::task_lifecycle",
+            "mncs:0.2:body:tests.self_suite::property_replay",
+            "mncs:0.2:body:tests.self_suite::snapshot_witness",
+            "mncs:0.2:body:tests.self_suite::native_runner_policy",
+        }
+        recomputed = set(body_fact_work["recomputed_semantic_facts"])
+        reasons = {
+            row["subject"]: row["reason"]
+            for row in body_fact_work["semantic_fact_recomputation_reasons"]
+        }
+        expected_recomputed = {changed_subject} | expected_dependents
+        before_identities = {row["name"]: row["test_case_identity"]
+                             for row in inventory["tests"]}
+        body_tests = {row["name"]: row for row in body_inventory["tests"]}
+        if (
+            body_build.get("status") != "verified"
+            or body_build.get("cache", {}).get("status") != "miss"
+            or frontend_invocations(body_build) != 1
+            or body_build.get("cache", {}).get("publication") != "stored"
+            or body_fact_work.get("front_end_outcome") != "verified"
+            or recomputed != expected_recomputed
+            or reasons.get(changed_subject) != "subject_changed"
+            or any(reasons.get(subject) != "dependencies_changed"
+                   for subject in expected_dependents)
+            or body_fact_work.get("recomputed_declaration_facts")
+            or len(body_fact_work.get("reused_semantic_facts", []))
+            + len(recomputed) != cold_fact_work.get("produced_semantic_fact_count")
+            or body_build.get("artifact", {}).get("identity")
+            == built.get("artifact", {}).get("identity")
+            or any(body_tests[name].get("test_case_identity")
+                   != before_identities[name] for name in expected_names)
+        ):
+            raise AssertionError(
+                "shared assertion-helper edit did not invalidate the exact real Test dependency closure: "
+                + json.dumps({"recomputed": sorted(recomputed), "reasons": reasons}, sort_keys=True)
+            )
+
+        # Execute and compare the source cases from the new artifact after the
+        # reachable body edit. The same artifact and admitted VM process runs
+        # both rounds, while Stage-0 receives the same edited dependency source.
+        built = body_build
+        inventory = body_inventory
+        artifact = body_build.get("artifact", {}).get("value")
+        if not isinstance(artifact, dict):
+            raise AssertionError("reachable Test body edit omitted its regenerated VM artifact")
+
         repeat_count = 2
         oracle_calls = [{
             "schema_version": "0.1",
@@ -1639,7 +1730,7 @@ def run_real_mncs_test_suite() -> dict:
         try:
             oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
                 "root": source,
-                "modules": module_sources,
+                "modules": body_modules,
                 "calls": oracle_calls,
             }}, timeout=180.0)
         finally:
@@ -1702,7 +1793,7 @@ def run_real_mncs_test_suite() -> dict:
         selected_names = {"arithmetic", "skipped"}
         selected_identities = [
             row["test_case_identity"]
-            for row in inventory["tests"]
+            for row in original_inventory["tests"]
             if row["name"] in selected_names
         ]
         if len(selected_identities) != len(selected_names):
@@ -1751,7 +1842,7 @@ def run_real_mncs_test_suite() -> dict:
                 or {row.get("name") for row in selected_cases} != selected_names
                 or selected_root_pairs != expected_selected_roots
                 or any(row.get("status") != "verified" for row in selected_roots)
-                or selected_inventory != inventory
+                or selected_inventory != original_inventory
                 or not isinstance(selected_artifact, dict)):
             raise AssertionError(
                 "identity-selected self-suite build did not retain the full inventory and exact selected roots"
@@ -1927,6 +2018,44 @@ def run_real_mncs_test_suite() -> dict:
                 ),
                 "comment_build_process_metrics": comment_build_metrics,
                 "verification_work": comment_fact_work,
+                "reachable_body_edit": {
+                    "changed_module": "mncs.test.assertions",
+                    "changed_module_source_sha256": sha(
+                        body_modules["mncs.test.assertions"].encode("utf-8")
+                    ),
+                    "changed_subject": changed_subject,
+                    "source_edit": "if assertion.passed -> if assertion.passed == true",
+                    "recomputed_subjects": sorted(recomputed),
+                    "recomputation_reasons": reasons,
+                    "expected_dependents": sorted(expected_dependents),
+                    "reused_body_fact_count": len(body_fact_work["reused_semantic_facts"]),
+                    "recomputed_body_fact_count": len(recomputed),
+                    "recomputed_declaration_facts": body_fact_work[
+                        "recomputed_declaration_facts"
+                    ],
+                    "reused_declaration_fact_count": len(
+                        body_fact_work["reused_declaration_facts"]
+                    ),
+                    "frontend_invocations": frontend_invocations(body_build),
+                    "cache_status": body_build.get("cache", {}).get("status"),
+                    "artifact_identity_before_edit": comment_build.get(
+                        "artifact", {}
+                    ).get("identity"),
+                    "artifact_identity_after_edit": body_build.get(
+                        "artifact", {}
+                    ).get("identity"),
+                    "artifact_regenerated": (
+                        body_build.get("artifact", {}).get("identity")
+                        != comment_build.get("artifact", {}).get("identity")
+                    ),
+                    "test_case_identities_stable": all(
+                        body_tests[name].get("test_case_identity")
+                        == before_identities[name]
+                        for name in expected_names
+                    ),
+                    "build_process_metrics": body_build_metrics,
+                    "verification_work": body_fact_work,
+                },
             },
             "test_case_identities": {
                 row["name"]: row["test_case_identity"] for row in inventory["tests"]
@@ -1974,7 +2103,8 @@ def run_real_mncs_test_suite() -> dict:
                 "canonical_vm_batch_wall_seconds": round(selected_vm_wall, 6),
                 "canonical_vm_batch_peak_rss_kib": selected_vm_peak_rss,
             },
-            "language_verified_facts_reused": reused_count,
+            "language_verified_facts_reused": len(body_fact_work["reused_semantic_facts"]),
+            "language_verified_facts_reused_after_comment_edit": reused_count,
         }
 
 
@@ -2532,6 +2662,26 @@ def main() -> None:
                         "test_source_spans_refreshed"
                     ]
                 ),
+                "real_mncs_test_reachable_helper_edit_rechecks_exact_callers_and_repeats": (
+                    real_mncs_test_suite["language_fact_v3_reuse"][
+                        "reachable_body_edit"
+                    ]["recomputed_body_fact_count"] == 7
+                    and len(real_mncs_test_suite["language_fact_v3_reuse"][
+                        "reachable_body_edit"
+                    ]["recomputed_subjects"]) == 7
+                    and real_mncs_test_suite["language_fact_v3_reuse"][
+                        "reachable_body_edit"
+                    ]["reused_body_fact_count"] > 0
+                    and real_mncs_test_suite["language_fact_v3_reuse"][
+                        "reachable_body_edit"
+                    ]["recomputed_declaration_facts"] == []
+                    and real_mncs_test_suite["language_fact_v3_reuse"][
+                        "reachable_body_edit"
+                    ]["artifact_regenerated"]
+                    and real_mncs_test_suite["canonical_vm_batch_count"] == 14
+                    and real_mncs_test_suite["repeat_results_match"]
+                    and real_mncs_test_suite["stage0_equivalent"]
+                ),
                 "real_mncs_test_identity_selection_executes_only_requested_cases": (
                     real_mncs_test_suite["identity_selected_subset_batch"][
                         "source_test_count"
@@ -2604,6 +2754,9 @@ def main() -> None:
                 "real_self_suite_comment_edit": real_mncs_test_suite[
                     "language_fact_v3_reuse"
                 ]["comment_build_process_metrics"],
+                "real_self_suite_reachable_body_edit": real_mncs_test_suite[
+                    "language_fact_v3_reuse"
+                ]["reachable_body_edit"]["build_process_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -2615,6 +2768,9 @@ def main() -> None:
                 "real_self_suite_comment_edit": real_mncs_test_suite[
                     "language_fact_v3_reuse"
                 ]["verification_work"],
+                "real_self_suite_reachable_body_edit": real_mncs_test_suite[
+                    "language_fact_v3_reuse"
+                ]["reachable_body_edit"]["verification_work"],
             },
             "scope": (
                 "The Compiler returns the Language-owned source_module test inventory from the same "
@@ -2646,8 +2802,7 @@ def main() -> None:
                 "Test call. It publishes no result file; a fresh VM process executes the next Test "
                 "twice from the exact same artifact and matches Stage-0. This proves process "
                 "interruption recovery for this batch adapter; it does not prove durable Forge/Environment "
-                "session recovery. These focused compatibility cases do not measure Language fact reuse, "
-                "mncs-test consumer is unchanged. A second workload reads the real "
+                "session recovery. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
                 "revision. One application-build/8 all-source selection resolves all seven "
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "
@@ -2656,13 +2811,17 @@ def main() -> None:
                 "round matches the first, including six passes and the typed skip result. A comment-only "
                 "source shift in the real suite reuses every produced Language v3 body fact while refreshing "
                 "all current Test source spans and preserving semantic Test identities and the executable "
-                "artifact. This does not migrate the production runner or add Forge integration."
+                "artifact. A semantics-preserving edit to the imported assertions.from_assertion helper "
+                "rechecks exactly that body and its six real self-suite callers, reuses all unrelated "
+                "Language body facts and declaration facts, and regenerates the artifact. All 14 calls "
+                "on the new artifact match Stage-0 across two rounds. This does not migrate the "
+                "production runner or add Forge integration."
                 " The Environment provider adapter also publishes /7 after resolving "
                 "the Language-issued source Test identities. The additional cache policy check "
                 "built the same source under baseline, changed capability, and changed effect-assumption "
                 "requests; each variant received a distinct cache key and ran the frontend, while a "
                 "fresh process reused only the exact effect-assumption request. Language verified-fact "
-                "reuse is recorded by the real self-suite comment-edit workload above."
+                "reuse is recorded by both real self-suite comment and reachable-body edits above."
             ),
         }
         failed_boolean_checks = [
