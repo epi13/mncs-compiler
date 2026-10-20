@@ -19,7 +19,10 @@ import test_vm_native_application as app
 
 ROOT = app.ROOT
 CACHE_DIR = ROOT / '.build/native-app-readiness/gate-b-cache'
-EVIDENCE = ROOT / 'evidence/native-app-readiness-gate-b.json'
+EVIDENCE = ROOT / 'evidence' / (
+    f"native-app-readiness-gate-b-"
+    f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}-{os.getpid()}.json"
+)
 
 
 def clear_cache() -> None:

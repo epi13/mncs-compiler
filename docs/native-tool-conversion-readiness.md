@@ -17,11 +17,13 @@ limits are recorded in `evidence/post-reboot-recovery-20261014.json`.
 After recovery, Gate A's multi-module Stage-0/VM check and Gate B's incremental
 cache suite passed. The initial warm exact-artifact path measured 0.123 s versus
 0.472 s cold (3.84×). The current Gate B status and finer-grained executable
-closure reuse result are recorded below. The latest evidence files are
+closure reuse result are recorded below.
+The evidence identities captured at that post-reboot checkpoint were
 `evidence/native-app-readiness-gate-a.json` (SHA-256
 `95c9bb93efc579aa832ebba55c6e50c1570c7332b204baa97e70b4af57eb81dc`) and
 `evidence/native-app-readiness-gate-b.json` (SHA-256
-`0cb8a4e7a1ff4129d71c59321bdf23e069dba6d6af6978b715ff33549a766ce4`).
+`0cb8a4e7a1ff4129d71c59321bdf23e069dba6d6af6978b715ff33549a766ce4`). Later
+incremental-build revalidations are recorded below.
 
 The Gate B workload was rerun after the integration work. Its exact-source
 fresh-process build measured 0.475 s cold and 0.122 s warm (3.88× for this
@@ -521,26 +523,22 @@ A second application, `mncs.test.digest::digest_app`, exercises typed applicatio
 
 The original effectful-app proof used artifact `sha256:95cf2d3e3361b7089336c82e0cd4870dfe74775547831eed90879555d494f919` and evidence SHA-256 `ef625aca37e674d493dc64f6f45fe13c380d9770cc631c54eca34936be72fa89`; it is retained as the historical baseline. The projected artifact and current retained-session batch proof are recorded in the follow-up above.
 
-Gate B remains partial. The latest readiness-suite evidence
-`evidence/native-app-readiness-gate-b.json` (SHA-256
-`0cb8a4e7a1ff4129d71c59321bdf23e069dba6d6af6978b715ff33549a766ce4`)
-records a 0.528 s cold build and 0.125 s warm fresh-process hit (4.24× for
-this workload). A comment-only imported-module edit reused the artifact after
-fresh source checking in 0.222 s. A semantic edit to uncalled
-`mncs.test.generative::shrink` changed the full semantic identity but preserved
-the selected application closure; the verified artifact was reused after
-closure verification in 0.220 s, and canonical VM output matched the independent
-Stage-0 oracle. Changing that uncalled function's exported signature preserved
-the selected closure and entry interface but changed the whole-program artifact
-interface, so the build correctly missed and regenerated the artifact in
-0.442 s. A changed reachable function, exported nominal record, and added
-imported call also missed and rebuilt, with canonical VM results matching the
-oracle. Invalid source kept its stable `MNE162` diagnostic and was not
-published. A SIGKILL at 25 ms left no partial cache entry; retry and fresh-
-process reuse passed. Probe peak RSS was about 57 MiB; the VM peak was about
-27 MiB. cgroup memory counters were unavailable. Gate B is still partial
-because every changed snapshot receives a fresh whole-program semantic check;
-Language-owned verified-fact reuse and selective recomputation remain open.
+Gate B remains partial. The latest readiness-suite revalidation is
+`evidence/native-app-readiness-gate-b-20261020T012132.473487Z-2422075.json`
+(SHA-256
+`f35aa4f45af4d001e34c8666949a68fa8b9f3cf1f43cff1a5909aacd1e21fd09`) at
+Compiler `428b0d12ed0d4ec7bbf69bb57c9b6dd533d2373d`. The cold build measured
+0.672 s / 0.64 CPU s / 39.4 MiB peak RSS. A fresh-process warm hit measured
+0.108 s / 0.09 CPU s / 11.3 MiB (6.21× for this workload). A root comment
+edit took 0.819 s and reused the executable artifact after one full frontend
+run; an uncalled function edit took 0.411 s with the same full-frontend and
+artifact-hit behavior. Reachable dependency, exported nominal interface, and
+generic specialization edits rebuilt, and their canonical VM results matched
+Stage-0. Invalid source returned fresh diagnostics and published no successful
+artifact. Interrupted compilation published no partial cache entry; retry and
+fresh-process reuse passed. cgroup memory counters were unavailable. The
+changed snapshots reused zero Language verification facts, so Gate B remains
+partial while Language-owned fact reuse is unimplemented.
 
 The `/4` producer exposes source snapshot and dependency graph identities,
 selected callable interface, artifact provenance, build assumptions, structured

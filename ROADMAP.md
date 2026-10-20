@@ -80,17 +80,20 @@ specializations, typed failures, and explicit host effects.
   compilation. The closure fingerprint, artifact hash and size comparison are
   retained in `evidence/native-app-readiness-test-digest-app.json`. The
   self-consumption matrix is unchanged; Stage-1 and Stage-2 remain unproven.
-- **Gate B — partial.** Current readiness-suite evidence
-  `evidence/native-app-readiness-gate-b.json` has SHA-256
-  `65106578dc52ac9ea89412cde06b7a0578e989d9101e2c4c79d0e67e9f098f03` and
-  pins the same Compiler and probe identities. Cold build measured 0.461 s;
-  an unchanged fresh-process request took 0.120 s after 0.120 s process
-  startup. A source-only dependency edit reused the verified artifact after
-  a fresh semantic check in 0.188 s. A changed root function (0.366 s) and a
-  semantic dependency change (0.379 s) reran source checking, SSA verification,
-  and artifact generation. Invalid source was not published; interruption
-  recovery and unreferenced-module closure reuse passed. cgroup memory was
-  unavailable. The real digest application repeated the six required cases:
+- **Gate B — partial.** The current readiness-suite revalidation is
+  `evidence/native-app-readiness-gate-b-20261020T012132.473487Z-2422075.json`
+  (SHA-256
+  `f35aa4f45af4d001e34c8666949a68fa8b9f3cf1f43cff1a5909aacd1e21fd09`) at
+  Compiler `428b0d12ed0d4ec7bbf69bb57c9b6dd533d2373d`. Cold build measured
+  0.672 s / 0.64 CPU s / 39.4 MiB peak RSS; the fresh-process warm hit took
+  0.108 s / 0.09 CPU s / 11.3 MiB (6.21× for this workload). A root comment
+  edit took 0.819 s and reused the artifact after one full frontend run. An
+  uncalled function edit took 0.411 s with the same full-frontend/artifact-hit
+  behavior. Reachable dependency, exported nominal interface, and generic
+  specialization edits each rebuilt and matched the Stage-0 VM oracle. Invalid
+  source returned fresh diagnostics, and interrupted compilation published
+  no partial cache entry; retry and fresh-process reuse passed. cgroup memory
+  was unavailable. The real digest application repeated the six required cases:
   evidence `evidence/native-app-readiness-test-digest-incremental.json` has
   SHA-256 `bd85ae27d21b1ae6c1b99ac934d0a61273f52d04b8198727ada931744a59a161`.
   Cold/warm measured 0.633/0.246 s (2.57×); a changed root function and a
