@@ -97,8 +97,8 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("application response omitted its exact cache identity")
     path = cache_dir / "application-builds" / f"{key.removeprefix('sha256:')}.json"
     entry = json.loads(path.read_text(encoding="utf-8"))
-    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/5":
-        raise AssertionError("V5 application cache omitted Language declaration facts")
+    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/6":
+        raise AssertionError("V6 application cache omitted Language verification facts")
     facts = entry.get("declaration_verification_facts")
     if not isinstance(facts, list) or not all(
             isinstance(row, dict) and row.get("schema_version") == FACT_SCHEMA
@@ -106,6 +106,11 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("cache entry contains malformed Language declaration facts")
     if not entry.get("declaration_verification_facts_sha256"):
         raise AssertionError("cache entry does not bind declaration-fact bytes")
+    source_parse_cache = entry.get("source_parse_cache")
+    if (not isinstance(source_parse_cache, dict)
+            or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/1"
+            or not entry.get("source_parse_cache_sha256")):
+        raise AssertionError("cache entry does not bind Language source parse results")
     return entry
 
 
@@ -368,7 +373,7 @@ def main() -> None:
                 "root_module": app.APP_MODULE,
                 "callable_roots": [{"module": app.APP_MODULE, "function": "run"}],
                 "selected_tests": "all_source_cases",
-                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/5",
+                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/6",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
             "execution_checks": execution_checks,
