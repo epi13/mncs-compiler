@@ -72,6 +72,66 @@ PAGE_BOUND = 1024
 STRIDE_DEFAULT = 1024
 
 
+def verification_provenance():
+    """Bind a Project test result to the exact Compiler and Stage-0 inputs."""
+    git_root = subprocess.check_output(
+        ["git", "rev-parse", "--show-toplevel"], cwd=ROOT,
+        text=True, stderr=subprocess.DEVNULL,
+    ).strip()
+    compiler_revision = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT,
+        text=True, stderr=subprocess.DEVNULL,
+    ).strip()
+    compiler_branch = subprocess.check_output(
+        ["git", "branch", "--show-current"], cwd=ROOT,
+        text=True, stderr=subprocess.DEVNULL,
+    ).strip()
+
+    source_root = ROOT / "src" / "compiler"
+    source_files = sorted(
+        source_root.glob("*.mncs"), key=lambda candidate: candidate.name.encode()
+    )
+    source_hashes = {
+        candidate.relative_to(ROOT).as_posix():
+            hashlib.sha256(candidate.read_bytes()).hexdigest()
+        for candidate in source_files
+    }
+    lock_path = ROOT / "mncs-language.lock.json"
+    lock_bytes = lock_path.read_bytes()
+    lock = json.loads(lock_bytes)
+    probe_path = Path(os.environ.get(
+        "MNCS_PROBE_BIN",
+        BOOTSTRAP_TARGET / "release" / "mncs-compiler-stage0-probe",
+    )).expanduser()
+    if not probe_path.is_absolute():
+        probe_path = ROOT / probe_path
+    probe_hash = (
+        hashlib.sha256(probe_path.read_bytes()).hexdigest()
+        if probe_path.is_file() else None
+    )
+
+    return {
+        "schema_version": "mncs.compiler.project-verification-provenance/1",
+        "compiler": {
+            "git_root": git_root,
+            "revision": compiler_revision,
+            "branch": compiler_branch,
+        },
+        "compiler_sources": {
+            "root": "src/compiler",
+            "count": len(source_hashes),
+            "sha256": source_hashes,
+        },
+        "stage0": {
+            "locked_revision": lock["revision"],
+            "lock_sha256": hashlib.sha256(lock_bytes).hexdigest(),
+            "probe_path": str(probe_path),
+            "probe_sha256": probe_hash,
+        },
+        "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+    }
+
+
 def integer(n):
     return {"integer": {"type": {"bits": 64, "signed": False}, "value": n}}
 
@@ -2854,6 +2914,7 @@ if __name__ == "__main__":
         except ValueError as error:
             print(json.dumps({"route_error": str(error)}, indent=2))
             sys.exit(2)
+        route_case["verification_provenance"] = verification_provenance()
         print(json.dumps(route_case, indent=2))
         sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] in MODES:
@@ -2865,12 +2926,14 @@ if __name__ == "__main__":
         mode_case["stage0_reference_mode"] = os.environ.get("MNCS_PROBE_REFERENCE_MODE", "locked")
         mode_case["source_profile"] = "0.18"
         mode_case["elapsed_seconds"] = round(time.monotonic() - started, 3)
+        mode_case["verification_provenance"] = verification_provenance()
         print(json.dumps(mode_case, indent=2))
         sys.exit(0)
     started = time.monotonic()
     result = run()
     report = {
         "schema_version": 1,
+        "verification_provenance": verification_provenance(),
         "stage0_revision": json.loads(Path("mncs-language.lock.json").read_text())["revision"],
         "stage0_reference_mode": os.environ.get("MNCS_PROBE_REFERENCE_MODE", "locked"),
         "source_profile": "0.18",
