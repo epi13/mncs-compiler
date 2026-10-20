@@ -1433,6 +1433,282 @@ test passing_case() -> (result: TestResult) {
         }
 
 
+def run_interrupted_vm_retained_session(
+    artifact: dict,
+    inventory: dict,
+    oracle_executions: list[dict],
+) -> dict:
+    """Restart a killed retained VM and replay only the unreturned Test call."""
+    module = inventory.get("module")
+    tests = inventory.get("tests", [])
+    artifact_identity = artifact.get("artifact_id")
+    if (not isinstance(module, str) or not isinstance(tests, list)
+            or not isinstance(artifact_identity, str) or len(oracle_executions) != 3):
+        raise AssertionError("retained-session recovery requires a verified inventory, artifact, and oracle")
+    by_name = {row.get("name"): row for row in tests if isinstance(row, dict)}
+    if not {"long_case", "recover_case"} <= set(by_name):
+        raise AssertionError("retained-session recovery inventory omitted its long or recovery Test")
+    artifact_callables = {
+        (row.get("module"), row.get("name")): row
+        for row in artifact.get("callables", []) if isinstance(row, dict)
+    }
+
+    def call_frame(test_name: str, call_id: str) -> dict:
+        test = by_name[test_name]
+        callable_row = artifact_callables.get((module, test_name))
+        binding = callable_row.get("test_binding") if callable_row else None
+        required = {
+            "callable_identity", "declaration_identity", "test_case_identity", "signature_identity"
+        }
+        if (not isinstance(binding, dict) or not required <= set(binding)
+                or binding.get("callable_identity") != test.get("function_identity")
+                or binding.get("declaration_identity") != test.get("declaration_identity")
+                or binding.get("test_case_identity") != test.get("test_case_identity")):
+            raise AssertionError(f"retained-session recovery binding drifted for {test_name}")
+        type_arguments = inventory_test_type_arguments(test, None)
+        return {
+            "schema_version": "mncs.vm.session/1",
+            "id": call_id,
+            "request": {
+                "schema_version": "0.1",
+                "target": {"module": module, "function": test_name},
+                "arguments": inventory_test_arguments(test, None, type_arguments),
+                "type_arguments": type_arguments,
+                "step_budget": 8_000_000,
+            },
+            "callable_reference": {
+                "artifact_identity": artifact_identity,
+                "callable_identity": binding["callable_identity"],
+                "declaration_identity": binding["declaration_identity"],
+                "test_case_identity": binding["test_case_identity"],
+                "signature_identity": binding["signature_identity"],
+            },
+        }
+
+    def read_response(
+        process,
+        stderr_file,
+        label: str,
+        timeout_seconds: float = 10.0,
+        samples: list[dict] | None = None,
+    ) -> dict:
+        deadline = time.monotonic() + timeout_seconds
+        while time.monotonic() < deadline:
+            if process.stdout is None:
+                raise AssertionError("retained recovery VM stdout was unavailable")
+            ready, _, _ = select.select(
+                [process.stdout], [], [], min(0.05, max(0.0, deadline - time.monotonic()))
+            )
+            if samples is not None:
+                samples.append(app.process_sample(process.pid))
+            if ready:
+                line = process.stdout.readline()
+                if line:
+                    try:
+                        value = json.loads(line)
+                    except json.JSONDecodeError as error:
+                        raise AssertionError(f"retained recovery VM returned invalid JSON for {label}") from error
+                    if isinstance(value, dict):
+                        return value
+                    raise AssertionError(f"retained recovery VM returned a non-object for {label}")
+            if process.poll() is not None:
+                break
+        stderr_file.seek(0)
+        raise AssertionError(
+            f"retained recovery VM ended or timed out while waiting for {label}; "
+            f"rc={process.poll()} stderr={stderr_file.read()[-2000:]}"
+        )
+
+    def start_process(artifact_path: Path):
+        stderr_file = tempfile.TemporaryFile(mode="w+t")
+        process = subprocess.Popen(
+            [str(app.VM_BIN), "serve", "--artifact", str(artifact_path)],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=stderr_file,
+            text=True,
+            bufsize=1,
+            start_new_session=True,
+        )
+        return process, stderr_file
+
+    def send_call(
+        process, call: dict, stderr_file, label: str, samples: list[dict] | None = None
+    ) -> dict:
+        if process.stdin is None:
+            raise AssertionError("retained recovery VM stdin was unavailable")
+        process.stdin.write(json.dumps(call, separators=(",", ":")) + "\n")
+        process.stdin.flush()
+        response = read_response(process, stderr_file, label, samples=samples)
+        execution = response.get("result", {}).get("execution", {})
+        if (response.get("id") != call["id"]
+                or response.get("schema_version") != "mncs.vm.session/1"
+                or response.get("ok") is not True
+                or execution.get("status") != "returned"
+                or execution.get("artifact_identity") != artifact_identity
+                or execution.get("invoked_callable") != call["callable_reference"]):
+            raise AssertionError(f"retained recovery VM returned an invalid Test receipt: {response}")
+        return response
+
+    def typed_result(response: dict) -> dict:
+        values = response.get("result", {}).get("record", {}).get("returned", [])
+        if len(values) != 1:
+            raise AssertionError("retained recovery TestResult returned the wrong arity")
+        return app.decode_wire(app.vm_to_wire(values[0]))
+
+    expected_long = app.decode_wire(oracle_executions[0].get("returned", [])[0])
+    expected_recover = app.decode_wire(oracle_executions[1].get("returned", [])[0])
+    artifact_path = Path(tempfile.mkdtemp(prefix="mncs-test-retained-session-recovery-")) / "application.vm.json"
+    artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8")
+    first_process = restarted_process = None
+    first_stderr = restarted_stderr = None
+    first_samples: list[dict] = []
+    restart_samples: list[dict] = []
+    try:
+        first_started = time.monotonic()
+        first_process, first_stderr = start_process(artifact_path)
+        first_samples.append(app.process_sample(first_process.pid))
+        first_cpu = first_samples[0].get("cpu_seconds", 0.0)
+        ready = read_response(first_process, first_stderr, "initial readiness", samples=first_samples)
+        if (ready.get("schema_version") != "mncs.vm.session/1"
+                or ready.get("status") != "ready"
+                or ready.get("artifact_id") != artifact_identity):
+            raise AssertionError(f"retained recovery VM admitted the wrong artifact: {ready}")
+
+        completed_call = call_frame("recover_case", "completed-before-interruption")
+        completed_response = send_call(
+            first_process, completed_call, first_stderr,
+            "pre-interruption completed call", samples=first_samples,
+        )
+        completed_result = typed_result(completed_response)
+        if completed_result != expected_recover:
+            raise AssertionError("pre-interruption retained TestResult differed from Stage-0")
+        first_pid = first_process.pid
+
+        interrupted_call = call_frame("long_case", "interrupted-long-case")
+        if first_process.stdin is None or first_process.stdout is None:
+            raise AssertionError("retained recovery VM pipes were unavailable")
+        cpu_before_call = app.process_sample(first_process.pid)
+        first_samples.append(cpu_before_call)
+        first_process.stdin.write(json.dumps(interrupted_call, separators=(",", ":")) + "\n")
+        first_process.stdin.flush()
+        time.sleep(0.02)
+        active_before_signal = first_process.poll() is None
+        response_ready_before_signal, _, _ = select.select([first_process.stdout], [], [], 0)
+        cpu_during_call = app.process_sample(first_process.pid)
+        first_samples.append(cpu_during_call)
+        call_cpu_advanced = cpu_during_call.get("cpu_seconds", 0.0) > cpu_before_call.get(
+            "cpu_seconds", 0.0
+        )
+        if not active_before_signal or response_ready_before_signal:
+            raise AssertionError("retained VM Test completed before it could be interrupted")
+        if not call_cpu_advanced:
+            raise AssertionError("retained VM call showed no CPU progress before the interruption")
+        try:
+            os.killpg(first_process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        interrupted_returncode = first_process.wait(timeout=5.0)
+        interrupted_output = first_process.stdout.read()
+        if interrupted_output:
+            raise AssertionError("interrupted retained Test published a response before termination")
+        first_samples.append(app.process_sample(first_process.pid))
+        first_wall = time.monotonic() - first_started
+        first_metrics = app.summarize_samples(first_samples, first_wall, first_cpu)
+        if first_process.stdin is not None:
+            first_process.stdin.close()
+        first_stderr.close()
+        first_stderr = None
+        first_process.stdout.close()
+        first_process = None
+
+        restart_started = time.monotonic()
+        restarted_process, restarted_stderr = start_process(artifact_path)
+        restarted_pid = restarted_process.pid
+        restart_samples.append(app.process_sample(restarted_process.pid))
+        restart_cpu = restart_samples[0].get("cpu_seconds", 0.0)
+        restarted_ready = read_response(
+            restarted_process, restarted_stderr, "restart readiness", samples=restart_samples
+        )
+        if (restarted_ready.get("schema_version") != "mncs.vm.session/1"
+                or restarted_ready.get("status") != "ready"
+                or restarted_ready.get("artifact_id") != artifact_identity):
+            raise AssertionError("restarted retained session changed the admitted artifact")
+        replayed_response = send_call(
+            restarted_process, interrupted_call, restarted_stderr,
+            "replayed interrupted Test", samples=restart_samples,
+        )
+        replayed_result = typed_result(replayed_response)
+        if replayed_result != expected_long:
+            raise AssertionError("replayed retained TestResult differed from Stage-0")
+        recovered_call = call_frame("recover_case", "recovered-after-interruption")
+        recovered_response = send_call(
+            restarted_process, recovered_call, restarted_stderr,
+            "post-restart later Test", samples=restart_samples,
+        )
+        recovered_result = typed_result(recovered_response)
+        if recovered_result != expected_recover or recovered_result != completed_result:
+            raise AssertionError("later retained TestResult changed across the process restart")
+        if restarted_process.stdin is None:
+            raise AssertionError("restarted retained VM stdin was unavailable")
+        restarted_process.stdin.close()
+        if restarted_process.wait(timeout=5.0) != 0:
+            restarted_stderr.seek(0)
+            raise AssertionError(f"restarted retained VM did not shut down cleanly: {restarted_stderr.read()[-2000:]}")
+        restart_samples.append(app.process_sample(restarted_process.pid))
+        restart_wall = time.monotonic() - restart_started
+        restart_metrics = app.summarize_samples(restart_samples, restart_wall, restart_cpu)
+        restarted_stderr.close()
+        restarted_stderr = None
+        restarted_process.stdout.close()
+        restarted_process = None
+        same_artifact_identity = restarted_ready["artifact_id"] == artifact_identity
+        return {
+            "session_schema": "mncs.vm.session/1",
+            "signal": "SIGKILL",
+            "process_was_active_before_signal": active_before_signal,
+            "call_cpu_advanced_before_signal": call_cpu_advanced,
+            "response_published_for_interrupted_call": bool(interrupted_output),
+            "interrupted_returncode": interrupted_returncode,
+            "pre_interruption_completed_call_returned": True,
+            "replayed_call_id": replayed_response["id"],
+            "post_restart_recovery_call_id": recovered_response["id"],
+            "process_restarted": restarted_pid != first_pid,
+            "original_artifact_identity": artifact_identity,
+            "restarted_artifact_identity": restarted_ready["artifact_id"],
+            "same_artifact_identity": same_artifact_identity,
+            "replayed_interrupted_result_matches_stage0": True,
+            "post_restart_result_matches_stage0": True,
+            "pre_and_post_restart_result_match": True,
+            "recovered_results": [replayed_result, recovered_result],
+            "interrupted_process_metrics": first_metrics,
+            "restarted_process_metrics": restart_metrics,
+            "interrupted_process_wall_seconds": round(first_wall, 6),
+            "restart_recovery_wall_seconds": round(restart_wall, 6),
+        }
+    finally:
+        for process in (first_process, restarted_process):
+            if process is not None:
+                if process.poll() is None:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait(timeout=5.0)
+                if process.stdin is not None:
+                    process.stdin.close()
+                if process.stdout is not None:
+                    process.stdout.close()
+        for handle in (first_stderr, restarted_stderr):
+            if handle is not None:
+                handle.close()
+        try:
+            artifact_path.unlink()
+            artifact_path.parent.rmdir()
+        except OSError:
+            pass
+
+
 def run_interrupted_vm_recovery_batch() -> dict:
     """Recover valid Test calls after killing an active VM batch process."""
     module = "tests.interrupted_vm_recovery"
@@ -1442,13 +1718,13 @@ use mncs.test.assertions;
 
 fn selected_entry() -> (result: u64) { return 0; }
 test long_case() -> (result: TestResult) {
-    iterate outer up_to 1024 carrying total: u64 = 0 {
-        iterate inner up_to 1024 carrying count: u64 = 0 {
+    iterate outer up_to 512 carrying total: u64 = 0 {
+        iterate inner up_to 512 carrying count: u64 = 0 {
             next count = count + 1;
         }
         next total = total + count;
     }
-    return from_assertion(equals_i64(1048576, total as i64, 9401));
+    return from_assertion(equals_i64(262144, total as i64, 9401));
 }
 test recover_case() -> (result: TestResult) {
     return from_assertion(equals_i64(23, 23, 9402));
@@ -1510,7 +1786,7 @@ test recover_case() -> (result: TestResult) {
                 "target": {"module": module, "function": "long_case"},
                 "arguments": [],
                 "type_arguments": [],
-                "step_budget": 100_000_000,
+                "step_budget": 8_000_000,
             },
         }]
         calls_path.write_text(json.dumps(interrupted_call, sort_keys=True) + "\n", encoding="utf-8")
@@ -1562,22 +1838,35 @@ test recover_case() -> (result: TestResult) {
             },
         } for index in range(2)]
         oracle_probe = app.Probe(directory / "oracle-cache", executable=PROBE)
+        oracle_calls = [
+            {
+                "schema_version": "0.1",
+                "target": {"module": module, "function": "long_case"},
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 8_000_000,
+            },
+            *[{
+                "schema_version": "0.1",
+                "target": {"module": module, "function": "recover_case"},
+                "arguments": [],
+                "type_arguments": [],
+                "step_budget": 100_000,
+            } for _ in range(2)],
+        ]
         try:
             oracle, oracle_metrics = oracle_probe.send({"project_oracle": {
                 "root": source,
                 "modules": modules,
-                "calls": [{
-                    "schema_version": "0.1",
-                    "target": {"module": module, "function": "recover_case"},
-                    "arguments": [],
-                    "type_arguments": [],
-                    "step_budget": 100_000,
-                } for _ in range(2)],
+                "calls": oracle_calls,
             }}, timeout=180.0)
         finally:
             oracle_probe.close()
-        if (not oracle.get("valid") or len(oracle.get("executions", [])) != 2):
-            raise AssertionError("Stage-0 did not complete both post-interruption recovery calls")
+        if (not oracle.get("valid") or len(oracle.get("executions", [])) != len(oracle_calls)):
+            raise AssertionError("Stage-0 did not complete the interrupted and post-interruption Test calls")
+        retained_session_recovery = run_interrupted_vm_retained_session(
+            artifact, inventory, oracle["executions"]
+        )
 
         recovery_calls_path = directory / "recovery.calls.json"
         recovery_output_path = directory / "recovery.results.json"
@@ -1612,7 +1901,7 @@ test recover_case() -> (result: TestResult) {
 
         observed = []
         for actual_row, expected_row, request_value in zip(
-            results, oracle["executions"], recovery_calls
+            results, oracle["executions"][1:], recovery_calls
         ):
             if (actual_row.get("id") != request_value["id"]
                     or actual_row.get("outcome") != {"kind": "completed"}
@@ -1653,6 +1942,7 @@ test recover_case() -> (result: TestResult) {
             "recovery_results_match": True,
             "recovery_results_deterministic": True,
             "stage0_equivalent": True,
+            "retained_session_recovery": retained_session_recovery,
             "recovered_test_result": observed[0],
             "build_process_metrics": build_metrics,
             "stage0_oracle_metrics": oracle_metrics,
@@ -2963,6 +3253,43 @@ def main() -> None:
                     and interrupted_vm_recovery_batch["recovery_results_deterministic"]
                     and interrupted_vm_recovery_batch["stage0_equivalent"]
                 ),
+                "interrupted_retained_vm_session_restarts_and_replays_unreturned_call": (
+                    interrupted_vm_recovery_batch["retained_session_recovery"]["signal"]
+                    == "SIGKILL"
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "process_was_active_before_signal"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "call_cpu_advanced_before_signal"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "interrupted_returncode"
+                    ] == -signal.SIGKILL
+                    and not interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "response_published_for_interrupted_call"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "pre_interruption_completed_call_returned"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "process_restarted"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "same_artifact_identity"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "replayed_call_id"
+                    ] == "interrupted-long-case"
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "replayed_interrupted_result_matches_stage0"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "post_restart_result_matches_stage0"
+                    ]
+                    and interrupted_vm_recovery_batch["retained_session_recovery"][
+                        "pre_and_post_restart_result_match"
+                    ]
+                ),
                 "real_mncs_test_self_suite_runs_from_compiler_inventory": (
                     real_mncs_test_suite["frontend_invocations"] == 1
                     and real_mncs_test_suite["canonical_vm_batch_count"] == 14
@@ -3098,6 +3425,12 @@ def main() -> None:
                 ]["process_metrics"],
                 "interrupted_vm_recovery_build": interrupted_vm_recovery_batch["build_process_metrics"],
                 "interrupted_vm_recovery_oracle": interrupted_vm_recovery_batch["stage0_oracle_metrics"],
+                "interrupted_vm_retained_session_process": interrupted_vm_recovery_batch[
+                    "retained_session_recovery"
+                ]["interrupted_process_metrics"],
+                "interrupted_vm_retained_session_restart": interrupted_vm_recovery_batch[
+                    "retained_session_recovery"
+                ]["restarted_process_metrics"],
                 "real_self_suite_identity_selected_build": real_mncs_test_suite[
                     "identity_selected_subset_batch"
                 ]["build_process_metrics"],
@@ -3157,9 +3490,13 @@ def main() -> None:
                 "and match Stage-0, and the typed failure does not stop later session calls. A "
                 "live canonical VM process is then killed during a bounded inventory "
                 "Test call. It publishes no result file; a fresh VM process executes the next Test "
-                "twice from the exact same artifact and matches Stage-0. This proves process "
-                "interruption recovery for this batch adapter; it does not prove durable Forge/Environment "
-                "session recovery. A second workload reads the real "
+                "twice from the exact same artifact and matches Stage-0. A retained mncs.vm.session/1 "
+                "serve process returns one TestResult before interruption, publishes no response for "
+                "an in-flight call when killed, and after restart replays that call by its same ID, "
+                "then completes a later call from the same artifact. Recovered typed results match "
+                "Stage-0 and the earlier result. This proves local process restart and caller-managed "
+                "replay on the same artifact; Forge/Environment durable session state and exactly-once "
+                "execution are outside this proof. A second workload reads the real "
                 "mncs-test self-suite sources and the task module at the Compiler-pinned Language "
                 "revision. One application-build/8 all-source selection resolves all seven "
                 "compiler-inventoried TestResult callables from the Language inventory and emits a "
