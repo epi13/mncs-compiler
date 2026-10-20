@@ -44,6 +44,7 @@ fn check_ascii(pages: [[byte; up_to 8]; up_to 2], stride: u64, total: u64) -> (r
 }
 """
 CHANGED_FUNCTION = "mncs:0.2:body:mncs.compiler.source.v1::utf8_first_continuation_valid"
+CHANGED_INTERFACE_FUNCTION = "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global"
 REUSED_EXECUTION_PATH = {
     "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
     "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
@@ -200,6 +201,21 @@ def source_edit(modules: dict[str, str]) -> tuple[dict[str, str], dict[str, str]
     return comment, edited
 
 
+def interface_edit(modules: dict[str, str]) -> dict[str, str]:
+    """Rename one imported API parameter while preserving positional behavior."""
+    changed = dict(modules)
+    source = changed["mncs.compiler.source.v1"]
+    start = source.index("fn byte_at_global<")
+    end = source.index("\n}\n", start) + 2
+    function = source[start:end]
+    if function.count("total") != 2 or "total: u64" not in function:
+        raise AssertionError("Compiler source interface edit anchor changed")
+    changed["mncs.compiler.source.v1"] = (
+        source[:start] + function.replace("total", "source_length") + source[end:]
+    )
+    return changed
+
+
 def oracle(modules: dict[str, str], cache: Path, workload: list[dict]) -> list[list[dict]]:
     probe = app.Probe(cache_dir=cache / "probe-cache",
                       application_cache_dir=cache / "application-cache")
@@ -313,6 +329,55 @@ def main() -> dict:
                 != edited_build.get("artifact", {}).get("identity")):
             raise AssertionError("comment or unreachable-body edit changed the executable closure")
 
+        # Keep a separate cold fact set so the interface delta is compared to
+        # the exact unedited three-module snapshot. The renamed input label is
+        # part of the imported callable interface; all callsites remain
+        # positional and the application semantics remain unchanged.
+        interface_modules = interface_edit(modules)
+        interface_cache = cache / "interface-cache"
+        interface_baseline, interface_baseline_metrics = compile_fresh(
+            request(modules), interface_cache, "interface-invalidation baseline")
+        interface_baseline_work = interface_baseline.get("cache", {}).get(
+            "verification_work", {})
+        if interface_baseline_work.get("produced_semantic_fact_count") != 103:
+            raise AssertionError("interface baseline did not retain all 103 Language facts")
+        interface_build, interface_metrics = compile_fresh(
+            request(interface_modules), interface_cache, "imported interface edit")
+        interface_work = verification_work(interface_build, "imported interface edit")
+        interface_recomputed = set(interface_work["recomputed_semantic_facts"])
+        interface_reused = set(interface_work["reused_semantic_facts"])
+        reasons = interface_work.get("semantic_fact_recomputation_reasons")
+        if not isinstance(reasons, list):
+            raise AssertionError("interface edit omitted Language fact invalidation reasons")
+        reason_by_subject = {
+            row.get("subject"): row.get("reason")
+            for row in reasons if isinstance(row, dict)
+        }
+        if set(reason_by_subject) != interface_recomputed:
+            raise AssertionError("Language omitted or misattributed a recomputation reason")
+        expected_dependents = {
+            "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global",
+            "mncs:0.2:body:mncs.compiler.lexer.v1::keyword_global",
+            "mncs:0.2:body:mncs.compiler.segment.v1::byte_at_global",
+        }
+        if reason_by_subject.get(CHANGED_INTERFACE_FUNCTION) != "subject_changed":
+            raise AssertionError("changed exported function body was not freshly verified")
+        if any(reason_by_subject.get(subject) != "dependencies_changed"
+               for subject in expected_dependents):
+            raise AssertionError("imported interface change did not invalidate its direct consumers: "
+                                 + json.dumps(reason_by_subject, indent=2, sort_keys=True)[:6000])
+        if not expected_dependents.issubset(interface_recomputed):
+            raise AssertionError("imported interface consumers were not all reverified")
+        independently_reused = {
+            "mncs:0.2:body:mncs.compiler.source.v1::span_valid_global",
+            "mncs:0.2:body:mncs.compiler.segment.v1::span_valid_global",
+            f"mncs:0.2:body:{ROOT_MODULE}::check_span",
+            f"mncs:0.2:body:{ROOT_MODULE}::check_ascii",
+        }
+        if (not independently_reused.issubset(interface_reused)
+                or len(interface_recomputed) >= interface_baseline_work["produced_semantic_fact_count"]):
+            raise AssertionError("interface edit failed to preserve independent verified facts")
+
         expected = oracle(edited_modules, cache, workload)
         with tempfile.TemporaryDirectory(prefix="mncs-compiler-full-module-vm-") as vm_name:
             vm_values, vm_metrics = execute_vm(
@@ -320,6 +385,13 @@ def main() -> dict:
         if vm_values != expected:
             raise AssertionError("canonical VM differs from Stage-0: "
                                  + json.dumps({"vm": vm_values, "stage0": expected}, indent=2))
+
+        interface_expected = oracle(interface_modules, interface_cache, workload)
+        with tempfile.TemporaryDirectory(prefix="mncs-compiler-interface-vm-") as vm_name:
+            interface_vm_values, interface_vm_metrics = execute_vm(
+                interface_build["artifact"]["value"], Path(vm_name), workload)
+        if interface_vm_values != interface_expected or interface_vm_values != vm_values:
+            raise AssertionError("interface-only edit changed canonical VM semantics")
 
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
         vm_revision = subprocess.check_output(
@@ -376,12 +448,34 @@ def main() -> dict:
                 "fresh_process_per_snapshot": True,
                 "artifact_reused_for_unchanged_closure": True,
             },
+            "imported_interface_invalidation": {
+                "source_module": "mncs.compiler.source.v1",
+                "exported_function": "byte_at_global",
+                "edit": "renamed input total to source_length; positional callsites unchanged",
+                "changed_subject": CHANGED_INTERFACE_FUNCTION,
+                "changed_subject_reason": reason_by_subject[CHANGED_INTERFACE_FUNCTION],
+                "dependency_changed_subjects": sorted(expected_dependents),
+                "reused_independent_subjects": sorted(independently_reused),
+                "all_recomputed_subjects": sorted(interface_recomputed),
+                "all_recomputation_reasons": [
+                    {"subject": subject, "reason": reason_by_subject[subject]}
+                    for subject in sorted(reason_by_subject)
+                ],
+                "reused_fact_count": len(interface_reused),
+                "recomputed_fact_count": len(interface_recomputed),
+                "fresh_diagnostics": interface_build.get("diagnostics", []),
+                "application_build_verified": interface_build.get("status") == "verified",
+                "canonical_vm_matches_stage0": True,
+            },
             "measurements": {
                 "profile_018_attempt": profile_018_metrics,
                 "cold_full_module_build": cold_metrics,
                 "comment_edit_build": comment_metrics,
                 "body_edit_build": edited_metrics,
                 "canonical_vm_execution": vm_metrics,
+                "interface_baseline_build": interface_baseline_metrics,
+                "interface_edit_build": interface_metrics,
+                "interface_canonical_vm_execution": interface_vm_metrics,
                 "whole_frontier_wall_seconds": round(time.monotonic() - started, 6),
                 "cgroup_measurement_available": cold_metrics.get("peak_cgroup_memory_bytes") is not None,
             },
@@ -391,7 +485,7 @@ def main() -> dict:
                 "Profile 0.19 raises the sequence/view ceiling to 4096; its literal iteration ceiling remains 1024.",
                 "This does not establish Stage-1 or Stage-2 succession.",
             ],
-            "scope": "The full current Compiler Source, Lexer, and Segment modules now declare Profile 0.19 and pass application-build verification together. Across fresh processes, a comment edit reuses every Language body fact; changing one unreachable UTF-8 validator recomputes only that body and reuses the remaining facts. A native application executes selected Source and Segment functions in the canonical VM, with all six typed results matching Stage-0.",
+            "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, one-body recomputation, and precise invalidation of direct callers after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
         }
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence = ROOT / f"evidence/self-host-full-module-fact-reuse-{stamp}.json"
