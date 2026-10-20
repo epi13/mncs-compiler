@@ -68,16 +68,30 @@ the full Language frontend; if executable closure reuse is admitted, `/7`
 refreshes selected Test rows and their source locations from that frontend.
 Invalid source or unresolved case identity produces no artifact.
 
-An exact `/5`, `/6`, or `/7` source-snapshot hit skips the frontend. A changed snapshot always
-runs the full Language frontend; if the selected executable closure and
-callable interfaces still match a verified artifact, the Compiler reuses that
-VM artifact, otherwise it rebuilds the selected SSA closure and artifact. This
-does not reuse Language-owned verified facts. The
+`mncs.compiler.application-build-request/5` returns
+`mncs.compiler.application-build/8`. It preserves the `/4` callable and Test
+selection fields and enables reuse of Language-owned function declaration
+facts from an earlier verified application snapshot. The Compiler supplies
+those facts to Language only after validating the cache entry and its digest;
+Language checks each declaration fingerprint, verifier and policy identity,
+profile, assumption dependencies, and source-location refresh independently.
+The `/8` verification-work observation reports the declaration subjects that
+Language actually reused or recomputed, with miss reasons. `/5` through `/7`
+retain their prior behavior and do not claim declaration-fact reuse.
+
+An exact source-snapshot hit skips the frontend for each contract. A changed
+`/5` through `/7` snapshot runs the full Language frontend without reusing
+Language facts; a changed `/8` snapshot supplies prior verified facts so
+Language can selectively reuse valid declarations and bodies. Independently,
+if the selected executable closure and callable interfaces still match a
+verified artifact, the Compiler reuses that VM artifact; otherwise it rebuilds
+the selected SSA closure and artifact. The
 `tools/test_vm_native_digest_unreachable_body_reuse.py` workload verifies that
 an uncalled imported body edit takes the full-frontend path while preserving
 the digest executable artifact. The Environment provider accepts request `/1`
 with response `/4`, request `/2` with response `/5`, request `/3` with
-response `/6`, and request `/4` with response `/7`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
+response `/6`, request `/4` with response `/7`, and request `/5` with
+response `/8`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
 bound. For large selections it reports the root count and points to the
 shareable result artifact, which retains the complete typed interfaces. The
 focused direct compiler proof is
@@ -85,8 +99,8 @@ focused direct compiler proof is
 also sends `/2` through the adapter and calls `snapshot_witness` from its
 seven-callable Test-core artifact in one canonical VM batch.
 
-The Environment descriptor advertises request `/4` and response `/7` as
-current while retaining all four request-response pairs.
+The Environment descriptor advertises request `/5` and response `/8` as
+current while retaining all five request-response pairs.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only
@@ -140,10 +154,12 @@ interfaces, and Language-owned artifact interface still match. The response
 then receives the current snapshot identity and file list, including current
 inventory spans. Thus an edit to an unselected root test can reuse the VM
 artifact and avoid SSA/backend emission, but it does not skip semantic
-verification or reuse Language verification facts. Adding or editing an
-unreferenced module also receives current input provenance. This does not yet
-reuse verified declarations or functions within a changed closure, and it
-makes no claim of Stage-1 or Stage-2 succession. The real consumer exercise is
+verification or reuse Language verification facts on request `/1` through
+`/4`. Request `/5` still reparses and resolves the current source snapshot, then
+reuses only Language facts whose verifier, policy, subject, and dependency
+guards match that snapshot. Adding or editing an unreferenced module also
+receives current input provenance. Neither path makes a claim of Stage-1 or
+Stage-2 succession. The real consumer exercise is
 `python3 tools/test_vm_native_application.py`,
 which reads the selected `mncs-test` checkout without modifying it, requests
 `equals_bytes<4>` and `summarize<4>`, accepts a typed `ReadinessRequest`, returns
@@ -158,9 +174,8 @@ module, and verifies that a fresh process can reuse the artifact after a
 comment-only root edit while still running the current parse and resolution
 path, reusing guarded Language body facts, and matching the Stage-0 execution
 oracle. It also verifies that rejected or interrupted
-requests do not publish successful results. Its cache observation is now
-`mncs.compiler.application-build-cache-observation/4`; the nested
-`mncs.compiler.application-build-verification-work/2` reports whether the
+requests do not publish successful results. This request uses cache
+observation `/4` and verification-work `/2` to report whether the
 frontend ran, counts resolved modules and program functions, lists Language
 body facts actually reused and reverified, and separates dependency-closure,
 SSA, and backend artifact work. A cache hit that skips the frontend reports
@@ -200,18 +215,41 @@ and source artifact for each linked module while retaining the normal parse,
 resolution, and complete semantic-program path.
 
 The Stage-0 application cache stores Language facts in a separate checksummed
-field under cache-entry `/4`; existing `/3` entries are not reinterpreted.
-Changed snapshots pass those facts back to Language, and
+body-fact field under cache-entry `/4`; cache-entry `/5` stores body and
+declaration facts in separate checksummed fields. The reader accepts `/4` as
+a body-only entry and never invents declaration evidence. Changed `/4`
+snapshots pass body facts back to Language, and
 `verification_work.reused_semantic_facts` contains only facts Language actually
 matched and reused. Tests cover body, callable-interface, nominal-type,
 profile, verifier, and policy changes, fresh diagnostics, and serialization
 reuse across a new process.
 
+The separate Language-owned `mncs.language-declaration-verification-fact/1`
+binds a successful function declaration to its subject and semantic
+fingerprint, verifier and policy identities, language profile, referenced
+assumptions, warning paths, and witness identity. Its invalidators cover
+declaration, dependency, verifier, policy, and profile changes. Current source
+locations refresh independently of the reusable witness. For request `/5`,
+the frontend receives verified declaration facts from a checksummed cache
+entry, asks Language to compare their exact guards, and reports actual reused
+and recomputed declarations in verification-work `/3`. A frontend-skipping
+artifact cache hit reports no Language fact reuse because Language did not
+evaluate the guards.
+
+`python3 tools/test_vm_language_declaration_fact_reuse.py` exercises the real
+multi-module `mncs-test` readiness application through request `/5` and a fresh
+probe process for each build. It checks cold fact production, honest exact
+artifact hits, declaration reuse after a comment edit with refreshed source
+locations, body-only invalidation for an uncalled imported function, and
+reverification of that function's changed imported declaration. Each changed
+snapshot is compared with Stage-0 oracle output and canonical VM execution;
+the workload writes its process and per-stage timings to a new evidence file.
+
 ## Environment capability
 
-The Compiler manifest declares revision 6 of the contract as
-`mncs-compiler:native-application-build`, advertises request `/3` and response
-`/6` as current, and retains the `/1` to `/4` and `/2` to `/5` pairs. The provider accepts a request from the selected
+The Compiler manifest declares revision 8 of the contract as
+`mncs-compiler:native-application-build`, advertises request `/5` and response
+`/8` as current, and retains all five request-response pairs. The provider accepts a request from the selected
 Compiler checkout with `--request-file PATH`, or from a canonical Store input
 artifact with `--request-artifact NAME`. It writes the complete response as
 the shareable `native-application-build.json` invocation artifact and keeps
@@ -251,6 +289,7 @@ semantics. The workload-specific measurement is recorded in
 
 Cache entry validation hashes the exact stored response and Language fact bytes
 before decoding them into the current result. It does not reinterpret
-`application-build-cache-entry/3`; version `/4` binds the two payloads with
-separate digests. A mismatched digest remains a cache miss and triggers source
+`application-build-cache-entry/3`; `/4` binds the response and body-fact
+payloads, while `/5` adds a separate digest for declaration facts. A mismatched
+digest remains a cache miss and triggers source
 verification; the digest batch includes a tampered-entry recovery case.

@@ -35,6 +35,8 @@ INVENTORY_REQUEST_SCHEMA = "mncs.compiler.application-build-request/3"
 INVENTORY_RESPONSE_SCHEMA = "mncs.compiler.application-build/6"
 TEST_SELECTION_REQUEST_SCHEMA = "mncs.compiler.application-build-request/4"
 TEST_SELECTION_RESPONSE_SCHEMA = "mncs.compiler.application-build/7"
+DECLARATION_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
+DECLARATION_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -65,20 +67,21 @@ def validate_environment_contract_descriptor() -> None:
         (MULTI_REQUEST_SCHEMA, MULTI_RESPONSE_SCHEMA),
         (INVENTORY_REQUEST_SCHEMA, INVENTORY_RESPONSE_SCHEMA),
         (TEST_SELECTION_REQUEST_SCHEMA, TEST_SELECTION_RESPONSE_SCHEMA),
+        (DECLARATION_FACT_REQUEST_SCHEMA, DECLARATION_FACT_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "7":
-        raise AssertionError("Environment capability revision must match application-build/7")
+    if contract.get("version") != "8":
+        raise AssertionError("Compiler capability revision must match application-build/8")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        TEST_SELECTION_REQUEST_SCHEMA, TEST_SELECTION_RESPONSE_SCHEMA
+        DECLARATION_FACT_REQUEST_SCHEMA, DECLARATION_FACT_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Environment must advertise application-build/7 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/8 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Environment descriptor must retain /4 through /7 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /8 request-response pairs")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
@@ -90,6 +93,7 @@ def validate_environment_contract_descriptor() -> None:
         MULTI_REQUEST_SCHEMA: MULTI_RESPONSE_SCHEMA,
         INVENTORY_REQUEST_SCHEMA: INVENTORY_RESPONSE_SCHEMA,
         TEST_SELECTION_REQUEST_SCHEMA: TEST_SELECTION_RESPONSE_SCHEMA,
+        DECLARATION_FACT_REQUEST_SCHEMA: DECLARATION_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 

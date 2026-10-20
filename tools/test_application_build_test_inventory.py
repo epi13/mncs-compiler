@@ -1425,8 +1425,52 @@ def run_real_mncs_test_suite() -> dict:
     module_sources = {
         name: path.read_text(encoding="utf-8") for name, path in module_paths.items()
     }
-    language_repo = app.WORKSPACE_ROOT / "mncs-language"
-    language_revision = json.loads((ROOT / "mncs-language.lock.json").read_text())["revision"]
+    language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
+    language_revision = language_lock["revision"]
+    language_repo = None
+    # The exact Compiler worktree can carry its pinned Language checkout next
+    # to it, while the workspace's default Language checkout may have advanced
+    # on a separate history. Select by the locked commit and repository
+    # manifest instead of assuming the default sibling contains that object.
+    language_candidates = [
+        ROOT.parent / "mncs-language",
+        app.WORKSPACE_ROOT / "mncs-language",
+    ]
+    seen_language_candidates = set()
+    for candidate in language_candidates:
+        try:
+            resolved_candidate = candidate.resolve(strict=True)
+        except OSError:
+            continue
+        if resolved_candidate in seen_language_candidates:
+            continue
+        seen_language_candidates.add(resolved_candidate)
+        manifest_path = resolved_candidate / ".mncs" / "project.json"
+        if not manifest_path.is_file():
+            continue
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("repository") != "mncs-language":
+            continue
+        remote = subprocess.run(
+            ["git", "config", "--get", "remote.origin.url"],
+            cwd=resolved_candidate, capture_output=True, text=True,
+        )
+        expected_remote = language_lock.get("repository")
+        if (remote.returncode != 0 or not isinstance(expected_remote, str)
+                or remote.stdout.strip().removesuffix(".git")
+                != expected_remote.removesuffix(".git")):
+            continue
+        pinned_object = subprocess.run(
+            ["git", "cat-file", "-e", f"{language_revision}:library/std/task.mncs"],
+            cwd=resolved_candidate, capture_output=True, text=True,
+        )
+        if pinned_object.returncode == 0:
+            language_repo = resolved_candidate
+            break
+    if language_repo is None:
+        raise AssertionError(
+            f"no registered mncs-language checkout contains locked revision {language_revision}"
+        )
     language_head = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=language_repo, text=True
     ).strip()
@@ -1842,6 +1886,7 @@ def main() -> None:
         "mncs.compiler.application-build-request/2": "mncs.compiler.application-build/5",
         "mncs.compiler.application-build-request/3": "mncs.compiler.application-build/6",
         "mncs.compiler.application-build-request/4": "mncs.compiler.application-build/7",
+        "mncs.compiler.application-build-request/5": "mncs.compiler.application-build/8",
     }
     if provider.RESPONSE_SCHEMA_BY_REQUEST != expected_pairs:
         raise AssertionError("Environment provider does not accept all versioned build contracts")
@@ -1850,10 +1895,10 @@ def main() -> None:
         row for row in manifest.get("contracts", {}).get("provides", [])
         if isinstance(row, dict) and row.get("contract") == "native-application-build"
     ]
-    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "7"
+    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "8"
             or contract_rows[0].get("artifact_contract", {}).get("request_schema")
-            != "mncs.compiler.application-build-request/4"):
-        raise AssertionError("Compiler manifest does not advertise application-build/7")
+            != "mncs.compiler.application-build-request/5"):
+        raise AssertionError("Compiler manifest does not advertise application-build/8")
     provider_tests.validate_environment_contract_descriptor()
 
     with tempfile.TemporaryDirectory(

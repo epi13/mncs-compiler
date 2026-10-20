@@ -125,7 +125,7 @@
       },
       {
         "contract": "native-application-build",
-        "version": "7",
+        "version": "8",
         "kind": "compiler-application-build-provider",
         "stability": "experimental",
         "effects": [
@@ -136,8 +136,8 @@
         ],
         "output_limit_bytes": 16384,
         "artifact_contract": {
-          "request_schema": "mncs.compiler.application-build-request/4",
-          "response_schema": "mncs.compiler.application-build/7",
+          "request_schema": "mncs.compiler.application-build-request/5",
+          "response_schema": "mncs.compiler.application-build/8",
           "supported_request_response_pairs": [
             {
               "request_schema": "mncs.compiler.application-build-request/1",
@@ -154,6 +154,10 @@
             {
               "request_schema": "mncs.compiler.application-build-request/4",
               "response_schema": "mncs.compiler.application-build/7"
+            },
+            {
+              "request_schema": "mncs.compiler.application-build-request/5",
+              "response_schema": "mncs.compiler.application-build/8"
             }
           ],
           "callable_root_maximum_count": 256,
@@ -168,6 +172,8 @@
           "source_test_inventory_scope": "source_module",
           "source_test_selection_schema": "mncs.compiler.source-test-case-selection/1",
           "source_test_selection_maximum_count": 256,
+          "verification_work_schema": "mncs.compiler.application-build-verification-work/3",
+          "declaration_verification_fact_schema": "mncs.language-declaration-verification-fact/1",
           "result_artifact": "native-application-build.json",
           "execution_artifact": "mncs.vm.artifact/1",
           "status_values": [
@@ -185,6 +191,7 @@
           "tools/test_vm_native_application_batch.py",
           "tools/test_vm_native_application.py",
           "tools/test_native_application_incremental.py",
+          "tools/test_vm_language_declaration_fact_reuse.py",
           "tools/stage0-probe/src/application.rs",
           "tools/stage0-probe/src/main.rs",
           "tools/stage0-probe/Cargo.toml",
