@@ -1,0 +1,3536 @@
+{
+  "application": {
+    "artifact_identity": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+    "build_assumptions": {
+      "backend": "mncs-vm-direct",
+      "capabilities": [],
+      "effect_assumptions": [],
+      "generic_seeds": [
+        {
+          "function": "equals_bytes",
+          "module": "mncs.test.assertions",
+          "type_arguments": [
+            {
+              "kind": "nat",
+              "value": 4
+            }
+          ]
+        },
+        {
+          "function": "summarize",
+          "module": "mncs.test.suite",
+          "type_arguments": [
+            {
+              "kind": "nat",
+              "value": 4
+            }
+          ]
+        }
+      ],
+      "optimization_policy": "default",
+      "target": "mncs-vm-0.1",
+      "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1"
+    },
+    "callable_interface_identity": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
+    "callable_scope": {
+      "entry": {
+        "function": "run",
+        "module": "tests.native_readiness"
+      },
+      "generic_seed_functions": [
+        [
+          "mncs.test.assertions",
+          "equals_bytes"
+        ],
+        [
+          "mncs.test.suite",
+          "summarize"
+        ]
+      ],
+      "kind": "entry_and_explicit_generic_seeds"
+    },
+    "contract_schema": "mncs.compiler.application-build/4",
+    "dependency_graph_identity": "sha256:9ee80fa71b02957865630761371f23ba93eb4ddc202d00dc1d12b2e352969856",
+    "entry": "run",
+    "module": "tests.native_readiness",
+    "source_files": [
+      {
+        "bytes": 5301,
+        "module": "mncs.test.assertions",
+        "sha256": "sha256:9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b",
+        "source_id": "mncs.test.assertions"
+      },
+      {
+        "bytes": 1281,
+        "module": "mncs.test.generative",
+        "sha256": "sha256:d2b04baaad227030ab16172f648a88778f70465bb0e3fd1708fe7be5d92d8f39",
+        "source_id": "mncs.test.generative"
+      },
+      {
+        "bytes": 985,
+        "module": "mncs.test.snapshot",
+        "sha256": "sha256:c9b3374511062db85a2ab9f297847d778004c35361ebcc881155fb7da3934704",
+        "source_id": "mncs.test.snapshot"
+      },
+      {
+        "bytes": 5014,
+        "module": "mncs.test.suite",
+        "sha256": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5",
+        "source_id": "mncs.test.suite"
+      },
+      {
+        "bytes": 2733,
+        "module": "root",
+        "sha256": "sha256:a2f3488e6dbd12d4b0b6bc494e3c0d002f30c71955b6ba04e224ddff544b56ba",
+        "source_id": "tests/native_readiness.mncs"
+      }
+    ],
+    "source_snapshot_identity": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
+    "unselected_unresolved_exports": [
+      "export mncs.test.assertions::equals_bytes: no ssa instance",
+      "export mncs.test.suite::summarize: no ssa instance"
+    ]
+  },
+  "cache_key_inputs": [
+    "exact source snapshot identity, including root and every supplied module ID and byte hash",
+    "dependency-closure candidate index binds root source ID and build assumptions; exact root and resolved dependency hashes permit pre-frontend reuse, while changed source requires a fresh frontend check before executable-closure artifact reuse",
+    "canonical generic specialization seed identities",
+    "Stage-0 toolchain identity and probe executable SHA-256",
+    "compiler contract version, canonical VM backend, selected target, and entry",
+    "requested capabilities and effect assumptions",
+    "optimization and verification policies",
+    "the full source snapshot identity is recomputed when an artifact is reused from an unchanged dependency closure",
+    "after a fresh source semantic check, the aggregate canonical root and resolved-module semantic identity may reuse the verified VM artifact when exact build assumptions and entry still match"
+  ],
+  "compiler": {
+    "application_module_sha256": "sha256:ff7c65c9baf811ecf123ec0757666e56d91d8e463e631d8050c7b6a4ae6dd2a4",
+    "branch": "campaign/native-application-readiness-20261013",
+    "build_profile": "cargo build --release",
+    "gate_a_harness_sha256": "sha256:ec8c0ce004b2566c29b95a61a8766a9ab6a6e39bda1b28184338002db6e341fd",
+    "gate_b_harness_sha256": "sha256:bad72c063cd45b2827d4fd0581565acd933ba2f121e7017cdf0f1ed3c3745938",
+    "probe_dispatch_sha256": "sha256:5f51e3f37dd129dd733efb3ee036b4fb3fc02f1254288c6b6450a94f8b580a32",
+    "revision": "f090777ced40ba2925acd00c70566d97b5241831",
+    "stage0_probe_sha256": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153",
+    "stage0_revision": "68c52d3eb6aed31fdc0061fd4119ede3e096f9fe",
+    "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "vm_binary_path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler/.build/native-app-readiness/mncs-vm",
+    "vm_build_profile": "unspecified",
+    "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "vm_sha256": "sha256:2f7bd4a9f6b537b17e4c1dbf08bcc8cd55362a3f9f1bc28bd91a265a30e1e7f5",
+    "worktree_changes_at_measurement": [
+      "M docs/native-application-build-contract.md",
+      " M mncs-language.lock.json",
+      " M tools/stage0-probe/src/application.rs",
+      " M tools/test_application_build_provider.py",
+      " M tools/test_application_cache_index_bound.py",
+      " M tools/test_native_application_incremental.py",
+      " M tools/test_vm_native_automation_application.py",
+      " M tools/test_vm_native_digest_unreachable_body_reuse.py",
+      " M tools/test_vm_native_generic_specialization_invalidation.py",
+      "?? .bootstrap.control-workspace-link",
+      "?? evidence/native-app-readiness-gate-b-20261020T034119.286823Z-2521666.json"
+    ],
+    "worktree_dirty_at_measurement": true,
+    "worktree_head_at_measurement": "f090777ced40ba2925acd00c70566d97b5241831"
+  },
+  "experiments": {
+    "cold_build": {
+      "cache": {
+        "key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_by_full_frontend",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bool"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_i64"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::from_assertion"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::pass"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::project_test"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::skip"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::unsupported"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::replay"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::within"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::same"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::empty"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe_failure"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::project"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::verdict_for"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "no_prior_language_function_body_fact_matched_current_inputs",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "metrics": {
+        "cpu_seconds": 0.68,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54468608,
+        "peak_threads": 1,
+        "request_sequence": 3,
+        "wall_seconds": 0.700076
+      },
+      "process_startup_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54575104,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.124559
+      }
+    },
+    "dependency_change": {
+      "artifact_identity": "sha256:bc9a9512fd801ac817e683113893fd09ceb42191f7f4f8f50f1ce3655e90edaf",
+      "cache": {
+        "key": "sha256:95d3f5d3cf96e3641baf947bda4f5537952b04ddeec409d2198c54fc15178299",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "changed_module": "mncs.test.generative",
+      "compile_metrics": {
+        "cpu_seconds": 0.6,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 15,
+        "wall_seconds": 0.612131
+      },
+      "graph_identity_after": "sha256:c617f5972e2b3990b0cda2cbe319afdd6882e1c9f3fa6922bb489d7961bd68f5",
+      "graph_identity_before": "sha256:9ee80fa71b02957865630761371f23ba93eb4ddc202d00dc1d12b2e352969856",
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 14,
+        "wall_seconds": 0.261681
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 8981214498694797099
+        },
+        "state": {
+          "$p": {
+            "reason": 1
+          },
+          "$v": 1
+        },
+        "state_value": 1,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 1,
+          "failure_count": 1,
+          "passed": 2,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 1
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "reused_units": [],
+      "source_snapshot_identity": "sha256:cd375e8c4479b310200d9c8abdb16e5758a0cdf7e60c894756278387167faa2b",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 25722880,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.125694
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 8981214498694797099
+        },
+        "state": {
+          "$p": {
+            "reason": 1
+          },
+          "$v": 1
+        },
+        "state_value": 1,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 1,
+          "failure_count": 1,
+          "passed": 2,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 1
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "different_compiler_executable_identity": {
+      "artifact_identity_original": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_identity_variant": "sha256:4ffdc82068bbeac7b5dd9b2a8f6719d650752aa3f0e22bd42846088e4a57dd0f",
+      "cache_key_original": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+      "cache_key_variant": "sha256:1cf260a4e626a609e450b3f547cc8d2589c6a1652b803438a6a0991517b9edc4",
+      "cache_status": "miss",
+      "compile_metrics": {
+        "cpu_seconds": 0.69,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54497280,
+        "peak_threads": 1,
+        "request_sequence": 3,
+        "wall_seconds": 0.727591
+      },
+      "oracle_metrics": {
+        "cpu_seconds": 0.25,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54497280,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.277196
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "original_probe_sha256": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153",
+      "process_startup_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 8,
+        "peak_rss_bytes": 54677504,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.163349
+      },
+      "producer_stderr_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n",
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "reused_units": [],
+      "semantic_match": true,
+      "variant_probe_sha256": "sha256:cca74df4b364036bc9cbd404236fe77523c7e825353f904531e2331aa4490135",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 21557248,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.123362
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "exported_nominal_interface_change": {
+      "artifact_identity_after": "sha256:0067182db057f08c9c67aa170c8b349079750dd135b3a76cb4c97e026c2d0d7a",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:a9acc233fa67632490c7ed6a5f54a6f56a86579d8ca8f947c407c71cdf5811ff",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::replay"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "changed_exported_record": "PropertyCase.generation: u64",
+      "changed_module": "mncs.test.generative",
+      "compile_metrics": {
+        "cpu_seconds": 0.61,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 17,
+        "wall_seconds": 0.621382
+      },
+      "interface_identity_after": "sha256:21f3642ef03af5e6c761827208cd98c9281ff7535a9461fd7f161f6cbd82ad92",
+      "interface_identity_before": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
+      "oracle_matches_vm": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 16,
+        "wall_seconds": 0.261654
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "semantic_identity_after": "sha256:be017402633cc0371eaebe76fedfe4216b4b06ad609dcaa62d10a9034a3d714a",
+      "semantic_identity_before": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "source_sha256_after": "sha256:1f493265fc9c8e2c1b1c89cc7a4593162d940197b7ee6dcd538fc27f29c9b237",
+      "source_sha256_before": "sha256:d2b04baaad227030ab16172f648a88778f70465bb0e3fd1708fe7be5d92d8f39",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 21168128,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.124066
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "fresh_process_root_comment_edit": {
+      "artifact_identity_after": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:7f7e9053e061934354f1b3fe035e5a525146d0b2042315744bd10fb134b269af",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "application_executable_closure_verification"
+        ],
+        "reuse_basis": "verified_application_executable_closure",
+        "reused_from_key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "reused_units": [
+          "verified_vm_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+          "backend_artifact": "reused",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "reused_verified_vm_artifact",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "compile_metrics": {
+        "cpu_seconds": 0.51,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54198272,
+        "peak_threads": 1,
+        "request_sequence": 3,
+        "wall_seconds": 0.526467
+      },
+      "oracle_matches_vm": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.26,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54198272,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.276484
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "process_startup_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54300672,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.12352
+      },
+      "producer_stderr_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n",
+      "root_source_sha256_after": "sha256:3a43a9c65927aa54e39419cb10017cc0407f46aab2cb71b05933ce6b8fa63278",
+      "root_source_sha256_before": "sha256:a2f3488e6dbd12d4b0b6bc494e3c0d002f30c71955b6ba04e224ddff544b56ba",
+      "seed_compile_metrics": {
+        "cpu_seconds": 0.68,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54263808,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.705035
+      },
+      "seed_process_startup_metrics": {
+        "cpu_seconds": 0.09,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54366208,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.121659
+      },
+      "seed_producer_stderr_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n",
+      "semantic_identity_after": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "semantic_identity_before": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "source_snapshot_identity_after": "sha256:f097e844686113cf653323c7503ea066d7793b052d38bd51f92ef345f566f869",
+      "source_snapshot_identity_before": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
+      "verification_work": {
+        "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+        "backend_artifact": "reused",
+        "declaration_resolution": "recomputed_by_full_frontend",
+        "front_end_invocations": 1,
+        "front_end_outcome": "verified",
+        "function_body_verification": "recomputed_with_language_fact_reuse",
+        "language_verification_fact_schema": "mncs.language-verification-fact/1",
+        "produced_semantic_fact_count": 24,
+        "program_function_count": 24,
+        "recomputed_semantic_facts": [],
+        "resolved_module_count": 5,
+        "reused_semantic_facts": [
+          "mncs:0.2:body:mncs.test.assertions::equals_bool",
+          "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+          "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+          "mncs:0.2:body:mncs.test.assertions::equals_i64",
+          "mncs:0.2:body:mncs.test.assertions::from_assertion",
+          "mncs:0.2:body:mncs.test.assertions::pass",
+          "mncs:0.2:body:mncs.test.assertions::project_test",
+          "mncs:0.2:body:mncs.test.assertions::skip",
+          "mncs:0.2:body:mncs.test.assertions::unsupported",
+          "mncs:0.2:body:mncs.test.generative::advance_random",
+          "mncs:0.2:body:mncs.test.generative::draw_case",
+          "mncs:0.2:body:mncs.test.generative::replay",
+          "mncs:0.2:body:mncs.test.generative::shrink",
+          "mncs:0.2:body:mncs.test.generative::within",
+          "mncs:0.2:body:mncs.test.snapshot::bytes",
+          "mncs:0.2:body:mncs.test.snapshot::same",
+          "mncs:0.2:body:mncs.test.suite::empty",
+          "mncs:0.2:body:mncs.test.suite::observe",
+          "mncs:0.2:body:mncs.test.suite::observe_failure",
+          "mncs:0.2:body:mncs.test.suite::project",
+          "mncs:0.2:body:mncs.test.suite::summarize",
+          "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+          "mncs:0.2:body:mncs.test.suite::verdict_for",
+          "mncs:0.2:body:tests.native_readiness::run"
+        ],
+        "schema_version": "mncs.compiler.application-build-verification-work/2",
+        "semantic_dependency_closure": "recomputed_by_full_frontend",
+        "semantic_fact_recomputation_reasons": [],
+        "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+        "signature_verification": "recomputed_by_full_frontend",
+        "source_parsing": "recomputed_by_full_frontend",
+        "ssa_verification": "reused_verified_vm_artifact",
+        "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+      },
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 21221376,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.122844
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "generic_specialization_edit": {
+      "artifact_identity_after": "sha256:006b437858e853c75566cd4b5ff6f3cd417395a80412bdd38dfff0f20d69aa89",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:947ac0d2ed202efd1282708e0a2e4a45afc7ad26c5256de869146bef6d4ab767",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::verdict_for"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+            },
+            {
+              "reason": "dependencies_changed",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "changed_body": "reverse the bounded TestResult fold order",
+      "changed_generic_function": "summarize<N=4>",
+      "changed_module": "mncs.test.suite",
+      "compile_metrics": {
+        "cpu_seconds": 0.6,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54198272,
+        "peak_threads": 1,
+        "request_sequence": 4,
+        "wall_seconds": 0.616799
+      },
+      "executable_closure_identity_after": "sha256:17bf2cd114b562b13d6509a164ba67274c4edaa6b142ad56825bf6d97ab7d633",
+      "executable_closure_identity_before": "sha256:f6623caa4e7d635ae66ecb17eaad71f8f02af10b24307204e5418ae3d0c95d8d",
+      "generic_seeds": [
+        {
+          "function": "equals_bytes",
+          "module": "mncs.test.assertions",
+          "type_arguments": [
+            {
+              "kind": "nat",
+              "value": 4
+            }
+          ]
+        },
+        {
+          "function": "summarize",
+          "module": "mncs.test.suite",
+          "type_arguments": [
+            {
+              "kind": "nat",
+              "value": 4
+            }
+          ]
+        }
+      ],
+      "oracle_matches_vm": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.27,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54198272,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.268089
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "prior_fact_seed_cache": {
+        "key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_by_full_frontend",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bool"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_i64"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::from_assertion"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::pass"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::project_test"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::skip"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::unsupported"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::replay"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::within"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::same"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::empty"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe_failure"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::project"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::verdict_for"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "no_prior_language_function_body_fact_matched_current_inputs",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "prior_fact_seed_metrics": {
+        "cpu_seconds": 0.69,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54198272,
+        "peak_threads": 1,
+        "request_sequence": 3,
+        "wall_seconds": 0.709308
+      },
+      "process_startup_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54366208,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.123915
+      },
+      "semantic_identity_after": "sha256:5b515be644202669e4cac8b28334cd816da1c5c14d3f9ed2922d59f90237f9cc",
+      "semantic_identity_before": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "source_sha256_after": "sha256:63917a73e8f64203e1625f49b8a9a9eeee4cbc5dc96acda7ee0b91b6e47b9a93",
+      "source_sha256_before": "sha256:86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5",
+      "vm_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 21573632,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.124592
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "imported_module_closure_change": {
+      "added_cross_module_call": "readiness_marker(state_value)",
+      "added_module": "mncs.test.readiness_marker",
+      "artifact_identity_after": "sha256:8008b2db40dd2797864118e689b27f8bb04090ed2df80fc8d26d3992c7b64e83",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:c8e61f3fcfb014b96cfb626b14308012b11180fd7e01075c7f3f5fbaad246b65",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 25,
+          "program_function_count": 25,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.readiness_marker::readiness_marker",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 6,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::replay"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.readiness_marker::readiness_marker"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "compile_metrics": {
+        "cpu_seconds": 0.6,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 19,
+        "wall_seconds": 0.619275
+      },
+      "dependency_graph_identity_after": "sha256:76c5654add38e4c5ded8be5d6c7424ab869e86a08e71aed06d187e43e5a7898c",
+      "dependency_graph_identity_before": "sha256:9ee80fa71b02957865630761371f23ba93eb4ddc202d00dc1d12b2e352969856",
+      "dependency_resolutions_after": [
+        {
+          "declared_module": "mncs.test.assertions",
+          "module_identity": "mncs:0.2:module:mncs.test.assertions",
+          "requested_module": "mncs.test.assertions",
+          "semantic_fingerprint": "28463e519339c6012532271cd6e674d06f7ab12cccb45129c2d4b828c902d84a",
+          "source_identity": "mncs:source:artifact:492314b787ca746273dbb7d27b58b6ae15bc1bbe2975cdef311707368e947173",
+          "source_logical_name": "application"
+        },
+        {
+          "declared_module": "mncs.test.generative",
+          "module_identity": "mncs:0.2:module:mncs.test.generative",
+          "requested_module": "mncs.test.generative",
+          "semantic_fingerprint": "297ebe8d78537cec3a28f342b409cdc73d3787c31493a8ec676a2278894cea9a",
+          "source_identity": "mncs:source:artifact:82f376727c6135f56069a1faf2f4d38123ba484d98cbb3ce075b984c27b1290c",
+          "source_logical_name": "application"
+        },
+        {
+          "declared_module": "mncs.test.readiness_marker",
+          "module_identity": "mncs:0.2:module:mncs.test.readiness_marker",
+          "requested_module": "mncs.test.readiness_marker",
+          "semantic_fingerprint": "8d0a6d7cd52ebe7b48f6f72db35ed99a3847c302accc8501b7b9992bac3beeea",
+          "source_identity": "mncs:source:artifact:1cd6571d9af4c56c625550e5cdc60a88a4464a203965e710be91afe8971dcb5a",
+          "source_logical_name": "application"
+        },
+        {
+          "declared_module": "mncs.test.snapshot",
+          "module_identity": "mncs:0.2:module:mncs.test.snapshot",
+          "requested_module": "mncs.test.snapshot",
+          "semantic_fingerprint": "64945565eb3007fe3b613e11d28c4de082542d6c90dbba259be16ddece0aacd4",
+          "source_identity": "mncs:source:artifact:b5cb6973ceb6b3ee81211868639ff88bf03039e3b9c0283a85bd50a095eda682",
+          "source_logical_name": "application"
+        },
+        {
+          "declared_module": "mncs.test.suite",
+          "module_identity": "mncs:0.2:module:mncs.test.suite",
+          "requested_module": "mncs.test.suite",
+          "semantic_fingerprint": "81ffb9f2fb5563e68d0bd175882f7c23082438697dd73471f085c0dcbbf5c848",
+          "source_identity": "mncs:source:artifact:309324053bcbe9786592bbcdd7d259bea4c4ce48ec795b4f6aa6b889c5d7699d",
+          "source_logical_name": "application"
+        }
+      ],
+      "oracle_matches_vm": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 18,
+        "wall_seconds": 0.262582
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "vm_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 21487616,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.124225
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "interrupted_compilation": {
+      "cancelled_process": {
+        "delay_after_request_seconds": 0.025,
+        "exit_code": -9,
+        "interrupted": true,
+        "response_received": false,
+        "signal": "SIGKILL"
+      },
+      "entry_after_cancel_exists": false,
+      "fresh_process_cache": {
+        "key": "sha256:6d1ba4974503c5b313dfe0fa925678eab94466ddb948b951309747eb81d139c4",
+        "publication": "previously_published",
+        "recomputed_units": [],
+        "reuse_basis": "exact_source_snapshot",
+        "reused_from_key": "sha256:6d1ba4974503c5b313dfe0fa925678eab94466ddb948b951309747eb81d139c4",
+        "reused_units": [
+          "verified_application_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "verified_cached_application_artifact",
+          "backend_artifact": "reused",
+          "declaration_resolution": "not_run",
+          "front_end_invocations": 0,
+          "front_end_outcome": "not_run",
+          "function_body_verification": "not_run",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 0,
+          "program_function_count": null,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": null,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "not_run",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+          "signature_verification": "not_run",
+          "source_parsing": "not_run",
+          "ssa_verification": "not_run",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "fresh_process_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54566912,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.104695
+      },
+      "fresh_process_startup_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54673408,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.12235
+      },
+      "matching_temp_or_entry_paths_after_cancel": [],
+      "retry_cache": {
+        "key": "sha256:6d1ba4974503c5b313dfe0fa925678eab94466ddb948b951309747eb81d139c4",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_by_full_frontend",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bool"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_i64"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::from_assertion"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::pass"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::project_test"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::skip"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::unsupported"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::replay"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::within"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::same"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::empty"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe_failure"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::project"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::verdict_for"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "no_prior_language_function_body_fact_matched_current_inputs",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "retry_metrics": {
+        "cpu_seconds": 0.69,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54603776,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.703001
+      },
+      "retry_process_startup_metrics": {
+        "cpu_seconds": 0.09,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54644736,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.121495
+      },
+      "seed_cache": {
+        "key": "sha256:6d1ba4974503c5b313dfe0fa925678eab94466ddb948b951309747eb81d139c4",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_by_full_frontend",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bool"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::equals_i64"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::from_assertion"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::pass"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::project_test"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::skip"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.assertions::unsupported"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::replay"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.generative::within"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::bytes"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.snapshot::same"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::empty"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::observe_failure"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::project"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:mncs.test.suite::verdict_for"
+            },
+            {
+              "reason": "missing",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "no_prior_language_function_body_fact_matched_current_inputs",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "unique_policy_key": "sha256:6d1ba4974503c5b313dfe0fa925678eab94466ddb948b951309747eb81d139c4"
+    },
+    "invalid_source": {
+      "cache": {
+        "key": "sha256:d3a73dcaa43069da341f0e7d4417bc3b1a7d0d237367a254bfb9af298eb0bbad",
+        "publication": "not_published",
+        "recomputed_units": [
+          "source_semantic_check"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "bypass",
+        "verification_work": {
+          "artifact_decision_reason": "frontend_or_artifact_emission_did_not_produce_an_artifact",
+          "backend_artifact": "not_generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "rejected",
+          "function_body_verification": "recomputed_by_full_frontend",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 0,
+          "program_function_count": null,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "not_run",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "diagnostics": [
+        {
+          "code": "MNE162",
+          "expected": [],
+          "found": null,
+          "message": "record projection names a field the record does not declare",
+          "severity": "error",
+          "span": {
+            "column": 56,
+            "end": 2045,
+            "line": 53,
+            "start": 2032
+          },
+          "stage": "elaboration"
+        }
+      ],
+      "metrics": [
+        {
+          "cpu_seconds": 0.02,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 3,
+          "peak_rss_bytes": 54403072,
+          "peak_threads": 1,
+          "request_sequence": 20,
+          "wall_seconds": 0.037624
+        },
+        {
+          "cpu_seconds": 0.02,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 3,
+          "peak_rss_bytes": 54403072,
+          "peak_threads": 1,
+          "request_sequence": 21,
+          "wall_seconds": 0.035854
+        }
+      ],
+      "repeat_cache": {
+        "key": "sha256:d3a73dcaa43069da341f0e7d4417bc3b1a7d0d237367a254bfb9af298eb0bbad",
+        "publication": "not_published",
+        "recomputed_units": [
+          "source_semantic_check"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "bypass",
+        "verification_work": {
+          "artifact_decision_reason": "frontend_or_artifact_emission_did_not_produce_an_artifact",
+          "backend_artifact": "not_generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "rejected",
+          "function_body_verification": "recomputed_by_full_frontend",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 0,
+          "program_function_count": null,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "not_run",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "repeated_diagnostics_equal": true,
+      "response_status": "rejected"
+    },
+    "small_semantic_edit": {
+      "artifact_identity": "sha256:e4af0e899c9120f4b309a47b340c77eec4c3ab707c0ec5524666b8047b5260bd",
+      "cache": {
+        "key": "sha256:04e30a1c9bd979499005258175b71246da28da0383e54373cbcc9b1f7023e43a",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            },
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:tests.native_readiness::run"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "compile_metrics": {
+        "cpu_seconds": 0.61,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 13,
+        "wall_seconds": 0.62557
+      },
+      "directly_changed_source": "tests/native_readiness.mncs",
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 12,
+        "wall_seconds": 0.264651
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "reason": 1
+          },
+          "$v": 1
+        },
+        "state_value": 1,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 1,
+          "failure_count": 1,
+          "passed": 2,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 1
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "recomputed_units": [
+        "source_semantic_check",
+        "ssa_verification",
+        "verified_vm_artifact"
+      ],
+      "reused_units": [],
+      "source_snapshot_identity": "sha256:82d9c996239775f2a2aa5a926068172b065bdee0ea779c673c49267a02234b67",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 25591808,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.126204
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "reason": 1
+          },
+          "$v": 1
+        },
+        "state_value": 1,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 1,
+          "failure_count": 1,
+          "passed": 2,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 1
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "source_only_dependency_edit": {
+      "artifact_identity_after": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:ebd9f7cb596ce5319287c76912905279fa1c8a7fd1c7d3e649638f711b07c852",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "application_executable_closure_verification"
+        ],
+        "reuse_basis": "verified_application_executable_closure",
+        "reused_from_key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "reused_units": [
+          "verified_vm_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+          "backend_artifact": "reused",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::shrink",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "reused_verified_vm_artifact",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "compile_metrics": {
+        "cpu_seconds": 0.42,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 7,
+        "wall_seconds": 0.43819
+      },
+      "dependency_graph_identity_after": "sha256:49073a13eece114074d9cb12b5ea1b6ad9e2e0129d2cb148641b5fbac76fd231",
+      "dependency_graph_identity_before": "sha256:9ee80fa71b02957865630761371f23ba93eb4ddc202d00dc1d12b2e352969856",
+      "module": "mncs.test.generative",
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 6,
+        "wall_seconds": 0.260696
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "semantic_identity_after": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "semantic_identity_before": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "source_sha256_after": "sha256:359ad3896081ff6a1fd76e726f7205c8420fc31f37bbc2609e279f2eb3a599b1",
+      "source_sha256_before": "sha256:d2b04baaad227030ab16172f648a88778f70465bb0e3fd1708fe7be5d92d8f39",
+      "source_snapshot_identity_after": "sha256:3d9a45dc3eb60bbd4568d8401e64bb3f8cfa8c7bcd5b5027e82be37135c04a49",
+      "source_snapshot_identity_before": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 25845760,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.126211
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "unreachable_function_edit": {
+      "artifact_identity_after": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:cd6ecffe3d94335a885ad88233d44b8e948e7c8730bead3ab026113a01b77cef",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "application_executable_closure_verification"
+        ],
+        "reuse_basis": "verified_application_executable_closure",
+        "reused_from_key": "sha256:ebd9f7cb596ce5319287c76912905279fa1c8a7fd1c7d3e649638f711b07c852",
+        "reused_units": [
+          "verified_vm_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+          "backend_artifact": "reused",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.generative::shrink"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "reused_verified_vm_artifact",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "changed_function": "shrink",
+      "changed_module": "mncs.test.generative",
+      "compile_metrics": {
+        "cpu_seconds": 0.42,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 9,
+        "wall_seconds": 0.435739
+      },
+      "executable_closure_identity_after": "sha256:f6623caa4e7d635ae66ecb17eaad71f8f02af10b24307204e5418ae3d0c95d8d",
+      "executable_closure_identity_before": "sha256:f6623caa4e7d635ae66ecb17eaad71f8f02af10b24307204e5418ae3d0c95d8d",
+      "full_semantic_identity_after": "sha256:454f2f7d4a6e13c4c95aef36b57e36564c5200b146852af95d233eed9bb880be",
+      "full_semantic_identity_before": "sha256:1aed36c57c9331baa9d8180b3247e16f1e072c026bd2ef9b23c682270836a922",
+      "oracle_matches_vm": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 8,
+        "wall_seconds": 0.265649
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "source_sha256_after": "sha256:98945be30c3b3bac7ccc601ed9d52deea1cd53ab3d16d251a36c2fe03c673bf5",
+      "source_sha256_before": "sha256:d2b04baaad227030ab16172f648a88778f70465bb0e3fd1708fe7be5d92d8f39",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 21344256,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.122733
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "unreferenced_module_addition_and_edit": {
+      "artifact_identity_after_addition": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_identity_after_edit": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache_after_addition": {
+        "key": "sha256:1a283d21389f5706e19c9c7d7458f266313b1b555a9d13506ed4b779c359c1c1",
+        "publication": "previously_published",
+        "recomputed_units": [
+          "request_source_snapshot_identity"
+        ],
+        "reuse_basis": "verified_dependency_closure",
+        "reused_from_key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "reused_units": [
+          "verified_application_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "verified_cached_application_artifact",
+          "backend_artifact": "reused",
+          "declaration_resolution": "not_run",
+          "front_end_invocations": 0,
+          "front_end_outcome": "not_run",
+          "function_body_verification": "not_run",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 0,
+          "program_function_count": null,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": null,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "reused_verified_dependency_closure",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "source_change_outside_resolved_dependency_closure",
+          "signature_verification": "not_run",
+          "source_parsing": "not_run",
+          "ssa_verification": "not_run",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "cache_after_edit": {
+        "key": "sha256:5be4372f0caab03b8dd404108cd9ee80d565cbd4882b47d48aeb948f93e3648d",
+        "publication": "previously_published",
+        "recomputed_units": [
+          "request_source_snapshot_identity"
+        ],
+        "reuse_basis": "verified_dependency_closure",
+        "reused_from_key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "reused_units": [
+          "verified_application_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "verified_cached_application_artifact",
+          "backend_artifact": "reused",
+          "declaration_resolution": "not_run",
+          "front_end_invocations": 0,
+          "front_end_outcome": "not_run",
+          "function_body_verification": "not_run",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 0,
+          "program_function_count": null,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": null,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "reused_verified_dependency_closure",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "source_change_outside_resolved_dependency_closure",
+          "signature_verification": "not_run",
+          "source_parsing": "not_run",
+          "ssa_verification": "not_run",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "compile_metrics_after_addition": {
+        "cpu_seconds": 0.0,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 4,
+        "wall_seconds": 0.013875
+      },
+      "compile_metrics_after_edit": {
+        "cpu_seconds": 0.0,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 5,
+        "wall_seconds": 0.013642
+      },
+      "dependency_graph_identity": "sha256:9ee80fa71b02957865630761371f23ba93eb4ddc202d00dc1d12b2e352969856",
+      "module_added_and_edited": "mncs.test.unused",
+      "module_source_bytes_after_addition": 77,
+      "module_source_bytes_after_edit": 77,
+      "module_source_sha256_after_addition": "sha256:4defb7646bd1439490d763ce2d15c8916b909771de92026cc425f7f737ca805c",
+      "module_source_sha256_after_edit": "sha256:3cfa55941e0c1bfcb9c58237ee31ca502646d0ff5f95ae389298d424e4c601d8",
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 3,
+        "wall_seconds": 0.260212
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "snapshot_identity_after_addition": "sha256:d0e0cce90c6ba7330a33fdd8dbffea21befacb1193d5cd5d1b19b70c8069b771",
+      "snapshot_identity_after_edit": "sha256:b4f422eaa30cf80b36532712af955261cbeb2e81841483fe0f4b78108a8ab998",
+      "snapshot_identity_before": "sha256:e443aefbdaf5ef1a916c9b8d26038597d8f9d9e2af0d1e4e37e0a5a38abcf33c",
+      "vm_metrics": {
+        "cpu_seconds": 0.12,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 25513984,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.125813
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "unrelated_exported_signature_change": {
+      "artifact_identity_after": "sha256:518021e30a23a17b5a7d6a2250a7a633f4cf2b386e8031473017dfb598be2912",
+      "artifact_identity_before": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "artifact_interface_identity_after": "b740a1ae80a97073aaa247b81a50d642ba2ac54ae46016ecb0d2f8e1bfb2dd3c",
+      "artifact_interface_identity_before": "12732258e2c29abd961f738b075b19ef2f5ca9cadf4b8fb1323a1812f9fc99d4",
+      "cache": {
+        "key": "sha256:caa209d02000a50ba16f89339c2cd7d84ed8ccd81fa1790015ca711f9a1dcd5a",
+        "publication": "stored",
+        "recomputed_units": [
+          "source_semantic_check",
+          "ssa_verification",
+          "verified_vm_artifact"
+        ],
+        "reuse_basis": "none",
+        "reused_from_key": null,
+        "reused_units": [],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "miss",
+        "verification_work": {
+          "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+          "backend_artifact": "generated",
+          "declaration_resolution": "recomputed_by_full_frontend",
+          "front_end_invocations": 1,
+          "front_end_outcome": "verified",
+          "function_body_verification": "recomputed_with_language_fact_reuse",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 24,
+          "program_function_count": 24,
+          "recomputed_semantic_facts": [
+            "mncs:0.2:body:mncs.test.generative::shrink"
+          ],
+          "resolved_module_count": 5,
+          "reused_semantic_facts": [
+            "mncs:0.2:body:mncs.test.assertions::equals_bool",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+            "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.assertions::equals_i64",
+            "mncs:0.2:body:mncs.test.assertions::from_assertion",
+            "mncs:0.2:body:mncs.test.assertions::pass",
+            "mncs:0.2:body:mncs.test.assertions::project_test",
+            "mncs:0.2:body:mncs.test.assertions::skip",
+            "mncs:0.2:body:mncs.test.assertions::unsupported",
+            "mncs:0.2:body:mncs.test.generative::advance_random",
+            "mncs:0.2:body:mncs.test.generative::draw_case",
+            "mncs:0.2:body:mncs.test.generative::replay",
+            "mncs:0.2:body:mncs.test.generative::within",
+            "mncs:0.2:body:mncs.test.snapshot::bytes",
+            "mncs:0.2:body:mncs.test.snapshot::same",
+            "mncs:0.2:body:mncs.test.suite::empty",
+            "mncs:0.2:body:mncs.test.suite::observe",
+            "mncs:0.2:body:mncs.test.suite::observe_failure",
+            "mncs:0.2:body:mncs.test.suite::project",
+            "mncs:0.2:body:mncs.test.suite::summarize",
+            "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+            "mncs:0.2:body:mncs.test.suite::verdict_for",
+            "mncs:0.2:body:tests.native_readiness::run"
+          ],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "recomputed_by_full_frontend",
+          "semantic_fact_recomputation_reasons": [
+            {
+              "reason": "subject_changed",
+              "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+            }
+          ],
+          "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+          "signature_verification": "recomputed_by_full_frontend",
+          "source_parsing": "recomputed_by_full_frontend",
+          "ssa_verification": "recomputed",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "changed_function": "shrink",
+      "changed_module": "mncs.test.generative",
+      "compile_metrics": {
+        "cpu_seconds": 0.6,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 11,
+        "wall_seconds": 0.612175
+      },
+      "entry_interface_identity_after": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
+      "entry_interface_identity_before": "sha256:d56624256d76d2cb2ccc04d0593c7083c00f9ce3d07987d7e6924da135e4a049",
+      "executable_closure_identity_after": "sha256:f6623caa4e7d635ae66ecb17eaad71f8f02af10b24307204e5418ae3d0c95d8d",
+      "executable_closure_identity_before": "sha256:f6623caa4e7d635ae66ecb17eaad71f8f02af10b24307204e5418ae3d0c95d8d",
+      "oracle_matches_vm": true,
+      "oracle_metrics": {
+        "cpu_seconds": 0.24,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 10,
+        "wall_seconds": 0.264041
+      },
+      "oracle_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      },
+      "oracle_valid": true,
+      "source_sha256_after": "sha256:83d36051cfec4bbd8d3aaa7cac19276b66bd398d6d0e204e4fd417115946c496",
+      "source_sha256_before": "sha256:d2b04baaad227030ab16172f648a88778f70465bb0e3fd1708fe7be5d92d8f39",
+      "vm_metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 21565440,
+        "peak_threads": 1,
+        "process_count": 1,
+        "stderr": "",
+        "wall_seconds": 0.12335
+      },
+      "vm_result": {
+        "property_case": {
+          "case_index": 7,
+          "seed": 42,
+          "value": 7387423678921755881
+        },
+        "state": {
+          "$p": {
+            "checks": 4
+          },
+          "$v": 0
+        },
+        "state_value": 4,
+        "suite": {
+          "assertion_count": 3,
+          "failed": 0,
+          "failure_count": 0,
+          "passed": 3,
+          "skipped": 1,
+          "total": 4,
+          "unsupported": 0,
+          "verdict_code": 0
+        },
+        "witness": {
+          "checksum": 30,
+          "length": 4
+        }
+      }
+    },
+    "unsupported_target": {
+      "error": {
+        "code": "MCA101",
+        "message": "requested execution target is unavailable"
+      },
+      "metrics": {
+        "cpu_seconds": 0.0,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 22,
+        "wall_seconds": 0.000248
+      },
+      "response_status": "unavailable"
+    },
+    "warm_unchanged_fresh_process": {
+      "artifact_identity": "sha256:7a0f4ebec0cf65571f913858c66fa29e94c325e125bded4ebcf363489c01b3dc",
+      "cache": {
+        "key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "publication": "previously_published",
+        "recomputed_units": [],
+        "reuse_basis": "exact_source_snapshot",
+        "reused_from_key": "sha256:a846c47f70ab3f06e57e49b82bba2a0a2757f912aa349243d309c50ee0318e06",
+        "reused_units": [
+          "verified_application_artifact"
+        ],
+        "schema_version": "mncs.compiler.application-build-cache-observation/4",
+        "status": "hit",
+        "verification_work": {
+          "artifact_decision_reason": "verified_cached_application_artifact",
+          "backend_artifact": "reused",
+          "declaration_resolution": "not_run",
+          "front_end_invocations": 0,
+          "front_end_outcome": "not_run",
+          "function_body_verification": "not_run",
+          "language_verification_fact_schema": "mncs.language-verification-fact/1",
+          "produced_semantic_fact_count": 0,
+          "program_function_count": null,
+          "recomputed_semantic_facts": [],
+          "resolved_module_count": null,
+          "reused_semantic_facts": [],
+          "schema_version": "mncs.compiler.application-build-verification-work/2",
+          "semantic_dependency_closure": "not_run",
+          "semantic_fact_recomputation_reasons": [],
+          "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+          "signature_verification": "not_run",
+          "source_parsing": "not_run",
+          "ssa_verification": "not_run",
+          "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+        }
+      },
+      "cpu_speedup": 6.18,
+      "metrics": {
+        "cpu_seconds": 0.11,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 54403072,
+        "peak_threads": 1,
+        "request_sequence": 2,
+        "wall_seconds": 0.104425
+      },
+      "process_startup_metrics": {
+        "cpu_seconds": 0.1,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 3,
+        "peak_rss_bytes": 54444032,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.122257
+      },
+      "wall_speedup": 6.7
+    }
+  },
+  "fine_grained_invalidation": {
+    "detail": "Changed snapshots invoke parsing, module resolution, and declaration verification, then reuse only Language facts whose subject, verifier, policy, profile, callable interface, semantic dependencies, specialization, and effect assumptions still match. A dependency edit reused 22 independent body facts and reverified 2 dependent bodies in 0.612 s; canonical VM execution matched the Stage-0 oracle. A reachable root edit took 0.626 s, an unreachable body edit reused independent facts and reverified only the changed body, and a fresh-process root comment edit reused 24 facts. Nominal edits reverified affected users; a generic body edit reverified its declaration, concrete specialization, and dependent caller while retaining independent facts. SSA/backend identity remains separate and is regenerated when executable semantics change.",
+    "status": "language_function_body_fact_reuse_verified"
+  },
+  "gate_a": "pass",
+  "gate_b": "pass",
+  "kind": "mncs-native-incremental-build-evidence",
+  "observed_at": "2026-10-20T03:59:28.173771+00:00",
+  "producer_diagnostics_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n\nmncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=68c52d3eb6ae/68c52d3eb6ae\n",
+  "resource_notes": {
+    "cgroup_memory_bytes": "unknown when the sandbox exposes no usable cgroup memory counter",
+    "process_metrics": "sampled from /proc for probe and VM processes; wall and CPU use process deltas"
+  },
+  "schema_version": 1,
+  "self_consumption_matrix_change": "none; Stage-1/Stage-2 and the self-consumption matrix remain unchanged",
+  "verification_work_observation": {
+    "changed_snapshot_semantic_facts_reused": [
+      "mncs:0.2:body:mncs.test.assertions::equals_bool",
+      "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+      "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+      "mncs:0.2:body:mncs.test.assertions::equals_i64",
+      "mncs:0.2:body:mncs.test.assertions::from_assertion",
+      "mncs:0.2:body:mncs.test.assertions::pass",
+      "mncs:0.2:body:mncs.test.assertions::project_test",
+      "mncs:0.2:body:mncs.test.assertions::skip",
+      "mncs:0.2:body:mncs.test.assertions::unsupported",
+      "mncs:0.2:body:mncs.test.generative::draw_case",
+      "mncs:0.2:body:mncs.test.generative::replay",
+      "mncs:0.2:body:mncs.test.generative::shrink",
+      "mncs:0.2:body:mncs.test.generative::within",
+      "mncs:0.2:body:mncs.test.snapshot::bytes",
+      "mncs:0.2:body:mncs.test.snapshot::same",
+      "mncs:0.2:body:mncs.test.suite::empty",
+      "mncs:0.2:body:mncs.test.suite::observe",
+      "mncs:0.2:body:mncs.test.suite::observe_failure",
+      "mncs:0.2:body:mncs.test.suite::project",
+      "mncs:0.2:body:mncs.test.suite::summarize",
+      "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+      "mncs:0.2:body:mncs.test.suite::verdict_for"
+    ],
+    "cold_build": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 24,
+      "program_function_count": 24,
+      "recomputed_semantic_facts": [
+        "mncs:0.2:body:mncs.test.assertions::equals_bool",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.assertions::equals_i64",
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:mncs.test.assertions::pass",
+        "mncs:0.2:body:mncs.test.assertions::project_test",
+        "mncs:0.2:body:mncs.test.assertions::skip",
+        "mncs:0.2:body:mncs.test.assertions::unsupported",
+        "mncs:0.2:body:mncs.test.generative::advance_random",
+        "mncs:0.2:body:mncs.test.generative::draw_case",
+        "mncs:0.2:body:mncs.test.generative::replay",
+        "mncs:0.2:body:mncs.test.generative::shrink",
+        "mncs:0.2:body:mncs.test.generative::within",
+        "mncs:0.2:body:mncs.test.snapshot::bytes",
+        "mncs:0.2:body:mncs.test.snapshot::same",
+        "mncs:0.2:body:mncs.test.suite::empty",
+        "mncs:0.2:body:mncs.test.suite::observe",
+        "mncs:0.2:body:mncs.test.suite::observe_failure",
+        "mncs:0.2:body:mncs.test.suite::project",
+        "mncs:0.2:body:mncs.test.suite::summarize",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.suite::verdict_for",
+        "mncs:0.2:body:tests.native_readiness::run"
+      ],
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_fact_recomputation_reasons": [
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::equals_bool"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::equals_i64"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::from_assertion"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::pass"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::project_test"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::skip"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.assertions::unsupported"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.generative::draw_case"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.generative::replay"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.generative::within"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.snapshot::bytes"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.snapshot::same"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::empty"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::observe"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::observe_failure"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::project"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:mncs.test.suite::verdict_for"
+        },
+        {
+          "reason": "missing",
+          "subject": "mncs:0.2:body:tests.native_readiness::run"
+        }
+      ],
+      "semantic_reverification_reason": "no_prior_language_function_body_fact_matched_current_inputs",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "fresh_process_readback": {
+      "artifact_decision_reason": "verified_cached_application_artifact",
+      "backend_artifact": "reused",
+      "declaration_resolution": "not_run",
+      "front_end_invocations": 0,
+      "front_end_outcome": "not_run",
+      "function_body_verification": "not_run",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 0,
+      "program_function_count": null,
+      "recomputed_semantic_facts": [],
+      "resolved_module_count": null,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "not_run",
+      "semantic_fact_recomputation_reasons": [],
+      "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+      "signature_verification": "not_run",
+      "source_parsing": "not_run",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "generic_specialization_edit": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_with_language_fact_reuse",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 24,
+      "program_function_count": 24,
+      "recomputed_semantic_facts": [
+        "mncs:0.2:body:mncs.test.suite::summarize",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+        "mncs:0.2:body:tests.native_readiness::run"
+      ],
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [
+        "mncs:0.2:body:mncs.test.assertions::equals_bool",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.assertions::equals_i64",
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:mncs.test.assertions::pass",
+        "mncs:0.2:body:mncs.test.assertions::project_test",
+        "mncs:0.2:body:mncs.test.assertions::skip",
+        "mncs:0.2:body:mncs.test.assertions::unsupported",
+        "mncs:0.2:body:mncs.test.generative::advance_random",
+        "mncs:0.2:body:mncs.test.generative::draw_case",
+        "mncs:0.2:body:mncs.test.generative::replay",
+        "mncs:0.2:body:mncs.test.generative::shrink",
+        "mncs:0.2:body:mncs.test.generative::within",
+        "mncs:0.2:body:mncs.test.snapshot::bytes",
+        "mncs:0.2:body:mncs.test.snapshot::same",
+        "mncs:0.2:body:mncs.test.suite::empty",
+        "mncs:0.2:body:mncs.test.suite::observe",
+        "mncs:0.2:body:mncs.test.suite::observe_failure",
+        "mncs:0.2:body:mncs.test.suite::project",
+        "mncs:0.2:body:mncs.test.suite::verdict_for"
+      ],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_fact_recomputation_reasons": [
+        {
+          "reason": "subject_changed",
+          "subject": "mncs:0.2:body:mncs.test.suite::summarize"
+        },
+        {
+          "reason": "subject_changed",
+          "subject": "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230"
+        },
+        {
+          "reason": "dependencies_changed",
+          "subject": "mncs:0.2:body:tests.native_readiness::run"
+        }
+      ],
+      "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "interpretation": "Changed snapshots invoke parsing, module resolution, and whole-program declaration checking. Language-owned verified function-body facts are separately guard-checked, with independent bodies reused and changed bodies or dependents reverified. SSA and backend work are recorded independently.",
+    "invalid_source": {
+      "artifact_decision_reason": "frontend_or_artifact_emission_did_not_produce_an_artifact",
+      "backend_artifact": "not_generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "rejected",
+      "function_body_verification": "recomputed_by_full_frontend",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 0,
+      "program_function_count": null,
+      "recomputed_semantic_facts": [],
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_fact_recomputation_reasons": [],
+      "semantic_reverification_reason": "no_reusable_language_verified_fact_set_selected",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "reachable_dependency_edit": {
+      "artifact_decision_reason": "no_compatible_verified_vm_artifact_reused",
+      "backend_artifact": "generated",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_with_language_fact_reuse",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 24,
+      "program_function_count": 24,
+      "recomputed_semantic_facts": [
+        "mncs:0.2:body:mncs.test.generative::advance_random",
+        "mncs:0.2:body:tests.native_readiness::run"
+      ],
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [
+        "mncs:0.2:body:mncs.test.assertions::equals_bool",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.assertions::equals_i64",
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:mncs.test.assertions::pass",
+        "mncs:0.2:body:mncs.test.assertions::project_test",
+        "mncs:0.2:body:mncs.test.assertions::skip",
+        "mncs:0.2:body:mncs.test.assertions::unsupported",
+        "mncs:0.2:body:mncs.test.generative::draw_case",
+        "mncs:0.2:body:mncs.test.generative::replay",
+        "mncs:0.2:body:mncs.test.generative::shrink",
+        "mncs:0.2:body:mncs.test.generative::within",
+        "mncs:0.2:body:mncs.test.snapshot::bytes",
+        "mncs:0.2:body:mncs.test.snapshot::same",
+        "mncs:0.2:body:mncs.test.suite::empty",
+        "mncs:0.2:body:mncs.test.suite::observe",
+        "mncs:0.2:body:mncs.test.suite::observe_failure",
+        "mncs:0.2:body:mncs.test.suite::project",
+        "mncs:0.2:body:mncs.test.suite::summarize",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.suite::verdict_for"
+      ],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_fact_recomputation_reasons": [
+        {
+          "reason": "subject_changed",
+          "subject": "mncs:0.2:body:mncs.test.generative::advance_random"
+        },
+        {
+          "reason": "subject_changed",
+          "subject": "mncs:0.2:body:tests.native_readiness::run"
+        }
+      ],
+      "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "recomputed",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "schema_version": "mncs.compiler.application-build-verification-work/2",
+    "source_only_dependency_edit": {
+      "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+      "backend_artifact": "reused",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_with_language_fact_reuse",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 24,
+      "program_function_count": 24,
+      "recomputed_semantic_facts": [],
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [
+        "mncs:0.2:body:mncs.test.assertions::equals_bool",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.assertions::equals_i64",
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:mncs.test.assertions::pass",
+        "mncs:0.2:body:mncs.test.assertions::project_test",
+        "mncs:0.2:body:mncs.test.assertions::skip",
+        "mncs:0.2:body:mncs.test.assertions::unsupported",
+        "mncs:0.2:body:mncs.test.generative::advance_random",
+        "mncs:0.2:body:mncs.test.generative::draw_case",
+        "mncs:0.2:body:mncs.test.generative::replay",
+        "mncs:0.2:body:mncs.test.generative::shrink",
+        "mncs:0.2:body:mncs.test.generative::within",
+        "mncs:0.2:body:mncs.test.snapshot::bytes",
+        "mncs:0.2:body:mncs.test.snapshot::same",
+        "mncs:0.2:body:mncs.test.suite::empty",
+        "mncs:0.2:body:mncs.test.suite::observe",
+        "mncs:0.2:body:mncs.test.suite::observe_failure",
+        "mncs:0.2:body:mncs.test.suite::project",
+        "mncs:0.2:body:mncs.test.suite::summarize",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.suite::verdict_for",
+        "mncs:0.2:body:tests.native_readiness::run"
+      ],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_fact_recomputation_reasons": [],
+      "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "reused_verified_vm_artifact",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "unreachable_function_body_edit": {
+      "artifact_decision_reason": "executable_closure_and_interfaces_match_after_full_frontend",
+      "backend_artifact": "reused",
+      "declaration_resolution": "recomputed_by_full_frontend",
+      "front_end_invocations": 1,
+      "front_end_outcome": "verified",
+      "function_body_verification": "recomputed_with_language_fact_reuse",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 24,
+      "program_function_count": 24,
+      "recomputed_semantic_facts": [
+        "mncs:0.2:body:mncs.test.generative::shrink"
+      ],
+      "resolved_module_count": 5,
+      "reused_semantic_facts": [
+        "mncs:0.2:body:mncs.test.assertions::equals_bool",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes",
+        "mncs:0.2:body:mncs.test.assertions::equals_bytes__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.assertions::equals_i64",
+        "mncs:0.2:body:mncs.test.assertions::from_assertion",
+        "mncs:0.2:body:mncs.test.assertions::pass",
+        "mncs:0.2:body:mncs.test.assertions::project_test",
+        "mncs:0.2:body:mncs.test.assertions::skip",
+        "mncs:0.2:body:mncs.test.assertions::unsupported",
+        "mncs:0.2:body:mncs.test.generative::advance_random",
+        "mncs:0.2:body:mncs.test.generative::draw_case",
+        "mncs:0.2:body:mncs.test.generative::replay",
+        "mncs:0.2:body:mncs.test.generative::within",
+        "mncs:0.2:body:mncs.test.snapshot::bytes",
+        "mncs:0.2:body:mncs.test.snapshot::same",
+        "mncs:0.2:body:mncs.test.suite::empty",
+        "mncs:0.2:body:mncs.test.suite::observe",
+        "mncs:0.2:body:mncs.test.suite::observe_failure",
+        "mncs:0.2:body:mncs.test.suite::project",
+        "mncs:0.2:body:mncs.test.suite::summarize",
+        "mncs:0.2:body:mncs.test.suite::summarize__spec_f10cf230",
+        "mncs:0.2:body:mncs.test.suite::verdict_for",
+        "mncs:0.2:body:tests.native_readiness::run"
+      ],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "recomputed_by_full_frontend",
+      "semantic_fact_recomputation_reasons": [
+        {
+          "reason": "subject_changed",
+          "subject": "mncs:0.2:body:mncs.test.generative::shrink"
+        }
+      ],
+      "semantic_reverification_reason": "current_language_facts_checked_and_independent_units_recomputed",
+      "signature_verification": "recomputed_by_full_frontend",
+      "source_parsing": "recomputed_by_full_frontend",
+      "ssa_verification": "reused_verified_vm_artifact",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    },
+    "warm_exact_snapshot": {
+      "artifact_decision_reason": "verified_cached_application_artifact",
+      "backend_artifact": "reused",
+      "declaration_resolution": "not_run",
+      "front_end_invocations": 0,
+      "front_end_outcome": "not_run",
+      "function_body_verification": "not_run",
+      "language_verification_fact_schema": "mncs.language-verification-fact/1",
+      "produced_semantic_fact_count": 0,
+      "program_function_count": null,
+      "recomputed_semantic_facts": [],
+      "resolved_module_count": null,
+      "reused_semantic_facts": [],
+      "schema_version": "mncs.compiler.application-build-verification-work/2",
+      "semantic_dependency_closure": "not_run",
+      "semantic_fact_recomputation_reasons": [],
+      "semantic_reverification_reason": "exact_source_snapshot_cache_hit",
+      "signature_verification": "not_run",
+      "source_parsing": "not_run",
+      "ssa_verification": "not_run",
+      "verification_engine_identity": "sha256:b2abbc6db9d8065ff62df896ebb1dee1b9dca5dd414d7ff0dfb7888fdd3e5153"
+    }
+  }
+}

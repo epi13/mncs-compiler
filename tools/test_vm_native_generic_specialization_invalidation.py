@@ -48,7 +48,7 @@ def verification_work(build: dict, label: str) -> dict:
     work = build.get("cache", {}).get("verification_work")
     if not isinstance(work, dict):
         raise AssertionError(f"{label} omitted verification-work telemetry")
-    if work.get("schema_version") != "mncs.compiler.application-build-verification-work/1":
+    if work.get("schema_version") != "mncs.compiler.application-build-verification-work/2":
         raise AssertionError(f"{label} returned an unexpected work schema: {work}")
     return work
 
@@ -159,8 +159,16 @@ def main() -> None:
                 raise AssertionError("generic body edit reused the source-snapshot cache")
             if changed_work.get("front_end_invocations") != 1:
                 raise AssertionError("generic body edit skipped full current-source verification")
-            if changed_work.get("reused_semantic_facts") != []:
-                raise AssertionError("Compiler reported Language facts without Language evidence")
+            reused_facts = changed_work.get("reused_semantic_facts", [])
+            recomputed_facts = changed_work.get("recomputed_semantic_facts", [])
+            if not reused_facts:
+                raise AssertionError("unrelated Language body facts were not reused")
+            if not any("mncs.test.suite::summarize" in subject
+                       for subject in recomputed_facts):
+                raise AssertionError("changed generic specialization body was not reverified")
+            if any("mncs.test.suite::summarize" in subject
+                   for subject in reused_facts):
+                raise AssertionError("stale generic specialization fact was reused")
             if (baseline.get("artifact", {}).get("identity")
                     == changed.get("artifact", {}).get("identity")):
                 raise AssertionError("generic specialization edit reused the prior VM artifact")
@@ -258,10 +266,13 @@ def main() -> None:
             "changed_execution": changed_execution_metrics,
             "fresh_process_warm_build": warm_build_metrics,
         },
-        "scope": "Compiler source-snapshot and executable-artifact invalidation for a real Test generic specialization. The changed snapshot still runs the full Stage-0 frontend; no Language verified-fact reuse is claimed.",
+        "scope": "Compiler source-snapshot and executable-artifact invalidation for a real Test generic specialization. Parsing, module resolution, and declaration checking run on the changed snapshot; Language reuses only guarded independent body facts and rechecks the changed generic body, concrete specialization, and dependent caller.",
         "status": "passed",
     }
-    output = ROOT / "evidence/native-app-readiness-test-generic-specialization-invalidation-20261017.json"
+    output = ROOT / "evidence" / (
+        f"native-app-readiness-test-generic-specialization-invalidation-"
+        f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}.json"
+    )
     output.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
     print(json.dumps({
         "status": evidence["status"],

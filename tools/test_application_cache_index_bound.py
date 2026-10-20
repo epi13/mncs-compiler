@@ -30,8 +30,14 @@ MODULE_PATHS = {
     "mncs.test.suite": WORKSPACE / "mncs-test/native/mncs/test/suite.mncs",
     "mncs.std.application.v1": WORKSPACE / "mncs-stdlib/library/std/application.mncs",
 }
-PROBE = ROOT / ".build/native-app-readiness/stage0-target/release/mncs-compiler-stage0-probe"
-EVIDENCE_PATH = ROOT / "evidence/application-cache-index-digest-integration-20261017.json"
+PROBE = Path(os.environ.get(
+    "MNCS_NATIVE_APP_PROBE_BIN",
+    str(ROOT / ".build/native-app-readiness/stage0-target/release/mncs-compiler-stage0-probe"),
+))
+EVIDENCE_PATH = ROOT / "evidence" / (
+    f"application-cache-index-digest-integration-"
+    f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}-{os.getpid()}.json"
+)
 
 
 def sha(data: bytes) -> str:
@@ -81,7 +87,7 @@ def assert_full_frontend(response: dict, label: str) -> dict:
     work = cache.get("verification_work", {})
     if cache.get("schema_version") != "mncs.compiler.application-build-cache-observation/4":
         raise AssertionError(f"{label} omitted current cache observation: {cache}")
-    if work.get("schema_version") != "mncs.compiler.application-build-verification-work/1":
+    if work.get("schema_version") != "mncs.compiler.application-build-verification-work/2":
         raise AssertionError(f"{label} omitted verification work: {work}")
     if work.get("front_end_invocations") != 1 or work.get("front_end_outcome") != "verified":
         raise AssertionError(f"{label} did not report one verified frontend invocation: {work}")

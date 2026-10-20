@@ -6,7 +6,10 @@
 //! the executable authority or implement language semantics here.
 use crate::{vm_emit, ToolchainIdentity};
 use mncs_compiler::{ModuleResolution, ModuleResolver, ReferenceCompiler};
-use mncs_model::{ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest};
+use mncs_model::{
+    ArtifactRepresentation, ExecutionTypeArgument, HostGenericSeedRequest, VerificationFact,
+    VerificationFactRequest, VerificationFactReuseObservation,
+};
 use mncs_syntax::{SourceArtifactKind, SourceEnvelope};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -28,6 +31,8 @@ struct ApplicationCacheEntry<'a> {
     key: &'a str,
     response_sha256: &'a str,
     response: &'a serde_json::value::RawValue,
+    verification_facts_sha256: &'a str,
+    verification_facts: &'a serde_json::value::RawValue,
 }
 
 #[derive(serde::Serialize)]
@@ -36,6 +41,8 @@ struct ApplicationCachePublishEntry<'a> {
     key: &'a str,
     response_sha256: String,
     response: &'a Value,
+    verification_facts_sha256: String,
+    verification_facts: &'a [VerificationFact],
 }
 
 struct Sha256Writer(Sha256);
@@ -51,7 +58,7 @@ impl Write for Sha256Writer {
     }
 }
 
-fn sha256_serialized<T: serde::Serialize>(value: &T) -> Result<String, serde_json::Error> {
+fn sha256_serialized<T: serde::Serialize + ?Sized>(value: &T) -> Result<String, serde_json::Error> {
     let mut writer = Sha256Writer(Sha256::new());
     serde_json::to_writer(&mut writer, value)?;
     Ok(format!("sha256:{:x}", writer.0.finalize()))
@@ -566,7 +573,7 @@ fn annotate_cache_with_basis(
                 "reused_units": reused_units,
                 "recomputed_units": recomputed_units,
                 "verification_work": {
-                    "schema_version": "mncs.compiler.application-build-verification-work/1",
+                    "schema_version": "mncs.compiler.application-build-verification-work/2",
                     "verification_engine_identity": verifier_identity,
                     "source_parsing": source_stage,
                     "declaration_resolution": source_stage,
@@ -580,6 +587,10 @@ fn annotate_cache_with_basis(
                     "resolved_module_count": null,
                     "program_function_count": null,
                     "reused_semantic_facts": [],
+                    "recomputed_semantic_facts": [],
+                    "semantic_fact_recomputation_reasons": [],
+                    "produced_semantic_fact_count": 0,
+                    "language_verification_fact_schema": mncs_model::VERIFICATION_FACT_SCHEMA_VERSION,
                     "semantic_reverification_reason": semantic_reverification_reason,
                     "artifact_decision_reason": artifact_decision_reason,
                 },
@@ -610,6 +621,62 @@ fn annotate_frontend_work(
         program_function_count.map_or(Value::Null, |count| json!(count)),
     );
     work.insert("front_end_outcome".to_owned(), json!(frontend_outcome));
+    response
+}
+
+fn annotate_language_fact_work(
+    mut response: Value,
+    facts: &[VerificationFact],
+    reuse: Option<&VerificationFactReuseObservation>,
+) -> Value {
+    let Some(work) = response
+        .pointer_mut("/cache/verification_work")
+        .and_then(Value::as_object_mut)
+    else {
+        return response;
+    };
+    let Some(reuse) = reuse else {
+        return response;
+    };
+    work.insert(
+        "reused_semantic_facts".to_owned(),
+        json!(reuse
+            .reused
+            .iter()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>()),
+    );
+    work.insert(
+        "recomputed_semantic_facts".to_owned(),
+        json!(reuse
+            .recomputed
+            .iter()
+            .map(|row| row.subject.to_string())
+            .collect::<Vec<_>>()),
+    );
+    work.insert(
+        "semantic_fact_recomputation_reasons".to_owned(),
+        serde_json::to_value(&reuse.recomputed).unwrap_or_else(|_| json!([])),
+    );
+    work.insert(
+        "produced_semantic_fact_count".to_owned(),
+        json!(facts.len()),
+    );
+    if !reuse.reused.is_empty() {
+        work.insert(
+            "function_body_verification".to_owned(),
+            json!("recomputed_with_language_fact_reuse"),
+        );
+        work.insert(
+            "semantic_reverification_reason".to_owned(),
+            json!("current_language_facts_checked_and_independent_units_recomputed"),
+        );
+    } else if !reuse.recomputed.is_empty() {
+        work.insert(
+            "semantic_reverification_reason".to_owned(),
+            json!("no_prior_language_function_body_fact_matched_current_inputs"),
+        );
+    }
     response
 }
 
@@ -695,6 +762,25 @@ fn read_application_cache(
     probe_identity: &str,
     toolchain: Option<&ToolchainIdentity>,
 ) -> Option<Value> {
+    read_application_cache_with_facts(
+        path,
+        key,
+        expected_contract,
+        expected_source_identity,
+        probe_identity,
+        toolchain,
+    )
+    .map(|(response, _)| response)
+}
+
+fn read_application_cache_with_facts(
+    path: &PathBuf,
+    key: &str,
+    expected_contract: &str,
+    expected_source_identity: Option<&str>,
+    probe_identity: &str,
+    toolchain: Option<&ToolchainIdentity>,
+) -> Option<(Value, Vec<VerificationFact>)> {
     let read_started = Instant::now();
     let bytes = fs::read(path).ok()?;
     crate::trace_phase(
@@ -709,7 +795,7 @@ fn read_application_cache(
         decode_started,
         json!({"cache_bytes": bytes.len()}),
     );
-    if entry.schema_version != "mncs.compiler.application-build-cache-entry/3" || entry.key != key {
+    if entry.schema_version != "mncs.compiler.application-build-cache-entry/4" || entry.key != key {
         return None;
     }
     let response_raw = entry.response.get();
@@ -723,6 +809,12 @@ fn read_application_cache(
     if entry.response_sha256 != response_digest {
         return None;
     }
+    let facts_raw = entry.verification_facts.get();
+    let facts_digest = format!("sha256:{}", mncs_model::sha256_hex(facts_raw.as_bytes()));
+    if entry.verification_facts_sha256 != facts_digest {
+        return None;
+    }
+    let verification_facts: Vec<VerificationFact> = serde_json::from_str(facts_raw).ok()?;
     let response_decode_started = Instant::now();
     let response: Value = serde_json::from_str(response_raw).ok()?;
     crate::trace_phase(
@@ -759,7 +851,7 @@ fn read_application_cache(
     if response.pointer("/producer/stage0_toolchain").cloned() != expected_toolchain {
         return None;
     }
-    Some(response)
+    Some((response, verification_facts))
 }
 
 fn cached_application_matches_dependency_closure(
@@ -1327,17 +1419,25 @@ fn rebind_cached_application_response(
     Some(response)
 }
 
-fn publish_application_cache(path: &PathBuf, key: &str, response: &Value) -> Result<(), String> {
+fn publish_application_cache(
+    path: &PathBuf,
+    key: &str,
+    response: &Value,
+    verification_facts: &[VerificationFact],
+) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "cache path has no parent".to_owned())?;
     fs::create_dir_all(parent).map_err(|error| format!("create cache directory: {error}"))?;
     let entry = ApplicationCachePublishEntry {
-        schema_version: "mncs.compiler.application-build-cache-entry/3",
+        schema_version: "mncs.compiler.application-build-cache-entry/4",
         key,
         response_sha256: sha256_serialized(response)
             .map_err(|error| format!("hash cached response: {error}"))?,
         response,
+        verification_facts_sha256: sha256_serialized(verification_facts)
+            .map_err(|error| format!("hash cached Language verification facts: {error}"))?,
+        verification_facts,
     };
     let nonce = CACHE_NONCE.fetch_add(1, Ordering::Relaxed);
     let now = SystemTime::now()
@@ -2080,7 +2180,7 @@ mod tests {
                             "writer": writer,
                             "padding": "x".repeat(32 * 1024)
                         });
-                        super::publish_application_cache(&cache_path, &key, &response)
+                        super::publish_application_cache(&cache_path, &key, &response, &[])
                             .expect("publish cache entry atomically");
                         super::publish_application_cache_index(&index_path, &key, &candidate_key)
                             .expect("publish cache index atomically");
@@ -2156,7 +2256,7 @@ mod tests {
             },
             "entry": { "status": "verified" }
         });
-        super::publish_application_cache(&path, &key, &response)
+        super::publish_application_cache(&path, &key, &response, &[])
             .expect("publish test cache response");
 
         assert!(super::read_application_cache(
@@ -2925,11 +3025,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         }
     }
     let cache_candidate_lookup_started = Instant::now();
-    let mut semantic_cache_candidate: Option<(Value, String)> = None;
+    let mut semantic_cache_candidate: Option<(Value, String, Vec<VerificationFact>)> = None;
     if let (Some(index_path), Some(_)) = (cache_index_path.as_ref(), cache_path.as_ref()) {
         if let Some(candidate_key) = read_application_cache_index(index_path, &cache_index_key) {
             if let Some(candidate_path) = application_cache_path(&candidate_key) {
-                if let Some(candidate) = read_application_cache(
+                if let Some((candidate, verification_facts)) = read_application_cache_with_facts(
                     &candidate_path,
                     &candidate_key,
                     contract,
@@ -2960,7 +3060,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                             );
                         }
                     }
-                    semantic_cache_candidate = Some((candidate, candidate_key));
+                    semantic_cache_candidate = Some((candidate, candidate_key, verification_facts));
                 }
             }
         }
@@ -2982,11 +3082,22 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             .collect(),
     );
     let compiler = ReferenceCompiler::default();
+    let prior_facts = semantic_cache_candidate
+        .as_ref()
+        .map(|(_, _, facts)| facts.clone())
+        .unwrap_or_default();
+    let fact_request = VerificationFactRequest {
+        language_profile: String::new(),
+        subject_language_profiles: BTreeMap::new(),
+        prior_facts,
+        source_location_identities: BTreeMap::new(),
+    };
     let frontend_started = Instant::now();
-    let frontend = compiler.front_end_with_resolver_and_seeds(
+    let frontend = compiler.front_end_with_verified_facts(
         envelope(root_source),
         &resolver,
         &generic_seeds,
+        &fact_request,
     );
     let source_test_inventory = include_source_test_inventory
         .then(|| serde_json::to_value(frontend.test_inventory.as_ref()).unwrap_or(Value::Null));
@@ -3085,14 +3196,21 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             &[],
             &["source_semantic_check"],
         );
-        return annotate_frontend_work(
+        let response = annotate_frontend_work(
             response,
             resolved_module_count,
             program_function_count,
             "rejected",
         );
+        return annotate_language_fact_work(
+            response,
+            &frontend.verification_facts,
+            frontend.verification_fact_reuse.as_ref(),
+        );
     }
 
+    let language_facts = frontend.verification_facts.clone();
+    let language_fact_reuse = frontend.verification_fact_reuse.clone();
     let mncs_compiler::SourceFrontEndResult {
         program: Some(program),
         identities,
@@ -3353,7 +3471,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let graph_bytes = serde_json::to_vec(&graph_value).unwrap_or_default();
     let graph_identity = format!("sha256:{}", mncs_model::sha256_hex(&graph_bytes));
     if let (
-        Some((candidate, candidate_key)),
+        Some((candidate, candidate_key, _candidate_facts)),
         Some(semantic_identity),
         Some(executable_closure_identity),
         Some(interface),
@@ -3430,19 +3548,21 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
         );
         if let Some(response) = rebound {
             let publication = match cache_path.as_ref() {
-                Some(path) => match publish_application_cache(path, &cache_key, &response) {
-                    Ok(()) => {
-                        if let Some(index_path) = cache_index_path.as_ref() {
-                            let _ = publish_application_cache_index(
-                                index_path,
-                                &cache_index_key,
-                                &cache_key,
-                            );
+                Some(path) => {
+                    match publish_application_cache(path, &cache_key, &response, &language_facts) {
+                        Ok(()) => {
+                            if let Some(index_path) = cache_index_path.as_ref() {
+                                let _ = publish_application_cache_index(
+                                    index_path,
+                                    &cache_index_key,
+                                    &cache_key,
+                                );
+                            }
+                            "stored"
                         }
-                        "stored"
+                        Err(_) => "write_failed",
                     }
-                    Err(_) => "write_failed",
-                },
+                }
                 None => "not_configured",
             };
             let response = annotate_cache_with_basis(
@@ -3458,11 +3578,16 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                     "application_executable_closure_verification",
                 ],
             );
-            return annotate_frontend_work(
+            let response = annotate_frontend_work(
                 response,
                 resolved_module_count,
                 program_function_count,
                 "verified",
+            );
+            return annotate_language_fact_work(
+                response,
+                &language_facts,
+                language_fact_reuse.as_ref(),
             );
         }
     }
@@ -3600,8 +3725,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 );
                 artifact_generic_entrypoints.iter().any(|row| {
                     row.get("generic_module").and_then(Value::as_str) == Some(module)
-                        && row.get("generic_function").and_then(Value::as_str)
-                            == Some(function)
+                        && row.get("generic_function").and_then(Value::as_str) == Some(function)
                         && row.get("args_spellings") == Some(&expected_spellings)
                 })
             });
@@ -3811,7 +3935,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     }
     let (cache_status, publication) = match cache_path.as_ref() {
         Some(path) if status == "verified" => {
-            match publish_application_cache(path, &cache_key, &response) {
+            match publish_application_cache(path, &cache_key, &response, &language_facts) {
                 Ok(()) => {
                     if let Some(index_path) = cache_index_path.as_ref() {
                         let _ = publish_application_cache_index(
@@ -3840,10 +3964,11 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             "verified_vm_artifact",
         ],
     );
-    annotate_frontend_work(
+    let response = annotate_frontend_work(
         response,
         resolved_module_count,
         program_function_count,
         "verified",
-    )
+    );
+    annotate_language_fact_work(response, &language_facts, language_fact_reuse.as_ref())
 }

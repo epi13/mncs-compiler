@@ -240,7 +240,7 @@ def verification_work(response: dict, *, label: str, frontend_invocations: int) 
         cache.get("schema_version")
         != "mncs.compiler.application-build-cache-observation/4"
         or work.get("schema_version")
-        != "mncs.compiler.application-build-verification-work/1"
+        != "mncs.compiler.application-build-verification-work/2"
     ):
         raise AssertionError(
             f"{label} omitted versioned verification-work telemetry: cache={cache}"
@@ -248,14 +248,19 @@ def verification_work(response: dict, *, label: str, frontend_invocations: int) 
     if work.get("front_end_invocations") != frontend_invocations:
         raise AssertionError(f"{label} frontend invocation count is inaccurate: {work}")
     expected_stage = "recomputed_by_full_frontend" if frontend_invocations else "not_run"
-    for stage in (
-        "source_parsing",
-        "declaration_resolution",
-        "signature_verification",
-        "function_body_verification",
-    ):
+    for stage in ("source_parsing", "declaration_resolution", "signature_verification"):
         if work.get(stage) != expected_stage:
             raise AssertionError(f"{label} has unexpected {stage} work: {work}")
+    body_stage = (
+        "not_run" if not frontend_invocations else
+        "recomputed_with_language_fact_reuse" if work.get("reused_semantic_facts") else
+        "recomputed_by_full_frontend"
+    )
+    if work.get("function_body_verification") != body_stage:
+        raise AssertionError(f"{label} has unexpected function-body work: {work}")
+    if (not isinstance(work.get("recomputed_semantic_facts"), list)
+            or type(work.get("produced_semantic_fact_count")) is not int):
+        raise AssertionError(f"{label} omitted Language fact work: {work}")
     if frontend_invocations and (
         type(work.get("resolved_module_count")) is not int
         or work["resolved_module_count"] < 1

@@ -108,17 +108,26 @@ def require_verification_work(
     cache = build.get('cache', {})
     work = cache.get('verification_work', {})
     if (cache.get('schema_version') != 'mncs.compiler.application-build-cache-observation/4'
-            or work.get('schema_version') != 'mncs.compiler.application-build-verification-work/1'):
+            or work.get('schema_version') != 'mncs.compiler.application-build-verification-work/2'):
         raise AssertionError(f'{label} omitted the versioned verification-work observation')
     if work.get('front_end_invocations') != frontend_invocations:
         raise AssertionError(f'{label} frontend invocation count is inaccurate: {work}')
     expected_stage = 'recomputed_by_full_frontend' if frontend_invocations else 'not_run'
-    for stage in ('source_parsing', 'declaration_resolution', 'signature_verification',
-                  'function_body_verification'):
+    for stage in ('source_parsing', 'declaration_resolution', 'signature_verification'):
         if work.get(stage) != expected_stage:
             raise AssertionError(f'{label} has an unexpected {stage} state: {work}')
     if not isinstance(work.get('reused_semantic_facts'), list):
         raise AssertionError(f'{label} omitted the Language fact-reference list: {work}')
+    expected_body_stage = (
+        'not_run' if not frontend_invocations else
+        'recomputed_with_language_fact_reuse' if work['reused_semantic_facts'] else
+        'recomputed_by_full_frontend'
+    )
+    if work.get('function_body_verification') != expected_body_stage:
+        raise AssertionError(f'{label} has an unexpected function body verification state: {work}')
+    if (not isinstance(work.get('recomputed_semantic_facts'), list)
+            or type(work.get('produced_semantic_fact_count')) is not int):
+        raise AssertionError(f'{label} omitted actual Language fact work: {work}')
     if (work.get('semantic_dependency_closure') != dependency_closure
             or work.get('ssa_verification') != ssa_verification
             or work.get('backend_artifact') != backend_artifact):
@@ -247,6 +256,7 @@ def main() -> None:
         )
         root_comment_request = request_for(root_comment_source, modules)
         root_comment_cache_dir = CACHE_DIR / 'root-comment-isolated'
+        shutil.rmtree(root_comment_cache_dir, ignore_errors=True)
         root_seed_probe, root_seed_startup_metrics = ready_probe(root_comment_cache_dir)
         try:
             root_seed, root_seed_metrics = compile_one(root_seed_probe, original_request)
@@ -696,10 +706,18 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
         old_fold, new_fold, 1)
     generic_specialization_request = request_for(
         app.APP_SOURCE, generic_specialization_modules)
-    generic_probe, generic_startup_metrics = ready_probe(CACHE_DIR)
+    generic_cache_dir = CACHE_DIR / 'generic-specialization-isolated'
+    shutil.rmtree(generic_cache_dir, ignore_errors=True)
+    generic_probe, generic_startup_metrics = ready_probe(generic_cache_dir)
     try:
         generic_specialization_oracle, generic_specialization_exec, generic_specialization_oracle_metrics = oracle_one(
             generic_probe, app.APP_SOURCE, generic_specialization_modules)
+        generic_seed_build, generic_seed_metrics = compile_one(
+            generic_probe, original_request)
+        if (generic_seed_build.get('status') != 'verified'
+                or generic_seed_build.get('artifact', {}).get('identity')
+                != cold.get('artifact', {}).get('identity')):
+            raise AssertionError('generic specialization fixture could not seed prior Language facts')
         generic_specialization_build, generic_specialization_metrics = compile_one(
             generic_probe, generic_specialization_request)
         if (generic_specialization_build.get('status') != 'verified'
@@ -708,6 +726,22 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
                 or generic_specialization_build.get('cache', {}).get('recomputed_units') != [
                     'source_semantic_check', 'ssa_verification', 'verified_vm_artifact']):
             raise AssertionError('edited imported generic specialization reused stale build work')
+        generic_work = generic_specialization_build.get('cache', {}).get(
+            'verification_work', {})
+        generic_reused = set(generic_work.get('reused_semantic_facts', []))
+        generic_recomputed = set(generic_work.get('recomputed_semantic_facts', []))
+        if not generic_reused or not generic_recomputed:
+            raise AssertionError(
+                'generic specialization edit did not selectively reuse and recompute Language facts')
+        if (len(generic_recomputed) != 3
+                or not any('mncs.test.suite::summarize' in subject
+                           and '__spec_' not in subject
+                           for subject in generic_recomputed)
+                or not any('mncs.test.suite::summarize__spec_' in subject
+                           for subject in generic_recomputed)
+                or 'mncs:0.2:body:tests.native_readiness::run' not in generic_recomputed):
+            raise AssertionError(
+                'generic edit did not reverify its body, specialization, and consumer')
         if (generic_specialization_build.get('dependency_graph', {}).get('semantic_identity')
                 == cold.get('dependency_graph', {}).get('semantic_identity')
                 or generic_specialization_build.get('dependency_graph', {}).get(
@@ -934,6 +968,8 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
                 'changed_module': 'mncs.test.suite',
                 'changed_generic_function': 'summarize<N=4>',
                 'changed_body': 'reverse the bounded TestResult fold order',
+                'prior_fact_seed_cache': generic_seed_build.get('cache'),
+                'prior_fact_seed_metrics': generic_seed_metrics,
                 'source_sha256_before': app.sha(modules['mncs.test.suite'].encode()),
                 'source_sha256_after': app.sha(
                     generic_specialization_modules['mncs.test.suite'].encode()),
@@ -1103,7 +1139,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
             'process_metrics': 'sampled from /proc for probe and VM processes; wall and CPU use process deltas',
         },
         'verification_work_observation': {
-            'schema_version': 'mncs.compiler.application-build-verification-work/1',
+            'schema_version': 'mncs.compiler.application-build-verification-work/2',
             'cold_build': cold_work,
             'warm_exact_snapshot': warm.get('cache', {}).get('verification_work'),
             'source_only_dependency_edit': semantic_edit.get('cache', {}).get('verification_work'),
@@ -1114,15 +1150,17 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
             'reachable_dependency_edit': dependency.get('cache', {}).get('verification_work'),
             'invalid_source': invalid.get('cache', {}).get('verification_work'),
             'fresh_process_readback': retry_warm_work,
-            'changed_snapshot_semantic_facts_reused': [],
-            'interpretation': 'A changed resolved module still invokes the full frontend. The observation proves when this occurs and separates safe SSA/backend artifact reuse; it does not provide per-function Language fact reuse.',
+            'changed_snapshot_semantic_facts_reused': dependency.get(
+                'cache', {}).get('verification_work', {}).get(
+                    'reused_semantic_facts', []),
+            'interpretation': 'Changed snapshots invoke parsing, module resolution, and whole-program declaration checking. Language-owned verified function-body facts are separately guard-checked, with independent bodies reused and changed bodies or dependents reverified. SSA and backend work are recorded independently.',
         },
         'fine_grained_invalidation': {
-            'status': 'semantic_identity_and_dependency_closure_artifact_reuse_implemented',
-            'detail': (f'Exact source snapshot hits reuse the published artifact. When the root and build assumptions match but a resolved module source hash changes, a fresh valid Stage-0 semantic check computes the canonical root and resolved-module semantic identity; the verified VM artifact is reused only if that identity and the typed callable interface still match. A comment-only imported-module edit took {semantic_edit_metrics["wall_seconds"]:.3f} s and reused the artifact, while a semantic dependency change took {dependency_metrics["wall_seconds"]:.3f} s and rebuilt. Changing exported PropertyCase.generation:u64 changed the semantic and callable interface identities and forced full recomputation in {interface_metrics["wall_seconds"]:.3f} s; the resulting VM output matched the independent Stage-0 oracle. A changed root function or dependency semantic value still recomputes source checking, SSA verification, and artifact generation. Function-level and independently verified module-fact reuse remain unimplemented, so Gate B is partial.'),
+            'status': 'language_function_body_fact_reuse_verified',
+            'detail': (f'Changed snapshots invoke parsing, module resolution, and declaration verification, then reuse only Language facts whose subject, verifier, policy, profile, callable interface, semantic dependencies, specialization, and effect assumptions still match. A dependency edit reused {len(dependency.get("cache", {}).get("verification_work", {}).get("reused_semantic_facts", []))} independent body facts and reverified {len(dependency.get("cache", {}).get("verification_work", {}).get("recomputed_semantic_facts", []))} dependent bodies in {dependency_metrics["wall_seconds"]:.3f} s; canonical VM execution matched the Stage-0 oracle. A reachable root edit took {small_metrics["wall_seconds"]:.3f} s, an unreachable body edit reused independent facts and reverified only the changed body, and a fresh-process root comment edit reused {len(root_comment_work.get("reused_semantic_facts", []))} facts. Nominal edits reverified affected users; a generic body edit reverified its declaration, concrete specialization, and dependent caller while retaining independent facts. SSA/backend identity remains separate and is regenerated when executable semantics change.'),
         },
         'gate_a': 'pass',
-        'gate_b': 'partial',
+        'gate_b': 'pass',
         'self_consumption_matrix_change': 'none; Stage-1/Stage-2 and the self-consumption matrix remain unchanged',
         'producer_diagnostics_tail': '\n'.join(tails)[-1800:],
     }
@@ -1130,7 +1168,7 @@ fn readiness_marker(value: u64) -> (result: u64) { return value; }'''
     EVIDENCE.write_text(json.dumps(evidence, indent=2, sort_keys=True) + '\n')
     shutil.rmtree(CACHE_DIR, ignore_errors=True)
     print(json.dumps({
-        'gate_a': 'pass', 'gate_b': 'partial',
+        'gate_a': 'pass', 'gate_b': 'pass',
         'cold_cache': cold.get('cache', {}).get('status'),
         'warm_cache': warm.get('cache', {}).get('status'),
         'unreferenced_module_reuse_basis': unused.get('cache', {}).get('reuse_basis'),

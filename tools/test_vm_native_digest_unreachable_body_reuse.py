@@ -16,7 +16,10 @@ import test_vm_native_digest_batch as digest_batch
 import test_vm_native_digest_interface_invalidation as invalidation
 
 ROOT = digest_batch.ROOT
-EVIDENCE = ROOT / "evidence/native-app-readiness-digest-unreachable-body-20261016.json"
+EVIDENCE = ROOT / "evidence" / (
+    f"native-app-readiness-digest-unreachable-body-"
+    f"{datetime.now(timezone.utc):%Y%m%dT%H%M%S.%fZ}.json"
+)
 ASSERTIONS = "mncs.test.assertions"
 FUNCTION = "equals_i64"
 
@@ -68,6 +71,18 @@ def oracle_calls(inputs: list[dict]) -> list[dict]:
     return calls
 
 
+def digest_only_request(root_source: str, modules: dict[str, str]) -> dict:
+    request = digest_batch.build_request(root_source, modules)
+    request["callable_roots"] = [
+        row for row in digest_batch.ROOTS
+        if row["function"] not in {
+            digest_batch.SUITE_FIXTURE_FUNCTION,
+            digest_batch.SUITE_EDGE_FIXTURE_FUNCTION,
+        }
+    ]
+    return request
+
+
 def main() -> None:
     if EVIDENCE.exists():
         raise SystemExit(f"refusing to overwrite immutable evidence: {EVIDENCE}")
@@ -75,13 +90,16 @@ def main() -> None:
         raise SystemExit(f"missing Stage-0 probe or canonical VM: {digest_batch.PROBE}, {digest_batch.VM_BIN}")
 
     fixture = json.loads(digest_batch.digest_app.FIXTURE_PATH.read_text(encoding="utf-8"))
-    root_source = digest_batch.digest_app.ROOT_SOURCE_PATH.read_text(encoding="utf-8")
+    root_source = (
+        digest_batch.digest_app.ROOT_SOURCE_PATH.read_text(encoding="utf-8")
+        + digest_batch.SUITE_FIXTURE_SOURCE
+    )
     modules = {
         name: path.read_text(encoding="utf-8")
         for name, path in digest_batch.digest_app.MODULE_PATHS.items()
     }
     baseline, baseline_metrics, baseline_stderr = invalidation.compile_application(
-        digest_batch.build_request(root_source, modules)
+        digest_only_request(root_source, modules)
     )
     if baseline.get("status") != "verified" or baseline.get("cache", {}).get("status") != "miss":
         raise AssertionError(f"cold baseline did not produce a verified miss: {baseline}")
@@ -92,6 +110,7 @@ def main() -> None:
         baseline_artifact,
         fixture["execution"]["inputs"],
         fixture["execution"]["canonical_vm_results"],
+        {},
     )
 
     old_body = "return Assertion { passed: expected == actual, expected: expected, actual: actual, code: code };"
@@ -101,7 +120,7 @@ def main() -> None:
         raise AssertionError("equals_i64 source anchor is absent or ambiguous")
     edited_modules = dict(modules)
     edited_modules[ASSERTIONS] = original_assertions.replace(old_body, new_body, 1)
-    edited_request = digest_batch.build_request(root_source, edited_modules)
+    edited_request = digest_only_request(root_source, edited_modules)
     edited, edited_metrics, edited_stderr = invalidation.compile_application(edited_request)
     edited_artifact = require_reuse(
         edited, "unreachable imported body edit", frontend=1,
@@ -119,8 +138,13 @@ def main() -> None:
     callable_names = [row.get("name") for row in edited_artifact.get("callables", [])]
     if any(name == FUNCTION or name.startswith(FUNCTION + "__spec_") for name in callable_names):
         raise AssertionError("unreachable equals_i64 was incorrectly admitted to the digest executable closure")
-    if edited_work.get("function_body_verification") != "recomputed_by_full_frontend":
+    if edited_work.get("function_body_verification") != "recomputed_with_language_fact_reuse":
         raise AssertionError(f"changed source did not receive complete body verification: {edited_work}")
+    if not edited_work.get("reused_semantic_facts"):
+        raise AssertionError("independent Language function-body facts were not reused")
+    if not any("mncs.test.assertions::equals_i64" in subject
+               for subject in edited_work.get("recomputed_semantic_facts", [])):
+        raise AssertionError("the changed unreachable function body was not reverified")
 
     oracle_modules = dict(modules)
     oracle_modules[ASSERTIONS] = edited_modules[ASSERTIONS]
@@ -139,6 +163,7 @@ def main() -> None:
         edited_artifact,
         fixture["execution"]["inputs"],
         fixture["execution"]["canonical_vm_results"],
+        {},
     )
     if (edited_values != baseline_values
             or edited_document.get("artifact_id") != baseline_document.get("artifact_id")):
@@ -218,11 +243,12 @@ def main() -> None:
             "unreachable_body_edit": {"cache": edited_cache, "metrics": edited_metrics},
             "fresh_process_edit_hit": {"cache": warm.get("cache"), "metrics": warm_metrics},
         },
-        "language_verified_facts_reused": 0,
+        "language_verified_facts_reused": len(edited_work.get("reused_semantic_facts", [])),
         "scope": (
-            "The changed snapshot passed a full frontend verification. The unchanged selected digest "
-            "executable closure reused its VM artifact, and the fresh process reused the edited snapshot. "
-            "The Compiler still reverified all frontend units; no Language-owned verification fact was reused."
+            "The changed snapshot passed full frontend admission while the Language verifier reused "
+            f"{len(edited_work.get('reused_semantic_facts', []))} independent verified function facts and "
+            "reverified the edited unreachable function body. The unchanged selected digest executable "
+            "closure reused its VM artifact, and a fresh process reused the edited source snapshot."
         ),
         "probe_stderr_bytes": {
             "baseline": len(baseline_stderr.encode()),
@@ -237,7 +263,7 @@ def main() -> None:
         "source_snapshot_changed": evidence["application_build"]["source_snapshot_changed"],
         "artifact_reused_after_frontend": edited_work.get("backend_artifact") == "reused",
         "front_end_invocations": edited_work.get("front_end_invocations"),
-        "language_verified_facts_reused": 0,
+            "language_verified_facts_reused": len(edited_work.get("reused_semantic_facts", [])),
         "stage0_vm_parity": evidence["execution"]["canonical_vm_matches_stage0"],
         "evidence": str(EVIDENCE.relative_to(ROOT)),
         "evidence_sha256": sha(EVIDENCE.read_bytes()),

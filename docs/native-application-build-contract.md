@@ -155,52 +155,57 @@ constructs its argument using the callable interface emitted by the compiler.
 measures cold and warm builds, reuses the artifact across added and edited
 unreferenced modules, checks invalidation for a changed root and imported
 module, and verifies that a fresh process can reuse the artifact after a
-comment-only root edit while still running the full frontend and matching the
-Stage-0 execution oracle. It also verifies that rejected or interrupted
+comment-only root edit while still running the current parse and resolution
+path, reusing guarded Language body facts, and matching the Stage-0 execution
+oracle. It also verifies that rejected or interrupted
 requests do not publish successful results. Its cache observation is now
 `mncs.compiler.application-build-cache-observation/4`; the nested
-`mncs.compiler.application-build-verification-work/1` reports whether the
-full Language frontend ran, counts resolved modules and verified program
-functions when available, and separates dependency-closure, SSA, and backend
-artifact work. A cache hit skips these stages; it does not claim that separate
-Language fact objects were reused. Changed dependency snapshots currently
-report one full frontend invocation and an empty `reused_semantic_facts` list,
-even when a compatible executable artifact is reused after verification.
-This is the measured baseline for integrating a Language-owned fact cache.
+`mncs.compiler.application-build-verification-work/2` reports whether the
+frontend ran, counts resolved modules and program functions, lists Language
+body facts actually reused and reverified, and separates dependency-closure,
+SSA, and backend artifact work. A cache hit that skips the frontend reports
+no Language fact reuse; identities appear only when Language checks their
+current guards and reuses them.
 
 The real `mncs-test` readiness application also exercises an edit to the body
 of the selected `mncs.test.suite::summarize<N=4>` specialization. A semantic
 change to the generic body produced a different executable artifact, and the
-Stage-0 result matched canonical VM execution. The changed source still ran
-the full frontend; fresh-process reuse of that exact result then skipped it.
+Stage-0 result matched canonical VM execution. The changed source runs the
+current frontend; unchanged function-body facts are reused while the changed
+generic body is reverified. Fresh-process reuse of that exact result then
+skips the frontend.
 The regression is
 `tools/test_vm_native_generic_specialization_invalidation.py`, with exact
 provenance and measurements in
-`evidence/native-app-readiness-test-generic-specialization-invalidation-20261017.json`.
-It proves Compiler artifact invalidation for this specialization, not
-Language-owned verified-fact reuse.
+`evidence/native-app-readiness-test-generic-specialization-invalidation-20261020T040303.901183Z.json`.
+It proves Compiler artifact invalidation and selective Language body-fact
+reuse for this specialization workload.
 
-## Language incremental-fact handoff
+## Language verified-fact reuse
 
-The first Language-owned slice should let the Compiler submit a fresh source
-snapshot and the previous verified-fact-set identity to the Language
-frontend. The response must still contain the complete current program and
-diagnostics, while identifying which function-body facts were reused,
-reverified, or invalidated. A reusable function fact must bind a stable
-function identity, body-content identity, callable signature identity,
-Language verifier and policy identity, resolved call and nominal-type
-dependencies, generic specializations, and effect/capability assumptions.
-Source spans remain fresh snapshot metadata and are not part of semantic fact
-identity. Each invalidation must name the changed dependency or assumption;
-source names, timestamps, and a matching body fingerprint alone never prove
-that verification occurred. Invalid input returns fresh diagnostics and
-cannot publish a successful fact set. Fact publication is atomic, and
-interrupted verification leaves the prior set usable but publishes no partial
-success. This keeps parsing/resolution policy in Language while giving
-application builds exact revalidation counts. The existing
-`verification_work.reused_semantic_facts` field is reserved for these
-Language-issued identities; it intentionally remains empty until that
-interface is implemented and consumed.
+The Language model exposes `mncs.language-verification-fact/1` for successful
+function-body checks. Each fact binds the stable body subject and fingerprint,
+verifier and policy identities, declaring source profile, callable interface,
+actual called-function, nominal-type, assumption, and generic-specialization
+dependencies, and effect/capability assumptions. A witness identity binds that
+evidence, and the fact lists the changes that invalidate it. Source-location
+identities refresh separately and do not affect reuse.
+
+`Program::validate_with_verified_facts` rechecks whole-program declarations,
+matches every supplied guard, skips only valid unchanged body checks, and
+returns the actual reused and recomputed subjects with miss reasons. Invalid
+bodies receive fresh diagnostics and produce no success fact.
+`ReferenceCompiler::front_end_with_verified_facts` supplies the exact profile
+and source artifact for each linked module while retaining the normal parse,
+resolution, and complete semantic-program path.
+
+The Stage-0 application cache stores Language facts in a separate checksummed
+field under cache-entry `/4`; existing `/3` entries are not reinterpreted.
+Changed snapshots pass those facts back to Language, and
+`verification_work.reused_semantic_facts` contains only facts Language actually
+matched and reused. Tests cover body, callable-interface, nominal-type,
+profile, verifier, and policy changes, fresh diagnostics, and serialization
+reuse across a new process.
 
 ## Environment capability
 
@@ -244,8 +249,8 @@ process cache hits; it does not change application-build/5 or /6 cache identity
 semantics. The workload-specific measurement is recorded in
 `evidence/native-app-readiness-probe-cache-identity-20261016.json`.
 
-Cache entry validation hashes the exact stored response bytes before decoding
-that response into the current result. It no longer clones and re-serializes a
-large response to verify `application-build-cache-entry/3`. A mismatched
-response digest remains a cache miss and triggers source verification; the
-digest batch includes a tampered-entry recovery case.
+Cache entry validation hashes the exact stored response and Language fact bytes
+before decoding them into the current result. It does not reinterpret
+`application-build-cache-entry/3`; version `/4` binds the two payloads with
+separate digests. A mismatched digest remains a cache miss and triggers source
+verification; the digest batch includes a tampered-entry recovery case.

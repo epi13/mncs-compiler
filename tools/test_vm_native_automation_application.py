@@ -358,7 +358,7 @@ def main() -> None:
         if (changed.get("status") != "verified"
                 or changed.get("artifact", {}).get("identity") != artifact_identity
                 or changed_work.get("front_end_invocations") != 1
-                or changed_work.get("reused_semantic_facts") != []
+                or not changed_work.get("reused_semantic_facts")
                 or changed_work.get("backend_artifact") != "reused"
                 or changed.get("cache", {}).get("reuse_basis")
                 != "verified_application_executable_closure"):
@@ -383,7 +383,8 @@ def main() -> None:
                 == changed.get("source_snapshot", {}).get("identity")
                 or uncalled.get("artifact", {}).get("identity") != artifact_identity
                 or uncalled_work.get("front_end_invocations") != 1
-                or uncalled_work.get("reused_semantic_facts") != []
+                or not uncalled_work.get("reused_semantic_facts")
+                or not uncalled_work.get("recomputed_semantic_facts")
                 or uncalled_work.get("backend_artifact") != "reused"
                 or uncalled.get("cache", {}).get("reuse_basis")
                 != "verified_application_executable_closure"):
@@ -745,6 +746,17 @@ def main() -> None:
                              "bytes": path.stat().st_size}
                       for name, path in sorted(MODULE_PATHS.items())}
     host_memory_after = host_memory_observation()
+    verified_fact_work = {
+        "comment_dependency_edit": changed_work,
+        "uncalled_body_edit": uncalled_work,
+        "imported_signature_with_updated_consumers": interface_updated_work,
+        "imported_nominal_record_with_updated_consumers": record_updated_work,
+        "reachable_body_edit": reachable_work,
+    }
+    language_verified_facts_reused = sum(
+        len(work.get("reused_semantic_facts", []))
+        for work in verified_fact_work.values()
+    )
     evidence = {
         "schema_version": 1,
         "kind": "mncs.compiler.native-automation-evaluation-application",
@@ -826,6 +838,10 @@ def main() -> None:
                     "source_snapshot", {}).get("identity"),
                 "frontend_invocations": interface_updated_work.get(
                     "front_end_invocations"),
+                "reused_semantic_facts": interface_updated_work.get(
+                    "reused_semantic_facts"),
+                "recomputed_semantic_facts": interface_updated_work.get(
+                    "recomputed_semantic_facts"),
                 "backend_artifact": interface_updated_work.get("backend_artifact"),
                 "artifact_identity": interface_artifact_identity,
                 "prior_artifact_identity": artifact_identity,
@@ -854,6 +870,10 @@ def main() -> None:
                     "source_snapshot", {}).get("identity"),
                 "frontend_invocations": record_updated_work.get(
                     "front_end_invocations"),
+                "reused_semantic_facts": record_updated_work.get(
+                    "reused_semantic_facts"),
+                "recomputed_semantic_facts": record_updated_work.get(
+                    "recomputed_semantic_facts"),
                 "backend_artifact": record_updated_work.get("backend_artifact"),
                 "artifact_identity": record_artifact_identity,
                 "prior_artifact_identity": artifact_identity,
@@ -864,6 +884,10 @@ def main() -> None:
                 "source_snapshot_identity": reachable.get("source_snapshot", {}).get("identity"),
                 "semantic_identity": reachable.get("dependency_graph", {}).get("semantic_identity"),
                 "frontend_invocations": reachable_work.get("front_end_invocations"),
+                "reused_semantic_facts": reachable_work.get(
+                    "reused_semantic_facts"),
+                "recomputed_semantic_facts": reachable_work.get(
+                    "recomputed_semantic_facts"),
                 "backend_artifact": reachable_work.get("backend_artifact"),
                 "artifact_identity": reachable_artifact_identity,
                 "prior_artifact_identity": artifact_identity,
@@ -913,11 +937,18 @@ def main() -> None:
             "host_memory_after": host_memory_after,
             "cgroup_memory_measurement": "unavailable",
         },
-        "language_verified_facts_reused": 0,
+        "language_verified_facts_reused": language_verified_facts_reused,
+        "language_fact_reuse_by_edit": {
+            name: {
+                "reused": len(work.get("reused_semantic_facts", [])),
+                "recomputed": len(work.get("recomputed_semantic_facts", [])),
+            }
+            for name, work in verified_fact_work.items()
+        },
         "forge_execution_performed": False,
         "canonical_store_publication_performed": False,
         "production_automation_orchestration_replaced": False,
-        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one application-build/5 artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. A comment-only imported-source edit and an uncalled test-body edit each received fresh full frontend verification and reused the executable-closure artifact. An imported schedule signature change with unchanged callers and an imported NextOccurrence field rename with stale constructors and projections were freshly rejected without artifact reuse. Updating the imported call sites and consumers regenerated new artifacts; each updated 18-case Stage-0 result matched the canonical VM. Editing reachable reason_cond_false changed the selected caller result, regenerated the artifact, and matched Stage-0 in the canonical VM. An unresolved function body was freshly rejected without artifact fallback. Language verified facts remained zero, so each changed valid snapshot still rechecked whole-program semantics. This is Compiler application and execution evidence; it does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
+        "scope": "The Compiler built actual mncs-automation schedule, trigger, and evaluation source with its real mncs-test dependencies into one native application artifact. Eighteen deterministic evaluation inputs matched the independent Stage-0 project oracle in one canonical VM batch. Exact-snapshot fresh-process reuse passed. Comment-only and uncalled-body edits each received fresh frontend admission while reusing independent Language verification facts and the unchanged executable closure. Imported schedule signature and nominal record edits with stale consumers were freshly rejected; updating their consumers regenerated artifacts whose Stage-0 and canonical VM results matched. Editing reachable reason_cond_false reverified the changed semantic closure, changed the selected caller result, regenerated the artifact, and matched Stage-0. An unresolved body was freshly rejected without artifact fallback. The recorded reused-fact count is the sum of actual verifier-reported body facts reused across changed valid snapshots. This evidence does not prove Forge/Environment/Store routing or replacement of Automation host orchestration.",
     }
     default_evidence_name = (
         "evidence/native-app-readiness-automation-evaluation-"
@@ -935,7 +966,7 @@ def main() -> None:
                       "case_count": len(rows),
                       "cold_seconds": cold_metrics.get("wall_seconds"),
                       "vm_seconds": vm_metrics.get("wall_seconds"),
-                      "language_verified_facts_reused": 0,
+                      "language_verified_facts_reused": language_verified_facts_reused,
                       "evidence_sha256": sha(evidence_path.read_bytes())}, indent=2))
 
 
