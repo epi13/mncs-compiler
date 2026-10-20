@@ -324,7 +324,7 @@ def main() -> dict:
             },
             "verified_fact_reuse": {
                 "contract": "mncs.language-verification-fact/3",
-                "verifier_identity": "mncs-language-function-body-validator/3",
+                "verifier_identity": "mncs-language-function-body-validator/4",
                 "cold_facts_produced": fact_count,
                 "comment_edit_reused": len(comment_work["reused_semantic_facts"]),
                 "comment_edit_recomputed": len(comment_work["recomputed_semantic_facts"]),

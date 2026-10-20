@@ -363,7 +363,7 @@ def main() -> dict:
             "compiler_branch": git("branch", "--show-current"),
             "language_revision": lock["revision"],
             "language_fact_schema": FACT_SCHEMA,
-            "verifier_identity": "mncs-language-function-body-validator/3",
+            "verifier_identity": "mncs-language-function-body-validator/4",
             "stage0_probe_sha256": hashlib.sha256(app.PROBE.read_bytes()).hexdigest(),
             "vm_revision": subprocess.check_output(
                 ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
