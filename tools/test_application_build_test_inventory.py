@@ -10,6 +10,7 @@ in this harness.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 import re
@@ -711,6 +712,174 @@ def execute_inventory_retained_session(
             if process.stdout is not None:
                 process.stdout.close()
             stderr_file.close()
+
+
+def execute_mncs_test_vm_transport(
+    artifact: dict,
+    inventory: dict,
+    test_rows: list[dict],
+    *,
+    step_budget: int,
+) -> dict:
+    """Run an application-build artifact through mncs-test's VM transport."""
+    module = inventory.get("module")
+    artifact_identity = artifact.get("artifact_id")
+    tests = inventory.get("tests", [])
+    if (not isinstance(module, str) or not isinstance(artifact_identity, str)
+            or not isinstance(tests, list) or not test_rows):
+        raise AssertionError("mncs-test VM transport requires a verified inventory and artifact")
+    source_path = app.TEST_ROOT / "tools" / "vm_transport.py"
+    spec = importlib.util.spec_from_file_location(
+        "mncs_test_selected_vm_transport", source_path
+    )
+    if spec is None or spec.loader is None:
+        raise AssertionError("mncs-test canonical VM transport could not be loaded")
+    transport = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(transport)
+
+    artifact_callables = {
+        (row.get("module"), row.get("name")): row
+        for row in artifact.get("callables", []) if isinstance(row, dict)
+    }
+    binding_rows = []
+    reference_by_test_identity: dict[str, dict] = {}
+    for test in tests:
+        callable_row = artifact_callables.get((module, test.get("name")))
+        binding = callable_row.get("test_binding") if callable_row else None
+        required_fields = (
+            "callable_identity", "declaration_identity", "test_case_identity", "signature_identity"
+        )
+        if (not isinstance(binding, dict) or not set(required_fields) <= set(binding)
+                or binding.get("callable_identity") != test.get("function_identity")
+                or binding.get("declaration_identity") != test.get("declaration_identity")
+                or binding.get("test_case_identity") != test.get("test_case_identity")):
+            raise AssertionError(
+                f"Compiler artifact binding differs from Language inventory for {test.get('name')}"
+            )
+        binding_rows.append({
+            "module": module,
+            "function": test["name"],
+            **{field: binding[field] for field in required_fields},
+        })
+        reference_by_test_identity[test["test_case_identity"]] = {
+            "artifact_identity": artifact_identity,
+            **{field: binding[field] for field in required_fields},
+        }
+
+    requests = []
+    for test in test_rows:
+        test_identity = test.get("test_case_identity")
+        reference = reference_by_test_identity.get(test_identity)
+        if reference is None:
+            raise AssertionError("mncs-test call requested a case outside the Language inventory")
+        type_arguments = inventory_test_type_arguments(test, None)
+        requests.append({
+            "callable_reference": reference,
+            "args": inventory_test_arguments(test, None, type_arguments),
+            "step_budget": step_budget,
+            "type_arguments": type_arguments,
+        })
+
+    with tempfile.TemporaryDirectory(prefix="mncs-test-compiler-application-transport-") as raw:
+        cache = Path(raw)
+        artifact_path = cache / "application.vm.json"
+        artifact_path.write_text(json.dumps(artifact, sort_keys=True) + "\n", encoding="utf-8")
+        product = {
+            "cache": str(cache),
+            "artifact": {"address": artifact_path.name},
+            "build_receipt": None,
+            "producer": {
+                "provider": "mncs-compiler:application-build",
+                "artifact_identity": artifact_identity,
+            },
+        }
+        evidence = {"callable_bindings": binding_rows}
+        session = transport.VmTestSession(
+            vm_checkout=app.VM_ROOT,
+            vm_executable=app.VM_BIN,
+            product=product,
+            evidence=evidence,
+            timeout=30.0,
+            adapter_error=RuntimeError,
+        )
+        try:
+            session_info = session.info()
+            if session_info.get("artifact_identity") != artifact_identity:
+                raise AssertionError("mncs-test transport admitted a different application artifact")
+            process = session.runtime.proc
+            if process is None:
+                raise AssertionError("mncs-test transport did not retain its VM process")
+            process_pid = process.pid
+            samples = [app.process_sample(process_pid)]
+            initial_cpu = samples[0].get("cpu_seconds", 0.0)
+            started = time.monotonic()
+            executions = session.call_batch(requests)
+            wall_seconds = time.monotonic() - started
+            if len(executions) != len(test_rows):
+                raise AssertionError("mncs-test VM transport returned the wrong call count")
+            samples.append(app.process_sample(process_pid))
+            same_process_after_batch = (
+                session.runtime.proc is not None
+                and session.runtime.proc.pid == process_pid
+                and session.runtime.proc.poll() is None
+            )
+            process_metrics = app.summarize_samples(samples, wall_seconds, initial_cpu)
+
+            typed_results = []
+            reused_session_count = 0
+            for test, execution in zip(test_rows, executions):
+                expected_reference = reference_by_test_identity[test["test_case_identity"]]
+                vm_record = execution.get("vm_record", {})
+                returned = vm_record.get("returned", [])
+                if (execution.get("status") != "returned"
+                        or execution.get("artifact_identity") != artifact_identity
+                        or execution.get("target") != {
+                            "module": module, "function": test.get("name")
+                        }
+                        or execution.get("invoked_callable") != expected_reference
+                        or vm_record.get("artifact_id") != artifact_identity
+                        or len(returned) != 1):
+                    raise AssertionError(
+                        f"mncs-test VM transport returned an invalid identity-bound Test call: {execution}"
+                    )
+                reused = execution.get("reused_session") is True
+                reused_session_count += int(reused)
+                typed_results.append({
+                    "test_case_identity": test["test_case_identity"],
+                    "name": test["name"],
+                    "result": app.decode_wire(app.vm_to_wire(returned[0])),
+                    "reused_session": reused,
+                })
+            runtime = session_info.get("runtime", {})
+            build_origin = runtime.get("build_origin", {})
+            return {
+                "transport_source": str(source_path.relative_to(app.TEST_ROOT)),
+                "transport_source_sha256": sha(source_path.read_bytes()),
+                "session_schema": "mncs.vm.session/1",
+                "application_build_artifact_identity": artifact_identity,
+                "admitted_artifact_identity": session_info["artifact_identity"],
+                "runtime_executable_sha256": runtime.get("executable_sha256"),
+                "runtime_build_origin": {
+                    "status": build_origin.get("status"),
+                    "receipt_identity": build_origin.get("receipt_identity"),
+                    "source_revisions": build_origin.get("source_revisions"),
+                    "dirty_input_count": build_origin.get("dirty_input_count"),
+                    "mismatch_count": build_origin.get("mismatch_count"),
+                },
+                "call_count": len(executions),
+                "distinct_test_count": len(tests),
+                "retained_process_pid": process_pid,
+                "same_process_after_batch": same_process_after_batch,
+                "first_call_reused_session": executions[0].get("reused_session") is True,
+                "subsequent_calls_reused_session": reused_session_count == len(executions) - 1,
+                "reused_session_call_count": reused_session_count,
+                "callable_bindings_match_language_inventory": True,
+                "typed_results": typed_results,
+                "timings": list(session.timings),
+                "process_metrics": process_metrics,
+            }
+        finally:
+            session.close()
 
 
 def run_parameterized_test_case() -> dict:
@@ -2368,6 +2537,31 @@ def run_real_mncs_test_suite() -> dict:
             elif retained_results.get(test["name"]) != actual:
                 raise AssertionError(f"retained TestResult changed across session rounds: {test['name']}")
 
+        production_vm_transport = execute_mncs_test_vm_transport(
+            artifact, inventory, test_rows, step_budget=200_000
+        )
+        production_vm_results = production_vm_transport["typed_results"]
+        if len(production_vm_results) != expected_batch_count:
+            raise AssertionError("mncs-test production VM transport returned the wrong Test call count")
+        for test, actual_row, expected_row in zip(
+            test_rows, production_vm_results, oracle["executions"]
+        ):
+            actual = actual_row.get("result")
+            expected_values = expected_row.get("returned", [])
+            if len(expected_values) != 1:
+                raise AssertionError(
+                    f"Stage-0 returned the wrong arity for production transport case {test['name']}"
+                )
+            expected = app.decode_wire(expected_values[0])
+            if (actual != expected or actual != results[test["name"]]
+                    or actual != retained_results[test["name"]]):
+                raise AssertionError(
+                    "mncs-test production VM transport differs from Stage-0, batch, or retained-session "
+                    f"results for {test['name']}"
+                )
+        production_vm_transport["stage0_equivalent"] = True
+        production_vm_transport["batch_and_retained_session_match"] = True
+
         selected_names = {"arithmetic", "skipped"}
         selected_identities = [
             row["test_case_identity"]
@@ -2674,6 +2868,7 @@ def run_real_mncs_test_suite() -> dict:
                 "typed_results": retained_results,
                 "process_metrics": retained_vm_session["process_metrics"],
             },
+            "production_test_vm_transport": production_vm_transport,
             "identity_selected_subset_batch": {
                 "source_test_count": len(selected_inventory["tests"]),
                 "selected_test_count": len(selected_cases),
@@ -3321,6 +3516,56 @@ def main() -> None:
                     and real_mncs_test_suite["retained_vm_session"]["repeat_results_match"]
                     and real_mncs_test_suite["retained_vm_session"]["stage0_equivalent"]
                 ),
+                "real_mncs_test_production_vm_transport_runs_compiler_artifact": (
+                    real_mncs_test_suite["production_test_vm_transport"][
+                        "session_schema"
+                    ] == "mncs.vm.session/1"
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "call_count"
+                    ] == 14
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "distinct_test_count"
+                    ] == 7
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "application_build_artifact_identity"
+                    ] == real_mncs_test_suite["canonical_vm_artifact_identity"]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "admitted_artifact_identity"
+                    ] == real_mncs_test_suite["canonical_vm_artifact_identity"]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "callable_bindings_match_language_inventory"
+                    ]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "retained_process_pid"
+                    ] > 0
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "same_process_after_batch"
+                    ]
+                    and not real_mncs_test_suite["production_test_vm_transport"][
+                        "first_call_reused_session"
+                    ]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "subsequent_calls_reused_session"
+                    ]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "stage0_equivalent"
+                    ]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "batch_and_retained_session_match"
+                    ]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "runtime_executable_sha256"
+                    ]
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "runtime_build_origin"
+                    ]["status"] == "matches-embedded-inputs"
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "runtime_build_origin"
+                    ]["dirty_input_count"] == 0
+                    and real_mncs_test_suite["production_test_vm_transport"][
+                        "runtime_build_origin"
+                    ]["mismatch_count"] == 0
+                ),
                 "real_mncs_test_wrong_session_identity_reference_is_rejected": (
                     real_mncs_test_suite["retained_vm_session"][
                         "mismatched_test_identity_rejected"
@@ -3446,6 +3691,9 @@ def main() -> None:
                 "real_self_suite_retained_vm_session": real_mncs_test_suite[
                     "retained_vm_session"
                 ]["process_metrics"],
+                "real_self_suite_production_test_vm_transport": real_mncs_test_suite[
+                    "production_test_vm_transport"
+                ]["process_metrics"],
             },
             "verification_work": {
                 "cold_build": cold.get("cache", {}).get("verification_work"),
@@ -3506,7 +3754,14 @@ def main() -> None:
                 "mncs.vm.session/1 serve process then executes the same 14 individual calls across "
                 "two rounds with artifact-bound Language Test identities; a mismatched Test identity "
                 "is rejected without stopping the retained session, and every typed result matches "
-                "both the batch path and Stage-0. A comment-only "
+                "both the batch path and Stage-0. The unchanged production "
+                "mncs-test/tools/vm_transport.py VmTestSession also admits the Compiler application-build "
+                "artifact through an in-memory adapter for its existing product/evidence interface, "
+                "then executes all 14 Language-bound calls in one retained process. Its typed results "
+                "match the direct batch, retained-session, and Stage-0 paths; the runtime executable "
+                "reports clean embedded source inputs. This proves the production Test VM consumer "
+                "can run this compiler artifact, without modifying mncs-test or claiming Forge/Environment "
+                "provider publication. A comment-only "
                 "source shift in the real suite reuses every produced Language v3 body fact while refreshing "
                 "all current Test source spans and preserving semantic Test identities and the executable "
                 "artifact. A semantics-preserving edit to the imported assertions.from_assertion helper "
