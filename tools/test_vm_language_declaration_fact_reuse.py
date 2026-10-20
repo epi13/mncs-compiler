@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language declaration-fact reuse through application-build/10."""
+"""Exercise Language declaration-fact reuse through application-build/11."""
 from __future__ import annotations
 
 import copy
@@ -16,14 +16,16 @@ import test_vm_native_application as app
 import test_native_application_incremental as incremental
 
 ROOT = app.ROOT
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/7"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/10"
-CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/6"
-VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/5"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
+CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/7"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/6"
 FACT_SCHEMA = "mncs.language-declaration-verification-fact/1"
 FUNCTION_DECLARATION_VERIFIER = "mncs-language-function-declaration-validator/1"
 FINITE_TYPE_VERIFIER = "mncs-language-finite-type-validator/1"
 FINITE_TYPE_POLICY = "mncs-language-finite-type-policy/1"
+RECORD_TYPE_VERIFIER = "mncs-language-record-type-validator/1"
+RECORD_TYPE_POLICY = "mncs-language-record-type-policy/1"
 PROBE = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROBE_BIN",
     str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
@@ -103,6 +105,19 @@ def require_contract(label: str, response: dict) -> tuple[dict, dict]:
             raise AssertionError(f"{label} omitted actual {field}")
     if type(work.get("produced_finite_type_declaration_fact_count")) is not int:
         raise AssertionError(f"{label} omitted produced finite-type fact count")
+    if (work.get("language_record_type_declaration_verification_fact_schema") != FACT_SCHEMA
+            or work.get("language_record_type_declaration_fact_verifier_identity")
+            != RECORD_TYPE_VERIFIER
+            or work.get("language_record_type_declaration_fact_policy_identity")
+            != RECORD_TYPE_POLICY):
+        raise AssertionError(f"{label} did not identify Language's record fact contract")
+    for field in ("reused_record_type_declaration_facts",
+                  "recomputed_record_type_declaration_facts",
+                  "record_type_declaration_fact_recomputation_reasons"):
+        if not isinstance(work.get(field), list):
+            raise AssertionError(f"{label} omitted actual {field}")
+    if type(work.get("produced_record_type_declaration_fact_count")) is not int:
+        raise AssertionError(f"{label} omitted produced record fact count")
     return cache, work
 
 
@@ -112,8 +127,8 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("application response omitted its exact cache identity")
     path = cache_dir / "application-builds" / f"{key.removeprefix('sha256:')}.json"
     entry = json.loads(path.read_text(encoding="utf-8"))
-    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/7":
-        raise AssertionError("V7 application cache omitted separately bound finite-type facts")
+    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/8":
+        raise AssertionError("V8 application cache omitted separately bound record-type facts")
     facts = entry.get("declaration_verification_facts")
     if not isinstance(facts, list) or not all(
             isinstance(row, dict)
@@ -136,6 +151,19 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("cache entry contains malformed Language finite-type facts")
     if not entry.get("finite_type_declaration_verification_facts_sha256"):
         raise AssertionError("cache entry does not bind finite-type fact bytes")
+    record_type_facts = entry.get("record_type_declaration_verification_facts")
+    if (not isinstance(record_type_facts, list)
+            or not record_type_facts
+            or not all(isinstance(row, dict)
+                       and row.get("schema_version") == FACT_SCHEMA
+                       and row.get("verifier_identity") == RECORD_TYPE_VERIFIER
+                       and row.get("policy_identity") == RECORD_TYPE_POLICY
+                       and row.get("result") == "verified"
+                       and row.get("verification_witness_identity")
+                       for row in record_type_facts)):
+        raise AssertionError("cache entry contains malformed Language record-type facts")
+    if not entry.get("record_type_declaration_verification_facts_sha256"):
+        raise AssertionError("cache entry does not bind record-type fact bytes")
     source_parse_cache = entry.get("source_parse_cache")
     if (not isinstance(source_parse_cache, dict)
             or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/1"
@@ -149,6 +177,7 @@ def fact_locations(entry: dict) -> dict[str, str | None]:
         json.dumps(row.get("subject"), sort_keys=True): row.get("source_location_identity")
         for row in entry["declaration_verification_facts"]
         + entry["finite_type_declaration_verification_facts"]
+        + entry["record_type_declaration_verification_facts"]
     }
 
 
@@ -158,6 +187,7 @@ def measure_build(
     cache_root: Path,
     *,
     compare_execution: bool,
+    call_arguments: list[dict] | None = None,
 ) -> dict:
     probe = app.Probe(
         cache_root / "program-cache", executable=PROBE,
@@ -171,12 +201,15 @@ def measure_build(
         cache, work = require_contract(label, response)
         if compare_execution:
             oracle, execution, oracle_metrics = incremental.oracle_one(
-                probe, request["root_source"], request["modules"]
+                probe, request["root_source"], request["modules"],
+                call=app.call_request(call_arguments),
             )
             artifact_value = response.get("artifact", {}).get("value")
             if not isinstance(artifact_value, dict):
                 raise AssertionError(f"{label} omitted the canonical VM artifact value")
-            vm_document, vm_metrics, _ = incremental.run_and_compare(artifact_value, execution)
+            vm_document, vm_metrics, _ = incremental.run_and_compare(
+                artifact_value, execution, arguments=call_arguments
+            )
         else:
             oracle = None
             oracle_metrics = None
@@ -211,6 +244,12 @@ def compact(stage: dict) -> dict:
         "reused_finite_type_fact_count": len(work["reused_finite_type_declaration_facts"]),
         "recomputed_finite_type_fact_count": len(work["recomputed_finite_type_declaration_facts"]),
         "produced_finite_type_fact_count": work["produced_finite_type_declaration_fact_count"],
+        "reused_record_type_fact_count": len(work["reused_record_type_declaration_facts"]),
+        "recomputed_record_type_fact_count": len(work["recomputed_record_type_declaration_facts"]),
+        "produced_record_type_fact_count": work["produced_record_type_declaration_fact_count"],
+        "record_type_declaration_verification": work[
+            "record_type_declaration_verification"
+        ],
         "finite_type_declaration_verification": work[
             "finite_type_declaration_verification"
         ],
@@ -234,7 +273,7 @@ def main() -> None:
     stages: dict[str, dict] = {}
     execution_checks: list[dict] = []
 
-    with tempfile.TemporaryDirectory(prefix=".language-declaration-fact-reuse-", dir=ROOT) as raw:
+    with tempfile.TemporaryDirectory(prefix=".language-record-fact-reuse-", dir=ROOT) as raw:
         cache_root = Path(raw)
         artifact_path = cache_root / "vm-artifact.json"
         app.ARTIFACT_PATH = artifact_path
@@ -254,6 +293,12 @@ def main() -> None:
             raise AssertionError("cold build reported finite-type facts reused without prior evidence")
         if cold_work["finite_type_declaration_verification"] != "recomputed":
             raise AssertionError("cold finite-type work was not reported as recomputed")
+        if cold_work["produced_record_type_declaration_fact_count"] < 1:
+            raise AssertionError("cold build did not produce Language record-type declaration facts")
+        if cold_work["reused_record_type_declaration_facts"]:
+            raise AssertionError("cold build reported record facts reused without prior evidence")
+        if cold_work["record_type_declaration_verification"] != "recomputed":
+            raise AssertionError("cold record-type work was not reported as recomputed")
         execution_checks.append({"stage": "cold", "stage0_vm_equal": True})
         application_cache = cache_root / "cold" / "application-cache"
         entry_before = cache_entry(application_cache, cold["response"])
@@ -270,6 +315,10 @@ def main() -> None:
             raise AssertionError("exact artifact hit inaccurately reported finite-type fact reuse")
         if unchanged["verification_work"]["finite_type_declaration_verification"] != "not_run":
             raise AssertionError("exact artifact hit reported Language finite-type checking")
+        if unchanged["verification_work"]["reused_record_type_declaration_facts"]:
+            raise AssertionError("exact artifact hit inaccurately reported record fact reuse")
+        if unchanged["verification_work"]["record_type_declaration_verification"] != "not_run":
+            raise AssertionError("exact artifact hit reported Language record-type checking")
 
         comment_request = copy.deepcopy(original)
         comment_request["root_source"] = "// location refresh across a comment-only edit\n" + app.APP_SOURCE
@@ -290,6 +339,12 @@ def main() -> None:
             raise AssertionError("comment edit unnecessarily recomputed a finite-type fact")
         if comment_work["finite_type_declaration_verification"] != "reused_with_language_finite_type_facts":
             raise AssertionError("comment edit did not report finite-type fact reuse accurately")
+        if not comment_work["reused_record_type_declaration_facts"]:
+            raise AssertionError("comment edit did not reuse Language record-type facts")
+        if comment_work["recomputed_record_type_declaration_facts"]:
+            raise AssertionError("comment edit unnecessarily recomputed a record-type fact")
+        if comment_work["record_type_declaration_verification"] != "reused_with_language_record_type_facts":
+            raise AssertionError("comment edit did not report record-type fact reuse accurately")
         entry_after = cache_entry(application_cache, comment["response"])
         before_locations = fact_locations(entry_before)
         after_locations = fact_locations(entry_after)
@@ -304,6 +359,86 @@ def main() -> None:
         execution_checks.append({
             "stage": "comment_edit", "stage0_vm_equal": True,
             "refreshed_source_location_count": len(refreshed_locations),
+        })
+
+        record_type_request = copy.deepcopy(original)
+        old_request_record = "record ReadinessRequest { seed: u64, case_index: u64, expected_tests: u64 }"
+        new_request_record = "record ReadinessRequest { seed: u64, case_index: u64, expected_tests: i64 }"
+        if record_type_request["root_source"].count(old_request_record) != 1:
+            raise AssertionError("the selected application no longer has its ReadinessRequest record")
+        record_type_request["root_source"] = record_type_request["root_source"].replace(
+            old_request_record, new_request_record, 1
+        )
+        old_error_field = "InvalidTestCount { expected: u64, found: u64 }"
+        new_error_field = "InvalidTestCount { expected: u64, found: i64 }"
+        if record_type_request["root_source"].count(old_error_field) != 1:
+            raise AssertionError("the selected application no longer has its typed invalid-count outcome")
+        record_type_request["root_source"] = record_type_request["root_source"].replace(
+            old_error_field, new_error_field, 1
+        )
+        record_type_cache = cache_root / "record-types"
+        record_type_baseline = measure_build(
+            "nominal_record_dependency_baseline", original,
+            record_type_cache, compare_execution=True,
+        )
+        stages["nominal_record_dependency_baseline"] = record_type_baseline
+        record_type_edit = measure_build(
+            "nominal_record_dependency_edit", record_type_request,
+            record_type_cache, compare_execution=True,
+            call_arguments=[app.readiness_request(
+                42, 7, 4,
+                identity=(
+                    "mncs:0.2:record-type:tests.native_readiness::ReadinessRequest::"
+                    "case_index%3Au64%3Bexpected_tests%3Ai64%3Bseed%3Au64%3B"
+                ),
+                expected_tests_signed=True,
+            )],
+        )
+        stages["nominal_record_dependency_edit"] = record_type_edit
+        record_type_work = record_type_edit["verification_work"]
+        recomputed_record_facts = record_type_work["recomputed_record_type_declaration_facts"]
+        request_fact = next(
+            (subject for subject in recomputed_record_facts
+             if "::ReadinessRequest::" in str(subject)),
+            None,
+        )
+        report_fact = next(
+            (subject for subject in recomputed_record_facts
+             if "::ReadinessReport::" in str(subject)),
+            None,
+        )
+        if request_fact is None or report_fact is None:
+            raise AssertionError(
+                "record field edit did not invalidate its own and nested dependent record facts: "
+                f"{recomputed_record_facts}"
+            )
+        if len(recomputed_record_facts) != 2 or not record_type_work[
+                "reused_record_type_declaration_facts"]:
+            raise AssertionError("record edit did not isolate invalidation to the changed dependency closure")
+        record_reasons = record_type_work["record_type_declaration_fact_recomputation_reasons"]
+        request_reason = next(
+            (row.get("reason") for row in record_reasons
+             if "::ReadinessRequest::" in str(row.get("subject"))),
+            None,
+        )
+        report_reason = next(
+            (row.get("reason") for row in record_reasons
+             if "::ReadinessReport::" in str(row.get("subject"))),
+            None,
+        )
+        if request_reason != "missing" or report_reason != "dependencies_changed":
+            raise AssertionError(
+                "record edit did not report exact subject/dependency invalidation reasons: "
+                f"{record_reasons}"
+            )
+        if record_type_work["record_type_declaration_verification"] != (
+                "recomputed_with_language_record_type_fact_reuse"):
+            raise AssertionError("record edit did not report mixed Language fact reuse accurately")
+        execution_checks.append({
+            "stage": "nominal_record_dependency_edit",
+            "stage0_vm_equal": True,
+            "recomputed_record_type_facts": recomputed_record_facts,
+            "recomputation_reasons": record_reasons,
         })
 
         body_request = copy.deepcopy(comment_request)
@@ -325,6 +460,9 @@ def main() -> None:
         if (not body_work["reused_finite_type_declaration_facts"]
                 or body_work["recomputed_finite_type_declaration_facts"]):
             raise AssertionError("body-only edit did not retain finite-type declaration facts")
+        if (not body_work["reused_record_type_declaration_facts"]
+                or body_work["recomputed_record_type_declaration_facts"]):
+            raise AssertionError("body-only edit did not retain record-type declaration facts")
         if body_work["finite_type_declaration_verification"] != "reused_with_language_finite_type_facts":
             raise AssertionError("body-only edit did not report finite-type fact reuse accurately")
         if (body_edit["response"].get("artifact", {}).get("identity")
@@ -506,7 +644,7 @@ def main() -> None:
 
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text(encoding="utf-8"))
         evidence = {
-            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/2",
+            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/3",
             "recorded_at": datetime.now(timezone.utc).isoformat(),
             "compiler": {
                 "repository": "mncs-compiler",
@@ -524,7 +662,7 @@ def main() -> None:
                 "root_module": app.APP_MODULE,
                 "callable_roots": [{"module": app.APP_MODULE, "function": "run"}],
                 "selected_tests": "all_source_cases",
-                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/7",
+                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/8",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
             "execution_checks": execution_checks,
@@ -563,6 +701,18 @@ def main() -> None:
                 "invalid_type_edit_status": invalid_response.get("status"),
                 "invalid_type_edit_fresh_diagnostic": "MNE121",
                 "invalid_type_edit_cache_published": invalid_entry.exists(),
+            },
+            "record_type_declaration_fact_reuse": {
+                "comment_edit_reused": len(comment_work["reused_record_type_declaration_facts"]),
+                "comment_edit_recomputed": len(comment_work["recomputed_record_type_declaration_facts"]),
+                "body_edit_reused": len(body_work["reused_record_type_declaration_facts"]),
+                "body_edit_recomputed": len(body_work["recomputed_record_type_declaration_facts"]),
+                "nominal_edit_reused": len(record_type_work["reused_record_type_declaration_facts"]),
+                "nominal_edit_recomputed": recomputed_record_facts,
+                "nominal_edit_recomputation_reasons": record_reasons,
+                "comment_edit_verification": comment_work[
+                    "record_type_declaration_verification"
+                ],
             },
             "reachable_imported_body_dependency_invalidation": {
                 "changed_module": "mncs.test.generative",

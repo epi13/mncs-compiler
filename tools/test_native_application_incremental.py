@@ -72,9 +72,14 @@ def ready_probe(cache_dir: Path, executable: Path | None = None) -> tuple[app.Pr
     return probe, metrics
 
 
-def oracle_one(probe: app.Probe, root: str, modules: dict[str, str]) -> tuple[dict, dict, dict]:
+def oracle_one(
+    probe: app.Probe,
+    root: str,
+    modules: dict[str, str],
+    call: dict | None = None,
+) -> tuple[dict, dict, dict]:
     response, metrics = probe.send({'project_oracle': {
-        'root': root, 'modules': modules, 'calls': [call_request()]}})
+        'root': root, 'modules': modules, 'calls': [call or call_request()]}})
     if not response.get('valid'):
         raise AssertionError(json.dumps(response.get('diagnostics'), indent=2))
     execution = response['executions'][0]
@@ -83,8 +88,14 @@ def oracle_one(probe: app.Probe, root: str, modules: dict[str, str]) -> tuple[di
     return response, execution, metrics
 
 
-def run_and_compare(artifact: dict, execution: dict) -> tuple[dict, dict, list]:
-    document, metrics = app.run_vm(artifact, call_request()['arguments'])
+def run_and_compare(
+    artifact: dict,
+    execution: dict,
+    arguments: list[dict] | None = None,
+) -> tuple[dict, dict, list]:
+    document, metrics = app.run_vm(
+        artifact, arguments if arguments is not None else call_request()['arguments']
+    )
     if document.get('outcome') != {'kind': 'completed'}:
         raise AssertionError(json.dumps(document.get('outcome'), indent=2))
     if document.get('record', {}).get('artifact_id') != artifact.get('artifact_id'):

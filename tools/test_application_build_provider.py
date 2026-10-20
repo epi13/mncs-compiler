@@ -42,6 +42,8 @@ SOURCE_PARSE_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-request/6"
 SOURCE_PARSE_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/9"
 FINITE_TYPE_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/7"
 FINITE_TYPE_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/10"
+RECORD_TYPE_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
+RECORD_TYPE_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -75,20 +77,28 @@ def validate_environment_contract_descriptor() -> None:
         (DECLARATION_FACT_REQUEST_SCHEMA, DECLARATION_FACT_RESPONSE_SCHEMA),
         (SOURCE_PARSE_CACHE_REQUEST_SCHEMA, SOURCE_PARSE_CACHE_RESPONSE_SCHEMA),
         (FINITE_TYPE_FACT_REQUEST_SCHEMA, FINITE_TYPE_FACT_RESPONSE_SCHEMA),
+        (RECORD_TYPE_FACT_REQUEST_SCHEMA, RECORD_TYPE_FACT_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "10":
-        raise AssertionError("Compiler capability revision must match application-build/10")
+    if contract.get("version") != "11":
+        raise AssertionError("Compiler capability revision must match application-build/11")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        FINITE_TYPE_FACT_REQUEST_SCHEMA, FINITE_TYPE_FACT_RESPONSE_SCHEMA
+        RECORD_TYPE_FACT_REQUEST_SCHEMA, RECORD_TYPE_FACT_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/10 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/11 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /10 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /11 request-response pairs")
+    if (artifact.get("record_type_declaration_fact_schema")
+            != "mncs.language-declaration-verification-fact/1"
+            or artifact.get("record_type_declaration_fact_verifier_identity")
+            != "mncs-language-record-type-validator/1"
+            or artifact.get("record_type_declaration_fact_policy_identity")
+            != "mncs-language-record-type-policy/1"):
+        raise AssertionError("Compiler descriptor omitted the Language record fact verifier contract")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
@@ -103,6 +113,7 @@ def validate_environment_contract_descriptor() -> None:
         DECLARATION_FACT_REQUEST_SCHEMA: DECLARATION_FACT_RESPONSE_SCHEMA,
         SOURCE_PARSE_CACHE_REQUEST_SCHEMA: SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
         FINITE_TYPE_FACT_REQUEST_SCHEMA: FINITE_TYPE_FACT_RESPONSE_SCHEMA,
+        RECORD_TYPE_FACT_REQUEST_SCHEMA: RECORD_TYPE_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -408,6 +419,7 @@ def invoke(
         DECLARATION_FACT_RESPONSE_SCHEMA,
         SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
         FINITE_TYPE_FACT_RESPONSE_SCHEMA,
+        RECORD_TYPE_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):
@@ -701,6 +713,71 @@ def main() -> None:
                 or finite_type_warm_work.get("reused_finite_type_declaration_facts")
                 or finite_type_warm_work.get("finite_type_declaration_verification") != "not_run"):
             raise AssertionError("Environment exact cache hit claimed Language finite-type verification")
+
+        record_type_request = dict(parse_request)
+        record_type_request["schema_version"] = RECORD_TYPE_FACT_REQUEST_SCHEMA
+        record_type_request_path = base / "record-type-fact-request.json"
+        write_json(record_type_request_path, record_type_request)
+        record_type_cache_dir = base / "record-type-fact-cache"
+        record_type_cache_arg = record_type_cache_dir.relative_to(ROOT).as_posix()
+        record_type_cold_dir = base / "record-type-fact-cold-output"
+        record_type_cold_dir.mkdir()
+        record_type_cold, record_type_cold_response, record_type_cold_elapsed, record_type_cold_metrics = invoke(
+            ["--request-file", record_type_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", record_type_cache_arg],
+            output_dir=record_type_cold_dir,
+            cache_dir=record_type_cache_dir,
+        )
+        record_type_work = record_type_cold_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        if (record_type_cold_response.get("schema_version") != RECORD_TYPE_FACT_RESPONSE_SCHEMA
+                or record_type_cold_response.get("status") != "verified"
+                or record_type_work.get("schema_version")
+                != "mncs.compiler.application-build-verification-work/6"
+                or record_type_work.get("front_end_invocations") != 1
+                or not record_type_work.get("recomputed_record_type_declaration_facts")
+                or record_type_work.get("reused_record_type_declaration_facts")
+                or record_type_work.get("record_type_declaration_verification") != "recomputed"):
+            raise AssertionError(
+                "Environment provider did not route /8 through verified record-type Language work: "
+                + json.dumps(record_type_work, sort_keys=True)[:4000]
+            )
+        record_type_key = record_type_cold_response.get("cache", {}).get("key", "")
+        record_type_entry_path = (
+            record_type_cache_dir / "application-builds"
+            / f"{record_type_key.removeprefix('sha256:')}.json"
+        )
+        record_type_entry = json.loads(record_type_entry_path.read_text(encoding="utf-8"))
+        record_type_cached_facts = record_type_entry.get(
+            "record_type_declaration_verification_facts"
+        )
+        if (record_type_entry.get("schema_version")
+                != "mncs.compiler.application-build-cache-entry/8"
+                or not isinstance(record_type_cached_facts, list)
+                or not record_type_cached_facts
+                or not record_type_entry.get(
+                    "record_type_declaration_verification_facts_sha256"
+                )):
+            raise AssertionError("Environment provider did not publish separately bound record-type facts")
+
+        record_type_warm_dir = base / "record-type-fact-warm-output"
+        record_type_warm_dir.mkdir()
+        record_type_warm, record_type_warm_response, record_type_warm_elapsed, record_type_warm_metrics = invoke(
+            ["--request-file", record_type_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", record_type_cache_arg],
+            output_dir=record_type_warm_dir,
+            cache_dir=record_type_cache_dir,
+        )
+        record_type_warm_work = record_type_warm_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        if (record_type_warm_response.get("schema_version") != RECORD_TYPE_FACT_RESPONSE_SCHEMA
+                or record_type_warm_response.get("cache", {}).get("status") != "hit"
+                or record_type_warm_work.get("front_end_invocations") != 0
+                or record_type_warm_work.get("reused_record_type_declaration_facts")
+                or record_type_warm_work.get("record_type_declaration_verification") != "not_run"):
+            raise AssertionError("Environment exact cache hit claimed Language record-type verification")
 
         parse_comment_request = dict(parse_request)
         parse_comment_request["root_source"] = (
@@ -1467,6 +1544,31 @@ def main() -> None:
                     "provider_metrics": finite_type_warm_metrics,
                 },
             },
+            "language_record_type_declaration_fact_reuse": {
+                "request_schema": RECORD_TYPE_FACT_REQUEST_SCHEMA,
+                "response_schema": record_type_cold_response.get("schema_version"),
+                "cache_entry_schema": record_type_entry.get("schema_version"),
+                "cold": {
+                    "provider_status": record_type_cold.get("status"),
+                    "cache_status": record_type_cold_response.get("cache", {}).get("status"),
+                    "recomputed_record_type_fact_count": len(
+                        record_type_work.get("recomputed_record_type_declaration_facts", [])
+                    ),
+                    "stored_record_type_fact_count": len(record_type_cached_facts),
+                    "provider_wall_seconds": round(record_type_cold_elapsed, 6),
+                    "provider_metrics": record_type_cold_metrics,
+                },
+                "fresh_process_warm": {
+                    "provider_status": record_type_warm.get("status"),
+                    "cache_status": record_type_warm_response.get("cache", {}).get("status"),
+                    "front_end_invocations": record_type_warm_work.get("front_end_invocations"),
+                    "record_type_declaration_verification": record_type_warm_work.get(
+                        "record_type_declaration_verification"
+                    ),
+                    "provider_wall_seconds": round(record_type_warm_elapsed, 6),
+                    "provider_metrics": record_type_warm_metrics,
+                },
+            },
             "limitations": [
                 "This invokes the local canonical VM but does not exercise Forge, the live Environment provider route, or canonical Store execution.",
                 "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
@@ -1494,6 +1596,22 @@ def main() -> None:
                 "language_finite_type_fact_contract_routed": (
                     finite_type_cold_response.get("schema_version")
                     == FINITE_TYPE_FACT_RESPONSE_SCHEMA
+                ),
+                "language_record_type_fact_contract_routed": (
+                    record_type_cold_response.get("schema_version")
+                    == RECORD_TYPE_FACT_RESPONSE_SCHEMA
+                ),
+                "language_record_type_facts_stored_separately": (
+                    record_type_entry.get("schema_version")
+                    == "mncs.compiler.application-build-cache-entry/8"
+                    and bool(record_type_cached_facts)
+                ),
+                "language_record_type_exact_cache_hit_did_not_claim_reuse": (
+                    record_type_warm_response.get("cache", {}).get("status") == "hit"
+                    and record_type_warm_work.get("front_end_invocations") == 0
+                    and not record_type_warm_work.get(
+                        "reused_record_type_declaration_facts"
+                    )
                 ),
                 "language_finite_type_facts_stored_separately": (
                     finite_type_entry.get("schema_version")

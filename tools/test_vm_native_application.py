@@ -75,6 +75,7 @@ enum ReadinessError {
 record ReadinessRequest { seed: u64, case_index: u64, expected_tests: u64 }
 
 record ReadinessReport {
+    request: ReadinessRequest,
     state: ReadinessState,
     state_value: u64,
     summary: SuiteSummary,
@@ -121,6 +122,7 @@ fn run(request: ReadinessRequest) -> (result: ReadinessOutcome) {
         Deferred { reason } => reason
     };
     let report: ReadinessReport = ReadinessReport {
+        request: request,
         state: state,
         state_value: state_value,
         summary: summary,
@@ -302,16 +304,20 @@ def summarize_report(outcome: dict) -> dict:
 
 
 def readiness_request(seed: int, case_index: int, expected_tests: int,
-                      identity: str | None = None) -> dict:
+                      identity: str | None = None,
+                      expected_tests_signed: bool = False) -> dict:
     if identity is None:
         identity = ('mncs:0.2:record-type:tests.native_readiness::ReadinessRequest::'
-                    'case_index%3Au64%3Bexpected_tests%3Au64%3Bseed%3Au64%3B')
+                    f'case_index%3Au64%3Bexpected_tests%3A'
+                    f'{"i64" if expected_tests_signed else "u64"}%3Bseed%3Au64%3B')
     return {'record': {
         'type_identity': identity,
         'name': 'ReadinessRequest',
         'fields': [
             ['case_index', {'integer': {'type': {'bits': 64, 'signed': False}, 'value': case_index}}],
-            ['expected_tests', {'integer': {'type': {'bits': 64, 'signed': False}, 'value': expected_tests}}],
+            ['expected_tests', {'integer': {'type': {
+                'bits': 64, 'signed': expected_tests_signed,
+            }, 'value': expected_tests}}],
             ['seed', {'integer': {'type': {'bits': 64, 'signed': False}, 'value': seed}}],
         ],
     }}

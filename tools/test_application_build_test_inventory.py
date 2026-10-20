@@ -2915,6 +2915,7 @@ def main() -> None:
         "mncs.compiler.application-build-request/5": "mncs.compiler.application-build/8",
         "mncs.compiler.application-build-request/6": "mncs.compiler.application-build/9",
         "mncs.compiler.application-build-request/7": "mncs.compiler.application-build/10",
+        "mncs.compiler.application-build-request/8": "mncs.compiler.application-build/11",
     }
     if provider.RESPONSE_SCHEMA_BY_REQUEST != expected_pairs:
         raise AssertionError("Environment provider does not accept all versioned build contracts")
@@ -2923,10 +2924,10 @@ def main() -> None:
         row for row in manifest.get("contracts", {}).get("provides", [])
         if isinstance(row, dict) and row.get("contract") == "native-application-build"
     ]
-    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "10"
+    if (len(contract_rows) != 1 or contract_rows[0].get("version") != "11"
             or contract_rows[0].get("artifact_contract", {}).get("request_schema")
-            != "mncs.compiler.application-build-request/7"):
-        raise AssertionError("Compiler manifest does not advertise application-build/10")
+            != "mncs.compiler.application-build-request/8"):
+        raise AssertionError("Compiler manifest does not advertise application-build/11")
     provider_tests.validate_environment_contract_descriptor()
 
     with tempfile.TemporaryDirectory(

@@ -76,14 +76,17 @@ those facts to Language only after validating the cache entry and its digest;
 Language checks each declaration fingerprint, verifier and policy identity,
 profile, assumption dependencies, and source-location refresh independently.
 The `/8` verification-work observation reports the declaration subjects that
-Language actually reused or recomputed, with miss reasons. `/5` through `/7`
-retain their prior behavior and do not claim declaration-fact reuse.
+Language actually reused or recomputed, with miss reasons. Requests `/5` and
+`/6` retain function declaration-fact reuse; `/6` also carries the Language
+source parse cache, and `/7` adds separately verified finite-type facts.
 
 An exact source-snapshot hit skips the frontend for each contract. A changed
-`/5` through `/7` snapshot runs the full Language frontend without reusing
-Language facts; a changed `/8` snapshot supplies prior verified facts so
-Language can selectively reuse valid declarations and bodies. Independently,
-if the selected executable closure and callable interfaces still match a
+`/5` through `/8` snapshot runs the current Language frontend and supplies the
+fact sets supported by that request: function declarations for `/5` and `/6`,
+finite types for `/7`, and record types for `/8`. Language selectively reuses
+facts whose verification guards still match; parsing and dependency resolution
+remain part of the changed-snapshot frontend. Independently, if the selected
+executable closure and callable interfaces still match a
 verified artifact, the Compiler reuses that VM artifact; otherwise it rebuilds
 the selected SSA closure and artifact. The
 `tools/test_vm_native_digest_unreachable_body_reuse.py` workload verifies that
@@ -91,8 +94,9 @@ an uncalled imported body edit takes the full-frontend path while preserving
 the digest executable artifact. The Environment provider accepts request `/1`
 with response `/4`, request `/2` with response `/5`, request `/3` with
 response `/6`, request `/4` with response `/7`, request `/5` with
-response `/8`, request `/6` with response `/9`, and request `/7` with
-response `/10`; its bounded stdout summary preserves each selected callable identity when it fits the 12 KiB
+response `/8`, request `/6` with response `/9`, request `/7` with response
+`/10`, and request `/8` with response `/11`; its bounded stdout summary
+preserves each selected callable identity when it fits the 12 KiB
 bound. For large selections it reports the root count and points to the
 shareable result artifact, which retains the complete typed interfaces. The
 focused direct compiler proof is
@@ -100,8 +104,8 @@ focused direct compiler proof is
 also sends `/2` through the adapter and calls `snapshot_witness` from its
 seven-callable Test-core artifact in one canonical VM batch.
 
-The Environment descriptor advertises request `/7` and response `/10` as
-current while retaining all seven request-response pairs.
+The Environment descriptor advertises request `/8` and response `/11` as
+current while retaining all eight request-response pairs.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only
@@ -278,11 +282,27 @@ variant. Parsing and dependency resolution still dominate changed-snapshot
 wall time, so these results establish avoided semantic work rather than a
 general build-time speedup.
 
+Request `/8` returns application-build `/11` and adds nominal record
+declaration facts as a separate checksummed cache field under cache-entry `/8`.
+The facts carry the Language record verifier and policy identities and remain
+separate from function and finite-type declarations. Verification-work `/6`
+reports record facts Language actually reused or recomputed. In the
+multi-module `mncs-test` workload, a comment edit reused all 9 record facts and
+refreshed current source locations; changing `ReadinessRequest.expected_tests`
+recomputed that record and its dependent `ReadinessReport`, while reusing 7
+unrelated record facts. The changed application matched both Stage-0 oracle
+results and canonical VM execution. The implementation still runs the current
+frontend for changed snapshots; measured wall time was 1.206 seconds cold and
+1.102 seconds for the comment edit. These single-workload measurements do not
+establish a general speedup; the demonstrated gain is reduced semantic
+validation work. Full evidence is in
+`evidence/language-declaration-fact-reuse-20261020T212245.533651Z.json`.
+
 ## Environment capability
 
-The Compiler manifest declares revision 10 of the contract as
-`mncs-compiler:native-application-build`, advertises request `/7` and response
-`/10` as current, and retains all seven request-response pairs. The provider accepts a request from the selected
+The Compiler manifest declares revision 11 of the contract as
+`mncs-compiler:native-application-build`, advertises request `/8` and response
+`/11` as current, and retains all eight request-response pairs. The provider accepts a request from the selected
 Compiler checkout with `--request-file PATH`, or from a canonical Store input
 artifact with `--request-artifact NAME`. It writes the complete response as
 the shareable `native-application-build.json` invocation artifact and keeps
@@ -326,7 +346,8 @@ before decoding them into the current result. It does not reinterpret
 payloads, `/5` adds a separate digest for function declaration facts, `/6`
 adds the serialized parse cache, and `/7` adds a separate digest for finite-type
 declaration facts. A mismatched digest remains a cache miss and triggers source
-verification; the digest batch includes a tampered-entry recovery case.
+verification; `/8` adds nominal record declaration facts under their own
+digest-bound fields. The digest batch includes a tampered-entry recovery case.
 
 `mncs.compiler.application-build-request/6` returns
 `mncs.compiler.application-build/9`. It retains the `/5` callable, Test
@@ -337,8 +358,8 @@ only when its exact sealed source envelope, parser policy, syntax schemas, and
 source-profile registry still match. `/9` reports parsed and reused source
 identities under `verification_work.source_parse_cache`; these counts come
 from Language's parse adapter. Exact application artifact hits report parsing
-as not run. The provider descriptor retains request `/1` through `/7`,
-advertising request `/7` and response `/10` as current. The focused
+as not run. The provider descriptor retains request `/1` through `/8`,
+advertising request `/8` and response `/11` as current. The focused
 fresh-process proof is
 `python3 tools/test_vm_language_source_parse_cache.py`: it checks cold parsing,
 comment-only root edits with imported parse reuse, changed-import invalidation,
