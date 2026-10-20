@@ -1,0 +1,238 @@
+{
+  "schema_version": "mncs.compiler.project-language-fact-reuse/1",
+  "status": "passed_language_fact_v3_project_self_consumption",
+  "observed_at": "2026-10-20T19:36:21.530689+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_revision": "77557ebb725ba76f28d9564a1def9cec3c96e33e",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "language_revision": "844104d39cfe2685464e5bc078bd162e8a4924ab",
+  "language_fact_schema": "mncs.language-verification-fact/3",
+  "verifier_identity": "mncs-language-function-body-validator/4",
+  "stage0_probe_sha256": "32bb931aab283e2ee7b559db955105b7e4d40d69bf3d193a2ec94ff2c611e5ae",
+  "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+  "vm_binary_sha256": "b6fd0d0b862bcfc1307c3724e4f1e14d774061a4c1043cd92f1f9cb8738836cb",
+  "vm_runtime_build_origin": {
+    "status": "stale-inputs",
+    "source_revisions": {
+      "mncs-compiler": "1d4b6e2523ff76c8dfe84d78060622211eaa8c22",
+      "mncs-language": "ad79f3f025f39bbc0979afae728b24f19362b6ee",
+      "mncs-vm": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+    },
+    "mismatch_count": 2,
+    "mismatches": [
+      "source-revision:mncs-language",
+      "source-revision:mncs-compiler"
+    ]
+  },
+  "harness": "tools/test_vm_compiler_project_fact_reuse.py",
+  "harness_sha256": "2e7f9e4f85c771b541c074db65e4fd30f63a511ffd0e7e885f9d4b0cdc4fe562",
+  "contracts": {
+    "request": "mncs.compiler.application-build-request/5",
+    "response": "mncs.compiler.application-build/8",
+    "cache": "mncs.compiler.application-build-cache-observation/5",
+    "verification_work": "mncs.compiler.application-build-verification-work/3"
+  },
+  "module_closure": [
+    {
+      "module": "mncs.compiler.source.v1",
+      "path": "src/compiler/source.mncs",
+      "profile": "0.19",
+      "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+    },
+    {
+      "module": "mncs.compiler.lexer.v1",
+      "path": "src/compiler/lexer.mncs",
+      "profile": "0.19",
+      "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+    },
+    {
+      "module": "mncs.compiler.parser.v1",
+      "path": "src/compiler/parser.mncs",
+      "profile": "0.18",
+      "source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745"
+    },
+    {
+      "module": "mncs.compiler.segment.v1",
+      "path": "src/compiler/segment.mncs",
+      "profile": "0.19",
+      "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+    },
+    {
+      "module": "mncs.compiler.decl.v1",
+      "path": "src/compiler/decl.mncs",
+      "profile": "0.18",
+      "source_sha256": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0"
+    },
+    {
+      "module": "mncs.compiler.flow.v1",
+      "path": "src/compiler/flow.mncs",
+      "profile": "0.18",
+      "source_sha256": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd"
+    },
+    {
+      "module": "mncs.compiler.ssa.v1",
+      "path": "src/compiler/ssa.mncs",
+      "profile": "0.18",
+      "source_sha256": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709"
+    },
+    {
+      "module": "mncs.compiler.project.v1",
+      "path": "src/compiler/project.mncs",
+      "profile": "0.18",
+      "source_sha256": "9753f0f4ef04d72cade170bdaa46141f6eafe71af71896cc1289430d807dfa64"
+    }
+  ],
+  "workload": {
+    "root_module": "tests.compiler_project_fact_frontier",
+    "root_function": "run",
+    "callable": "mncs.compiler.project.v1::module_resolution_cache_key_equal<1,1024>",
+    "reference_backend": null,
+    "cases": [
+      {
+        "id": "equal-short-module-name",
+        "expected": true
+      },
+      {
+        "id": "mismatch-at-sixth-byte",
+        "expected": false
+      },
+      {
+        "id": "equal-empty-name",
+        "expected": true
+      },
+      {
+        "id": "different-length-names",
+        "expected": false
+      },
+      {
+        "id": "out-of-range-name-span",
+        "expected": false
+      }
+    ],
+    "case_count": 5
+  },
+  "verified_fact_reuse": {
+    "cold_body_fact_count": 2031,
+    "cold_declaration_fact_count": 2031,
+    "comment_reused_body_fact_count": 2031,
+    "comment_recomputed_body_facts": [],
+    "comment_reused_declaration_fact_count": 2031,
+    "comment_recomputed_declaration_facts": [],
+    "uncalled_body_edit_subject": "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper",
+    "uncalled_body_edit_recomputed": [
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper"
+    ],
+    "uncalled_body_edit_recomputation_reasons": {
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper": "subject_changed"
+    },
+    "uncalled_body_edit_reused_body_fact_count": 2030,
+    "uncalled_body_edit_recomputed_declaration_facts": [],
+    "body_edit_subject": "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal",
+    "body_edit_recomputed": [
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_fact",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal__spec_33cf5e9d",
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::run"
+    ],
+    "body_edit_recomputation_reasons": {
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_fact": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal__spec_33cf5e9d": "subject_changed",
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::run": "dependencies_changed"
+    },
+    "body_edit_reused_body_fact_count": 2027,
+    "body_edit_recomputed_declaration_facts": [],
+    "fresh_process_per_snapshot": true
+  },
+  "invalid_source": {
+    "status": "rejected",
+    "diagnostic_codes": [
+      "MNE135",
+      "MNE103"
+    ],
+    "front_end_invocations": 1,
+    "front_end_outcome": "rejected",
+    "artifact_publication": "not_published",
+    "prior_success_did_not_mask_diagnostic": true
+  },
+  "execution": {
+    "stage0_values": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "canonical_vm_values": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "stage0_vm_equivalent": true,
+    "artifact_identity": "sha256:655997b6d1dff498b4c72d84d57d56d0d8780fa7c8bb65cf75b3b2aa25cd24f2",
+    "canonical_vm": {
+      "wall_seconds": 0.007105,
+      "peak_rss_kib": 7944,
+      "calls_bytes": 15839,
+      "results_bytes": 5713
+    }
+  },
+  "measurements": {
+    "total_wall_seconds": 355.578912,
+    "cold_build": {
+      "wall_seconds": 83.027483,
+      "cpu_seconds": 82.67,
+      "peak_rss_bytes": 1820557312,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "comment_edit": {
+      "wall_seconds": 75.283125,
+      "cpu_seconds": 74.77,
+      "peak_rss_bytes": 1863651328,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "uncalled_body_edit": {
+      "wall_seconds": 75.062054,
+      "cpu_seconds": 74.81,
+      "peak_rss_bytes": 1863458816,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "body_edit": {
+      "wall_seconds": 82.928004,
+      "cpu_seconds": 82.45,
+      "peak_rss_bytes": 1863340032,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "invalid_source": {
+      "wall_seconds": 38.069196,
+      "cpu_seconds": 37.79,
+      "peak_rss_bytes": 1697439744,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "isolated_cgroup_peak_bytes": null,
+    "isolated_cgroup_measurement": "unavailable"
+  },
+  "claim_boundary": "selected Project function application only; whole-compiler succession remains unproven"
+}
