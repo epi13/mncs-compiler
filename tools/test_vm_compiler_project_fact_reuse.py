@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from contextlib import nullcontext
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -278,7 +279,16 @@ def main() -> dict:
         raise AssertionError("invalid root fixture did not change the return type")
 
     started = time.monotonic()
-    with tempfile.TemporaryDirectory(prefix="mncs-project-language-fact-reuse-") as raw:
+    persistent_cache = os.environ.get("MNCS_PROJECT_FACT_CACHE_DIR")
+    if persistent_cache:
+        cache_root = Path(persistent_cache).expanduser().resolve()
+        cache_root.mkdir(parents=True, exist_ok=True)
+        cache_context = nullcontext(str(cache_root))
+    else:
+        cache_context = tempfile.TemporaryDirectory(
+            prefix="mncs-project-language-fact-reuse-"
+        )
+    with cache_context as raw:
         cache = Path(raw)
         cold, cold_metrics = compile_once(
             build_request(modules), cache, "cold Project application")
