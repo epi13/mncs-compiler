@@ -10,6 +10,7 @@ test.
 """
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import os
@@ -41,6 +42,9 @@ RUN_EVIDENCE_NAME = (
     "native-test-provider-app-boundary-"
     f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S.%fZ')}-{os.getpid()}.json"
 )
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/6"
 EVIDENCE_PATH = ROOT / os.environ.get(
     "MNCS_NATIVE_TEST_PROVIDER_APP_EVIDENCE_PATH",
     f"evidence/{RUN_EVIDENCE_NAME}",
@@ -205,7 +209,7 @@ def byte_values(values: bytes) -> dict:
 
 def compile_request(root: str, modules: dict[str, str]) -> dict:
     return {
-        "schema_version": "mncs.compiler.application-build-request/2",
+        "schema_version": REQUEST_SCHEMA,
         "target": "mncs-vm-0.1",
         "root_source_id": "native/mncs/test/provider.mncs",
         "root_source": root,
@@ -216,6 +220,9 @@ def compile_request(root: str, modules: dict[str, str]) -> dict:
         "modules": modules,
         "generic_seeds": [],
         "capabilities": ["provider_artifact", "provider_digest"],
+        "effect_assumptions": [],
+        "optimization_policy": "default",
+        "test_selection": {"kind": "all_source_cases"},
         "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1",
     }
 
@@ -337,8 +344,10 @@ def compile_cross_module_provider_case(cache_dir: Path) -> tuple[dict, dict]:
         root_source_id="mncs-test/tests/provider_cross_module.mncs",
         modules=modules,
     )
-    build_request["schema_version"] = "mncs.compiler.application-build-request/4"
+    build_request["schema_version"] = REQUEST_SCHEMA
     build_request["test_selection"] = {"kind": "all_source_cases"}
+    build_request["effect_assumptions"] = []
+    build_request["optimization_policy"] = "default"
     probe = support.Probe(
         cache_dir / "program-cache",
         executable=support.PROBE,
@@ -355,7 +364,7 @@ def compile_cross_module_provider_case(cache_dir: Path) -> tuple[dict, dict]:
         built,
         {"separate_module_identity"},
         expected_module="tests.provider_cross_module",
-        response_schema="mncs.compiler.application-build/7",
+        response_schema=RESPONSE_SCHEMA,
     )
     if (built.get("unresolved_obligations") != []
             or test_inventory.frontend_invocations(built) != 1):
@@ -465,7 +474,7 @@ def main() -> None:
         try:
             built, build_metrics = probe.send({"compile_application": request}, timeout=600)
             interface = built.get("entry", {}).get("interface", {})
-            if (built.get("schema_version") != "mncs.compiler.application-build/5"
+            if (built.get("schema_version") != RESPONSE_SCHEMA
                     or built.get("status") != "verified"
                     or built.get("unresolved_obligations") != []
                     or interface.get("status") != "verified"
@@ -609,7 +618,7 @@ def main() -> None:
         warm_artifact = warm_built.get("artifact", {}).get("value")
         warm_artifact_identity = warm_built.get("artifact", {}).get("identity")
         if (
-            warm_built.get("schema_version") != "mncs.compiler.application-build/5"
+            warm_built.get("schema_version") != RESPONSE_SCHEMA
             or warm_built.get("status") != "verified"
             or warm_cache_status != "hit"
             or warm_frontend_invocations != 0
@@ -645,6 +654,59 @@ def main() -> None:
             "source_snapshot_identity": warm_built.get("source_snapshot", {}).get("identity"),
             "fresh_probe_process": True,
             "metrics": warm_build_metrics,
+        }
+
+        comment_request = copy.deepcopy(request)
+        comment_request["root_source"] = (
+            "// comment-only fact reuse probe; body identities and interfaces stay fixed\n"
+            + root
+        )
+        comment_probe = support.Probe(
+            cache / "program-cache",
+            executable=support.PROBE,
+            application_cache_dir=cache / "application-cache",
+        )
+        try:
+            comment_built, comment_build_metrics = comment_probe.send(
+                {"compile_application": comment_request}, timeout=180,
+            )
+        finally:
+            comment_probe.close()
+        comment_work = comment_built.get("cache", {}).get("verification_work", {})
+        comment_reused_facts = comment_work.get("reused_semantic_facts", [])
+        comment_recomputed_facts = comment_work.get("recomputed_semantic_facts", [])
+        if (comment_built.get("schema_version") != RESPONSE_SCHEMA
+                or comment_built.get("status") != "verified"
+                or comment_work.get("schema_version") != VERIFICATION_WORK_SCHEMA
+                or comment_work.get("front_end_invocations") != 1
+                or not comment_reused_facts
+                or comment_recomputed_facts
+                or comment_built.get("artifact", {}).get("identity") != artifact_identity
+                or comment_built.get("capability_dispatch") != dispatch):
+            raise AssertionError(json.dumps({
+                "schema_version": comment_built.get("schema_version"),
+                "status": comment_built.get("status"),
+                "verification_work": comment_work,
+                "artifact_identity": comment_built.get("artifact", {}).get("identity"),
+                "expected_artifact_identity": artifact_identity,
+                "capability_dispatch_matches": comment_built.get("capability_dispatch") == dispatch,
+            }, indent=2)[:10000])
+        comment_fact_reuse = {
+            "source_location_edit": "comment_only",
+            "frontend_invocations": comment_work.get("front_end_invocations"),
+            "reused_semantic_fact_count": len(comment_reused_facts),
+            "recomputed_semantic_facts": comment_recomputed_facts,
+            "reused_declaration_fact_count": len(
+                comment_work.get("reused_declaration_facts", [])
+            ),
+            "reused_finite_type_fact_count": len(
+                comment_work.get("reused_finite_type_declaration_facts", [])
+            ),
+            "reused_record_type_fact_count": len(
+                comment_work.get("reused_record_type_declaration_facts", [])
+            ),
+            "artifact_identity_preserved": True,
+            "metrics": comment_build_metrics,
         }
 
     binary, runner_sha, runner_lock_sha = digest_app.build_runner()
@@ -1863,10 +1925,11 @@ def main() -> None:
                     "selected_callable_roots": [
                         f"{module}::{function}" for module, function in actual_roots
                     ],
-                    "application_build_requests": 1,
+                    "application_build_requests": 2,
                     "application_artifact_count": 1,
                     "frontend_invocations": test_inventory.frontend_invocations(built),
                     "fresh_process_warm_reuse": warm_reuse,
+                    "comment_only_language_fact_reuse": comment_fact_reuse,
                     "artifact_identity": artifact_identity,
                     "artifact_sha256": sha(artifact_bytes),
                     "artifact_bytes": len(artifact_bytes),
@@ -2017,7 +2080,7 @@ def main() -> None:
                 "limitations": [
                     "The local bounded structured-file provider completes single-test and two-test paths, a combined eight-case heterogeneous-artifact batch, and a three-call retained VM session over that batch; the seven-case mncs-test self-suite is also exercised separately. Execution still uses the local adapter rather than Forge, Environment, and canonical Store, and it does not prove fresh-process Store readback."
                 ],
-                "language_verified_facts_reused": 0,
+                "language_verified_facts_reused": len(comment_reused_facts),
                 "self_consumption_frontier_advanced": False,
             }
             evidence_bytes = (json.dumps(evidence, indent=2, sort_keys=True) + "\n").encode("utf-8")
