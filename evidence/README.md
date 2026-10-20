@@ -1306,3 +1306,25 @@ was 61.1 MB and cgroup memory was unavailable. The real provider VM batch took
 orchestration, but Language verified facts reused remains zero. Execution
 still uses the local bounded provider adapter rather than Forge and canonical
 Store, and compiler self-consumption did not advance.
+
+## Current Source location and span frontier (2026-10-20)
+
+The [current-head Source report](self-host-source-line-col-scalar-batch-current-head-20261020.json)
+binds `line_col_global`, `line_col_span_global`, and `line_cols_global` to
+Compiler revision `1c4f002629a73eadf692bcd828ba194a81c535d3` and Source hash
+`927209afd171de7f2aac97d7b5a90c511f417d9837c845032a28de34dbdc3e22`. A
+fresh run exposed that the older Compiler frontier harness still expected
+byte-counted UTF-8 columns. `mncs-syntax::SourceSpan::at` uses byte offsets
+with Unicode-scalar columns, which matches the MNCS Source implementation;
+the harness oracle and wording now follow that contract.
+
+The corrected frontier passed 178 location queries, 31 span queries, and 30
+batches in each of the reference interpreter, Cranelift, and canonical VM. On
+the VM, batching saved 27,099,821 steps (90.1%) over independent lookups, and
+span mapping saved 1,640,735 steps (13.0%) over two lookups. The canonical VM
+run took 55.323 seconds at 241,908 KiB peak RSS; reference and Cranelift child
+CPU totaled 228.550 seconds. The Python harness peaked at 834,208 KiB RSS;
+cgroup measurements were unavailable. This covers selected Source callables,
+not the full Source module. Language verified facts reused remains zero, and
+Stage-1/Stage-2 succession remains unproven. Evidence SHA-256:
+`7794a02d386885bfd34f32a2e86b147d5e2683c3d78e9cf234448e835fde8880`.

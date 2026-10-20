@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Differentially verify global source line/column and span mapping in a canonical VM.
 
-The selected Source callable is checked against the byte-based SourceSpan
-convention across page strides, newline boundaries, out-of-range offsets,
-multibyte UTF-8 bytes, and a real 64 KiB source. One freshly emitted artifact
-is exercised through the reference interpreter, Cranelift, and canonical VM.
+The selected Source callable is checked against the byte-offset,
+Unicode-scalar-column SourceSpan convention across page strides, newline
+boundaries, out-of-range offsets, multibyte UTF-8 bytes, and a real 64 KiB
+source. One freshly emitted artifact is exercised through the reference
+interpreter, Cranelift, and canonical VM.
 """
 from __future__ import annotations
 
@@ -64,7 +65,7 @@ def observations() -> list[dict]:
          lambda raw: [0, len(raw) // 2, len(raw), len(raw) + 1]),
         ("multiple-lines", b"first\nsecond\nlast",
          lambda raw: [5, 6, 7, 12, 13, len(raw)]),
-        ("utf8-columns-count-bytes", "cafe:\u2603\nend".encode(),
+        ("utf8-columns-count-scalars", "cafe:\u2603\nend".encode(),
          lambda raw: [5, 6, 7, 8, len(raw)]),
         ("duplicate-offsets", b"prefix\nsuffix",
          lambda raw: [0, 0, 6, 6, len(raw), len(raw)]),
@@ -130,6 +131,23 @@ def span_observations(cases: list[dict]) -> list[dict]:
     return spans
 
 
+def ref_line_col_scalar_columns(data: bytes, offset: int) -> tuple[int, int]:
+    """Transcribe SourceSpan::at: byte offsets, Unicode-scalar columns.
+
+    A column advances at each scalar's first UTF-8 byte. A byte offset inside
+    a multibyte scalar therefore has the column after that scalar has begun.
+    The Source module applies the same rule by ignoring continuation bytes.
+    """
+    offset = min(offset, len(data))
+    prefix = data[:offset]
+    line = prefix.count(b"\n") + 1
+    line_start = prefix.rfind(b"\n") + 1
+    scalar_starts = sum(
+        not 0x80 <= value <= 0xBF for value in prefix[line_start:]
+    )
+    return line, scalar_starts + 1
+
+
 def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                       ) -> tuple[list[dict], list[dict], list[dict], dict | None]:
     previous = os.environ.get("MNCS_PROBE_BACKEND")
@@ -153,7 +171,7 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                     budget=STEP_BUDGET,
                 )
                 wall = time.monotonic() - started
-                expected = cp0001.ref_line_col(case["raw"], offset)
+                expected = ref_line_col_scalar_columns(case["raw"], offset)
                 actual = (returned["line"], returned["col"])
                 if actual != expected:
                     raise AssertionError(
@@ -176,8 +194,8 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
                 budget=STEP_BUDGET,
             )
             wall = time.monotonic() - started
-            expected_start = cp0001.ref_line_col(span["raw"], span["start"])
-            expected_end = cp0001.ref_line_col(span["raw"], span["end"])
+            expected_start = ref_line_col_scalar_columns(span["raw"], span["start"])
+            expected_end = ref_line_col_scalar_columns(span["raw"], span["end"])
             actual_start = (returned["start"]["line"], returned["start"]["col"])
             actual_end = (returned["end"]["line"], returned["end"]["col"])
             if actual_start != expected_start or actual_end != expected_end:
@@ -206,7 +224,7 @@ def run_probe_backend(backend: str, cases: list[dict], spans: list[dict]
             if not returned["ordered"]:
                 raise AssertionError(f"{backend} {case['id']}: ordered query batch rejected")
             locations = returned["locations"]
-            expected = [cp0001.ref_line_col(case["raw"], offset)
+            expected = [ref_line_col_scalar_columns(case["raw"], offset)
                         for offset in case["offsets"]]
             actual = [(item["line"], item["col"]) for item in locations]
             if actual != expected:
@@ -565,7 +583,7 @@ def main() -> None:
             "zero_stride": "delegates to line_col_global's compatibility path",
             "dense_case": "dense-64-query-16k-source-stride-1024",
         },
-        "oracle": "byte-based SourceSpan line/column convention: 1-based, newline resets column, UTF-8 columns count bytes",
+        "oracle": "SourceSpan byte-offset and Unicode-scalar-column convention: 1-based, newline resets column",
         "page_strides": list(STRIDES),
         "input_count": len(cases),
         "request_count_per_executor": len(reference_rows),
@@ -627,11 +645,11 @@ def main() -> None:
             "The selected Source line_col_global callable maps byte offsets, and line_col_span_global "
             "maps ordered span endpoints in one prefix walk; line_cols_global maps ordered byte offsets "
             "with one monotone scan that skips pages before the prior query cursor and rejects decreasing query batches. "
-            "Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-based "
-            "SourceSpan convention for newline edges, UTF-8 byte columns, clamped offsets, empty input, "
+            "Reference interpreter, Cranelift, and one fresh canonical VM artifact agree with the byte-offset, "
+            "Unicode-scalar-column SourceSpan convention for newline edges, UTF-8 scalar columns, clamped offsets, empty input, "
             "duplicate offsets, a dense 64-query 16 KiB input, and a 64 KiB source. Span and batch transition counts are compared with independent "
             "single-coordinate calls. This is a selected source-location frontier, not full Source module proof, "
-            "Unicode-scalar column semantics, Language verified-fact reuse, or compiler succession."
+            "Language verified-fact reuse, or compiler succession."
         ),
     }
     evidence_path.parent.mkdir(parents=True, exist_ok=True)
