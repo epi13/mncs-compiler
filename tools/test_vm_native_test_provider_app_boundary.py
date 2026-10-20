@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Verify the production Test provider application's capability boundary.
 
-The harness compiles the real application and protocol, checks denied and
-invalid calls, and executes real inventory results through bounded structured
-host operations. It also combines Test callables from distinct verified
-artifacts and compares the native provider fold with Stage-0. This local VM
-adapter is not a Forge or canonical Store integration test.
+The harness compiles the real application and protocol in one multi-callable
+build, checks denied and invalid calls, and executes real inventory results
+through bounded structured host operations. It also combines Test callables
+from distinct verified artifacts and compares the native provider fold with
+Stage-0. This local VM adapter is not a Forge or canonical Store integration
+test.
 """
 from __future__ import annotations
 
@@ -204,11 +205,14 @@ def byte_values(values: bytes) -> dict:
 
 def compile_request(root: str, modules: dict[str, str]) -> dict:
     return {
-        "schema_version": "mncs.compiler.application-build-request/1",
+        "schema_version": "mncs.compiler.application-build-request/2",
         "target": "mncs-vm-0.1",
         "root_source_id": "native/mncs/test/provider.mncs",
         "root_source": root,
-        "entry": {"module": ENTRY_MODULE, "function": ENTRY_FUNCTION},
+        "callable_roots": [
+            {"module": ENTRY_MODULE, "function": ENTRY_FUNCTION},
+            {"module": ENTRY_MODULE, "function": "run_selected_batch"},
+        ],
         "modules": modules,
         "generic_seeds": [],
         "capabilities": ["provider_artifact", "provider_digest"],
@@ -461,44 +465,47 @@ def main() -> None:
         try:
             built, build_metrics = probe.send({"compile_application": request}, timeout=600)
             interface = built.get("entry", {}).get("interface", {})
-            if (built.get("schema_version") != "mncs.compiler.application-build/4"
+            if (built.get("schema_version") != "mncs.compiler.application-build/5"
                     or built.get("status") != "verified"
                     or built.get("unresolved_obligations") != []
-                    or interface.get("status") != "verified"):
+                    or interface.get("status") != "verified"
+                    or test_inventory.frontend_invocations(built) != 1):
                 raise AssertionError(json.dumps({
                     "schema_version": built.get("schema_version"),
                     "status": built.get("status"),
                     "interface_status": interface.get("status"),
+                    "frontend_invocations": test_inventory.frontend_invocations(built),
                     "unresolved_obligations": built.get("unresolved_obligations"),
                     "diagnostics": built.get("diagnostics"),
                 }, indent=2)[:10000])
 
-            # The application entry takes ApplicationContext, so its callable
-            # interface intentionally does not expose ProviderRequest. Ask the
-            # same compiler to verify the actual protocol consumer as a second
-            # entry and take the nominal identity from that compiler interface.
-            protocol_request = json.loads(json.dumps(request))
-            protocol_request["entry"] = {
-                "module": ENTRY_MODULE,
-                "function": "run_selected_batch",
-            }
-            protocol_built, protocol_build_metrics = probe.send(
-                {"compile_application": protocol_request}, timeout=600,
-            )
-            protocol_interface = protocol_built.get("entry", {}).get("interface", {})
-            if (protocol_built.get("schema_version") != "mncs.compiler.application-build/4"
-                    or protocol_built.get("status") != "verified"
-                    or protocol_built.get("unresolved_obligations") != []
-                    or protocol_interface.get("status") != "verified"
-                    or protocol_interface.get("types", {}).get("status") != "verified"
+            # Verify the ApplicationContext entry and protocol consumer in one
+            # multi-callable request, producing one executable application.
+            callable_rows = built.get("callable_scope", {}).get("callable_roots", [])
+            expected_roots = [
+                (ENTRY_MODULE, ENTRY_FUNCTION),
+                (ENTRY_MODULE, "run_selected_batch"),
+            ]
+            actual_roots = [
+                (row.get("module"), row.get("function")) for row in callable_rows
+            ]
+            if (actual_roots != expected_roots
+                    or any(row.get("status") != "verified" for row in callable_rows)
+                    or any(row.get("interface", {}).get("status") != "verified"
+                           for row in callable_rows)):
+                raise AssertionError(
+                    f"multi-callable build did not verify both provider roots: {callable_rows}"
+                )
+            protocol_interface = callable_rows[1].get("interface", {})
+            if (protocol_interface.get("types", {}).get("status") != "verified"
                     or protocol_interface.get("types", {}).get("unresolved_references") != []):
                 raise AssertionError(json.dumps({
-                    "schema_version": protocol_built.get("schema_version"),
-                    "status": protocol_built.get("status"),
+                    "schema_version": built.get("schema_version"),
+                    "status": built.get("status"),
                     "interface_status": protocol_interface.get("status"),
                     "types_status": protocol_interface.get("types", {}).get("status"),
-                    "unresolved_obligations": protocol_built.get("unresolved_obligations"),
-                    "diagnostics": protocol_built.get("diagnostics"),
+                    "unresolved_obligations": built.get("unresolved_obligations"),
+                    "diagnostics": built.get("diagnostics"),
                 }, indent=2)[:10000])
             provider_request_type = next(
                 (row for row in protocol_interface["types"]["records"]
@@ -1788,6 +1795,12 @@ def main() -> None:
                     "request_schema": request["schema_version"],
                     "result_schema": built["schema_version"],
                     "status": built["status"],
+                    "selected_callable_roots": [
+                        f"{module}::{function}" for module, function in actual_roots
+                    ],
+                    "application_build_requests": 1,
+                    "application_artifact_count": 1,
+                    "frontend_invocations": test_inventory.frontend_invocations(built),
                     "artifact_identity": artifact_identity,
                     "artifact_sha256": sha(artifact_bytes),
                     "artifact_bytes": len(artifact_bytes),
@@ -1798,7 +1811,6 @@ def main() -> None:
                         "identity": protocol_interface.get("identity"),
                         "signature": protocol_interface.get("signature"),
                         "provider_request_type_identity": provider_request_identity,
-                        "metrics": protocol_build_metrics,
                     },
                 },
                 "execution": {

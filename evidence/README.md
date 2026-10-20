@@ -1283,3 +1283,26 @@ facts reused.
 ## Current Source byte_at_global frontier (2026-10-20)
 
 The [current-head report](self-host-source-byte-at-global-20261020T013651.595702Z-2426923.json) binds the selected `source.byte_at_global<1024,1024>` execution to Compiler revision `4cf9d354c4349db0e486e7f7a4382a98cea88528`. All 70 bounded and malformed-layout cases agree across the reference interpreter, Cranelift, and a fresh canonical VM artifact. The frontier took 2.985 seconds, used 2.554 child CPU seconds and 140020 KiB child peak RSS; the canonical VM batch took 0.741 seconds at 44380 KiB peak RSS. Cgroup measurements were unavailable. Language verified facts remain unreused. The matrix is still partial: only this callable was rerun at the current head, and the Project source hash changed since the preceding partial revalidation. This does not prove the full Source module, Stage-1, or Stage-2 succession. Evidence SHA-256: `3d19a51b567a1b68d82de659215a0b04b88676d16f8e270a4eb5d32fe2471c48`.
+
+## Multi-callable native Test provider build (2026-10-20)
+
+The [provider boundary run](native-test-provider-app-boundary-20261020T014308.157199Z-2429143.json)
+now selects `provider_batch_app` and `run_selected_batch` in one
+`application-build-request/2`. Compiler verified both callable interfaces,
+their capability identities, and one combined VM artifact in one frontend
+invocation. The real seven-case `mncs-test` provider batch and the eight-case
+heterogeneous-artifact batch both matched Stage-0; the three-call retained VM
+session also reproduced valid results around a typed artifact-identity
+rejection.
+
+The [build comparison](native-test-provider-multicallable-build-comparison-20261020.json)
+compares that 1.161-second build with two earlier runs that requested the
+application and protocol interfaces separately. Their mean combined build
+time was 1.622 seconds, so this workload measured a 28.41% wall-time reduction
+and a 28.66% CPU-time reduction. The source snapshot and Stage-0/VM binaries
+matched; host load and Compiler Git revisions differed. Current build peak RSS
+was 61.1 MB and cgroup memory was unavailable. The real provider VM batch took
+0.067 seconds at 32.1 MiB peak RSS. This improves native Test artifact
+orchestration, but Language verified facts reused remains zero. Execution
+still uses the local bounded provider adapter rather than Forge and canonical
+Store, and compiler self-consumption did not advance.
