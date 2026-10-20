@@ -1394,3 +1394,22 @@ claim; full Compiler self-consumption and Stage-1/Stage-2 succession remain
 unproven. The harness and evidence identities are recorded under
 `current_campaign_native_application_fact_v3_incremental_revalidation_20261020`
 in [`SELF-HOST-MATRIX.json`](SELF-HOST-MATRIX.json).
+
+## Effectful `mncs.test.digest::digest_app` with Language fact v3 (2026-10-20)
+
+The [current digest application record](native-app-readiness-test-digest-app-fact-v3-20261020.json)
+rebuilds the real effectful Test application under Language revision
+`f03bdc1` and checks the exact `test_artifact` capability identity and runtime
+alias against the admitted VM artifact. Cold compilation produced 30 Language
+v3 body facts in 0.865 seconds (0.83 CPU seconds, 54.6 MB peak RSS). The
+comment-only imported Test edit reran the frontend, reused all 30 facts, and
+retained the artifact; a fresh-process warm build used no frontend. Three
+typed success cases matched Stage-0. Seven calls ran in one retained VM
+session, including missing capability, invalid input, write failure, wrong
+artifact and budget exhaustion cases. The canonical VM used the bounded local
+file adapter; Forge execution and its receipt remain unproven. The current
+campaign also lacks a Control-approved `mncs-forge` scope grant, so no Forge
+claim or execution request was attempted. Exact identities and limitations
+are recorded under
+`current_campaign_effectful_digest_app_language_fact_v3_20261020` in
+[`SELF-HOST-MATRIX.json`](SELF-HOST-MATRIX.json).
