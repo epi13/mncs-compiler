@@ -1093,6 +1093,8 @@ The [current-source frontier](self-host-source-byte-at-global-canonical-vm-20261
 
 The run took 2.95 seconds overall and 2.53 child CPU seconds; child peak RSS was 140,024 KiB and canonical-VM peak RSS was 44,312 KiB. Host available memory before the run was about 24.1 GB; cgroup readings were unavailable. This is a selected source helper frontier, not full Source-module proof or a general speed claim. Language-owned verified facts reused remains zero; Stage-1 and Stage-2 succession remain unproven.
 
+The [current Compiler-head rerun](self-host-source-byte-at-global-canonical-vm-20261020T010428Z.json) revalidates the same selected source function at `d1ecdd1ad3a1022440a26538be54ca6c2f885849`. All 70 cases still match the Stage-0 reference and Cranelift with semantic digest `f606619d…fc2277da`. The frontier took 2.964 seconds overall, 2.539 child CPU seconds, and 139,764 KiB child peak RSS; canonical-VM peak RSS was 44,424 KiB. Cgroup readings were unavailable. The verifier published no Store artifact; the report is preserved in this commit. It reuses zero Language facts and does not prove the full Source module or compiler succession.
+
 ## Multi-input native Test inventory execution (2026-10-19)
 
 The [multi-input inventory record](application-build-test-inventory-multi-input-20261019.json)
