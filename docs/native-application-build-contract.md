@@ -315,8 +315,13 @@ workload has already passed the integrated Compiler to Forge to canonical VM
 to Environment to Store route with fresh-process artifact readback; its exact
 identities and limits are recorded in
 `evidence/native-app-readiness-gate-c.json`. That proof used the pure
-`build_digest` entry. The effectful `digest_app` capability path remains a
-separate, unproven integration milestone.
+`build_digest` entry. The effectful `digest_app` source, capability dispatch,
+and canonical VM behavior now pass the Environment-bound verification
+capability for three typed calls and its negative cases; the evidence is
+`evidence/native-app-readiness-test-digest-app-20261021T193413.686644Z-3854775.json`.
+That bounded test adapter is not the Forge application provider. Forge-owned
+capability admission and execution-receipt publication through Environment
+and Store remain open.
 
 The contract keeps build and execution obligations distinct. `verified` on an
 entry means the selected entry has a verified canonical VM artifact; it does
