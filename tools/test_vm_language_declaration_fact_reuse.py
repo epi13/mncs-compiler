@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language declaration-fact reuse through application-build/11."""
+"""Exercise Language fact reuse through application-build/12."""
 from __future__ import annotations
 
 import copy
@@ -23,16 +23,20 @@ import test_native_application_incremental as incremental
 import test_vm_test_digest_app as digest_app
 
 ROOT = app.ROOT
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
-CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/7"
-VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/6"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/9"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/12"
+CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/8"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/7"
 FACT_SCHEMA = "mncs.language-declaration-verification-fact/1"
 FUNCTION_DECLARATION_VERIFIER = "mncs-language-function-declaration-validator/1"
 FINITE_TYPE_VERIFIER = "mncs-language-finite-type-validator/1"
 FINITE_TYPE_POLICY = "mncs-language-finite-type-policy/1"
 RECORD_TYPE_VERIFIER = "mncs-language-record-type-validator/1"
 RECORD_TYPE_POLICY = "mncs-language-record-type-policy/1"
+SSA_FACT_SCHEMA = "mncs.language-ssa-function-verification-fact/1"
+SSA_FACT_VERIFIER = "mncs-language-ssa-function-validator/1"
+SSA_FACT_POLICY = "mncs-language-ssa-function-policy/1"
+SSA_LANGUAGE_PROFILE = "mncs-language-ssa-profile/0.5"
 PROBE = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROBE_BIN",
     str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
@@ -200,6 +204,17 @@ def require_contract(label: str, response: dict) -> tuple[dict, dict]:
             raise AssertionError(f"{label} omitted actual {field}")
     if type(work.get("produced_record_type_declaration_fact_count")) is not int:
         raise AssertionError(f"{label} omitted produced record fact count")
+    if (work.get("language_ssa_function_verification_fact_schema") != SSA_FACT_SCHEMA
+            or work.get("language_ssa_function_fact_verifier_identity") != SSA_FACT_VERIFIER
+            or work.get("language_ssa_function_fact_policy_identity") != SSA_FACT_POLICY
+            or work.get("language_ssa_function_profile") != SSA_LANGUAGE_PROFILE):
+        raise AssertionError(f"{label} did not identify the Language SSA fact verifier contract")
+    for field in ("reused_ssa_function_facts", "recomputed_ssa_function_facts",
+                  "ssa_function_fact_recomputation_reasons"):
+        if not isinstance(work.get(field), list):
+            raise AssertionError(f"{label} omitted actual {field}")
+    if type(work.get("produced_ssa_function_fact_count")) is not int:
+        raise AssertionError(f"{label} omitted produced SSA function-fact count")
     return cache, work
 
 
@@ -209,8 +224,8 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("application response omitted its exact cache identity")
     path = cache_dir / "application-builds" / f"{key.removeprefix('sha256:')}.json"
     entry = json.loads(path.read_text(encoding="utf-8"))
-    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/8":
-        raise AssertionError("V8 application cache omitted separately bound record-type facts")
+    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/9":
+        raise AssertionError("V9 application cache omitted SSA function verification facts")
     facts = entry.get("declaration_verification_facts")
     if not isinstance(facts, list) or not all(
             isinstance(row, dict)
@@ -246,6 +261,20 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("cache entry contains malformed Language record-type facts")
     if not entry.get("record_type_declaration_verification_facts_sha256"):
         raise AssertionError("cache entry does not bind record-type fact bytes")
+    ssa_facts = entry.get("ssa_function_verification_facts")
+    if (not isinstance(ssa_facts, list)
+            or not ssa_facts
+            or not all(isinstance(row, dict)
+                       and row.get("schema_version") == SSA_FACT_SCHEMA
+                       and row.get("verifier_identity") == SSA_FACT_VERIFIER
+                       and row.get("policy_identity") == SSA_FACT_POLICY
+                       and row.get("language_profile") == SSA_LANGUAGE_PROFILE
+                       and row.get("result") == "verified"
+                       and row.get("verification_witness_identity")
+                       for row in ssa_facts)):
+        raise AssertionError("cache entry contains malformed Language SSA function facts")
+    if not entry.get("ssa_function_verification_facts_sha256"):
+        raise AssertionError("cache entry does not bind SSA function-fact bytes")
     source_parse_cache = entry.get("source_parse_cache")
     if (not isinstance(source_parse_cache, dict)
             or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/1"
@@ -337,6 +366,10 @@ def compact(stage: dict) -> dict:
         ],
         "reused_function_body_fact_count": len(work.get("reused_semantic_facts", [])),
         "recomputed_function_body_fact_count": len(work.get("recomputed_semantic_facts", [])),
+        "reused_ssa_function_fact_count": len(work["reused_ssa_function_facts"]),
+        "recomputed_ssa_function_fact_count": len(work["recomputed_ssa_function_facts"]),
+        "produced_ssa_function_fact_count": work["produced_ssa_function_fact_count"],
+        "ssa_function_verification": work.get("ssa_function_verification"),
         "artifact_id": artifact.get("identity") if isinstance(artifact, dict) else None,
         "build_metrics": stage["build_metrics"],
         "oracle_valid": stage["oracle_valid"],
@@ -602,6 +635,16 @@ def main() -> None:
             )
         if not any("mncs.test.generative::shrink" in row for row in reachable_reused):
             raise AssertionError("reachable imported body edit failed to reuse independent shrink fact")
+        ssa_recomputed = reachable_work["recomputed_ssa_function_facts"]
+        ssa_reused = reachable_work["reused_ssa_function_facts"]
+        if (not any("advance_random" in row for row in ssa_recomputed)
+                or not ssa_reused
+                or reachable_work.get("ssa_function_verification")
+                != "recomputed_with_language_ssa_function_fact_reuse"):
+            raise AssertionError(
+                "reachable body edit did not reuse unchanged SSA verification facts and "
+                f"recompute its changed unit: reused={ssa_reused}, recomputed={ssa_recomputed}"
+            )
         if (not reachable_work.get("reused_declaration_facts")
                 or reachable_work.get("recomputed_declaration_facts")):
             raise AssertionError("reachable body edit did not reuse unchanged declaration facts")
@@ -1178,7 +1221,7 @@ def main() -> None:
                 "root_module": app.APP_MODULE,
                 "callable_roots": [{"module": app.APP_MODULE, "function": "run"}],
                 "selected_tests": "all_source_cases",
-                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/8",
+                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/9",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
             "generic_specialization_fact_reuse": generic_specialization_evidence,
@@ -1240,6 +1283,15 @@ def main() -> None:
                 "declaration_fact_reuse": {
                     "reused": reachable_work.get("reused_declaration_facts", []),
                     "recomputed": reachable_work.get("recomputed_declaration_facts", []),
+                },
+                "ssa_function_fact_reuse": {
+                    "reused": reachable_work["reused_ssa_function_facts"],
+                    "recomputed": reachable_work["recomputed_ssa_function_facts"],
+                    "recomputation_reasons": reachable_work[
+                        "ssa_function_fact_recomputation_reasons"
+                    ],
+                    "produced_count": reachable_work["produced_ssa_function_fact_count"],
+                    "verification": reachable_work["ssa_function_verification"],
                 },
                 "artifact_identity_changed": (
                     reachable_body_edit["response"].get("artifact", {}).get("identity")
