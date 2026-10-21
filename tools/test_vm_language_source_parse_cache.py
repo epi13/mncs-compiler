@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove Language source parse-cache reuse through application-build/9."""
+"""Prove Language source parse-cache reuse through application-build/11."""
 from __future__ import annotations
 
 import hashlib
@@ -12,12 +12,16 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe
+
+ROOT = Path(__file__).resolve().parents[1]
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
+os.environ.setdefault("MNCS_PROBE_BIN", os.environ["MNCS_NATIVE_APP_PROBE_BIN"])
 import test_vm_native_application as app
 
-ROOT = app.ROOT
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/6"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/9"
-WORK_SCHEMA = "mncs.compiler.application-build-verification-work/4"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
+WORK_SCHEMA = "mncs.compiler.application-build-verification-work/6"
 PARSE_CACHE_SCHEMA = "mncs.language-source-parse-cache/1"
 PARSE_OBSERVATION_SCHEMA = "mncs.language-source-parse-cache-observation/1"
 ROOT_ID = "cache/application_root.mncs"
@@ -259,6 +263,40 @@ def main() -> None:
                 or comment["vm_artifact_id"] == changed["vm_artifact_id"]):
             raise AssertionError("changed imported semantics reused a stale executable artifact")
 
+        invalid_root_source = comment_source.replace(
+            "return value();", "return absent();", 1
+        )
+        if invalid_root_source == comment_source:
+            raise AssertionError("invalid root fixture failed to change the call")
+        probe = app.Probe(program_cache, executable=app.PROBE,
+                          application_cache_dir=application_cache)
+        try:
+            invalid_root, _ = probe.send({
+                "compile_application": request_for(invalid_root_source, dependency(43)),
+            }, timeout=180.0)
+        finally:
+            probe.close()
+        invalid_root_parse = (
+            invalid_root.get("cache", {}).get("verification_work", {})
+            .get("source_parse_cache", {}).get("observation", {})
+        ) or {}
+        root_diagnostics = invalid_root.get("diagnostics", [])
+        root_location = (root_diagnostics[0].get("span")
+                         if root_diagnostics and isinstance(root_diagnostics[0], dict)
+                         else None)
+        if (invalid_root.get("schema_version") != RESPONSE_SCHEMA
+                or invalid_root.get("status") != "rejected"
+                or invalid_root.get("artifact") is not None
+                or len(root_diagnostics) == 0
+                or not isinstance(root_location, dict)
+                or root_location.get("line") != 5
+                or set(invalid_root_parse.get("reused_source_identities", []))
+                != changed_parsed):
+            raise AssertionError(
+                "comment-shifted invalid root did not retain fresh diagnostic locations "
+                "while reusing the unchanged dependency parse"
+            )
+
         invalid_request = request_for(comment_source, dependency(43).replace("return 43", "return absent"))
         probe = app.Probe(program_cache, executable=app.PROBE,
                           application_cache_dir=application_cache)
@@ -287,6 +325,14 @@ def main() -> None:
                 "fresh_process_exact_hit": summarize(warm),
                 "comment_edit": summarize(comment),
                 "dependency_edit": summarize(changed),
+            },
+            "source_location_refresh": {
+                "invalid_root_rejected": True,
+                "diagnostic_code": root_diagnostics[0].get("code"),
+                "diagnostic_span": root_location,
+                "expected_line_after_comment_edit": 5,
+                "unchanged_dependency_parse_reused": True,
+                "artifact_publication": "not_published",
             },
             "invalid_dependency_rejected": True,
             "parse_cache_contract": PARSE_CACHE_SCHEMA,
