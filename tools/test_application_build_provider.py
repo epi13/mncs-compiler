@@ -46,6 +46,8 @@ RECORD_TYPE_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
 RECORD_TYPE_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
 SSA_FUNCTION_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/9"
 SSA_FUNCTION_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/12"
+SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-request/10"
+SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/13"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -81,20 +83,21 @@ def validate_environment_contract_descriptor() -> None:
         (FINITE_TYPE_FACT_REQUEST_SCHEMA, FINITE_TYPE_FACT_RESPONSE_SCHEMA),
         (RECORD_TYPE_FACT_REQUEST_SCHEMA, RECORD_TYPE_FACT_RESPONSE_SCHEMA),
         (SSA_FUNCTION_FACT_REQUEST_SCHEMA, SSA_FUNCTION_FACT_RESPONSE_SCHEMA),
+        (SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA, SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "12":
-        raise AssertionError("Compiler capability revision must match application-build/12")
+    if contract.get("version") != "13":
+        raise AssertionError("Compiler capability revision must match application-build/13")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        SSA_FUNCTION_FACT_REQUEST_SCHEMA, SSA_FUNCTION_FACT_RESPONSE_SCHEMA
+        SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA, SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/12 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/13 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /12 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /13 request-response pairs")
     if (artifact.get("record_type_declaration_fact_schema")
             != "mncs.language-declaration-verification-fact/1"
             or artifact.get("record_type_declaration_fact_verifier_identity")
@@ -102,6 +105,15 @@ def validate_environment_contract_descriptor() -> None:
             or artifact.get("record_type_declaration_fact_policy_identity")
             != "mncs-language-record-type-policy/1"):
         raise AssertionError("Compiler descriptor omitted the Language record fact verifier contract")
+    if (artifact.get("verification_work_schema")
+            != "mncs.compiler.application-build-verification-work/8"
+            or artifact.get("application_build_cache_entry_schema")
+            != "mncs.compiler.application-build-cache-entry/10"
+            or artifact.get("ssa_function_artifact_cache_schema")
+            != "mncs.language-ssa-function-artifact-cache/1"
+            or artifact.get("ssa_function_artifact_cache_observation_schema")
+            != "mncs.language-ssa-function-artifact-cache-observation/1"):
+        raise AssertionError("Compiler descriptor omitted Language SSA artifact cache identities")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
@@ -118,6 +130,7 @@ def validate_environment_contract_descriptor() -> None:
         FINITE_TYPE_FACT_REQUEST_SCHEMA: FINITE_TYPE_FACT_RESPONSE_SCHEMA,
         RECORD_TYPE_FACT_REQUEST_SCHEMA: RECORD_TYPE_FACT_RESPONSE_SCHEMA,
         SSA_FUNCTION_FACT_REQUEST_SCHEMA: SSA_FUNCTION_FACT_RESPONSE_SCHEMA,
+        SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA: SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 

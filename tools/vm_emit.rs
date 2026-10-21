@@ -21,8 +21,8 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use mncs_compiler::{ReferenceCompiler, SsaFunctionFactWork};
 use mncs_model::{
-    ArtifactRepresentation, BodyOperationKind, BodyType, BoundsEvidence, CompilationStatus,
-    Program, SequenceBound, SsaFunctionFactRequest, SsaFunctionVerificationFact,
+    ArtifactRepresentation, BodyOperationKind, BodyType, BoundsEvidence, CompilationResult,
+    CompilationStatus, Program, SequenceBound, SsaFunctionFactRequest, SsaFunctionVerificationFact,
     SsaInstruction, SsaInstructionKind, SsaModule, SsaValue, TargetContractRef, TargetIdentity,
 };
 
@@ -315,14 +315,51 @@ pub fn emit_vm_application_artifact_for_callables_with_producer_and_ssa_facts(
     ),
     String,
 > {
+    let selected_exports =
+        application_selected_exports(program, callable_roots, generic_seed_functions)?;
+    let (artifact, _, unselected_unresolved, capability_bindings, ssa_fact_work) =
+        emit_vm_artifact_scoped_with_ssa_facts(
+            compiler,
+            program,
+            producer,
+            None,
+            Some(&selected_exports),
+            Some(generic_seed_functions),
+            prior_ssa_facts,
+            None,
+        )?;
+    let Some(ssa_fact_work) = ssa_fact_work else {
+        return Err("Language SSA verification produced no complete fact result".to_owned());
+    };
+    Ok((
+        artifact,
+        unselected_unresolved,
+        capability_bindings,
+        ssa_fact_work,
+    ))
+}
+
+/// Return the exact selected dependency closure that application emission lowers.
+pub(crate) fn application_lowering_program_for_callables(
+    program: &Program,
+    callable_roots: &BTreeSet<(String, String)>,
+    generic_seed_functions: &BTreeSet<(String, String)>,
+) -> Result<Program, String> {
+    let selected_exports =
+        application_selected_exports(program, callable_roots, generic_seed_functions)?;
+    application_lowering_program(program, &selected_exports)
+}
+
+fn application_selected_exports(
+    program: &Program,
+    callable_roots: &BTreeSet<(String, String)>,
+    generic_seed_functions: &BTreeSet<(String, String)>,
+) -> Result<BTreeSet<(String, String)>, String> {
     if callable_roots.is_empty() {
         return Err("application callable set has no selected roots".to_owned());
     }
     let mut selected_exports = callable_roots.clone();
     for (generic_module, generic_function) in generic_seed_functions {
-        // A generic template is a source identity, not an executable export.
-        // Keep its concrete seed entry in the generic-entrypoint table below
-        // and lower only the matching specialization bodies.
         selected_exports.remove(&(generic_module.clone(), generic_function.clone()));
         let generic_identity = mncs_model::function_id(generic_module, generic_function);
         for record in &program.generic_specializations {
@@ -342,20 +379,45 @@ pub fn emit_vm_application_artifact_for_callables_with_producer_and_ssa_facts(
             }
         }
     }
-    let (artifact, _, unselected_unresolved, capability_bindings, ssa_fact_work) =
+    Ok(selected_exports)
+}
+
+/// Emit a canonical VM artifact from the Language compilation result already
+/// produced by the application builder.
+pub fn emit_vm_application_artifact_for_callables_with_precompiled_ssa(
+    compiler: &ReferenceCompiler,
+    program: &Program,
+    producer: Option<&str>,
+    callable_roots: &BTreeSet<(String, String)>,
+    generic_seed_functions: &BTreeSet<(String, String)>,
+    result: CompilationResult,
+    ssa_fact_work: SsaFunctionFactWork,
+) -> Result<
+    (
+        serde_json::Value,
+        Vec<String>,
+        Vec<CapabilityDispatchBinding>,
+        SsaFunctionFactWork,
+    ),
+    String,
+> {
+    let selected_exports =
+        application_selected_exports(program, callable_roots, generic_seed_functions)?;
+    let (artifact, _, unresolved, bindings, ssa_fact_work) =
         emit_vm_artifact_scoped_with_ssa_facts(
-        compiler,
-        program,
-        producer,
-        None,
-        Some(&selected_exports),
-        Some(generic_seed_functions),
-        prior_ssa_facts,
-    )?;
+            compiler,
+            program,
+            producer,
+            None,
+            Some(&selected_exports),
+            Some(generic_seed_functions),
+            &[],
+            Some((result, Some(ssa_fact_work))),
+        )?;
     let Some(ssa_fact_work) = ssa_fact_work else {
         return Err("Language SSA verification produced no complete fact result".to_owned());
     };
-    Ok((artifact, unselected_unresolved, capability_bindings, ssa_fact_work))
+    Ok((artifact, unresolved, bindings, ssa_fact_work))
 }
 
 fn collect_record_type_ids(ty: &BodyType, identities: &mut BTreeSet<String>) {
@@ -2130,16 +2192,16 @@ fn emit_vm_artifact_scoped(
     ),
     String,
 > {
-    let (artifact, source_map, unresolved, bindings, _) =
-        emit_vm_artifact_scoped_with_ssa_facts(
-            compiler,
-            program,
-            producer,
-            source_map,
-            selected_exports,
-            selected_generic_bases,
-            &[],
-        )?;
+    let (artifact, source_map, unresolved, bindings, _) = emit_vm_artifact_scoped_with_ssa_facts(
+        compiler,
+        program,
+        producer,
+        source_map,
+        selected_exports,
+        selected_generic_bases,
+        &[],
+        None,
+    )?;
     Ok((artifact, source_map, unresolved, bindings))
 }
 
@@ -2151,6 +2213,7 @@ fn emit_vm_artifact_scoped_with_ssa_facts(
     selected_exports: Option<&BTreeSet<(String, String)>>,
     selected_generic_bases: Option<&BTreeSet<(String, String)>>,
     prior_ssa_facts: &[SsaFunctionVerificationFact],
+    precompiled: Option<(CompilationResult, Option<SsaFunctionFactWork>)>,
 ) -> Result<
     (
         serde_json::Value,
@@ -2169,8 +2232,9 @@ fn emit_vm_artifact_scoped_with_ssa_facts(
     let emit: BTreeSet<ArtifactRepresentation> =
         [ArtifactRepresentation::Ssa].into_iter().collect();
     let request = compiler.request_for_program(lowering_program, emit, None);
-    let (mut result, ssa_fact_work) =
-        compiler.compile_with_ssa_facts(request, lowering_program, prior_ssa_facts);
+    let (mut result, ssa_fact_work) = precompiled.unwrap_or_else(|| {
+        compiler.compile_with_ssa_facts(request, lowering_program, prior_ssa_facts)
+    });
     if result.status == CompilationStatus::Failed {
         return Err(format!(
             "direct vm emission failed for {}: {:?}",
@@ -2808,8 +2872,7 @@ mod application_closure_tests {
         )
         .expect("decode full canonical SSA module");
         let roots = BTreeSet::from([("closure.sample".to_owned(), "entry".to_owned())]);
-        let expected_closure =
-            application_ssa_closure(full_module.clone(), program, &roots, &[])
+        let expected_closure = application_ssa_closure(full_module.clone(), program, &roots, &[])
             .expect("full compiler output projects to the selected application closure");
         assert_eq!(
             projected.functions, expected_closure.functions,
