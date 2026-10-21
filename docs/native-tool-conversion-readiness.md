@@ -590,9 +590,23 @@ pinned by Compiler main. The Compiler lock now follows Language main at
 Gate B has moved from “fact reuse not implemented” to partial: selective
 function and declaration reuse is independently verified in Compiler
 application-build, with fresh diagnostics and canonical execution parity.
-Remaining proof includes application-level imported/exported interface,
-nominal type, generic specialization, and effect/capability invalidation, plus
-reducing changed-snapshot parse and frontend cost.
+An imported callable interface edit is also covered in the current Source,
+Lexer, and Segment application frontier. Remaining proof includes nominal
+type, generic-specialization, and effect/capability invalidation in
+application builds, plus reducing changed-snapshot parse and frontend cost.
+
+That current-pinned self-host frontier uses Compiler `f53b10d` and Language
+`f31b098`. A comment edit reused all 103 body facts; a reachable body edit
+reused 79; renaming the imported `byte_at_global` input recomputed 21
+changed/dependent facts and reused 82 independent facts. Six canonical VM calls
+matched Stage-0. Invalid source returned fresh diagnostics and published no
+facts or artifact. Cold, comment, body-edit, and interface-edit builds took
+2.88 s, 2.11 s, 2.42 s, and 2.02 s respectively, with 144–154 MB peak RSS;
+cgroup memory measurements were unavailable. Evidence is
+`evidence/self-host-full-module-fact-reuse-20261021T163947Z.json` (SHA-256
+`69a55b1beaf9d633cc7ac4adb1ba4b37b8741b056a5af16df06e3a4a277c36a2`). This
+advances the Source/Lexer/Segment frontier only; the full Compiler and
+Stage-1/Stage-2 succession remain unproven.
 
 ## Conversion classification
 
