@@ -3154,7 +3154,7 @@
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
   "previous_next_frontier_before_20261018_decl_parse": "Current-head bounded decl.check_unit and decl.prove_unit frontiers pass on canonical VM with reference/Cranelift agreement and explicit UNKNOWN obligations. Continue smaller Compiler self-consumption closures; Language-owned fact reuse and Forge digest_app execution still require their matching authenticated scopes.",
-  "next_frontier": "The pinned eight-module Project closure proves Language body and declaration fact reuse. Compiler main now consumes Language main e641383 for bounded parse-cache bookkeeping; unchanged imported source parses are reused, while changed snapshots still invoke the full frontend. Next measure and reduce changed-snapshot frontend work on representative mncs-test and Project workloads, then establish the authenticated Forge native-application binding for effectful digest_app. Keep Stage-1 and Stage-2 unproven.",
+  "next_frontier": "Language-owned body and declaration facts are consumed by Compiler across the eight-module Project closure with exact dependency invalidation and fresh canonical VM parity. The declaration-fingerprint indexing change has no measurable end-to-end speedup yet; changed snapshots still take about 82–90 seconds and run the full frontend. Next profile and reduce changed-snapshot frontend work on this closure and a real mncs-test workload, then continue the authenticated Forge digest_app route. Keep Stage-1 and Stage-2 unproven.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -9873,7 +9873,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-21T12:18:43.192251+00:00",
+  "evidence_updated_at": "2026-10-21T13:00:41.489983+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -24903,5 +24903,85 @@
       }
     },
     "performance_interpretation": "The implementation avoids serializing every cached parse entry to recalculate LRU size on each source lookup. On this two-source workload, comment edit wall time (0.137s) was within noise of cold build (0.133s); this proves correctness and Compiler consumption, not an end-to-end speedup. Cgroup memory was unavailable."
+  },
+  "current_campaign_project_declaration_fingerprint_reuse_20261021": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "status": "passed_language_fact_v3_project_self_consumption",
+    "observed_at": "2026-10-21T13:00:41.489983+00:00",
+    "tested_compiler_revision": "0f8db0073b158d1ed05dba4b110bfb2909cb275e",
+    "integrated_compiler_main_revision": "878ce85a40576980aa852d019eeabeda1e24395e",
+    "tested_compiler_tree": "d31e876af314d512a2db4661c9581d2d201d6075",
+    "language_main_revision": "4a65ad261f85766d107013af549a38f542d39ccb",
+    "language_change_commit": "20a80f2",
+    "vm_revision": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5",
+    "vm_binary_sha256": "93ecf150b7d4385a177735f616bca439652e44f3b010cc3f086c8c82faa166f7",
+    "vm_runtime_build_origin": {
+      "status": "matches-embedded-inputs",
+      "source_revisions": {
+        "mncs-compiler": "878ce85a40576980aa852d019eeabeda1e24395e",
+        "mncs-language": "4a65ad261f85766d107013af549a38f542d39ccb",
+        "mncs-vm": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5"
+      },
+      "mismatch_count": 0,
+      "mismatches": []
+    },
+    "language_fact_schema": "mncs.language-verification-fact/3",
+    "workload": {
+      "module_count": 8,
+      "program_function_count": 2031,
+      "callable": "mncs.compiler.project.v1::module_resolution_cache_key_equal<1,1024>",
+      "fresh_stage0_process_per_snapshot": true,
+      "stage0_reference_cases": 5
+    },
+    "verified_fact_reuse": {
+      "cold_body_facts": 2031,
+      "cold_declaration_facts": 2031,
+      "comment_edit_reused_body_facts": 2031,
+      "comment_edit_reused_declaration_facts": 2031,
+      "comment_edit_recomputed_facts": 0,
+      "uncalled_body_edit_recomputed_facts": 1,
+      "uncalled_body_edit_reused_facts": 2030,
+      "reachable_body_edit_recomputed_facts": 15,
+      "reachable_body_edit_reused_facts": 2016,
+      "invalid_source_diagnostic_codes": [
+        "MNE135",
+        "MNE103"
+      ],
+      "invalid_source_artifact_published": false
+    },
+    "execution": {
+      "stage0_values": [
+        true,
+        false,
+        true,
+        false,
+        false
+      ],
+      "canonical_vm_values": [
+        true,
+        false,
+        true,
+        false,
+        false
+      ],
+      "canonical_vm_matches_stage0": true,
+      "vm_build_origin_status": "matches-embedded-inputs",
+      "vm_build_origin_mismatch_count": 0
+    },
+    "measurements": {
+      "cold_build_wall_seconds": 88.531114,
+      "comment_edit_wall_seconds": 81.965214,
+      "uncalled_body_edit_wall_seconds": 84.411573,
+      "reachable_body_edit_wall_seconds": 90.34214,
+      "invalid_source_wall_seconds": 39.924455,
+      "peak_rss_bytes": 2094284800,
+      "cgroup_peak_memory_bytes": null
+    },
+    "performance_interpretation": "No measurable end-to-end speedup was established. The cross-revision reference run used Language 7057 and a stale VM receipt, so its timing is directional rather than a controlled A/B. Changed snapshots still invoke the full frontend.",
+    "evidence_artifact": "evidence/project-language-fact-reuse-20261021T130041Z.json",
+    "evidence_sha256": "d80948d7ca39e2e24b37998292439a6bb40b23d19a318480b73bc82a0f353119",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "scope": "Eight-module Project callable closure with comment, uncalled-body, reachable-body, invalid-source, and canonical VM checks; not a complete Compiler build or succession proof."
   }
 }
