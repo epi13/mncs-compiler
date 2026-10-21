@@ -10,8 +10,8 @@
   "current_source_revalidation": {
     "schema_version": 1,
     "status": "partial",
-    "observed_at": "2026-10-21T21:49:11.616588+00:00",
-    "compiler_revision": "088857931ef1b987a49a6ac2d521a5f60ed54dcb",
+    "observed_at": "2026-10-21T22:10:09.578493+00:00",
+    "compiler_revision": "fe9d53dca30f60391829e3d140da8b98ecc46d0e",
     "compiler_branch": "campaign/native-application-readiness-20261013",
     "stage0_revision": "440f036772b1baea89a59a5899a2217997e6fd44",
     "module_source_sha256": {
@@ -810,6 +810,114 @@
         "canonical_vm_matches_stage0": true,
         "fresh_process_per_snapshot": true,
         "scope": "Full Parser, Source, and Lexer modules; executes Parser.header, not the global parser frontier or full Compiler project."
+      },
+      "flow_ssa_language_fact_reuse_current_head": {
+        "status": "passed_language_fact_v3_flow_to_ssa_self_consumption",
+        "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+        "tested_compiler_revision": "fe9d53dca30f60391829e3d140da8b98ecc46d0e",
+        "delivered_compiler_revision": "3ad73bccf13fecc31f61526c09e128dc95673545",
+        "compiler_branch": "campaign/native-application-readiness-20261013",
+        "stage0_revision": "440f036772b1baea89a59a5899a2217997e6fd44",
+        "language_fact_contract": "mncs.language-verification-fact/3",
+        "language_fact_verifier_identity": "mncs-language-function-body-validator/4",
+        "evidence_artifact": "evidence/self-host-flow-ssa-language-fact-reuse-20261021T221010Z.json",
+        "evidence_sha256": "dd16cfc70ce6d54c26387ecced20ef1c52fb74f8ba7c479aa337396feae1f7e8",
+        "module_closure": [
+          "mncs.compiler.source.v1",
+          "mncs.compiler.lexer.v1",
+          "mncs.compiler.parser.v1",
+          "mncs.compiler.segment.v1",
+          "mncs.compiler.decl.v1",
+          "mncs.compiler.flow.v1",
+          "mncs.compiler.ssa.v1"
+        ],
+        "cold_verified_fact_count": 2935,
+        "comment_edit_reused_body_fact_count": 2935,
+        "comment_edit_recomputed_body_fact_count": 0,
+        "comment_edit_reused_declaration_fact_count": 2935,
+        "comment_edit_recomputed_declaration_fact_count": 0,
+        "flow_body_edit_subject": "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit",
+        "flow_body_edit_recomputed_subjects": [
+          "mncs:0.2:body:demo.flow_ssa_frontier::run",
+          "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit",
+          "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit__spec_3c0ffe82",
+          "mncs:0.2:body:mncs.compiler.flow.v1::lower_unit",
+          "mncs:0.2:body:mncs.compiler.flow.v1::lower_unit__spec_3c0ffe82",
+          "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa",
+          "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa__spec_3c0ffe82",
+          "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas",
+          "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function",
+          "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function_source_flow"
+        ],
+        "flow_body_edit_reused_body_fact_count": 2925,
+        "flow_body_edit_recomputed_body_fact_count": 10,
+        "invalid_source": {
+          "status": "rejected",
+          "diagnostic_codes": [
+            "MNE155",
+            "MNE103"
+          ],
+          "front_end_invocations": 1,
+          "front_end_outcome": "rejected",
+          "artifact_publication": "not_published",
+          "prior_success_did_not_mask_diagnostic": true
+        },
+        "canonical_vm_matches_stage0": true,
+        "fresh_process_per_snapshot": true,
+        "measurements": {
+          "cold_build": {
+            "wall_seconds": 220.995672,
+            "cpu_seconds": 219.31,
+            "peak_rss_bytes": 3249659904,
+            "peak_cgroup_memory_bytes": null,
+            "peak_open_file_descriptors": 5,
+            "peak_threads": 1,
+            "peak_child_processes": 0,
+            "request_sequence": 2
+          },
+          "comment_edit_build": {
+            "wall_seconds": 152.893342,
+            "cpu_seconds": 150.62,
+            "peak_rss_bytes": 3577171968,
+            "peak_cgroup_memory_bytes": null,
+            "peak_open_file_descriptors": 5,
+            "peak_threads": 1,
+            "peak_child_processes": 0,
+            "request_sequence": 2
+          },
+          "flow_body_edit_build": {
+            "wall_seconds": 248.80177,
+            "cpu_seconds": 242.73,
+            "peak_rss_bytes": 3578228736,
+            "peak_cgroup_memory_bytes": null,
+            "peak_open_file_descriptors": 5,
+            "peak_threads": 1,
+            "peak_child_processes": 0,
+            "request_sequence": 2
+          },
+          "invalid_source_build": {
+            "wall_seconds": 28.611385,
+            "cpu_seconds": 27.6,
+            "peak_rss_bytes": 2692100096,
+            "peak_cgroup_memory_bytes": null,
+            "peak_open_file_descriptors": 4,
+            "peak_threads": 1,
+            "peak_child_processes": 0,
+            "request_sequence": 2
+          },
+          "canonical_vm_batch": {
+            "wall_seconds": 30.502657,
+            "reported_wall_seconds": 30.50213523209095,
+            "peak_rss_kib": 398180,
+            "calls_bytes": 7996,
+            "results_bytes": 5429
+          },
+          "whole_frontier_wall_seconds": 687.850482,
+          "cgroup_measurement_available": false
+        },
+        "stage1_claimed": false,
+        "stage2_claimed": false,
+        "scope": "Seven-module Source, Lexer, Parser, Segment, Decl, Flow, and SSA application closure. The selected workload has two Flow-to-SSA cases; this is not full Compiler proof or succession."
       }
     },
     "source_hash_equivalence_basis": {
@@ -9918,7 +10026,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-21T21:50:53Z",
+  "evidence_updated_at": "2026-10-21T22:10:09.578493+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
