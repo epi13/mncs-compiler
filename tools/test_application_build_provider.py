@@ -641,7 +641,7 @@ def main() -> None:
         parse_cold_work = parse_cold_response.get("cache", {}).get("verification_work", {})
         parse_cold_observation = parse_cold_work.get("source_parse_cache", {}).get("observation", {})
         if (parse_cold_work.get("schema_version") != "mncs.compiler.application-build-verification-work/4"
-                or parse_cold_observation.get("schema_version") != "mncs.language-source-parse-cache-observation/1"
+                or parse_cold_observation.get("schema_version") != "mncs.language-source-parse-cache-observation/2"
                 or not parse_cold_observation.get("parsed_source_identities")):
             raise AssertionError("provider /9 response omitted Language parse execution evidence")
         parse_cold_reused_facts = parse_cold_work.get("reused_semantic_facts", [])

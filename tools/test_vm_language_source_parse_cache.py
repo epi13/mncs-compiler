@@ -22,8 +22,8 @@ import test_vm_native_application as app
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
 WORK_SCHEMA = "mncs.compiler.application-build-verification-work/6"
-PARSE_CACHE_SCHEMA = "mncs.language-source-parse-cache/1"
-PARSE_OBSERVATION_SCHEMA = "mncs.language-source-parse-cache-observation/1"
+PARSE_CACHE_SCHEMA = "mncs.language-source-parse-cache/2"
+PARSE_OBSERVATION_SCHEMA = "mncs.language-source-parse-cache-observation/2"
 ROOT_ID = "cache/application_root.mncs"
 ROOT_MODULE = "cache.application_root"
 DEP_MODULE = "cache.dependency"
@@ -57,11 +57,11 @@ def sha256_file(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def request_for(root: str, dependency: str) -> dict:
+def request_for(root: str, dependency: str, root_source_id: str = ROOT_ID) -> dict:
     return {
         "schema_version": REQUEST_SCHEMA,
         "target": "mncs-vm-0.1",
-        "root_source_id": ROOT_ID,
+        "root_source_id": root_source_id,
         "root_source": root,
         "callable_roots": [{"module": ROOT_MODULE, "function": "run"}],
         "test_selection": {"kind": "all_source_cases"},
@@ -227,6 +227,30 @@ def main() -> None:
                 f"cold build did not parse and publish both source units: {cold_observation}"
             )
 
+        alias_root_id = "cache/application_root_alias.mncs"
+        alias = compile_stage(
+            "source_identity_alias",
+            request_for(ROOT_SOURCE, dependency(42), root_source_id=alias_root_id),
+            application_cache,
+            program_cache,
+        )
+        alias_observation = alias["parse_observation"]
+        assert isinstance(alias_observation, dict)
+        alias_reused = set(alias_observation.get("reused_source_identities", []))
+        alias_parsed = set(alias_observation.get("parsed_source_identities", []))
+        alias_inventory = alias["response"].get("source_test_inventory") or {}
+        if (alias["cache"].get("status") != "miss"
+                or alias["verification_work"].get("front_end_invocations") != 1
+                or len(alias_reused) != 2 or alias_parsed
+                or not alias["verification_work"].get("reused_semantic_facts")
+                or alias["response"].get("source_snapshot", {}).get("identity")
+                == cold["response"].get("source_snapshot", {}).get("identity")
+                or not isinstance(alias_inventory.get("source_artifact_identity"), str)
+                or alias_inventory.get("source_artifact_identity") not in alias_reused):
+            raise AssertionError(
+                "new root provenance did not reuse both Language parse results under the current identities"
+            )
+
         warm = compile_stage("fresh_process_exact_hit", request_for(ROOT_SOURCE, dependency(42)),
                              application_cache, program_cache)
         if (warm["cache"].get("status") != "hit"
@@ -322,6 +346,7 @@ def main() -> None:
             "language_lock": json.loads((ROOT / "mncs-language.lock.json").read_text()),
             "stages": {
                 "cold": summarize(cold),
+                "source_identity_alias": summarize(alias),
                 "fresh_process_exact_hit": summarize(warm),
                 "comment_edit": summarize(comment),
                 "dependency_edit": summarize(changed),
@@ -332,6 +357,8 @@ def main() -> None:
                 "diagnostic_span": root_location,
                 "expected_line_after_comment_edit": 5,
                 "unchanged_dependency_parse_reused": True,
+                "same_source_text_reused_under_new_root_identity": True,
+                "alias_inventory_source_identity": alias_inventory.get("source_artifact_identity"),
                 "artifact_publication": "not_published",
             },
             "invalid_dependency_rejected": True,

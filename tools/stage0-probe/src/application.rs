@@ -485,22 +485,21 @@ fn application_cache_index_key(
 }
 
 /// Selects a prior cache entry only as a source of Language-owned facts and
-/// parse results. External capability admission and effect assumptions stay
-/// bound to the exact executable-artifact index; Language rechecks each
-/// candidate fact against the current program before skipping validation.
+/// parse results. Source-envelope identity is deliberately absent: Language
+/// rechecks each semantic fact and its parser cache keys exact parser inputs,
+/// then refreshes the current source identity. External capability admission
+/// and effect assumptions stay bound to the exact executable-artifact index.
 fn language_fact_cache_index_key(
     request: &Value,
     contract: &str,
-    root_id: &str,
     callable_roots: &[(String, String)],
     source_test_selection: Option<&Value>,
     toolchain: Option<&ToolchainIdentity>,
     probe_identity: &str,
 ) -> String {
     let identity = json!({
-        "schema_version": "mncs.compiler.application-build-language-fact-index-key/1",
+        "schema_version": "mncs.compiler.application-build-language-fact-index-key/2",
         "contract": contract,
-        "root_source_id": root_id,
         "callable_roots": callable_roots,
         "source_test_selection": source_test_selection,
         "compiler_semantics": toolchain
@@ -512,7 +511,7 @@ fn language_fact_cache_index_key(
         "verification_policy": request.get("verification_policy").cloned().unwrap_or(json!("default")),
         "entry": request.get("entry").cloned().unwrap_or(Value::Null),
     });
-    let mut bytes = b"mncs.compiler.application-build-language-fact-index/1\0".to_vec();
+    let mut bytes = b"mncs.compiler.application-build-language-fact-index/2\0".to_vec();
     bytes.extend_from_slice(&serde_json::to_vec(&identity).unwrap_or_default());
     format!("sha256:{}", mncs_model::sha256_hex(&bytes))
 }
@@ -2593,6 +2592,49 @@ mod tests {
     }
 
     #[test]
+    fn language_fact_index_ignores_source_envelope_identity_but_artifact_index_binds_it() {
+        let request_for = |root_source_id: &str| {
+            json!({
+                "target": VM_TARGET,
+                "verification_policy": "stage0-semantic-check+canonical-vm-artifact/1",
+                "root_source_id": root_source_id,
+            })
+        };
+        let callable_roots = vec![("cache.alias".to_owned(), "run".to_owned())];
+        let language_index = |root_source_id: &str| {
+            language_fact_cache_index_key(
+                &request_for(root_source_id),
+                CONTRACT_V2,
+                &callable_roots,
+                None,
+                None,
+                "sha256:compiler-probe",
+            )
+        };
+        assert_eq!(
+            language_index("cache/root-a.mncs"),
+            language_index("cache/root-b.mncs")
+        );
+
+        let artifact_index = |root_source_id: &str| {
+            application_cache_index_key(
+                &request_for(root_source_id),
+                CONTRACT_V2,
+                root_source_id,
+                &[],
+                &callable_roots,
+                None,
+                None,
+                "sha256:compiler-probe",
+            )
+        };
+        assert_ne!(
+            artifact_index("cache/root-a.mncs"),
+            artifact_index("cache/root-b.mncs")
+        );
+    }
+
+    #[test]
     fn application_cache_keys_bind_capabilities_and_effect_assumptions() {
         let root_id = "root.mncs";
         let root_source = "mncs 0.18; module policy.root; fn entry() -> (r: u64) { return 1; }";
@@ -2626,7 +2668,6 @@ mod tests {
                 language_fact_cache_index_key(
                     request,
                     CONTRACT_V2,
-                    root_id,
                     &callable_roots,
                     None,
                     None,
@@ -3927,7 +3968,6 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let fact_index_key = language_fact_cache_index_key(
         request,
         contract,
-        root_id,
         &callable_roots,
         source_test_selection_value.as_ref(),
         toolchain,

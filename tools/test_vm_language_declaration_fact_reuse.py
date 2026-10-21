@@ -277,7 +277,7 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("cache entry does not bind SSA function-fact bytes")
     source_parse_cache = entry.get("source_parse_cache")
     if (not isinstance(source_parse_cache, dict)
-            or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/1"
+            or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/2"
             or not entry.get("source_parse_cache_sha256")):
         raise AssertionError("cache entry does not bind Language source parse results")
     return entry
