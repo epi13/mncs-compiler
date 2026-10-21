@@ -50,6 +50,26 @@ EXPECTED_BODY_RECOMPUTED = {
     "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar",
     "mncs:0.2:body:mncs.compiler.source.v1::utf8_scalar_global",
     "mncs:0.2:body:mncs.compiler.source.v1::utf8_validation_step",
+    "mncs:0.2:body:mncs.compiler.source.v1::validate_utf8",
+    "mncs:0.2:body:mncs.compiler.source.v1::validate_utf8_global",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::batch_step",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::lex_tokens_from",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::next_token",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::next_token_global",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::scan_block_comment_scalar_global",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::scan_line_comment_global",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::scan_line_comment_window",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::scan_step",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::scan_unicode_scalar_global",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::significant",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::significant_global",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::skip_trivia",
+    "mncs:0.2:body:mncs.compiler.lexer.v1::skip_trivia_global",
+    "mncs:0.2:body:mncs.compiler.segment.v1::lex_batch_from",
+    "mncs:0.2:body:mncs.compiler.segment.v1::next_token",
+    "mncs:0.2:body:mncs.compiler.segment.v1::next_token_global",
+    "mncs:0.2:body:mncs.compiler.segment.v1::significant",
+    "mncs:0.2:body:mncs.compiler.segment.v1::significant_global",
 }
 CHANGED_INTERFACE_FUNCTION = "mncs:0.2:body:mncs.compiler.source.v1::byte_at_global"
 REUSED_EXECUTION_PATH = {
@@ -345,12 +365,27 @@ def main() -> dict:
         edited_work = verification_work(edited_build, "full-module non-root helper body edit")
         reused = set(edited_work["reused_semantic_facts"])
         recomputed = set(edited_work["recomputed_semantic_facts"])
+        body_reasons = edited_work.get("semantic_fact_recomputation_reasons")
         if recomputed != EXPECTED_BODY_RECOMPUTED or not REUSED_EXECUTION_PATH.issubset(reused):
             raise AssertionError("full Compiler modules did not reverify the exact changed-body dependency closure: "
                                  + json.dumps({"recomputed": sorted(recomputed),
                                                "expected_recomputed": sorted(EXPECTED_BODY_RECOMPUTED),
+                                               "recomputation_reasons": body_reasons,
                                                "missing_execution_path": sorted(
                                                    REUSED_EXECUTION_PATH - reused)}, indent=2))
+        if not isinstance(body_reasons, list):
+            raise AssertionError("changed-body verification omitted Language dependency invalidation reasons")
+        reason_by_subject = {
+            row.get("subject"): row.get("reason")
+            for row in body_reasons if isinstance(row, dict)
+        }
+        if (set(reason_by_subject) != recomputed
+                or reason_by_subject.get(CHANGED_FUNCTION) != "subject_changed"
+                or any(reason != "dependencies_changed"
+                       for subject, reason in reason_by_subject.items()
+                       if subject != CHANGED_FUNCTION)):
+            raise AssertionError("changed-body Language facts did not report exact subject and dependency invalidations: "
+                                 + json.dumps(body_reasons, indent=2))
         if (cold.get("artifact", {}).get("identity")
                 != comment_build.get("artifact", {}).get("identity")
                 or cold.get("artifact", {}).get("identity")
@@ -498,6 +533,7 @@ def main() -> dict:
                 "comment_edit_recomputed": len(comment_work["recomputed_semantic_facts"]),
                 "body_edit_reused": len(reused),
                 "body_edit_recomputed": sorted(recomputed),
+                "body_edit_recomputation_reasons": body_reasons,
                 "edited_subject": CHANGED_FUNCTION,
                 "unchanged_execution_path_reused": sorted(REUSED_EXECUTION_PATH),
                 "fresh_process_per_snapshot": True,
@@ -552,11 +588,11 @@ def main() -> dict:
             },
             "limitations": [
                 "This compiles and executes the full Source, Lexer, and Segment modules, not the full Compiler project.",
-                "The changed UTF-8 helper is outside the selected executable closure; it and its direct body dependents are reverified while independent bodies are reused.",
+                "The changed UTF-8 helper is outside the selected executable closure; its exact transitive call dependents are reverified while independent bodies are reused.",
                 "Profile 0.19 raises the sequence/view ceiling to 4096; its literal iteration ceiling remains 1024.",
                 "This does not establish Stage-1 or Stage-2 succession.",
             ],
-            "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, exact invalidation of a changed UTF-8 helper and its direct body dependents, and precise invalidation of direct callers after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
+            "scope": "The full current Compiler Source, Lexer, and Segment modules declare Profile 0.19 and pass application-build verification together. Fresh processes demonstrate comment-only reuse, exact transitive invalidation after a changed UTF-8 helper, and exact invalidation after an imported callable-interface edit while independent body facts remain reusable. Source and Segment native application calls match Stage-0 before and after the interface-only edit.",
         }
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     evidence = ROOT / f"evidence/self-host-full-module-fact-reuse-{stamp}.json"
