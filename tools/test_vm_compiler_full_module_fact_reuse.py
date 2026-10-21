@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
+LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
@@ -207,6 +208,40 @@ def compile_fresh(request_value: dict, cache: Path, label: str) -> tuple[dict, d
     return build, metrics
 
 
+def persisted_fact_verifier_identities(cache: Path, build: dict, label: str) -> list[str]:
+    cache_key = build.get("cache", {}).get("key")
+    if not isinstance(cache_key, str) or not cache_key.startswith("sha256:"):
+        raise AssertionError(f"{label} did not report its published Language fact cache key")
+    cache_file = (cache / "application-cache" / "application-builds"
+                  / f"{cache_key.removeprefix('sha256:')}.json")
+    if not cache_file.is_file():
+        raise AssertionError(f"{label} did not publish its application fact cache: {cache_file}")
+    entry = json.loads(cache_file.read_text())
+    facts = entry.get("verification_facts")
+    if entry.get("key") != cache_key or not isinstance(facts, list):
+        raise AssertionError(f"{label} cache entry does not match its reported identity")
+    serialized_facts = json.dumps(facts, separators=(",", ":"), ensure_ascii=False).encode()
+    facts_digest = "sha256:" + hashlib.sha256(serialized_facts).hexdigest()
+    if entry.get("verification_facts_sha256") != facts_digest:
+        raise AssertionError(f"{label} persisted Language facts failed their cache digest")
+    if len(facts) != build.get("cache", {}).get("verification_work", {}).get(
+            "produced_semantic_fact_count"):
+        raise AssertionError(f"{label} cache fact count differs from Language telemetry")
+    if not facts or any(
+            fact.get("schema_version") != LANGUAGE_FACT_SCHEMA
+            or fact.get("result") != "verified"
+            or not isinstance(fact.get("verification_witness_identity"), str)
+            or len(fact["verification_witness_identity"]) != 64
+            for fact in facts if isinstance(fact, dict)):
+        raise AssertionError(f"{label} cache contains a non-verified or malformed Language fact")
+    if any(not isinstance(fact, dict) for fact in facts):
+        raise AssertionError(f"{label} cache contains a malformed Language fact row")
+    identities = sorted({fact.get("verifier_identity") for fact in facts})
+    if not identities or any(not isinstance(identity, str) for identity in identities):
+        raise AssertionError(f"{label} facts do not identify their Language verifier")
+    return identities
+
+
 def source_edit(modules: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
     comment = dict(modules)
     comment["mncs.compiler.source.v1"] += "\n// Incremental source snapshot comment edit.\n"
@@ -352,9 +387,13 @@ def main() -> dict:
                 or cold_work.get("produced_semantic_fact_count", 0) <= 0
                 or cold_work.get("front_end_outcome") != "verified"):
             raise AssertionError("Profile 0.19 full modules did not publish verified Language facts")
+        cold_verifier_identities = persisted_fact_verifier_identities(
+            cache, cold, "full-module cold build")
 
         comment_build, comment_metrics = compile_fresh(
             request(comment_modules), cache, "full-module comment edit")
+        comment_verifier_identities = persisted_fact_verifier_identities(
+            cache, comment_build, "full-module comment edit")
         comment_work = verification_work(comment_build, "full-module comment edit")
         if (not comment_work["reused_semantic_facts"]
                 or comment_work["recomputed_semantic_facts"]):
@@ -362,6 +401,8 @@ def main() -> dict:
 
         edited_build, edited_metrics = compile_fresh(
             request(edited_modules), cache, "full-module non-root helper body edit")
+        edited_verifier_identities = persisted_fact_verifier_identities(
+            cache, edited_build, "full-module non-root helper body edit")
         edited_work = verification_work(edited_build, "full-module non-root helper body edit")
         reused = set(edited_work["reused_semantic_facts"])
         recomputed = set(edited_work["recomputed_semantic_facts"])
@@ -400,12 +441,16 @@ def main() -> dict:
         interface_cache = cache / "interface-cache"
         interface_baseline, interface_baseline_metrics = compile_fresh(
             request(modules), interface_cache, "interface-invalidation baseline")
+        interface_baseline_verifier_identities = persisted_fact_verifier_identities(
+            interface_cache, interface_baseline, "interface-invalidation baseline")
         interface_baseline_work = interface_baseline.get("cache", {}).get(
             "verification_work", {})
         if interface_baseline_work.get("produced_semantic_fact_count") != 103:
             raise AssertionError("interface baseline did not retain all 103 Language facts")
         interface_build, interface_metrics = compile_fresh(
             request(interface_modules), interface_cache, "imported interface edit")
+        interface_verifier_identities = persisted_fact_verifier_identities(
+            interface_cache, interface_build, "imported interface edit")
         interface_work = verification_work(interface_build, "imported interface edit")
         interface_recomputed = set(interface_work["recomputed_semantic_facts"])
         interface_reused = set(interface_work["reused_semantic_facts"])
@@ -440,6 +485,21 @@ def main() -> dict:
         if (not independently_reused.issubset(interface_reused)
                 or len(interface_recomputed) >= interface_baseline_work["produced_semantic_fact_count"]):
             raise AssertionError("interface edit failed to preserve independent verified facts")
+
+        verifier_identities_by_snapshot = {
+            "cold": cold_verifier_identities,
+            "comment_edit": comment_verifier_identities,
+            "body_edit": edited_verifier_identities,
+            "interface_baseline": interface_baseline_verifier_identities,
+            "interface_edit": interface_verifier_identities,
+        }
+        observed_verifier_identities = sorted({
+            identity for identities in verifier_identities_by_snapshot.values()
+            for identity in identities
+        })
+        if observed_verifier_identities != [LANGUAGE_FACT_VERIFIER_ID]:
+            raise AssertionError("persisted facts do not identify the pinned Language verifier: "
+                                 + json.dumps(verifier_identities_by_snapshot, indent=2))
 
         invalid_modules = invalid_body_edit(modules)
         invalid_cache = cache / "invalid-body-cache"
@@ -527,7 +587,8 @@ def main() -> dict:
             },
             "verified_fact_reuse": {
                 "contract": LANGUAGE_FACT_SCHEMA,
-                "verifier_identity": "mncs-language-function-body-validator/3",
+                "verifier_identity": observed_verifier_identities[0],
+                "verifier_identities_by_snapshot": verifier_identities_by_snapshot,
                 "cold_facts_produced": cold_work["produced_semantic_fact_count"],
                 "comment_edit_reused": len(comment_work["reused_semantic_facts"]),
                 "comment_edit_recomputed": len(comment_work["recomputed_semantic_facts"]),
