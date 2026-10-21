@@ -1,0 +1,94 @@
+{
+  "schema_version": "mncs.environment.artifact-readback-evidence/1",
+  "identity": "ev_native_digest_effectful_store_readback_20261021",
+  "observed_at": "2026-10-21T11:28:46Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "session_id": "ses_164edc158d9b1637",
+  "checkpoint_before": "chk_27857dbaa03ccc45",
+  "verification": {
+    "capability": "mncs-compiler:verification-executor/mncs-compiler.native-test-digest-effectful-app-canonical-vm",
+    "binding_id": "cap_6765a78611903552",
+    "status": "ok",
+    "artifact_store_ref": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:9d52ac127f2253c6a13fafa3225f2c17a6ffbd2990a206e75219f29dfa4d8ce2",
+    "artifact_file_count": 2,
+    "artifact_byte_count": 658680,
+    "compiler_revision": "95f4a9efae1eb934060d9cb2f35c45b5a4c47779",
+    "language_revision": "7057f17516655578091b9fae41075357adede32d"
+  },
+  "store_readback": {
+    "operation": "artifact_read",
+    "authenticated_session": "ses_164edc158d9b1637",
+    "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:9d52ac127f2253c6a13fafa3225f2c17a6ffbd2990a206e75219f29dfa4d8ce2",
+    "files": [
+      {
+        "path": "native-app-readiness-test-digest-app.json",
+        "local_path": "evidence/native-app-readiness-test-digest-app-20261021T111940.989131Z-3552784.json",
+        "byte_count": 39629,
+        "sha256": "8e2cbf96c7cc6e6d64f5d6824bb9c113c1d924a4b987a7550fa81f76a04327ae",
+        "matches_local": true
+      },
+      {
+        "path": "test-digest-app.vm.json.part-00",
+        "byte_count": 619051,
+        "sha256": "2e6372458d1c83bc95126168ec9df2ad40b6610b8d26f3cde7224e90599a1a1c",
+        "matches_reported_artifact": true
+      }
+    ],
+    "all_byte_counts_match": true,
+    "all_sha256_values_match": true
+  },
+  "application": {
+    "entry": "mncs.test.digest::digest_app",
+    "artifact_identity": "sha256:938b60f7490bd1f02657205cc7252ae51f445811f81b0eae01ea8afac20811ab",
+    "artifact_bytes": 619051,
+    "artifact_sha256": "2e6372458d1c83bc95126168ec9df2ad40b6610b8d26f3cde7224e90599a1a1c",
+    "capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+    "runtime_dispatch_alias": "test_artifact",
+    "mapped_host_call_count": 2,
+    "successful_canonical_vm_cases": 3,
+    "retained_session_calls": 7,
+    "retained_call_order": [
+      "success-0",
+      "missing-capability",
+      "invalid-typed-input",
+      "write-failure",
+      "step-budget-interruption",
+      "success-1",
+      "success-2"
+    ],
+    "stage0_result_agreement": true,
+    "negative_cases": [
+      "missing capability admission",
+      "mismatched capability identity",
+      "mismatched dispatch alias",
+      "incorrect artifact identity",
+      "invalid typed input",
+      "rejected output publication",
+      "step budget exhaustion"
+    ]
+  },
+  "language_fact_reuse": {
+    "schema": "mncs.language-verification-fact/3",
+    "cold_facts_produced": 30,
+    "comment_edit_facts_reused": 30,
+    "comment_edit_facts_recomputed": 0,
+    "comment_edit_frontend_invocations": 1,
+    "fresh_process_unchanged_artifact_reused": true
+  },
+  "performance": {
+    "cold_build_wall_seconds": 0.897634,
+    "cold_build_cpu_seconds": 0.86,
+    "cold_build_peak_rss_bytes": 54657024,
+    "fresh_process_warm_build_wall_seconds": 0.235696,
+    "comment_only_edit_wall_seconds": 0.707921,
+    "retained_session_wall_seconds": 0.027687,
+    "retained_session_cpu_seconds": 0.01,
+    "retained_session_peak_rss_bytes": 11603968,
+    "cgroup_memory_bytes": null
+  },
+  "limitations": [
+    "Execution used the Compiler canonical VM Provider API and a bounded test file provider, not Forge native-application execution.",
+    "This is Environment publication and Store readback of verifier output, not a Forge execution receipt.",
+    "The run does not establish full mncs-test command parity or compiler succession."
+  ]
+}
