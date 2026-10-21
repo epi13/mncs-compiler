@@ -81,7 +81,7 @@ Language actually reused or recomputed, with miss reasons. Requests `/5` and
 source parse cache, and `/7` adds separately verified finite-type facts.
 
 An exact source-snapshot hit skips the frontend for each contract. A changed
-`/5` through `/9` snapshot runs the current Language frontend and supplies the
+`/5` through `/10` snapshot runs the current Language frontend and supplies the
 fact sets supported by that request: function declarations for `/5` and `/6`,
 finite types for `/7`, record types for `/8`, and SSA function facts for `/9`.
 Language selectively reuses facts whose verification guards still match;
@@ -96,7 +96,8 @@ the digest executable artifact. The Environment provider accepts request `/1`
 with response `/4`, request `/2` with response `/5`, request `/3` with
 response `/6`, request `/4` with response `/7`, request `/5` with
 response `/8`, request `/6` with response `/9`, request `/7` with response
-`/10`, request `/8` with response `/11`, and request `/9` with response `/12`;
+`/10`, request `/8` with response `/11`, request `/9` with response `/12`,
+and request `/10` with response `/13`;
 its bounded stdout summary
 preserves each selected callable identity when it fits the 12 KiB
 bound. For large selections it reports the root count and points to the
@@ -107,8 +108,19 @@ also sends `/2` through the adapter and calls `snapshot_witness` from its
 seven-callable Test-core artifact in one canonical VM batch.
 
 The earlier Environment descriptor advertised request `/8` and response `/11`
-as current while retaining eight pairs. Revision 12 extends it with request
-`/9` and response `/12`.
+as current while retaining eight pairs. Revision 12 extended it with request
+`/9` and response `/12`; revision 13 adds request `/10` and response `/13`.
+The `/13` application cache entry stores the Language-owned bounded
+`mncs.language-ssa-function-artifact-cache/1` alongside verified Language
+facts, bound by a SHA-256 digest. Language validates each complete SSA function
+against current lowering inputs, lowerer and policy identities, its verification
+witness, and actual dependencies. The `/8` verification-work observation
+reports artifacts reused or lowered by Language and their miss reasons. The
+cache publishes only after a verified build and can be restored by a fresh
+process. `tools/test_vm_language_declaration_fact_reuse.py` exercises a changed
+reachable imported body, checks that independent SSA artifacts are reused
+while the changed dependency is lowered, and compares canonical VM behavior
+with the Stage-0 oracle.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only

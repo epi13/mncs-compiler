@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language fact reuse through application-build/12."""
+"""Exercise Language fact and SSA artifact reuse through application-build/13."""
 from __future__ import annotations
 
 import copy
@@ -23,10 +23,10 @@ import test_native_application_incremental as incremental
 import test_vm_test_digest_app as digest_app
 
 ROOT = app.ROOT
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/9"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/12"
-CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/8"
-VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/7"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/10"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/13"
+CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/9"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/8"
 FACT_SCHEMA = "mncs.language-declaration-verification-fact/1"
 FUNCTION_DECLARATION_VERIFIER = "mncs-language-function-declaration-validator/1"
 FINITE_TYPE_VERIFIER = "mncs-language-finite-type-validator/1"
@@ -37,6 +37,10 @@ SSA_FACT_SCHEMA = "mncs.language-ssa-function-verification-fact/1"
 SSA_FACT_VERIFIER = "mncs-language-ssa-function-validator/1"
 SSA_FACT_POLICY = "mncs-language-ssa-function-policy/1"
 SSA_LANGUAGE_PROFILE = "mncs-language-ssa-profile/0.5"
+SSA_ARTIFACT_CACHE_SCHEMA = "mncs.language-ssa-function-artifact-cache/1"
+SSA_ARTIFACT_OBSERVATION_SCHEMA = "mncs.language-ssa-function-artifact-cache-observation/1"
+SSA_LOWERER_IDENTITY = "mncs-language-ssa-function-lowerer/1"
+SSA_LOWERING_POLICY_IDENTITY = "mncs-language-ssa-function-lowering-policy/1"
 PROBE = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROBE_BIN",
     str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
@@ -215,6 +219,23 @@ def require_contract(label: str, response: dict) -> tuple[dict, dict]:
             raise AssertionError(f"{label} omitted actual {field}")
     if type(work.get("produced_ssa_function_fact_count")) is not int:
         raise AssertionError(f"{label} omitted produced SSA function-fact count")
+    if (work.get("language_ssa_function_artifact_cache_schema") != SSA_ARTIFACT_CACHE_SCHEMA
+            or work.get("ssa_function_artifact_cache_observation_schema")
+            != SSA_ARTIFACT_OBSERVATION_SCHEMA
+            or work.get("ssa_function_lowerer_identity") != SSA_LOWERER_IDENTITY
+            or work.get("ssa_function_lowering_policy_identity") != SSA_LOWERING_POLICY_IDENTITY):
+        raise AssertionError(
+            f"{label} did not identify Language's SSA artifact cache policy: "
+            f"{work.get('language_ssa_function_artifact_cache_schema')!r}, "
+            f"{work.get('ssa_function_artifact_cache_observation_schema')!r}, "
+            f"{work.get('ssa_function_lowerer_identity')!r}, "
+            f"{work.get('ssa_function_lowering_policy_identity')!r}"
+        )
+    for field in ("reused_ssa_function_artifacts", "recomputed_ssa_function_artifacts"):
+        if not isinstance(work.get(field), list):
+            raise AssertionError(f"{label} omitted actual {field}")
+    if not isinstance(work.get("ssa_function_artifact_recomputation_reasons"), dict):
+        raise AssertionError(f"{label} omitted actual Language artifact reuse observation")
     return cache, work
 
 
@@ -224,8 +245,8 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("application response omitted its exact cache identity")
     path = cache_dir / "application-builds" / f"{key.removeprefix('sha256:')}.json"
     entry = json.loads(path.read_text(encoding="utf-8"))
-    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/9":
-        raise AssertionError("V9 application cache omitted SSA function verification facts")
+    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/10":
+        raise AssertionError("V10 application cache omitted Language SSA function data")
     facts = entry.get("declaration_verification_facts")
     if not isinstance(facts, list) or not all(
             isinstance(row, dict)
@@ -275,6 +296,11 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("cache entry contains malformed Language SSA function facts")
     if not entry.get("ssa_function_verification_facts_sha256"):
         raise AssertionError("cache entry does not bind SSA function-fact bytes")
+    ssa_artifact_cache = entry.get("ssa_function_artifact_cache")
+    if (not isinstance(ssa_artifact_cache, dict)
+            or ssa_artifact_cache.get("schema_version") != SSA_ARTIFACT_CACHE_SCHEMA
+            or not entry.get("ssa_function_artifact_cache_sha256")):
+        raise AssertionError("cache entry does not bind Language verified SSA artifacts")
     source_parse_cache = entry.get("source_parse_cache")
     if (not isinstance(source_parse_cache, dict)
             or source_parse_cache.get("schema_version") != "mncs.language-source-parse-cache/2"
@@ -370,6 +396,8 @@ def compact(stage: dict) -> dict:
         "recomputed_ssa_function_fact_count": len(work["recomputed_ssa_function_facts"]),
         "produced_ssa_function_fact_count": work["produced_ssa_function_fact_count"],
         "ssa_function_verification": work.get("ssa_function_verification"),
+        "reused_ssa_function_artifact_count": len(work["reused_ssa_function_artifacts"]),
+        "recomputed_ssa_function_artifact_count": len(work["recomputed_ssa_function_artifacts"]),
         "artifact_id": artifact.get("identity") if isinstance(artifact, dict) else None,
         "build_metrics": stage["build_metrics"],
         "oracle_valid": stage["oracle_valid"],
@@ -644,6 +672,15 @@ def main() -> None:
             raise AssertionError(
                 "reachable body edit did not reuse unchanged SSA verification facts and "
                 f"recompute its changed unit: reused={ssa_reused}, recomputed={ssa_recomputed}"
+            )
+        ssa_artifacts_recomputed = reachable_work["recomputed_ssa_function_artifacts"]
+        ssa_artifacts_reused = reachable_work["reused_ssa_function_artifacts"]
+        if (not any("advance_random" in row for row in ssa_artifacts_recomputed)
+                or not ssa_artifacts_reused):
+            raise AssertionError(
+                "reachable body edit did not reuse unchanged complete Language SSA artifacts "
+                "while recomputing the changed function: "
+                f"reused={ssa_artifacts_reused}, recomputed={ssa_artifacts_recomputed}"
             )
         if (not reachable_work.get("reused_declaration_facts")
                 or reachable_work.get("recomputed_declaration_facts")):
@@ -1203,7 +1240,7 @@ def main() -> None:
 
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text(encoding="utf-8"))
         evidence = {
-            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/3",
+            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/4",
             "recorded_at": datetime.now(timezone.utc).isoformat(),
             "compiler": {
                 "repository": "mncs-compiler",
@@ -1221,7 +1258,7 @@ def main() -> None:
                 "root_module": app.APP_MODULE,
                 "callable_roots": [{"module": app.APP_MODULE, "function": "run"}],
                 "selected_tests": "all_source_cases",
-                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/9",
+                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/10",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
             "generic_specialization_fact_reuse": generic_specialization_evidence,
@@ -1292,6 +1329,16 @@ def main() -> None:
                     ],
                     "produced_count": reachable_work["produced_ssa_function_fact_count"],
                     "verification": reachable_work["ssa_function_verification"],
+                },
+                "ssa_function_artifact_reuse": {
+                    "reused": ssa_artifacts_reused,
+                    "recomputed": ssa_artifacts_recomputed,
+                    "recomputation_reasons": reachable_work[
+                        "ssa_function_artifact_recomputation_reasons"
+                    ],
+                    "cache_schema": SSA_ARTIFACT_CACHE_SCHEMA,
+                    "lowerer_identity": SSA_LOWERER_IDENTITY,
+                    "lowering_policy_identity": SSA_LOWERING_POLICY_IDENTITY,
                 },
                 "artifact_identity_changed": (
                     reachable_body_edit["response"].get("artifact", {}).get("identity")
