@@ -18,6 +18,12 @@ LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
 sys.path.insert(0, str(ROOT / "tools"))
 from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
 
+# This frontier records the Stage-0 implementation pinned by this repository.
+# A process-wide probe override can point at a stale linked-worktree build and
+# make dependency-invalidation failures look like Language regressions, so use
+# the lock-checked bootstrap path for this workload.
+os.environ.pop("MNCS_NATIVE_APP_PROBE_BIN", None)
+os.environ.pop("MNCS_PROBE_BIN", None)
 os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
 import test_cp0001 as cp0001  # noqa: E402
 import test_vm_native_application as app  # noqa: E402
