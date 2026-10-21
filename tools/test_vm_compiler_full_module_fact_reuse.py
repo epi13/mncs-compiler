@@ -18,6 +18,12 @@ LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
 sys.path.insert(0, str(ROOT / "tools"))
 from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
 
+# This frontier records the Stage-0 implementation pinned by this repository.
+# A process-wide probe override can point at a stale linked-worktree build and
+# make dependency-invalidation failures look like Language regressions, so use
+# the lock-checked bootstrap path for this workload.
+os.environ.pop("MNCS_NATIVE_APP_PROBE_BIN", None)
+os.environ.pop("MNCS_PROBE_BIN", None)
 os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
 import test_cp0001 as cp0001  # noqa: E402
 import test_vm_native_application as app  # noqa: E402
@@ -82,6 +88,21 @@ REUSED_EXECUTION_PATH = {
 
 def u64(value: int) -> dict:
     return cp0001.integer(value)
+
+
+def vm_repository_for_binary(binary: Path) -> tuple[Path, str]:
+    """Report the checkout that contains the exact VM binary under test."""
+    resolved = binary.resolve(strict=True)
+    root = Path(subprocess.check_output(
+        ["git", "-C", str(resolved.parent), "rev-parse", "--show-toplevel"],
+        text=True,
+    ).strip()).resolve()
+    if root not in resolved.parents:
+        raise AssertionError(f"VM binary is outside its reported Git checkout: {resolved}")
+    revision = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True,
+    ).strip()
+    return root, revision
 
 
 def cases() -> list[dict]:
@@ -541,9 +562,7 @@ def main() -> dict:
             raise AssertionError("interface-only edit changed canonical VM semantics")
 
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
-        vm_revision = subprocess.check_output(
-            ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
-        ).strip()
+        vm_repository, vm_revision = vm_repository_for_binary(test_vm_emit.VM_BIN)
         result = {
             "schema_version": "mncs.compiler.self-consumption-full-module-fact-reuse/1",
             "status": "passed_full_source_lexer_segment_fact_reuse_frontier",
@@ -556,6 +575,7 @@ def main() -> dict:
             "language_fact_implementation_revision": language_lock["revision"],
             "stage0_probe_sha256": hashlib.sha256(app.PROBE.read_bytes()).hexdigest(),
             "vm_revision": vm_revision,
+            "vm_repository_root": str(vm_repository),
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
             "harness": "tools/test_vm_compiler_full_module_fact_reuse.py",
             "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
