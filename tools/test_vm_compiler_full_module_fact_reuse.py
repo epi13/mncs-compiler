@@ -90,6 +90,21 @@ def u64(value: int) -> dict:
     return cp0001.integer(value)
 
 
+def vm_repository_for_binary(binary: Path) -> tuple[Path, str]:
+    """Report the checkout that contains the exact VM binary under test."""
+    resolved = binary.resolve(strict=True)
+    root = Path(subprocess.check_output(
+        ["git", "-C", str(resolved.parent), "rev-parse", "--show-toplevel"],
+        text=True,
+    ).strip()).resolve()
+    if root not in resolved.parents:
+        raise AssertionError(f"VM binary is outside its reported Git checkout: {resolved}")
+    revision = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True,
+    ).strip()
+    return root, revision
+
+
 def cases() -> list[dict]:
     rows = [
         ("valid-span", "check_span", [u64(8), u64(2), u64(8)]),
@@ -547,9 +562,7 @@ def main() -> dict:
             raise AssertionError("interface-only edit changed canonical VM semantics")
 
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
-        vm_revision = subprocess.check_output(
-            ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
-        ).strip()
+        vm_repository, vm_revision = vm_repository_for_binary(test_vm_emit.VM_BIN)
         result = {
             "schema_version": "mncs.compiler.self-consumption-full-module-fact-reuse/1",
             "status": "passed_full_source_lexer_segment_fact_reuse_frontier",
@@ -562,6 +575,7 @@ def main() -> dict:
             "language_fact_implementation_revision": language_lock["revision"],
             "stage0_probe_sha256": hashlib.sha256(app.PROBE.read_bytes()).hexdigest(),
             "vm_revision": vm_revision,
+            "vm_repository_root": str(vm_repository),
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
             "harness": "tools/test_vm_compiler_full_module_fact_reuse.py",
             "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
