@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 PROJECTS = Path("/home/epi13/Documents/Projects")
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
+    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
 )
 os.environ.setdefault("MNCS_PROBE_BIN", os.environ["MNCS_NATIVE_APP_PROBE_BIN"])
 os.environ.setdefault("MNCS_VM_ROOT", str(PROJECTS / "mncs-vm"))

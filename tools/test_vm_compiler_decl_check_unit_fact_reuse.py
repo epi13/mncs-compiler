@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
+    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
 )
 import test_decl as decl_tests  # noqa: E402
 import test_vm_native_application as app  # noqa: E402

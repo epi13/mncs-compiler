@@ -17,7 +17,7 @@ LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / "tools/stage0-probe/target/release/mncs-compiler-stage0-probe"),
+    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
 )
 import test_vm_native_application as app  # noqa: E402
 import test_vm_emit  # noqa: E402

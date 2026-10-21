@@ -18,7 +18,9 @@ LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / "tools/stage0-probe/target/release/mncs-compiler-stage0-probe"),
+    # `tools/bootstrap.sh` builds the probe against the locked Language tree
+    # under `.bootstrap/target`; the Cargo-local target may be an older binary.
+    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
 )
 import test_cp0001 as cp0001  # noqa: E402
 import test_vm_native_application as app  # noqa: E402

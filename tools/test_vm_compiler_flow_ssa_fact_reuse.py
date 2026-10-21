@@ -22,11 +22,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 os.environ.setdefault(
     "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
+    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
 )
 os.environ.setdefault(
     "MNCS_PROBE_BIN",
-    str(ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe"),
+    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
 )
 import test_flow  # noqa: E402
 import test_vm_flow_ssa_frontier as flow_frontier  # noqa: E402
