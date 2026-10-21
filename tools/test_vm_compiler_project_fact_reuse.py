@@ -23,8 +23,13 @@ sys.path.insert(0, str(ROOT / "tools"))
 PROJECTS = Path("/home/epi13/Documents/Projects")
 from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
 
-os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
-os.environ.setdefault("MNCS_PROBE_BIN", os.environ["MNCS_NATIVE_APP_PROBE_BIN"])
+# Resolve the lock-pinned Language Stage-0 probe instead of inheriting a
+# process-wide path that may refer to a stale or unrelated Language checkout.
+os.environ.pop("MNCS_NATIVE_APP_PROBE_BIN", None)
+os.environ.pop("MNCS_PROBE_BIN", None)
+LOCKED_STAGE0_PROBE = ensure_locked_stage0_probe(ROOT)
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(LOCKED_STAGE0_PROBE)
+os.environ["MNCS_PROBE_BIN"] = str(LOCKED_STAGE0_PROBE)
 os.environ.setdefault("MNCS_VM_ROOT", str(PROJECTS / "mncs-vm"))
 os.environ.setdefault("MNCS_VM_BIN", str(PROJECTS / "mncs-vm/target/release/mncs-vm"))
 os.environ.setdefault("MNCS_NATIVE_APP_VM_BIN", os.environ["MNCS_VM_BIN"])
@@ -86,6 +91,19 @@ STEP_BUDGET = reference.STEP_BUDGET
 
 def git(*args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+
+
+def selected_vm_repository() -> tuple[Path, str]:
+    """Bind VM source provenance to the executable used for execution."""
+    binary = Path(test_vm_emit.VM_BIN).resolve(strict=True)
+    root = Path(subprocess.check_output(
+        ["git", "-C", str(binary.parent), "rev-parse", "--show-toplevel"],
+        text=True,
+    ).strip()).resolve()
+    revision = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    return root, revision
 
 
 def load_modules() -> dict[str, str]:
@@ -263,7 +281,8 @@ def main() -> dict:
     print("Running Stage-0 Project reference cases...", flush=True)
     reference_status, cases, expected = reference_cases()
     print(f"Stage-0 Project reference passed {len(cases)} cases.", flush=True)
-    sys.path.insert(0, str(test_vm_emit.VM_REPO / "python"))
+    vm_repository_root, vm_revision = selected_vm_repository()
+    sys.path.insert(0, str(vm_repository_root / "python"))
     from mncs_vm_client import inspect_runtime  # noqa: E402
 
     vm_runtime = inspect_runtime(test_vm_emit.VM_BIN)
@@ -393,9 +412,9 @@ def main() -> dict:
             "language_fact_schema": FACT_SCHEMA,
             "verifier_identity": "mncs-language-function-body-validator/4",
             "stage0_probe_sha256": hashlib.sha256(app.PROBE.read_bytes()).hexdigest(),
-            "vm_revision": subprocess.check_output(
-                ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
-            ).strip(),
+            "vm_revision": vm_revision,
+            "vm_repository_root": str(vm_repository_root),
+            "vm_binary_path": str(Path(test_vm_emit.VM_BIN).resolve()),
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
             "vm_runtime_build_origin": {
                 "status": vm_runtime.get("build_origin", {}).get("status"),
