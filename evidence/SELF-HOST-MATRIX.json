@@ -24983,5 +24983,57 @@
     "stage1_claimed": false,
     "stage2_claimed": false,
     "scope": "Eight-module Project callable closure with comment, uncalled-body, reachable-body, invalid-source, and canonical VM checks; not a complete Compiler build or succession proof."
+  },
+  "current_campaign_language_module_link_borrowing_trial_20261021": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "status": "measured_and_reverted_due_to_wall_time_regression",
+    "baseline_language_revision": "4a65ad261f85766d107013af549a38f542d39ccb",
+    "borrowed_treatment_language_revision": "ef2022f907bf0e67750a2825383e4967a84f7333",
+    "borrowed_change_commit": "65f89ed8fa84e3643aba3898e0aba01be2ed63e9",
+    "revert_commit": "15e09c1",
+    "language_main_revision_after_revert": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "compiler_language_lock_revision": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "same_harness_and_project_source_closure": true,
+    "verified_fact_reuse": {
+      "cold_body_facts": 2031,
+      "comment_reused_body_facts": 2031,
+      "comment_reused_declaration_facts": 2031,
+      "uncalled_edit_reverified": 1,
+      "uncalled_edit_reused": 2030,
+      "reachable_edit_reverified": 15,
+      "reachable_edit_reused": 2016
+    },
+    "timing_delta_seconds_borrowed_minus_baseline": {
+      "cold_build": 3.708202,
+      "comment_edit": 5.805083,
+      "uncalled_body_edit": 2.115483,
+      "body_edit": 4.10968,
+      "invalid_source": 4.34333
+    },
+    "timing_delta_percent_borrowed_minus_baseline": {
+      "cold_build": 4.19,
+      "comment_edit": 7.08,
+      "uncalled_body_edit": 2.51,
+      "body_edit": 4.55,
+      "invalid_source": 10.88
+    },
+    "peak_rss_delta_bytes_borrowed_minus_baseline": {
+      "cold_build": -85381120,
+      "comment_edit": -128409600,
+      "uncalled_body_edit": -128696320,
+      "body_edit": -128626688,
+      "invalid_source": -469962752
+    },
+    "execution_equivalence": {
+      "stage0_and_vm_values_match": true,
+      "invalid_source_rejected_in_both": true
+    },
+    "performance_interpretation": "Borrowing reduced measured peak RSS by 81-470 MB but increased wall time in all five cases by 2.1-5.8 seconds (2.5-10.9%). The workload has ample available system memory; the change was reverted. Language fact reuse counts and execution semantics remained correct. Changed snapshots still invoke the full frontend.",
+    "evidence_artifact": "evidence/project-language-module-linking-borrow-trial-20261021.json",
+    "evidence_sha256": "69304203182b13904c5af711b71bee399a73fac42d31e13cf1f15f490f616727",
+    "baseline_evidence_artifact": "evidence/project-language-fact-reuse-20261021T130041Z.json",
+    "borrowed_evidence_artifact": "evidence/project-language-fact-reuse-20261021T133610Z.json",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }

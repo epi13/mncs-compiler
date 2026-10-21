@@ -1,0 +1,102 @@
+{
+  "schema_version": "mncs.compiler.language-module-linking-benchmark/1",
+  "status": "measured_and_reverted_due_to_wall_time_regression",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "observed_at": "2026-10-21T13:36:10.817524+00:00",
+  "workload": {
+    "harness": "tools/test_vm_compiler_project_fact_reuse.py",
+    "harness_sha256": "9595b41104558e270d1c8399d4b30a4619c50628647cc93ac024251fbb097c55",
+    "module_closure_sha256": "3efe08354657356c45e2a5be7b76d046017e151e5958b5c0910172b0ec28fb83",
+    "same_module_closure": true,
+    "same_harness": true,
+    "module_count": 8,
+    "program_function_count": 2031
+  },
+  "baseline": {
+    "compiler_revision": "0f8db0073b158d1ed05dba4b110bfb2909cb275e",
+    "language_revision": "4a65ad261f85766d107013af549a38f542d39ccb",
+    "report": "evidence/project-language-fact-reuse-20261021T130041Z.json",
+    "report_sha256": "d80948d7ca39e2e24b37998292439a6bb40b23d19a318480b73bc82a0f353119"
+  },
+  "treatment": {
+    "compiler_revision": "54317a89826ebeffe4a7dd843628bca0ea751e70",
+    "language_revision": "ef2022f907bf0e67750a2825383e4967a84f7333",
+    "language_change_commit": "65f89ed8fa84e3643aba3898e0aba01be2ed63e9",
+    "change": "Borrow imported Module Programs during linked frontend elaboration instead of cloning them.",
+    "report": "evidence/project-language-fact-reuse-20261021T133610Z.json",
+    "report_sha256": "9f89da9095f4735deab8b97f06b4ae3b403d1202a691013d9f25c3b830b1cd30"
+  },
+  "measurements": {
+    "cold_build": {
+      "baseline_wall_seconds": 88.531114,
+      "borrowed_wall_seconds": 92.239316,
+      "wall_delta_seconds": 3.708202,
+      "wall_delta_percent": 4.19,
+      "baseline_peak_rss_bytes": 1821114368,
+      "borrowed_peak_rss_bytes": 1735733248,
+      "peak_rss_delta_bytes": -85381120
+    },
+    "comment_edit": {
+      "baseline_wall_seconds": 81.965214,
+      "borrowed_wall_seconds": 87.770297,
+      "wall_delta_seconds": 5.805083,
+      "wall_delta_percent": 7.08,
+      "baseline_peak_rss_bytes": 2094055424,
+      "borrowed_peak_rss_bytes": 1965645824,
+      "peak_rss_delta_bytes": -128409600
+    },
+    "uncalled_body_edit": {
+      "baseline_wall_seconds": 84.411573,
+      "borrowed_wall_seconds": 86.527056,
+      "wall_delta_seconds": 2.115483,
+      "wall_delta_percent": 2.51,
+      "baseline_peak_rss_bytes": 2094284800,
+      "borrowed_peak_rss_bytes": 1965588480,
+      "peak_rss_delta_bytes": -128696320
+    },
+    "body_edit": {
+      "baseline_wall_seconds": 90.34214,
+      "borrowed_wall_seconds": 94.45182,
+      "wall_delta_seconds": 4.10968,
+      "wall_delta_percent": 4.55,
+      "baseline_peak_rss_bytes": 2094219264,
+      "borrowed_peak_rss_bytes": 1965592576,
+      "peak_rss_delta_bytes": -128626688
+    },
+    "invalid_source": {
+      "baseline_wall_seconds": 39.924455,
+      "borrowed_wall_seconds": 44.267785,
+      "wall_delta_seconds": 4.34333,
+      "wall_delta_percent": 10.88,
+      "baseline_peak_rss_bytes": 1939054592,
+      "borrowed_peak_rss_bytes": 1469091840,
+      "peak_rss_delta_bytes": -469962752
+    }
+  },
+  "correctness": {
+    "verified_fact_counts_match": true,
+    "stage0_vm_values_match": true,
+    "baseline_stage0_vm_equivalent": true,
+    "treatment_stage0_vm_equivalent": true,
+    "invalid_source_rejected_in_both": true
+  },
+  "decision": {
+    "reverted_language_commit": "15e09c1",
+    "merged_language_main_revision": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "compiler_language_lock_revision": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "reason": "The borrowing treatment reduced peak RSS, but increased wall time in every measured case. On this workload the runtime cost outweighs the memory reduction; preserve the established owned-program linking path until a design avoids the measured elaboration cost.",
+    "cgroup_peak_memory_bytes": "unavailable"
+  },
+  "integration_validation": {
+    "language_tested_commit": "15e09c1",
+    "language_commit_integration_revision": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "language_test": "cargo test -p mncs-compiler --test module_imports",
+    "language_test_result": "52 passed, 0 failed",
+    "language_source_tree_equal_after_badge_merge": true,
+    "compiler_lock_revision": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "stage0_revision_built": "4a6ff85a59a23a39b8c1664de605eb928f7feae3",
+    "stage0_build": "tools/bootstrap.sh with CARGO_BUILD_JOBS=4 and cached target dir",
+    "compiler_lock_tests": "python3 tools/test_ensure_locked_stage0_probe.py: 3 passed",
+    "stage0_cli_smoke": "mncs --help exited 0"
+  }
+}
