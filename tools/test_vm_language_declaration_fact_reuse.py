@@ -13,6 +13,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+ROOT = Path(__file__).resolve().parents[1]
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe
+
+ensure_locked_stage0_probe(ROOT)
+
 import test_vm_native_application as app
 import test_native_application_incremental as incremental
 import test_vm_test_digest_app as digest_app
