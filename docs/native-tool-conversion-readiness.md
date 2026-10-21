@@ -608,6 +608,50 @@ cgroup memory measurements were unavailable. Evidence is
 advances the Source/Lexer/Segment frontier only; the full Compiler and
 Stage-1/Stage-2 succession remain unproven.
 
+## Language fact reuse and bounded parse-cache accounting on pinned main (2026-10-21)
+
+The current Compiler frontier was rerun against Language main
+`b339aaabcb8cbe5ebba4ab67ce113400f3b0bc81`, which includes the bounded,
+streamed source-parse cache accounting change. Compiler
+`229151994271b8c41db956df4558fa297a6a7e85` verified the complete Source,
+Lexer, and Segment modules together (103 functions and 103 body facts across
+four resolved modules). A comment edit reused all 103 facts; an edited UTF-8
+helper recomputed its body and 23 dependent bodies while reusing 79; an
+imported callable-interface rename recomputed 21 affected bodies and reused
+82 independent facts. Invalid source returned fresh diagnostics and published
+no facts. Six canonical VM results matched Stage-0. Cold, comment, body-edit,
+interface-baseline, and interface-edit builds took 2.814, 2.086, 2.146,
+2.726, and 2.021 seconds; peak RSS was 144.5–154.7 MB. The VM calls took
+0.093 seconds. Cgroup memory counters were unavailable. These measurements
+verify behavior for this frontier and are not a controlled speedup comparison.
+Evidence is
+[`evidence/self-host-full-module-fact-reuse-20261021T172114Z.json`](../evidence/self-host-full-module-fact-reuse-20261021T172114Z.json)
+(SHA-256 `49e57cb1ac9b8accbaf18f2639c1731dc40950c0bbd63021a3c1906d1035a1a3`).
+
+The application-build/11 parse-cache test also consumed Language's
+`mncs.language-source-parse-cache/1` implementation at that same revision. A
+cold two-module build parsed and published both sources. A fresh process reused
+the exact artifact without invoking the frontend. After a comment edit, the
+root was parsed while its unchanged import parse and both verified body facts
+were reused. After an imported body edit, only that source was reparsed; the
+root parse was reused, both semantically dependent facts were recomputed, and
+the canonical VM returned the new value. Invalid root and dependency edits
+were rejected with fresh diagnostics; the comment-shifted root diagnostic
+remained at line 5. Stage-0 and VM results agreed. Cold, warm, comment, and
+dependency builds measured 0.131, 0.103, 0.134, and 0.140 seconds at roughly
+54.6–55.0 MB peak RSS. Cgroup memory counters were unavailable. This small
+workload establishes correct parse reuse and bounded accounting behavior, not
+an end-to-end speedup. Evidence is
+[`evidence/language-source-parse-cache-application-20261021T172239.466730Z.json`](../evidence/language-source-parse-cache-application-20261021T172239.466730Z.json)
+(SHA-256 `fc89df7d24b1812f147b27d711acc043dfc91cb39801037563876844fee0dcb3`).
+
+These results supersede the earlier `f31b098` pin for the current Source,
+Lexer, and Segment frontier. Compiler pins Language `b339aaa`; the Language
+change is merged and pushed to Language main. Nominal, generic-specialization,
+and effect/capability invalidation in application builds remain open, as do the
+Forge-routed digest application, production Test runner, and Stage-1/Stage-2
+succession.
+
 ## Conversion classification
 
 | Area | Classification | Evidence and boundary |
