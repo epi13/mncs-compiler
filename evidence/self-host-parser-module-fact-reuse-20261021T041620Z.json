@@ -1,0 +1,148 @@
+{
+  "application": {
+    "artifact_identity": "sha256:baa4d8986664291a7bab5c545bcac5772ea8507016c2c421f64605bfbc87ec39",
+    "callable_root": "header_code",
+    "canonical_vm_matches_stage0": true,
+    "case_count": 4,
+    "expected_codes": [
+      0,
+      2,
+      4,
+      8
+    ],
+    "selected_parser_function": "mncs.compiler.parser.v1::header<64>"
+  },
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "compiler_revision": "164ee9bc9195fef9ca8d34b5534caa02010fc5d9",
+  "full_module_admission": {
+    "cold_verified_fact_count": 108,
+    "profile_mix": {
+      "lexer": "0.19",
+      "parser": "0.18",
+      "source": "0.19"
+    },
+    "program_function_count": 108,
+    "resolved_module_count": 4,
+    "status": "verified"
+  },
+  "harness": "tools/test_vm_compiler_parser_module_fact_reuse.py",
+  "harness_sha256": "d2c9b601cc43153ac312ee945d6704a4b0672fe34771ace925da312036825536",
+  "language_fact_implementation_revision": "141b02d6dc8bddc14fff2953497d37b7c3a67c70",
+  "limitations": [
+    "This verifies the full current Parser, Source, and Lexer modules in an application; it does not verify the full Compiler project.",
+    "The selected application executes Parser.header, not the global parser frontier.",
+    "This does not establish Stage-1 or Stage-2 succession."
+  ],
+  "measurements": {
+    "canonical_vm_execution": {
+      "calls_bytes": 2514,
+      "peak_rss_kib": 44172,
+      "results_bytes": 4738,
+      "wall_seconds": 0.129238
+    },
+    "cgroup_measurement_available": false,
+    "cold_build": {
+      "cpu_seconds": 7.57,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 253853696,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 7.666566
+    },
+    "comment_edit_build": {
+      "cpu_seconds": 5.46,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 274972672,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 5.554874
+    },
+    "reachable_body_edit_build": {
+      "cpu_seconds": 7.38,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 274702336,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 7.497983
+    },
+    "whole_frontier_wall_seconds": 27.948999
+  },
+  "modules": [
+    {
+      "language_profile": "0.19",
+      "module": "mncs.compiler.source.v1",
+      "source_path": "src/compiler/source.mncs",
+      "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+    },
+    {
+      "language_profile": "0.19",
+      "module": "mncs.compiler.lexer.v1",
+      "source_path": "src/compiler/lexer.mncs",
+      "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+    },
+    {
+      "language_profile": "0.18",
+      "module": "mncs.compiler.parser.v1",
+      "source_path": "src/compiler/parser.mncs",
+      "source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745"
+    }
+  ],
+  "observed_at": "2026-10-21T04:16:20.427056+00:00",
+  "profile_018_baseline": {
+    "diagnostic_count": 20,
+    "measurement": {
+      "cpu_seconds": 0.24,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 55132160,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.284358
+    },
+    "profile_bound_diagnostic_count": 9,
+    "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+    "status": "rejected_by_profile_018_traversal_bound"
+  },
+  "schema_version": "mncs.compiler.parser-dependency-fact-reuse/2",
+  "scope": "The current Parser module at Profile 0.18 and its current Source and Lexer dependencies at Profile 0.19 are fully verified together in application-build. A comment edit reuses every Language fact; an equivalent reachable finish-body edit recomputes the changed body, its generic specialization, the dependent header bodies, and the transitive root header_code caller while preserving independent Parser facts, regenerating the executable artifact, and retaining Stage-0-equivalent canonical VM behavior.",
+  "stage0_probe_sha256": "039df6939c557d342d6cb9faa62052da93e46c4c2d966e161c7f0b6cbef4d6b7",
+  "stage0_revision": "141b02d6dc8bddc14fff2953497d37b7c3a67c70",
+  "status": "passed_full_parser_dependency_fact_reuse_frontier",
+  "verified_fact_reuse": {
+    "cold_facts_produced": 108,
+    "comment_edit_recomputed": 0,
+    "comment_edit_reused": 108,
+    "contract": "mncs.language-verification-fact/3",
+    "fresh_process_per_snapshot": true,
+    "invalidated_root_caller": "mncs:0.2:body:tests.compiler_parser_frontier::header_code",
+    "reachable_body_edit_recomputation_reasons": {
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1": "dependencies_changed",
+      "mncs:0.2:body:tests.compiler_parser_frontier::header_code": "dependencies_changed"
+    },
+    "reachable_body_edit_recomputed": [
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish",
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1",
+      "mncs:0.2:body:tests.compiler_parser_frontier::header_code"
+    ],
+    "reachable_body_edit_reused": 103,
+    "reachable_body_edit_subject": "mncs:0.2:body:mncs.compiler.parser.v1::finish",
+    "reused_independent_parser_facts": [
+      "mncs:0.2:body:mncs.compiler.parser.v1::step"
+    ],
+    "verifier_identity": "mncs-language-function-body-validator/4"
+  },
+  "vm_binary_sha256": "b2ebf49c592d1aa3383294de4407fa7fff4b9456e56338302a9f4c881a5d951a",
+  "vm_revision": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5"
+}
