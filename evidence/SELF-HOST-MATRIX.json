@@ -24545,5 +24545,66 @@
         "mncs.test.suite"
       ]
     }
+  },
+  "current_campaign_project_language_fact_reuse_e055d72_20261021": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "compiler_branch": "campaign/native-application-readiness-20261013",
+    "compiler_revision": "118add8f96f7665a1d49bd37f5bff2fc20d8d4b6",
+    "evidence_artifact": "evidence/project-language-fact-reuse-20261020T062536Z.json",
+    "evidence_sha256": "beeefdeffb3922d45f5319eaf1854213165922f584e434774743d7a138601669",
+    "language_revision": "e055d72760038a071717bacf3b1d11593247ea01",
+    "language_fact_schema": "mncs.language-verification-fact/3",
+    "module_closure": [
+      "mncs.compiler.source.v1",
+      "mncs.compiler.lexer.v1",
+      "mncs.compiler.parser.v1",
+      "mncs.compiler.segment.v1",
+      "mncs.compiler.decl.v1",
+      "mncs.compiler.flow.v1",
+      "mncs.compiler.ssa.v1",
+      "mncs.compiler.project.v1"
+    ],
+    "workload": {
+      "callable": "mncs.compiler.project.v1::module_resolution_cache_key_equal<1,1024>",
+      "stage0_reference_cases": 5,
+      "fresh_stage0_process_per_snapshot": true
+    },
+    "verified_fact_reuse": {
+      "cold_body_facts": 2031,
+      "comment_edit_reused": 2031,
+      "comment_edit_recomputed": 0,
+      "uncalled_body_edit_reused": 2030,
+      "uncalled_body_edit_recomputed": 1,
+      "reachable_project_body_edit_reused": 2016,
+      "reachable_project_body_edit_recomputed": 15,
+      "invalid_source_diagnostic_codes": ["MNE135", "MNE103"],
+      "invalid_source_artifact_publication": "not_published"
+    },
+    "execution": {
+      "stage0_values_match_vm_output": true,
+      "vm_repository_revision": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5",
+      "vm_binary_build_origin_status": "stale-inputs",
+      "vm_binary_build_source_revisions": {
+        "mncs-compiler": "f62b98c6c6ec1ad64f3c4590bbe7be74eaec614a",
+        "mncs-language": "141b02d6dc8bddc14fff2953497d37b7c3a67c70",
+        "mncs-vm": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+      },
+      "current_canonical_vm_parity": "unverified"
+    },
+    "measurements": {
+      "total_wall_seconds": 577.33937,
+      "cold_build_wall_seconds": 138.589655,
+      "comment_edit_wall_seconds": 129.137948,
+      "uncalled_body_edit_wall_seconds": 129.60122,
+      "reachable_body_edit_wall_seconds": 138.816838,
+      "invalid_source_wall_seconds": 39.907751,
+      "peak_rss_bytes": 2093920256,
+      "cgroup_peak_memory_bytes": null
+    },
+    "status": "passed_language_fact_v3_project_self_consumption",
+    "limitations": [
+      "This verifies the selected eight-module Project closure, not the whole Compiler or Stage-1/Stage-2 succession.",
+      "VM outputs matched the Stage-0 oracle, but the VM binary build receipt names older Compiler, Language, and VM revisions; current canonical VM parity is unverified."
+    ]
   }
 }
