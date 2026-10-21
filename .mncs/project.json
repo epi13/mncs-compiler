@@ -125,7 +125,7 @@
       },
       {
         "contract": "native-application-build",
-        "version": "13",
+        "version": "14",
         "kind": "compiler-application-build-provider",
         "stability": "experimental",
         "effects": [
@@ -136,8 +136,8 @@
         ],
         "output_limit_bytes": 16384,
         "artifact_contract": {
-          "request_schema": "mncs.compiler.application-build-request/10",
-          "response_schema": "mncs.compiler.application-build/13",
+          "request_schema": "mncs.compiler.application-build-request/11",
+          "response_schema": "mncs.compiler.application-build/14",
           "supported_request_response_pairs": [
             {
               "request_schema": "mncs.compiler.application-build-request/1",
@@ -178,6 +178,10 @@
             {
               "request_schema": "mncs.compiler.application-build-request/10",
               "response_schema": "mncs.compiler.application-build/13"
+            },
+            {
+              "request_schema": "mncs.compiler.application-build-request/11",
+              "response_schema": "mncs.compiler.application-build/14"
             }
           ],
           "callable_root_maximum_count": 256,
@@ -192,7 +196,10 @@
           "source_test_inventory_scope": "source_module",
           "source_test_selection_schema": "mncs.compiler.source-test-case-selection/1",
           "source_test_selection_maximum_count": 256,
-          "verification_work_schema": "mncs.compiler.application-build-verification-work/8",
+          "verification_work_schema": "mncs.compiler.application-build-verification-work/9",
+          "language_verification_dependency_summary_cache_schema": "mncs.language-verification-dependency-summary-cache/1",
+          "language_verification_dependency_summary_cache_observation_schema": "mncs.language-verification-dependency-summary-cache-observation/1",
+          "language_verification_dependency_summary_cache_policy_identity": "mncs-language-verification-dependency-extractor/1",
           "declaration_verification_fact_schema": "mncs.language-declaration-verification-fact/1",
           "finite_type_declaration_fact_schema": "mncs.language-declaration-verification-fact/1",
           "finite_type_declaration_fact_verifier_identity": "mncs-language-finite-type-validator/1",
@@ -230,6 +237,7 @@
           "tools/test_vm_native_application.py",
           "tools/test_native_application_incremental.py",
           "tools/test_vm_language_declaration_fact_reuse.py",
+          "tools/test_vm_language_dependency_summary_cache.py",
           "docs/native-application-build-contract.md",
           "tools/test_vm_language_source_parse_cache.py",
           "tools/stage0-probe/src/application.rs",
