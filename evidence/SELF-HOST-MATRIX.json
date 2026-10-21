@@ -25035,5 +25035,119 @@
     "borrowed_evidence_artifact": "evidence/project-language-fact-reuse-20261021T133610Z.json",
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_single_pass_frontend_semantic_validation_20261021": {
+    "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "status": "passed_single_pass_frontend_semantic_snapshot",
+    "language_main_revision": "a7fcdc444c07b41ffa27cf2a1e0eab5fd3269fcf",
+    "language_change_commit": "5b84859",
+    "compiler_test_revision": "94548cb10bc847464333d75df4456c433154b521",
+    "compiler_lock_sha256": "95b6ed31b35c7700cf32fe3985a68538f5191fdf473a84d88c8e18f9173b094c",
+    "compiler_main_revision_at_vm_build": "acd6f91484031002573c54de7d9808673ac7d161",
+    "vm_revision": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5",
+    "vm_binary_sha256": "fb35ed3441a470d2a38a32cfd86cfe4d8ddfbd50e65a988302206692af5d359f",
+    "vm_runtime_build_origin": {
+      "status": "matches-embedded-inputs",
+      "source_revisions": {
+        "mncs-compiler": "acd6f91484031002573c54de7d9808673ac7d161",
+        "mncs-language": "a7fcdc444c07b41ffa27cf2a1e0eab5fd3269fcf",
+        "mncs-vm": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5"
+      },
+      "mismatch_count": 0,
+      "mismatches": []
+    },
+    "harness": "tools/test_vm_compiler_project_fact_reuse.py",
+    "harness_sha256": "9595b41104558e270d1c8399d4b30a4619c50628647cc93ac024251fbb097c55",
+    "same_harness_and_project_source_closure_as_baseline": true,
+    "workload": {
+      "module_count": 8,
+      "program_function_count": 2031,
+      "fresh_stage0_process_per_snapshot": true
+    },
+    "frontend_validation_passes": {
+      "before": 2,
+      "after": 1,
+      "reason": "The graph builder previously called full Program.validate() after fact-aware validation. Language now returns the canonical form, identities, validation, and valid graph from one immutable snapshot."
+    },
+    "verified_fact_reuse": {
+      "cold_body_facts": 2031,
+      "cold_declaration_facts": 2031,
+      "comment_reused_body_facts": 2031,
+      "comment_recomputed_body_facts": 0,
+      "uncalled_body_edit_recomputed": 1,
+      "uncalled_body_edit_reused": 2030,
+      "reachable_body_edit_recomputed": 15,
+      "reachable_body_edit_reused": 2016
+    },
+    "scenario_measurements": {
+      "cold_build": {
+        "baseline_wall_seconds": 88.531114,
+        "single_pass_wall_seconds": 80.108905,
+        "delta_seconds": -8.422209,
+        "delta_percent": -9.51,
+        "baseline_peak_rss_bytes": 1821114368,
+        "single_pass_peak_rss_bytes": 1812221952,
+        "peak_rss_delta_bytes": -8892416
+      },
+      "comment_edit": {
+        "baseline_wall_seconds": 81.965214,
+        "single_pass_wall_seconds": 74.377731,
+        "delta_seconds": -7.587483,
+        "delta_percent": -9.26,
+        "baseline_peak_rss_bytes": 2094055424,
+        "single_pass_peak_rss_bytes": 2090205184,
+        "peak_rss_delta_bytes": -3850240
+      },
+      "uncalled_body_edit": {
+        "baseline_wall_seconds": 84.411573,
+        "single_pass_wall_seconds": 73.810088,
+        "delta_seconds": -10.601485,
+        "delta_percent": -12.56,
+        "baseline_peak_rss_bytes": 2094284800,
+        "single_pass_peak_rss_bytes": 2091130880,
+        "peak_rss_delta_bytes": -3153920
+      },
+      "body_edit": {
+        "baseline_wall_seconds": 90.34214,
+        "single_pass_wall_seconds": 81.236579,
+        "delta_seconds": -9.105561,
+        "delta_percent": -10.08,
+        "baseline_peak_rss_bytes": 2094219264,
+        "single_pass_peak_rss_bytes": 2091053056,
+        "peak_rss_delta_bytes": -3166208
+      },
+      "invalid_source": {
+        "baseline_wall_seconds": 39.924455,
+        "single_pass_wall_seconds": 39.704751,
+        "delta_seconds": -0.219704,
+        "delta_percent": -0.55,
+        "baseline_peak_rss_bytes": 1939054592,
+        "single_pass_peak_rss_bytes": 1939087360,
+        "peak_rss_delta_bytes": 32768
+      }
+    },
+    "total_wall_seconds": {
+      "baseline": 386.422443,
+      "single_pass": 350.529451,
+      "delta_seconds": -35.892992,
+      "delta_percent": -9.29
+    },
+    "execution_equivalence": {
+      "stage0_and_vm_values_match": true,
+      "vm_build_origin_status": "matches-embedded-inputs",
+      "vm_build_origin_mismatch_count": 0,
+      "invalid_source_diagnostics": [
+        "MNE135",
+        "MNE103"
+      ],
+      "invalid_source_artifact_published": false
+    },
+    "performance_interpretation": "The four valid cases improved by 9.3%-12.6%; invalid-source time was within noise. Total measured workload wall time fell 35.9 seconds (9.3%). Peak RSS was essentially unchanged and cgroup memory was unavailable. Changed snapshots still invoke the full Language frontend and elaboration.",
+    "baseline_evidence_artifact": "evidence/project-language-fact-reuse-20261021T130041Z.json",
+    "baseline_evidence_sha256": "d80948d7ca39e2e24b37998292439a6bb40b23d19a318480b73bc82a0f353119",
+    "evidence_artifact": "evidence/project-language-fact-reuse-20261021T141844Z.json",
+    "evidence_sha256": "74580c93302f76f5a3bd50c1d1ce1b31ff0eb6bd0a94b15b4dee39424d7723ee",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }
