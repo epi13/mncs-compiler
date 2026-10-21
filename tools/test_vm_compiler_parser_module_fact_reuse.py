@@ -50,6 +50,7 @@ EXPECTED_RECOMPUTED = {
     "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1",
     "mncs:0.2:body:mncs.compiler.parser.v1::header",
     "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1",
+    f"mncs:0.2:body:{ROOT_MODULE}::header_code",
 }
 
 
@@ -262,13 +263,13 @@ def main() -> dict:
             "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1": "subject_changed",
             "mncs:0.2:body:mncs.compiler.parser.v1::header": "dependencies_changed",
             "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1": "dependencies_changed",
+            f"mncs:0.2:body:{ROOT_MODULE}::header_code": "dependencies_changed",
         }
         if reasons != expected_reasons:
             raise AssertionError("Parser body edit reported incorrect fact invalidation reasons: "
                                  + json.dumps(reasons, indent=2, sort_keys=True))
-        if (f"mncs:0.2:body:{ROOT_MODULE}::header_code" not in reused
-                or "mncs:0.2:body:mncs.compiler.parser.v1::step" not in reused):
-            raise AssertionError("unaffected Parser/application caller facts were not reused")
+        if "mncs:0.2:body:mncs.compiler.parser.v1::step" not in reused:
+            raise AssertionError("unaffected Parser body facts were not reused")
         if (edited_build.get("artifact", {}).get("identity")
                 == cold.get("artifact", {}).get("identity")
                 or edited_work.get("backend_artifact") != "generated"):
@@ -283,7 +284,7 @@ def main() -> dict:
 
         lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
         result = {
-            "schema_version": "mncs.compiler.parser-dependency-fact-reuse/1",
+            "schema_version": "mncs.compiler.parser-dependency-fact-reuse/2",
             "status": "passed_full_parser_dependency_fact_reuse_frontier",
             "observed_at": datetime.now(timezone.utc).isoformat(),
             "compiler_revision": subprocess.check_output(
@@ -331,13 +332,11 @@ def main() -> dict:
                 "reachable_body_edit_recomputed": sorted(recomputed),
                 "reachable_body_edit_recomputation_reasons": reasons,
                 "reachable_body_edit_reused": len(reused),
-                "reused_parser_and_application_callers": sorted(
+                "reused_independent_parser_facts": sorted(
                     subject for subject in reused
-                    if subject in {
-                        f"mncs:0.2:body:{ROOT_MODULE}::header_code",
-                        "mncs:0.2:body:mncs.compiler.parser.v1::step",
-                    }
+                    if subject == "mncs:0.2:body:mncs.compiler.parser.v1::step"
                 ),
+                "invalidated_root_caller": f"mncs:0.2:body:{ROOT_MODULE}::header_code",
                 "fresh_process_per_snapshot": True,
             },
             "measurements": {
@@ -353,7 +352,7 @@ def main() -> dict:
                 "The selected application executes Parser.header, not the global parser frontier.",
                 "This does not establish Stage-1 or Stage-2 succession.",
             ],
-            "scope": "The current Parser module at Profile 0.18 and its current Source and Lexer dependencies at Profile 0.19 are fully verified together in application-build. A comment edit reuses every Language fact; an equivalent reachable finish-body edit recomputes the changed body, its generic specialization, and the exact dependent header bodies while preserving independent Parser/application facts, regenerating the executable artifact, and retaining Stage-0-equivalent canonical VM behavior.",
+            "scope": "The current Parser module at Profile 0.18 and its current Source and Lexer dependencies at Profile 0.19 are fully verified together in application-build. A comment edit reuses every Language fact; an equivalent reachable finish-body edit recomputes the changed body, its generic specialization, the dependent header bodies, and the transitive root header_code caller while preserving independent Parser facts, regenerating the executable artifact, and retaining Stage-0-equivalent canonical VM behavior.",
         }
     output = ROOT / f"evidence/self-host-parser-module-fact-reuse-{datetime.now(timezone.utc):%Y%m%dT%H%M%SZ}.json"
     output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
