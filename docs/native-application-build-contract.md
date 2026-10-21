@@ -81,7 +81,7 @@ Language actually reused or recomputed, with miss reasons. Requests `/5` and
 source parse cache, and `/7` adds separately verified finite-type facts.
 
 An exact source-snapshot hit skips the frontend for each contract. A changed
-`/5` through `/10` snapshot runs the current Language frontend and supplies the
+`/5` through `/11` snapshot runs the current Language frontend and supplies the
 fact sets supported by that request: function declarations for `/5` and `/6`,
 finite types for `/7`, record types for `/8`, and SSA function facts for `/9`.
 Language selectively reuses facts whose verification guards still match;
@@ -110,6 +110,7 @@ seven-callable Test-core artifact in one canonical VM batch.
 The earlier Environment descriptor advertised request `/8` and response `/11`
 as current while retaining eight pairs. Revision 12 extended it with request
 `/9` and response `/12`; revision 13 adds request `/10` and response `/13`.
+Revision 14 adds request `/11` and response `/14`.
 The `/13` application cache entry stores the Language-owned bounded
 `mncs.language-ssa-function-artifact-cache/1` alongside verified Language
 facts, bound by a SHA-256 digest. Language validates each complete SSA function
@@ -121,6 +122,22 @@ process. `tools/test_vm_language_declaration_fact_reuse.py` exercises a changed
 reachable imported body, checks that independent SSA artifacts are reused
 while the changed dependency is lowered, and compares canonical VM behavior
 with the Stage-0 oracle.
+
+Request `/11` and response `/14` enable Language's bounded, process-local
+`mncs.language-verification-dependency-summary-cache/1`. The cache reuses
+structural direct-dependency summaries for unchanged resolved function bodies
+only when the callable interface and extractor policy still match. Language
+rebuilds dependency fingerprints against the current program and independently
+revalidates verified function facts; a summary hit is not verification
+evidence. The `/9` verification-work observation reports the function subjects
+whose dependency summaries were reused or recomputed. These summaries are not
+serialized into application cache entries, so a fresh process recomputes them
+while still being able to reuse persisted Language verification facts after
+their normal dependency checks. The process retains summaries only while its
+Stage-0 probe remains alive. `tools/test_vm_language_dependency_summary_cache.py`
+checks unchanged, comment-only, unreachable-body, reachable-body, invalid
+source, and fresh-process snapshots on a real two-module application, then
+compares VM results with the Stage-0 oracle.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only
