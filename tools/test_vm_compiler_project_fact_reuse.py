@@ -21,10 +21,9 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 PROJECTS = Path("/home/epi13/Documents/Projects")
-os.environ.setdefault(
-    "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
-)
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
+
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
 os.environ.setdefault("MNCS_PROBE_BIN", os.environ["MNCS_NATIVE_APP_PROBE_BIN"])
 os.environ.setdefault("MNCS_VM_ROOT", str(PROJECTS / "mncs-vm"))
 os.environ.setdefault("MNCS_VM_BIN", str(PROJECTS / "mncs-vm/target/release/mncs-vm"))

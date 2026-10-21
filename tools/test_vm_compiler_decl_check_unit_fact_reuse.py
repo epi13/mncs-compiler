@@ -20,10 +20,9 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
-os.environ.setdefault(
-    "MNCS_NATIVE_APP_PROBE_BIN",
-    str(ROOT / ".bootstrap/target/release/mncs-compiler-stage0-probe"),
-)
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
+
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
 import test_decl as decl_tests  # noqa: E402
 import test_vm_native_application as app  # noqa: E402
 import test_vm_emit  # noqa: E402
