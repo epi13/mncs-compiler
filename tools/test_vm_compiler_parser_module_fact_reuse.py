@@ -16,7 +16,15 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
 from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
 
-os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(ensure_locked_stage0_probe(ROOT))
+# This harness owns its pinned Stage-0 selection. A process-wide probe override
+# can point at a different Language revision and silently invalidate the
+# dependency-reuse evidence, so clear inherited overrides before resolving the
+# lock-checked binary.
+os.environ.pop("MNCS_NATIVE_APP_PROBE_BIN", None)
+os.environ.pop("MNCS_PROBE_BIN", None)
+LOCKED_STAGE0_PROBE = ensure_locked_stage0_probe(ROOT)
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(LOCKED_STAGE0_PROBE)
+os.environ["MNCS_PROBE_BIN"] = str(LOCKED_STAGE0_PROBE)
 import test_cp0001 as cp0001  # noqa: E402
 import test_vm_compiler_full_module_fact_reuse as common  # noqa: E402
 import test_vm_emit  # noqa: E402
@@ -177,6 +185,19 @@ def execute_vm(artifact: dict, temporary_root: Path, workload: list[dict]) -> tu
                     "results_bytes": output_path.stat().st_size}
 
 
+def selected_vm_repository() -> tuple[Path, str]:
+    """Resolve provenance from the exact VM executable used by this harness."""
+    binary = Path(test_vm_emit.VM_BIN).resolve(strict=True)
+    root = Path(subprocess.check_output(
+        ["git", "-C", str(binary.parent), "rev-parse", "--show-toplevel"],
+        text=True,
+    ).strip()).resolve()
+    revision = subprocess.check_output(
+        ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
+    ).strip()
+    return root, revision
+
+
 def profile_018_attempt(cache: Path, modules: dict[str, str], workload: list[dict]) -> tuple[dict, dict]:
     baseline = dict(modules)
     for name in ("mncs.compiler.source.v1", "mncs.compiler.lexer.v1"):
@@ -282,6 +303,8 @@ def main() -> dict:
             raise AssertionError("canonical VM differs from Stage-0 Parser results: "
                                  + json.dumps({"vm": actual, "stage0": expected}, indent=2))
 
+        vm_repository_root, vm_revision = selected_vm_repository()
+
         lock = json.loads((ROOT / "mncs-language.lock.json").read_text())
         result = {
             "schema_version": "mncs.compiler.parser-dependency-fact-reuse/2",
@@ -294,9 +317,9 @@ def main() -> dict:
             "stage0_revision": lock["revision"],
             "language_fact_implementation_revision": lock["revision"],
             "stage0_probe_sha256": hashlib.sha256(common.app.PROBE.read_bytes()).hexdigest(),
-            "vm_revision": subprocess.check_output(
-                ["git", "-C", str(test_vm_emit.VM_REPO), "rev-parse", "HEAD"], text=True
-            ).strip(),
+            "vm_revision": vm_revision,
+            "vm_repository_root": str(vm_repository_root),
+            "vm_binary_path": str(Path(test_vm_emit.VM_BIN).resolve()),
             "vm_binary_sha256": hashlib.sha256(test_vm_emit.VM_BIN.read_bytes()).hexdigest(),
             "harness": "tools/test_vm_compiler_parser_module_fact_reuse.py",
             "harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

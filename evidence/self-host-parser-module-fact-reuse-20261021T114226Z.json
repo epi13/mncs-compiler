@@ -1,0 +1,150 @@
+{
+  "application": {
+    "artifact_identity": "sha256:d2eb2f0d18c7228c33c627639f89b538eb15e0175ec05717a10477655a97909d",
+    "callable_root": "header_code",
+    "canonical_vm_matches_stage0": true,
+    "case_count": 4,
+    "expected_codes": [
+      0,
+      2,
+      4,
+      8
+    ],
+    "selected_parser_function": "mncs.compiler.parser.v1::header<64>"
+  },
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "compiler_revision": "2463863cc0b71e629756b90ec22476ad5af6fd23",
+  "full_module_admission": {
+    "cold_verified_fact_count": 108,
+    "profile_mix": {
+      "lexer": "0.19",
+      "parser": "0.18",
+      "source": "0.19"
+    },
+    "program_function_count": 108,
+    "resolved_module_count": 4,
+    "status": "verified"
+  },
+  "harness": "tools/test_vm_compiler_parser_module_fact_reuse.py",
+  "harness_sha256": "b7ded458fe7091a98335dd15f359a828e667dc2c74a5f8a7e75202d042b98e9e",
+  "language_fact_implementation_revision": "7057f17516655578091b9fae41075357adede32d",
+  "limitations": [
+    "This verifies the full current Parser, Source, and Lexer modules in an application; it does not verify the full Compiler project.",
+    "The selected application executes Parser.header, not the global parser frontier.",
+    "This does not establish Stage-1 or Stage-2 succession."
+  ],
+  "measurements": {
+    "canonical_vm_execution": {
+      "calls_bytes": 2514,
+      "peak_rss_kib": 54400,
+      "results_bytes": 4738,
+      "wall_seconds": 1.051998
+    },
+    "cgroup_measurement_available": false,
+    "cold_build": {
+      "cpu_seconds": 7.23,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 254365696,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 7.304818
+    },
+    "comment_edit_build": {
+      "cpu_seconds": 5.05,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 275034112,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 5.127517
+    },
+    "reachable_body_edit_build": {
+      "cpu_seconds": 6.98,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 274976768,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 7.080052
+    },
+    "whole_frontier_wall_seconds": 28.797898
+  },
+  "modules": [
+    {
+      "language_profile": "0.19",
+      "module": "mncs.compiler.source.v1",
+      "source_path": "src/compiler/source.mncs",
+      "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+    },
+    {
+      "language_profile": "0.19",
+      "module": "mncs.compiler.lexer.v1",
+      "source_path": "src/compiler/lexer.mncs",
+      "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+    },
+    {
+      "language_profile": "0.18",
+      "module": "mncs.compiler.parser.v1",
+      "source_path": "src/compiler/parser.mncs",
+      "source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745"
+    }
+  ],
+  "observed_at": "2026-10-21T11:42:26.218275+00:00",
+  "profile_018_baseline": {
+    "diagnostic_count": 20,
+    "measurement": {
+      "cpu_seconds": 0.24,
+      "peak_cgroup_memory_bytes": null,
+      "peak_child_processes": 0,
+      "peak_open_file_descriptors": 4,
+      "peak_rss_bytes": 54857728,
+      "peak_threads": 1,
+      "request_sequence": 1,
+      "wall_seconds": 0.282442
+    },
+    "profile_bound_diagnostic_count": 9,
+    "sample_diagnostic": "sequence traversal bound must not exceed the profile ceiling 1024",
+    "status": "rejected_by_profile_018_traversal_bound"
+  },
+  "schema_version": "mncs.compiler.parser-dependency-fact-reuse/2",
+  "scope": "The current Parser module at Profile 0.18 and its current Source and Lexer dependencies at Profile 0.19 are fully verified together in application-build. A comment edit reuses every Language fact; an equivalent reachable finish-body edit recomputes the changed body, its generic specialization, the dependent header bodies, and the transitive root header_code caller while preserving independent Parser facts, regenerating the executable artifact, and retaining Stage-0-equivalent canonical VM behavior.",
+  "stage0_probe_sha256": "8ac4af9c441cc9374290faf7a501538a5855049c2f96bbe9e63a8a0b7f5bca88",
+  "stage0_revision": "7057f17516655578091b9fae41075357adede32d",
+  "status": "passed_full_parser_dependency_fact_reuse_frontier",
+  "verified_fact_reuse": {
+    "cold_facts_produced": 108,
+    "comment_edit_recomputed": 0,
+    "comment_edit_reused": 108,
+    "contract": "mncs.language-verification-fact/3",
+    "fresh_process_per_snapshot": true,
+    "invalidated_root_caller": "mncs:0.2:body:tests.compiler_parser_frontier::header_code",
+    "reachable_body_edit_recomputation_reasons": {
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1": "dependencies_changed",
+      "mncs:0.2:body:tests.compiler_parser_frontier::header_code": "dependencies_changed"
+    },
+    "reachable_body_edit_recomputed": [
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish",
+      "mncs:0.2:body:mncs.compiler.parser.v1::finish__spec_4dd6cbd1",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header",
+      "mncs:0.2:body:mncs.compiler.parser.v1::header__spec_4dd6cbd1",
+      "mncs:0.2:body:tests.compiler_parser_frontier::header_code"
+    ],
+    "reachable_body_edit_reused": 103,
+    "reachable_body_edit_subject": "mncs:0.2:body:mncs.compiler.parser.v1::finish",
+    "reused_independent_parser_facts": [
+      "mncs:0.2:body:mncs.compiler.parser.v1::step"
+    ],
+    "verifier_identity": "mncs-language-function-body-validator/4"
+  },
+  "vm_binary_path": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-vm/target/debug/mncs-vm",
+  "vm_binary_sha256": "b2f6af014157359e269d7cf28a346116759d9f22583379d891fb8d5ec8f75446",
+  "vm_repository_root": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-vm",
+  "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02"
+}
