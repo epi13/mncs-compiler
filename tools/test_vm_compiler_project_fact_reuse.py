@@ -487,8 +487,8 @@ def main() -> dict:
         }
         output = ROOT / "evidence" / "project-language-fact-reuse-20261020.json"
         if output.exists():
-            suffix = datetime.now(timezone.utc).strftime("%H%M%S")
-            output = output.with_name(f"project-language-fact-reuse-20261020T{suffix}Z.json")
+            suffix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            output = output.with_name(f"project-language-fact-reuse-{suffix}.json")
         output.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         return report
 
