@@ -536,9 +536,10 @@ artifact-hit behavior. Reachable dependency, exported nominal interface, and
 generic specialization edits rebuilt, and their canonical VM results matched
 Stage-0. Invalid source returned fresh diagnostics and published no successful
 artifact. Interrupted compilation published no partial cache entry; retry and
-fresh-process reuse passed. cgroup memory counters were unavailable. The
-changed snapshots reused zero Language verification facts, so Gate B remains
-partial while Language-owned fact reuse is unimplemented.
+fresh-process reuse passed. cgroup memory counters were unavailable. At this
+2026-10-20 checkpoint, changed snapshots reused zero Language verification
+facts. The follow-up below supersedes that fact-reuse status; the earlier
+artifact invalidation and interruption results remain historical evidence.
 
 The `/4` producer exposes source snapshot and dependency graph identities,
 selected callable interface, artifact provenance, build assumptions, structured
@@ -554,6 +555,44 @@ latest failed invocation cannot fall back to an earlier successful artifact.
 fresh-process warm, invalid-source, unsupported-schema, Store-input-artifact
 reuse, and corrupt-input cases. Production `mncs test` retained-session/batch
 consumption, Monitor correlation, and Automation eligibility remain unproven.
+
+## Language-owned verification fact reuse in Compiler Project (2026-10-21)
+
+The Compiler application-build now consumes Language's
+`mncs.language-verification-fact/3` and declaration facts. The real eight-module
+Compiler Project workload contains 2,031 cold body facts and 2,031 declaration
+facts. A comment-only edit reused all 2,031 of each. Editing an uncalled helper
+recomputed that body and reused 2,030 body facts. Editing a reachable function
+recomputed its 15-function dependency closure and reused 2,016 body facts. The
+fact observations identify recomputation as `subject_changed` or
+`dependencies_changed`, rather than inferring reuse from artifact-cache hits.
+
+Each changed snapshot ran in a fresh process. Invalid input returned fresh
+`MNE135` and `MNE103` diagnostics and published no artifact. The five canonical
+VM outputs matched the Stage-0 oracle: `[true, false, true, false, false]`.
+The cold build took 78.8 s; comment, uncalled-body, and reachable-body edits
+took 73.5 s, 73.9 s, and 80.7 s. Peak RSS ranged from 1.80 to 2.09 GB;
+cgroup memory measurements were unavailable. The work avoided thousands of
+semantic verification units, but these measurements do not establish an
+end-to-end speedup because source parsing and other frontend work remain.
+
+The evidence is
+`evidence/project-language-fact-reuse-20261021T152950Z.json` (SHA-256
+`d9d085e896dfb779d6ae2ed416c035448c7bd589df6d862be3f9c2ae48675b79`), measured
+at Compiler `37a0a3b` and Language `a235081`. A follow-up experiment with
+borrowed imported-program references preserved fact counts and VM results,
+reduced peak RSS to 1.47–1.93 GB, and increased total measured time from
+349.1 s to 374.1 s. These were sequential workload runs, not a controlled
+benchmark; the optimization candidate is preserved as evidence but is not
+pinned by Compiler main. The Compiler lock now follows Language main at
+`f31b098` (a badge-only update over the measured fact implementation).
+
+Gate B has moved from “fact reuse not implemented” to partial: selective
+function and declaration reuse is independently verified in Compiler
+application-build, with fresh diagnostics and canonical execution parity.
+Remaining proof includes application-level imported/exported interface,
+nominal type, generic specialization, and effect/capability invalidation, plus
+reducing changed-snapshot parse and frontend cost.
 
 ## Conversion classification
 
@@ -573,7 +612,7 @@ No production host implementation is safe to remove from this evidence. The nati
 
 ## Prioritized next steps
 
-1. Add Language-owned verified-fact reuse for the real multi-module application so unchanged declarations and bodies can avoid repeated whole-program semantic work. Preserve the source, compiler, backend, effect, and verification-policy identities already covered by the current artifact cache; rerun cold, warm, local edit, interface change, invalid source, and interruption cases.
+1. Extend the demonstrated Language fact reuse through real application-level imported/exported interface, nominal type, generic specialization, and effect/capability invalidation. Then reduce repeated changed-snapshot parsing and frontend work while preserving fresh diagnostics, policy identity, and interruption safety.
 2. Feed application-build/7 into the production mncs-test native runner and prove its compile-once retained-session and batch path with the existing provider receipt checks; the Compiler can now select and execute source tests by Language-issued case identity, including across distinct artifacts.
 3. Complete the effectful digest and Test provider applications through the established Forge, Monitor, Store, and Automation path; preserve the current `build_digest` result and receipt as the integrated regression baseline.
 4. Add JSON/TOML and filesystem capability work only for concrete Test consumer needs. Obtain the owning repository scope before any cross-repository implementation.
