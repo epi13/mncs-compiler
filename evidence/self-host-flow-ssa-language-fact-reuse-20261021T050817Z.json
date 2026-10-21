@@ -1,0 +1,305 @@
+{
+  "schema_version": "mncs.compiler.flow-ssa-language-fact-reuse/1",
+  "status": "passed_language_fact_v3_flow_to_ssa_self_consumption",
+  "observed_at": "2026-10-21T05:08:17.112002+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_revision": "4955b2eac2d2bee71871719d0f515e2c03be9a3f",
+  "compiler_branch": "campaign/native-application-readiness-20261013",
+  "language_revision": "141b02d6dc8bddc14fff2953497d37b7c3a67c70",
+  "language_fact_schema": "mncs.language-verification-fact/3",
+  "verifier_identity": "mncs-language-function-body-validator/4",
+  "stage0_probe_sha256": "d7ea5d8437c9b4e234b8c4a20d78d60326f1aa490342a34fcd98a5e48ed3a068",
+  "vm_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+  "vm_binary_sha256": "b2f6af014157359e269d7cf28a346116759d9f22583379d891fb8d5ec8f75446",
+  "harness": "tools/test_vm_compiler_flow_ssa_fact_reuse.py",
+  "harness_sha256": "e66caeb2c79e1053e7e0ac0dcf19d0e784efa8835aa417e604b5ed2dd2c5c373",
+  "contracts": {
+    "request": "mncs.compiler.application-build-request/5",
+    "response": "mncs.compiler.application-build/8",
+    "verification_work": "mncs.compiler.application-build-verification-work/3"
+  },
+  "module_closure": [
+    {
+      "module": "mncs.compiler.source.v1",
+      "path": "src/compiler/source.mncs",
+      "profile": "0.19",
+      "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+    },
+    {
+      "module": "mncs.compiler.lexer.v1",
+      "path": "src/compiler/lexer.mncs",
+      "profile": "0.19",
+      "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+    },
+    {
+      "module": "mncs.compiler.parser.v1",
+      "path": "src/compiler/parser.mncs",
+      "profile": "0.18",
+      "source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745"
+    },
+    {
+      "module": "mncs.compiler.segment.v1",
+      "path": "src/compiler/segment.mncs",
+      "profile": "0.19",
+      "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+    },
+    {
+      "module": "mncs.compiler.decl.v1",
+      "path": "src/compiler/decl.mncs",
+      "profile": "0.18",
+      "source_sha256": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0"
+    },
+    {
+      "module": "mncs.compiler.flow.v1",
+      "path": "src/compiler/flow.mncs",
+      "profile": "0.18",
+      "source_sha256": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd"
+    },
+    {
+      "module": "mncs.compiler.ssa.v1",
+      "path": "src/compiler/ssa.mncs",
+      "profile": "0.18",
+      "source_sha256": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709"
+    }
+  ],
+  "workload": {
+    "root_module": "demo.flow_ssa_frontier",
+    "root_function": "run",
+    "callable": "mncs.compiler.ssa.v1::lower_flow_unit_value_ssa<1024,1024>",
+    "selected_cases": [
+      {
+        "id": "fallthrough_join",
+        "source_sha256": "f9dab71eb3ebb41e57622d6b6658e8d089aa78e5a3373ea7289080f06d0b33db",
+        "source_bytes": 107,
+        "stage0_ssa_shape": {
+          "functions": 1,
+          "branches": 1,
+          "jumps": 1,
+          "returns": 2,
+          "failures": 1,
+          "switches": 0,
+          "blocks": 5,
+          "instructions": 2
+        },
+        "expected_iterations": 0,
+        "stage0_loop_instruction_facts": []
+      },
+      {
+        "id": "conditional_return_counted_iteration",
+        "source_sha256": "61e9c91e4e651cedffc7fa4847067aba715edbfe23abdfafe6e82dd032290a28",
+        "source_bytes": 175,
+        "stage0_ssa_shape": {
+          "functions": 1,
+          "branches": 2,
+          "jumps": 3,
+          "returns": 2,
+          "failures": 1,
+          "switches": 0,
+          "blocks": 8,
+          "instructions": 9
+        },
+        "expected_iterations": 1,
+        "stage0_loop_instruction_facts": [
+          {
+            "role": "bound_initialization",
+            "ssa_kind": "Constant",
+            "value": 4
+          },
+          {
+            "role": "remaining_zero",
+            "ssa_kind": "Constant",
+            "value": 0
+          },
+          {
+            "role": "remaining_guard",
+            "ssa_kind": "IntegerCompare",
+            "predicate": "gt"
+          },
+          {
+            "role": "materialized_index",
+            "ssa_kind": "Integer",
+            "operator": "sub"
+          },
+          {
+            "role": "decrement_constant",
+            "ssa_kind": "Constant",
+            "value": 1
+          },
+          {
+            "role": "remaining_decrement",
+            "ssa_kind": "Integer",
+            "operator": "sub"
+          }
+        ]
+      }
+    ],
+    "case_count": 2
+  },
+  "verified_fact_reuse": {
+    "cold_body_fact_count": 2935,
+    "cold_declaration_fact_count": 2935,
+    "comment_edit_reused_body_facts": 2935,
+    "comment_edit_recomputed_body_facts": 0,
+    "comment_edit_reused_declaration_facts": 2935,
+    "comment_edit_recomputed_declaration_facts": 0,
+    "body_edit_changed_subject": "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit",
+    "body_edit_recomputed": [
+      "mncs:0.2:body:demo.flow_ssa_frontier::run",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit__spec_3c0ffe82",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_unit",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_unit__spec_3c0ffe82",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa__spec_3c0ffe82",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function_source_flow"
+    ],
+    "body_edit_recomputation_reasons": {
+      "mncs:0.2:body:demo.flow_ssa_frontier::run": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_proven_unit__spec_3c0ffe82": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_unit": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.flow.v1::lower_unit__spec_3c0ffe82": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa__spec_3c0ffe82": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::lower_flow_unit_value_ssa_with_imported_schemas": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.ssa.v1::verify_function_source_flow": "dependencies_changed"
+    },
+    "body_edit_reused_body_fact_count": 2925,
+    "body_edit_recomputed_declaration_facts": [],
+    "fresh_process_per_snapshot": true
+  },
+  "invalid_source": {
+    "status": "rejected",
+    "diagnostic_codes": [
+      "MNE155",
+      "MNE103"
+    ],
+    "front_end_invocations": 1,
+    "front_end_outcome": "rejected",
+    "artifact_publication": "not_published",
+    "prior_success_did_not_mask_diagnostic": true
+  },
+  "execution": {
+    "stage0_matches_canonical_vm": true,
+    "artifact_identity_before_edit": "sha256:90491cabb4b9a0c4da51a4cf43d1f9b96cc5bb7c9eca265f60b5bab766d0c6d4",
+    "artifact_identity_after_edit": "sha256:ee32e83e24fef27d294d032cc0645cceb080bd58ab4b023cf310f84c0ba01369",
+    "artifact_regenerated": true,
+    "canonical_vm_artifact_identity": "sha256:ee32e83e24fef27d294d032cc0645cceb080bd58ab4b023cf310f84c0ba01369",
+    "canonical_vm_summaries": [
+      {
+        "case": "fallthrough_join",
+        "summary": {
+          "block_count": 5,
+          "branch_count": 1,
+          "failure_count": 1,
+          "function_count": 1,
+          "instruction_count": 2,
+          "jump_count": 1,
+          "loop_guard_count": 0,
+          "loop_index_advance_count": 0,
+          "loop_index_init_count": 0,
+          "loop_instruction_counts_complete": true,
+          "return_count": 2,
+          "supported_function_count": 1,
+          "switch_count": 0,
+          "valid": true,
+          "verified_function_count": 1
+        },
+        "loop_instruction_counts": {
+          "index_init": 0,
+          "guard": 0,
+          "index_advance": 0
+        },
+        "steps": 3191375
+      },
+      {
+        "case": "conditional_return_counted_iteration",
+        "summary": {
+          "block_count": 8,
+          "branch_count": 2,
+          "failure_count": 1,
+          "function_count": 1,
+          "instruction_count": 6,
+          "jump_count": 3,
+          "loop_guard_count": 1,
+          "loop_index_advance_count": 1,
+          "loop_index_init_count": 1,
+          "loop_instruction_counts_complete": true,
+          "return_count": 2,
+          "supported_function_count": 1,
+          "switch_count": 0,
+          "valid": true,
+          "verified_function_count": 1
+        },
+        "loop_instruction_counts": {
+          "index_init": 1,
+          "guard": 1,
+          "index_advance": 1
+        },
+        "steps": 6230640
+      }
+    ]
+  },
+  "measurements": {
+    "cold_build": {
+      "wall_seconds": 363.60707,
+      "cpu_seconds": 360.36,
+      "peak_rss_bytes": 3244539904,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 5,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "comment_edit_build": {
+      "wall_seconds": 308.869313,
+      "cpu_seconds": 306.09,
+      "peak_rss_bytes": 3649216512,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 5,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "body_edit_build": {
+      "wall_seconds": 395.738146,
+      "cpu_seconds": 392.53,
+      "peak_rss_bytes": 3632984064,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "invalid_source_build": {
+      "wall_seconds": 28.514772,
+      "cpu_seconds": 28.31,
+      "peak_rss_bytes": 2691538944,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "canonical_vm_batch": {
+      "wall_seconds": 30.841896,
+      "reported_wall_seconds": 30.841378877987154,
+      "peak_rss_kib": 397736,
+      "calls_bytes": 7996,
+      "results_bytes": 5429
+    },
+    "cgroup_measurement_available": false,
+    "whole_frontier_wall_seconds": 1133.639288
+  },
+  "limitations": [
+    "The closure covers Source, Lexer, Parser, Segment, Decl, Flow, and SSA; it does not verify the full Compiler project.",
+    "The selected Flow-to-SSA workload contains two focused source cases and does not establish full CFG/IR parity.",
+    "This does not establish Stage-1 or Stage-2 succession."
+  ],
+  "stage1_claimed": false,
+  "stage2_claimed": false,
+  "evidence_artifact": "evidence/self-host-flow-ssa-language-fact-reuse-20261021T050817Z.json"
+}
