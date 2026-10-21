@@ -44,6 +44,8 @@ FINITE_TYPE_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/7"
 FINITE_TYPE_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/10"
 RECORD_TYPE_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/8"
 RECORD_TYPE_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/11"
+SSA_FUNCTION_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/9"
+SSA_FUNCTION_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/12"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -78,20 +80,21 @@ def validate_environment_contract_descriptor() -> None:
         (SOURCE_PARSE_CACHE_REQUEST_SCHEMA, SOURCE_PARSE_CACHE_RESPONSE_SCHEMA),
         (FINITE_TYPE_FACT_REQUEST_SCHEMA, FINITE_TYPE_FACT_RESPONSE_SCHEMA),
         (RECORD_TYPE_FACT_REQUEST_SCHEMA, RECORD_TYPE_FACT_RESPONSE_SCHEMA),
+        (SSA_FUNCTION_FACT_REQUEST_SCHEMA, SSA_FUNCTION_FACT_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "11":
-        raise AssertionError("Compiler capability revision must match application-build/11")
+    if contract.get("version") != "12":
+        raise AssertionError("Compiler capability revision must match application-build/12")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        RECORD_TYPE_FACT_REQUEST_SCHEMA, RECORD_TYPE_FACT_RESPONSE_SCHEMA
+        SSA_FUNCTION_FACT_REQUEST_SCHEMA, SSA_FUNCTION_FACT_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/11 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/12 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /11 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /12 request-response pairs")
     if (artifact.get("record_type_declaration_fact_schema")
             != "mncs.language-declaration-verification-fact/1"
             or artifact.get("record_type_declaration_fact_verifier_identity")
@@ -114,6 +117,7 @@ def validate_environment_contract_descriptor() -> None:
         SOURCE_PARSE_CACHE_REQUEST_SCHEMA: SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
         FINITE_TYPE_FACT_REQUEST_SCHEMA: FINITE_TYPE_FACT_RESPONSE_SCHEMA,
         RECORD_TYPE_FACT_REQUEST_SCHEMA: RECORD_TYPE_FACT_RESPONSE_SCHEMA,
+        SSA_FUNCTION_FACT_REQUEST_SCHEMA: SSA_FUNCTION_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -420,6 +424,7 @@ def invoke(
         SOURCE_PARSE_CACHE_RESPONSE_SCHEMA,
         FINITE_TYPE_FACT_RESPONSE_SCHEMA,
         RECORD_TYPE_FACT_RESPONSE_SCHEMA,
+        SSA_FUNCTION_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):
@@ -778,6 +783,68 @@ def main() -> None:
                 or record_type_warm_work.get("reused_record_type_declaration_facts")
                 or record_type_warm_work.get("record_type_declaration_verification") != "not_run"):
             raise AssertionError("Environment exact cache hit claimed Language record-type verification")
+
+        ssa_fact_request = dict(parse_request)
+        ssa_fact_request["schema_version"] = SSA_FUNCTION_FACT_REQUEST_SCHEMA
+        ssa_fact_request["generic_seeds"] = []
+        ssa_fact_request_path = base / "ssa-function-fact-request.json"
+        write_json(ssa_fact_request_path, ssa_fact_request)
+        ssa_fact_cache_dir = base / "ssa-function-fact-cache"
+        ssa_fact_cache_arg = ssa_fact_cache_dir.relative_to(ROOT).as_posix()
+        ssa_fact_cold_dir = base / "ssa-function-fact-cold-output"
+        ssa_fact_cold_dir.mkdir()
+        ssa_fact_cold, ssa_fact_cold_response, ssa_fact_cold_elapsed, ssa_fact_cold_metrics = invoke(
+            ["--request-file", ssa_fact_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", ssa_fact_cache_arg],
+            output_dir=ssa_fact_cold_dir,
+            cache_dir=ssa_fact_cache_dir,
+        )
+        ssa_fact_work = ssa_fact_cold_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        if (ssa_fact_cold_response.get("schema_version") != SSA_FUNCTION_FACT_RESPONSE_SCHEMA
+                or ssa_fact_cold_response.get("status") != "verified"
+                or ssa_fact_work.get("schema_version")
+                != "mncs.compiler.application-build-verification-work/7"
+                or ssa_fact_work.get("front_end_invocations") != 1
+                or not ssa_fact_work.get("recomputed_ssa_function_facts")
+                or ssa_fact_work.get("reused_ssa_function_facts")
+                or ssa_fact_work.get("ssa_function_verification") != "recomputed"):
+            raise AssertionError(
+                "Environment provider did not route /9 through Language SSA function verification: "
+                + json.dumps(ssa_fact_work, sort_keys=True)[:4000]
+            )
+        ssa_fact_key = ssa_fact_cold_response.get("cache", {}).get("key", "")
+        ssa_fact_entry_path = (
+            ssa_fact_cache_dir / "application-builds"
+            / f"{ssa_fact_key.removeprefix('sha256:')}.json"
+        )
+        ssa_fact_entry = json.loads(ssa_fact_entry_path.read_text(encoding="utf-8"))
+        ssa_function_facts = ssa_fact_entry.get("ssa_function_verification_facts")
+        if (ssa_fact_entry.get("schema_version")
+                != "mncs.compiler.application-build-cache-entry/9"
+                or not isinstance(ssa_function_facts, list)
+                or not ssa_function_facts
+                or not ssa_fact_entry.get("ssa_function_verification_facts_sha256")):
+            raise AssertionError("Environment provider did not persist bound Language SSA facts")
+
+        ssa_fact_warm_dir = base / "ssa-function-fact-warm-output"
+        ssa_fact_warm_dir.mkdir()
+        ssa_fact_warm, ssa_fact_warm_response, ssa_fact_warm_elapsed, ssa_fact_warm_metrics = invoke(
+            ["--request-file", ssa_fact_request_path.relative_to(ROOT).as_posix(),
+             "--cache-dir", ssa_fact_cache_arg],
+            output_dir=ssa_fact_warm_dir,
+            cache_dir=ssa_fact_cache_dir,
+        )
+        ssa_fact_warm_work = ssa_fact_warm_response.get("cache", {}).get(
+            "verification_work", {}
+        )
+        if (ssa_fact_warm_response.get("schema_version") != SSA_FUNCTION_FACT_RESPONSE_SCHEMA
+                or ssa_fact_warm_response.get("cache", {}).get("status") != "hit"
+                or ssa_fact_warm_work.get("front_end_invocations") != 0
+                or ssa_fact_warm_work.get("reused_ssa_function_facts")
+                or ssa_fact_warm_work.get("ssa_function_verification") != "not_run"):
+            raise AssertionError("Environment exact cache hit claimed Language SSA verification reuse")
 
         parse_comment_request = dict(parse_request)
         parse_comment_request["root_source"] = (
@@ -1569,6 +1636,31 @@ def main() -> None:
                     "provider_metrics": record_type_warm_metrics,
                 },
             },
+            "language_ssa_function_verification_fact_reuse": {
+                "request_schema": SSA_FUNCTION_FACT_REQUEST_SCHEMA,
+                "response_schema": ssa_fact_cold_response.get("schema_version"),
+                "cache_entry_schema": ssa_fact_entry.get("schema_version"),
+                "cold": {
+                    "provider_status": ssa_fact_cold.get("status"),
+                    "cache_status": ssa_fact_cold_response.get("cache", {}).get("status"),
+                    "recomputed_ssa_function_fact_count": len(
+                        ssa_fact_work.get("recomputed_ssa_function_facts", [])
+                    ),
+                    "stored_ssa_function_fact_count": len(ssa_function_facts),
+                    "provider_wall_seconds": round(ssa_fact_cold_elapsed, 6),
+                    "provider_metrics": ssa_fact_cold_metrics,
+                },
+                "fresh_process_warm": {
+                    "provider_status": ssa_fact_warm.get("status"),
+                    "cache_status": ssa_fact_warm_response.get("cache", {}).get("status"),
+                    "front_end_invocations": ssa_fact_warm_work.get("front_end_invocations"),
+                    "ssa_function_verification": ssa_fact_warm_work.get(
+                        "ssa_function_verification"
+                    ),
+                    "provider_wall_seconds": round(ssa_fact_warm_elapsed, 6),
+                    "provider_metrics": ssa_fact_warm_metrics,
+                },
+            },
             "limitations": [
                 "This invokes the local canonical VM but does not exercise Forge, the live Environment provider route, or canonical Store execution.",
                 "CPU and peak RSS are sampled across the provider process tree; brief peaks between 10 ms samples may be missed, and cgroup memory was unavailable.",
@@ -1600,6 +1692,20 @@ def main() -> None:
                 "language_record_type_fact_contract_routed": (
                     record_type_cold_response.get("schema_version")
                     == RECORD_TYPE_FACT_RESPONSE_SCHEMA
+                ),
+                "language_ssa_function_fact_contract_routed": (
+                    ssa_fact_cold_response.get("schema_version")
+                    == SSA_FUNCTION_FACT_RESPONSE_SCHEMA
+                ),
+                "language_ssa_function_facts_stored_separately": (
+                    ssa_fact_entry.get("schema_version")
+                    == "mncs.compiler.application-build-cache-entry/9"
+                    and bool(ssa_function_facts)
+                ),
+                "language_ssa_function_exact_cache_hit_did_not_claim_reuse": (
+                    ssa_fact_warm_response.get("cache", {}).get("status") == "hit"
+                    and ssa_fact_warm_work.get("front_end_invocations") == 0
+                    and not ssa_fact_warm_work.get("reused_ssa_function_facts")
                 ),
                 "language_record_type_facts_stored_separately": (
                     record_type_entry.get("schema_version")

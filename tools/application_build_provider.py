@@ -26,6 +26,7 @@ RESPONSE_SCHEMA_BY_REQUEST = {
     "mncs.compiler.application-build-request/6": "mncs.compiler.application-build/9",
     "mncs.compiler.application-build-request/7": "mncs.compiler.application-build/10",
     "mncs.compiler.application-build-request/8": "mncs.compiler.application-build/11",
+    "mncs.compiler.application-build-request/9": "mncs.compiler.application-build/12",
 }
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 INPUT_ARTIFACT_SCHEMA = "mncs.environment.provider-input-artifacts/1"
