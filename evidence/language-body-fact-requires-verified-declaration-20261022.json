@@ -1,0 +1,92 @@
+{
+  "schema_version": "mncs.compiler.language-body-fact-declaration-gate/1",
+  "kind": "language_verified_fact_reuse_regression",
+  "status": "passed",
+  "observed_at": "2026-10-22T00:34:28Z",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "language": {
+    "repository": "mncs-language",
+    "branch": "campaign/language-verified-fact-reuse-20261020",
+    "worktree": ".worktrees/native-app-readiness-20261013/mncs-language/.worktrees/verified-fact-reuse-20261020",
+    "revision": "2ffc662087bfb91a331a73b5efefebf67b056a4d",
+    "files": [
+      {
+        "path": "crates/mncs-model/src/validation.rs",
+        "sha256": "31c19c58ef17d40ad76281bc357b54b60dd2933cfcd689442af0bc1102f0742d"
+      },
+      {
+        "path": "crates/mncs-model/src/verification_facts.rs",
+        "sha256": "75cabb94e9f2d3d745e07fa54bebd7494ec9a736592a76a9688a5fa207dceab3"
+      }
+    ],
+    "implementation": {
+      "previous_behavior": "Language could issue and reuse a function-body fact when that function's declaration check failed.",
+      "current_behavior": "Language issues and reuses a body fact only after accepting a current declaration fact or producing one after successful declaration validation.",
+      "body_policy_identity": "mncs-language-function-body-policy/2",
+      "old_body_facts_invalidated": true,
+      "invalid_declaration_candidate_fact_reused": false,
+      "body_recomputed_on_invalid_declaration": true
+    }
+  },
+  "regression": {
+    "invalid_declaration": "Function declares a storage read effect without declaring the required capability.",
+    "before_fix": "The first invalid validation returned one Verified body fact.",
+    "after_fix": "No body fact is issued; a caller-supplied fact with a matching current body basis is rejected with DeclarationInterfaceChanged and the body is checked again.",
+    "failed_before_fix": true,
+    "passed_after_fix": true
+  },
+  "verification": [
+    {
+      "command": "cargo test -p mncs-model invalid_declaration_does_not_issue_or_reuse_a_body_fact -- --nocapture",
+      "result": "passed",
+      "tests_passed": 1,
+      "tests_failed": 0
+    },
+    {
+      "command": "cargo test -p mncs-model verification_facts::tests -- --nocapture",
+      "result": "passed",
+      "tests_passed": 26,
+      "tests_failed": 0
+    },
+    {
+      "command": "cargo test -p mncs-model",
+      "result": "passed",
+      "tests_passed": 253,
+      "tests_failed": 0
+    },
+    {
+      "command": "cargo test -p mncs-compiler --test module_imports",
+      "result": "passed",
+      "tests_passed": 53,
+      "tests_failed": 0
+    },
+    {
+      "command": "rustfmt --check crates/mncs-model/src/validation.rs crates/mncs-model/src/verification_facts.rs",
+      "result": "passed"
+    },
+    {
+      "command": "git diff --check",
+      "result": "passed"
+    }
+  ],
+  "measurements": {
+    "language_fact_reuse_observed_in_valid_reuse_tests": true,
+    "invalid_declaration_body_facts_reused": 0,
+    "cpu_seconds": null,
+    "peak_rss_bytes": null,
+    "cgroup_memory_peak_bytes": null,
+    "resource_note": "CPU and peak memory were not captured for these test commands; null does not mean zero."
+  },
+  "compiler_integration": {
+    "compiler_language_lock_revision": "d9895afc0a3870c49a04add44204fbf61a902698",
+    "new_language_revision_consumed_by_application_build": false,
+    "note": "The change was verified through the Language model and linked-front-end test targets. The Compiler application-build provider remains pinned to d9895af until this Language revision is integrated and the lock is advanced."
+  },
+  "delivery": {
+    "language_feature_branch_pushed": true,
+    "language_main_merged": false,
+    "language_main_head_at_verification": "4315a5a8b973db95aa77a7936e84296328d901a2",
+    "merge_fence": "A separate live Environment claim covers the Language main checkout and its active feature worktree; the active session is ses_3c436ac8fee86eb7."
+  },
+  "scope": "This closes the invalid-declaration reuse hole in Language-owned body facts. It does not claim that the new Language revision has been consumed by the Compiler application-build provider, that the Language branch is merged, or that Forge application execution has succeeded."
+}
