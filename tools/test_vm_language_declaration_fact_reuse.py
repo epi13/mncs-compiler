@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language fact and SSA artifact reuse through application-build/13."""
+"""Exercise Language fact and SSA artifact reuse through application-build/15."""
 from __future__ import annotations
 
 import copy
@@ -23,10 +23,13 @@ import test_native_application_incremental as incremental
 import test_vm_test_digest_app as digest_app
 
 ROOT = app.ROOT
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/10"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/13"
-CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/9"
-VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/8"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/12"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/15"
+CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/11"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/10"
+FUNCTION_BODY_FACT_SCHEMA = "mncs.language-verification-fact/3"
+FUNCTION_BODY_FACT_VERIFIER = "mncs-language-function-body-validator/4"
+FUNCTION_BODY_FACT_POLICY = "mncs-language-function-body-policy/2"
 FACT_SCHEMA = "mncs.language-declaration-verification-fact/1"
 FUNCTION_DECLARATION_VERIFIER = "mncs-language-function-declaration-validator/1"
 FINITE_TYPE_VERIFIER = "mncs-language-finite-type-validator/1"
@@ -178,6 +181,13 @@ def require_contract(label: str, response: dict) -> tuple[dict, dict]:
     if (cache.get("schema_version") != CACHE_OBSERVATION_SCHEMA
             or work.get("schema_version") != VERIFICATION_WORK_SCHEMA):
         raise AssertionError(f"{label} omitted declaration-fact work telemetry")
+    if (work.get("language_function_body_verification_fact_schema")
+            != FUNCTION_BODY_FACT_SCHEMA
+            or work.get("language_function_body_fact_verifier_identity")
+            != FUNCTION_BODY_FACT_VERIFIER
+            or work.get("language_function_body_fact_policy_identity")
+            != FUNCTION_BODY_FACT_POLICY):
+        raise AssertionError(f"{label} omitted the Language body-fact verifier policy identity")
     if work.get("language_declaration_verification_fact_schema") != FACT_SCHEMA:
         raise AssertionError(f"{label} did not identify Language's declaration-fact contract")
     if work.get("language_finite_type_declaration_verification_fact_schema") != FACT_SCHEMA:
@@ -373,6 +383,12 @@ def compact(stage: dict) -> dict:
     return {
         "response_schema": response.get("schema_version"),
         "cache_schema": stage["cache"].get("schema_version"),
+        "function_body_fact_schema": work.get(
+            "language_function_body_verification_fact_schema"),
+        "function_body_fact_verifier_identity": work.get(
+            "language_function_body_fact_verifier_identity"),
+        "function_body_fact_policy_identity": work.get(
+            "language_function_body_fact_policy_identity"),
         "cache_status": stage["cache"].get("status"),
         "frontend_invocations": work.get("front_end_invocations"),
         "reused_declaration_fact_count": len(work["reused_declaration_facts"]),
@@ -1240,7 +1256,7 @@ def main() -> None:
 
         language_lock = json.loads((ROOT / "mncs-language.lock.json").read_text(encoding="utf-8"))
         evidence = {
-            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/4",
+            "schema_version": "mncs.compiler.language-declaration-fact-reuse-evidence/5",
             "recorded_at": datetime.now(timezone.utc).isoformat(),
             "compiler": {
                 "repository": "mncs-compiler",
@@ -1251,6 +1267,9 @@ def main() -> None:
                 "repository": "mncs-language",
                 "revision": language_lock.get("revision"),
                 "fact_schema": FACT_SCHEMA,
+                "function_body_fact_schema": FUNCTION_BODY_FACT_SCHEMA,
+                "function_body_fact_verifier_identity": FUNCTION_BODY_FACT_VERIFIER,
+                "function_body_fact_policy_identity": FUNCTION_BODY_FACT_POLICY,
             },
             "workload": {
                 "repository": "mncs-test",

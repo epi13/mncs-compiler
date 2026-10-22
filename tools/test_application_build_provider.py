@@ -50,6 +50,8 @@ SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-re
 SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/13"
 DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-request/11"
 DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/14"
+FUNCTION_BODY_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/12"
+FUNCTION_BODY_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/15"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -87,20 +89,21 @@ def validate_environment_contract_descriptor() -> None:
         (SSA_FUNCTION_FACT_REQUEST_SCHEMA, SSA_FUNCTION_FACT_RESPONSE_SCHEMA),
         (SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA, SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA),
         (DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA, DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA),
+        (FUNCTION_BODY_FACT_REQUEST_SCHEMA, FUNCTION_BODY_FACT_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "14":
-        raise AssertionError("Compiler capability revision must match application-build/14")
+    if contract.get("version") != "15":
+        raise AssertionError("Compiler capability revision must match application-build/15")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA, DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA
+        FUNCTION_BODY_FACT_REQUEST_SCHEMA, FUNCTION_BODY_FACT_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/14 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/15 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /14 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /15 request-response pairs")
     if (artifact.get("record_type_declaration_fact_schema")
             != "mncs.language-declaration-verification-fact/1"
             or artifact.get("record_type_declaration_fact_verifier_identity")
@@ -109,7 +112,13 @@ def validate_environment_contract_descriptor() -> None:
             != "mncs-language-record-type-policy/1"):
         raise AssertionError("Compiler descriptor omitted the Language record fact verifier contract")
     if (artifact.get("verification_work_schema")
-            != "mncs.compiler.application-build-verification-work/9"
+            != "mncs.compiler.application-build-verification-work/10"
+            or artifact.get("function_body_verification_fact_schema")
+            != "mncs.language-verification-fact/3"
+            or artifact.get("function_body_verification_fact_verifier_identity")
+            != "mncs-language-function-body-validator/4"
+            or artifact.get("function_body_verification_fact_policy_identity")
+            != "mncs-language-function-body-policy/2"
             or artifact.get("application_build_cache_entry_schema")
             != "mncs.compiler.application-build-cache-entry/10"
             or artifact.get("language_verification_dependency_summary_cache_schema")
@@ -141,6 +150,7 @@ def validate_environment_contract_descriptor() -> None:
         SSA_FUNCTION_FACT_REQUEST_SCHEMA: SSA_FUNCTION_FACT_RESPONSE_SCHEMA,
         SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA: SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA,
         DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA: DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA,
+        FUNCTION_BODY_FACT_REQUEST_SCHEMA: FUNCTION_BODY_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 

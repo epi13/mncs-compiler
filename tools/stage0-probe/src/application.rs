@@ -128,6 +128,7 @@ const CONTRACT_V8: &str = "mncs.compiler.application-build/11";
 const CONTRACT_V9: &str = "mncs.compiler.application-build/12";
 const CONTRACT_V10: &str = "mncs.compiler.application-build/13";
 const CONTRACT_V11: &str = "mncs.compiler.application-build/14";
+const CONTRACT_V12: &str = "mncs.compiler.application-build/15";
 const CAPABILITY_DISPATCH_SCHEMA: &str = "mncs.compiler.capability-dispatch/1";
 const REQUEST_V1: &str = "mncs.compiler.application-build-request/1";
 const REQUEST_V2: &str = "mncs.compiler.application-build-request/2";
@@ -140,6 +141,7 @@ const REQUEST_V8: &str = "mncs.compiler.application-build-request/8";
 const REQUEST_V9: &str = "mncs.compiler.application-build-request/9";
 const REQUEST_V10: &str = "mncs.compiler.application-build-request/10";
 const REQUEST_V11: &str = "mncs.compiler.application-build-request/11";
+const REQUEST_V12: &str = "mncs.compiler.application-build-request/12";
 const VM_TARGET: &str = "mncs-vm-0.1";
 const MAX_MODULES: usize = 64;
 const MAX_SOURCE_BYTES: usize = 4 * 1024 * 1024;
@@ -259,6 +261,7 @@ fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Va
         || contract == CONTRACT_V9
         || contract == CONTRACT_V10
         || contract == CONTRACT_V11
+        || contract == CONTRACT_V12
     {
         response
             .as_object_mut()
@@ -273,6 +276,7 @@ fn error_contract(contract: &str, status: &str, code: &str, message: &str) -> Va
         || contract == CONTRACT_V9
         || contract == CONTRACT_V10
         || contract == CONTRACT_V11
+        || contract == CONTRACT_V12
     {
         response
             .as_object_mut()
@@ -650,25 +654,38 @@ fn annotate_cache_with_basis(
                 | CONTRACT_V9
                 | CONTRACT_V10
                 | CONTRACT_V11
+                | CONTRACT_V12
         )
     );
     let source_parse_cache_contract = matches!(
         response_contract.as_deref(),
-        Some(CONTRACT_V6 | CONTRACT_V7 | CONTRACT_V8 | CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11)
+        Some(
+            CONTRACT_V6
+                | CONTRACT_V7
+                | CONTRACT_V8
+                | CONTRACT_V9
+                | CONTRACT_V10
+                | CONTRACT_V11
+                | CONTRACT_V12
+        )
     );
     let record_type_facts_contract = matches!(
         response_contract.as_deref(),
-        Some(CONTRACT_V8 | CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11)
+        Some(CONTRACT_V8 | CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12)
     );
     let ssa_function_facts_contract = matches!(
         response_contract.as_deref(),
-        Some(CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11)
+        Some(CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12)
     );
     let ssa_function_artifact_cache_contract = matches!(
         response_contract.as_deref(),
-        Some(CONTRACT_V10 | CONTRACT_V11)
+        Some(CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12)
     );
-    let dependency_summary_cache_contract = response_contract.as_deref() == Some(CONTRACT_V11);
+    let function_body_fact_identity_contract = response_contract.as_deref() == Some(CONTRACT_V12);
+    let dependency_summary_cache_contract = matches!(
+        response_contract.as_deref(),
+        Some(CONTRACT_V11 | CONTRACT_V12)
+    );
     if let Some(object) = response.as_object_mut() {
         let frontend_invoked = recomputed_units.contains(&"source_semantic_check");
         let source_stage = if frontend_invoked {
@@ -726,7 +743,9 @@ fn annotate_cache_with_basis(
         object.insert(
             "cache".to_owned(),
             json!({
-                "schema_version": if ssa_function_artifact_cache_contract {
+                "schema_version": if function_body_fact_identity_contract {
+                    "mncs.compiler.application-build-cache-observation/11"
+                } else if ssa_function_artifact_cache_contract {
                     if dependency_summary_cache_contract {
                         "mncs.compiler.application-build-cache-observation/10"
                     } else {
@@ -751,7 +770,9 @@ fn annotate_cache_with_basis(
                 "reused_units": reused_units,
                 "recomputed_units": recomputed_units,
                 "verification_work": {
-                    "schema_version": if ssa_function_artifact_cache_contract {
+                    "schema_version": if function_body_fact_identity_contract {
+                        "mncs.compiler.application-build-verification-work/10"
+                    } else if ssa_function_artifact_cache_contract {
                         if dependency_summary_cache_contract {
                             "mncs.compiler.application-build-verification-work/9"
                         } else {
@@ -838,6 +859,27 @@ fn annotate_cache_with_basis(
                 );
             }
         }
+        if function_body_fact_identity_contract {
+            if let Some(work) = object
+                .get_mut("cache")
+                .and_then(Value::as_object_mut)
+                .and_then(|cache| cache.get_mut("verification_work"))
+                .and_then(Value::as_object_mut)
+            {
+                work.insert(
+                    "language_function_body_verification_fact_schema".to_owned(),
+                    json!(mncs_model::VERIFICATION_FACT_SCHEMA_VERSION),
+                );
+                work.insert(
+                    "language_function_body_fact_verifier_identity".to_owned(),
+                    json!(mncs_model::VERIFICATION_FACT_VERIFIER_ID),
+                );
+                work.insert(
+                    "language_function_body_fact_policy_identity".to_owned(),
+                    json!(mncs_model::VERIFICATION_FACT_POLICY_ID),
+                );
+            }
+        }
         if source_parse_cache_contract {
             if let Some(work) = object
                 .get_mut("cache")
@@ -873,7 +915,14 @@ fn annotate_cache_with_basis(
         }
         if matches!(
             response_contract.as_deref(),
-            Some(CONTRACT_V7 | CONTRACT_V8 | CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11)
+            Some(
+                CONTRACT_V7
+                    | CONTRACT_V8
+                    | CONTRACT_V9
+                    | CONTRACT_V10
+                    | CONTRACT_V11
+                    | CONTRACT_V12
+            )
         ) {
             if let Some(work) = object
                 .get_mut("cache")
@@ -1049,6 +1098,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/7"
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
         )
     ) {
         if let Some(record_reuse) = record_type_declaration_reuse {
@@ -1148,6 +1198,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/7"
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
         )
     ) {
         if let Some(declaration_reuse) = declaration_reuse {
@@ -1197,6 +1248,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/7"
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
         )
     ) {
         if let Some(reuse) = finite_type_declaration_reuse {
@@ -1276,6 +1328,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/7"
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
         )
     ) {
         work.insert(
@@ -1289,6 +1342,7 @@ fn annotate_language_fact_work(
             "mncs.compiler.application-build-verification-work/7"
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
         )
     ) {
         if let Some(ssa_fact_work) = ssa_function_fact_work {
@@ -1346,10 +1400,30 @@ fn annotate_language_fact_work(
             );
         }
     }
-    if work_schema.as_deref() == Some("mncs.compiler.application-build-verification-work/9") {
+    if matches!(
+        work_schema.as_deref(),
+        Some(
+            "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
+        )
+    ) {
         work.insert(
             "verification_dependency_summary_cache".to_owned(),
             verification_dependency_summary_cache_work_value(dependency_summary_cache_reuse),
+        );
+    }
+    if work_schema.as_deref() == Some("mncs.compiler.application-build-verification-work/10") {
+        work.insert(
+            "language_function_body_verification_fact_schema".to_owned(),
+            json!(mncs_model::VERIFICATION_FACT_SCHEMA_VERSION),
+        );
+        work.insert(
+            "language_function_body_fact_verifier_identity".to_owned(),
+            json!(mncs_model::VERIFICATION_FACT_VERIFIER_ID),
+        );
+        work.insert(
+            "language_function_body_fact_policy_identity".to_owned(),
+            json!(mncs_model::VERIFICATION_FACT_POLICY_ID),
         );
     }
     if matches!(
@@ -1357,6 +1431,7 @@ fn annotate_language_fact_work(
         Some(
             "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
+                | "mncs.compiler.application-build-verification-work/10"
         )
     ) {
         if let Some(ssa_fact_work) = ssa_function_fact_work {
@@ -3978,6 +4053,7 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
             false,
         ),
         Some(REQUEST_V11) => (CONTRACT_V11, true, true, true, true, true, true, true, true),
+        Some(REQUEST_V12) => (CONTRACT_V12, true, true, true, true, true, true, true, true),
         _ => {
             return error_contract(
                 CONTRACT_V1,
@@ -4003,9 +4079,10 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                             | REQUEST_V9
                             | REQUEST_V10
                             | REQUEST_V11
+                            | REQUEST_V12
                     )
                 ) {
-                    "test_selection is required for application-build-request/5 through /11"
+                    "test_selection is required for application-build-request/5 through /12"
                 } else {
                     "test_selection is required for application-build-request/4"
                 },
@@ -5048,9 +5125,12 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                         reuse_record_type_declaration_facts
                             .then_some(language_record_type_declaration_facts.as_slice()),
                         &source_parse_cache,
-                        matches!(contract, CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11)
-                            .then_some(candidate_ssa_function_facts.as_slice()),
-                        matches!(contract, CONTRACT_V10 | CONTRACT_V11)
+                        matches!(
+                            contract,
+                            CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12
+                        )
+                        .then_some(candidate_ssa_function_facts.as_slice()),
+                        matches!(contract, CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12)
                             .then_some(&ssa_function_artifact_cache),
                     ) {
                         Ok(()) => {
@@ -5113,12 +5193,15 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
     let producer_reference = format!("stage0-probe:{probe_identity}");
     let callable_root_set = callable_roots.iter().cloned().collect::<BTreeSet<_>>();
     let emission_started = Instant::now();
-    let prior_ssa_facts = if matches!(contract, CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11) {
+    let prior_ssa_facts = if matches!(
+        contract,
+        CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12
+    ) {
         prior_ssa_function_facts.as_slice()
     } else {
         &[]
     };
-    let emission = if matches!(contract, CONTRACT_V10 | CONTRACT_V11) {
+    let emission = if matches!(contract, CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12) {
         match vm_emit::application_lowering_program_for_callables(
             &program,
             &callable_root_set,
@@ -5504,14 +5587,17 @@ pub(crate) fn compile_application(request: &Value, toolchain: Option<&ToolchainI
                 reuse_record_type_declaration_facts
                     .then_some(language_record_type_declaration_facts.as_slice()),
                 &source_parse_cache,
-                matches!(contract, CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11)
-                    .then(|| {
-                        ssa_function_fact_work
-                            .as_ref()
-                            .map(|work| work.facts.as_slice())
-                    })
-                    .flatten(),
-                matches!(contract, CONTRACT_V10 | CONTRACT_V11)
+                matches!(
+                    contract,
+                    CONTRACT_V9 | CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12
+                )
+                .then(|| {
+                    ssa_function_fact_work
+                        .as_ref()
+                        .map(|work| work.facts.as_slice())
+                })
+                .flatten(),
+                matches!(contract, CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12)
                     .then_some(&ssa_function_artifact_cache),
             ) {
                 Ok(()) => {
