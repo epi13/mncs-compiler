@@ -16,6 +16,11 @@ from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "tools"))
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402
+
+LOCKED_PROBE = ensure_locked_stage0_probe(ROOT)
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(LOCKED_PROBE)
+os.environ["MNCS_PROBE_BIN"] = str(LOCKED_PROBE)
 import test_vm_native_application as support  # noqa: E402
 
 
@@ -38,7 +43,7 @@ TEST_ROOT = find_repository("mncs-test", "MNCS_TEST_ROOT")
 VM_ROOT = find_repository("mncs-vm", "MNCS_VM_ROOT")
 PROBE = Path(os.environ.get(
     "MNCS_AUTOMATION_PROBE_BIN",
-    ROOT / "tools/stage0-probe/target/release/mncs-compiler-stage0-probe",
+    LOCKED_PROBE,
 ))
 VM_BIN = Path(os.environ.get("MNCS_AUTOMATION_VM_BIN", VM_ROOT / "target/debug/mncs-vm"))
 CACHE_ROOT = ROOT / ".build/native-app-readiness/automation-application-cache"
@@ -56,7 +61,7 @@ ROOTS = [
     {"module": AUTOMATION_MODULE, "function": "evaluate_tick"},
     {"module": AUTOMATION_MODULE, "function": "evaluate_resource_headroom"},
 ]
-LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
+LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/4"
 LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
 VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/2"
 

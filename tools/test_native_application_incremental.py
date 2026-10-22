@@ -151,9 +151,9 @@ def require_verification_work(
     if (not isinstance(work.get('recomputed_semantic_facts'), list)
             or type(work.get('produced_semantic_fact_count')) is not int):
         raise AssertionError(f'{label} omitted actual Language fact work: {work}')
-    if work.get('language_verification_fact_schema') != 'mncs.language-verification-fact/3':
+    if work.get('language_verification_fact_schema') != 'mncs.language-verification-fact/4':
         raise AssertionError(
-            f'{label} did not consume Language verification fact v3: {work}')
+            f'{label} did not consume Language verification fact v4: {work}')
     if (work.get('semantic_dependency_closure') != dependency_closure
             or work.get('ssa_verification') != ssa_verification
             or work.get('backend_artifact') != backend_artifact):

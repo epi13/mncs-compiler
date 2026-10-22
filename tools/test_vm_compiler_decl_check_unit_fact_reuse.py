@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply Language fact v3 reuse to the bounded Compiler Decl frontier.
+"""Apply Language fact v4 reuse to the bounded Compiler Decl frontier.
 
 The selected application contains the current five-module dependency closure
 and invokes mncs.compiler.decl.v1::check_unit on focused declaration cases.
@@ -56,7 +56,7 @@ REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
 CACHE_SCHEMA = "mncs.compiler.application-build-cache-observation/5"
 WORK_SCHEMA = "mncs.compiler.application-build-verification-work/3"
-FACT_SCHEMA = "mncs.language-verification-fact/3"
+FACT_SCHEMA = "mncs.language-verification-fact/4"
 CHECKS = [decl_tests.CHECKS[index] for index in (0, 1, 2)]
 STEP_BUDGET = decl_tests.EXECUTION_STEP_BUDGET
 
@@ -268,7 +268,7 @@ def main() -> dict:
                 or cold.get("cache", {}).get("status") != "miss"
                 or cold.get("cache", {}).get("publication") != "stored"
                 or not cold_work["produced_semantic_fact_count"]):
-            raise AssertionError("cold Decl application did not publish Language v3 facts")
+            raise AssertionError("cold Decl application did not publish Language v4 facts")
 
         comment_request = build_request(modules, comment_root)
         comment, comment_metrics = compile_once(

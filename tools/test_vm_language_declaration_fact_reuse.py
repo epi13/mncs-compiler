@@ -25,9 +25,9 @@ import test_vm_test_digest_app as digest_app
 ROOT = app.ROOT
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/12"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/15"
-CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/11"
-VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/10"
-FUNCTION_BODY_FACT_SCHEMA = "mncs.language-verification-fact/3"
+CACHE_OBSERVATION_SCHEMA = "mncs.compiler.application-build-cache-observation/12"
+VERIFICATION_WORK_SCHEMA = "mncs.compiler.application-build-verification-work/11"
+FUNCTION_BODY_FACT_SCHEMA = "mncs.language-verification-fact/4"
 FUNCTION_BODY_FACT_VERIFIER = "mncs-language-function-body-validator/4"
 FUNCTION_BODY_FACT_POLICY = "mncs-language-function-body-policy/2"
 FACT_SCHEMA = "mncs.language-declaration-verification-fact/1"
@@ -255,8 +255,10 @@ def cache_entry(cache_dir: Path, response: dict) -> dict:
         raise AssertionError("application response omitted its exact cache identity")
     path = cache_dir / "application-builds" / f"{key.removeprefix('sha256:')}.json"
     entry = json.loads(path.read_text(encoding="utf-8"))
-    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/10":
-        raise AssertionError("V10 application cache omitted Language SSA function data")
+    if entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/11":
+        raise AssertionError("V11 application cache omitted its Language fact schema identity")
+    if entry.get("language_verification_fact_schema") != FUNCTION_BODY_FACT_SCHEMA:
+        raise AssertionError("application cache misidentified its Language body fact schema")
     facts = entry.get("declaration_verification_facts")
     if not isinstance(facts, list) or not all(
             isinstance(row, dict)
@@ -1277,7 +1279,7 @@ def main() -> None:
                 "root_module": app.APP_MODULE,
                 "callable_roots": [{"module": app.APP_MODULE, "function": "run"}],
                 "selected_tests": "all_source_cases",
-                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/10",
+                "cache_entry_schema": "mncs.compiler.application-build-cache-entry/11",
             },
             "stages": {name: compact(stage) for name, stage in stages.items()},
             "generic_specialization_fact_reuse": generic_specialization_evidence,

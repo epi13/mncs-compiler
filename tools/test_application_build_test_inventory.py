@@ -107,8 +107,8 @@ def frontend_invocations(response: dict) -> int | None:
 
 def require_language_fact_v3(response: dict, label: str) -> dict:
     work = response.get("cache", {}).get("verification_work", {})
-    if work.get("language_verification_fact_schema") != "mncs.language-verification-fact/3":
-        raise AssertionError(f"{label} did not consume Language fact v3: {work}")
+    if work.get("language_verification_fact_schema") != "mncs.language-verification-fact/4":
+        raise AssertionError(f"{label} did not consume Language fact v4: {work}")
     if (not isinstance(work.get("reused_semantic_facts"), list)
             or not isinstance(work.get("recomputed_semantic_facts"), list)
             or type(work.get("produced_semantic_fact_count")) is not int):
@@ -2278,7 +2278,7 @@ def run_real_mncs_test_suite() -> dict:
             raise AssertionError("real mncs-test source no longer has one arithmetic Test declaration")
         comment_source = source.replace(
             location_marker,
-            "// Language fact v3 source-location refresh\n" + location_marker,
+            "// Language fact v4 source-location refresh\n" + location_marker,
             1,
         )
         comment_request = request(
@@ -3579,7 +3579,7 @@ def main() -> None:
                 ),
                 "real_mncs_test_self_suite_reuses_language_v3_facts_and_refreshes_locations": (
                     real_mncs_test_suite["language_fact_v3_reuse"]["schema"]
-                    == "mncs.language-verification-fact/3"
+                    == "mncs.language-verification-fact/4"
                     and real_mncs_test_suite["language_fact_v3_reuse"][
                         "comment_edit_reused_all_facts"
                     ]
@@ -3768,7 +3768,7 @@ def main() -> None:
                 "reports clean embedded source inputs. This proves the production Test VM consumer "
                 "can run this compiler artifact, without modifying mncs-test or claiming Forge/Environment "
                 "provider publication. A comment-only "
-                "source shift in the real suite reuses every produced Language v3 body fact while refreshing "
+                "source shift in the real suite reuses every produced Language v4 body fact while refreshing "
                 "all current Test source spans and preserving semantic Test identities and the executable "
                 "artifact. A semantics-preserving edit to the imported assertions.from_assertion helper "
                 "rechecks exactly that body and its six real self-suite callers, reuses all unrelated "

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language's real dependency-summary cache through application-build/14."""
+"""Exercise Language fact-seeded dependency summaries through application-build/15."""
 from __future__ import annotations
 
 import hashlib
@@ -12,16 +12,23 @@ import tempfile
 from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+ROOT = Path(__file__).resolve().parents[1]
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe
+
+LOCKED_PROBE = ensure_locked_stage0_probe(ROOT)
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(LOCKED_PROBE)
+os.environ["MNCS_PROBE_BIN"] = str(LOCKED_PROBE)
+
 import test_application_build_provider as provider_tests
 import test_native_application_incremental as incremental
 import test_vm_native_application as app
 
-ROOT = Path(__file__).resolve().parents[1]
-REQUEST_SCHEMA = "mncs.compiler.application-build-request/11"
-RESPONSE_SCHEMA = "mncs.compiler.application-build/14"
-WORK_SCHEMA = "mncs.compiler.application-build-verification-work/9"
-SUMMARY_SCHEMA = "mncs.language-verification-dependency-summary-cache/1"
-SUMMARY_OBSERVATION_SCHEMA = "mncs.language-verification-dependency-summary-cache-observation/1"
+REQUEST_SCHEMA = "mncs.compiler.application-build-request/12"
+RESPONSE_SCHEMA = "mncs.compiler.application-build/15"
+WORK_SCHEMA = "mncs.compiler.application-build-verification-work/11"
+FACT_SCHEMA = "mncs.language-verification-fact/4"
+SUMMARY_SCHEMA = "mncs.language-verification-dependency-summary-cache/2"
+SUMMARY_OBSERVATION_SCHEMA = "mncs.language-verification-dependency-summary-cache-observation/2"
 SUMMARY_POLICY = "mncs-language-verification-dependency-extractor/1"
 MODULE = "mncs.dependency_cache"
 ROOT_SOURCE = """mncs 0.18;
@@ -71,6 +78,20 @@ def measured_metrics(value: dict) -> dict:
     return result
 
 
+def dependency_summary_subjects(stage: dict, field: str) -> list:
+    work = stage.get("verification_work")
+    if not isinstance(work, dict):
+        return []
+    cache = work.get("verification_dependency_summary_cache")
+    if not isinstance(cache, dict):
+        return []
+    observation = cache.get("observation")
+    if not isinstance(observation, dict):
+        return []
+    values = observation.get(field)
+    return values if isinstance(values, list) else []
+
+
 def request(root_source: str, module_source: str) -> dict:
     return {
         "schema_version": REQUEST_SCHEMA,
@@ -95,6 +116,8 @@ def work_for(label: str, response: dict) -> tuple[dict, dict]:
         raise AssertionError(f"{label}: unexpected response schema {response.get('schema_version')}")
     if work.get("schema_version") != WORK_SCHEMA:
         raise AssertionError(f"{label}: unexpected verification-work schema {work.get('schema_version')}")
+    if work.get("language_verification_fact_schema") != FACT_SCHEMA:
+        raise AssertionError(f"{label}: Compiler did not consume Language fact v4: {work}")
     summary = work.get("verification_dependency_summary_cache", {})
     if (summary.get("schema_version") != SUMMARY_SCHEMA
             or summary.get("observation_schema_version") != SUMMARY_OBSERVATION_SCHEMA
@@ -114,15 +137,22 @@ def subjects(rows: object) -> set[str]:
 
 def assert_units(label: str, work: dict, observation: dict,
                  *, reused_summary: set[str], recomputed_summary: set[str],
-                 reused_facts: set[str], recomputed_facts: set[str]) -> None:
+                 reused_facts: set[str], recomputed_facts: set[str],
+                 fact_seeded_summary: set[str] | None = None) -> None:
+    expected_fact_seeded = fact_seeded_summary or set()
+    actual_fact_seeded = subjects(observation.get("fact_seeded_function_subjects"))
     actual_reused_summary = subjects(observation.get("reused_function_subjects"))
     actual_recomputed_summary = subjects(observation.get("recomputed_function_subjects"))
     actual_reused_facts = subjects(work.get("reused_semantic_facts"))
     actual_recomputed_facts = subjects(work.get("recomputed_semantic_facts"))
-    if actual_reused_summary != reused_summary or actual_recomputed_summary != recomputed_summary:
+    if (actual_fact_seeded != expected_fact_seeded
+            or actual_reused_summary != reused_summary
+            or actual_recomputed_summary != recomputed_summary):
         raise AssertionError(
             f"{label}: incorrect dependency-summary units: "
-            f"reused={sorted(actual_reused_summary)}, recomputed={sorted(actual_recomputed_summary)}"
+            f"fact_seeded={sorted(actual_fact_seeded)}, "
+            f"reused={sorted(actual_reused_summary)}, "
+            f"recomputed={sorted(actual_recomputed_summary)}"
         )
     if actual_reused_facts != reused_facts or actual_recomputed_facts != recomputed_facts:
         raise AssertionError(
@@ -387,9 +417,11 @@ def main() -> None:
             _, fresh_observation = work_for("fresh_process_comment_edit", fresh)
             assert_units(
                 "fresh_process_comment_edit", fresh_work, fresh_observation,
-                reused_summary=set(), recomputed_summary=all_summary_subjects,
+                reused_summary=set(),
+                recomputed_summary={changed_idle_summary},
                 reused_facts=all_body_facts - {changed_idle},
                 recomputed_facts={changed_idle},
+                fact_seeded_summary=all_summary_subjects - {changed_idle_summary},
             )
             if (fresh_cache.get("status") != "hit"
                     or fresh.get("artifact", {}).get("identity")
@@ -461,13 +493,13 @@ def main() -> None:
                 )
             )
             provider_work, provider_cache_observation = assert_frontend(
-                "environment_provider_request_11", provider_response, 1
+                "environment_provider_request_12", provider_response, 1
             )
             _, provider_dependency_observation = work_for(
-                "environment_provider_request_11", provider_response
+                "environment_provider_request_12", provider_response
             )
             assert_units(
-                "environment_provider_request_11", provider_work,
+                "environment_provider_request_12", provider_work,
                 provider_dependency_observation,
                 reused_summary=set(), recomputed_summary=all_summary_subjects,
                 reused_facts=set(), recomputed_facts=all_body_facts,
@@ -479,9 +511,9 @@ def main() -> None:
                     or provider_response.get("artifact", {}).get("identity")
                     != reachable.get("artifact", {}).get("identity")):
                 raise AssertionError(
-                    "Environment provider did not route request/11 to its verified /14 result"
+                    "Environment provider did not route request/12 to its verified /15 result"
                 )
-            stages["environment_provider_request_11"] = {
+            stages["environment_provider_request_12"] = {
                 "provider_summary": provider_summary,
                 "response_schema": provider_response.get("schema_version"),
                 "cache_status": provider_cache_observation.get("status"),
@@ -491,7 +523,7 @@ def main() -> None:
             }
 
     evidence = {
-        "schema_version": "mncs.compiler.language-dependency-summary-cache-evidence/1",
+        "schema_version": "mncs.compiler.language-dependency-summary-cache-evidence/2",
         "compiler_repository": str(ROOT),
         "compiler_revision_before_test": root_hash,
         "compiler_branch": git("branch", "--show-current"),
@@ -502,6 +534,7 @@ def main() -> None:
         "request_schema": REQUEST_SCHEMA,
         "response_schema": RESPONSE_SCHEMA,
         "verification_work_schema": WORK_SCHEMA,
+        "language_verification_fact_schema": FACT_SCHEMA,
         "language_cache_schema": SUMMARY_SCHEMA,
         "language_cache_observation_schema": SUMMARY_OBSERVATION_SCHEMA,
         "language_cache_policy_identity": SUMMARY_POLICY,
@@ -512,15 +545,16 @@ def main() -> None:
         "stages": stages,
         "stage0_process_stderr": {"initial_process": probe_tail, "fresh_process": fresh_probe_tail},
         "language_dependency_summaries_actually_reused": (
-            len(stages["comment_edit"]["verification_work"]
-                ["verification_dependency_summary_cache"]["observation"]
-                ["reused_function_subjects"])
-            + len(stages["unreachable_body_edit"]["verification_work"]
-                  ["verification_dependency_summary_cache"]["observation"]
-                  ["reused_function_subjects"])
-            + len(stages["reachable_imported_body_edit"]["verification_work"]
-                  ["verification_dependency_summary_cache"]["observation"]
-                  ["reused_function_subjects"])
+            sum(
+                len(dependency_summary_subjects(stage, "reused_function_subjects"))
+                + len(dependency_summary_subjects(stage, "fact_seeded_function_subjects"))
+                for stage in stages.values()
+            )
+        ),
+        "fresh_process_fact_seeded_dependency_summaries": len(
+            stages["fresh_process_comment_edit"]["verification_work"]
+            ["verification_dependency_summary_cache"]["observation"]
+            ["fact_seeded_function_subjects"]
         ),
         "language_verified_facts_reused": sum(
             len(stage["verification_work"].get("reused_semantic_facts", []))

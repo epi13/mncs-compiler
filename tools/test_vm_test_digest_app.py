@@ -191,9 +191,9 @@ def compile_request(root: str, modules: dict[str, str]) -> dict:
 
 def require_language_fact_v3(build: dict, label: str) -> dict:
     work = build.get('cache', {}).get('verification_work', {})
-    if work.get('language_verification_fact_schema') != 'mncs.language-verification-fact/3':
+    if work.get('language_verification_fact_schema') != 'mncs.language-verification-fact/4':
         raise AssertionError(
-            f'{label} did not consume Language verification fact v3: {work}'
+            f'{label} did not consume Language verification fact v4: {work}'
         )
     if (not isinstance(work.get('reused_semantic_facts'), list)
             or not isinstance(work.get('recomputed_semantic_facts'), list)
@@ -960,7 +960,7 @@ def main() -> None:
         },
         'feature_evidence': [
             'real mncs-test source module with three imported modules',
-            'cold digest application body facts are produced by Language verification fact v3',
+            'cold digest application body facts are produced by Language verification fact v4',
             'the effectful digest application artifact is reused from a fresh probe process without invoking the frontend',
             'a comment-only edit in an imported Test module reruns the frontend, reuses every verified body fact, and retains identical executable artifact bytes',
             'nominal structured request and result with bounded nested sequences',
@@ -974,7 +974,7 @@ def main() -> None:
         ],
         'limitations': [
             'The file provider is a bounded test adapter for the canonical VM Provider API; it is not a production MNCS service provider.',
-            'This digest-specific run proves comment-only Language v3 fact reuse; changed-body and dependency invalidation are measured in the native incremental Gate B workload.',
+            'This digest-specific run proves comment-only Language v4 fact reuse; changed-body and dependency invalidation are measured in the native incremental Gate B workload.',
             'The pure digest body is compared to Stage-0; this does not prove full mncs-test command parity or compiler succession.',
             'The provider harness is a separate Rust test program in the Compiler repository; it performs bounded structured file transport and validates the capability mapping from admitted SSA.',
             'The digest application itself does not execute through Forge; Environment publication here stores verifier outputs, not a Forge application-execution receipt.',

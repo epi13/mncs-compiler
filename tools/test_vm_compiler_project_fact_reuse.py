@@ -79,7 +79,7 @@ REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
 CACHE_SCHEMA = "mncs.compiler.application-build-cache-observation/5"
 WORK_SCHEMA = "mncs.compiler.application-build-verification-work/3"
-FACT_SCHEMA = "mncs.language-verification-fact/3"
+FACT_SCHEMA = "mncs.language-verification-fact/4"
 TARGET_SUBJECT = (
     "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal"
 )

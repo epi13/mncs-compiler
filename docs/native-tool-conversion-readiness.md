@@ -559,7 +559,7 @@ consumption, Monitor correlation, and Automation eligibility remain unproven.
 ## Language-owned verification fact reuse in Compiler Project (2026-10-21)
 
 The Compiler application-build now consumes Language's
-`mncs.language-verification-fact/3` and declaration facts. The real eight-module
+`mncs.language-verification-fact/4` and declaration facts. The real eight-module
 Compiler Project workload contains 2,031 cold body facts and 2,031 declaration
 facts. A comment-only edit reused all 2,031 of each. Editing an uncalled helper
 recomputed that body and reused 2,030 body facts. Editing a reachable function

@@ -38,6 +38,8 @@ static LANGUAGE_VERIFICATION_DEPENDENCY_SUMMARY_CACHE: OnceLock<
 struct ApplicationCacheEntry<'a> {
     schema_version: &'a str,
     key: &'a str,
+    #[serde(default)]
+    language_verification_fact_schema: Option<&'a str>,
     response_sha256: &'a str,
     response: &'a serde_json::value::RawValue,
     verification_facts_sha256: &'a str,
@@ -72,6 +74,7 @@ struct ApplicationCacheEntry<'a> {
 struct ApplicationCachePublishEntry<'a> {
     schema_version: &'static str,
     key: &'a str,
+    language_verification_fact_schema: &'static str,
     response_sha256: String,
     response: &'a Value,
     verification_facts_sha256: String,
@@ -681,7 +684,10 @@ fn annotate_cache_with_basis(
         response_contract.as_deref(),
         Some(CONTRACT_V10 | CONTRACT_V11 | CONTRACT_V12)
     );
-    let function_body_fact_identity_contract = response_contract.as_deref() == Some(CONTRACT_V12);
+    let function_body_fact_identity_contract = matches!(
+        response_contract.as_deref(),
+        Some(CONTRACT_V11 | CONTRACT_V12)
+    );
     let dependency_summary_cache_contract = matches!(
         response_contract.as_deref(),
         Some(CONTRACT_V11 | CONTRACT_V12)
@@ -744,7 +750,7 @@ fn annotate_cache_with_basis(
             "cache".to_owned(),
             json!({
                 "schema_version": if function_body_fact_identity_contract {
-                    "mncs.compiler.application-build-cache-observation/11"
+                    "mncs.compiler.application-build-cache-observation/12"
                 } else if ssa_function_artifact_cache_contract {
                     if dependency_summary_cache_contract {
                         "mncs.compiler.application-build-cache-observation/10"
@@ -771,7 +777,7 @@ fn annotate_cache_with_basis(
                 "recomputed_units": recomputed_units,
                 "verification_work": {
                     "schema_version": if function_body_fact_identity_contract {
-                        "mncs.compiler.application-build-verification-work/10"
+                        "mncs.compiler.application-build-verification-work/11"
                     } else if ssa_function_artifact_cache_contract {
                         if dependency_summary_cache_contract {
                             "mncs.compiler.application-build-verification-work/9"
@@ -1099,6 +1105,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         if let Some(record_reuse) = record_type_declaration_reuse {
@@ -1199,6 +1206,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         if let Some(declaration_reuse) = declaration_reuse {
@@ -1249,6 +1257,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         if let Some(reuse) = finite_type_declaration_reuse {
@@ -1329,6 +1338,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         work.insert(
@@ -1343,6 +1353,7 @@ fn annotate_language_fact_work(
                 | "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         if let Some(ssa_fact_work) = ssa_function_fact_work {
@@ -1405,6 +1416,7 @@ fn annotate_language_fact_work(
         Some(
             "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         work.insert(
@@ -1412,7 +1424,13 @@ fn annotate_language_fact_work(
             verification_dependency_summary_cache_work_value(dependency_summary_cache_reuse),
         );
     }
-    if work_schema.as_deref() == Some("mncs.compiler.application-build-verification-work/10") {
+    if matches!(
+        work_schema.as_deref(),
+        Some(
+            "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
+        )
+    ) {
         work.insert(
             "language_function_body_verification_fact_schema".to_owned(),
             json!(mncs_model::VERIFICATION_FACT_SCHEMA_VERSION),
@@ -1432,6 +1450,7 @@ fn annotate_language_fact_work(
             "mncs.compiler.application-build-verification-work/8"
                 | "mncs.compiler.application-build-verification-work/9"
                 | "mncs.compiler.application-build-verification-work/10"
+                | "mncs.compiler.application-build-verification-work/11"
         )
     ) {
         if let Some(ssa_fact_work) = ssa_function_fact_work {
@@ -1639,8 +1658,18 @@ fn read_application_cache_with_facts(
             | "mncs.compiler.application-build-cache-entry/8"
             | "mncs.compiler.application-build-cache-entry/9"
             | "mncs.compiler.application-build-cache-entry/10"
+            | "mncs.compiler.application-build-cache-entry/11"
     ) || entry.key != key
     {
+        return None;
+    }
+    if entry.schema_version == "mncs.compiler.application-build-cache-entry/11" {
+        if entry.language_verification_fact_schema
+            != Some(mncs_model::VERIFICATION_FACT_SCHEMA_VERSION)
+        {
+            return None;
+        }
+    } else if entry.language_verification_fact_schema.is_some() {
         return None;
     }
     let response_raw = entry.response.get();
@@ -1689,7 +1718,8 @@ fn read_application_cache_with_facts(
             | "mncs.compiler.application-build-cache-entry/7"
             | "mncs.compiler.application-build-cache-entry/8"
             | "mncs.compiler.application-build-cache-entry/9"
-            | "mncs.compiler.application-build-cache-entry/10",
+            | "mncs.compiler.application-build-cache-entry/10"
+            | "mncs.compiler.application-build-cache-entry/11",
         ) => {
             let raw = raw.get();
             let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
@@ -1715,7 +1745,8 @@ fn read_application_cache_with_facts(
             "mncs.compiler.application-build-cache-entry/7"
             | "mncs.compiler.application-build-cache-entry/8"
             | "mncs.compiler.application-build-cache-entry/9"
-            | "mncs.compiler.application-build-cache-entry/10",
+            | "mncs.compiler.application-build-cache-entry/10"
+            | "mncs.compiler.application-build-cache-entry/11",
         ) => {
             let raw = raw.get();
             let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
@@ -1726,7 +1757,8 @@ fn read_application_cache_with_facts(
         }
         (None, None, "mncs.compiler.application-build-cache-entry/4")
         | (None, None, "mncs.compiler.application-build-cache-entry/5")
-        | (None, None, "mncs.compiler.application-build-cache-entry/6") => Vec::new(),
+        | (None, None, "mncs.compiler.application-build-cache-entry/6")
+        | (None, None, "mncs.compiler.application-build-cache-entry/11") => Vec::new(),
         _ => return None,
     };
     let record_type_declaration_verification_facts = match (
@@ -1739,7 +1771,8 @@ fn read_application_cache_with_facts(
             Some(raw),
             "mncs.compiler.application-build-cache-entry/8"
             | "mncs.compiler.application-build-cache-entry/9"
-            | "mncs.compiler.application-build-cache-entry/10",
+            | "mncs.compiler.application-build-cache-entry/10"
+            | "mncs.compiler.application-build-cache-entry/11",
         ) => {
             let raw = raw.get();
             let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
@@ -1751,7 +1784,8 @@ fn read_application_cache_with_facts(
         (None, None, "mncs.compiler.application-build-cache-entry/4")
         | (None, None, "mncs.compiler.application-build-cache-entry/5")
         | (None, None, "mncs.compiler.application-build-cache-entry/6")
-        | (None, None, "mncs.compiler.application-build-cache-entry/7") => Vec::new(),
+        | (None, None, "mncs.compiler.application-build-cache-entry/7")
+        | (None, None, "mncs.compiler.application-build-cache-entry/11") => Vec::new(),
         _ => return None,
     };
     let ssa_function_verification_facts = match (
@@ -1763,7 +1797,8 @@ fn read_application_cache_with_facts(
             Some(expected_digest),
             Some(raw),
             "mncs.compiler.application-build-cache-entry/9"
-            | "mncs.compiler.application-build-cache-entry/10",
+            | "mncs.compiler.application-build-cache-entry/10"
+            | "mncs.compiler.application-build-cache-entry/11",
         ) => {
             let raw = raw.get();
             let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
@@ -1776,7 +1811,8 @@ fn read_application_cache_with_facts(
         | (None, None, "mncs.compiler.application-build-cache-entry/5")
         | (None, None, "mncs.compiler.application-build-cache-entry/6")
         | (None, None, "mncs.compiler.application-build-cache-entry/7")
-        | (None, None, "mncs.compiler.application-build-cache-entry/8") => Vec::new(),
+        | (None, None, "mncs.compiler.application-build-cache-entry/8")
+        | (None, None, "mncs.compiler.application-build-cache-entry/11") => Vec::new(),
         _ => return None,
     };
     let ssa_function_artifact_cache = match (
@@ -1784,7 +1820,12 @@ fn read_application_cache_with_facts(
         entry.ssa_function_artifact_cache,
         entry.schema_version,
     ) {
-        (Some(expected_digest), Some(raw), "mncs.compiler.application-build-cache-entry/10") => {
+        (
+            Some(expected_digest),
+            Some(raw),
+            "mncs.compiler.application-build-cache-entry/10"
+            | "mncs.compiler.application-build-cache-entry/11",
+        ) => {
             let raw = raw.get();
             let actual_digest = format!("sha256:{}", mncs_model::sha256_hex(raw.as_bytes()));
             if expected_digest != actual_digest {
@@ -1797,7 +1838,8 @@ fn read_application_cache_with_facts(
         | (None, None, "mncs.compiler.application-build-cache-entry/6")
         | (None, None, "mncs.compiler.application-build-cache-entry/7")
         | (None, None, "mncs.compiler.application-build-cache-entry/8")
-        | (None, None, "mncs.compiler.application-build-cache-entry/9") => {
+        | (None, None, "mncs.compiler.application-build-cache-entry/9")
+        | (None, None, "mncs.compiler.application-build-cache-entry/11") => {
             SsaFunctionArtifactCache::default()
         }
         _ => return None,
@@ -2473,18 +2515,9 @@ fn publish_application_cache_with_ssa_facts(
         .transpose()
         .map_err(|error| format!("hash cached Language SSA function artifacts: {error}"))?;
     let entry = ApplicationCachePublishEntry {
-        schema_version: if ssa_function_artifact_cache.is_some() {
-            "mncs.compiler.application-build-cache-entry/10"
-        } else if ssa_function_verification_facts.is_some() {
-            "mncs.compiler.application-build-cache-entry/9"
-        } else if record_type_declaration_verification_facts.is_some() {
-            "mncs.compiler.application-build-cache-entry/8"
-        } else if finite_type_declaration_verification_facts.is_some() {
-            "mncs.compiler.application-build-cache-entry/7"
-        } else {
-            "mncs.compiler.application-build-cache-entry/6"
-        },
+        schema_version: "mncs.compiler.application-build-cache-entry/11",
         key,
+        language_verification_fact_schema: mncs_model::VERIFICATION_FACT_SCHEMA_VERSION,
         response_sha256: sha256_serialized(response)
             .map_err(|error| format!("hash cached response: {error}"))?,
         response,

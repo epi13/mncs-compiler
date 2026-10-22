@@ -12,14 +12,15 @@ def ensure_locked_stage0_probe(repository_root: Path) -> Path:
 
     A caller-supplied probe path remains an explicit override. For the default
     path, compare the extracted Stage-0 revision with ``mncs-language.lock``
-    before any harness imports the probe adapter. When they differ, use the
-    existing bootstrap script and prefer a neighboring Language checkout that
-    contains the locked commit.
+    before any harness imports the probe adapter. Both the extracted source
+    and target-directory revision markers must match; otherwise use the
+    existing bootstrap script and prefer a neighboring Language checkout
+    that contains the locked commit.
     """
     root = Path(repository_root).resolve()
     explicit_probe = os.environ.get("MNCS_NATIVE_APP_PROBE_BIN")
     if explicit_probe:
-        os.environ.setdefault("MNCS_PROBE_BIN", explicit_probe)
+        os.environ["MNCS_PROBE_BIN"] = explicit_probe
         return Path(explicit_probe)
 
     lock_path = root / "mncs-language.lock.json"
@@ -37,12 +38,17 @@ def ensure_locked_stage0_probe(repository_root: Path) -> Path:
         target_root = root / target_root
     probe = target_root / "release/mncs-compiler-stage0-probe"
     revision_marker = root / ".bootstrap/revision"
+    target_revision_marker = target_root / ".mncs-language-revision"
     try:
         current_revision = revision_marker.read_text(encoding="utf-8").strip()
     except OSError:
         current_revision = None
+    try:
+        target_revision = target_revision_marker.read_text(encoding="utf-8").strip()
+    except OSError:
+        target_revision = None
 
-    if current_revision != revision or not probe.is_file():
+    if current_revision != revision or target_revision != revision or not probe.is_file():
         bootstrap = root / "tools/bootstrap.sh"
         if not bootstrap.is_file():
             raise RuntimeError(f"locked Stage-0 bootstrap script is missing: {bootstrap}")
@@ -70,10 +76,21 @@ def ensure_locked_stage0_probe(repository_root: Path) -> Path:
         raise RuntimeError(
             f"Stage-0 revision {bootstrapped_revision!r} does not match locked Language {revision}"
         )
+    try:
+        bootstrapped_target_revision = target_revision_marker.read_text(encoding="utf-8").strip()
+    except OSError as error:
+        raise RuntimeError(
+            f"Stage-0 bootstrap did not create {target_revision_marker}"
+        ) from error
+    if bootstrapped_target_revision != revision:
+        raise RuntimeError(
+            "Stage-0 target revision "
+            f"{bootstrapped_target_revision!r} does not match locked Language {revision}"
+        )
     if not probe.is_file():
         raise RuntimeError(f"Stage-0 bootstrap did not create the expected probe: {probe}")
 
     selected_probe = probe.resolve()
     os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(selected_probe)
-    os.environ.setdefault("MNCS_PROBE_BIN", str(selected_probe))
+    os.environ["MNCS_PROBE_BIN"] = str(selected_probe)
     return selected_probe

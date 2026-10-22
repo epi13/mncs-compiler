@@ -123,21 +123,21 @@ reachable imported body, checks that independent SSA artifacts are reused
 while the changed dependency is lowered, and compares canonical VM behavior
 with the Stage-0 oracle.
 
-Request `/11` and response `/14` enable Language's bounded, process-local
-`mncs.language-verification-dependency-summary-cache/1`. The cache reuses
-structural direct-dependency summaries for unchanged resolved function bodies
-only when the callable interface and extractor policy still match. Language
-rebuilds dependency fingerprints against the current program and independently
-revalidates verified function facts; a summary hit is not verification
-evidence. The `/9` verification-work observation reports the function subjects
-whose dependency summaries were reused or recomputed. These summaries are not
-serialized into application cache entries, so a fresh process recomputes them
-while still being able to reuse persisted Language verification facts after
-their normal dependency checks. The process retains summaries only while its
-Stage-0 probe remains alive. `tools/test_vm_language_dependency_summary_cache.py`
-checks unchanged, comment-only, unreachable-body, reachable-body, invalid
-source, and fresh-process snapshots on a real two-module application, then
-compares VM results with the Stage-0 oracle.
+Request `/12` and response `/15` use Language's bounded
+`mncs.language-verification-dependency-summary-cache/2`. Language still keeps
+the rebuilt summaries process-local, but verified function facts now carry the
+structural dependency summary in their witness. On a fresh process, Language
+can seed its summary cache from a stored fact only after validating the fact's
+subject, body and interface fingerprints, verifier and policy identities, and
+witness; it then rebuilds the current dependency closure before deciding
+whether verification can be reused. The `/2` observation records summaries
+seeded from verified facts separately from process-local cache hits and
+recomputation. Compiler cache entry `/11` identifies the exact Language fact
+schema, cache observation `/12` and verification-work `/11` report this path.
+`tools/test_vm_language_dependency_summary_cache.py` checks unchanged,
+comment-only, unreachable-body, reachable-body, invalid source, and
+fresh-process snapshots on a real two-module application, then compares VM
+results with the Stage-0 oracle.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only

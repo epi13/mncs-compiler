@@ -14,6 +14,7 @@ import os
 import select
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -21,6 +22,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "tools"))
+from ensure_locked_stage0_probe import ensure_locked_stage0_probe
+
+LOCKED_PROBE = ensure_locked_stage0_probe(ROOT)
+os.environ["MNCS_NATIVE_APP_PROBE_BIN"] = str(LOCKED_PROBE)
+os.environ["MNCS_PROBE_BIN"] = str(LOCKED_PROBE)
 
 
 def resolve_workspace_root() -> Path:

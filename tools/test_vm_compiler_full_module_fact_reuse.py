@@ -13,7 +13,7 @@ import time
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[1]
-LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/3"
+LANGUAGE_FACT_SCHEMA = "mncs.language-verification-fact/4"
 LANGUAGE_FACT_VERIFIER_ID = "mncs-language-function-body-validator/4"
 sys.path.insert(0, str(ROOT / "tools"))
 from ensure_locked_stage0_probe import ensure_locked_stage0_probe  # noqa: E402

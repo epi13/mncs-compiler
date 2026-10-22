@@ -11,6 +11,7 @@ export CARGO_PROFILE_RELEASE_DEBUG="${CARGO_PROFILE_RELEASE_DEBUG:-0}"
 export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
 revision=$(python3 -c 'import json; print(json.load(open("mncs-language.lock.json"))["revision"])')
 target_dir="${MNCS_BOOTSTRAP_TARGET_DIR:-$PWD/.bootstrap/target}"
+target_revision_marker="$target_dir/.mncs-language-revision"
 extract_locked_source() {
     local destination="$1"
     local selected_source="${MNCS_LANGUAGE_ROOT:-}"
@@ -62,5 +63,17 @@ if [[ "$current_revision" != "$revision" ]]; then
 fi
 [[ $(cat .bootstrap/revision) == "$revision" ]]
 [[ -f .bootstrap/Cargo.toml ]]
+target_revision=""
+if [[ -f "$target_revision_marker" ]]; then
+    target_revision=$(cat "$target_revision_marker")
+fi
+if [[ "$target_revision" != "$revision" ]]; then
+    echo "Refreshing Stage-0 build outputs for locked Language revision $revision."
+    cargo clean --release --manifest-path .bootstrap/Cargo.toml --target-dir "$target_dir"
+fi
 CARGO_TARGET_DIR="$target_dir" cargo build --release --locked --manifest-path .bootstrap/Cargo.toml -p mncs-cli
 CARGO_TARGET_DIR="$target_dir" cargo build --release --locked --manifest-path tools/stage0-probe/Cargo.toml
+mkdir -p "$(dirname "$target_revision_marker")"
+temporary_marker="$target_revision_marker.tmp.$$"
+printf '%s\n' "$revision" > "$temporary_marker"
+mv "$temporary_marker" "$target_revision_marker"

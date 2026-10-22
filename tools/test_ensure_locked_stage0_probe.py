@@ -51,6 +51,10 @@ class EnsureLockedStage0ProbeTests(unittest.TestCase):
             self.assertEqual(command, [str(bootstrap)])
             self.assertEqual(cwd, self.root)
             (self.root / ".bootstrap/revision").write_text(self.revision, encoding="utf-8")
+            (self.target / ".mncs-language-revision").parent.mkdir(parents=True, exist_ok=True)
+            (self.target / ".mncs-language-revision").write_text(
+                self.revision, encoding="utf-8"
+            )
             probe.parent.mkdir(parents=True, exist_ok=True)
             probe.write_bytes(b"locked probe")
             return subprocess.CompletedProcess(command, 0)
@@ -78,6 +82,9 @@ class EnsureLockedStage0ProbeTests(unittest.TestCase):
         probe = self.root / ".bootstrap/target/release/mncs-compiler-stage0-probe"
         probe.parent.mkdir(parents=True, exist_ok=True)
         probe.write_bytes(b"current probe")
+        (self.root / ".bootstrap/target/.mncs-language-revision").write_text(
+            self.revision, encoding="utf-8"
+        )
 
         with patch.dict(os.environ, {}, clear=True):
             with patch("ensure_locked_stage0_probe.subprocess.run") as run:
@@ -86,13 +93,43 @@ class EnsureLockedStage0ProbeTests(unittest.TestCase):
             self.assertEqual(selected, probe.resolve())
             self.assertEqual(os.environ.get("MNCS_PROBE_BIN"), str(probe.resolve()))
 
+    def test_stale_target_build_revision_reprovisions_existing_probe(self) -> None:
+        (self.root / ".bootstrap/revision").write_text(self.revision, encoding="utf-8")
+        probe = self.root / ".bootstrap/target/release/mncs-compiler-stage0-probe"
+        probe.parent.mkdir(parents=True, exist_ok=True)
+        probe.write_bytes(b"stale probe")
+        (self.root / ".bootstrap/target/.mncs-language-revision").write_text(
+            "2" * 40, encoding="utf-8"
+        )
+        bootstrap = self.root / "tools/bootstrap.sh"
+
+        def fake_run(command: list[str], *, cwd: Path | None = None, **kwargs):
+            self.assertEqual(command, [str(bootstrap)])
+            self.assertEqual(cwd, self.root)
+            (self.root / ".bootstrap/target/.mncs-language-revision").write_text(
+                self.revision, encoding="utf-8"
+            )
+            probe.write_bytes(b"fresh probe")
+            return subprocess.CompletedProcess(command, 0)
+
+        with patch.dict(os.environ, {}, clear=True):
+            with patch("ensure_locked_stage0_probe.subprocess.run", side_effect=fake_run) as run:
+                selected = ensure_locked_stage0_probe(self.root)
+            run.assert_called_once()
+            self.assertEqual(selected, probe.resolve())
+
     def test_explicit_probe_override_is_preserved(self) -> None:
         override = str(self.root / "custom-probe")
-        with patch.dict(os.environ, {"MNCS_NATIVE_APP_PROBE_BIN": override}, clear=True):
+        with patch.dict(
+            os.environ,
+            {"MNCS_NATIVE_APP_PROBE_BIN": override, "MNCS_PROBE_BIN": "stale-probe"},
+            clear=True,
+        ):
             with patch("ensure_locked_stage0_probe.subprocess.run") as run:
                 selected = ensure_locked_stage0_probe(self.root)
             run.assert_not_called()
             self.assertEqual(selected, Path(override))
+            self.assertEqual(os.environ.get("MNCS_NATIVE_APP_PROBE_BIN"), override)
             self.assertEqual(os.environ.get("MNCS_PROBE_BIN"), override)
 
 

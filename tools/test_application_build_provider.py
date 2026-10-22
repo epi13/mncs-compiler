@@ -112,19 +112,21 @@ def validate_environment_contract_descriptor() -> None:
             != "mncs-language-record-type-policy/1"):
         raise AssertionError("Compiler descriptor omitted the Language record fact verifier contract")
     if (artifact.get("verification_work_schema")
-            != "mncs.compiler.application-build-verification-work/10"
+            != "mncs.compiler.application-build-verification-work/11"
             or artifact.get("function_body_verification_fact_schema")
-            != "mncs.language-verification-fact/3"
+            != "mncs.language-verification-fact/4"
             or artifact.get("function_body_verification_fact_verifier_identity")
             != "mncs-language-function-body-validator/4"
             or artifact.get("function_body_verification_fact_policy_identity")
             != "mncs-language-function-body-policy/2"
             or artifact.get("application_build_cache_entry_schema")
-            != "mncs.compiler.application-build-cache-entry/10"
+            != "mncs.compiler.application-build-cache-entry/11"
             or artifact.get("language_verification_dependency_summary_cache_schema")
-            != "mncs.language-verification-dependency-summary-cache/1"
+            != "mncs.language-verification-dependency-summary-cache/2"
             or artifact.get("language_verification_dependency_summary_cache_observation_schema")
-            != "mncs.language-verification-dependency-summary-cache-observation/1"
+            != "mncs.language-verification-dependency-summary-cache-observation/2"
+            or artifact.get("application_build_cache_observation_schema")
+            != "mncs.compiler.application-build-cache-observation/12"
             or artifact.get("language_verification_dependency_summary_cache_policy_identity")
             != "mncs-language-verification-dependency-extractor/1"
             or artifact.get("ssa_function_artifact_cache_schema")
@@ -459,6 +461,7 @@ def invoke(
         RECORD_TYPE_FACT_RESPONSE_SCHEMA,
         SSA_FUNCTION_FACT_RESPONSE_SCHEMA,
         DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA,
+        FUNCTION_BODY_FACT_RESPONSE_SCHEMA,
     }:
         raise AssertionError("stored application build response schema is unsupported")
     if summary.get("response_schema") != response.get("schema_version"):

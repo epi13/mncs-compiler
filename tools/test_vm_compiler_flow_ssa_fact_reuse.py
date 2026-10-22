@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Exercise Language v3 fact reuse in the bounded Flow-to-SSA application.
+"""Exercise Language v4 fact reuse in the bounded Flow-to-SSA application.
 
 The selected seven-module application runs Flow lowering and value SSA inside
 one canonical VM artifact. Each source snapshot is compiled in a fresh
@@ -52,7 +52,7 @@ REQUEST_SCHEMA = "mncs.compiler.application-build-request/5"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/8"
 CACHE_SCHEMA = "mncs.compiler.application-build-cache-observation/5"
 WORK_SCHEMA = "mncs.compiler.application-build-verification-work/3"
-FACT_SCHEMA = "mncs.language-verification-fact/3"
+FACT_SCHEMA = "mncs.language-verification-fact/4"
 STEP_BUDGET = flow_frontier.STEP_BUDGET
 
 
@@ -287,7 +287,7 @@ def main() -> dict:
                 or cold.get("cache", {}).get("status") != "miss"
                 or cold.get("cache", {}).get("publication") != "stored"
                 or not cold_work["produced_semantic_fact_count"]):
-            raise AssertionError("cold Flow-to-SSA application did not publish Language v3 facts")
+            raise AssertionError("cold Flow-to-SSA application did not publish Language v4 facts")
 
         comment, comment_metrics = compile_once(
             build_request(modules, comment_root), cache / "cold", "Flow-to-SSA comment edit")

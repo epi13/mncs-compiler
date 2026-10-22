@@ -346,7 +346,7 @@ def main() -> dict:
                 "artifact_identity": edited_build["artifact"]["identity"],
             },
             "verified_fact_reuse": {
-                "contract": "mncs.language-verification-fact/3",
+                "contract": "mncs.language-verification-fact/4",
                 "verifier_identity": "mncs-language-function-body-validator/4",
                 "cold_facts_produced": fact_count,
                 "comment_edit_reused": len(comment_work["reused_semantic_facts"]),
