@@ -1,0 +1,289 @@
+{
+  "application": {
+    "artifact_bytes": 619051,
+    "artifact_file_sha256": "cdcc44ed61faf83665c1d8e2cea4b79cfd0692aeb26df507dabd3877e152ea2f",
+    "artifact_identity": "sha256:382fe4a7638c8e9ad5fe45d308a4d3198c826b6ea8c1929628f1c0935f366ade",
+    "build_contract": "mncs.compiler.application-build-request/1",
+    "callable_interface_identity": "sha256:6f2f19db351c5d3c8e86c3c2ff34848fafd314cda62e97f758b364dfb5f8aee2",
+    "capability_admission": {
+      "authorized_capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+      "mapped_host_call_count": 2,
+      "mapping_source": "mncs.compiler.capability-dispatch/1, cross-checked against admitted SSA",
+      "runtime_dispatch_alias": "test_artifact"
+    },
+    "entry": "mncs.test.digest::digest_app",
+    "module_sources": [
+      {
+        "module": "mncs.std.application.v1",
+        "path": "/home/epi13/Documents/Projects/mncs-stdlib/library/std/application.mncs",
+        "sha256": "5669f67e921e71c0f54742325f06fddfe3b11692c1fe3d27ee515f8a3fd30c7e"
+      },
+      {
+        "module": "mncs.test.assertions",
+        "path": "/home/epi13/Documents/Projects/mncs-test/native/mncs/test/assertions.mncs",
+        "sha256": "9456ccc069591b3dc2a53af64d3a196e98162d2f8d640410ae50f5487570919b"
+      },
+      {
+        "module": "mncs.test.suite",
+        "path": "/home/epi13/Documents/Projects/mncs-test/native/mncs/test/suite.mncs",
+        "sha256": "86019047090fd28f2ec29a51bc08b36c6ad39d16cbf03961d6586ea2fe4dc2d5"
+      },
+      {
+        "module": "mncs.test.digest",
+        "path": "/home/epi13/Documents/Projects/mncs-test/native/mncs/test/digest.mncs",
+        "sha256": "fa45534cdebb4de683675bfb70eed15cfa177a5198f036c0e3b7fcab68b91c30"
+      }
+    ],
+    "required_capability": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+    "runtime_dispatch_alias": "test_artifact",
+    "status": "verified",
+    "target": "mncs-vm-0.1",
+    "unresolved_obligations": [],
+    "verification_fact_schema": "mncs.language-verification-fact/3"
+  },
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "canonical_vm_execution": {
+    "all_cases_match_stage0": true,
+    "exact_result_agreement_with_stage0": true,
+    "negative_cases": {
+      "incorrect_artifact_identity": {
+        "diagnostic": "IdentityMismatch",
+        "rejected": true
+      },
+      "invalid_typed_input": {
+        "application_exit_code": null,
+        "effects": [
+          {
+            "capability": "test_artifact",
+            "operation": "structured_read",
+            "outcome_tag": "completed",
+            "sequence": 1
+          }
+        ],
+        "outcome": {
+          "kind": "invalid_request",
+          "reason": "call argument does not match input type"
+        },
+        "output_published": false
+      },
+      "mismatched_capability_identity": {
+        "diagnostic": "artifact does not require authorized capability",
+        "rejected": true
+      },
+      "mismatched_dispatch_alias": {
+        "diagnostic": "application contract dispatch alias differs from admitted SSA",
+        "rejected": true
+      },
+      "missing_capability": {
+        "application_exit_code": null,
+        "effects": [
+          {
+            "capability": "test_artifact",
+            "operation": "structured_read",
+            "outcome_tag": "capability_denied",
+            "sequence": 1
+          }
+        ],
+        "outcome": {
+          "capability": "test_artifact",
+          "kind": "capability_denied",
+          "operation": "structured_read"
+        },
+        "output_published": false
+      },
+      "step_budget_interruption": {
+        "application_exit_code": null,
+        "effects": [],
+        "outcome": {
+          "dimension": "steps",
+          "kind": "budget_exhausted"
+        },
+        "output_published": false
+      },
+      "structured_write_failure": {
+        "application_exit_code": 3,
+        "effects": [
+          {
+            "capability": "test_artifact",
+            "operation": "structured_read",
+            "outcome_tag": "completed",
+            "sequence": 1
+          },
+          {
+            "capability": "test_artifact",
+            "operation": "structured_write",
+            "outcome_tag": "completed",
+            "sequence": 2
+          }
+        ],
+        "outcome": {
+          "kind": "completed"
+        },
+        "output_published": false
+      }
+    },
+    "retained_batch": {
+      "admitted_artifact_count": 1,
+      "calls_in_one_process": 7,
+      "capability_identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+      "host_calls_per_success": 2,
+      "host_metrics": {
+        "cpu_seconds": 0.01,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 0,
+        "peak_open_file_descriptors": 4,
+        "peak_rss_bytes": 11603968,
+        "peak_threads": 1,
+        "process_count": 1,
+        "wall_seconds": 0.030129
+      },
+      "schema_version": "mncs.compiler.native-application-batch-result/1",
+      "unique_request_input_output_paths": true
+    },
+    "successful_digest_cases": [
+      {
+        "application_exit_code": 0,
+        "callable_function": "mncs:0.4:ssa:function:094ce440e3f62f0711113dc9d1459a2ecaf2e90f15c7528c81092c53e74b9bdd",
+        "case_index": 0,
+        "effect_operations": [
+          "structured_read",
+          "structured_write"
+        ],
+        "effect_outcomes": [
+          "completed",
+          "completed"
+        ],
+        "input_sha256": "fd77eaf8bf7feaee0118b41c6520432f0482e9bd4c7dab762e025194cfde64e1",
+        "matches_stage0_oracle": true,
+        "output_sha256": "2ca00e51a81463179f409d295148de136d10e6cea66da96aa997a357032f98db",
+        "return_digest": "sha256:5629cc8146c11a28e12fb54981fba72405eb5437b20ee66459c3bfc8f773888e",
+        "stage0_output_sha256": "2ca00e51a81463179f409d295148de136d10e6cea66da96aa997a357032f98db"
+      },
+      {
+        "application_exit_code": 0,
+        "callable_function": "mncs:0.4:ssa:function:094ce440e3f62f0711113dc9d1459a2ecaf2e90f15c7528c81092c53e74b9bdd",
+        "case_index": 1,
+        "effect_operations": [
+          "structured_read",
+          "structured_write"
+        ],
+        "effect_outcomes": [
+          "completed",
+          "completed"
+        ],
+        "input_sha256": "b6dafde6b4e930d9fca2d07374c5638216e673851f40f5e9f0ba657ccda785d8",
+        "matches_stage0_oracle": true,
+        "output_sha256": "56d7e4d761bfa18dbb624429652591c96bea851dcc31594a01d8587e0db09c93",
+        "return_digest": "sha256:5629cc8146c11a28e12fb54981fba72405eb5437b20ee66459c3bfc8f773888e",
+        "stage0_output_sha256": "56d7e4d761bfa18dbb624429652591c96bea851dcc31594a01d8587e0db09c93"
+      },
+      {
+        "application_exit_code": 0,
+        "callable_function": "mncs:0.4:ssa:function:094ce440e3f62f0711113dc9d1459a2ecaf2e90f15c7528c81092c53e74b9bdd",
+        "case_index": 2,
+        "effect_operations": [
+          "structured_read",
+          "structured_write"
+        ],
+        "effect_outcomes": [
+          "completed",
+          "completed"
+        ],
+        "input_sha256": "78e51a847982d01b3c86a805e77df5e607688f83fe642995b27a28afc4480ffc",
+        "matches_stage0_oracle": true,
+        "output_sha256": "df3b93e72b0a55b9213705c6c142f48ae0b66a684c57752b8e3f1b3916f37afa",
+        "return_digest": "sha256:5629cc8146c11a28e12fb54981fba72405eb5437b20ee66459c3bfc8f773888e",
+        "stage0_output_sha256": "df3b93e72b0a55b9213705c6c142f48ae0b66a684c57752b8e3f1b3916f37afa"
+      }
+    ]
+  },
+  "compiler_main_after_prior_delivery": "bd08d8bde7f274b1e3634273a334a189f3ff433f",
+  "compiler_revision_used": "c4124d3aff1beea7f2b59efe40c37721eccfa96f",
+  "environment_session_id": "ses_164edc158d9b1637",
+  "harness_record_sha256": "11b5f7dbf8f858d01a1e3d3a1f2dfa815a25a328be4fee2134b0bdf0ad907dca",
+  "incremental_work": {
+    "cold": {
+      "backend_artifact": "generated",
+      "front_end_invocations": 1,
+      "language_body_facts_recomputed": 30,
+      "language_body_facts_reused": 0,
+      "metrics": {
+        "cpu_seconds": 0.79,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 54910976,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.833896
+      },
+      "status": "miss"
+    },
+    "comment_only_import_edit": {
+      "backend_artifact": "reused",
+      "changed_module": "mncs.test.assertions",
+      "changed_module_sha256": "sha256:86292b76323721875cdcbe07a002ae0a049aea7ff80a63453915a4e843380ef5",
+      "front_end_invocations": 1,
+      "language_body_facts_recomputed": 0,
+      "language_body_facts_reused": 30,
+      "metrics": {
+        "cpu_seconds": 0.6,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 55062528,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.636175
+      },
+      "reuse_basis": "verified_application_executable_closure",
+      "status": "hit"
+    },
+    "fresh_process_warm": {
+      "backend_artifact": "reused",
+      "front_end_invocations": 0,
+      "metrics": {
+        "cpu_seconds": 0.2,
+        "peak_cgroup_memory_bytes": null,
+        "peak_child_processes": 1,
+        "peak_open_file_descriptors": 5,
+        "peak_rss_bytes": 55410688,
+        "peak_threads": 1,
+        "request_sequence": 1,
+        "wall_seconds": 0.244183
+      },
+      "reuse_basis": "exact_source_snapshot",
+      "status": "hit"
+    }
+  },
+  "language_delivery": {
+    "feature_branch": "campaign/language-verified-fact-reuse-20261020",
+    "feature_revision": "d9895afc0a3870c49a04add44204fbf61a902698",
+    "main_merge_status": "pending_active_main_worktree_claim",
+    "remote_ref": "refs/heads/campaign/language-verified-fact-reuse-20261020"
+  },
+  "resource_measurement_limits": {
+    "environment_store_publication": "not performed by this local canonical-VM harness",
+    "forge_application_provider": "not run; authenticated Forge capability is not bound to the active Compiler session",
+    "peak_cgroup_memory": "unavailable"
+  },
+  "result": "The effectful MNCS digest application was built with the locked Language Stage-0 revision d9895af, reused all 30 Language body facts after a comment-only imported-source edit, matched Stage-0 outputs for three real inputs, and passed seven capability, typed-input, interruption, and artifact-identity negative cases through one retained canonical VM batch.",
+  "schema_version": "mncs.compiler.native-digest-locked-language-e2e-evidence/1",
+  "toolchain_provenance": {
+    "bootstrap_source_revision": "d9895afc0a3870c49a04add44204fbf61a902698",
+    "compiler_language_lock_schema": "0.1",
+    "compiler_language_locked_revision": "d9895afc0a3870c49a04add44204fbf61a902698",
+    "lock_and_bootstrap_revision_match": true,
+    "stage0_language_revision": "d9895afc0a3870c49a04add44204fbf61a902698",
+    "stage0_probe_path": ".bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "822fb90f81e9042231d0dbbca82f5b5cd755c08a7346378edfee2fb95e5d8a46",
+    "stage0_probe_used_explicitly": true,
+    "stdlib_revision": "6aa443cacf8c80a8ccb0fe6586b1f8c68575bf6c",
+    "test_revision": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "vm_repository_revision": "1c19a94732c9d24029dd00e2d5af13710f481d02",
+    "vm_runner_binary_sha256": "cde46a8d0cb3c6cee9aecbe343a5613b820b501dd78ad4ee241fbdc1eeef29c0",
+    "vm_runner_lock_sha256": "8fb0c17ce84946c50888c31b13dd50a82e5d821a818b0520c9c6f1a8ae6ca1ee",
+    "vm_runner_source_sha256": "8dbbbbbdfc1b4f0652f664f3048961d3cf99df5852876827fe8940c1b2cce5f2",
+    "vm_runtime_language_model_revision": "7057f17516655578091b9fae41075357adede32d"
+  }
+}
