@@ -6,6 +6,7 @@ import json
 import hashlib
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -267,7 +268,7 @@ def stage_summary(row: dict) -> dict:
             "recomputed_fact_count": len(recomputed),
             "reused_subjects_sample": reused[:4],
             "recomputed_subjects_sample": recomputed[:4],
-            "changed_assertion_body_recomputed": (
+            "from_assertion_body_fact_recomputed": (
                 "mncs:0.2:body:mncs.test.assertions::from_assertion" in recomputed
             ),
         }
@@ -283,6 +284,93 @@ def stage_summary(row: dict) -> dict:
     if "execution" in row:
         summary["execution"] = row["execution"]
     return summary
+
+
+def run_isolated_module_edit(
+    probe_binary: Path,
+    directory: Path,
+    label: str,
+    root_source: str,
+    modules: dict[str, str],
+    edited_root: str,
+    edited_modules: dict[str, str],
+    *,
+    reused_modules: set[str],
+    linked_modules: set[str],
+    invalidated_modules: set[str],
+    recomputed_subject_suffixes: set[str],
+    argument: dict,
+) -> dict[str, dict]:
+    """Prove one interface edit against a fresh application-cache baseline."""
+    cache_root = directory / f"{label}-application-cache"
+    probe = app.Probe(
+        directory / f"{label}-program-cache",
+        executable=probe_binary,
+        application_cache_dir=cache_root,
+    )
+    result: dict[str, dict] = {}
+    try:
+        ready, _ = probe.send({"execution_status": True})
+        if not isinstance(ready, dict) or "modules" not in ready:
+            raise AssertionError(f"{label}: Stage-0 probe did not return its readiness handshake")
+
+        cold, cold_metrics = probe.send(
+            {"compile_application": request(root_source, modules)}, timeout=180
+        )
+        cold_work, cold_observation = work_for(f"{label}_cold", cold)
+        assert_modules(
+            f"{label}_cold", cold_observation,
+            reused=set(), linked=EXPECTED_MODULES, invalidated=set(),
+        )
+        if cold.get("status") != "verified" or not fact_set(
+            cold_work, "recomputed_semantic_facts"
+        ):
+            raise AssertionError(f"{label}: isolated cold baseline did not verify all facts")
+        result["cold"] = {
+            "cache_status": cold.get("cache", {}).get("status"),
+            "build_metrics": cold_metrics,
+            "module_observation": cold_observation,
+            "verification_work": cold_work,
+        }
+
+        edited, edited_metrics = probe.send(
+            {"compile_application": request(edited_root, edited_modules)}, timeout=180
+        )
+        edited_work, edited_observation = work_for(label, edited)
+        assert_modules(
+            label, edited_observation,
+            reused=reused_modules,
+            linked=linked_modules,
+            invalidated=invalidated_modules,
+        )
+        if edited.get("status") != "verified":
+            raise AssertionError(
+                f"{label}: interface edit failed verification: {edited.get('diagnostics')}"
+            )
+
+        recomputed = fact_set(edited_work, "recomputed_semantic_facts")
+        reused = fact_set(edited_work, "reused_semantic_facts")
+        missing = sorted(
+            suffix for suffix in recomputed_subject_suffixes
+            if not any(subject.endswith(suffix) for subject in recomputed)
+        )
+        if missing or not recomputed or not reused:
+            raise AssertionError(
+                f"{label}: Language did not report the expected exact invalidation and reuse; "
+                f"missing={missing}, recomputed={sorted(recomputed)}, reused={sorted(reused)}"
+            )
+        result["edited"] = {
+            "cache_status": edited.get("cache", {}).get("status"),
+            "build_metrics": edited_metrics,
+            "module_observation": edited_observation,
+            "verification_work": edited_work,
+            "execution": assert_execution_equivalent(
+                probe, label, edited, edited_root, edited_modules, argument
+            ),
+        }
+    finally:
+        result["probe_tail"] = probe.close()
+    return result
 
 
 def main() -> None:
@@ -406,6 +494,117 @@ def main() -> None:
                     changed_modules, argument,
                 ),
             }
+
+            # The real digest root constructs TestResult values and folds them
+            # through mncs.test.suite. Add one unused nominal field, update its
+            # constructors, then verify the actual application still behaves
+            # the same while Language invalidates the assertion/suite closure.
+            assertion_source = modules["mncs.test.assertions"]
+            test_result_record = (
+                "record TestResult {\n"
+                "    verdict: Verdict,\n"
+                "    verdict_code: u64,\n"
+                "    failure_kind: FailureKind,\n"
+                "    failure_code: u64,\n"
+                "    assertions: u64,\n"
+                "    failures: u64,\n"
+                "    expected: i64,\n"
+                "    actual: i64,\n"
+                "    assertion_code: u64\n"
+                "}"
+            )
+            extended_test_result_record = test_result_record.replace(
+                "    assertion_code: u64\n",
+                "    assertion_code: u64,\n    extension_identity: u64\n",
+                1,
+            )
+            nominal_assertions, record_count = assertion_source.replace(
+                test_result_record, extended_test_result_record, 1
+            ), assertion_source.count(test_result_record)
+            nominal_assertions, assertion_ctor_count = re.subn(
+                r"(?m)^([ \t]*)assertion_code: assertion\.code$",
+                r"\1assertion_code: assertion.code,\n\1extension_identity: 0",
+                nominal_assertions,
+            )
+            nominal_assertions, zero_ctor_count = re.subn(
+                r"(?m)^([ \t]*)assertion_code: 0$",
+                r"\1assertion_code: 0,\n\1extension_identity: 0",
+                nominal_assertions,
+            )
+            nominal_root_marker = (
+                "        assertion_code: test.assertion_code\n"
+                "    };\n}\n\nfn to_failure"
+            )
+            nominal_root = root_source.replace(
+                nominal_root_marker,
+                "        assertion_code: test.assertion_code,\n"
+                "        extension_identity: 0\n"
+                "    };\n}\n\nfn to_failure",
+                1,
+            )
+            if (record_count != 1 or assertion_ctor_count != 2 or zero_ctor_count != 3
+                    or nominal_assertions == assertion_source
+                    or nominal_root == root_source):
+                raise AssertionError(
+                    "digest fixture no longer has the expected TestResult declaration/constructors"
+                )
+            nominal_modules = dict(modules)
+            nominal_modules["mncs.test.assertions"] = nominal_assertions
+            nominal = run_isolated_module_edit(
+                probe_binary,
+                directory,
+                "imported_nominal_field_addition",
+                root_source,
+                modules,
+                nominal_root,
+                nominal_modules,
+                reused_modules={"mncs.std.application.v1"},
+                linked_modules={"mncs.test.assertions", "mncs.test.suite"},
+                invalidated_modules={"mncs.test.assertions", "mncs.test.suite"},
+                recomputed_subject_suffixes={
+                    "mncs.test.digest::to_result",
+                    "mncs.test.digest::build_digest",
+                },
+                argument=argument,
+            )
+            stages["imported_nominal_cold"] = nominal["cold"]
+            stages["imported_nominal_field_addition"] = nominal["edited"]
+
+            # Renaming an imported function's result binding preserves runtime
+            # values but changes its verified interface. build_digest calls
+            # this function directly, so its Language body fact must be fresh.
+            suite_source = modules["mncs.test.suite"]
+            suite_signature = (
+                "fn observe(summary: SuiteSummary, test: TestResult) "
+                "-> (result: SuiteSummary)"
+            )
+            changed_suite_source = suite_source.replace(
+                suite_signature,
+                "fn observe(summary: SuiteSummary, test: TestResult) "
+                "-> (observation: SuiteSummary)",
+                1,
+            )
+            if changed_suite_source == suite_source:
+                raise AssertionError("test fixture no longer exposes the selected imported signature")
+            signature_modules = dict(modules)
+            signature_modules["mncs.test.suite"] = changed_suite_source
+            signature = run_isolated_module_edit(
+                probe_binary,
+                directory,
+                "imported_function_result_name_edit",
+                root_source,
+                modules,
+                root_source,
+                signature_modules,
+                reused_modules={"mncs.std.application.v1", "mncs.test.assertions"},
+                linked_modules={"mncs.test.suite"},
+                invalidated_modules={"mncs.test.suite"},
+                recomputed_subject_suffixes={"mncs.test.digest::build_digest"},
+                argument=argument,
+            )
+            stages["imported_signature_cold"] = signature["cold"]
+            stages["imported_function_result_name_edit"] = signature["edited"]
+
             # Keep the tamper-negative case isolated so its deliberately
             # corrupted receipt cannot poison the fresh-process reuse case.
             tampered_cache_root = directory / "tampered-application-cache"
@@ -515,6 +714,7 @@ def main() -> None:
         ["git", "-C", str(ROOT), "diff", "--binary", "HEAD"],
     )
     print(json.dumps({
+        "identity": "ev_compiler_digest_application_interface_invalidation_20261023",
         "schema_version": "mncs.compiler.language-module-elaboration-cache-regression/1",
         "compiler_head": digest_app.git(ROOT, "rev-parse", "HEAD"),
         "compiler_tracked_patch_sha256": hashlib.sha256(tracked_patch).hexdigest(),

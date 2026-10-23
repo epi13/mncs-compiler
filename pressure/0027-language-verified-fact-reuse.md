@@ -72,6 +72,18 @@ The frontend invocation count remains one for each changed snapshot, so the
 remaining pressure is parsing/linking and other whole-snapshot work rather
 than a lack of body-fact reuse.
 
+The same harness now changes imported interfaces in two isolated application
+caches. Adding `extension_identity: u64` to the imported nominal
+`mncs.test.assertions::TestResult` invalidated the assertion and suite module
+entries, recomputed 11 body facts, and reused 19 independent facts. Renaming
+the imported `mncs.test.suite::observe` result binding invalidated the suite
+entry and recomputed the four affected body facts while reusing 26. Both
+edited applications matched Stage-0 canonical VM output. Their Compiler build
+times were approximately 0.800 s and 0.733 s, respectively, with peak process
+RSS near 55.4 MB; these short workload measurements establish selective work,
+not an end-to-end speedup. Exact observations are in
+[`language-module-interface-application-invalidation-compiler-20261023.json`](../evidence/language-module-interface-application-invalidation-compiler-20261023.json).
+
 ## Current workaround
 
 Selective Language fact reuse now avoids redundant verification, while the
@@ -92,8 +104,9 @@ Language's versioned `mncs.language-verification-fact/3` contract now supports
 function-body and declaration reuse with verifier, policy, profile, interface,
 dependency, and assumption identities. The Compiler consumes those facts and
 reports actual reused and recomputed subjects. Continue by covering exported
-and imported interfaces, nominal types, generic specializations, and
-effect/capability changes in real application builds; reduce repeated
+and imported interfaces and nominal types in a real application build. Extend
+coverage to module export-set edits, generic specializations, and
+effect/capability changes; reduce repeated
 source-level work only where measurement shows it is safe and useful.
 
 ## Likely ownership
@@ -126,5 +139,5 @@ it without duplicating semantic identity.
 ## Upstream tracking
 
 - `mncs-language` issue/PR: not opened; the dedicated Language campaign delivered the fact implementation on main.
-- Verified-fact implementation revision: Language `a235081db27db4965612f926c69bb6a5769b0d67`; the current Compiler pin is Language `d74402a057c085f928a81644e6195ab1e52a78b3`. Compiler application-build integration and production digest-app reuse evidence are on Compiler main `1bbd5a5f20d2ab09f8a2b950b92493b2d939a7f1`.
-- Follow-up: exercise nominal, generic-specialization, and effect/capability invalidation through real application builds, then reduce remaining changed-snapshot frontend, parsing, and linking work where measurement supports it.
+- Verified-fact implementation first landed in Language `a235081db27db4965612f926c69bb6a5769b0d67`. The current Compiler pin is Language `9505d3f557701f072b5803a5bad046389b84cb3b`; application-build integration and digest-app reuse evidence are in Compiler main `9ddf7da5d010ec25d5325985583b63f796312233`.
+- Follow-up: exercise module export-set, generic-specialization, and effect/capability invalidation through real application builds, then reduce remaining changed-snapshot frontend, parsing, and linking work where measurement supports it.

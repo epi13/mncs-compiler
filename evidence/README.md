@@ -1477,4 +1477,22 @@ under `current_campaign_native_app_imported_body_fact_v3_reuse_20261020`.
 
 The [current-main digest application record](language-module-interface-cache-compiler-consumption-main-9505-20261023.json) pins Language `9505d3f` and exercises the real three-module `mncs.test.digest` dependency closure. The cold build recomputed 30 verified body facts. A root comment edit reused all 30; changing the unreachable imported `mncs.test.assertions::from_assertion` body recomputed exactly one and reused 29, while the independent imported modules were reused. A separate fresh Compiler process reused all 30 persisted facts and module entries. A tampered cache receipt forced recomputation of all 30, and invalid source returned one fresh diagnostic without publishing an artifact. The valid canonical VM results matched Stage-0.
 
-The successful harness took 5.20 seconds wall time, 3.86 CPU seconds, and peaked at 96,996 KiB process RSS; cgroup memory was unavailable. Building the pinned Stage-0 release probe took 552.41 seconds across its two Cargo build phases and peaked at 1,498,780 KiB RSS. These measurements describe this workload. Exported interface edits, nominal types, generic specializations, effects, capability assumptions, policy isolation, Forge publication, full Test conversion, and Stage-1/Stage-2 succession remain separate work.
+The successful harness took 5.20 seconds wall time, 3.86 CPU seconds, and peaked at 96,996 KiB process RSS; cgroup memory was unavailable. Building the pinned Stage-0 release probe took 552.41 seconds across its two Cargo build phases and peaked at 1,498,780 KiB RSS. These measurements describe this workload. Module export-set changes, generic specializations, effects, capability assumptions, policy isolation, Forge publication, full Test conversion, and Stage-1/Stage-2 succession remain separate work.
+
+## Imported nominal and callable interface invalidation (2026-10-23)
+
+The [digest application interface-invalidation record](language-module-interface-application-invalidation-compiler-20261023.json)
+uses fresh application caches for two changes to imported modules. Adding a
+field to `mncs.test.assertions::TestResult` invalidated the assertion and suite
+module entries, recomputed 11 Language body facts, and reused 19 independent
+facts. Renaming the result binding of `mncs.test.suite::observe` invalidated
+the suite entry, recomputed four affected body facts, and reused 26. Both
+recompiled applications produced canonical VM output equal to Stage-0.
+
+The changed builds took approximately 0.800 s and 0.733 s, with peak process
+RSS near 55.4 MB. Cgroup memory was unavailable. The warm harness run took
+9.14 s wall time, 6.76 CPU seconds, and 97,492 KiB peak RSS. Its isolated Stage-0
+bootstrap build took 230.60 s wall time and peaked at 1,369,204 KiB RSS with
+two Cargo jobs; that one-time compilation is reported separately from the
+warm harness measurement. These measurements prove selective semantic
+invalidation for this workload, not a general wall-time improvement.
