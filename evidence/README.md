@@ -1471,3 +1471,10 @@ the later report is canonical because its harness asserts the exact changed
 and reused body-fact sets. This does not establish production Test-runner
 migration or compiler succession. The matrix records the exact identities
 under `current_campaign_native_app_imported_body_fact_v3_reuse_20261020`.
+
+
+## Compiler consumption of current Language module facts (2026-10-23)
+
+The [current-main digest application record](language-module-interface-cache-compiler-consumption-main-9505-20261023.json) pins Language `9505d3f` and exercises the real three-module `mncs.test.digest` dependency closure. The cold build recomputed 30 verified body facts. A root comment edit reused all 30; changing the unreachable imported `mncs.test.assertions::from_assertion` body recomputed exactly one and reused 29, while the independent imported modules were reused. A separate fresh Compiler process reused all 30 persisted facts and module entries. A tampered cache receipt forced recomputation of all 30, and invalid source returned one fresh diagnostic without publishing an artifact. The valid canonical VM results matched Stage-0.
+
+The successful harness took 5.20 seconds wall time, 3.86 CPU seconds, and peaked at 96,996 KiB process RSS; cgroup memory was unavailable. Building the pinned Stage-0 release probe took 552.41 seconds across its two Cargo build phases and peaked at 1,498,780 KiB RSS. These measurements describe this workload. Exported interface edits, nominal types, generic specializations, effects, capability assumptions, policy isolation, Forge publication, full Test conversion, and Stage-1/Stage-2 succession remain separate work.

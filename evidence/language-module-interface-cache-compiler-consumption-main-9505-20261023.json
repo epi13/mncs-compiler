@@ -1,0 +1,420 @@
+{
+  "campaign": {
+    "checkpoint_before_change": "chk_49e8d78bec2b25f4",
+    "identity": "cmp_mncs_native_application_readiness_compiler_20261013",
+    "session_id": "ses_164edc158d9b1637"
+  },
+  "identity": "ev_compiler_language_module_interface_cache_consumption_main_9505_20261023",
+  "implementation": {
+    "base_revision": "0888fa95b78b2ae7497a124787a687959e5fbb85",
+    "branch": "campaign/compiler-language-main-consumption-20261023",
+    "language_lock_revision": "9505d3f557701f072b5803a5bad046389b84cb3b",
+    "language_main_revision_at_verification": "9505d3f557701f072b5803a5bad046389b84cb3b",
+    "repository": "mncs-compiler",
+    "source_files": {
+      "mncs-language.lock.json": "e9df745570356d6d536d6bbbd16608df997a0ba364ea1955650dcbd41eb63e01",
+      "tools/test_vm_language_module_elaboration_cache.py": "ec736fd4ebc67e94ff37e8e32b00e2a720d1cf3427ab40207f884f6b60fddee1"
+    },
+    "test_head": "57802fba4dea04ad50004d3e1e6768b507b889bb",
+    "tracked_patch_sha256": "d7125f417efbbda50be954868035184845f40557717c4a79093d17a235d1f66c"
+  },
+  "limitations": [
+    "This workload changes one unreachable imported assertion body; it proves exact body fact invalidation and independent fact reuse, while the executable closure and canonical VM artifact remain unchanged.",
+    "The focused Compiler integration does not cover exported signature, nominal type, generic specialization, effect or capability edits; those remain separate invalidation cases.",
+    "The test exercises a tampered cache receipt but does not independently vary Compiler or verifier policy identity.",
+    "The measurements apply to this multi-module mncs-test digest workload and do not establish a general speedup, full native Test conversion, Stage-1, or Stage-2 succession."
+  ],
+  "schema_version": "mncs.compiler.language-module-interface-cache-consumption/1",
+  "semantic_proof": {
+    "all_successful_stages_share_executable_artifact_identity": true,
+    "canonical_vm_artifact_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66",
+    "canonical_vm_outputs_match_stage0": true,
+    "cold_facts_recomputed": 30,
+    "cold_facts_reused": 0,
+    "comment_edit_facts_recomputed": 0,
+    "comment_edit_facts_reused": 30,
+    "comment_edit_source_parse_work": {
+      "parsed_source_count": 0,
+      "published_entry_count": 0,
+      "reused_exact_source_count": 3,
+      "reused_significant_tokens_source_count": 1
+    },
+    "fresh_process_facts_recomputed": 0,
+    "fresh_process_facts_reused": 30,
+    "fresh_process_module_observation": {
+      "invalidated_module_subjects": [],
+      "linked_module_subjects": [],
+      "published_entry_count": 0,
+      "rejected_entry_count": 0,
+      "reused_module_subjects": [
+        "mncs.std.application.v1",
+        "mncs.test.assertions",
+        "mncs.test.suite"
+      ]
+    },
+    "invalid_source_artifact_published": false,
+    "invalid_source_diagnostic_count": 1,
+    "invalid_source_status": "rejected",
+    "language_verification_fact_schema": "mncs.language-verification-fact/4",
+    "source_module_count": 4,
+    "tampered_receipt_facts_recomputed": 30,
+    "tampered_receipt_facts_reused": 0,
+    "tampered_receipt_module_observation": {
+      "invalidated_module_subjects": [],
+      "linked_module_subjects": [
+        "mncs.std.application.v1",
+        "mncs.test.assertions",
+        "mncs.test.suite"
+      ],
+      "published_entry_count": 3,
+      "rejected_entry_count": 0,
+      "reused_module_subjects": []
+    },
+    "unreachable_imported_body_facts_recomputed": 1,
+    "unreachable_imported_body_facts_reused": 29,
+    "unreachable_imported_body_module_observation": {
+      "invalidated_module_subjects": [
+        "mncs.test.assertions"
+      ],
+      "linked_module_subjects": [
+        "mncs.test.assertions"
+      ],
+      "published_entry_count": 1,
+      "rejected_entry_count": 1,
+      "reused_module_subjects": [
+        "mncs.std.application.v1",
+        "mncs.test.suite"
+      ]
+    },
+    "unreachable_imported_body_subject": "mncs:0.2:body:mncs.test.assertions::from_assertion"
+  },
+  "verification": {
+    "bootstrap_build_measurement": {
+      "command": "tools/test_vm_language_module_elaboration_cache.py with the exact Language 9505d3f lock and CARGO_BUILD_JOBS=2",
+      "note": "The first harness invocation stopped at workspace discovery after build; the successful invocation reused this build.",
+      "peak_cgroup_memory_bytes": null,
+      "peak_rss_kb": 1498780,
+      "result": "locked Stage-0 release binaries built successfully before the harness ran",
+      "system_seconds": 14.41,
+      "target_directory": "/tmp/mncs-language-stage0-9505d3f",
+      "user_seconds": 1068.17,
+      "wall_seconds": 552.41
+    },
+    "canonical_vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+    "canonical_vm_binary_sha256": "06a15aaec7b67b5c815e3a4c6659a4ecd83a0a729a80e2c6002ebf0a81e5ba5d",
+    "command": "CARGO_BUILD_JOBS=2 TMPDIR=/tmp MNCS_PROJECTS_ROOT=/home/epi13/Documents/Projects MNCS_TEST_ROOT=/home/epi13/Documents/Projects/mncs-test MNCS_STDLIB_ROOT=/home/epi13/Documents/Projects/mncs-stdlib MNCS_LANGUAGE_ROOT=/tmp/mncs-language-delivery-20261023 MNCS_VM_ROOT=/home/epi13/Documents/Projects/mncs-vm MNCS_BOOTSTRAP_TARGET_DIR=/tmp/mncs-language-stage0-9505d3f MNCS_LANGUAGE_MODULE_CACHE_VM_BIN=/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm python3 tools/test_vm_language_module_elaboration_cache.py",
+    "locked_language_revision": "9505d3f557701f072b5803a5bad046389b84cb3b",
+    "result": "passed",
+    "runner_measurement": {
+      "note": "Host peak RSS from /usr/bin/time; cgroup memory was unavailable.",
+      "peak_cgroup_memory_bytes": null,
+      "peak_rss_kb": 96996,
+      "system_seconds": 1.4,
+      "user_seconds": 3.86,
+      "wall_seconds": 5.2
+    },
+    "stage0_probe": "/tmp/mncs-language-stage0-9505d3f",
+    "stage_observations": {
+      "cold": {
+        "build_metrics": {
+          "cpu_seconds": 0.79,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 55169024,
+          "peak_threads": 1,
+          "request_sequence": 2,
+          "wall_seconds": 0.803368
+        },
+        "cache_status": "miss",
+        "execution": {
+          "artifact_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66",
+          "output_equal_to_stage0": true,
+          "returned_value_count": 1,
+          "stage0_metrics": {
+            "cpu_seconds": 0.26,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 3,
+            "peak_rss_bytes": 55169024,
+            "peak_threads": 1,
+            "request_sequence": 3,
+            "wall_seconds": 0.281599
+          },
+          "vm_run_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66"
+        },
+        "module_observation": {
+          "invalidated_module_subjects": [],
+          "linked_module_subjects": [
+            "mncs.std.application.v1",
+            "mncs.test.assertions",
+            "mncs.test.suite"
+          ],
+          "published_entry_count": 3,
+          "rejected_entry_count": 0,
+          "reused_module_subjects": []
+        },
+        "semantic_work": {
+          "changed_assertion_body_recomputed": true,
+          "front_end_invocations": 1,
+          "recomputed_fact_count": 30,
+          "recomputed_subjects_sample": [
+            "mncs:0.2:body:mncs.std.application.v1::context_is_bounded",
+            "mncs:0.2:body:mncs.std.application.v1::failure",
+            "mncs:0.2:body:mncs.std.application.v1::success",
+            "mncs:0.2:body:mncs.test.assertions::equals_bool"
+          ],
+          "reused_fact_count": 0,
+          "reused_subjects_sample": []
+        },
+        "source_parse_work": {
+          "parsed_source_count": 4,
+          "published_entry_count": 4,
+          "reused_exact_source_count": 0,
+          "reused_significant_tokens_source_count": 0
+        }
+      },
+      "fresh_process": {
+        "build_metrics": {
+          "cpu_seconds": 0.61,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 55365632,
+          "peak_threads": 1,
+          "request_sequence": 2,
+          "wall_seconds": 0.623384
+        },
+        "cache_status": "hit",
+        "execution": {
+          "artifact_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66",
+          "output_equal_to_stage0": true,
+          "returned_value_count": 1,
+          "stage0_metrics": {
+            "cpu_seconds": 0.24,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 3,
+            "peak_rss_bytes": 55365632,
+            "peak_threads": 1,
+            "request_sequence": 3,
+            "wall_seconds": 0.265651
+          },
+          "vm_run_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66"
+        },
+        "module_observation": {
+          "invalidated_module_subjects": [],
+          "linked_module_subjects": [],
+          "published_entry_count": 0,
+          "rejected_entry_count": 0,
+          "reused_module_subjects": [
+            "mncs.std.application.v1",
+            "mncs.test.assertions",
+            "mncs.test.suite"
+          ]
+        },
+        "semantic_work": {
+          "changed_assertion_body_recomputed": false,
+          "front_end_invocations": 1,
+          "recomputed_fact_count": 0,
+          "recomputed_subjects_sample": [],
+          "reused_fact_count": 30,
+          "reused_subjects_sample": [
+            "mncs:0.2:body:mncs.std.application.v1::context_is_bounded",
+            "mncs:0.2:body:mncs.std.application.v1::failure",
+            "mncs:0.2:body:mncs.std.application.v1::success",
+            "mncs:0.2:body:mncs.test.assertions::equals_bool"
+          ]
+        },
+        "source_parse_work": {
+          "parsed_source_count": 0,
+          "published_entry_count": 0,
+          "reused_exact_source_count": 3,
+          "reused_significant_tokens_source_count": 1
+        }
+      },
+      "imported_body_edit": {
+        "build_metrics": {
+          "cpu_seconds": 0.49,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 55169024,
+          "peak_threads": 1,
+          "request_sequence": 6,
+          "wall_seconds": 0.504982
+        },
+        "cache_status": "hit",
+        "execution": {
+          "artifact_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66",
+          "output_equal_to_stage0": true,
+          "returned_value_count": 1,
+          "stage0_metrics": {
+            "cpu_seconds": 0.26,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 3,
+            "peak_rss_bytes": 55169024,
+            "peak_threads": 1,
+            "request_sequence": 7,
+            "wall_seconds": 0.2674
+          },
+          "vm_run_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66"
+        },
+        "module_observation": {
+          "invalidated_module_subjects": [
+            "mncs.test.assertions"
+          ],
+          "linked_module_subjects": [
+            "mncs.test.assertions"
+          ],
+          "published_entry_count": 1,
+          "rejected_entry_count": 1,
+          "reused_module_subjects": [
+            "mncs.std.application.v1",
+            "mncs.test.suite"
+          ]
+        },
+        "semantic_work": {
+          "changed_assertion_body_recomputed": true,
+          "front_end_invocations": 1,
+          "recomputed_fact_count": 1,
+          "recomputed_subjects_sample": [
+            "mncs:0.2:body:mncs.test.assertions::from_assertion"
+          ],
+          "reused_fact_count": 29,
+          "reused_subjects_sample": [
+            "mncs:0.2:body:mncs.std.application.v1::context_is_bounded",
+            "mncs:0.2:body:mncs.std.application.v1::failure",
+            "mncs:0.2:body:mncs.std.application.v1::success",
+            "mncs:0.2:body:mncs.test.assertions::equals_bool"
+          ]
+        },
+        "source_parse_work": {
+          "parsed_source_count": 1,
+          "published_entry_count": 1,
+          "reused_exact_source_count": 2,
+          "reused_significant_tokens_source_count": 1
+        }
+      },
+      "invalid_source": {
+        "artifact_published": false,
+        "build_metrics": {
+          "cpu_seconds": 0.04,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 3,
+          "peak_rss_bytes": 55365632,
+          "peak_threads": 1,
+          "request_sequence": 4,
+          "wall_seconds": 0.04502
+        },
+        "cache_status": null,
+        "diagnostic_count": 1,
+        "status": "rejected"
+      },
+      "root_comment_edit": {
+        "build_metrics": {
+          "cpu_seconds": 0.47,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 55169024,
+          "peak_threads": 1,
+          "request_sequence": 4,
+          "wall_seconds": 0.47667
+        },
+        "cache_status": "hit",
+        "execution": {
+          "artifact_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66",
+          "output_equal_to_stage0": true,
+          "returned_value_count": 1,
+          "stage0_metrics": {
+            "cpu_seconds": 0.25,
+            "peak_cgroup_memory_bytes": null,
+            "peak_child_processes": 0,
+            "peak_open_file_descriptors": 3,
+            "peak_rss_bytes": 55169024,
+            "peak_threads": 1,
+            "request_sequence": 5,
+            "wall_seconds": 0.266322
+          },
+          "vm_run_identity": "sha256:7cef49925c709d9fc86a6f78c413fd399fac4f664ed16fdf07df469d263bfe66"
+        },
+        "module_observation": {
+          "invalidated_module_subjects": [],
+          "linked_module_subjects": [],
+          "published_entry_count": 0,
+          "rejected_entry_count": 0,
+          "reused_module_subjects": [
+            "mncs.std.application.v1",
+            "mncs.test.assertions",
+            "mncs.test.suite"
+          ]
+        },
+        "semantic_work": {
+          "changed_assertion_body_recomputed": false,
+          "front_end_invocations": 1,
+          "recomputed_fact_count": 0,
+          "recomputed_subjects_sample": [],
+          "reused_fact_count": 30,
+          "reused_subjects_sample": [
+            "mncs:0.2:body:mncs.std.application.v1::context_is_bounded",
+            "mncs:0.2:body:mncs.std.application.v1::failure",
+            "mncs:0.2:body:mncs.std.application.v1::success",
+            "mncs:0.2:body:mncs.test.assertions::equals_bool"
+          ]
+        },
+        "source_parse_work": {
+          "parsed_source_count": 0,
+          "published_entry_count": 0,
+          "reused_exact_source_count": 3,
+          "reused_significant_tokens_source_count": 1
+        }
+      },
+      "tampered_cache_digest": {
+        "build_metrics": {
+          "cpu_seconds": 0.77,
+          "peak_cgroup_memory_bytes": null,
+          "peak_child_processes": 0,
+          "peak_open_file_descriptors": 4,
+          "peak_rss_bytes": 55627776,
+          "peak_threads": 1,
+          "request_sequence": 2,
+          "wall_seconds": 0.793463
+        },
+        "cache_status": "miss",
+        "module_observation": {
+          "invalidated_module_subjects": [],
+          "linked_module_subjects": [
+            "mncs.std.application.v1",
+            "mncs.test.assertions",
+            "mncs.test.suite"
+          ],
+          "published_entry_count": 3,
+          "rejected_entry_count": 0,
+          "reused_module_subjects": []
+        },
+        "semantic_work": {
+          "changed_assertion_body_recomputed": true,
+          "front_end_invocations": 1,
+          "recomputed_fact_count": 30,
+          "recomputed_subjects_sample": [
+            "mncs:0.2:body:mncs.std.application.v1::context_is_bounded",
+            "mncs:0.2:body:mncs.std.application.v1::failure",
+            "mncs:0.2:body:mncs.std.application.v1::success",
+            "mncs:0.2:body:mncs.test.assertions::equals_bool"
+          ],
+          "reused_fact_count": 0,
+          "reused_subjects_sample": []
+        },
+        "source_parse_work": {
+          "parsed_source_count": 4,
+          "published_entry_count": 4,
+          "reused_exact_source_count": 0,
+          "reused_significant_tokens_source_count": 0
+        }
+      }
+    }
+  }
+}
