@@ -1,0 +1,270 @@
+{
+  "schema_version": "mncs.compiler.project-language-fact-reuse/1",
+  "status": "passed_language_fact_v3_project_self_consumption",
+  "observed_at": "2026-10-23T10:34:03.713106+00:00",
+  "campaign_id": "cmp_mncs_native_application_readiness_compiler_20261013",
+  "compiler_revision": "3491377d44609b45a6a8d14286eeaa6e1693396a",
+  "compiler_branch": "campaign/compiler-language-identity-index-20261023",
+  "language_revision": "6295d0b94b34b271d78d512c3ddd2eb6d5c1ef46",
+  "language_fact_schema": "mncs.language-verification-fact/4",
+  "verifier_identity": "mncs-language-function-body-validator/4",
+  "stage0_probe_sha256": "23c9e258c5cbaeda1d763cdd297c6c29e48806a5808c402928248ad37c4a5f40",
+  "vm_revision": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5",
+  "vm_repository_root": "/home/epi13/Documents/Projects/mncs-vm",
+  "vm_binary_path": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+  "vm_binary_sha256": "19ff90a4e67abdd0838d9f26a99e9a86c43265532f2e5dfecc9dd0a63bf7b47d",
+  "vm_runtime_build_origin": {
+    "status": "stale-inputs",
+    "source_revisions": {
+      "mncs-compiler": "0d3bc4540201dcdb9e2a2739bcd6292ddce17ebe",
+      "mncs-language": "a235081db27db4965612f926c69bb6a5769b0d67",
+      "mncs-vm": "01e78c5b300f00ad57ca1003b4b1b1f5b4d8c4a5"
+    },
+    "mismatch_count": 10,
+    "mismatches": [
+      "source-revision:mncs-language",
+      "source-revision:mncs-compiler",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/frontend.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/lib.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-compiler/src/source_parse_cache.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/canonical.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/lib.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/ssa.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/validation.rs",
+      "/home/epi13/Documents/Projects/mncs-language/crates/mncs-model/src/verification_facts.rs"
+    ]
+  },
+  "harness": "tools/test_vm_compiler_project_fact_reuse.py",
+  "harness_sha256": "1ddaf1f94341deedb633470268ed4cb4095ef4bb9c07fdf7de31a56851ab351e",
+  "contracts": {
+    "request": "mncs.compiler.application-build-request/5",
+    "response": "mncs.compiler.application-build/8",
+    "cache": "mncs.compiler.application-build-cache-observation/5",
+    "verification_work": "mncs.compiler.application-build-verification-work/3"
+  },
+  "module_closure": [
+    {
+      "module": "mncs.compiler.source.v1",
+      "path": "src/compiler/source.mncs",
+      "profile": "0.19",
+      "source_sha256": "867d519686635ba4fb91a1d2a157195274007ed3c5d7da8624ae1a868eac7771"
+    },
+    {
+      "module": "mncs.compiler.lexer.v1",
+      "path": "src/compiler/lexer.mncs",
+      "profile": "0.19",
+      "source_sha256": "b70e9fd1a10ac96639e9125af42708543faf22ec1c35f1fc823fe13948a88ba7"
+    },
+    {
+      "module": "mncs.compiler.parser.v1",
+      "path": "src/compiler/parser.mncs",
+      "profile": "0.18",
+      "source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745"
+    },
+    {
+      "module": "mncs.compiler.segment.v1",
+      "path": "src/compiler/segment.mncs",
+      "profile": "0.19",
+      "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5"
+    },
+    {
+      "module": "mncs.compiler.decl.v1",
+      "path": "src/compiler/decl.mncs",
+      "profile": "0.18",
+      "source_sha256": "4ee3107b10fa9999f717a67aeed64189bd6ba09bc65f8c949c05093364292ae0"
+    },
+    {
+      "module": "mncs.compiler.flow.v1",
+      "path": "src/compiler/flow.mncs",
+      "profile": "0.18",
+      "source_sha256": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd"
+    },
+    {
+      "module": "mncs.compiler.ssa.v1",
+      "path": "src/compiler/ssa.mncs",
+      "profile": "0.18",
+      "source_sha256": "3c9081da467eccbd6a67bd11b77e33ea80f20ab6ac8f9389ff481d049c339709"
+    },
+    {
+      "module": "mncs.compiler.project.v1",
+      "path": "src/compiler/project.mncs",
+      "profile": "0.18",
+      "source_sha256": "9753f0f4ef04d72cade170bdaa46141f6eafe71af71896cc1289430d807dfa64"
+    }
+  ],
+  "workload": {
+    "root_module": "tests.compiler_project_fact_frontier",
+    "root_function": "run",
+    "callable": "mncs.compiler.project.v1::module_resolution_cache_key_equal<1,1024>",
+    "reference_backend": null,
+    "cases": [
+      {
+        "id": "equal-short-module-name",
+        "expected": true
+      },
+      {
+        "id": "mismatch-at-sixth-byte",
+        "expected": false
+      },
+      {
+        "id": "equal-empty-name",
+        "expected": true
+      },
+      {
+        "id": "different-length-names",
+        "expected": false
+      },
+      {
+        "id": "out-of-range-name-span",
+        "expected": false
+      }
+    ],
+    "case_count": 5
+  },
+  "verified_fact_reuse": {
+    "cold_body_fact_count": 2031,
+    "cold_declaration_fact_count": 2031,
+    "comment_reused_body_fact_count": 2031,
+    "comment_recomputed_body_facts": [],
+    "comment_reused_declaration_fact_count": 2031,
+    "comment_recomputed_declaration_facts": [],
+    "uncalled_body_edit_subject": "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper",
+    "uncalled_body_edit_recomputed": [
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper"
+    ],
+    "uncalled_body_edit_recomputation_reasons": {
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::unused_snapshot_helper": "subject_changed"
+    },
+    "uncalled_body_edit_reused_body_fact_count": 2030,
+    "uncalled_body_edit_recomputed_declaration_facts": [],
+    "body_edit_subject": "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal",
+    "body_edit_recomputed": [
+      "mncs:0.2:body:mncs.compiler.project.v1::compile_project",
+      "mncs:0.2:body:mncs.compiler.project.v1::compile_project_target",
+      "mncs:0.2:body:mncs.compiler.project.v1::compile_project_target_with_diagnostic_locations",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_fact",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal__spec_33cf5e9d",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_lookup",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_step",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_imports",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_module_step",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_module_uses",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_one_use",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_use_list",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_use_step",
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::run"
+    ],
+    "body_edit_recomputation_reasons": {
+      "mncs:0.2:body:mncs.compiler.project.v1::compile_project": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::compile_project_target": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::compile_project_target_with_diagnostic_locations": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_fact": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_key_equal__spec_33cf5e9d": "subject_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_lookup": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::module_resolution_cache_step": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_imports": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_module_step": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_module_uses": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_one_use": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_use_list": "dependencies_changed",
+      "mncs:0.2:body:mncs.compiler.project.v1::resolve_use_step": "dependencies_changed",
+      "mncs:0.2:body:tests.compiler_project_fact_frontier::run": "dependencies_changed"
+    },
+    "body_edit_reused_body_fact_count": 2016,
+    "body_edit_recomputed_declaration_facts": [],
+    "fresh_process_per_snapshot": true
+  },
+  "invalid_source": {
+    "status": "rejected",
+    "diagnostic_codes": [
+      "MNE135",
+      "MNE103"
+    ],
+    "front_end_invocations": 1,
+    "front_end_outcome": "rejected",
+    "artifact_publication": "not_published",
+    "prior_success_did_not_mask_diagnostic": true
+  },
+  "execution": {
+    "stage0_values": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "canonical_vm_values": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ],
+    "stage0_vm_equivalent": true,
+    "artifact_identity": "sha256:de63cc00b9de0944c28d8f4261bbc0ae526ba3b3ce7b5e849db84e7abc6fe35c",
+    "canonical_vm": {
+      "wall_seconds": 0.009151,
+      "peak_rss_kib": 8092,
+      "calls_bytes": 15839,
+      "results_bytes": 5713
+    }
+  },
+  "measurements": {
+    "total_wall_seconds": 342.003768,
+    "cold_build": {
+      "wall_seconds": 77.814298,
+      "cpu_seconds": 77.16,
+      "peak_rss_bytes": 1803956224,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "comment_edit": {
+      "wall_seconds": 72.048104,
+      "cpu_seconds": 71.05,
+      "peak_rss_bytes": 2087919616,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "uncalled_body_edit": {
+      "wall_seconds": 71.807732,
+      "cpu_seconds": 71.23,
+      "peak_rss_bytes": 2088222720,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "body_edit": {
+      "wall_seconds": 79.655982,
+      "cpu_seconds": 78.36,
+      "peak_rss_bytes": 2088214528,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "invalid_source": {
+      "wall_seconds": 39.438486,
+      "cpu_seconds": 39.21,
+      "peak_rss_bytes": 1945997312,
+      "peak_cgroup_memory_bytes": null,
+      "peak_open_file_descriptors": 4,
+      "peak_threads": 1,
+      "peak_child_processes": 0,
+      "request_sequence": 2
+    },
+    "isolated_cgroup_peak_bytes": null,
+    "isolated_cgroup_measurement": "unavailable"
+  },
+  "claim_boundary": "selected Project function application only; whole-compiler succession remains unproven"
+}
