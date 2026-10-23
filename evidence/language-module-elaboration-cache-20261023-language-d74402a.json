@@ -1,23 +1,24 @@
 {
-  "build_profile": "release; CARGO_BUILD_JOBS=4; clean Stage-0 and probe rebuilt for the locked Language revision",
-  "observed_at_utc": "2026-10-23T21:55:33Z",
+  "build_profile": "CARGO_BUILD_JOBS=4; final validation reused the already-built release Stage-0 and probe outputs",
+  "observed_at_utc": "2026-10-23T21:57:01Z",
   "resource_measurements": {
     "cgroup_memory_metric_unavailable": true,
-    "compiler_vm_request_peak_cgroup_memory_bytes": null,
-    "compiler_vm_request_peak_rss_bytes": 55635968,
-    "release_rebuild_elapsed_seconds_per_stage": [
+    "final_validation_reused_release_artifacts": true,
+    "initial_clean_release_rebuild_elapsed_seconds": [
       171,
       168
-    ]
+    ],
+    "maximum_reported_vm_request_peak_rss_bytes": 55468032,
+    "peak_cgroup_memory_bytes": null
   },
   "result": {
     "actual_language_modules_reused": true,
     "bootstrap_target": "/tmp/mncs-language-stage0-307e517",
     "canonical_vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
     "canonical_vm_binary_sha256": "06a15aaec7b67b5c815e3a4c6659a4ecd83a0a729a80e2c6002ebf0a81e5ba5d",
-    "compiler_head": "9610d3b0f5cde065ad28f353455d10ea322e6b51",
+    "compiler_head": "45128fba33c5fb905731043261be9bf3a36ce6ac",
     "compiler_probe_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=d74402a057c0/d74402a057c0\n",
-    "compiler_tracked_patch_sha256": "2258eb60137850e318c029c31dbb3b6bf74179e7ea19a1f53618d2deeceb4b54",
+    "compiler_tracked_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "fresh_probe_tail": "mncs-stage0-probe backend=none modules=0 cache_hits=0 frontend_program_cache_hits=0 cache_misses=0 stage0=d74402a057c0/d74402a057c0\n",
     "language_head": "d74402a057c085f928a81644e6195ab1e52a78b3",
     "schema_version": "mncs.compiler.language-module-elaboration-cache-regression/1",
@@ -25,14 +26,14 @@
     "stages": {
       "cold": {
         "build_metrics": {
-          "cpu_seconds": 0.78,
+          "cpu_seconds": 0.76,
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 4,
-          "peak_rss_bytes": 55541760,
+          "peak_rss_bytes": 55468032,
           "peak_threads": 1,
           "request_sequence": 2,
-          "wall_seconds": 0.78516
+          "wall_seconds": 0.77925
         },
         "cache_status": "miss",
         "execution": {
@@ -40,14 +41,14 @@
           "output_equal_to_stage0": true,
           "returned_value_count": 1,
           "stage0_metrics": {
-            "cpu_seconds": 0.24,
+            "cpu_seconds": 0.26,
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 3,
-            "peak_rss_bytes": 55541760,
+            "peak_rss_bytes": 55468032,
             "peak_threads": 1,
             "request_sequence": 3,
-            "wall_seconds": 0.263416
+            "wall_seconds": 0.270513
           },
           "vm_run_identity": "sha256:1372ca2d0613d519e834b9ba82ffb35b66fb209deeb4f7a5f7e892cc1b83b109"
         },
@@ -84,14 +85,14 @@
       },
       "fresh_process": {
         "build_metrics": {
-          "cpu_seconds": 0.63,
+          "cpu_seconds": 0.6,
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 4,
-          "peak_rss_bytes": 55635968,
+          "peak_rss_bytes": 55291904,
           "peak_threads": 1,
           "request_sequence": 2,
-          "wall_seconds": 0.637041
+          "wall_seconds": 0.623719
         },
         "cache_status": "hit",
         "execution": {
@@ -103,10 +104,10 @@
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 3,
-            "peak_rss_bytes": 55635968,
+            "peak_rss_bytes": 55291904,
             "peak_threads": 1,
             "request_sequence": 3,
-            "wall_seconds": 0.262683
+            "wall_seconds": 0.264536
           },
           "vm_run_identity": "sha256:1372ca2d0613d519e834b9ba82ffb35b66fb209deeb4f7a5f7e892cc1b83b109"
         },
@@ -147,10 +148,10 @@
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 4,
-          "peak_rss_bytes": 55541760,
+          "peak_rss_bytes": 55468032,
           "peak_threads": 1,
           "request_sequence": 6,
-          "wall_seconds": 0.507595
+          "wall_seconds": 0.502978
         },
         "cache_status": "hit",
         "execution": {
@@ -158,14 +159,14 @@
           "output_equal_to_stage0": true,
           "returned_value_count": 1,
           "stage0_metrics": {
-            "cpu_seconds": 0.26,
+            "cpu_seconds": 0.24,
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 3,
-            "peak_rss_bytes": 55541760,
+            "peak_rss_bytes": 55468032,
             "peak_threads": 1,
             "request_sequence": 7,
-            "wall_seconds": 0.274569
+            "wall_seconds": 0.266129
           },
           "vm_run_identity": "sha256:1372ca2d0613d519e834b9ba82ffb35b66fb209deeb4f7a5f7e892cc1b83b109"
         },
@@ -212,10 +213,10 @@
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 3,
-          "peak_rss_bytes": 55635968,
+          "peak_rss_bytes": 55291904,
           "peak_threads": 1,
           "request_sequence": 4,
-          "wall_seconds": 0.045651
+          "wall_seconds": 0.045042
         },
         "cache_status": null,
         "diagnostic_count": 1,
@@ -227,10 +228,10 @@
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 4,
-          "peak_rss_bytes": 55541760,
+          "peak_rss_bytes": 55468032,
           "peak_threads": 1,
           "request_sequence": 4,
-          "wall_seconds": 0.459215
+          "wall_seconds": 0.467368
         },
         "cache_status": "hit",
         "execution": {
@@ -238,14 +239,14 @@
           "output_equal_to_stage0": true,
           "returned_value_count": 1,
           "stage0_metrics": {
-            "cpu_seconds": 0.27,
+            "cpu_seconds": 0.26,
             "peak_cgroup_memory_bytes": null,
             "peak_child_processes": 0,
             "peak_open_file_descriptors": 3,
-            "peak_rss_bytes": 55541760,
+            "peak_rss_bytes": 55468032,
             "peak_threads": 1,
             "request_sequence": 5,
-            "wall_seconds": 0.267459
+            "wall_seconds": 0.26867
           },
           "vm_run_identity": "sha256:1372ca2d0613d519e834b9ba82ffb35b66fb209deeb4f7a5f7e892cc1b83b109"
         },
@@ -282,14 +283,14 @@
       },
       "tampered_cache_digest": {
         "build_metrics": {
-          "cpu_seconds": 0.78,
+          "cpu_seconds": 0.8,
           "peak_cgroup_memory_bytes": null,
           "peak_child_processes": 0,
           "peak_open_file_descriptors": 4,
-          "peak_rss_bytes": 55463936,
+          "peak_rss_bytes": 55422976,
           "peak_threads": 1,
           "request_sequence": 2,
-          "wall_seconds": 0.809479
+          "wall_seconds": 0.795324
         },
         "cache_status": "miss",
         "module_observation": {

@@ -63,6 +63,11 @@ The updated Compiler harness passes against exact Language revision
   same VM artifact identity.
 - Invalid source was rejected without publishing an artifact. A tampered cache
   receipt caused a cold four-source parse and verification.
+- Final integration was rerun after merging current Compiler main; it passed at
+  Compiler revision `45128fba33c5fb905731043261be9bf3a36ce6ac`. The cold build
+  took 0.779 seconds and the comment-edit build took 0.467 seconds in this
+  workload run. These timings are workload-specific; the compiler request's
+  reported peak RSS was at most 55.7 MB, and cgroup peak memory was unavailable.
 
 See the complete stage telemetry and artifact identities in
 [`../evidence/language-module-elaboration-cache-20261023-language-d74402a.json`](../evidence/language-module-elaboration-cache-20261023-language-d74402a.json).
@@ -71,7 +76,8 @@ See the complete stage telemetry and artifact identities in
 
 The workload used `mncs-test` root source SHA-256
 `fa45534cdebb4de683675bfb70eed15cfa177a5198f036c0e3b7fcab68b91c30`,
-Compiler harness revision `9610d3b0f5cde065ad28f353455d10ea322e6b51`, and
-Test repository revision `57802fba4dea04ad50004d3e1e6768b507b889bb`. The
-release Stage-0 and probe were each rebuilt in 171 and 168 seconds. Per-request
-VM peak RSS was 55.6 MB; the cgroup peak-memory counter was unavailable.
+Compiler harness revision `45128fba33c5fb905731043261be9bf3a36ce6ac`, and
+Test repository revision `57802fba4dea04ad50004d3e1e6768b507b889bb`. Its
+release Stage-0 and probe outputs were reused after the initial clean rebuilds
+of 171 and 168 seconds. Per-request VM peak RSS was 55.7 MB; the cgroup
+peak-memory counter was unavailable.
