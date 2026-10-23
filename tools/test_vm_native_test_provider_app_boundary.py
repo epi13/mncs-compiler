@@ -487,6 +487,12 @@ def main() -> None:
                     "unresolved_obligations": built.get("unresolved_obligations"),
                     "diagnostics": built.get("diagnostics"),
                 }, indent=2)[:10000])
+            cold_work = built.get("cache", {}).get("verification_work", {})
+            if cold_work.get("language_verification_fact_schema") != "mncs.language-verification-fact/4":
+                raise AssertionError(
+                    "provider application did not use the pinned Language verification-fact contract: "
+                    f"{cold_work.get('language_verification_fact_schema')}"
+                )
 
             # Verify the ApplicationContext entry and protocol consumer in one
             # multi-callable request, producing one executable application.
@@ -1882,6 +1888,9 @@ def main() -> None:
             ]
             source_rows.append({"module": ENTRY_MODULE, "path": str(ROOT_SOURCE_PATH),
                                 "sha256": sha(ROOT_SOURCE_PATH.read_bytes())})
+            language_lock_revision = json.loads(
+                (ROOT / "mncs-language.lock.json").read_text(encoding="utf-8")
+            )["revision"]
             evidence = {
                 "schema_version": "mncs.compiler.native-application-proof/3",
                 "created_at": datetime.now(timezone.utc).isoformat(),
@@ -1905,7 +1914,11 @@ def main() -> None:
                 },
                 "producer": {
                     "compiler_revision": subprocess.check_output(["git", "-C", str(ROOT), "rev-parse", "HEAD"], text=True).strip(),
-                    "language_revision": subprocess.check_output(["git", "-C", str(digest_app.LANGUAGE_ROOT), "rev-parse", "HEAD"], text=True).strip(),
+                    "compiler_worktree_diff_sha256": sha(subprocess.check_output(
+                        ["git", "-C", str(ROOT), "diff", "--binary", "HEAD"],
+                    )),
+                    "language_revision": language_lock_revision,
+                    "language_checkout_head": subprocess.check_output(["git", "-C", str(digest_app.LANGUAGE_ROOT), "rev-parse", "HEAD"], text=True).strip(),
                     "test_revision": subprocess.check_output(["git", "-C", str(TEST_ROOT), "rev-parse", "HEAD"], text=True).strip(),
                     "stdlib_revision": subprocess.check_output(["git", "-C", str(STDLIB_ROOT), "rev-parse", "HEAD"], text=True).strip(),
                     "vm_revision": subprocess.check_output(["git", "-C", str(digest_app.VM_ROOT), "rev-parse", "HEAD"], text=True).strip(),
@@ -1921,6 +1934,7 @@ def main() -> None:
                 "build": {
                     "request_schema": request["schema_version"],
                     "result_schema": built["schema_version"],
+                    "language_verification_fact_schema": cold_work.get("language_verification_fact_schema"),
                     "status": built["status"],
                     "selected_callable_roots": [
                         f"{module}::{function}" for module, function in actual_roots

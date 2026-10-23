@@ -29,7 +29,7 @@ import test_vm_native_application as app
 ROOT = Path(__file__).resolve().parents[1]
 PROBE = Path(os.environ.get(
     "MNCS_TEST_INVENTORY_PROBE_BIN",
-    ROOT / ".build/native-app-readiness/mncs-compiler-stage0-probe",
+    app.PROBE,
 ))
 MODULE = "tests.native_inventory_build"
 SOURCE_ID = "tests/native_inventory_build.mncs"
