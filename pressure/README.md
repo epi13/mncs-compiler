@@ -47,7 +47,7 @@ and current native syntax results are in
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
-| [CP-0027 Language verified-fact reuse](0027-language-verified-fact-reuse.md) | Open | Real `mncs-test` and Automation builds still recheck the full Language frontend for in-closure edits; `reused_semantic_facts` remains empty. Owner: `mncs-language`; implement in a separately authorized Language run. |
+| [CP-0027 Language verified-fact reuse](0027-language-verified-fact-reuse.md) | Partially resolved; application reuse verified | Compiler and Language now prove real `mncs-test` digest-app fact reuse: 30 facts reused after a root comment edit and 29 reused when one imported assertion body changes, with one changed fact recomputed, fresh invalid-source rejection, tamper fallback, and canonical VM equivalence. One full frontend invocation remains per changed snapshot; nominal, generic-specialization, and effect/capability invalidation still need application coverage. |
 
 ## Incremental parse workload (2026-10-23)
 

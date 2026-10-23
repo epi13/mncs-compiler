@@ -61,6 +61,17 @@ The edited application still compiled and its canonical VM calls matched
 Stage-0. The bad-body case returned fresh `MNE103` diagnostics without
 publishing facts or an artifact.
 
+The 2026-10-23 `mncs.test.digest::digest_app` run extends this proof to the
+real Test application. A root comment edit reused 30 verified facts, recomputed
+none, reused its current syntax tree from unchanged significant tokens, and
+preserved canonical VM output. An imported assertion-body edit recomputed the
+single changed function fact and reused 29 independent facts; invalid source
+still returned a fresh rejection, and tampered cache evidence forced cold
+verification. A fresh process reused the same Language facts and VM artifact.
+The frontend invocation count remains one for each changed snapshot, so the
+remaining pressure is parsing/linking and other whole-snapshot work rather
+than a lack of body-fact reuse.
+
 ## Current workaround
 
 Selective Language fact reuse now avoids redundant verification, while the
@@ -108,11 +119,12 @@ it without duplicating semantic identity.
 - `evidence/native-app-readiness-automation-evaluation-inplace-20261018.json`: multi-module Automation application; changed snapshots receive fresh whole-frontend verification before artifact reuse. The measured comment edit took 0.608 s and the uncalled-body edit 0.578 s in this workload; cgroup memory was unavailable.
 - `evidence/project-language-fact-reuse-20261021T152950Z.json` (SHA-256 `d9d085e896dfb779d6ae2ed416c035448c7bd589df6d862be3f9c2ae48675b79`): eight-module Project workload, 2,031 cold body and declaration facts, full reuse after a comment edit, one body recomputed after an uncalled edit, 15 bodies recomputed after a reachable edit, fresh `MNE135`/`MNE103` diagnostics, and Stage-0/canonical VM agreement. Each changed-snapshot build took 73.5–80.7 s, so end-to-end speedup is not established; peak RSS was 1.80–2.09 GB and cgroup memory was unavailable.
 - `evidence/self-host-full-module-fact-reuse-20261021T163947Z.json` (SHA-256 `69a55b1beaf9d633cc7ac4adb1ba4b37b8741b056a5af16df06e3a4a277c36a2`): current Language main `f31b098`, three full Compiler modules plus the root test module, 103 verified body facts, exact imported interface invalidation (21 recomputed, 82 reused), fresh invalid-source diagnostics, and six canonical VM calls matching Stage-0. Cold, comment, body-edit, and interface-edit builds measured 2.88 s, 2.11 s, 2.42 s, and 2.02 s; peak RSS was 144–154 MB and cgroup memory was unavailable.
+- `evidence/language-module-elaboration-cache-20261023-language-d74402a.json` (SHA-256 `f03623e51a856ebd64d8a8bc7ff24be18ba0e0682e5491125a5172b0e176820f`): current Compiler main `1bbd5a5` with Language `d74402a`, real digest application, comment edit (30 facts reused, zero recomputed), imported body edit (29 reused, one recomputed), fresh-process reuse, fresh invalid-source rejection, tamper-triggered full verification, and canonical VM equivalence.
 - `evidence/project-language-fact-reuse-20261021T155938Z.json` (SHA-256 `271f04c1e3b1ace856b5f48684bd3ce7616600aafe46b6d9eea93070c7d043e6`): exploratory borrowed-module-linking revision. It preserved fact counts and VM results, reduced measured peak RSS to 1.47–1.93 GB, but took 374.1 s total versus 349.1 s in the earlier run. The measurements were sequential rather than a controlled benchmark; this candidate is not pinned by Compiler main.
 - `docs/native-application-build-contract.md`: defines the reserved Language-fact result field and the provenance/invalidation contract.
 
 ## Upstream tracking
 
 - `mncs-language` issue/PR: not opened; the dedicated Language campaign delivered the fact implementation on main.
-- Resolution revision: Language `a235081db27db4965612f926c69bb6a5769b0d67` (current main `f31b098f561c706e7fddea70242398cdf5c7e39c` adds only a badge refresh); Compiler application-build integration is present on main.
-- Follow-up: exercise interface, nominal, generic, and effect/capability invalidation through the real multi-module application workload and reduce repeated parsing/linking cost.
+- Verified-fact implementation revision: Language `a235081db27db4965612f926c69bb6a5769b0d67`; the current Compiler pin is Language `d74402a057c085f928a81644e6195ab1e52a78b3`. Compiler application-build integration and production digest-app reuse evidence are on Compiler main `1bbd5a5f20d2ab09f8a2b950b92493b2d939a7f1`.
+- Follow-up: exercise nominal, generic-specialization, and effect/capability invalidation through real application builds, then reduce remaining changed-snapshot frontend, parsing, and linking work where measurement supports it.
