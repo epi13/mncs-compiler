@@ -103,9 +103,9 @@ Artifact-cache hits must not be reported as Language fact reuse.
 Language's versioned `mncs.language-verification-fact/3` contract now supports
 function-body and declaration reuse with verifier, policy, profile, interface,
 dependency, and assumption identities. The Compiler consumes those facts and
-reports actual reused and recomputed subjects. Continue by covering exported
-and imported interfaces and nominal types in a real application build. Extend
-coverage to module export-set edits, generic specializations, and
+reports actual reused and recomputed subjects. Imported callable and nominal
+interface edits plus one seeded generic specialization are covered by real
+application builds. Continue by covering module export-set edits and
 effect/capability changes; reduce repeated
 source-level work only where measurement shows it is safe and useful.
 
@@ -140,4 +140,4 @@ it without duplicating semantic identity.
 
 - `mncs-language` issue/PR: not opened; the dedicated Language campaign delivered the fact implementation on main.
 - Verified-fact implementation first landed in Language `a235081db27db4965612f926c69bb6a5769b0d67`. The current Compiler pin is Language `9505d3f557701f072b5803a5bad046389b84cb3b`; application-build integration and digest-app reuse evidence are in Compiler main `9ddf7da5d010ec25d5325985583b63f796312233`.
-- Follow-up: exercise module export-set, generic-specialization, and effect/capability invalidation through real application builds, then reduce remaining changed-snapshot frontend, parsing, and linking work where measurement supports it.
+- Follow-up: exercise module export-set and effect/capability invalidation through real application builds, then reduce remaining changed-snapshot frontend, parsing, and linking work where measurement supports it.

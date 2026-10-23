@@ -62,9 +62,19 @@ SOURCE_PARSE_CACHE_SCHEMA = "mncs.language-source-parse-cache/3"
 SOURCE_PARSE_OBSERVATION_SCHEMA = "mncs.language-source-parse-cache-observation/3"
 SOURCE_PARSE_POLICY_IDENTITY = "mncs-language-source-parser/1"
 EXPECTED_MODULES = set(digest_app.MODULE_PATHS)
+GENERIC_SUMMARIZE_SEED = [{
+    "module": "mncs.test.suite",
+    "function": "summarize",
+    "type_arguments": [{"kind": "nat", "value": 4}],
+}]
 
 
-def request(root_source: str, modules: dict[str, str]) -> dict:
+def request(
+    root_source: str,
+    modules: dict[str, str],
+    *,
+    generic_seeds: list[dict] | None = None,
+) -> dict:
     return {
         "schema_version": REQUEST_SCHEMA,
         "target": "mncs-vm-0.1",
@@ -75,7 +85,7 @@ def request(root_source: str, modules: dict[str, str]) -> dict:
         "callable_roots": [{"module": digest_app.ENTRY_MODULE, "function": "build_digest"}],
         "test_selection": {"kind": "all_source_cases"},
         "modules": modules,
-        "generic_seeds": [],
+        "generic_seeds": list(generic_seeds or []),
         "capabilities": ["test_artifact"],
         "effect_assumptions": [],
         "optimization_policy": "default",
@@ -246,7 +256,7 @@ def stage_summary(row: dict) -> dict:
         "cache_status": row.get("cache_status"),
         "build_metrics": row.get("build_metrics"),
     }
-    for field in ("status", "diagnostic_count", "artifact_published"):
+    for field in ("status", "diagnostic_count", "artifact_published", "artifact_identity"):
         if field in row:
             summary[field] = row[field]
     module_observation = row.get("module_observation")
@@ -300,6 +310,7 @@ def run_isolated_module_edit(
     invalidated_modules: set[str],
     recomputed_subject_suffixes: set[str],
     argument: dict,
+    generic_seeds: list[dict] | None = None,
 ) -> dict[str, dict]:
     """Prove one interface edit against a fresh application-cache baseline."""
     cache_root = directory / f"{label}-application-cache"
@@ -315,7 +326,9 @@ def run_isolated_module_edit(
             raise AssertionError(f"{label}: Stage-0 probe did not return its readiness handshake")
 
         cold, cold_metrics = probe.send(
-            {"compile_application": request(root_source, modules)}, timeout=180
+            {"compile_application": request(
+                root_source, modules, generic_seeds=generic_seeds
+            )}, timeout=180
         )
         cold_work, cold_observation = work_for(f"{label}_cold", cold)
         assert_modules(
@@ -328,13 +341,16 @@ def run_isolated_module_edit(
             raise AssertionError(f"{label}: isolated cold baseline did not verify all facts")
         result["cold"] = {
             "cache_status": cold.get("cache", {}).get("status"),
+            "artifact_identity": cold.get("artifact", {}).get("identity"),
             "build_metrics": cold_metrics,
             "module_observation": cold_observation,
             "verification_work": cold_work,
         }
 
         edited, edited_metrics = probe.send(
-            {"compile_application": request(edited_root, edited_modules)}, timeout=180
+            {"compile_application": request(
+                edited_root, edited_modules, generic_seeds=generic_seeds
+            )}, timeout=180
         )
         edited_work, edited_observation = work_for(label, edited)
         assert_modules(
@@ -361,6 +377,7 @@ def run_isolated_module_edit(
             )
         result["edited"] = {
             "cache_status": edited.get("cache", {}).get("status"),
+            "artifact_identity": edited.get("artifact", {}).get("identity"),
             "build_metrics": edited_metrics,
             "module_observation": edited_observation,
             "verification_work": edited_work,
@@ -605,6 +622,75 @@ def main() -> None:
             stages["imported_signature_cold"] = signature["cold"]
             stages["imported_function_result_name_edit"] = signature["edited"]
 
+            # Force a real generic specialization in the same multi-module
+            # application, then change its implementation while preserving
+            # the digest root's observable behavior. The specialization's
+            # own verified body must be recomputed while independent facts
+            # remain reusable.
+            generic_suite = modules["mncs.test.suite"]
+            generic_body = "    return summary;\n}"
+            changed_generic_suite, generic_body_count = generic_suite.replace(
+                generic_body,
+                "    return verdict_for(summary);\n}",
+                1,
+            ), generic_suite.count(generic_body)
+            if generic_body_count != 1 or changed_generic_suite == generic_suite:
+                raise AssertionError("test suite no longer exposes the selected generic body")
+            generic_modules = dict(modules)
+            generic_modules["mncs.test.suite"] = changed_generic_suite
+            generic_specialization = run_isolated_module_edit(
+                probe_binary,
+                directory,
+                "generic_summarize_body_edit",
+                root_source,
+                modules,
+                root_source,
+                generic_modules,
+                reused_modules={"mncs.std.application.v1", "mncs.test.assertions"},
+                linked_modules={"mncs.test.suite"},
+                invalidated_modules={"mncs.test.suite"},
+                recomputed_subject_suffixes={"mncs.test.suite::summarize"},
+                argument=argument,
+                generic_seeds=GENERIC_SUMMARIZE_SEED,
+            )
+            generic_edited = generic_specialization["edited"]
+            generic_recomputed = fact_set(
+                generic_edited["verification_work"], "recomputed_semantic_facts"
+            )
+            generic_reused = fact_set(
+                generic_edited["verification_work"], "reused_semantic_facts"
+            )
+            if not any(
+                subject.endswith("mncs.test.suite::summarize")
+                for subject in generic_recomputed
+            ):
+                raise AssertionError(
+                    "generic template body was not reverified: "
+                    f"{sorted(generic_recomputed)}"
+                )
+            if not any(
+                "mncs.test.suite::summarize__spec_" in subject
+                for subject in generic_recomputed
+            ):
+                raise AssertionError(
+                    "generic specialization body was not reverified: "
+                    f"{sorted(generic_recomputed)}"
+                )
+            if not any(
+                subject.endswith("mncs.test.digest::digest_app")
+                for subject in generic_reused
+            ):
+                raise AssertionError(
+                    "independent effectful root body was not reused: "
+                    f"{sorted(generic_reused)}"
+                )
+            if generic_edited["artifact_identity"] == generic_specialization["cold"]["artifact_identity"]:
+                raise AssertionError(
+                    "changed generic specialization retained the prior executable artifact"
+                )
+            stages["generic_specialization_cold"] = generic_specialization["cold"]
+            stages["generic_summarize_body_edit"] = generic_edited
+
             # Keep the tamper-negative case isolated so its deliberately
             # corrupted receipt cannot poison the fresh-process reuse case.
             tampered_cache_root = directory / "tampered-application-cache"
@@ -714,7 +800,7 @@ def main() -> None:
         ["git", "-C", str(ROOT), "diff", "--binary", "HEAD"],
     )
     print(json.dumps({
-        "identity": "ev_compiler_digest_application_interface_invalidation_20261023",
+        "identity": "ev_compiler_digest_application_generic_specialization_invalidation_20261023",
         "schema_version": "mncs.compiler.language-module-elaboration-cache-regression/1",
         "compiler_head": digest_app.git(ROOT, "rev-parse", "HEAD"),
         "compiler_tracked_patch_sha256": hashlib.sha256(tracked_patch).hexdigest(),
@@ -725,6 +811,7 @@ def main() -> None:
         "bootstrap_target": os.environ["MNCS_BOOTSTRAP_TARGET_DIR"],
         "source_module_count": len(EXPECTED_MODULES) + 1,
         "actual_language_modules_reused": True,
+        "generic_specialization_seed": GENERIC_SUMMARIZE_SEED,
         "canonical_vm_binary": str(app.VM_BIN),
         "canonical_vm_binary_sha256": hashlib.sha256(app.VM_BIN.read_bytes()).hexdigest(),
         "compiler_probe_tail": probe_tail,
