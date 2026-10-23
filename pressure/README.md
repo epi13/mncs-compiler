@@ -49,6 +49,12 @@ and current native syntax results are in
 | --- | --- | --- |
 | [CP-0027 Language verified-fact reuse](0027-language-verified-fact-reuse.md) | Open | Real `mncs-test` and Automation builds still recheck the full Language frontend for in-closure edits; `reused_semantic_facts` remains empty. Owner: `mncs-language`; implement in a separately authorized Language run. |
 
+## Incremental parse workload (2026-10-23)
+
+| Finding | Current status | Current result and owner |
+| --- | --- | --- |
+| [CP-0028 large-source trivia parse reuse](0028-large-source-trivia-parse-reuse.md) | Reproduced; Language fix in progress | The digest application reused three imported parse results, but its comment-edited root was parsed and republished because Language rejected the syntax-tree span rebase. Owner: `mncs-language`. |
+
 ## Operating sequence
 
 ```text
