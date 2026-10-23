@@ -138,6 +138,25 @@ schema, cache observation `/12` and verification-work `/11` report this path.
 comment-only, unreachable-body, reachable-body, invalid source, and
 fresh-process snapshots on a real two-module application, then compares VM
 results with the Stage-0 oracle.
+
+Request `/13` and response `/16` add Language's bounded
+`mncs.language-module-elaboration-cache/2`. The caller-owned cache stores only
+successfully linked imported-module Programs and declaration spans. A cache
+entry binds the exact source-envelope identity, source profile and
+profile-registry identity, parser and linker policy identities, AST schema,
+and a fingerprint of every direct dependency's transitive closure. The
+current source is parsed and its dependency closure is resolved before a hit
+can be reused; Language still runs semantic verification for the complete
+current program. A dependency edit invalidates only imported modules whose
+closure changed, and stale source locations cannot be reused across source
+identities. Cache entry `/12` checksums the serialized Language cache; cache
+observation `/13` and verification-work `/12` report imported module
+identities actually linked, reused, invalidated, and published. The
+fresh-process workload
+`tools/test_vm_language_module_elaboration_cache.py` uses the real four-module
+`mncs-test` digest application. It checks root-only edits, transitive
+invalidation, tampered-cache rejection, fresh diagnostics, and canonical VM
+equivalence with the Stage-0 oracle.
 `python3 tools/test_application_build_test_inventory.py` checks that the
 response carries the root module's Language-issued inventory, fresh-process
 reuse preserves it, comment edits refresh spans, test-body edits refresh only
@@ -332,9 +351,9 @@ validation work. Full evidence is in
 
 ## Environment capability
 
-The Compiler manifest declares revision 12 of the contract as
-`mncs-compiler:native-application-build`, advertises request `/9` and response
-`/12` as current, and retains all nine request-response pairs. The provider accepts a request from the selected
+The Compiler manifest declares revision 16 of the contract as
+`mncs-compiler:native-application-build`, advertises request `/13` and response
+`/16` as current, and retains all thirteen request-response pairs. The provider accepts a request from the selected
 Compiler checkout with `--request-file PATH`, or from a canonical Store input
 artifact with `--request-artifact NAME`. It writes the complete response as
 the shareable `native-application-build.json` invocation artifact and keeps

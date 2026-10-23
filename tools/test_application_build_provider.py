@@ -52,6 +52,8 @@ DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-reque
 DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/14"
 FUNCTION_BODY_FACT_REQUEST_SCHEMA = "mncs.compiler.application-build-request/12"
 FUNCTION_BODY_FACT_RESPONSE_SCHEMA = "mncs.compiler.application-build/15"
+MODULE_ELABORATION_CACHE_REQUEST_SCHEMA = "mncs.compiler.application-build-request/13"
+MODULE_ELABORATION_CACHE_RESPONSE_SCHEMA = "mncs.compiler.application-build/16"
 INVOCATION_SCHEMA = "mncs.compiler.application-build-invocation/1"
 _DIGEST_EVIDENCE_PATH = Path(os.environ.get(
     "MNCS_NATIVE_APP_PROVIDER_EVIDENCE_PATH",
@@ -90,20 +92,21 @@ def validate_environment_contract_descriptor() -> None:
         (SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA, SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA),
         (DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA, DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA),
         (FUNCTION_BODY_FACT_REQUEST_SCHEMA, FUNCTION_BODY_FACT_RESPONSE_SCHEMA),
+        (MODULE_ELABORATION_CACHE_REQUEST_SCHEMA, MODULE_ELABORATION_CACHE_RESPONSE_SCHEMA),
     }
     actual_pairs = {
         (row.get("request_schema"), row.get("response_schema"))
         for row in artifact.get("supported_request_response_pairs", [])
         if isinstance(row, dict)
     }
-    if contract.get("version") != "15":
-        raise AssertionError("Compiler capability revision must match application-build/15")
+    if contract.get("version") != "16":
+        raise AssertionError("Compiler capability revision must match application-build/16")
     if (artifact.get("request_schema"), artifact.get("response_schema")) != (
-        FUNCTION_BODY_FACT_REQUEST_SCHEMA, FUNCTION_BODY_FACT_RESPONSE_SCHEMA
+        MODULE_ELABORATION_CACHE_REQUEST_SCHEMA, MODULE_ELABORATION_CACHE_RESPONSE_SCHEMA
     ):
-        raise AssertionError("Compiler must advertise application-build/15 as its current contract")
+        raise AssertionError("Compiler must advertise application-build/16 as its current contract")
     if actual_pairs != expected_pairs:
-        raise AssertionError("Compiler descriptor must retain /4 through /15 request-response pairs")
+        raise AssertionError("Compiler descriptor must retain /4 through /16 request-response pairs")
     if (artifact.get("record_type_declaration_fact_schema")
             != "mncs.language-declaration-verification-fact/1"
             or artifact.get("record_type_declaration_fact_verifier_identity")
@@ -112,7 +115,7 @@ def validate_environment_contract_descriptor() -> None:
             != "mncs-language-record-type-policy/1"):
         raise AssertionError("Compiler descriptor omitted the Language record fact verifier contract")
     if (artifact.get("verification_work_schema")
-            != "mncs.compiler.application-build-verification-work/11"
+            != "mncs.compiler.application-build-verification-work/12"
             or artifact.get("function_body_verification_fact_schema")
             != "mncs.language-verification-fact/4"
             or artifact.get("function_body_verification_fact_verifier_identity")
@@ -120,13 +123,13 @@ def validate_environment_contract_descriptor() -> None:
             or artifact.get("function_body_verification_fact_policy_identity")
             != "mncs-language-function-body-policy/2"
             or artifact.get("application_build_cache_entry_schema")
-            != "mncs.compiler.application-build-cache-entry/11"
+            != "mncs.compiler.application-build-cache-entry/12"
             or artifact.get("language_verification_dependency_summary_cache_schema")
             != "mncs.language-verification-dependency-summary-cache/2"
             or artifact.get("language_verification_dependency_summary_cache_observation_schema")
             != "mncs.language-verification-dependency-summary-cache-observation/2"
             or artifact.get("application_build_cache_observation_schema")
-            != "mncs.compiler.application-build-cache-observation/12"
+            != "mncs.compiler.application-build-cache-observation/13"
             or artifact.get("language_verification_dependency_summary_cache_policy_identity")
             != "mncs-language-verification-dependency-extractor/1"
             or artifact.get("ssa_function_artifact_cache_schema")
@@ -134,6 +137,13 @@ def validate_environment_contract_descriptor() -> None:
             or artifact.get("ssa_function_artifact_cache_observation_schema")
             != "mncs.language-ssa-function-artifact-cache-observation/1"):
         raise AssertionError("Compiler descriptor omitted Language SSA artifact cache identities")
+    if (artifact.get("module_elaboration_cache_schema")
+            != "mncs.language-module-elaboration-cache/2"
+            or artifact.get("module_elaboration_cache_observation_schema")
+            != "mncs.language-module-elaboration-cache-observation/1"
+            or artifact.get("module_elaboration_policy_identity")
+            != "mncs-language-module-linker/1"):
+        raise AssertionError("Compiler descriptor omitted the Language module elaboration cache contract")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")
@@ -153,6 +163,7 @@ def validate_environment_contract_descriptor() -> None:
         SSA_FUNCTION_ARTIFACT_CACHE_REQUEST_SCHEMA: SSA_FUNCTION_ARTIFACT_CACHE_RESPONSE_SCHEMA,
         DEPENDENCY_SUMMARY_CACHE_REQUEST_SCHEMA: DEPENDENCY_SUMMARY_CACHE_RESPONSE_SCHEMA,
         FUNCTION_BODY_FACT_REQUEST_SCHEMA: FUNCTION_BODY_FACT_RESPONSE_SCHEMA,
+        MODULE_ELABORATION_CACHE_REQUEST_SCHEMA: MODULE_ELABORATION_CACHE_RESPONSE_SCHEMA,
     }:
         raise AssertionError("Environment descriptor no longer matches provider schema support")
 
@@ -730,7 +741,7 @@ def main() -> None:
             "finite_type_declaration_verification_facts"
         )
         if (finite_type_entry.get("schema_version")
-                != "mncs.compiler.application-build-cache-entry/7"
+                != "mncs.compiler.application-build-cache-entry/11"
                 or not isinstance(finite_type_cached_facts, list)
                 or not finite_type_cached_facts
                 or not finite_type_entry.get(
@@ -795,7 +806,7 @@ def main() -> None:
             "record_type_declaration_verification_facts"
         )
         if (record_type_entry.get("schema_version")
-                != "mncs.compiler.application-build-cache-entry/8"
+                != "mncs.compiler.application-build-cache-entry/11"
                 or not isinstance(record_type_cached_facts, list)
                 or not record_type_cached_facts
                 or not record_type_entry.get(
@@ -859,7 +870,7 @@ def main() -> None:
         ssa_fact_entry = json.loads(ssa_fact_entry_path.read_text(encoding="utf-8"))
         ssa_function_facts = ssa_fact_entry.get("ssa_function_verification_facts")
         if (ssa_fact_entry.get("schema_version")
-                != "mncs.compiler.application-build-cache-entry/9"
+                != "mncs.compiler.application-build-cache-entry/11"
                 or not isinstance(ssa_function_facts, list)
                 or not ssa_function_facts
                 or not ssa_fact_entry.get("ssa_function_verification_facts_sha256")):
@@ -1736,7 +1747,7 @@ def main() -> None:
                 ),
                 "language_ssa_function_facts_stored_separately": (
                     ssa_fact_entry.get("schema_version")
-                    == "mncs.compiler.application-build-cache-entry/9"
+                    == "mncs.compiler.application-build-cache-entry/11"
                     and bool(ssa_function_facts)
                 ),
                 "language_ssa_function_exact_cache_hit_did_not_claim_reuse": (
@@ -1746,7 +1757,7 @@ def main() -> None:
                 ),
                 "language_record_type_facts_stored_separately": (
                     record_type_entry.get("schema_version")
-                    == "mncs.compiler.application-build-cache-entry/8"
+                    == "mncs.compiler.application-build-cache-entry/11"
                     and bool(record_type_cached_facts)
                 ),
                 "language_record_type_exact_cache_hit_did_not_claim_reuse": (
@@ -1758,7 +1769,7 @@ def main() -> None:
                 ),
                 "language_finite_type_facts_stored_separately": (
                     finite_type_entry.get("schema_version")
-                    == "mncs.compiler.application-build-cache-entry/7"
+                    == "mncs.compiler.application-build-cache-entry/11"
                     and bool(finite_type_cached_facts)
                 ),
                 "language_finite_type_exact_cache_hit_did_not_claim_reuse": (
