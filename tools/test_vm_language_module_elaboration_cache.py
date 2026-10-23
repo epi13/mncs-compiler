@@ -6,12 +6,23 @@ import json
 import hashlib
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 ROOT = Path(__file__).resolve().parents[1]
+# The workspace's inherited TMPDIR is on a quota-limited Btrfs subvolume.
+# This test atomically replaces cache-index files across successive builds, so
+# keep its disposable cache and process artifacts on the host tmpfs instead.
+os.environ["TMPDIR"] = "/tmp"
+tempfile.tempdir = "/tmp"
+locked_language = json.loads((ROOT / "mncs-language.lock.json").read_text(encoding="utf-8"))
+os.environ.setdefault(
+    "MNCS_BOOTSTRAP_TARGET_DIR",
+    f"/tmp/mncs-language-stage0-{locked_language['revision'][:7]}",
+)
 from ensure_locked_stage0_probe import ensure_locked_stage0_probe
 
 LOCKED_PROBE = ensure_locked_stage0_probe(ROOT)
@@ -44,7 +55,7 @@ else:
 REQUEST_SCHEMA = "mncs.compiler.application-build-request/13"
 RESPONSE_SCHEMA = "mncs.compiler.application-build/16"
 WORK_SCHEMA = "mncs.compiler.application-build-verification-work/12"
-MODULE_CACHE_SCHEMA = "mncs.language-module-elaboration-cache/2"
+MODULE_CACHE_SCHEMA = "mncs.language-module-elaboration-cache/3"
 MODULE_OBSERVATION_SCHEMA = "mncs.language-module-elaboration-cache-observation/1"
 EXPECTED_MODULES = set(digest_app.MODULE_PATHS)
 
@@ -81,7 +92,7 @@ def work_for(label: str, response: dict) -> tuple[dict, dict]:
     cache = work.get("module_elaboration_cache", {})
     if (cache.get("schema_version") != MODULE_CACHE_SCHEMA
             or cache.get("observation_schema_version") != MODULE_OBSERVATION_SCHEMA
-            or cache.get("linker_policy_identity") != "mncs-language-module-linker/1"):
+            or cache.get("linker_policy_identity") != "mncs-language-module-linker/2"):
         raise AssertionError(f"{label}: missing Language module-cache contract: {cache}")
     observation = cache.get("observation")
     if cache.get("status") != "observed" or not isinstance(observation, dict):
@@ -335,9 +346,9 @@ def main() -> None:
             changed_work, changed_observation = work_for("imported_body_edit", changed)
             assert_modules(
                 "imported_body_edit", changed_observation,
-                reused={"mncs.std.application.v1"},
-                linked={"mncs.test.assertions", "mncs.test.suite"},
-                invalidated={"mncs.test.assertions", "mncs.test.suite"},
+                reused={"mncs.std.application.v1", "mncs.test.suite"},
+                linked={"mncs.test.assertions"},
+                invalidated={"mncs.test.assertions"},
             )
             if changed.get("status") != "verified":
                 raise AssertionError(f"imported body edit failed verification: {changed.get('diagnostics')}")
@@ -358,8 +369,11 @@ def main() -> None:
                     changed_modules, argument,
                 ),
             }
-
-            stored_path = cache_entry_path(cache_root, changed)
+            # Keep the tamper-negative case isolated so its deliberately
+            # corrupted receipt cannot poison the fresh-process reuse case.
+            tampered_cache_root = directory / "tampered-application-cache"
+            shutil.copytree(cache_root, tampered_cache_root)
+            stored_path = cache_entry_path(tampered_cache_root, changed)
             entry = json.loads(stored_path.read_text(encoding="utf-8"))
             if (entry.get("schema_version") != "mncs.compiler.application-build-cache-entry/12"
                     or not isinstance(entry.get("module_elaboration_cache_sha256"), str)):
@@ -368,22 +382,36 @@ def main() -> None:
             stored_path.write_text(
                 json.dumps(entry, sort_keys=True, separators=(",", ":")), encoding="utf-8"
             )
-            tampered, tampered_metrics = probe.send(
-                {"compile_application": request(comment_root, changed_modules)}, timeout=180
+            tampered_probe = app.Probe(
+                directory / "tampered-program-cache",
+                executable=probe_binary,
+                application_cache_dir=tampered_cache_root,
             )
-            tampered_work, tampered_observation = work_for("tampered_cache_digest", tampered)
-            assert_modules(
-                "tampered_cache_digest", tampered_observation,
-                reused=set(), linked=EXPECTED_MODULES, invalidated=set(),
-            )
-            if tampered.get("status") != "verified":
-                raise AssertionError("tampered cache digest prevented a fresh correct build")
-            stages["tampered_cache_digest"] = {
-                "cache_status": tampered.get("cache", {}).get("status"),
-                "build_metrics": tampered_metrics,
-                "module_observation": tampered_observation,
-                "verification_work": tampered_work,
-            }
+            try:
+                ready, _ = tampered_probe.send({"execution_status": True})
+                if not isinstance(ready, dict) or "modules" not in ready:
+                    raise AssertionError("tamper-negative process did not return its readiness handshake")
+                tampered, tampered_metrics = tampered_probe.send(
+                    {"compile_application": request(comment_root, changed_modules)}, timeout=180
+                )
+                tampered_work, tampered_observation = work_for("tampered_cache_digest", tampered)
+                # Rejecting the outer executable-cache receipt runs a full
+                # fresh frontend because its nested Language cache digest no
+                # longer authenticates the independently stored module cache.
+                assert_modules(
+                    "tampered_cache_digest", tampered_observation,
+                    reused=set(), linked=EXPECTED_MODULES, invalidated=set(),
+                )
+                if tampered.get("status") != "verified":
+                    raise AssertionError("tampered cache digest prevented a fresh correct build")
+                stages["tampered_cache_digest"] = {
+                    "cache_status": tampered.get("cache", {}).get("status"),
+                    "build_metrics": tampered_metrics,
+                    "module_observation": tampered_observation,
+                    "verification_work": tampered_work,
+                }
+            finally:
+                tampered_probe_tail = tampered_probe.close()
         finally:
             probe_tail = probe.close()
 
@@ -407,7 +435,7 @@ def main() -> None:
             )
             if (fresh.get("status") != "verified"
                     or fresh.get("artifact", {}).get("identity")
-                    != tampered.get("artifact", {}).get("identity")):
+                    != changed.get("artifact", {}).get("identity")):
                 raise AssertionError("fresh process did not reuse the persisted module cache and artifact")
             if (not fact_set(fresh_work, "reused_semantic_facts")
                     or fact_set(fresh_work, "recomputed_semantic_facts")):
@@ -456,11 +484,14 @@ def main() -> None:
         "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "language_head": language_lock["revision"],
         "test_head": digest_app.git(digest_app.TEST_ROOT, "rev-parse", "HEAD"),
+        "temporary_root": tempfile.gettempdir(),
+        "bootstrap_target": os.environ["MNCS_BOOTSTRAP_TARGET_DIR"],
         "source_module_count": len(EXPECTED_MODULES) + 1,
         "actual_language_modules_reused": True,
         "canonical_vm_binary": str(app.VM_BIN),
         "canonical_vm_binary_sha256": hashlib.sha256(app.VM_BIN.read_bytes()).hexdigest(),
         "compiler_probe_tail": probe_tail,
+        "tampered_probe_tail": tampered_probe_tail,
         "fresh_probe_tail": fresh_probe_tail,
         "stages": {name: stage_summary(row) for name, row in stages.items()},
     }, indent=2, sort_keys=True))
