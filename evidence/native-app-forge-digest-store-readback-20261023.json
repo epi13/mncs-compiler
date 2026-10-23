@@ -112,5 +112,152 @@
   "limitations": [
     "The application completed successfully and returned typed output, whose Test suite verdict is FAIL for the supplied workload. This records the actual application result and does not claim the suite passed.",
     "This is one native effectful application invocation, not full native Test workflow parity or host orchestration replacement."
-  ]
+  ],
+  "post_delivery_replay": {
+    "application_build": {
+      "application_artifact_identity": "sha256:b29a478a41735c2bd8d52417c3a056b01b5ba342ea5fea5a82a64f1b9b0d0a96",
+      "binding_id": "cap_03c3eab5bd3e6ebb",
+      "capability_dispatch_status": "verified",
+      "response_bytes": 634037,
+      "response_sha256": "4cf40afda89263d81222bfc233d02664355c32a68bdc09e67a37addf824d3839",
+      "schema_version": "mncs.compiler.application-build/4",
+      "source_snapshot_identity": "sha256:23dba371f8f644ac0ac68028d88cdbee11e3868a9b81cf0b5ddbc6dfd1f9c26f",
+      "status": "verified",
+      "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:4ea8c481085f39e2f38b3d9b0a9f5a96ea367a1a02b3d76000ee7939cff3e282",
+      "unresolved_capability_obligations": 0
+    },
+    "forge_execution": {
+      "artifact_bytes": 95423,
+      "artifact_file_count": 2,
+      "artifact_store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:8e14847c6025d853a0ef1e076d88165c64ad50d53bf0d6a0037e0898f8d45ca2",
+      "binding_id": "cap_07ea8bcfb58ff902",
+      "call_identity": "sha256:c8e0c4f5cec4f64cf641fcfff8ff97aa78c4c08e76f4ad92313753cdcf8f6f99",
+      "capability_output": {
+        "identity": "mncs:0.2:capability:mncs.test.digest::digest_app::test_artifact",
+        "input_schema": "mncs.test-digest-request/1",
+        "input_sha256": "fd77eaf8bf7feaee0118b41c6520432f0482e9bd4c7dab762e025194cfde64e1",
+        "output_schema": "mncs.test-digest/1",
+        "output_sha256": "a4300dc9d19e406a6e071a50a6ce0a39a1fc424c96b598d4b473d8cf0df4c8fe"
+      },
+      "execution_result": {
+        "bytes": 87667,
+        "sha256": "6d824c02159e540eb64fb8f5bc7ab14a42c69cb83639c6c4e669ad05e5386b30",
+        "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:8e14847c6025d853a0ef1e076d88165c64ad50d53bf0d6a0037e0898f8d45ca2"
+      },
+      "forge_receipt": {
+        "bytes": 7756,
+        "identity": "994549c0c95486a6066695a9d69194de66cf5bbb1e138c6926ec126b26306442",
+        "sha256": "166380ab02a65bf0df5006caa4e3d25b517b3e0de7267a1aa03fc8810a6d0cb5",
+        "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:8e14847c6025d853a0ef1e076d88165c64ad50d53bf0d6a0037e0898f8d45ca2"
+      },
+      "resource_observations": {
+        "cgroup_memory_peak_bytes": 17891328,
+        "cpu_time_microseconds": 313562,
+        "memory_max_bytes": 536870912,
+        "memory_oom_events": 0,
+        "process_count_peak": 2,
+        "runtime_max_seconds": 45.0
+      },
+      "returncode": 0,
+      "schema_version": "mncs.forge.native-application-execution/2",
+      "status": "completed"
+    },
+    "forge_provider_tests": {
+      "checkout_revision": "1ecff52c87858b020d4f09c2f7caeb74fe6df466",
+      "command": "PYTHONPATH=src python3 -m pytest -q tests/test_native_application_execution.py",
+      "passed": "8/8"
+    },
+    "fresh_store_readback_and_test_oracle": {
+      "application_exit_code": 0,
+      "different_fields": [],
+      "execution_artifact_verified": true,
+      "forge_receipt_verified": true,
+      "fresh_authenticated_process": true,
+      "full_typed_result_equal": true,
+      "request_test_count": 4,
+      "suite_counts": {
+        "assertion_failures": 2,
+        "assertions": 3,
+        "failed": 2,
+        "passed": 1,
+        "skipped": 1,
+        "total": 4
+      },
+      "suite_verdict": "FAIL",
+      "test_oracle": "mncs-test/tools/mncs_test_digest.evaluate_digest",
+      "test_oracle_cache": "/tmp/mncs-test-oracle-cache-20261023",
+      "test_oracle_runtime": "selected Language release binary at /home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/.worktrees/luna-language-fact-invalidation-20261022/mncs-language/target/release/mncs"
+    },
+    "limitations": [
+      "The native application completed successfully and returned typed output; its supplied Test suite verdict is FAIL, so this is not a passing Test suite claim.",
+      "Wrong artifact identity and interruption were checked at the Forge canonical VM task boundary, not by forcing a production execution to interrupt after Store admission.",
+      "This remains one effectful application call, not full native Test workflow parity or host orchestration replacement."
+    ],
+    "negative_cases": [
+      {
+        "application_failure_schema": "mncs.forge.native-application-failure/1",
+        "case": "missing capability admission",
+        "environment_exit_code": 4,
+        "forge_returncode": 1,
+        "published_failure_artifact": true,
+        "result": "failure",
+        "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:de9062eb4cd9d1e40cce31611baaa79a39941c5a0d5ab823d55831e35df85995"
+      },
+      {
+        "application_failure_schema": "mncs.forge.native-application-failure/1",
+        "case": "mismatched capability identity",
+        "environment_exit_code": 4,
+        "forge_returncode": 1,
+        "published_failure_artifact": true,
+        "result": "failure",
+        "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:ce5666aade137b5cd8283263bdc795e458d31bc115bb6300b34a1b5ac7031eef"
+      },
+      {
+        "application_failure_schema": "mncs.forge.native-application-failure/1",
+        "case": "invalid typed input",
+        "environment_exit_code": 4,
+        "forge_returncode": 1,
+        "published_failure_artifact": true,
+        "result": "failure",
+        "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:4dc82c647edcf09925036157f48a4be6141c94518943c58c20ed074c8d11a398"
+      },
+      {
+        "application_failure_schema": "mncs.forge.native-application-failure/1",
+        "case": "rejected output publication",
+        "environment_exit_code": 4,
+        "forge_returncode": 1,
+        "published_failure_artifact": true,
+        "result": "failure",
+        "store_reference": "mncs-store:ses_164edc158d9b1637:capability-invocation-artifacts:1cc59af3857ab26582298a2ba6d417c0384f8e27d2a1dff8f908b3991f7dccb1"
+      },
+      {
+        "case": "incorrect VM artifact identity",
+        "reason": "canonical VM refused or changed the Compiler artifact identity",
+        "result": "failure",
+        "vm_task_returncode": 1,
+        "witness_count": 0
+      },
+      {
+        "case": "interrupted VM command",
+        "reason": "simulated subprocess timeout at the canonical VM run boundary; no VM witness returned",
+        "result": "failure",
+        "vm_task_returncode": 1,
+        "witness_count": 0
+      }
+    ],
+    "source": {
+      "compiler_revision": "536811d22eecfcd9b9b46562477d43eb66c4491c",
+      "compiler_worktree": "/home/epi13/Documents/Projects/mncs-compiler/.worktrees/native-app-readiness-20261013/mncs-compiler",
+      "language_revision": "e6a4cf81be5c2a9606f1ab9b934c2f7fb85b5c2b"
+    },
+    "stage0_probe": {
+      "build_elapsed_seconds": 46.0,
+      "build_max_rss_kib": 856932,
+      "inspection_state": "ready",
+      "mismatches": [],
+      "producer_identity": "sha256:c06bdee2f9f97ad66294632525db06e7cfb123aca688021dcd936b742bbcef01",
+      "sha256": "6db7ef3d866ba4771a10b40d16d11968fa6d15eb0128d8dde662c074cb0e0d54",
+      "swap_bytes": 0
+    }
+  }
 }
