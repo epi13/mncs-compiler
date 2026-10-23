@@ -53,7 +53,7 @@ and current native syntax results are in
 
 | Finding | Current status | Current result and owner |
 | --- | --- | --- |
-| [CP-0028 large-source trivia parse reuse](0028-large-source-trivia-parse-reuse.md) | Reproduced; Language fix in progress | The digest application reused three imported parse results, but its comment-edited root was parsed and republished because Language rejected the syntax-tree span rebase. Owner: `mncs-language`. |
+| [CP-0028 large-source trivia parse reuse](0028-large-source-trivia-parse-reuse.md) | Resolved (Language `d74402a`; Compiler workload verified) | The real digest application reuses all three imported parses and the root syntax tree after a comment edit, parses and publishes zero sources, reuses 30 semantic facts, and preserves Stage-0 VM output. Fresh-process reuse and the changed-import invalidation path also pass. |
 
 ## Operating sequence
 
