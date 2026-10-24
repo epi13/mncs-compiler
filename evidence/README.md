@@ -1534,3 +1534,24 @@ release CLI and Stage-0 probe rebuild took 4m40s and 4m26s respectively with
 two Cargo jobs. This is workload-specific evidence of avoided Language
 verification work, not a general build speedup or a Forge execution receipt.
 Evidence SHA-256: `502456da3819d900388194044957604e8c07e7bb0eb8fe68a65d117945611751`.
+
+## Import-edge refresh with Language body-fact reuse (2026-10-24)
+
+The [import-edge application record](native-app-readiness-import-edge-fact-reuse-20261024.json)
+uses the real four-module `mncs.test.digest::digest_app` workload, then adds an
+unused import and one module containing `unused_value`. On the changed snapshot,
+Compiler reused all 30 previously verified Language body facts and recomputed
+only `mncs:0.2:body:mncs.test.import_probe::unused_value`. The resolved closure
+expanded from four to five modules. The source-parse cache parsed the two
+changed/new sources and reused the other three; module elaboration linked only
+the new module and reused the three existing module entries. The changed source
+and executable artifact received new identities.
+
+The baseline build took 0.931 s and the import-edit build took 1.029 s; this
+isolated run demonstrates avoided Language verification work, not a wall-time
+improvement. The changed artifact was admitted by the selected VM CLI and its
+`digest_app` result matched the Stage-0 fixture in the canonical VM runner
+(about 8.5 MB peak RSS; cgroup measurement unavailable). This local proof does
+not exercise Forge execution or Environment Store publication. The unused
+import isolates module-closure refresh; reachable dependency invalidation is
+covered by the existing records above. Evidence SHA-256: `ba39b5b62ce638ea44536466ced6783de8ccf59244d363674143df5de1dd7f58`.
