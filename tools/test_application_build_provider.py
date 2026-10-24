@@ -138,12 +138,19 @@ def validate_environment_contract_descriptor() -> None:
             != "mncs.language-ssa-function-artifact-cache-observation/1"):
         raise AssertionError("Compiler descriptor omitted Language SSA artifact cache identities")
     if (artifact.get("module_elaboration_cache_schema")
-            != "mncs.language-module-elaboration-cache/2"
+            != "mncs.language-module-elaboration-cache/3"
             or artifact.get("module_elaboration_cache_observation_schema")
             != "mncs.language-module-elaboration-cache-observation/1"
             or artifact.get("module_elaboration_policy_identity")
-            != "mncs-language-module-linker/1"):
+            != "mncs-language-module-linker/2"):
         raise AssertionError("Compiler descriptor omitted the Language module elaboration cache contract")
+    if (artifact.get("source_parse_cache_schema")
+            != "mncs.language-source-parse-cache/3"
+            or artifact.get("source_parse_cache_observation_schema")
+            != "mncs.language-source-parse-cache-observation/3"
+            or artifact.get("source_parse_policy_identity")
+            != "mncs-language-source-parser/1"):
+        raise AssertionError("Compiler descriptor omitted the Language source-parse cache contract")
     if (artifact.get("source_test_inventory_schema") != "mncs.test-inventory/1"
             or artifact.get("source_test_inventory_scope") != "source_module"):
         raise AssertionError("application-build/7 must declare the Language source-module Test inventory")

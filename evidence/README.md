@@ -1512,3 +1512,25 @@ callable was verified and emitted but was not separately invoked by this
 digest-root execution. The warm harness took 11.11 s wall time, 8.23 CPU
 seconds, and 98,864 KiB peak RSS; cgroup memory was unavailable. These are
 workload-specific measurements, not a general speedup claim.
+
+## Current Language fact reuse and dependency invalidation (2026-10-24)
+
+The [current Language run](native-app-readiness-language-fact-reuse-current-language-6a3f690-20261024.json)
+pins Compiler `f4f6591` to Language `6a3f690` and exercises the real four-source
+digest application. The cold build recomputed 30 body facts. A comment-only
+edit reused all 30 in a fresh process; an unreachable imported body edit
+recomputed one and reused 29. Changing either the effect or capability
+declaration recomputed exactly `build_digest` and its `digest_app` caller (2
+facts) while reusing 28 independent facts. Editing the seeded `summarize<N=4>`
+generic body recomputed its template and specialization (2 facts) and reused
+29. Invalid source returned one fresh diagnostic and published no artifact.
+Every valid edited application matched the Stage-0 result in the canonical VM.
+
+The cold application build took 0.825 s wall time, 0.82 CPU seconds, and
+55,287,808 bytes peak process RSS. The comment edit took 0.477 s, and the
+effect and capability edits took 0.749 s and 0.739 s. Their peak process RSS
+was about 55.3 MB; cgroup measurements were unavailable. The pinned Language
+release CLI and Stage-0 probe rebuild took 4m40s and 4m26s respectively with
+two Cargo jobs. This is workload-specific evidence of avoided Language
+verification work, not a general build speedup or a Forge execution receipt.
+Evidence SHA-256: `502456da3819d900388194044957604e8c07e7bb0eb8fe68a65d117945611751`.
