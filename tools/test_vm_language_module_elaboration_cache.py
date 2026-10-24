@@ -93,6 +93,19 @@ def request(
     }
 
 
+def add_function_clauses(source: str, function_name: str, clauses: list[str]) -> str:
+    """Insert declaration clauses before one function's body without changing its code."""
+    marker = f"fn {function_name}("
+    start = source.find(marker)
+    if start < 0:
+        raise AssertionError(f"source no longer contains {marker!r}")
+    body = source.find("{", start)
+    if body < 0:
+        raise AssertionError(f"source no longer contains a body for {function_name}")
+    inserted = "\n" + "\n".join(f"    {clause}" for clause in clauses) + "\n"
+    return source[:body] + inserted + source[body:]
+
+
 def work_for(label: str, response: dict) -> tuple[dict, dict]:
     if response.get("schema_version") != RESPONSE_SCHEMA:
         raise AssertionError(
@@ -278,6 +291,18 @@ def stage_summary(row: dict) -> dict:
             "recomputed_fact_count": len(recomputed),
             "reused_subjects_sample": reused[:4],
             "recomputed_subjects_sample": recomputed[:4],
+            "independent_assertion_fact_reused": any(
+                subject.endswith("mncs.test.assertions::from_assertion")
+                for subject in reused
+            ),
+            "digest_build_body_recomputed": any(
+                subject.endswith("mncs.test.digest::build_digest")
+                for subject in recomputed
+            ),
+            "digest_app_caller_body_recomputed": any(
+                subject.endswith("mncs.test.digest::digest_app")
+                for subject in recomputed
+            ),
             "from_assertion_body_fact_recomputed": (
                 "mncs:0.2:body:mncs.test.assertions::from_assertion" in recomputed
             ),
@@ -691,6 +716,73 @@ def main() -> None:
             stages["generic_specialization_cold"] = generic_specialization["cold"]
             stages["generic_summarize_body_edit"] = generic_edited
 
+            # Declaration assumptions flow from callees into caller facts.
+            # Keep each edit in an isolated cache so the counters come from
+            # Language's current verifier work, not from cache-hit estimates.
+            capability_root = add_function_clauses(
+                root_source, "build_digest", ["capability test_artifact"]
+            )
+            capability_edit = run_isolated_module_edit(
+                probe_binary,
+                directory,
+                "capability_assumption_edit",
+                root_source,
+                modules,
+                capability_root,
+                modules,
+                reused_modules=EXPECTED_MODULES,
+                linked_modules=set(),
+                invalidated_modules=set(),
+                recomputed_subject_suffixes={
+                    "mncs.test.digest::build_digest",
+                    "mncs.test.digest::digest_app",
+                },
+                argument=argument,
+            )
+            capability_work = capability_edit["edited"]["verification_work"]
+            capability_reused = fact_set(capability_work, "reused_semantic_facts")
+            if not any(
+                subject.endswith("mncs.test.assertions::from_assertion")
+                for subject in capability_reused
+            ):
+                raise AssertionError(
+                    "capability edit failed to reuse an independent Test assertion fact"
+                )
+            stages["capability_assumption_edit"] = capability_edit["edited"]
+
+            effect_root = add_function_clauses(
+                capability_root,
+                "build_digest",
+                ["effect structured_read authorized_by test_artifact"],
+            )
+            effect_edit = run_isolated_module_edit(
+                probe_binary,
+                directory,
+                "effect_assumption_edit",
+                capability_root,
+                modules,
+                effect_root,
+                modules,
+                reused_modules=EXPECTED_MODULES,
+                linked_modules=set(),
+                invalidated_modules=set(),
+                recomputed_subject_suffixes={
+                    "mncs.test.digest::build_digest",
+                    "mncs.test.digest::digest_app",
+                },
+                argument=argument,
+            )
+            effect_work = effect_edit["edited"]["verification_work"]
+            effect_reused = fact_set(effect_work, "reused_semantic_facts")
+            if not any(
+                subject.endswith("mncs.test.assertions::from_assertion")
+                for subject in effect_reused
+            ):
+                raise AssertionError(
+                    "effect edit failed to reuse an independent Test assertion fact"
+                )
+            stages["effect_assumption_edit"] = effect_edit["edited"]
+
             # Keep the tamper-negative case isolated so its deliberately
             # corrupted receipt cannot poison the fresh-process reuse case.
             tampered_cache_root = directory / "tampered-application-cache"
@@ -800,8 +892,8 @@ def main() -> None:
         ["git", "-C", str(ROOT), "diff", "--binary", "HEAD"],
     )
     print(json.dumps({
-        "identity": "ev_compiler_digest_application_generic_specialization_invalidation_20261023",
-        "schema_version": "mncs.compiler.language-module-elaboration-cache-regression/1",
+        "identity": "ev_compiler_digest_application_effect_capability_invalidation_20261024",
+        "schema_version": "mncs.compiler.language-module-elaboration-cache-regression/2",
         "compiler_head": digest_app.git(ROOT, "rev-parse", "HEAD"),
         "compiler_tracked_patch_sha256": hashlib.sha256(tracked_patch).hexdigest(),
         "test_harness_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
@@ -811,6 +903,7 @@ def main() -> None:
         "bootstrap_target": os.environ["MNCS_BOOTSTRAP_TARGET_DIR"],
         "source_module_count": len(EXPECTED_MODULES) + 1,
         "actual_language_modules_reused": True,
+        "language_effect_and_capability_dependencies_invalidated": True,
         "generic_specialization_seed": GENERIC_SUMMARIZE_SEED,
         "canonical_vm_binary": str(app.VM_BIN),
         "canonical_vm_binary_sha256": hashlib.sha256(app.VM_BIN.read_bytes()).hexdigest(),
