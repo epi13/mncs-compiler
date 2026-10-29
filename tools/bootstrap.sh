@@ -67,9 +67,13 @@ target_revision=""
 if [[ -f "$target_revision_marker" ]]; then
     target_revision=$(cat "$target_revision_marker")
 fi
-if [[ "$target_revision" != "$revision" ]]; then
+if [[ -n "$target_revision" && "$target_revision" != "$revision" ]]; then
     echo "Refreshing Stage-0 build outputs for locked Language revision $revision."
     cargo clean --release --manifest-path .bootstrap/Cargo.toml --target-dir "$target_dir"
+elif [[ -z "$target_revision" ]]; then
+    # A missing marker can mean an interrupted first build. Keep partial
+    # outputs; Cargo fingerprints validate them and avoid discarding work.
+    echo "No Stage-0 build marker; preserving outputs for Cargo validation."
 fi
 CARGO_TARGET_DIR="$target_dir" cargo build --release --locked --manifest-path .bootstrap/Cargo.toml -p mncs-cli
 CARGO_TARGET_DIR="$target_dir" cargo build --release --locked --manifest-path tools/stage0-probe/Cargo.toml
