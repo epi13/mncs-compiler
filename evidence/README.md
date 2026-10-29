@@ -1512,3 +1512,46 @@ callable was verified and emitted but was not separately invoked by this
 digest-root execution. The warm harness took 11.11 s wall time, 8.23 CPU
 seconds, and 98,864 KiB peak RSS; cgroup memory was unavailable. These are
 workload-specific measurements, not a general speedup claim.
+
+## Current Language fact reuse and dependency invalidation (2026-10-24)
+
+The [current Language run](native-app-readiness-language-fact-reuse-current-language-6a3f690-20261024.json)
+pins Compiler `f4f6591` to Language `6a3f690` and exercises the real four-source
+digest application. The cold build recomputed 30 body facts. A comment-only
+edit reused all 30 in a fresh process; an unreachable imported body edit
+recomputed one and reused 29. Changing either the effect or capability
+declaration recomputed exactly `build_digest` and its `digest_app` caller (2
+facts) while reusing 28 independent facts. Editing the seeded `summarize<N=4>`
+generic body recomputed its template and specialization (2 facts) and reused
+29. Invalid source returned one fresh diagnostic and published no artifact.
+Every valid edited application matched the Stage-0 result in the canonical VM.
+
+The cold application build took 0.825 s wall time, 0.82 CPU seconds, and
+55,287,808 bytes peak process RSS. The comment edit took 0.477 s, and the
+effect and capability edits took 0.749 s and 0.739 s. Their peak process RSS
+was about 55.3 MB; cgroup measurements were unavailable. The pinned Language
+release CLI and Stage-0 probe rebuild took 4m40s and 4m26s respectively with
+two Cargo jobs. This is workload-specific evidence of avoided Language
+verification work, not a general build speedup or a Forge execution receipt.
+Evidence SHA-256: `502456da3819d900388194044957604e8c07e7bb0eb8fe68a65d117945611751`.
+
+## Import-edge refresh with Language body-fact reuse (2026-10-24)
+
+The [import-edge application record](native-app-readiness-import-edge-fact-reuse-20261024.json)
+uses the real four-module `mncs.test.digest::digest_app` workload, then adds an
+unused import and one module containing `unused_value`. On the changed snapshot,
+Compiler reused all 30 previously verified Language body facts and recomputed
+only `mncs:0.2:body:mncs.test.import_probe::unused_value`. The resolved closure
+expanded from four to five modules. The source-parse cache parsed the two
+changed/new sources and reused the other three; module elaboration linked only
+the new module and reused the three existing module entries. The changed source
+and executable artifact received new identities.
+
+The baseline build took 0.931 s and the import-edit build took 1.029 s; this
+isolated run demonstrates avoided Language verification work, not a wall-time
+improvement. The changed artifact was admitted by the selected VM CLI and its
+`digest_app` result matched the Stage-0 fixture in the canonical VM runner
+(about 8.5 MB peak RSS; cgroup measurement unavailable). This local proof does
+not exercise Forge execution or Environment Store publication. The unused
+import isolates module-closure refresh; reachable dependency invalidation is
+covered by the existing records above. Evidence SHA-256: `ba39b5b62ce638ea44536466ced6783de8ccf59244d363674143df5de1dd7f58`.
