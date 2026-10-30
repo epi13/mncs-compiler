@@ -248,11 +248,9 @@ def build_selected_producer(*, checkout: Path, executable: Path, cargo: str = 'c
     expected = (checkout / '.bootstrap/target/release/mncs-compiler-stage0-probe').resolve()
     if Path(executable).resolve() != expected:
         raise ProviderError('provider build is bound to the selected Stage-0 probe path')
-    pin = json.loads((checkout / 'mncs-language.lock.json').read_text())['revision']
-    staged = checkout / '.bootstrap'
-    if (not (staged / 'Cargo.toml').is_file()
-            or (staged / 'revision').read_text().strip() != pin):
-        raise ProviderError('selected Stage-0 source tree is absent or does not match the compiler pin')
+    # Bootstrap owns materialization and pin refresh as well as compilation.
+    # Refusing absent/stale source here prevents its existing recovery path
+    # from ever running on a fresh checkout or after a Language repin.
     result = subprocess.run(
         ['bash', str(checkout / 'tools/bootstrap.sh')], cwd=checkout,
         capture_output=True, text=True, timeout=1800, check=False,

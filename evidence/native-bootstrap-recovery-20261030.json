@@ -1,0 +1,37 @@
+{
+  "schema_version": "mncs.development-evidence/1",
+  "campaign": "luna-max-native-self-consumption-20261030",
+  "session_id": "ses_0bfde8681859fef6",
+  "pressure": {
+    "cause": "compiler-build both required its missing output and rejected absent or stale bootstrap sources before the bootstrap owner could materialize them",
+    "original_main_bootstrap_revision": "9505d3f557701f072b5803a5bad046389b84cb3b",
+    "locked_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+  },
+  "correction": [
+    "Build invocation has no dependency on the probe it builds.",
+    "Delegate source materialization and pin refresh to bootstrap.",
+    "Find the local locked Language commit via the owning Git repository for linked worktrees."
+  ],
+  "verification": {
+    "focused_regressions": "11 passed, including real direct producer emission and cache/source invalidation",
+    "source_acquisition": "git archive of the exact lock from the local Language repository; no replacement compiler",
+    "producer_build": {
+      "build_command": [
+        "bash",
+        "tools/bootstrap.sh"
+      ],
+      "executable_sha256": "a1ae655d1c8448a3155c1664dd02213f378582f7222527f23889f78aa7ad63f7",
+      "producer_identity": "sha256:b923ff6342097105c06d4c59143a009ec6272bec7ae1e8fbe16a8f8ce849e996",
+      "schema_version": "mncs.compiler-build-operation/1",
+      "source_revision": "025d621dfed9e00191665f570866041202d73ea7",
+      "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+      "status": "built-and-verified-locally"
+    },
+    "native_consumer": "34 stdlib budget contract cases compiled through this producer and executed by canonical mncs-vm; all matched independent expected values",
+    "repeated_product_cache_reused": true
+  },
+  "limits": [
+    "Stage-0 bootstrap remains host Rust; no self-hosting claim.",
+    "The probe was materialized in this isolated checkout; other checkouts use the corrected build capability."
+  ]
+}

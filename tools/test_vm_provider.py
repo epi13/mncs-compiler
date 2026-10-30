@@ -11,6 +11,42 @@ ROOT=Path(__file__).resolve().parents[1]
 spec=importlib.util.spec_from_file_location('producer_under_test',ROOT/'tools/vm_provider.py')
 module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
 
+class BuildRecoveryTests(unittest.TestCase):
+    def test_build_delegates_absent_and_stale_source_to_bootstrap(self):
+        for staged_revision in (None, 'old-pin'):
+            with self.subTest(staged_revision=staged_revision), tempfile.TemporaryDirectory() as raw:
+                root = Path(raw)
+                (root / 'mncs-language.lock.json').write_text(json.dumps({'revision': 'new-pin'}))
+                if staged_revision is not None:
+                    (root / '.bootstrap').mkdir()
+                    (root / '.bootstrap/revision').write_text(staged_revision)
+                    (root / '.bootstrap/Cargo.toml').write_text('[workspace]')
+                executable = root / '.bootstrap/target/release/mncs-compiler-stage0-probe'
+                inspection = {'state': 'ready', 'executable_sha256': 'built-bytes',
+                              'producer': {'identity': 'new-producer', 'receipt':
+                                           {'stage0_revision': 'new-pin', 'source_revision': 'compiler-head'}}}
+                with patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')) as run, \
+                     patch.object(module.CompilerProvider, 'inspect', return_value=inspection):
+                    result = module.build_selected_producer(checkout=root, executable=executable)
+                self.assertEqual(result['stage0_revision'], 'new-pin')
+                self.assertEqual(run.call_args.args[0], ['bash', str(root / 'tools/bootstrap.sh')])
+
+    def test_build_still_requires_selected_path_and_verified_receipt(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            with self.assertRaises(module.ProviderError):
+                module.build_selected_producer(checkout=root, executable=root / 'other-probe')
+            with patch.object(module.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, '', '')), \
+                 patch.object(module.CompilerProvider, 'inspect', return_value={'state': 'stale'}):
+                with self.assertRaises(module.ProviderError):
+                    module.build_selected_producer(checkout=root, executable=root / '.bootstrap/target/release/mncs-compiler-stage0-probe')
+
+    def test_build_descriptor_does_not_require_its_missing_product(self):
+        manifest = json.loads((ROOT / '.mncs/project.json').read_text())
+        build = next(item for item in manifest['contracts']['provides'] if item['contract'] == 'compiler-build')
+        self.assertNotIn('toolchain', build['invocation'])
+        self.assertTrue((ROOT / build['invocation']['path']).is_file())
+
 class InspectionTests(unittest.TestCase):
     @staticmethod
     def toolchain(root):

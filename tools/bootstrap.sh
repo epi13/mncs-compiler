@@ -15,6 +15,14 @@ target_revision_marker="$target_dir/.mncs-language-revision"
 extract_locked_source() {
     local destination="$1"
     local selected_source="${MNCS_LANGUAGE_ROOT:-}"
+    # A linked worktree's parent is not the family root. Resolve the owning
+    # repository through Git before looking for its local Language provider.
+    # The exact pinned commit is still checked below before extracting bytes.
+    if [[ -z "$selected_source" ]]; then
+        local common_directory
+        common_directory=$(git rev-parse --path-format=absolute --git-common-dir)
+        selected_source="$(dirname "$(dirname "$common_directory")")/mncs-language"
+    fi
     if [[ -n "$selected_source" && -f "$selected_source/Cargo.toml" ]]; then
         if git -C "$selected_source" cat-file -e "${revision}^{commit}" 2>/dev/null; then
             mkdir -p "$destination"
