@@ -19,7 +19,7 @@ use mncs.compiler.parser.v1 as parser;
 // Scope of the native grammar: the source module itself uses Profile 0.18,
 // while each parsed unit carries its own version gate. It accepts `!`,
 // signed integer atoms, exact sequence repeat literals, and scalar integer
-// matches with an identifier subject and ordinary expression arm values from
+// matches with an integer expression subject and ordinary expression arm values from
 // Profile 0.13 onward; integer patterns require one final `_` and are
 // range/duplicate checked. Finite (enum-variant) matches and qualified enum
 // construction (`Flag.Yes { set: s }`, bare `Flag.No`) are accepted at every
@@ -6591,6 +6591,7 @@ enum SemKont {
     KTop,
     KNot { start: u64, end: u64, exp: ExpTy },
     KRepeat { count: u64, start: u64, end: u64, exp: ExpTy },
+    KScalarSubject { arms: ScalarMatchArmList, result_ty: SemType, ss: u64, se: u64, start: u64, end: u64 },
     KMatchArm { remaining: ScalarMatchArmList, current: ScalarMatchArm, completed: TypedScalarMatchArmList, prior_tops: u64, subject_ty: SemType, result_ty: SemType, arm_count: u64, default_count: u64, rs: u64, re: u64, start: u64, end: u64 },
     KFiniteSubject { arms: FiniteMatchArmList, result_ty: SemType, ss: u64, se: u64, start: u64, end: u64 },
     KFiniteArm { remaining: FiniteMatchArmList, all: FiniteMatchArmList, current: FiniteMatchArm, completed: TypedFiniteMatchArmList, payload_fields: BindList, type_identity: SemanticIdentity, prior_tops: u64, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64 },
@@ -6683,56 +6684,39 @@ fn seed_scalar_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     };
 }
 fn seed_scalar_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, subject: Expr, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType) -> (result: SemState) {
-    return match subject {
-        Name { start: ns, end: ne } => seed_scalar_match_name<P, N>(pages, stride, total, st, arms, start, end, result_ty, ns, ne),
-        Integer { start: s, end: e, value: v, overflow: o } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        Boolean { start: s, end: e, value: v } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        UnaryNot { value: v, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        SequenceLiteral { elements: xs, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        ScalarMatch { subject: value, arms: nested, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        Binary { op: op, left: l, right: r, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        Call { name_start: ns, name_end: ne, args: a, targs: tg, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        Index { base: ib, index: ii, start: is, end: ie } => sem_drain(sem_emit(st, 2, is, ie, 1)),
-        Slice { base: sb, start_index: si, end_index: ei, start: ss, end: se } => sem_drain(sem_emit(st, 2, ss, se, 1)),
-        Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => sem_drain(sem_emit(st, 2, cs, ce, 1)),
-        RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: f, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
-        OpCall { slot: slot, name_start: ns, name_end: ne, args: a, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1))
-    };
+    let ssp: ExprSpan = expr_span(subject);
+    let job: SemJob = SemJob { e: subject, exp: ExpTy.XNone };
+    let kont: SemKont = SemKont.KScalarSubject { arms: arms, result_ty: result_ty, ss: ssp.start, se: ssp.end, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
 }
-fn seed_scalar_match_name<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType, ns: u64, ne: u64) -> (result: SemState) {
-    let subject: LookupRes = env_lookup<P, N>(pages, stride, total, st.env, ns, ne);
-    if !(subject.found) { return sem_drain(sem_emit(st, 1, ns, ne, 1)); }
-    return seed_scalar_match_subject_ty<P, N>(pages, stride, total, st, arms, start, end, result_ty, subject.ty, ns, ne);
-}
-fn seed_scalar_match_subject_ty<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType, subject_ty: SemType, ns: u64, ne: u64) -> (result: SemState) {
+// The scalar-match subject is an ordinary expression. Prove it before
+// validating its established type so its complete typed operation chain is
+// preserved as the value consumed by TMatch.
+fn apply_scalar_match_subject<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, result_ty: SemType, ss: u64, se: u64, start: u64, end: u64) -> (result: SemState) {
+    let subject_ty: SemType = st.last_ty;
+    if is_poison(subject_ty) { return sem_drain(sem_emit(st, 2, ss, se, 1)); }
     return match subject_ty {
-        TInt { width: w, signed: g } => seed_scalar_match_int<P, N>(pages, stride, total, st, arms, start, end, result_ty, subject_ty, ns, ne),
+        TInt { width: w, signed: g } => seed_scalar_match_int<P, N>(pages, stride, total, st, arms, start, end, result_ty, subject_ty),
         TBool => sem_drain(sem_emit_scalar_arm_mismatch<P, N>(pages, stride, total, st, arms, start, end)),
-        TNamed { start: es, end: ee } => seed_scalar_match_named<P, N>(pages, stride, total, st, arms, start, end, es, ee, ns, ne),
+        TNamed { start: es, end: ee } => seed_scalar_match_named<P, N>(pages, stride, total, st, arms, start, end, es, ee, ss, se),
         TByte => sem_drain(sem_emit(st, 2, start, end, 1)),
         TSeq => sem_drain(sem_emit(st, 2, start, end, 1)),
         TSeqExact { element: element, length: length, length_valid: valid } => sem_drain(sem_emit(st, 2, start, end, 1)),
         TPoison => sem_drain(sem_emit(st, 2, start, end, 1))
     };
 }
-fn seed_scalar_match_named<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, es: u64, ee: u64, ns: u64, ne: u64) -> (result: SemState) {
+fn seed_scalar_match_named<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, es: u64, ee: u64, ss: u64, se: u64) -> (result: SemState) {
     let found: EnumFind = enum_lookup<P, N>(pages, stride, total, st.enumtab, es, ee);
     if found.found { return sem_drain(sem_emit_scalar_arm_mismatch<P, N>(pages, stride, total, st, arms, start, end)); }
     let rec: RecFind = rec_lookup<P, N>(pages, stride, total, st.rectab, es, ee);
-    if rec.found { return sem_drain(sem_emit(st, 51, ns, ne, 1)); }
+    if rec.found { return sem_drain(sem_emit(st, 51, ss, se, 1)); }
     return sem_drain(sem_emit(st, 2, start, end, 1));
 }
-fn seed_scalar_match_int<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType, subject_ty: SemType, ns: u64, ne: u64) -> (result: SemState) {
+fn seed_scalar_match_int<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, arms: ScalarMatchArmList, start: u64, end: u64, result_ty: SemType, subject_ty: SemType) -> (result: SemState) {
     if !(scalar_match_patterns_ok<P, N>(pages, stride, total, arms, subject_ty)) { return sem_drain(sem_emit(st, 2, start, end, 1)); }
     let count: ScalarMatchCount = scalar_match_count<P, N>(pages, stride, total, arms);
     if count.defaults != 1 || count.n == 0 { return sem_drain(sem_emit(st, 2, start, end, 1)); }
-    let subject_top: TOp = TOp.TName { ty: subject_ty, start: ns, end: ne };
-    let st1: SemState = sem_emit_top(sem_accept(st, subject_ty), subject_top);
-    return seed_scalar_match_arm<P, N>(pages, stride, total, st1, arms, subject_ty, result_ty, count.n, count.defaults, start, end);
+    return seed_scalar_match_arm<P, N>(pages, stride, total, st, arms, subject_ty, result_ty, count.n, count.defaults, start, end);
 }
 // Scalar patterns against a bool or finite subject: every arm misfits and
 // coverage fails, exactly the Stage-0 MNE138-per-arm plus MNE140 shape.
@@ -7862,6 +7846,7 @@ fn apply_kont<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         KTop => SemState { ..st, top_ty: st.last_ty },
         KNot { start: s, end: e, exp: x } => apply_not<P, N>(pages, stride, total, st, s, e, x),
         KRepeat { count: count, start: s, end: e, exp: x } => apply_repeat<P, N>(pages, stride, total, st, count, s, e, x),
+        KScalarSubject { arms: arms, result_ty: result_ty, ss: ss, se: se, start: s, end: e } => apply_scalar_match_subject<P, N>(pages, stride, total, st, arms, result_ty, ss, se, s, e),
         KMatchArm { remaining: remaining, current: current, completed: completed, prior_tops: prior_tops, subject_ty: subject_ty, result_ty: result_ty, arm_count: arm_count, default_count: default_count, rs: rs, re: re, start: s, end: e } => continue_scalar_match_arm<P, N>(pages, stride, total, st, remaining, current, completed, prior_tops, subject_ty, result_ty, arm_count, default_count, rs, re, s, e),
         KFiniteSubject { arms: arms, result_ty: result_ty, ss: ss, se: se, start: s, end: e } => apply_finite_subject<P, N>(pages, stride, total, st, arms, result_ty, ss, se, s, e),
         KFiniteArm { remaining: remaining, all: all, current: current, completed: completed, payload_fields: payload_fields, type_identity: type_identity, prior_tops: prior_tops, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: env, rs: rs, re: re, start: s, end: e } => continue_finite_match_arm<P, N>(pages, stride, total, st, remaining, all, current, completed, payload_fields, type_identity, prior_tops, subject_ty, es, ee, result_ty, arm_count, env, rs, re, s, e),
