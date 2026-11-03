@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import hashlib
+import statistics
 import subprocess
 import time
 from copy import deepcopy
@@ -38,7 +39,7 @@ def line_col(source: bytes, offset: int) -> tuple[int, int]:
 
 def run_project(probe, source: bytes, source_id: str, *, page_count_override=None,
                 append_orphan_page=False, source_index_override=None,
-                span_override=None):
+                span_override=None, span_overrides=None):
     request = project.request_value(
         project.identity_map(probe),
         [(source_id, source_id, source)],
@@ -64,6 +65,16 @@ def run_project(probe, source: bytes, source_id: str, *, page_count_override=Non
         first = project.wire_flist(diagnostics)[0]
         project.set_wire_variant_field(first, "start", project.integer(span_override[0]))
         project.set_wire_variant_field(first, "end", project.integer(span_override[1]))
+    if span_overrides is not None:
+        diagnostic_values = project.wire_flist(diagnostics)
+        assert len(diagnostic_values) == len(span_overrides), (
+            len(diagnostic_values), len(span_overrides))
+        for value, byte_span in zip(diagnostic_values, span_overrides):
+            assert byte_span is not None
+            project.set_wire_variant_field(
+                value, "start", project.integer(byte_span[0]))
+            project.set_wire_variant_field(
+                value, "end", project.integer(byte_span[1]))
     locate_request = {
         "schema_version": "0.1",
         "target": {"module": PROJECT_MODULE,
@@ -129,6 +140,63 @@ def run_project_with_integrated_locations(probe, source: bytes, source_id: str):
     return rows, compiled["steps"]
 
 
+def decoded_locations(value):
+    decoded = project.decode(value)
+    rows = []
+    node = decoded
+    while node["$v"] == 1:
+        rows.append(node["$p"]["head"])
+        node = node["$p"]["tail"]
+    assert node["$v"] == 0, node
+    return rows
+
+
+def run_many_locations(probe, source: bytes, source_id: str, *,
+                       span_overrides=None, repeats=1):
+    request = project.request_value(
+        project.identity_map(probe), [(source_id, source_id, source)])
+    compiled = probe.send(request)
+    assert compiled.get("status") == "returned", compiled
+    diagnostics = deepcopy(project.wire_field(compiled["returned"][0], "diagnostics"))
+    if span_overrides is not None:
+        values = project.wire_flist(diagnostics)
+        assert len(values) == len(span_overrides), (len(values), len(span_overrides))
+        for value, byte_span in zip(values, span_overrides):
+            project.set_wire_variant_field(
+                value, "start", project.integer(byte_span[0]))
+            project.set_wire_variant_field(
+                value, "end", project.integer(byte_span[1]))
+    expected_diagnostics = project.decode(diagnostics)
+    locate_request = {
+        "schema_version": "0.1",
+        "target": {"module": PROJECT_MODULE,
+                   "function": "locate_project_diagnostics_global"},
+        "arguments": [
+            project.wire_field(request["arguments"][0], "sources"),
+            request["arguments"][1],
+            diagnostics,
+        ],
+        "type_arguments": NAT_ARGS,
+        "step_budget": 8_000_000,
+    }
+    timings = []
+    located = None
+    for _ in range(repeats):
+        before = time.perf_counter()
+        located = probe.send(locate_request)
+        timings.append(time.perf_counter() - before)
+        assert located.get("status") == "returned", located
+    rows = decoded_locations(located["returned"][0])
+    original_rows = []
+    node = expected_diagnostics
+    while node["$v"] == 1:
+        original_rows.append(node["$p"]["head"])
+        node = node["$p"]["tail"]
+    assert node["$v"] == 0, node
+    assert [row["diagnostic"] for row in rows] == original_rows
+    return rows, compiled["steps"], located["steps"], timings
+
+
 def span(row):
     diag = row["diagnostic"]
     if diag["$v"] in (2, 3, 4, 5, 6, 8):
@@ -143,6 +211,16 @@ def verify_span(rows, source: bytes):
     assert (row["start"]["line"], row["start"]["col"]) == line_col(source, start), row
     assert (row["end"]["line"], row["end"]["col"]) == line_col(source, end), row
     return row
+
+
+def verify_all_spans(rows, source: bytes, expected_spans):
+    assert len(rows) == len(expected_spans), (len(rows), len(expected_spans))
+    for row, byte_span in zip(rows, expected_spans):
+        assert row["mapped"] is True, row
+        start, end = byte_span
+        assert span(row) == byte_span, row
+        assert (row["start"]["line"], row["start"]["col"]) == line_col(source, start), row
+        assert (row["end"]["line"], row["end"]["col"]) == line_col(source, end), row
 
 
 def main():
@@ -183,6 +261,36 @@ def main():
             multi_page.index(b"demo.absent"),
             multi_page.index(b"demo.absent") + len(b"demo.absent"),
         ), multi_page_row
+
+        many_import_count = 64
+        many_imports = b"".join(
+            f"use demo.absent_{index:02d} as missing_{index:02d};\n".encode()
+            for index in range(many_import_count))
+        many_missing = (
+            b"mncs 0.18;\nmodule demo.many_missing;\n"
+            + b"\n" * 32768
+            + many_imports
+            + b"fn main() -> (r: u64) { return 1; }\n"
+        )
+        many_spans = [
+            (many_missing.index(f"demo.absent_{index:02d}".encode()),
+             many_missing.index(f"demo.absent_{index:02d}".encode())
+             + len(f"demo.absent_{index:02d}"))
+            for index in range(many_import_count)
+        ]
+        many_integrated_rows, many_integrated_steps = run_project_with_integrated_locations(
+            probe, many_missing, "many-missing-integrated.mncs")
+        verify_all_spans(many_integrated_rows, many_missing, many_spans)
+
+        ordered_rows, many_compile_steps, many_location_steps, ordered_times = run_many_locations(
+            probe, many_missing, "many-missing-ordered.mncs", repeats=7)
+        verify_all_spans(ordered_rows, many_missing, many_spans)
+        out_of_order_spans = list(reversed(many_spans))
+        out_of_order_rows, out_of_order_compile_steps, out_of_order_location_steps, out_of_order_times = run_many_locations(
+            probe, many_missing, "many-missing-out-of-order.mncs",
+            span_overrides=out_of_order_spans)
+        verify_all_spans(out_of_order_rows, many_missing, out_of_order_spans)
+        cursor_median_ms = statistics.median(ordered_times) * 1000
 
         broken = (
             b"mncs 0.18;\nmodule demo.broken;\n"
@@ -237,6 +345,17 @@ def main():
             "multi_page_span_matches_source": True,
             "multi_page_source_bytes": len(multi_page),
             "multi_page_span_line": multi_page_row["start"]["line"],
+            "project_diagnostic_cursor": {
+                "source_bytes": len(many_missing),
+                "diagnostic_count": many_import_count,
+                "integrated_compile_locations_match_python": True,
+                "ordered_locations_match_python": True,
+                "out_of_order_fallback_matches_python": True,
+                "ordered_request_times_ms": [round(value * 1000, 3) for value in ordered_times],
+                "ordered_request_median_ms": round(cursor_median_ms, 3),
+                "ordered_location_steps": many_location_steps,
+                "out_of_order_location_steps": out_of_order_location_steps,
+            },
             "parse_failure_span_matches_source": True,
             "malformed_source_pages_fail_closed": True,
             "location_free_diagnostic_preserved": True,
@@ -259,6 +378,11 @@ def main():
                 "integrated_compile_and_locate_missing": integrated_steps,
                 "compile_multi_page": multi_page_compile_steps,
                 "locate_multi_page": multi_page_location_steps,
+                "integrated_many_diagnostics": many_integrated_steps,
+                "compile_many_diagnostics": many_compile_steps,
+                "locate_many_diagnostics": many_location_steps,
+                "compile_out_of_order_diagnostics": out_of_order_compile_steps,
+                "locate_out_of_order_diagnostics": out_of_order_location_steps,
                 "compile_parse_failure": broken_compile_steps,
                 "locate_parse_failure": broken_location_steps,
                 "compile_malformed_pages": malformed_compile_steps,
