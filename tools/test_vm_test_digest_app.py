@@ -52,6 +52,7 @@ MODULE_PATHS = {
     'mncs.test.assertions': TEST_ROOT / 'native/mncs/test/assertions.mncs',
     'mncs.test.suite': TEST_ROOT / 'native/mncs/test/suite.mncs',
     'mncs.std.application.v1': STDLIB_ROOT / 'library/std/application.mncs',
+    'mncs.core.sequences.v1': STDLIB_ROOT / 'library/core/sequences.mncs',
 }
 FIXTURE_PATH = ROOT / 'evidence/native-app-readiness-test-digest.json'
 ARTIFACT_PATH = ROOT / os.environ.get(
