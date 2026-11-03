@@ -1,0 +1,57 @@
+{
+  "schema_version": "mncs.development-evidence/1",
+  "campaign": "luna-max-native-self-consumption-20261102",
+  "session_id": "ses_d7868ae434cd48ec",
+  "work_intent_id": "int_2b4e13c1aa81fe29",
+  "responsibility": "Map Project compiler diagnostics from immutable source byte spans to line and column locations.",
+  "change": {
+    "implementation": "The native Project diagnostic walk validates a source page slice once per adjacent source group and advances from the previous mapped endpoint for monotone spans. Nonmonotone valid spans retain the full-prefix scan fallback. Invalid source descriptors and spans remain unmapped.",
+    "consumer": "locate_project_diagnostics_global, used by compile_project_target_with_diagnostic_locations",
+    "shared_native_primitive": "mncs.compiler.source.v1::line_col_advance_global"
+  },
+  "workload": {
+    "source_bytes": 35017,
+    "diagnostic_count": 64,
+    "diagnostic_kind": "missing import",
+    "first_span_start": 32809,
+    "last_span_start": 34951,
+    "repeated_locator_requests": 7,
+    "backend": "cranelift",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+  },
+  "baseline": {
+    "compiler_revision": "98845d1fd10e9612a961cbb4314db50588f84353",
+    "project_module_sha256": "46386445964f0a7f1d1e1755cf5c4cfd43f2db8633111f263b9daf30e0b98fb7",
+    "median_locator_request_ms": 1071.144,
+    "sample_count": 7,
+    "independent_python_locations_matched": true
+  },
+  "verified_result": {
+    "environment_binding_id": "cap_b6744d8e63d8c131",
+    "environment_capability": "mncs-compiler:verification-executor/mncs-compiler.project-diagnostic-location-cursor-frontier",
+    "environment_provider_status": "ok",
+    "test_status": "passed",
+    "project_module_sha256": "f07735ea1deff6bb95b09f315d72ac69595e9ac7b61c0626d4c7d1e618ed3257",
+    "test_source_sha256": "cd75ad77791d5165f5d0100dbbc2c8342f5a26d1cbf1d1d41d4de015a6e4399f",
+    "ordered_locator_request_times_ms": [
+      84.64,
+      88.534,
+      88.046,
+      86.482,
+      85.822,
+      86.658,
+      87.657
+    ],
+    "median_locator_request_ms": 86.658,
+    "measured_request_level_speedup": 12.36,
+    "ordered_locations_match_independent_python": true,
+    "nonmonotone_fallback_matches_independent_python": true,
+    "integrated_compile_and_location_path_passed": true,
+    "malformed_page_and_invalid_span_cases_passed": true,
+    "cold_cranelift_ready_seconds": 254.9
+  },
+  "limits": [
+    "The timing compares seven warm locator requests for one bounded synthetic workload; it does not establish an end-to-end Compiler speedup.",
+    "The canonical VM frontier is still unavailable for this module artifact because the current VM reports unsupported instruction view_narrow; the passing verification used the Stage-0-derived Cranelift executor and independent Python span expectations."
+  ]
+}
