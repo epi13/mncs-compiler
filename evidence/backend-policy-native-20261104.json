@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "campaign": "cmp_luna_max_native_stdlib_extension_20261104_2252z",
+  "work_intent": "int_2b4e13c1aa81fe29",
+  "environment_session": "ses_067d7714fdaa695e",
+  "claim": "clm_c2fd0e648dd66f7c",
+  "repository": "mncs-compiler",
+  "base_revision": "f372a6e069805d8de6753da4b9de332749184785",
+  "migration": {
+    "native_module": "src/compiler/backend_policy.mncs",
+    "native_module_sha256": "668a7ebf2dd1be1f4c6601553a98050c39a4282e2543d557eb9c6c2f9e3a0458",
+    "responsibilities_moved": [
+      "suite identity classification",
+      "known-suite classification state",
+      "default backend selection",
+      "explicit-override precedence"
+    ],
+    "host_adapter_retained": [
+      "typed invocation and response transport",
+      "legacy Python API projection",
+      "explanatory reason strings and VM-driver test metadata"
+    ]
+  },
+  "toolchain": {
+    "language_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "source_profile": "0.18",
+    "mncs_cli_sha256": "8a0a0491ac2a04b61ed80fb5cfac498199561b6d46c03d3a05a9819ec9fde0db",
+    "stage0_probe_sha256": "21469e50175474ce5f618bcce2dd52fc20c8ac3fc03cb87c8e83f31dcb6047fc"
+  },
+  "verification": [
+    {
+      "command": "python3 tools/test_backend_policy.py",
+      "status": "passed",
+      "checks": 7,
+      "independent_contract": "all eight suite rows, class and default choices, reason/driver metadata, explicit overrides including unknown suites, fail-closed unknown handling, and LookupError compatibility",
+      "adapter_sha256": "79723c876701ea9d0e45c9afcac5aeb3075552fa41a01083e75aaf61ad12bd23",
+      "test_sha256": "8ce57afc77d8ff021bfb3549750ab4ce8739a3b7bef7fce0b2f8963703a79a60"
+    },
+    {
+      "command": "python3 tools/test_flow.py",
+      "status": "passed",
+      "selected_backend": "research-bytecode",
+      "requests": 39,
+      "identical_native_repetitions": 2,
+      "retained_execution_sessions": 1,
+      "execution_steps_total": 21888404,
+      "execution_steps_max": 2003225,
+      "elapsed_seconds": 104.272,
+      "result_sha256": "e0ba7f1d9548865338a9e31bd1ae4ef30120d11de591ecc98d6f8d81a2333dfc",
+      "report_sha256": "682f785ff786cd72135a52bdb5d511711af6a1be16b14c66163fb411d558e055",
+      "stage0_reference": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+    },
+    {
+      "command": "python3 tools/test_segment.py",
+      "status": "passed",
+      "selected_backend": "cranelift",
+      "requests": 6561,
+      "texts": 42,
+      "tokens_compared": 3161,
+      "identical_runs": 2,
+      "retained_execution_sessions": 1,
+      "execution_steps_total": 6561,
+      "execution_steps_max": 1,
+      "elapsed_seconds": 19.823,
+      "result_sha256": "1e24a7de009a8c33893d8b8a0fc5933d4221db2cb306ab75f9a0973a54ba906d",
+      "report_sha256": "2d855eebca9c5eb0d93045b75197fc8ffe6bd997771506a8de0064627a160cf4",
+      "stage0_reference": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+    }
+  ],
+  "limitations": [
+    "The host adapter still launches the pinned Language CLI once per uncached decision and exposes host-language compatibility metadata.",
+    "Environment verification inventory reads main; the branch-only obligation will be exercised through Environment after integration."
+  ]
+}

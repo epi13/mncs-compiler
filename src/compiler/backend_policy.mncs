@@ -1,0 +1,52 @@
+mncs 0.19;
+module mncs.compiler.backend_policy.v1;
+
+// Backend classification is compiler-owned verification policy. Python only
+// supplies the suite name and the environment override; this module decides
+// the default backend and whether an explicit override wins.
+record SuitePolicy {
+    suite: [byte; up_to 32],
+    classification: [byte; up_to 1],
+    backend: [byte; up_to 32]
+}
+record PolicyDecision {
+    known: bool,
+    overridden: bool,
+    suite: [byte; up_to 32],
+    classification: [byte; up_to 1],
+    backend: [byte; up_to 32]
+}
+
+fn policy_for_id(id: u64) -> (result: SuitePolicy) {
+    if id == 0 { return SuitePolicy { suite: [102, 108, 111, 119], classification: [66], backend: [114, 101, 115, 101, 97, 114, 99, 104, 45, 98, 121, 116, 101, 99, 111, 100, 101] }; }
+    if id == 1 { return SuitePolicy { suite: [100, 101, 99, 108], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 2 { return SuitePolicy { suite: [115, 101, 109], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 3 { return SuitePolicy { suite: [102, 114, 111, 110, 116, 101, 110, 100], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 4 { return SuitePolicy { suite: [115, 101, 103, 109, 101, 110, 116], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 5 { return SuitePolicy { suite: [99, 112, 48, 48, 48, 49], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 6 { return SuitePolicy { suite: [112, 114, 111, 102, 105, 108, 101, 45, 115, 117, 114, 102, 97, 99, 101], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 7 { return SuitePolicy { suite: [112, 114, 111, 106, 101, 99, 116], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    return SuitePolicy { suite: [], classification: [], backend: [] };
+}
+
+fn suite_id(suite: [byte; up_to 64]) -> (result: u64) {
+    if suite.len == 4 { if suite[0] == 102 && suite[1] == 108 && suite[2] == 111 && suite[3] == 119 { return 0; } }
+    if suite.len == 4 { if suite[0] == 100 && suite[1] == 101 && suite[2] == 99 && suite[3] == 108 { return 1; } }
+    if suite.len == 3 { if suite[0] == 115 && suite[1] == 101 && suite[2] == 109 { return 2; } }
+    if suite.len == 8 { if suite[0] == 102 && suite[1] == 114 && suite[2] == 111 && suite[3] == 110 && suite[4] == 116 && suite[5] == 101 && suite[6] == 110 && suite[7] == 100 { return 3; } }
+    if suite.len == 7 { if suite[0] == 115 && suite[1] == 101 && suite[2] == 103 && suite[3] == 109 && suite[4] == 101 && suite[5] == 110 && suite[6] == 116 { return 4; } }
+    if suite.len == 6 { if suite[0] == 99 && suite[1] == 112 && suite[2] == 48 && suite[3] == 48 && suite[4] == 48 && suite[5] == 49 { return 5; } }
+    if suite.len == 15 { if suite[0] == 112 && suite[1] == 114 && suite[2] == 111 && suite[3] == 102 && suite[4] == 105 && suite[5] == 108 && suite[6] == 101 && suite[7] == 45 && suite[8] == 115 && suite[9] == 117 && suite[10] == 114 && suite[11] == 102 && suite[12] == 97 && suite[13] == 99 && suite[14] == 101 { return 6; } }
+    if suite.len == 7 { if suite[0] == 112 && suite[1] == 114 && suite[2] == 111 && suite[3] == 106 && suite[4] == 101 && suite[5] == 99 && suite[6] == 116 { return 7; } }
+    return 8;
+}
+
+fn catalogue() -> (result: [SuitePolicy; 8]) {
+    return [policy_for_id(0), policy_for_id(1), policy_for_id(2), policy_for_id(3), policy_for_id(4), policy_for_id(5), policy_for_id(6), policy_for_id(7)];
+}
+
+fn resolve(suite: [byte; up_to 64], has_override: bool) -> (result: PolicyDecision) {
+    let id: u64 = suite_id(suite);
+    let policy: SuitePolicy = policy_for_id(id);
+    return PolicyDecision { known: id < 8, overridden: has_override, suite: policy.suite, classification: policy.classification, backend: policy.backend };
+}
