@@ -1,5 +1,24 @@
 # mncs-compiler
 
+Disposable storage has an automatic lifecycle. After a successful bootstrap,
+`tools/bootstrap.sh` clears Cargo targets in validated archived Stage-0 source
+trees under `.build/stage0`; the source and revision markers remain available
+for provenance and rebuilding. Failed builds retain the previous outputs
+until a successful retry. Set `MNCS_BOOTSTRAP_KEEP_ARCHIVED_TARGETS=1` when a
+measurement intentionally requires historical executables. Caller-selected
+external targets and symlink targets are preserved.
+`tools/bootstrap.sh --retire-archived-targets` performs this upkeep without
+rebuilding when the selected pin already has a matching successful-build marker.
+
+The Stage-0 probe's compressed cache retains at most 2 GiB, 128 files, and
+14 days of unused entries by default. Override these with
+`MNCS_PROBE_CACHE_MAX_BYTES`, `MNCS_PROBE_CACHE_MAX_ENTRIES`, and
+`MNCS_PROBE_CACHE_MAX_AGE_SECONDS`. Publication evicts the least recently used
+recognized cache entries under a process lock; active cache readers finish
+before eviction. Other files, source, and durable evidence are preserved.
+The probe's `--cache-maintain` operation applies the same retention without
+compilation, requiring an explicit `MNCS_PROBE_CACHE_DIR` selection.
+
 <!-- MNCS:generated:begin -->
 ## Project entry
 

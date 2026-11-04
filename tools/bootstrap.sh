@@ -4,6 +4,11 @@
 # quota constrained; the default remains local and disposable.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+# Serialize provisioning and retirement for this checkout. Cargo's own target
+# lock still coordinates a clean with a build using an archived target.
+mkdir -p .build
+exec 9>.build/bootstrap.lock
+flock 9
 # Keep the reference build useful in constrained compiler-workload sandboxes.
 # Both artifacts are disposable bootstrap outputs; callers may override these
 # defaults when they want full symbols or incremental compilation.
@@ -12,6 +17,28 @@ export CARGO_INCREMENTAL="${CARGO_INCREMENTAL:-0}"
 revision=$(python3 -c 'import json; print(json.load(open("mncs-language.lock.json"))["revision"])')
 target_dir="${MNCS_BOOTSTRAP_TARGET_DIR:-$PWD/.bootstrap/target}"
 target_revision_marker="$target_dir/.mncs-language-revision"
+retire_archived_targets() {
+    [[ ${MNCS_BOOTSTRAP_KEEP_ARCHIVED_TARGETS:-0} != 1 ]] || return 0
+    for archived in "$PWD"/.build/stage0/*; do
+        [[ -d "$archived" && ! -L "$archived" ]] || continue
+        archive_name=${archived##*/}
+        [[ "$archive_name" =~ ^[0-9a-f]{40}(-[0-9]+)?$ ]] || continue
+        [[ -f "$archived/revision" && -f "$archived/Cargo.toml" ]] || continue
+        [[ $(cat "$archived/revision") == "${archive_name:0:40}" ]] || continue
+        [[ -d "$archived/target" && ! -L "$archived/target" ]] || continue
+        echo "Retiring disposable build outputs for archived Stage-0 ${archive_name:0:40}."
+        cargo clean --manifest-path "$archived/Cargo.toml" --target-dir "$archived/target"
+    done
+}
+if [[ ${1:-} == --retire-archived-targets ]]; then
+    if [[ ! -f .bootstrap/revision || $(cat .bootstrap/revision) != "$revision"
+          || ! -f "$target_revision_marker" || $(cat "$target_revision_marker") != "$revision" ]]; then
+        echo 'The selected Stage-0 build is not verified; preserving archived targets.' >&2
+        exit 2
+    fi
+    retire_archived_targets
+    exit 0
+fi
 extract_locked_source() {
     local destination="$1"
     local selected_source="${MNCS_LANGUAGE_ROOT:-}"
@@ -89,3 +116,9 @@ mkdir -p "$(dirname "$target_revision_marker")"
 temporary_marker="$target_revision_marker.tmp.$$"
 printf '%s\n' "$revision" > "$temporary_marker"
 mv "$temporary_marker" "$target_revision_marker"
+
+# A repin archives the previous source tree for provenance. Its Cargo target
+# is disposable; carrying it into every archived revision silently retains a
+# full compiler build per pin. Retire these outputs only after the selected
+# build has succeeded, including archives left by an interrupted earlier run.
+retire_archived_targets

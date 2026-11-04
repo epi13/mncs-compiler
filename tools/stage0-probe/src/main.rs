@@ -21,6 +21,7 @@ use std::{
 };
 
 mod application;
+mod cache_retention;
 mod provider;
 #[path = "../../vm_emit.rs"]
 mod vm_emit;
@@ -1069,6 +1070,21 @@ fn emit_vm_artifact_for_probe(
 }
 
 fn main() {
+    if std::env::args().skip(1).eq(["--cache-maintain"]) {
+        let directory = std::env::var("MNCS_PROBE_CACHE_DIR").unwrap_or_default();
+        if directory.is_empty() {
+            eprintln!("--cache-maintain requires an explicitly selected MNCS_PROBE_CACHE_DIR");
+            std::process::exit(2);
+        }
+        match cache_retention::maintain(std::path::Path::new(&directory)) {
+            Ok(()) => println!("{}", json!({"schema_version":"mncs.compiler.probe-cache-maintenance/1", "status":"complete", "directory":directory})),
+            Err(error) => {
+                eprintln!("probe cache maintenance: {error}");
+                std::process::exit(2);
+            }
+        }
+        return;
+    }
     if std::env::args().any(|arg| arg == "--producer-info") {
         println!("{}", provider::producer());
         return;
@@ -1265,6 +1281,7 @@ fn main() {
         Option<FrontendCacheMetadata>,
     )> {
         let dir = cache_dir.as_ref()?;
+        let _cache_lease = cache_retention::read_lease(dir)?;
         let path = format!("{dir}/{key}{suffix}");
         let started = Instant::now();
         let mut gzip = std::process::Command::new("gzip")
@@ -1294,10 +1311,11 @@ fn main() {
                 "gzip_pid": gzip_pid,
                 "exit_code": status.code(),
                 "success": status.success(),
-                "compressed_bytes": std::fs::metadata(path).map(|metadata| metadata.len()).ok()
+                "compressed_bytes": std::fs::metadata(&path).map(|metadata| metadata.len()).ok()
             }),
         );
         if status.success() {
+            if parsed.is_some() { cache_retention::touch(&path); }
             parsed
         } else {
             None
@@ -1473,7 +1491,7 @@ fn main() {
             }
         };
         let stored = compressed_bytes.is_some()
-            && std::fs::rename(&compressed_tmp, format!("{dir}/{key}{suffix}")).is_ok();
+            && cache_retention::publish(dir, &compressed_tmp, &format!("{dir}/{key}{suffix}"));
         if !stored {
             let _ = std::fs::remove_file(&compressed_tmp);
         }
