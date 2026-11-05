@@ -1,32 +1,63 @@
 mncs 0.19;
 module mncs.compiler.backend_policy.v1;
 
-// Backend classification is compiler-owned verification policy. Python only
-// supplies the suite name and the environment override; this module decides
-// the default backend and whether an explicit override wins.
-record SuitePolicy {
+// Backend classification, execution choice, rationale, and VM-driver metadata
+// are compiler-owned verification policy. Python only supplies the suite
+// name and the environment override, then projects this typed result.
+record SuiteIdentity {
     suite: [byte; up_to 32],
     classification: [byte; up_to 1],
     backend: [byte; up_to 32]
+}
+record SuitePolicy {
+    suite: [byte; up_to 32],
+    classification: [byte; up_to 1],
+    backend: [byte; up_to 32],
+    reason: [byte; up_to 128],
+    vm_driver: [byte; up_to 64]
 }
 record PolicyDecision {
     known: bool,
     overridden: bool,
     suite: [byte; up_to 32],
     classification: [byte; up_to 1],
-    backend: [byte; up_to 32]
+    backend: [byte; up_to 32],
+    reason: [byte; up_to 128],
+    vm_driver: [byte; up_to 64]
+}
+
+fn reason_for_id(id: u64) -> (result: [byte; up_to 128]) {
+    if id == 0 { return [67, 80, 45, 48, 48, 50, 52, 32, 98, 114, 101, 97, 107, 115, 32, 67, 114, 97, 110, 101, 108, 105, 102, 116, 32, 114, 101, 116, 101, 110, 116, 105, 111, 110, 59, 32, 98, 121, 116, 101, 99, 111, 100, 101, 32, 112, 97, 115, 115, 101, 115, 32, 119, 105, 116, 104, 32, 105, 100, 101, 110, 116, 105, 99, 97, 108, 32, 100, 105, 103, 101, 115, 116, 115]; }
+    if id == 1 { return [110, 97, 116, 105, 118, 101, 32, 99, 97, 110, 97, 114, 121, 59, 32, 98, 121, 116, 101, 99, 111, 100, 101, 32, 112, 97, 114, 105, 116, 121, 32, 97, 108, 114, 101, 97, 100, 121, 32, 118, 101, 114, 105, 102, 105, 101, 100]; }
+    if id == 2 { return [101, 120, 101, 99, 117, 116, 105, 111, 110, 45, 100, 111, 109, 105, 110, 97, 116, 101, 100, 59, 32, 110, 97, 116, 105, 118, 101, 32, 105, 115, 32, 126, 51, 46, 53, 120, 32, 102, 97, 115, 116, 101, 114, 32, 116, 104, 97, 110, 32, 105, 110, 116, 101, 114, 112, 114, 101, 116, 97, 116, 105, 111, 110]; }
+    if id == 3 { return [101, 120, 101, 99, 117, 116, 111, 114, 45, 98, 97, 99, 107, 101, 100, 59, 32, 115, 116, 97, 121, 115, 32, 110, 97, 116, 105, 118, 101, 32, 117, 110, 116, 105, 108, 32, 116, 104, 101, 32, 86, 77, 32, 114, 111, 117, 116, 101, 32, 99, 111, 118, 101, 114, 115, 32, 116, 104, 101, 32, 119, 111, 114, 107, 108, 111, 97, 100]; }
+    if id == 4 { return [101, 120, 101, 99, 117, 116, 111, 114, 45, 98, 97, 99, 107, 101, 100, 59, 32, 110, 97, 116, 105, 118, 101, 32, 97, 110, 99, 104, 111, 114, 44, 32, 119, 105, 116, 104, 32, 86, 77, 32, 99, 111, 118, 101, 114, 97, 103, 101, 32, 118, 105, 97, 32, 116, 101, 115, 116, 95, 118, 109, 95, 115, 101, 103, 109, 101, 110, 116, 46, 112, 121]; }
+    if id == 5 { return [101, 120, 101, 99, 117, 116, 111, 114, 45, 98, 97, 99, 107, 101, 100, 59, 32, 67, 114, 97, 110, 101, 108, 105, 102, 116, 32, 114, 101, 116, 101, 110, 116, 105, 111, 110, 32, 97, 115, 115, 101, 114, 116, 105, 111, 110, 115, 32, 97, 114, 101, 32, 97, 32, 110, 97, 116, 105, 118, 101, 32, 99, 97, 110, 97, 114, 121]; }
+    if id == 6 { return [101, 120, 101, 99, 117, 116, 111, 114, 45, 98, 97, 99, 107, 101, 100, 59, 32, 115, 116, 97, 121, 115, 32, 110, 97, 116, 105, 118, 101, 32, 117, 110, 116, 105, 108, 32, 116, 104, 101, 32, 86, 77, 32, 114, 111, 117, 116, 101, 32, 99, 111, 118, 101, 114, 115, 32, 116, 104, 101, 32, 119, 111, 114, 107, 108, 111, 97, 100]; }
+    if id == 7 { return [98, 117, 100, 103, 101, 116, 45, 98, 111, 117, 110, 100, 58, 32, 99, 97, 110, 110, 111, 116, 32, 102, 105, 116, 32, 116, 104, 101, 32, 56, 77, 32, 105, 110, 116, 101, 114, 112, 114, 101, 116, 101, 100, 45, 115, 116, 101, 112, 32, 98, 117, 100, 103, 101, 116, 59, 32, 114, 101, 116, 101, 110, 116, 105, 111, 110, 32, 105, 115, 32, 116, 104, 101, 32, 99, 97, 110, 97, 114, 121]; }
+    return [];
+}
+
+fn vm_driver_for_id(id: u64) -> (result: [byte; up_to 64]) {
+    if id == 4 { return [116, 111, 111, 108, 115, 47, 116, 101, 115, 116, 95, 118, 109, 95, 115, 101, 103, 109, 101, 110, 116, 46, 112, 121]; }
+    return [];
+}
+
+fn identity_for_id(id: u64) -> (result: SuiteIdentity) {
+    if id == 0 { return SuiteIdentity { suite: [102, 108, 111, 119], classification: [66], backend: [114, 101, 115, 101, 97, 114, 99, 104, 45, 98, 121, 116, 101, 99, 111, 100, 101] }; }
+    if id == 1 { return SuiteIdentity { suite: [100, 101, 99, 108], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 2 { return SuiteIdentity { suite: [115, 101, 109], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 3 { return SuiteIdentity { suite: [102, 114, 111, 110, 116, 101, 110, 100], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 4 { return SuiteIdentity { suite: [115, 101, 103, 109, 101, 110, 116], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 5 { return SuiteIdentity { suite: [99, 112, 48, 48, 48, 49], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 6 { return SuiteIdentity { suite: [112, 114, 111, 102, 105, 108, 101, 45, 115, 117, 114, 102, 97, 99, 101], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    if id == 7 { return SuiteIdentity { suite: [112, 114, 111, 106, 101, 99, 116], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
+    return SuiteIdentity { suite: [], classification: [], backend: [] };
 }
 
 fn policy_for_id(id: u64) -> (result: SuitePolicy) {
-    if id == 0 { return SuitePolicy { suite: [102, 108, 111, 119], classification: [66], backend: [114, 101, 115, 101, 97, 114, 99, 104, 45, 98, 121, 116, 101, 99, 111, 100, 101] }; }
-    if id == 1 { return SuitePolicy { suite: [100, 101, 99, 108], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    if id == 2 { return SuitePolicy { suite: [115, 101, 109], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    if id == 3 { return SuitePolicy { suite: [102, 114, 111, 110, 116, 101, 110, 100], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    if id == 4 { return SuitePolicy { suite: [115, 101, 103, 109, 101, 110, 116], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    if id == 5 { return SuitePolicy { suite: [99, 112, 48, 48, 48, 49], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    if id == 6 { return SuitePolicy { suite: [112, 114, 111, 102, 105, 108, 101, 45, 115, 117, 114, 102, 97, 99, 101], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    if id == 7 { return SuitePolicy { suite: [112, 114, 111, 106, 101, 99, 116], classification: [66], backend: [99, 114, 97, 110, 101, 108, 105, 102, 116] }; }
-    return SuitePolicy { suite: [], classification: [], backend: [] };
+    let identity: SuiteIdentity = identity_for_id(id);
+    return SuitePolicy { suite: identity.suite, classification: identity.classification, backend: identity.backend, reason: reason_for_id(id), vm_driver: vm_driver_for_id(id) };
 }
 
 fn suite_id(suite: [byte; up_to 64]) -> (result: u64) {
@@ -48,5 +79,5 @@ fn catalogue() -> (result: [SuitePolicy; 8]) {
 fn resolve(suite: [byte; up_to 64], has_override: bool) -> (result: PolicyDecision) {
     let id: u64 = suite_id(suite);
     let policy: SuitePolicy = policy_for_id(id);
-    return PolicyDecision { known: id < 8, overridden: has_override, suite: policy.suite, classification: policy.classification, backend: policy.backend };
+    return PolicyDecision { known: id < 8, overridden: has_override, suite: policy.suite, classification: policy.classification, backend: policy.backend, reason: policy.reason, vm_driver: policy.vm_driver };
 }

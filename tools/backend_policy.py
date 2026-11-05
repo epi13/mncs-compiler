@@ -23,19 +23,6 @@ class UnknownSuiteError(LookupError):
     """A suite has no native backend classification and no explicit choice."""
 
 
-# These strings explain the verified rows to maintainers; executable class
-# and backend decisions live in backend_policy.mncs.
-_SUITE_REASONS = {
-    "flow": "CP-0024 breaks Cranelift retention; bytecode passes with identical digests",
-    "decl": "native canary; bytecode parity already verified",
-    "sem": "execution-dominated; native is ~3.5x faster than interpretation",
-    "frontend": "executor-backed; stays native until the VM route covers the workload",
-    "segment": "executor-backed; native anchor, with VM coverage via test_vm_segment.py",
-    "cp0001": "executor-backed; Cranelift retention assertions are a native canary",
-    "profile-surface": "executor-backed; stays native until the VM route covers the workload",
-    "project": "budget-bound: cannot fit the 8M interpreted-step budget; retention is the canary",
-}
-_VM_DRIVERS = {"segment": "tools/test_vm_segment.py"}
 _KNOWN_CLASSES = {"A", "B", "C", "D"}
 _KNOWN_BACKENDS = {"research-bytecode", "cranelift"}
 
@@ -156,9 +143,19 @@ def _policy(value: object) -> dict[str, str]:
     suite = _text(fields.get("suite"), "suite")
     classification = _text(fields.get("classification"), "classification")
     backend = _text(fields.get("backend"), "backend")
-    if not suite or classification not in _KNOWN_CLASSES or backend not in _KNOWN_BACKENDS:
+    reason = _text(fields.get("reason"), "reason")
+    vm_driver = _text(fields.get("vm_driver"), "vm_driver")
+    if (
+        not suite
+        or classification not in _KNOWN_CLASSES
+        or backend not in _KNOWN_BACKENDS
+        or not reason
+    ):
         raise RuntimeError("MNCS backend policy returned an unknown catalogue row")
-    return {"suite": suite, "class": classification, "backend": backend}
+    result = {"suite": suite, "class": classification, "backend": backend, "reason": reason}
+    if vm_driver:
+        result["vm_driver"] = vm_driver
+    return result
 
 
 @lru_cache(maxsize=1)
@@ -172,18 +169,15 @@ def _catalogue() -> dict[str, dict[str, str]]:
     for raw in rows:
         policy = _policy(raw)
         suite = policy["suite"]
-        if suite in result or suite not in _SUITE_REASONS:
-            raise RuntimeError(f"MNCS backend policy returned an unexpected suite {suite!r}")
-        projected = {
+        if suite in result:
+            raise RuntimeError(f"MNCS backend policy returned a duplicate suite {suite!r}")
+        result[suite] = {
             "class": policy["class"],
             "backend": policy["backend"],
-            "reason": _SUITE_REASONS[suite],
+            "reason": policy["reason"],
         }
-        if suite in _VM_DRIVERS:
-            projected["vm_driver"] = _VM_DRIVERS[suite]
-        result[suite] = projected
-    if result.keys() != _SUITE_REASONS.keys():
-        raise RuntimeError("MNCS backend policy catalogue is incomplete")
+        if "vm_driver" in policy:
+            result[suite]["vm_driver"] = policy["vm_driver"]
     return result
 
 

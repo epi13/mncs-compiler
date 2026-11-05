@@ -1,0 +1,94 @@
+{
+  "schema_version": 1,
+  "campaign": "cmp_luna_max_native_ecosystem_20261105_0400z",
+  "work_intent": "int_2b4e13c1aa81fe29",
+  "environment_session": "ses_e3ce6fbf3b79584a",
+  "claim": "clm_495b72bbe28a974c",
+  "repository": "mncs-compiler",
+  "base_revision": "eef4e580426aa876c57be8f5bcad42e2b14fb41b",
+  "migration": {
+    "native_module": "src/compiler/backend_policy.mncs",
+    "native_module_sha256": "ec5c0a48d4025d0e68c8bfef49a1a791721775ad6191e4a57030ef12de5f48e3",
+    "host_adapter": "tools/backend_policy.py",
+    "host_adapter_sha256": "53d913b98ce5b35a36712047cde30ec7413387da13ba1dc7af22681d85052347",
+    "responsibilities_moved": [
+      "suite rationale strings for all eight backend policies",
+      "the segment suite's canonical-VM driver association"
+    ],
+    "host_functionality_retired": [
+      "the Python _SUITE_REASONS policy map",
+      "the Python _VM_DRIVERS policy map",
+      "catalogue completeness checks derived from those Python maps"
+    ],
+    "host_adapter_retained": [
+      "typed invocation of the pinned Language CLI",
+      "validation and decoding of MNCS typed values",
+      "legacy Python consumer API projection",
+      "explicit environment override transport"
+    ]
+  },
+  "toolchain": {
+    "language_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "source_profile": "0.18",
+    "mncs_cli_sha256": "8a0a0491ac2a04b61ed80fb5cfac498199561b6d46c03d3a05a9819ec9fde0db",
+    "stage0_probe_sha256": "21469e50175474ce5f618bcce2dd52fc20c8ac3fc03cb87c8e83f31dcb6047fc"
+  },
+  "environment": {
+    "scope_grant": "scope_9c382248497e05a2",
+    "selected_checkout": "mncs-compiler/.worktrees/compiler-native-policy-complete-20261105",
+    "branch": "campaign/compiler-native-policy-complete-20261105",
+    "resume_revalidated_checkout": true,
+    "verification_capability": "mncs-compiler:verification-executor/mncs-compiler.backend-policy-native",
+    "binding_id": "cap_58ada474d8aeb98b",
+    "status": "ok",
+    "returncode": 0,
+    "stdout": "backend_policy: 7 checks passed\n",
+    "readiness": {
+      "status": "degraded",
+      "blocking_count": 0,
+      "unavailable_count": 3,
+      "unknown_count": 1
+    }
+  },
+  "verification": [
+    {
+      "command": "python3 tools/test_backend_policy.py",
+      "status": "passed",
+      "checks": 7,
+      "independent_expectation_rows": 8,
+      "native_execution": "Pinned MNCS CLI; no host policy maps supply the expected metadata."
+    },
+    {
+      "command": "MNCS_PROBE_BIN=/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe python3 tools/test_flow.py",
+      "MNCS_PROBE_BACKEND": "unset",
+      "status": "passed",
+      "selected_backend": "research-bytecode",
+      "requests": 39,
+      "identical_native_repetitions": 2,
+      "retained_execution_sessions": 1,
+      "execution_steps_total": 21888404,
+      "execution_steps_max": 2003225,
+      "elapsed_seconds": 106.306,
+      "result_sha256": "e0ba7f1d9548865338a9e31bd1ae4ef30120d11de591ecc98d6f8d81a2333dfc",
+      "stage0_reference": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+    },
+    {
+      "command": "env -u MNCS_PROBE_BACKEND MNCS_PROBE_BIN=/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe python3 tools/test_segment.py",
+      "status": "passed",
+      "selected_backend": "cranelift",
+      "requests": 6561,
+      "texts": 42,
+      "tokens_compared": 3161,
+      "identical_runs": 2,
+      "retained_execution_sessions": 1,
+      "elapsed_seconds": 20.288,
+      "result_sha256": "1e24a7de009a8c33893d8b8a0fc5933d4221db2cb306ab75f9a0973a54ba906d",
+      "stage0_reference": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+    }
+  ],
+  "limitations": [
+    "The first flow attempt stopped before test execution because the linked worktree has no private Stage-0 probe; the passing rerun used the existing canonical probe without copying or rebuilding it.",
+    "Verification covered the backend-policy contract and the flow and segment consumers, not the full Compiler suite.",
+    "Python remains the mechanical typed-call bridge for existing test consumers."
+  ]
+}

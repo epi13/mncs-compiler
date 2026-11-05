@@ -56,11 +56,11 @@ The declaration vertical extends this to bounded declaration-scale compilation: 
 
 Run `tools/bootstrap.sh`, then the focused and canonical suites documented in [`evidence/README.md`](evidence/README.md). See [frontend evidence](evidence/FRONTEND.md), [segment evidence](evidence/SEGMENT.md), [declaration evidence](evidence/DECL.md), [semantic evidence](evidence/SEM.md), the [current parity ledger](evidence/PARITY.md), and the [pressure index](pressure/README.md). Production compiler behavior lives in `src/compiler/`; Rust/Python code under `tools/` is a temporary Stage-0 test transport, not a compiler implementation. There is no standalone native driver or coordinator yet.
 
-Compiler test-suite classification and default backend selection now execute
-from `src/compiler/backend_policy.mncs`. `tools/backend_policy.py` keeps the
-existing Python consumer API as a typed-call adapter; suite classes and backend
-choices are returned by MNCS, while explanatory reason text and VM-driver
-references remain host-side test metadata.
+Compiler test-suite classification, default backend selection, rationale, and
+VM-driver references now execute from `src/compiler/backend_policy.mncs`.
+`tools/backend_policy.py` keeps typed invocation and the legacy Python
+consumer API. The independent policy contract checks all eight rows and their
+metadata.
 
 ## Mission
 
