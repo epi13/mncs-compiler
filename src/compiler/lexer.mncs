@@ -1,6 +1,7 @@
 mncs 0.19;
 module mncs.compiler.lexer.v1;
 use mncs.compiler.source.v1 as source;
+use mncs.std.text_utf8.v1 as text_utf8;
 
 // Numeric kinds are a versioned wire vocabulary: src/compiler/token-kinds.json.
 // diagnostic: 0 none, 1 MNL001, 2 MNL002, 3 invalid UTF-8 scalar,
@@ -212,7 +213,7 @@ fn next_token<N: Nat>(text: [byte; up_to N], start: u64) -> (result: Token) {
         _ => source.utf8_scalar<N>(text, start)
     };
     let unicode_word_start: bool = a >= 128 && first_scalar.valid && source.identifier_start_scalar(first_scalar.scalar);
-    let unicode_whitespace: bool = a >= 128 && first_scalar.valid && source.whitespace_scalar(first_scalar.scalar);
+    let unicode_whitespace: bool = a >= 128 && first_scalar.valid && text_utf8.is_whitespace_scalar(first_scalar.scalar as u32);
     if a >= 128 && !(unicode_word_start || unicode_whitespace) {
         let error_end: u64 = select(first_scalar.valid, first_scalar.next, start + 1);
         return Token { kind: 7, start: start, end: error_end, diagnostic: select(first_scalar.valid, 2, 3) };
@@ -289,7 +290,7 @@ fn scan_step<N: Nat>(text: [byte; up_to N], st: Scan, line: bool, block: bool, w
     if ws {
         if a >= 128 {
             let scalar: source.Utf8Scalar = source.utf8_scalar<N>(text, st.end);
-            let advance: bool = scalar.valid && source.whitespace_scalar(scalar.scalar);
+            let advance: bool = scalar.valid && text_utf8.is_whitespace_scalar(scalar.scalar as u32);
             return Scan { ..st, end: select(advance, scalar.next, st.end), done: !advance };
         }
         let advance: bool = space(a);
@@ -724,7 +725,7 @@ fn scan_line_comment_window<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
 
 fn scan_unicode_scalar_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: Scan, word: bool, ws: bool) -> (result: Scan) {
     let scalar: source.Utf8Scalar = source.utf8_scalar_global<P, N>(pages, stride, total, st.end);
-    let accepted: bool = scalar.valid && ((word && source.identifier_continue_scalar(scalar.scalar)) || (ws && source.whitespace_scalar(scalar.scalar)));
+    let accepted: bool = scalar.valid && ((word && source.identifier_continue_scalar(scalar.scalar)) || (ws && text_utf8.is_whitespace_scalar(scalar.scalar as u32)));
     return Scan { ..st, end: select(accepted, scalar.next, st.end), done: !accepted };
 }
 
@@ -767,7 +768,7 @@ fn next_token_global<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         _ => source.utf8_scalar_global<P, N>(pages, stride, total, start)
     };
     let unicode_word_start: bool = a >= 128 && first_scalar.valid && source.identifier_start_scalar(first_scalar.scalar);
-    let unicode_whitespace: bool = a >= 128 && first_scalar.valid && source.whitespace_scalar(first_scalar.scalar);
+    let unicode_whitespace: bool = a >= 128 && first_scalar.valid && text_utf8.is_whitespace_scalar(first_scalar.scalar as u32);
     if a >= 128 && !(unicode_word_start || unicode_whitespace) {
         let error_end: u64 = select(first_scalar.valid, first_scalar.next, start + 1);
         return Token { kind: 7, start: start, end: error_end, diagnostic: select(first_scalar.valid, 2, 3) };

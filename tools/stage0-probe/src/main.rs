@@ -189,6 +189,87 @@ fn envelope(text: String) -> SourceEnvelope {
     SourceEnvelope::inline(SourceArtifactKind::Program, "probe", text)
 }
 
+fn library_module_relative_path(module: &str) -> Option<std::path::PathBuf> {
+    let suffix = module.strip_prefix("mncs.")?;
+    let parts: Vec<&str> = suffix.split('.').collect();
+    if parts.len() < 3
+        || !parts.last().is_some_and(|version| {
+            version.starts_with('v') && version[1..].chars().all(|c| c.is_ascii_digit())
+        })
+        || parts.iter().any(|part| {
+            part.is_empty()
+                || !part.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        })
+    {
+        return None;
+    }
+    let mut relative = std::path::PathBuf::new();
+    for part in &parts[..parts.len() - 1] {
+        relative.push(part);
+    }
+    relative.set_extension("mncs");
+    Some(relative)
+}
+
+fn load_probe_library_modules(
+    sources: &mut Sources,
+    loaded_source_bytes: &mut usize,
+) -> BTreeMap<String, String> {
+    let requested = std::env::var("MNCS_PROBE_LIBRARY_MODULES").unwrap_or_default();
+    let mut pending: BTreeSet<String> = requested
+        .split(',')
+        .map(str::trim)
+        .filter(|module| !module.is_empty())
+        .map(str::to_owned)
+        .collect();
+    if pending.is_empty() {
+        return BTreeMap::new();
+    }
+    let roots: Vec<std::path::PathBuf> = std::env::var_os("MNCS_LIBRARY_PATH")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    assert!(!roots.is_empty(), "MNCS_PROBE_LIBRARY_MODULES needs MNCS_LIBRARY_PATH");
+
+    let mut loaded = BTreeMap::new();
+    while let Some(module) = pending.pop_first() {
+        if loaded.contains_key(&module) || sources.0.contains_key(&module) {
+            continue;
+        }
+        let Some(relative) = library_module_relative_path(&module) else {
+            continue;
+        };
+        let path = roots
+            .iter()
+            .map(|root| root.join(&relative))
+            .find(|path| path.is_file())
+            .unwrap_or_else(|| {
+                panic!("MNCS probe library module {module} not found at {relative:?}")
+            });
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read MNCS probe library module {module}: {error}"));
+        *loaded_source_bytes += text.len();
+        sources.0.insert(module.clone(), envelope(text.clone()));
+        for line in text.lines() {
+            let Some(declaration) = line.trim().strip_prefix("use ") else {
+                continue;
+            };
+            let imported = declaration
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .trim_end_matches(';');
+            if imported.starts_with("mncs.")
+                && !sources.0.contains_key(imported)
+                && !loaded.contains_key(imported)
+            {
+                pending.insert(imported.to_owned());
+            }
+        }
+        loaded.insert(module, text);
+    }
+    loaded
+}
+
 /// Cache key schema. Bump whenever cache read/write logic changes: a
 /// logic change without a bump could otherwise misread old entries.
 const PROBE_CACHE_SCHEMA: &str = "probe-cache-v3";
@@ -1162,6 +1243,7 @@ fn main() {
             .0
             .insert(format!("mncs.compiler.{file}.v1"), envelope(text));
     }
+    let library_sources = load_probe_library_modules(&mut sources, &mut loaded_source_bytes);
     trace_phase(
         "source_resolution",
         source_resolution_started,
@@ -1213,7 +1295,7 @@ fn main() {
     // Loaded closure as (name, bytes) pairs, read once (the envelopes
     // already hold the leaves but do not lend the text back).
     let closure_started = Instant::now();
-    let closure: Vec<(String, String)> = [
+    let mut closure: Vec<(String, String)> = [
         "source", "lexer", "parser", "kernel", "segment", "decl", "flow", "ssa", "project",
     ]
     .into_iter()
@@ -1225,6 +1307,8 @@ fn main() {
         })
     })
     .collect();
+    closure.extend(library_sources);
+    closure.sort_by(|left, right| left.0.cmp(&right.0));
     trace_phase(
         "dependency_closure_resolution",
         closure_started,

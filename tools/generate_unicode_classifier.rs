@@ -1,6 +1,5 @@
-//! Generate the MNCS Unicode scalar classifiers from Rust's pinned `char`
-//! property tables. Run this tool with the workspace Rust toolchain whenever
-//! that toolchain changes, then review the resulting source diff.
+//! Generate the MNCS Unicode identifier classifiers from Rust's pinned `char`
+//! property tables. Unicode White_Space is owned by mncs.std.text_utf8.
 
 use std::env;
 use std::fs;
@@ -131,17 +130,10 @@ fn generate() -> String {
     let alphabetic = emit_property("alphabetic", char::is_alphabetic, &mut output);
     let alphanumeric = emit_property("alphanumeric", char::is_alphanumeric, &mut output);
     output.push_str(
-        "// Rust char::is_whitespace is represented by the Unicode White_Space property.\n\
-fn unicode_whitespace(value: u64) -> (result: bool) {\n\
-    return (value >= 9 && value <= 13) || value == 32 || value == 133 || value == 160 ||\n\
-        value == 5760 || (value >= 8192 && value <= 8202) || value == 8232 || value == 8233 ||\n\
-        value == 8239 || value == 8287 || value == 12288;\n}\n\
-fn identifier_start_scalar(value: u64) -> (result: bool) {\n\
+        "fn identifier_start_scalar(value: u64) -> (result: bool) {\n\
     return value == 95 || (value < 128 && ((value >= 65 && value <= 90) || (value >= 97 && value <= 122))) || unicode_alphabetic(value);\n}\n\
 fn identifier_continue_scalar(value: u64) -> (result: bool) {\n\
     return value == 95 || (value >= 48 && value <= 57) || (value < 128 && ((value >= 65 && value <= 90) || (value >= 97 && value <= 122))) || unicode_alphanumeric(value);\n}\n\
-fn whitespace_scalar(value: u64) -> (result: bool) {\n\
-    return (value == 32 || (value >= 9 && value <= 13)) || unicode_whitespace(value);\n}\n\
 ",
     );
     output.push_str(END);

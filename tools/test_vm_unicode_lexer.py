@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import resource
+import re
 import subprocess
 import tempfile
 import time
@@ -15,6 +16,7 @@ import test_cp0001 as cp
 import test_vm_emit
 import test_vm_native_application as native_app
 import test_vm_segment
+import probe_paths
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = "mncs.compiler.source.v1"
@@ -24,6 +26,13 @@ PAGE_BOUND = 1024
 VIEW_BOUND = 1024
 STEP_BUDGET = 8_000_000
 STRIDES = (1, 2, 3, 4, 7, 64, 1024)
+NON_ASCII_WHITE_SPACE = (
+    0x0085, 0x00A0, 0x1680, *range(0x2000, 0x200B),
+    0x2028, 0x2029, 0x202F, 0x205F, 0x3000,
+)
+WHITE_SPACE_EXCLUSIONS = (
+    0x0084, 0x00A1, 0x1681, 0x200B, 0x2027, 0x202A, 0x2060, 0xFEFF,
+)
 TEXTS = [
     "café value2",
     "_Αλφα βeta",
@@ -37,6 +46,10 @@ TEXTS = [
     "/* 漢字 */变量",
     "a😀b",
     "\u200bname",
+] + [
+    f"left{chr(scalar)}right" for scalar in NON_ASCII_WHITE_SPACE
+] + [
+    f"left{chr(scalar)}right" for scalar in WHITE_SPACE_EXCLUSIONS
 ]
 MALFORMED_COMMENT_CASES = [
     ("line-comment-bad-continuation", b"// ok \xe2(\xa1\n", 6),
@@ -172,7 +185,53 @@ def cgroup_snapshot() -> dict:
     return result
 
 
+def shared_library_module_sources(library_root: Path, roots: tuple[str, ...]) -> dict[str, Path]:
+    pending = list(roots)
+    modules: dict[str, Path] = {}
+    while pending:
+        module = pending.pop()
+        if module in modules:
+            continue
+        parts = module.removeprefix("mncs.").split(".")
+        if len(parts) < 3 or not parts[-1].startswith("v"):
+            continue
+        path = library_root.joinpath(*parts[:-1]).with_suffix(".mncs")
+        if not path.is_file():
+            raise FileNotFoundError(f"MNCS library source for {module} is missing: {path}")
+        modules[module] = path
+        for line in path.read_text(encoding="utf-8").splitlines():
+            match = re.match(
+                r"\s*use\s+([A-Za-z0-9_.]+)(?:\s+as\s+[A-Za-z0-9_]+)?\s*;",
+                line,
+            )
+            if match and match.group(1).startswith("mncs."):
+                pending.append(match.group(1))
+    return modules
+
+
 def main() -> dict:
+    configured_library = os.environ.get("MNCS_LIBRARY_PATH")
+    if configured_library:
+        library_roots = [Path(item) for item in configured_library.split(os.pathsep) if item]
+    else:
+        library_roots = [parent / "mncs-stdlib" / "library" for parent in ROOT.parents]
+    shared_library_root = next((
+        candidate.resolve() for candidate in library_roots
+        if (candidate / "std/text_utf8.mncs").is_file()
+    ), None)
+    if shared_library_root is None:
+        raise FileNotFoundError(
+            "mncs-stdlib/library with std/text_utf8.mncs is required for the shared whitespace proof"
+        )
+    shared_modules = shared_library_module_sources(
+        shared_library_root, ("mncs.std.text_utf8.v1",)
+    )
+    os.environ["MNCS_LIBRARY_PATH"] = str(shared_library_root)
+    os.environ["MNCS_PROBE_LIBRARY_MODULES"] = "mncs.std.text_utf8.v1"
+    if "MNCS_PROBE_CACHE_DIR" not in os.environ:
+        os.environ["MNCS_PROBE_CACHE_DIR"] = str(
+            probe_paths.probe_cache_directory(ROOT)
+        )
     before_children = resource.getrusage(resource.RUSAGE_CHILDREN)
     memory_before = cgroup_snapshot()
     started = time.monotonic()
@@ -466,8 +525,16 @@ def main() -> dict:
                      "src/compiler/parser.mncs", "src/compiler/kernel.mncs",
                      "tools/generate_unicode_classifier.rs")
     }
+    source_hashes.update({
+        module: hashlib.sha256(path.read_bytes()).hexdigest()
+        for module, path in shared_modules.items()
+    })
+    library_revision = subprocess.run(
+        ["git", "-C", str(shared_library_root), "rev-parse", "HEAD"],
+        capture_output=True, text=True,
+    )
     result = {
-        "schema_version": "mncs.compiler.unicode-lexer-frontier/2",
+        "schema_version": "mncs.compiler.unicode-lexer-frontier/4",
         "status": "verified",
         "rustc": subprocess.run(["rustc", "--version"], capture_output=True,
                                  text=True, check=True).stdout.strip(),
@@ -477,6 +544,22 @@ def main() -> dict:
         "malformed_comment_case_count": len(malformed_comment_summaries),
         "malformed_comment_cases": malformed_comment_summaries,
         "header_count": len(HEADERS),
+        "shared_whitespace_contract": {
+            "module": "mncs.std.text_utf8.v1",
+            "function": "is_whitespace_scalar",
+            "white_space_scalars": [f"U+{scalar:04X}" for scalar in NON_ASCII_WHITE_SPACE],
+            "exclusion_scalars": [f"U+{scalar:04X}" for scalar in WHITE_SPACE_EXCLUSIONS],
+            "stage0_reference_agreement": True,
+            "checked_page_strides": list(STRIDES),
+            "library_repository": "mncs-stdlib",
+            "library_path": "library",
+            "library_revision": library_revision.stdout.strip()
+                if library_revision.returncode == 0 else None,
+            "module_sha256": {
+                module: source_hashes[module]
+                for module in sorted(shared_modules)
+            },
+        },
         "strides": list(STRIDES),
         "token_count_per_backend": token_count,
         "token_vm_call_count": len(vm_tokens),
@@ -510,7 +593,7 @@ def main() -> dict:
             "Language-owned verified-fact reuse is not implemented or measured by these checks.",
         ],
     }
-    evidence_path = ROOT / "evidence/unicode-comment-utf8-scan-state-20261019.json"
+    evidence_path = ROOT / "evidence/compiler-shared-unicode-whitespace-20261106.json"
     evidence_path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n")
     return result
 
