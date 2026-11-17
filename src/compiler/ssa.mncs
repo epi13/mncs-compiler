@@ -983,6 +983,7 @@ fn lower_operation<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
         TName { ty: ty, start: s, end: e } => lower_name<P, N>(pages, stride, total, st, rest, ty, s, e),
         TNot { ty: ty, start: s, end: e } => lower_not<P, N>(pages, stride, total, st, rest, ty, s, e),
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => lower_repeat<P, N>(pages, stride, total, st, rest, ty, element, count, s, e),
+        TSequenceLiteral { ty: ty, element: element, count: count, start: s, end: e } => lower_sequence_literal<P, N>(pages, stride, total, st, rest, ty, element, count, s, e),
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => lower_scalar_match<P, N>(pages, stride, total, st, rest, ty, subject_ty, arms, arm_count, default_count, s, e),
         TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => lower_finite_match<P, N>(pages, stride, total, st, rest, ty, subject_ty, arms, arm_count, s, e),
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => lower_enum_construct<P, N>(pages, stride, total, st, rest, ty, vs, ve, f, params, s, e),
@@ -1141,6 +1142,7 @@ fn nest_driver_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
         TName { ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<P, N>(pages, stride, total, st.build, operation, rest), frames: st.frames, done: false },
         TNot { ty: ty, start: s, end: e } => NestDriver { build: lower_arm_operation<P, N>(pages, stride, total, st.build, operation, rest), frames: st.frames, done: false },
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => NestDriver { build: lower_arm_operation<P, N>(pages, stride, total, st.build, operation, rest), frames: st.frames, done: false },
+        TSequenceLiteral { ty: ty, element: element, count: count, start: s, end: e } => NestDriver { build: lower_arm_operation<P, N>(pages, stride, total, st.build, operation, rest), frames: st.frames, done: false },
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => nest_scalar_setup<P, N>(pages, stride, total, st, rest, ty, subject_ty, arms, arm_count, default_count, s, e),
         TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => nest_finite_setup<P, N>(pages, stride, total, st, rest, ty, subject_ty, arms, arm_count, s, e),
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => NestDriver { build: lower_arm_operation<P, N>(pages, stride, total, st.build, operation, rest), frames: st.frames, done: false },
@@ -1290,6 +1292,7 @@ fn lower_arm_operation<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
         TName { ty: ty, start: start, end: end } => lower_name<P, N>(pages, stride, total, st, rest, ty, start, end),
         TNot { ty: ty, start: start, end: end } => lower_not<P, N>(pages, stride, total, st, rest, ty, start, end),
         TRepeat { ty: ty, element: element, count: count, start: start, end: end } => lower_repeat<P, N>(pages, stride, total, st, rest, ty, element, count, start, end),
+        TSequenceLiteral { ty: ty, element: element, count: count, start: start, end: end } => lower_sequence_literal<P, N>(pages, stride, total, st, rest, ty, element, count, start, end),
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 2) },
         TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: start, end: end } => ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 4) },
         TEnumConstruct { ty: ty, variant_start: variant_start, variant_end: variant_end, field_count: count, params: params, start: start, end: end } => lower_enum_construct<P, N>(pages, stride, total, st, rest, ty, variant_start, variant_end, count, params, start, end),
@@ -1468,6 +1471,59 @@ fn emit_repeat<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, t
     let args: IdList = IdList.ICons { head: Id { value: element.id }, tail: IdList.INil };
     let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 7, operator: count, result: value.id, ty: ty, inputs: args, argc: 1, params: decl.BindList.BNil, identity: invalid_identity(), nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
     return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok, failure_op: st.failure_op };
+}
+fn sequence_literal_type_ok<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: decl.SemType, element_ty: decl.SemType, count: u64) -> (result: bool) {
+    if decl.is_poison(ty) || decl.is_poison(element_ty) { return false; }
+    return match ty {
+        TSeqExact { element: result_element, length: length, length_valid: valid } => decl.sequence_literal_bound_fits(length, valid, count) && decl.sem_eq<P, N>(pages, stride, total, result_element, element_ty),
+        TBool => false,
+        TByte => false,
+        TInt { width: width, signed: signed } => false,
+        TNamed { start: named_start, end: named_end } => false,
+        TSeq => false,
+        TPoison => false
+    };
+}
+record SeqInputCheck { rest: IdList, values: ValueList, element: decl.SemType, remaining: u64, ok: bool }
+fn sequence_inputs_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, arguments: IdList, element: decl.SemType, expected_count: u64) -> (result: bool) {
+    if expected_count > 1024 { return false; }
+    iterate i up_to 1024 carrying st: SeqInputCheck = SeqInputCheck { rest: arguments, values: values, element: element, remaining: expected_count, ok: true } {
+        if !(st.ok) || id_list_empty(st.rest) { return st.ok && st.remaining == 0 && id_list_empty(st.rest); }
+        next st = sequence_input_step<P, N>(pages, stride, total, st);
+    }
+    return st.ok && st.remaining == 0 && id_list_empty(st.rest);
+}
+fn sequence_input_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SeqInputCheck) -> (result: SeqInputCheck) {
+    if !(st.ok) { return st; }
+    if st.remaining == 0 { return SeqInputCheck { ..st, ok: false }; }
+    return match st.rest {
+        IdList.INil => st,
+        IdList.ICons { head: id, tail: rest } => sequence_input_one<P, N>(pages, stride, total, st, id, rest)
+    };
+}
+fn sequence_input_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SeqInputCheck, id: Id, rest: IdList) -> (result: SeqInputCheck) {
+    let found: LookupValue = find_value<P, N>(pages, stride, total, st.values, id.value);
+    if !(found.found) { return SeqInputCheck { ..st, rest: rest, ok: false }; }
+    return SeqInputCheck { rest: rest, values: st.values, element: st.element, remaining: st.remaining - 1, ok: decl.sem_eq<P, N>(pages, stride, total, found.value.ty, st.element) };
+}
+fn pop_stack_args(stack: ValueStack, count: u64) -> (result: PopArgs) {
+    iterate i up_to 1024 carrying popped: PopArgs = PopArgs { stack: stack, remaining: count, arguments: IdList.INil, ok: true } {
+        if !(popped.ok) || popped.remaining == 0 { return popped; }
+        next popped = pop_call_arg(popped);
+    }
+    return popped;
+}
+fn lower_sequence_literal<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, element_ty: decl.SemType, count: u64, start: u64, end: u64) -> (result: ExprBuild) {
+    let popped: PopArgs = pop_stack_args(st.stack, count);
+    let type_ok: bool = sequence_literal_type_ok<P, N>(pages, stride, total, ty, element_ty, count);
+    let source_ok: bool = decl.sequence_literal_source_valid<P, N>(pages, stride, total, start, end, count);
+    let inputs_ok: bool = popped.ok && popped.remaining == 0 && sequence_inputs_match<P, N>(pages, stride, total, st.values, popped.arguments, element_ty, count);
+    if !(type_ok) || !(source_ok) || !(inputs_ok) || !(supported_value_type<P, N>(pages, stride, total, ty, st.nominals)) {
+        return ExprBuild { ..st, rest: rest, ok: false, failure_op: select(st.failure_op > 0, st.failure_op, 3) };
+    }
+    let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 18, operator: count, result: value.id, ty: ty, inputs: popped.arguments, argc: count, params: decl.BindList.BNil, identity: invalid_identity(), nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: popped.stack }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok, failure_op: st.failure_op };
 }
 fn emit_constant(st: ExprBuild, rest: decl.TOpList, kind: u64, integer: u64, boolean: bool, ty: decl.SemType, start: u64, end: u64) -> (result: ExprBuild) {
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
@@ -2249,7 +2305,16 @@ fn verify_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     if inst.kind == 15 { return verify_loop_index_init<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 16 { return verify_record_construct_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 17 { return verify_sequence_view_instruction<P, N>(pages, stride, total, function, inst); }
+    if inst.kind == 18 { return verify_sequence_construct_instruction<P, N>(pages, stride, total, function, inst); }
     return false;
+}
+fn verify_sequence_construct_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
+    if inst.kind != 18 || inst.operator != inst.argc || inst.argc > 1024 { return false; }
+    let element: decl.SemType = decl.sequence_sem_element(inst.ty);
+    let shape_ok: bool = sequence_literal_type_ok<P, N>(pages, stride, total, inst.ty, element, inst.argc);
+    let inputs_ok: bool = sequence_inputs_match<P, N>(pages, stride, total, function.values, inst.inputs, element, inst.argc);
+    let source_ok: bool = decl.sequence_literal_source_valid<P, N>(pages, stride, total, inst.start, inst.end, inst.argc);
+    return shape_ok && inputs_ok && source_ok && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals) && decl.bind_list_empty(inst.params) && !(inst.identity.valid) && !(inst.nominal_identity.valid) && inst.variant_start == 0 && inst.variant_end == 0 && inst.binding_start == 0 && inst.binding_end == 0 && effect_identities_empty(inst.effects) && capability_identities_empty(inst.capabilities) && decl.signature_identity_valid<P, N>(pages, stride, total, inst.effects, inst.capabilities);
 }
 fn verify_loop_guard_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: u64, inst: Instruction) -> (result: bool) {
     let source_ok: bool = loop_statement_matches<P, N>(pages, stride, total, inst, 13);

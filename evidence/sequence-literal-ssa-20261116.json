@@ -1,0 +1,170 @@
+{
+  "schema_version": "mncs.development-evidence/1",
+  "session_id": "ses_27ccdf9c4d5d5a0d",
+  "work_intent_id": "int_2b4e13c1aa81fe29",
+  "campaign_id": "cmp_compiler_seq_literal_ssa_20261116",
+  "baseline": {
+    "repository": "mncs-compiler",
+    "base_commit": "42c1cf7682736bab237651108742b2116861b355",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+  },
+  "change": {
+    "summary": "Implement native SequenceLiteral ([e0, e1, ...] and []) semantic proof and TOp verification in decl.mncs plus Value SSA kind-18 SequenceConstruct lowering and verification in ssa.mncs, unlocking end-to-end native self-consumption of src/compiler/backend_policy.mncs.",
+    "file_sha256": {
+      "src/compiler/decl.mncs": "b8f0fa3f56f03cfa7ad5a963ba4f3462ee6dba33115c8e6ccdd08d723b263e0b",
+      "src/compiler/ssa.mncs": "2c032525ffe068e0d1a5c86ab601246683294e8a19b18b78303a4a4c12c6e9f3",
+      "src/compiler/backend_policy.mncs": "ec5c0a48d4025d0e68c8bfef49a1a791721775ad6191e4a57030ef12de5f48e3",
+      "tools/test_sem.py": "5cce68036d04d02637061739c961fcd3d922d081217f2b65d7f14a1a2fb45187",
+      "tools/test_ssa_sequence_literal.py": "0b724f772e79ad8e0ff6a7b0a1322a99879716caf10c9d99306502df3dc92048"
+    }
+  },
+  "verified_result": {
+    "test_ssa_sequence_literal": {
+      "decl": {
+        "ok": true,
+        "fn_count": 7,
+        "obligations": 54,
+        "call_ms": [425.349, 405.539],
+        "elapsed_seconds": 91.72
+      },
+      "decl_vm": {
+        "cases": 6,
+        "vm_wall_seconds": 19.635729,
+        "vm_peak_rss_kb": 308968,
+        "agreement": true
+      },
+      "flow": {
+        "bp_ms": 539.653
+      },
+      "ssa": {
+        "small_cases": 7,
+        "small_stage0_seq_constructs": 10,
+        "small_native_seq_constructs": 10,
+        "tamper_rejections": 12,
+        "backend_policy": {
+          "valid": true,
+          "functions": 7,
+          "instructions": 1114,
+          "blocks": 113,
+          "per_function_seq_constructs": {
+            "reason_for_id": 9,
+            "vm_driver_for_id": 2,
+            "identity_for_id": 27,
+            "policy_for_id": 0,
+            "suite_id": 0,
+            "catalogue": 1,
+            "resolve": 0
+          },
+          "total_seq_constructs": 39,
+          "tamper_rejected": true,
+          "call_ms": [7466.005, 7793.887]
+        },
+        "ssa_vm": {
+          "artifact_id": "sha256:55595e8135e20062ea28e6f034d01d2f08b757a94dd9e067b7992c818cde799e",
+          "batch_cases": 20,
+          "vm_wall_seconds": 68.39419,
+          "vm_peak_rss_kb": 423624,
+          "agreement": true
+        }
+      },
+      "project": {
+        "project_probe_wall_seconds": 82.595,
+        "multi_module_verified_functions": 2,
+        "multi_module_kind18_count": 2,
+        "multi_module_call_ms": 92.765,
+        "negative_multi_module_mne184_matched": true,
+        "backend_policy_project": {
+          "valid": true,
+          "value_ssa_valid": true,
+          "verified_functions": 7,
+          "kind18_count": 39,
+          "call_ms": [4696.586, 4134.818]
+        }
+      },
+      "elapsed_seconds": 417.445,
+      "max_child_rss_kib": 8225352
+    },
+    "backend_policy_target_frontier": {
+      "command": "python3 -u tools/probe_compiler_module_frontier.py --modules backend_policy --target-last",
+      "native_project_valid": true,
+      "native_project_ssa_valid": true,
+      "stage0_oracle_valid": true,
+      "target_verified_functions": 7,
+      "target_total_blocks": 113,
+      "target_total_instructions": 1114,
+      "retained_session_admission_ns": 312792387179,
+      "native_request_transport_and_execution_ns": 4124494659,
+      "target_call_wait_ns": 2388773052
+    },
+    "incremental_comment_edit_backend_policy": {
+      "ready_s": 75.0,
+      "call_ms": {
+        "base_1": 4948.65,
+        "base_2": 4153.36,
+        "edit_1": 4142.38,
+        "edit_2": 4488.77
+      }
+    },
+    "regression_checks": {
+      "test_sem_focused": {
+        "cases_passed": 273,
+        "sequence_literal_cases_included": 18,
+        "paged_nested_match_case_fails": 0,
+        "sabotage_checks_rejected": 10,
+        "sound_sample": true
+      },
+      "test_decl": {
+        "requests": 162,
+        "identical_runs": 2,
+        "elapsed_seconds": 758.932
+      },
+      "test_flow": {
+        "requests": 39,
+        "identical_native_repetitions": 2,
+        "elapsed_seconds": 110.325
+      },
+      "test_ssa_scalar_match_expression_subject": {
+        "native_proof_ok": true,
+        "native_ssa_verified_functions": 4,
+        "scalar_switches": 4
+      },
+      "test_ssa_record_construct": {
+        "canonical_vm_cranelift_verifier_agreement": true,
+        "elapsed_seconds": 173.308
+      },
+      "test_project_imported_record_projection": {
+        "native_valid": true,
+        "native_proof_ok": true,
+        "native_verified_functions": 3,
+        "missing_field_rejected_by_native_and_stage0": true
+      },
+      "test_vm_unicode_lexer": {
+        "status": "verified",
+        "sample_count": 39,
+        "elapsed_seconds": 140.61117
+      },
+      "test_backend_policy": "7 checks passed",
+      "unit_and_timeout_tests": {
+        "unittest_storage_and_locked_probe_count": 9,
+        "unittest_elapsed_s": 0.833,
+        "test_ssa_probe_timeout": "passed"
+      }
+    },
+    "vm_artifact_dag_footprint": {
+      "two_seed_ssa_json": {
+        "roots": ["lower_value_ssa", "verify_function"],
+        "dag_nodes": 779831,
+        "expanded_nodes": 6133739,
+        "depth": 13,
+        "max_expanded_limit": 8500000
+      }
+    }
+  },
+  "limits": [
+    "Element iteration bounds in SequenceLiteral semantic proof and Value SSA lowering/verification are bounded up_to 1024 elements, matching Profile 0.18 sequence limits.",
+    "Non-call sequence borrow rules on named expressions remain outside this slice.",
+    "Full test_sem.py (line 1116) and test_ssa_sequence_length.py (line 307) hit a pre-existing failure on src/compiler/source.mncs (replace(st.locations, index, position): [('MNE131', 56418, 56425), ('MNE102', 56475, 56485)]).",
+    "test_ssa_record_flow.py passed Cranelift checks under a 360s timeout wrapper (exceeding default 120s cold-JIT un-rooted timeout) and was refused by mncs-vm because its 13-seed ssa.json expands to 10,075,859 nodes (1,455,391 DAG nodes) above MAX_EXPANDED_NODES = 8,500,000, whereas 2-seed lower_value_ssa/verify_function ssa.json expands to 6,133,739 nodes and passes mncs-vm.",
+    "test_project_target_module.py verified kernel Value SSA (9 functions) and failed on UnresolvedImport for src/compiler/lexer.mncs bytes 85..106 (mncs.std.text_utf8.v1) because the harness loads only source, lexer, parser, and kernel without mncs-stdlib."
+  ]
+}

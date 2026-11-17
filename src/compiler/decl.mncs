@@ -5873,6 +5873,7 @@ enum TOp {
     TName { ty: SemType, start: u64, end: u64 },
     TNot { ty: SemType, start: u64, end: u64 },
     TRepeat { ty: SemType, element: SemType, count: u64, start: u64, end: u64 },
+    TSequenceLiteral { ty: SemType, element: SemType, count: u64, start: u64, end: u64 },
     TMatch { ty: SemType, subject_ty: SemType, arms: TypedScalarMatchArmList, arm_count: u64, default_count: u64, start: u64, end: u64 },
     TFiniteMatch { ty: SemType, subject_ty: SemType, arms: TypedFiniteMatchArmList, arm_count: u64, start: u64, end: u64 },
     TEnumConstruct { ty: SemType, variant_start: u64, variant_end: u64, field_count: u64, params: BindList, start: u64, end: u64 },
@@ -6006,6 +6007,7 @@ fn queue_finite_match_checks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
         TName { ty: ty, start: start, end: end } => pending,
         TNot { ty: ty, start: start, end: end } => pending,
         TRepeat { ty: ty, element: element, count: count, start: start, end: end } => pending,
+        TSequenceLiteral { ty: ty, element: element, count: count, start: start, end: end } => pending,
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: start, end: end } => queue_typed_scalar_match_arms<P, N>(pages, stride, total, arms, ty, pending),
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: count, params: params, start: start, end: end } => pending,
         TRecordConstruct { ty: ty, type_start: ts, type_end: te, has_base: has_base, field_count: count, params: params, start: start, end: end } => pending,
@@ -6066,6 +6068,7 @@ fn verify_top_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
         TName { ty: ty, start: s, end: e } => verify_top_push(st, t, ty),
         TNot { ty: ty, start: s, end: e } => verify_top_not<P, N>(pages, stride, total, st, t, ty),
         TRepeat { ty: ty, element: element, count: count, start: s, end: e } => verify_top_repeat<P, N>(pages, stride, total, st, t, ty, element, count),
+        TSequenceLiteral { ty: ty, element: element, count: count, start: s, end: e } => verify_top_sequence_literal<P, N>(pages, stride, total, st, t, ty, element, count, s, e),
         TMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, default_count: default_count, start: s, end: e } => verify_top_match<P, N>(pages, stride, total, st, t, ty, subject_ty, arms, arm_count, default_count),
         TFiniteMatch { ty: ty, subject_ty: subject_ty, arms: arms, arm_count: arm_count, start: s, end: e } => verify_top_finite_match<P, N>(pages, stride, total, st, t, ty, subject_ty, arms, arm_count),
         TEnumConstruct { ty: ty, variant_start: vs, variant_end: ve, field_count: f, params: params, start: s, end: e } => verify_top_enum_construct<P, N>(pages, stride, total, st, t, ty, f, params, vs, ve, s, e),
@@ -6098,6 +6101,89 @@ fn verify_top_repeat_exact<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
 fn verify_top_repeat_value<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, element: SemType, actual: SemType, rest: TyStack) -> (result: TDepth) {
     if !(sem_eq<P, N>(pages, stride, total, actual, element)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth, ok: true };
+}
+fn concrete_view_bound(length: u64) -> (result: bool) {
+    return view_bound_is_concrete(length) && exact_generic_bound_index(length) == 0;
+}
+fn sequence_literal_bound_fits(length: u64, length_valid: bool, count: u64) -> (result: bool) {
+    if length_valid { return count == length; }
+    return concrete_view_bound(length) && count <= length;
+}
+record ExprCountRes { rest: ExprList, count: u64, ok: bool }
+fn count_exprs_exact<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, list: ExprList) -> (result: ExprCountRes) {
+    iterate i up_to 1024 carrying st: ExprCountRes = ExprCountRes { rest: list, count: 0, ok: true } {
+        if expr_list_empty(st.rest) { return st; }
+        next st = count_exprs_exact_step(st);
+    }
+    return ExprCountRes { ..st, ok: expr_list_empty(st.rest) };
+}
+fn count_exprs_exact_step(st: ExprCountRes) -> (result: ExprCountRes) {
+    return match st.rest {
+        ENil => st,
+        ECons { head: h, tail: t } => ExprCountRes { rest: t, count: st.count + 1, ok: true }
+    };
+}
+fn sequence_source_elements_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, elements: ExprList, expected_count: u64) -> (result: bool) {
+    let counted: ExprCountRes = count_exprs_exact<P, N>(pages, stride, total, elements);
+    return counted.ok && counted.count == expected_count;
+}
+fn sequence_literal_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, expected_count: u64) -> (result: bool) {
+    if end <= start || end > total { return false; }
+    let parsed: ExprParse = parse_expr<P, N>(pages, stride, end, start, true);
+    if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
+    return match parsed.node {
+        SequenceLiteral { elements: elements, start: s, end: e } => s == start && e == end && sequence_source_elements_match<P, N>(pages, stride, total, elements, expected_count),
+        Name { start: s, end: e } => false,
+        Integer { start: s, end: e, value: v, overflow: o } => false,
+        Boolean { start: s, end: e, value: v } => false,
+        UnaryNot { value: v, start: s, end: e } => false,
+        Repeat { value: v, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => false,
+        ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        Binary { op: op, left: left, right: right, start: s, end: e } => false,
+        Call { name_start: ns, name_end: ne, args: args, targs: targs, start: s, end: e } => false,
+        Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
+        FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        Index { base: b, index: i, start: s, end: e } => false,
+        Slice { base: b, start_index: i, end_index: j, start: s, end: e } => false,
+        Cast { value: v, type_start: ts, type_end: te, type_kind: k, start: s, end: e } => false,
+        RecordConstruct { type_start: ts, type_end: te, base: b, has_base: hb, fields: fields, start: s, end: e } => false,
+        OpCall { slot: slot, name_start: ns, name_end: ne, args: args, start: s, end: e } => false
+    };
+}
+record SeqStackCheck { stack: TyStack, remaining: u64, element: SemType, ok: bool }
+fn verify_top_sequence_literal<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, element: SemType, count: u64, start: u64, end: u64) -> (result: TDepth) {
+    if is_poison(ty) || is_poison(element) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return match ty {
+        TSeqExact { element: expected_element, length: length, length_valid: valid } => verify_top_seq_elements<P, N>(pages, stride, total, st, t, ty, element, expected_element, length, valid, count, start, end),
+        TBool => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TByte => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TInt { width: w, signed: g } => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TNamed { start: s, end: e } => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TSeq => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false },
+        TPoison => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }
+    };
+}
+fn verify_top_seq_elements<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, element: SemType, expected_element: SemType, length: u64, valid: bool, count: u64, start: u64, end: u64) -> (result: TDepth) {
+    if st.depth < count || !(sequence_literal_bound_fits(length, valid, count)) || !(sem_eq<P, N>(pages, stride, total, element, expected_element)) || !(sequence_literal_source_valid<P, N>(pages, stride, total, start, end, count)) {
+        return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false };
+    }
+    iterate i up_to 1024 carrying ck: SeqStackCheck = SeqStackCheck { stack: st.stack, remaining: count, element: element, ok: true } {
+        if !(ck.ok) || ck.remaining == 0 { return finish_top_sequence_literal(st, t, ty, count, ck); }
+        next ck = seq_stack_check_step<P, N>(pages, stride, total, ck);
+    }
+    return finish_top_sequence_literal(st, t, ty, count, ck);
+}
+fn seq_stack_check_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ck: SeqStackCheck) -> (result: SeqStackCheck) {
+    if !(ck.ok) || ck.remaining == 0 { return ck; }
+    return match ck.stack {
+        WNil => SeqStackCheck { ..ck, ok: false },
+        WCons { head: actual, tail: rest } => SeqStackCheck { stack: rest, remaining: ck.remaining - 1, element: ck.element, ok: sem_eq<P, N>(pages, stride, total, actual, ck.element) }
+    };
+}
+fn finish_top_sequence_literal(st: TDepth, t: TOpList, ty: SemType, count: u64, ck: SeqStackCheck) -> (result: TDepth) {
+    if !(ck.ok) || ck.remaining != 0 { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: ck.stack }, depth: st.depth - count + 1, ok: true };
 }
 fn verify_top_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, subject_ty: SemType, arms: TypedScalarMatchArmList, arm_count: u64, default_count: u64) -> (result: TDepth) {
     let count: TypedScalarMatchCount = typed_scalar_match_count<P, N>(pages, stride, total, arms);
@@ -6610,7 +6696,8 @@ enum SemKont {
     KCastValue { type_kind: u64, type_start: u64, type_end: u64, start: u64, end: u64, exp: ExpTy },
     KSelectCondition { true_value: Expr, false_value: Expr, condition_start: u64, condition_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy },
     KSelectTrue { condition_ty: SemType, condition_start: u64, condition_end: u64, false_value: Expr, true_start: u64, true_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy },
-    KSelectFalse { condition_ty: SemType, condition_start: u64, condition_end: u64, true_ty: SemType, true_start: u64, true_end: u64, false_start: u64, false_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy }
+    KSelectFalse { condition_ty: SemType, condition_start: u64, condition_end: u64, true_ty: SemType, true_start: u64, true_end: u64, false_start: u64, false_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy },
+    KSeqElem { remaining: ExprList, element: SemType, result_ty: SemType, count: u64, elem_start: u64, elem_end: u64, start: u64, end: u64 }
 }
 enum KontList { QNil, QCons { head: SemKont, tail: KontList } }
 record SemState { jobs: JobList, konts: KontList, obls: OblList, tops: TOpList, last_ty: SemType, top_ty: SemType, failed: bool, env: ScopeStack, sigs: SigTab, rectab: RecordList, enumtab: EnumList, nominals: NominalTypeIdentityList, imported_records: ImportedRecordList, imported_enums: ImportedEnumList, effects: EffectIdentityList, caller_fx: EffectList, caller_caps: CapList, gparams: GenericParamList, total: u64 }
@@ -6663,7 +6750,7 @@ fn sem_job<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total
         Boolean { start: s, end: e, value: v } => finish_bool(st, v, s, e, job.exp),
         UnaryNot { value: value, start: s, end: e } => seed_not(st, value, s, e, job.exp),
         Repeat { value: value, count_start: cs, count_end: ce, count_kind: ck, start: s, end: e } => seed_repeat<P, N>(pages, stride, total, st, value, cs, ce, ck, s, e, job.exp),
-        SequenceLiteral { elements: xs, start: s, end: e } => sem_drain(sem_emit(st, 2, s, e, 1)),
+        SequenceLiteral { elements: xs, start: s, end: e } => seed_sequence_literal<P, N>(pages, stride, total, st, xs, s, e, job.exp),
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => seed_scalar_match<P, N>(pages, stride, total, st, subject, arms, s, e, job.exp),
         Binary { op: o, left: l, right: r, start: s, end: e } => seed_binop(st, o, l, r, s, e, job.exp),
         Call { name_start: ns, name_end: ne, args: a, targs: tg, start: s, end: e } => seed_call<P, N>(pages, stride, total, st, ns, ne, a, tg, s, e, job.exp),
@@ -7841,6 +7928,51 @@ fn apply_repeat_req<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     if sem_eq<P, N>(pages, stride, total, result_ty, expected) { return sem_emit_top(sem_accept(st, result_ty), TOp.TRepeat { ty: result_ty, element: element, count: count, start: start, end: end }); }
     return sem_emit_top(sem_accept(sem_emit(st, 2, start, end, 1), result_ty), TOp.TRepeat { ty: result_ty, element: element, count: count, start: start, end: end });
 }
+fn seed_sequence_literal<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, elements: ExprList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    return match exp {
+        XNone => sem_drain(sem_emit(st, 101, start, end, 1)),
+        XSome { ty: expected } => seed_sequence_literal_expected<P, N>(pages, stride, total, st, elements, start, end, expected)
+    };
+}
+fn seed_sequence_literal_expected<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, elements: ExprList, start: u64, end: u64, expected: SemType) -> (result: SemState) {
+    return match expected {
+        TSeqExact { element: elem_ty, length: bound, length_valid: valid } => seed_sequence_literal_seq<P, N>(pages, stride, total, st, elements, start, end, expected, elem_ty, bound, valid),
+        TSeq => sem_drain(sem_emit(st, 101, start, end, 1)),
+        TBool => sem_drain(sem_emit(st, 101, start, end, 1)),
+        TByte => sem_drain(sem_emit(st, 101, start, end, 1)),
+        TInt { width: w, signed: g } => sem_drain(sem_emit(st, 101, start, end, 1)),
+        TNamed { start: ns, end: ne } => sem_drain(sem_emit(st, 101, start, end, 1)),
+        TPoison => sem_drain(sem_emit(st, 101, start, end, 1))
+    };
+}
+fn seed_sequence_literal_seq<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, elements: ExprList, start: u64, end: u64, expected: SemType, elem_ty: SemType, bound: u64, valid: bool) -> (result: SemState) {
+    if !(valid) && !(concrete_view_bound(bound)) { return sem_drain(sem_emit(st, 101, start, end, 1)); }
+    let counted: ExprCountRes = count_exprs_exact<P, N>(pages, stride, total, elements);
+    if !(counted.ok) || !(sequence_literal_bound_fits(bound, valid, counted.count)) {
+        return sem_drain(sem_emit(st, 102, start, end, 1));
+    }
+    return match elements {
+        ENil => sem_emit_top(sem_accept(st, expected), TOp.TSequenceLiteral { ty: expected, element: elem_ty, count: 0, start: start, end: end }),
+        ECons { head: first, tail: rest } => push_seq_elem_job(st, first, rest, elem_ty, expected, counted.count, start, end)
+    };
+}
+fn push_seq_elem_job(st: SemState, elem: Expr, rest: ExprList, element: SemType, result_ty: SemType, count: u64, start: u64, end: u64) -> (result: SemState) {
+    let sp: ExprSpan = expr_span(elem);
+    let job: SemJob = SemJob { e: elem, exp: ExpTy.XSome { ty: element } };
+    let kont: SemKont = SemKont.KSeqElem { remaining: rest, element: element, result_ty: result_ty, count: count, elem_start: sp.start, elem_end: sp.end, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_seq_elem<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, remaining: ExprList, element: SemType, result_ty: SemType, count: u64, elem_start: u64, elem_end: u64, start: u64, end: u64) -> (result: SemState) {
+    let checked: SemState = seq_elem_type_check<P, N>(pages, stride, total, st, element, elem_start, elem_end);
+    return match remaining {
+        ENil => sem_emit_top(sem_accept(checked, result_ty), TOp.TSequenceLiteral { ty: result_ty, element: element, count: count, start: start, end: end }),
+        ECons { head: next_elem, tail: rest } => push_seq_elem_job(checked, next_elem, rest, element, result_ty, count, start, end)
+    };
+}
+fn seq_elem_type_check<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, element: SemType, elem_start: u64, elem_end: u64) -> (result: SemState) {
+    if sem_eq<P, N>(pages, stride, total, st.last_ty, element) { return st; }
+    return sem_emit(st, 103, elem_start, elem_end, 1);
+}
 fn apply_kont<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, k: SemKont) -> (result: SemState) {
     return match k {
         KTop => SemState { ..st, top_ty: st.last_ty },
@@ -7865,7 +7997,8 @@ fn apply_kont<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         KCastValue { type_kind: kind, type_start: ts, type_end: te, start: s, end: e, exp: x } => apply_cast_value<P, N>(pages, stride, total, st, kind, ts, te, s, e, x),
         KSelectCondition { true_value: tv, false_value: fv, condition_start: cs, condition_end: ce, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_condition(st, tv, fv, cs, ce, ns, ne, s, e, x),
         KSelectTrue { condition_ty: ct, condition_start: cs, condition_end: ce, false_value: fv, true_start: ts, true_end: te, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_true<P, N>(pages, stride, total, st, ct, cs, ce, fv, ts, te, ns, ne, s, e, x),
-        KSelectFalse { condition_ty: ct, condition_start: cs, condition_end: ce, true_ty: tt, true_start: ts, true_end: te, false_start: fs, false_end: fe, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_false<P, N>(pages, stride, total, st, ct, cs, ce, tt, ts, te, fs, fe, ns, ne, s, e, x)
+        KSelectFalse { condition_ty: ct, condition_start: cs, condition_end: ce, true_ty: tt, true_start: ts, true_end: te, false_start: fs, false_end: fe, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_false<P, N>(pages, stride, total, st, ct, cs, ce, tt, ts, te, fs, fe, ns, ne, s, e, x),
+        KSeqElem { remaining: remaining, element: element, result_ty: result_ty, count: count, elem_start: es, elem_end: ee, start: s, end: e } => apply_seq_elem<P, N>(pages, stride, total, st, remaining, element, result_ty, count, es, ee, s, e)
     };
 }
 fn seed_not(st: SemState, value: Expr, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
