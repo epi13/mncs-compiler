@@ -1150,6 +1150,30 @@ fn emit_vm_artifact_for_probe(
     }
 }
 
+// Keep execution results typed until the JSON encoder visits them. Constructing
+// a second serde_json::Value tree for a full ProjectResult can cost many GiB.
+#[derive(serde::Serialize)]
+#[serde(untagged)]
+enum ProbeReply {
+    Json(Value),
+    Backend(mncs_codegen::BackendExecutionResult),
+    Reference(mncs_model::ExecutionResult),
+}
+
+impl ProbeReply {
+    fn observations(&self) -> (Value, Value, Value) {
+        match self {
+            Self::Json(value) => (
+                value["steps"].clone(),
+                value["status"].clone(),
+                value["valid"].clone(),
+            ),
+            Self::Backend(result) => (json!(result.steps), json!(result.status), Value::Null),
+            Self::Reference(result) => (json!(result.steps), json!(result.status), Value::Null),
+        }
+    }
+}
+
 fn main() {
     if std::env::args().skip(1).eq(["--cache-maintain"]) {
         let directory = std::env::var("MNCS_PROBE_CACHE_DIR").unwrap_or_default();
@@ -2043,14 +2067,14 @@ fn main() {
                 "step_budget": request_step_budget
             }));
             let output = if input.get("execution_status").is_some() {
-                json!({
+                ProbeReply::Json(json!({
                     "backend": backend_name,
                     "modules": backend_sessions.len(),
                     "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count(),
-                })
+                }))
             } else if let Some(module) = input.get("record_types").and_then(Value::as_str) {
                 if let Some(record_types) = record_types_cache.get(module) {
-                    record_types.clone()
+                    ProbeReply::Json(record_types.clone())
                 } else {
                     let (record_types, function_count) = {
                         let program = programs
@@ -2071,7 +2095,7 @@ fn main() {
                             "function_count": function_count
                         }));
                     }
-                    record_types
+                    ProbeReply::Json(record_types)
                 }
             } else {
                 let request: ExecutionRequest = serde_json::from_value(input).unwrap();
@@ -2083,8 +2107,9 @@ fn main() {
                             request.target.module
                         )
                     });
-                json!(session.execute(&request))
+                ProbeReply::Backend(session.execute(&request))
             };
+            let (steps, status, valid) = output.observations();
             trace_phase(
                 "request_execution",
                 dispatch_started,
@@ -2093,9 +2118,9 @@ fn main() {
                     "target_module": request_module,
                     "target_function": request_function,
                     "step_budget": request_step_budget,
-                    "reported_steps": output.get("steps"),
-                    "reported_status": output.get("status"),
-                    "reported_valid": output.get("valid"),
+                    "reported_steps": steps,
+                    "reported_status": status,
+                    "reported_valid": valid,
                     "reported_steps_semantics": match backend_name.as_deref() {
                         Some("research-bytecode") => "research-bytecode execution budget units",
                         Some("canonical-vm") => "canonical VM reported steps",
@@ -2117,6 +2142,7 @@ fn main() {
                 "request_kind": request_kind
             }));
             let output_line = serde_json::to_string(&output).unwrap();
+            drop(output);
             trace_phase(
                 "response_json_encode",
                 encode_started,
@@ -2206,15 +2232,17 @@ fn main() {
             "step_budget": request_step_budget
         }));
         let output = if let Some(text) = input.get("oracle").and_then(Value::as_str) {
-            serde_json::to_value(mncs_syntax::parse(&envelope(text.to_owned()))).unwrap()
+            ProbeReply::Json(
+                serde_json::to_value(mncs_syntax::parse(&envelope(text.to_owned()))).unwrap(),
+            )
         } else if input.get("execution_status").is_some() {
-            json!({
+            ProbeReply::Json(json!({
                 "backend": backend_name,
                 "modules": backend_sessions.len(),
                 "retained_sessions": backend_sessions.values().filter(|session| session.reused()).count(),
-            })
+            }))
         } else if let Some(module) = input.get("record_types").and_then(Value::as_str) {
-            json!(programs[module].record_types)
+            ProbeReply::Json(json!(programs[module].record_types))
         } else if let Some(request) = input.get("project_oracle") {
             let root = request["root"].as_str().expect("project root source");
             let generic_seeds = request
@@ -2274,16 +2302,16 @@ fn main() {
                     "finite_types": program.finite_types,
                 })
             });
-            json!({
+            ProbeReply::Json(json!({
                 "valid": result.is_valid(),
                 "diagnostics": result.diagnostics,
                 "module_resolutions": result.module_resolutions,
                 "program": program,
                 "ssa": ssa,
                 "executions": executions,
-            })
+            }))
         } else if let Some(request) = input.get("compile_application") {
-            application::compile_application(request, toolchain.as_ref())
+            ProbeReply::Json(application::compile_application(request, toolchain.as_ref()))
         } else if let Some(request) = input.get("emit_vm_artifact") {
             // Direct canonical emission: one sealed mncs.vm.artifact/1
             // for an elaborated module, no research payload involved.
@@ -2297,11 +2325,11 @@ fn main() {
             let compiler = ReferenceCompiler::default();
             let artifact = emit_vm_artifact_for_probe(&compiler, program, backend_roots.as_ref())
                 .expect("direct VM emission");
-            json!({"module": module, "artifact": artifact})
+            ProbeReply::Json(json!({"module": module, "artifact": artifact}))
         } else if let Some(text) = input.get("elaborate").and_then(Value::as_str) {
             let result = ReferenceCompiler::default()
                 .front_end_with_resolver(envelope(text.to_owned()), &NullResolver);
-            serde_json::to_value(&result.diagnostics).unwrap()
+            ProbeReply::Json(serde_json::to_value(&result.diagnostics).unwrap())
         } else if let Some(text) = input.get("ssa").and_then(Value::as_str) {
             // Test-only Rust oracle: flow parity currently compares block
             // shape with Stage-0 SSA because MNCS has not built value SSA.
@@ -2313,7 +2341,7 @@ fn main() {
                 .program
                 .as_ref()
                 .and_then(|program| program.lower_to_ssa().ok());
-            json!({"diagnostics": result.diagnostics, "ssa": ssa})
+            ProbeReply::Json(json!({"diagnostics": result.diagnostics, "ssa": ssa}))
         } else {
             let request_decode_started = Instant::now();
             trace_event(json!({
@@ -2352,7 +2380,7 @@ fn main() {
                     result.steps,
                     true,
                 );
-                json!(result)
+                ProbeReply::Backend(result)
             } else if let Some(session) = sessions.get(&request.target.module) {
                 let execution_started = Instant::now();
                 trace_mncs_function_execution_begin("reference_body_session", None, &request, true);
@@ -2366,7 +2394,7 @@ fn main() {
                     result.steps,
                     true,
                 );
-                json!(result)
+                ProbeReply::Reference(result)
             } else {
                 let module = request.target.module.clone();
                 let program = programs
@@ -2407,9 +2435,10 @@ fn main() {
                     result.steps,
                     false,
                 );
-                json!(result)
+                ProbeReply::Reference(result)
             }
         };
+        let (steps, status, valid) = output.observations();
         trace_phase(
             "request_execution",
             dispatch_started,
@@ -2418,15 +2447,15 @@ fn main() {
                 "target_module": request_module,
                 "target_function": request_function,
                 "step_budget": request_step_budget,
-                "reported_steps": output.get("steps"),
+                "reported_steps": steps,
                 "reported_steps_semantics": match backend_name.as_deref() {
                     Some("research-bytecode") => "research-bytecode execution budget units",
                     Some("canonical-vm") => "canonical VM reported steps",
                     Some("cranelift") => "not an instruction-count metric",
                     _ => "executor-specific; UNKNOWN",
                 },
-                "reported_status": output.get("status"),
-                "reported_valid": output.get("valid")
+                "reported_status": status,
+                "reported_valid": valid
             }),
         );
         if telemetry_enabled() {
@@ -2442,6 +2471,7 @@ fn main() {
             "request_kind": request_kind
         }));
         let output_line = serde_json::to_string(&output).unwrap();
+        drop(output);
         trace_phase(
             "response_json_encode",
             encode_started,
