@@ -146,7 +146,7 @@ def main():
             "module": project.PROJECT_MODULE,
             "function": "compile_project_target",
             "type_arguments": [
-                {"kind": "nat", "value": 2048},
+                {"kind": "nat", "value": 1024},
                 {"kind": "nat", "value": 1024},
             ],
         },
@@ -164,6 +164,12 @@ def main():
         "        Lit { n: v } => v,\n"
         "        Empty => 0\n"
         "    };\n"
+        "}\n"
+        "fn construct_and_update_imported(x: u64) -> (r: u64) {\n"
+        "    let m: mid.Mid = mid.make_mid(x);\n"
+        "    let rebuilt: mid.Mid = mid.Mid { item: m.item, tag: m.tag, items: m.items };\n"
+        "    let updated: mid.Mid = mid.Mid { ..rebuilt, item: m.item };\n"
+        "    return updated.item.val;\n"
         "}\n"
         "fn call_generic_seq(a: u64, b: u64) -> (r: u64) {\n"
         "    let xs: [u64; up_to 4] = [a, b];\n"
@@ -185,6 +191,20 @@ def main():
         "    };\n"
         "}\n"
     )
+    negative_missing_record_field = (
+        "fn bad_construct(x: u64) -> (r: u64) {\n"
+        "    let m: mid.Mid = mid.make_mid(x);\n"
+        "    let broken: mid.Mid = mid.Mid { item: m.item, tag: m.tag };\n"
+        "    return broken.item.val;\n"
+        "}\n"
+    )
+    negative_unknown_record_field = (
+        "fn bad_construct_field(x: u64) -> (r: u64) {\n"
+        "    let m: mid.Mid = mid.make_mid(x);\n"
+        "    let broken: mid.Mid = mid.Mid { ..m, bogus: x };\n"
+        "    return broken.item.val;\n"
+        "}\n"
+    )
 
     probe = project.Probe()
     try:
@@ -194,7 +214,7 @@ def main():
         # 1. Positive transitive closure case via BOTH send_encoded_decoded and Probe.send
         pos_sources = _build_sources(positive_root, extra_leaf_distractors=True)
         encoded = project.encode_project_request_bytes(
-            identities, pos_sources, stride=1024, page_bound=2048, target_index=2,
+            identities, pos_sources, stride=1024, page_bound=1024, target_index=2,
         )
         resp_enc = probe.send_encoded_decoded(encoded, module=project.PROJECT_MODULE)
         assert resp_enc.get("status") == "returned", resp_enc
@@ -205,7 +225,7 @@ def main():
         req_old = project.request_value(identities, pos_sources, stride=1024)
         req_old["target"] = {"module": project.PROJECT_MODULE, "function": "compile_project_target"}
         req_old["type_arguments"] = [
-            {"kind": "nat", "value": 2048},
+            {"kind": "nat", "value": 1024},
             {"kind": "nat", "value": 1024},
         ]
         req_old["arguments"].append(project.integer(2))
@@ -218,7 +238,7 @@ def main():
         assert norm_enc["valid"] is True and norm_enc["value_ssa_valid"] is True, norm_enc
         mod = norm_enc["modules"][0]
         assert mod["proof_ok"] is True and mod["flow_valid"] is True and mod["ssa_valid"] is True, mod
-        assert mod["ssa_function_count"] == 4 and mod["ssa_verified_function_count"] == 4, mod
+        assert mod["ssa_function_count"] == 5 and mod["ssa_verified_function_count"] == 5, mod
         assert mod["first_call_identity"] in {
             "mncs:0.2:function:demo.mid::make_mid",
             "mncs:0.2:function:demo.mid::count_seq",
@@ -226,21 +246,24 @@ def main():
         }, mod
         # Verify per-function schema trimming: pure_helper retains 0 imported schemas,
         # read_transitive_record retains only Mid+Leaf (2 records, 0 enums),
-        # read_transitive_enum retains only Mid+Tag (1 record, 1 enum), NOT the 12+ unused ones!
+        # read_transitive_enum retains only Mid+Tag (1 record, 1 enum),
+        # construct_and_update_imported retains only Mid+Leaf+Tag, NOT the 12+ unused ones!
         by_fn = {f["identity"]: f for f in mod["functions"]}
         pure_fn = by_fn["mncs:0.2:function:demo.root::pure_helper"]
         rec_fn = by_fn["mncs:0.2:function:demo.root::read_transitive_record"]
         enum_fn = by_fn["mncs:0.2:function:demo.root::read_transitive_enum"]
+        ctor_fn = by_fn["mncs:0.2:function:demo.root::construct_and_update_imported"]
         gen_fn = by_fn["mncs:0.2:function:demo.root::call_generic_seq"]
         assert pure_fn["imported_record_count"] == 0 and pure_fn["imported_enum_count"] == 0, pure_fn
         assert rec_fn["imported_record_count"] == 2 and rec_fn["imported_enum_count"] == 0, rec_fn
         assert enum_fn["imported_record_count"] == 1 and enum_fn["imported_enum_count"] == 1, enum_fn
+        assert ctor_fn["imported_record_count"] == 2 and ctor_fn["imported_enum_count"] == 1, ctor_fn
         assert gen_fn["imported_record_count"] == 0 and gen_fn["imported_enum_count"] == 0, gen_fn
 
         # 2. Determinism without distractors: identical semantic verdict & call identity
         pos_clean = _build_sources(positive_root, extra_leaf_distractors=False)
         enc_clean = project.encode_project_request_bytes(
-            identities, pos_clean, stride=1024, page_bound=2048, target_index=2,
+            identities, pos_clean, stride=1024, page_bound=1024, target_index=2,
         )
         resp_clean = probe.send_encoded_decoded(enc_clean, module=project.PROJECT_MODULE)
         digest_clean, norm_clean = _semantic_digest(resp_clean["returned"][0])
@@ -253,7 +276,7 @@ def main():
         # 3. Negative case: unknown field on transitive imported record (exact span!)
         neg1_sources = _build_sources(negative_unknown_field, extra_leaf_distractors=True)
         enc_neg1 = project.encode_project_request_bytes(
-            identities, neg1_sources, stride=1024, page_bound=2048, target_index=2,
+            identities, neg1_sources, stride=1024, page_bound=1024, target_index=2,
         )
         resp_neg1 = probe.send_encoded_decoded(enc_neg1, module=project.PROJECT_MODULE)
         digest_neg1, norm_neg1 = _semantic_digest(resp_neg1["returned"][0])
@@ -268,7 +291,7 @@ def main():
         # 4. Negative case: unknown variant on transitive imported enum (exact span!)
         neg2_sources = _build_sources(negative_bad_variant, extra_leaf_distractors=True)
         enc_neg2 = project.encode_project_request_bytes(
-            identities, neg2_sources, stride=1024, page_bound=2048, target_index=2,
+            identities, neg2_sources, stride=1024, page_bound=1024, target_index=2,
         )
         resp_neg2 = probe.send_encoded_decoded(enc_neg2, module=project.PROJECT_MODULE)
         digest_neg2, norm_neg2 = _semantic_digest(resp_neg2["returned"][0])
@@ -279,6 +302,31 @@ def main():
         assert b"NoSuch" in neg2_raw[err2_s:err2_e], (err2_s, err2_e, neg2_raw[err2_s:err2_e])
         oracle_neg2 = _oracle_check(probe, neg2_sources, 2)
         assert oracle_neg2.get("valid") is False, oracle_neg2
+
+        # 5. Negative case: missing required field on qualified imported record construction
+        neg3_sources = _build_sources(negative_missing_record_field, extra_leaf_distractors=True)
+        enc_neg3 = project.encode_project_request_bytes(
+            identities, neg3_sources, stride=1024, page_bound=1024, target_index=2,
+        )
+        resp_neg3 = probe.send_encoded_decoded(enc_neg3, module=project.PROJECT_MODULE)
+        _, norm_neg3 = _semantic_digest(resp_neg3["returned"][0])
+        assert norm_neg3["valid"] is False and norm_neg3["modules"][0]["proof_ok"] is False, norm_neg3
+        oracle_neg3 = _oracle_check(probe, neg3_sources, 2)
+        assert oracle_neg3.get("valid") is False, oracle_neg3
+
+        # 6. Negative case: unknown field on qualified imported record update
+        neg4_sources = _build_sources(negative_unknown_record_field, extra_leaf_distractors=True)
+        enc_neg4 = project.encode_project_request_bytes(
+            identities, neg4_sources, stride=1024, page_bound=1024, target_index=2,
+        )
+        resp_neg4 = probe.send_encoded_decoded(enc_neg4, module=project.PROJECT_MODULE)
+        _, norm_neg4 = _semantic_digest(resp_neg4["returned"][0])
+        assert norm_neg4["valid"] is False and norm_neg4["modules"][0]["proof_ok"] is False, norm_neg4
+        neg4_raw = neg4_sources[2][2]
+        err4_s, err4_e = norm_neg4["modules"][0]["proof_err_span"]
+        assert b"bogus" in neg4_raw[err4_s:err4_e], (err4_s, err4_e, neg4_raw[err4_s:err4_e])
+        oracle_neg4 = _oracle_check(probe, neg4_sources, 2)
+        assert oracle_neg4.get("valid") is False, oracle_neg4
 
         print(json.dumps({
             "status": "passed",
@@ -298,8 +346,13 @@ def main():
                 "records": enum_fn["imported_record_count"],
                 "enums": enum_fn["imported_enum_count"],
             },
+            "imported_record_ctor_update_retained_schemas": {
+                "records": ctor_fn["imported_record_count"],
+                "enums": ctor_fn["imported_enum_count"],
+            },
             "negative_unknown_field_span": [err_s, err_e],
             "negative_bad_variant_span": [err2_s, err2_e],
+            "negative_unknown_update_field_span": [err4_s, err4_e],
             "stage0_oracle_agrees": True,
         }, indent=2))
     finally:

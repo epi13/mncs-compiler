@@ -3010,8 +3010,8 @@ fn verify_record_construct_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; 
     if inst.operator == 1 { return verify_record_update_instruction<P, N>(pages, stride, total, function, inst); }
     let nominal: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, function.nominals, inst.ty);
     let shape_ok: bool = inst.argc == id_count<P, N>(pages, stride, total, inst.inputs) && inst.argc == bind_count<P, N>(pages, stride, total, inst.params);
-    let source_ok: bool = decl.record_construct_source_valid<P, N>(pages, stride, total, inst.ty, inst.binding_start, inst.binding_end, inst.params, inst.start, inst.end);
-    let fields_ok: bool = call_argument_types_match<P, N>(pages, stride, total, function.values, inst.inputs, inst.params);
+    let source_ok: bool = decl.record_construct_source_valid<P, N>(pages, stride, total, inst.ty, inst.binding_start, inst.binding_end, inst.params, inst.start, inst.end) && enum_construct_type_matches_source<P, N>(pages, stride, total, function.nominals, inst.ty, inst.binding_start, inst.binding_end);
+    let fields_ok: bool = call_argument_types_match<P, N>(pages, stride, total, function.values, inst.inputs, inst.params) && imported_record_construct_valid<P, N>(pages, stride, total, function, nominal, inst, false);
     return inst.kind == 16 && inst.operator == 0 && shape_ok && source_ok && fields_ok && inst.end > inst.start && inst.binding_end > inst.binding_start && inst.variant_start == 0 && inst.variant_end == 0 && !(inst.identity.valid) && effect_identities_empty(inst.effects) && capability_identities_empty(inst.capabilities) && nominal.valid && decl.semantic_identity_equal(nominal, inst.nominal_identity) && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals);
 }
 fn verify_record_update_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
@@ -3024,9 +3024,38 @@ fn verify_record_update_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
     let base_value: LookupValue = find_value<P, N>(pages, stride, total, function.values, base.value);
     let nominal: decl.SemanticIdentity = nominal_identity_for_type<P, N>(pages, stride, total, function.nominals, inst.ty);
     let shape_ok: bool = inst.argc == id_count<P, N>(pages, stride, total, inst.inputs) && inst.argc == bind_count<P, N>(pages, stride, total, inst.params) + 1;
-    let source_ok: bool = decl.record_construct_source_valid_base<P, N>(pages, stride, total, inst.ty, inst.binding_start, inst.binding_end, true, inst.params, inst.start, inst.end);
-    let fields_ok: bool = call_argument_types_match<P, N>(pages, stride, total, function.values, overrides, inst.params);
+    let source_ok: bool = decl.record_construct_source_valid_base<P, N>(pages, stride, total, inst.ty, inst.binding_start, inst.binding_end, true, inst.params, inst.start, inst.end) && enum_construct_type_matches_source<P, N>(pages, stride, total, function.nominals, inst.ty, inst.binding_start, inst.binding_end);
+    let fields_ok: bool = call_argument_types_match<P, N>(pages, stride, total, function.values, overrides, inst.params) && imported_record_construct_valid<P, N>(pages, stride, total, function, nominal, inst, true);
     return inst.kind == 16 && inst.operator == 1 && shape_ok && base_value.found && is_named_type(base_value.value.ty) && decl.sem_eq<P, N>(pages, stride, total, base_value.value.ty, inst.ty) && supported_value_type<P, N>(pages, stride, total, base_value.value.ty, function.nominals) && fields_ok && source_ok && inst.end > inst.start && inst.binding_end > inst.binding_start && inst.variant_start == 0 && inst.variant_end == 0 && !(inst.identity.valid) && effect_identities_empty(inst.effects) && capability_identities_empty(inst.capabilities) && nominal.valid && decl.semantic_identity_equal(nominal, inst.nominal_identity) && supported_value_type<P, N>(pages, stride, total, inst.ty, function.nominals) && decl.signature_identity_valid<P, N>(pages, stride, total, inst.effects, inst.capabilities);
+}
+fn imported_record_construct_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, nominal: decl.SemanticIdentity, inst: Instruction, is_update: bool) -> (result: bool) {
+    let schema: decl.ImportedRecordLookup = decl.imported_record_lookup(function.imported_records, nominal);
+    if !(schema.found) { return true; }
+    return imported_record_construct_fields_valid<P, N>(pages, stride, total, function.nominals, schema.schema.fields, inst.params, is_update);
+}
+record ImportedRecordConstructParamCheck { rest: decl.BindList, fields: decl.ImportedRecordFieldList, seen: decl.NameList, nominals: decl.NominalTypeIdentityList, ok: bool }
+fn imported_record_construct_fields_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, fields: decl.ImportedRecordFieldList, params: decl.BindList, is_update: bool) -> (result: bool) {
+    let initial: ImportedRecordConstructParamCheck = ImportedRecordConstructParamCheck { rest: params, fields: fields, seen: decl.NameList.NNil, nominals: nominals, ok: true };
+    iterate i up_to 1024 carrying st: ImportedRecordConstructParamCheck = initial {
+        if !(st.ok) || decl.bind_list_empty(st.rest) { return st.ok && decl.bind_list_empty(st.rest) && (is_update || decl.imported_record_shape_ok<P, N>(pages, stride, total, fields, st.seen)); }
+        next st = imported_record_construct_param_step<P, N>(pages, stride, total, st);
+    }
+    return st.ok && decl.bind_list_empty(st.rest) && (is_update || decl.imported_record_shape_ok<P, N>(pages, stride, total, fields, st.seen));
+}
+fn imported_record_construct_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ImportedRecordConstructParamCheck) -> (result: ImportedRecordConstructParamCheck) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        decl.BindList.BNil => st,
+        decl.BindList.BCons { head: param, tail: rest } => imported_record_construct_check_param<P, N>(pages, stride, total, st, param, rest)
+    };
+}
+fn imported_record_construct_check_param<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ImportedRecordConstructParamCheck, param: decl.Bind, rest: decl.BindList) -> (result: ImportedRecordConstructParamCheck) {
+    if decl.name_known<P, N>(pages, stride, total, st.seen, param.start, param.end) { return ImportedRecordConstructParamCheck { ..st, ok: false }; }
+    let key: decl.SemanticIdentity = decl.signature_name_key<P, N>(pages, stride, total, param.start, param.end);
+    let field: decl.ImportedFieldLookup = decl.imported_field_lookup(st.fields, key);
+    if !(field.found) || !(field.field.type_valid) || !(imported_enum_field_type_equal<P, N>(pages, stride, total, st.nominals, field.field.ty, param.ty)) { return ImportedRecordConstructParamCheck { ..st, ok: false }; }
+    let seen: decl.NameList = decl.NameList.NCons { head: decl.NameSpan { start: param.start, end: param.end }, tail: st.seen };
+    return ImportedRecordConstructParamCheck { rest: rest, fields: st.fields, seen: seen, nominals: st.nominals, ok: true };
 }
 fn verify_not_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
     return match inst.inputs {

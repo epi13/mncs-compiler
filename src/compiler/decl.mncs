@@ -268,7 +268,7 @@ fn collect_call_expr<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
         Call { name_start: s, name_end: e, args: args, targs: tg, start: t, end: n } => CallWalk { ..st, exprs: append_exprs<P, N>(pages, stride, total, args, rest), calls: CallSiteList.CCons { head: CallSite { start: s, end: e }, tail: st.calls } },
         Project { base: base, field_start: fs, field_end: fe, start: s, end: e, path: p } => CallWalk { ..st, exprs: ExprList.ECons { head: base, tail: rest }, nominal_references: project_base_nominal_reference(base, p, st.nominal_references) },
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => CallWalk { ..st, exprs: finite_match_children<P, N>(pages, stride, total, subject, arms, rest), pattern_qualifiers: collect_finite_pattern_qualifiers(arms, st.pattern_qualifiers) },
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => CallWalk { ..st, exprs: construct_children<P, N>(pages, stride, total, f, rest), nominal_references: CallSiteList.CCons { head: CallSite { start: ts, end: te }, tail: st.nominal_references } },
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => CallWalk { ..st, exprs: construct_children<P, N>(pages, stride, total, f, rest), nominal_references: CallSiteList.CCons { head: CallSite { start: ts, end: te }, tail: CallSiteList.CCons { head: CallSite { start: ts, end: ve }, tail: st.nominal_references } } },
         Index { base: ib, index: ii, start: is, end: ie } => CallWalk { ..st, exprs: ExprList.ECons { head: ib, tail: ExprList.ECons { head: ii, tail: rest } } },
         Slice { base: sb, start_index: si, end_index: ei, start: ss, end: se } => CallWalk { ..st, exprs: ExprList.ECons { head: sb, tail: ExprList.ECons { head: si, tail: ExprList.ECons { head: ei, tail: rest } } } },
         Cast { value: cv, type_start: cts, type_end: cte, type_kind: ctk, start: cs, end: ce } => CallWalk { ..st, exprs: ExprList.ECons { head: cv, tail: rest } },
@@ -6357,6 +6357,8 @@ fn record_construct_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
 }
 fn record_construct_source_valid_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: SemType, type_start: u64, type_end: u64, expected_base: bool, params: BindList, start: u64, end: u64) -> (result: bool) {
     // A typed record operation must reparse exactly its own source node.
+    // Qualified imported record literals without `..base` (`alias.Record { ... }`)
+    // share syntax with enum payload construction until name resolution.
     let parsed: ExprParse = parse_expr<P, N>(pages, stride, end, start, true);
     if !(parsed.ok) || parsed.start != start || parsed.end != end { return false; }
     return match parsed.node {
@@ -6372,7 +6374,7 @@ fn record_construct_source_valid_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; u
         Call { name_start: ns, name_end: ne, args: args, targs: targs, start: s, end: e } => false,
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: path } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
-        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => false,
+        EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: fields, start: s, end: e } => !(expected_base) && record_construct_source_parts<P, N>(pages, stride, total, ty, type_start, type_end, false, params, start, end, ts, ve, false, fields),
         Index { base: b, index: i, start: s, end: e } => false,
         Slice { base: b, start_index: i, end_index: j, start: s, end: e } => false,
         Cast { value: v, type_start: ts, type_end: te, type_kind: k, start: s, end: e } => false,
@@ -6381,7 +6383,7 @@ fn record_construct_source_valid_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; u
 }
 fn record_construct_source_parts<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: SemType, type_start: u64, type_end: u64, expected_base: bool, params: BindList, start: u64, end: u64, source_type_start: u64, source_type_end: u64, source_has_base: bool, fields: ConstructFieldList) -> (result: bool) {
     let type_ok: bool = match ty {
-        TNamed { start: ts, end: te } => ts == source_type_start && te == source_type_end,
+        TNamed { start: ts, end: te } => (ts == source_type_start && te == source_type_end) || generic_type_marker_index(ts, te) > 1024,
         TBool => false,
         TByte => false,
         TInt { width: width, signed: signed } => false,
@@ -6690,6 +6692,7 @@ enum SemKont {
     KFiniteSubject { arms: FiniteMatchArmList, result_ty: SemType, ss: u64, se: u64, start: u64, end: u64 },
     KFiniteArm { remaining: FiniteMatchArmList, all: FiniteMatchArmList, current: FiniteMatchArm, completed: TypedFiniteMatchArmList, payload_fields: BindList, type_identity: SemanticIdentity, prior_tops: u64, subject_ty: SemType, es: u64, ee: u64, result_ty: SemType, arm_count: u64, env: ScopeStack, rs: u64, re: u64, start: u64, end: u64 },
     KRecordBase { declared: FieldList, fields: ConstructFieldList, ty: SemType, type_start: u64, type_end: u64, base_start: u64, base_end: u64, start: u64, end: u64, exp: ExpTy },
+    KImportedRecordBase { declared: ImportedRecordFieldList, fields: ConstructFieldList, ty: SemType, type_start: u64, type_end: u64, base_start: u64, base_end: u64, start: u64, end: u64, exp: ExpTy },
     KConstructField { remaining: ConstructJobList, total: u64, ty: SemType, params: BindList, vs: u64, ve: u64, cty: SemType, cvs: u64, cve: u64, mismatch_kind: u64, shape_ok: bool, is_record: bool, diagnostic_end: u64, start: u64, end: u64, exp: ExpTy },
     KBinL { op: u64, right: Expr, start: u64, end: u64, exp: ExpTy },
     KBinR { op: u64, lty: SemType, start: u64, end: u64, rlit: bool, exp: ExpTy },
@@ -7276,12 +7279,86 @@ fn bind_imported_arm_scope_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
 // with the record table defining required fields and nominal identity.
 fn seed_record_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, ts: u64, te: u64, base: Expr, has_base: bool, fields: ConstructFieldList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let found: RecFind = rec_lookup<P, N>(pages, stride, total, st.rectab, ts, te);
-    if !(found.found) { return sem_drain(sem_emit(st, 92, ts, te, 1)); }
-    let ty: SemType = SemType.TNamed { start: ts, end: te };
+    if found.found {
+        let ty: SemType = SemType.TNamed { start: ts, end: te };
+        let diagnostic_span: ExprSpan = record_construct_span(fields, base, has_base, ts, te);
+        let expected: SemState = record_construct_expected<P, N>(pages, stride, total, st, ty, exp, diagnostic_span.start, diagnostic_span.end);
+        if has_base { return seed_record_base(expected, found.decl.fields, fields, base, ty, ts, te, start, end, exp); }
+        return check_construct_fields<P, N>(pages, stride, total, expected, found.decl.fields, fields, ts, te, ts, te, start, end, ExpTy.XNone, true, false, diagnostic_span.end, 94, 95, 97);
+    }
+    let nominal: NominalLookup = nominal_identity_at<P, N>(pages, stride, total, st.nominals, ts, te);
+    let imported: ImportedRecordLookup = imported_record_lookup(st.imported_records, nominal.identity);
+    if nominal.found && imported.found {
+        return seed_imported_record_construct<P, N>(pages, stride, total, st, imported.schema, ts, te, base, has_base, fields, start, end, exp);
+    }
+    return sem_drain(sem_emit(st, 92, ts, te, 1));
+}
+record ImportedRecordShapeScan { rest: ImportedRecordFieldList, bound: NameList, ok: bool }
+fn imported_record_shape_ok<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: ImportedRecordFieldList, bound: NameList) -> (result: bool) {
+    iterate i up_to 1024 carrying st: ImportedRecordShapeScan = ImportedRecordShapeScan { rest: fields, bound: bound, ok: true } {
+        if !(st.ok) { return false; }
+        next st = imported_record_shape_step<P, N>(pages, stride, total, st);
+    }
+    return st.ok;
+}
+fn imported_record_shape_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ImportedRecordShapeScan) -> (result: ImportedRecordShapeScan) {
+    if !(st.ok) { return st; }
+    return match st.rest {
+        IRFNil => st,
+        IRFCons { head: field, tail: rest } => ImportedRecordShapeScan { rest: rest, bound: st.bound, ok: imported_name_known<P, N>(pages, stride, total, st.bound, field.name) }
+    };
+}
+record ImportedRecordConstructCheck { rest: ConstructFieldList, declared: ImportedRecordFieldList, seen: NameList, jobs: ConstructJobList, params: BindList, obls: OblList }
+fn seed_imported_record_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, schema: ImportedRecordSchema, ts: u64, te: u64, base: Expr, has_base: bool, fields: ConstructFieldList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let semantic_span: NominalTypeSpan = nominal_semantic_span<P, N>(pages, stride, total, st.nominals, schema.identity, ts, te);
+    let ty: SemType = SemType.TNamed { start: semantic_span.start, end: semantic_span.end };
     let diagnostic_span: ExprSpan = record_construct_span(fields, base, has_base, ts, te);
     let expected: SemState = record_construct_expected<P, N>(pages, stride, total, st, ty, exp, diagnostic_span.start, diagnostic_span.end);
-    if has_base { return seed_record_base(expected, found.decl.fields, fields, base, ty, ts, te, start, end, exp); }
-    return check_construct_fields<P, N>(pages, stride, total, expected, found.decl.fields, fields, ts, te, ts, te, start, end, ExpTy.XNone, true, false, diagnostic_span.end, 94, 95, 97);
+    if has_base { return seed_imported_record_base(expected, schema.fields, fields, base, ty, ts, te, start, end, exp); }
+    return check_imported_record_construct_fields<P, N>(pages, stride, total, expected, schema.fields, fields, ty, ts, te, false, diagnostic_span.end, start, end, ExpTy.XNone);
+}
+fn seed_imported_record_base(st: SemState, declared: ImportedRecordFieldList, fields: ConstructFieldList, base: Expr, ty: SemType, type_start: u64, type_end: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let span: ExprSpan = expr_span(base);
+    let job: SemJob = SemJob { e: base, exp: ExpTy.XSome { ty: ty } };
+    let kont: SemKont = SemKont.KImportedRecordBase { declared: declared, fields: fields, ty: ty, type_start: type_start, type_end: type_end, base_start: span.start, base_end: span.end, start: start, end: end, exp: exp };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_imported_record_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, declared: ImportedRecordFieldList, fields: ConstructFieldList, ty: SemType, type_start: u64, type_end: u64, base_start: u64, base_end: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    if is_poison(st.last_ty) { return sem_drain(st); }
+    if !(sem_eq<P, N>(pages, stride, total, st.last_ty, ty)) { return sem_drain(sem_emit(st, 96, base_start, base_end, 1)); }
+    return check_imported_record_construct_fields<P, N>(pages, stride, total, st, declared, fields, ty, type_start, type_end, true, end, start, end, exp);
+}
+fn check_imported_record_construct_fields<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, declared: ImportedRecordFieldList, fields: ConstructFieldList, ty: SemType, ts: u64, te: u64, has_base: bool, diagnostic_end: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
+    let initial: ImportedRecordConstructCheck = ImportedRecordConstructCheck { rest: fields, declared: declared, seen: NameList.NNil, jobs: ConstructJobList.CJNil, params: BindList.BNil, obls: st.obls };
+    iterate i up_to 1024 carrying d: ImportedRecordConstructCheck = initial { next d = imported_record_construct_field_step<P, N>(pages, stride, total, d); }
+    let jobs: ConstructJobList = reverse_construct_jobs<P, N>(pages, stride, total, d.jobs);
+    let job_total: u64 = count_construct_jobs<P, N>(pages, stride, total, jobs);
+    let st1: SemState = SemState { ..st, obls: d.obls };
+    let params: BindList = reverse_binds<P, N>(pages, stride, total, d.params);
+    let shape_ok: bool = select(has_base, true, imported_record_shape_ok<P, N>(pages, stride, total, declared, d.seen));
+    return seed_construct_jobs<P, N>(pages, stride, total, st1, jobs, job_total, ty, params, ts, te, shape_ok, true, diagnostic_end, start, end, exp);
+}
+fn imported_record_construct_field_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ImportedRecordConstructCheck) -> (result: ImportedRecordConstructCheck) {
+    return match st.rest {
+        CNil => st,
+        CCons { head: field, tail: rest } => imported_record_construct_field_one<P, N>(pages, stride, total, st, field, rest)
+    };
+}
+fn imported_record_construct_field_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ImportedRecordConstructCheck, field: ConstructField, rest: ConstructFieldList) -> (result: ImportedRecordConstructCheck) {
+    let key: SemanticIdentity = signature_name_key<P, N>(pages, stride, total, field.field_start, field.field_end);
+    let found: ImportedFieldLookup = imported_field_lookup(st.declared, key);
+    if !(found.found) { return ImportedRecordConstructCheck { ..st, rest: rest, obls: OblList.LCons { head: Obligation { kind: 94, start: field.field_start, end: field.field_end, status: 1 }, tail: st.obls } }; }
+    let seen: NameList = NameList.NCons { head: NameSpan { start: field.field_start, end: field.field_end }, tail: st.seen };
+    let value_span: ExprSpan = expr_span(field.value);
+    let field_ty: SemType = select_type(found.field.type_valid, found.field.ty, SemType.TPoison);
+    let job: ConstructJob = ConstructJob { value: field.value, ty: field_ty, vs: value_span.start, ve: value_span.end, mismatch_kind: 97 };
+    let jobs: ConstructJobList = ConstructJobList.CJCons { head: job, tail: st.jobs };
+    let params: BindList = BindList.BCons { head: Bind { start: field.field_start, end: field.field_end, ty: field_ty }, tail: st.params };
+    let duplicate: bool = name_known<P, N>(pages, stride, total, st.seen, field.field_start, field.field_end);
+    let type_invalid: bool = !(found.field.type_valid);
+    let obls: OblList = select_obls(duplicate, OblList.LCons { head: Obligation { kind: 95, start: field.field_start, end: field.field_end, status: 1 }, tail: st.obls }, st.obls);
+    let typed_obls: OblList = select_obls(type_invalid, OblList.LCons { head: Obligation { kind: 97, start: value_span.start, end: value_span.end, status: 1 }, tail: obls }, obls);
+    return ImportedRecordConstructCheck { rest: rest, declared: st.declared, seen: seen, jobs: jobs, params: params, obls: typed_obls };
 }
 fn seed_record_base(st: SemState, declared: FieldList, fields: ConstructFieldList, base: Expr, ty: SemType, type_start: u64, type_end: u64, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let span: ExprSpan = expr_span(base);
@@ -7643,6 +7720,11 @@ fn seed_enum_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     let nominal: NominalLookup = nominal_identity_at<P, N>(pages, stride, total, st.nominals, ts, te);
     let imported: ImportedEnumLookup = imported_enum_lookup(st.imported_enums, nominal.identity);
     if nominal.found && imported.found { return seed_imported_enum_construct<P, N>(pages, stride, total, st, imported.schema, ts, te, vs, ve, fields, start, end, exp); }
+    let rec_nominal: NominalLookup = nominal_identity_at<P, N>(pages, stride, total, st.nominals, ts, ve);
+    let imported_rec: ImportedRecordLookup = imported_record_lookup(st.imported_records, rec_nominal.identity);
+    if rec_nominal.found && imported_rec.found {
+        return seed_imported_record_construct<P, N>(pages, stride, total, st, imported_rec.schema, ts, ve, Expr.Name { start: 0, end: 0 }, false, fields, start, end, exp);
+    }
     return sem_drain(sem_emit(st, 42, ts, te, 1));
 }
 fn seed_local_enum_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, declared: EnumDecl, ts: u64, te: u64, vs: u64, ve: u64, fields: ConstructFieldList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
@@ -8060,6 +8142,7 @@ fn apply_kont<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         KFiniteSubject { arms: arms, result_ty: result_ty, ss: ss, se: se, start: s, end: e } => apply_finite_subject<P, N>(pages, stride, total, st, arms, result_ty, ss, se, s, e),
         KFiniteArm { remaining: remaining, all: all, current: current, completed: completed, payload_fields: payload_fields, type_identity: type_identity, prior_tops: prior_tops, subject_ty: subject_ty, es: es, ee: ee, result_ty: result_ty, arm_count: arm_count, env: env, rs: rs, re: re, start: s, end: e } => continue_finite_match_arm<P, N>(pages, stride, total, st, remaining, all, current, completed, payload_fields, type_identity, prior_tops, subject_ty, es, ee, result_ty, arm_count, env, rs, re, s, e),
         KRecordBase { declared: declared, fields: fields, ty: ty, type_start: ts, type_end: te, base_start: bs, base_end: be, start: s, end: e, exp: x } => apply_record_base<P, N>(pages, stride, total, st, declared, fields, ty, ts, te, bs, be, s, e, x),
+        KImportedRecordBase { declared: declared, fields: fields, ty: ty, type_start: ts, type_end: te, base_start: bs, base_end: be, start: s, end: e, exp: x } => apply_imported_record_base<P, N>(pages, stride, total, st, declared, fields, ty, ts, te, bs, be, s, e, x),
         KConstructField { remaining: remaining, total: total, ty: ty, params: params, vs: vs, ve: ve, cty: cty, cvs: cvs, cve: cve, mismatch_kind: mismatch_kind, shape_ok: shape_ok, is_record: is_record, diagnostic_end: diagnostic_end, start: s, end: e, exp: x } => continue_construct_field<P, N>(pages, stride, total, st, remaining, total, ty, params, vs, ve, cty, cvs, cve, mismatch_kind, shape_ok, is_record, diagnostic_end, s, e, x),
         KBinL { op: o, right: r, start: s, end: e, exp: x } => apply_bin_l(st, o, r, s, e, x),
         KBinR { op: o, lty: l, start: s, end: e, rlit: q, exp: x } => apply_bin_r<P, N>(pages, stride, total, st, o, l, s, e, q, x),
