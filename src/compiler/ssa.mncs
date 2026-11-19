@@ -562,13 +562,135 @@ fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     let bound_reversed: SsaBlockList = bind_failure_targets<P, N>(normal_blocks, failure_id);
     let all_reversed: SsaBlockList = SsaBlockList.LCons { head: failure_block, tail: bound_reversed };
     let blocks: SsaBlockList = reverse_blocks<P, N>(pages, stride, total, all_reversed, block_count);
+    let used_nominals: decl.NominalTypeIdentityList = collect_function_value_nominals<P, N>(pages, stride, total, st.values, st.nominals);
+    let fn_records: decl.ImportedRecordList = filter_function_imported_records(used_nominals, imported_records);
+    let fn_enums: decl.ImportedEnumList = filter_function_imported_enums(used_nominals, imported_enums);
     let candidate: Function = Function {
-        identity: st.identity, nominals: st.nominals, imported_records: imported_records, imported_enums: imported_enums, inputs: st.inputs, result_type: st.result_type,
+        identity: st.identity, nominals: st.nominals, imported_records: fn_records, imported_enums: fn_enums, inputs: st.inputs, result_type: st.result_type,
         blocks: blocks, block_count: block_count, values: st.values, value_count: st.next_value,
         supported: st.supported && blocks_complete, verified: false
     };
     let verified: bool = candidate.supported && verify_function_with_flow<P, N>(pages, stride, total, candidate, cfg);
     return Function { ..candidate, verified: verified };
+}
+record ValueNominalCollect { rest: ValueList, nominals: decl.NominalTypeIdentityList, acc: decl.NominalTypeIdentityList }
+record NominalSpanCheck { rest: decl.NominalTypeIdentityList, start: u64, end: u64, found: bool }
+record NominalIdentityCheck { rest: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity, found: bool }
+record FunctionRecordFilter { rest: decl.ImportedRecordList, used: decl.NominalTypeIdentityList, acc: decl.ImportedRecordList }
+record FunctionEnumFilter { rest: decl.ImportedEnumList, used: decl.NominalTypeIdentityList, acc: decl.ImportedEnumList }
+fn value_list_empty_local(values: ValueList) -> (result: bool) {
+    return match values { VNil => true, VCons { head: h, tail: t } => false };
+}
+fn nominal_list_empty_local(nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match nominals { decl.NominalTypeIdentityList.NINil => true, decl.NominalTypeIdentityList.NICons { head: h, tail: t } => false };
+}
+fn imported_record_list_empty_local(records: decl.ImportedRecordList) -> (result: bool) {
+    return match records { decl.ImportedRecordList.IRNil => true, decl.ImportedRecordList.IRCons { head: h, tail: t } => false };
+}
+fn imported_enum_list_empty_local(enums: decl.ImportedEnumList) -> (result: bool) {
+    return match enums { decl.ImportedEnumList.IENil => true, decl.ImportedEnumList.IECons { head: h, tail: t } => false };
+}
+fn nominal_list_has_span_local(nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying st: NominalSpanCheck = NominalSpanCheck { rest: nominals, start: start, end: end, found: false } {
+        if st.found || nominal_list_empty_local(st.rest) { return st.found; }
+        next st = nominal_list_has_span_step(st);
+    }
+    return st.found;
+}
+fn nominal_list_has_span_step(st: NominalSpanCheck) -> (result: NominalSpanCheck) {
+    return match st.rest {
+        decl.NominalTypeIdentityList.NINil => st,
+        decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => NominalSpanCheck { rest: rest, start: st.start, end: st.end, found: item.start == st.start && item.end == st.end }
+    };
+}
+fn nominal_list_has_identity_local(nominals: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    iterate i up_to 1024 carrying st: NominalIdentityCheck = NominalIdentityCheck { rest: nominals, wanted: wanted, found: false } {
+        if st.found || nominal_list_empty_local(st.rest) { return st.found; }
+        next st = nominal_list_has_identity_step(st);
+    }
+    return st.found;
+}
+fn nominal_list_has_identity_step(st: NominalIdentityCheck) -> (result: NominalIdentityCheck) {
+    return match st.rest {
+        decl.NominalTypeIdentityList.NINil => st,
+        decl.NominalTypeIdentityList.NICons { head: item, tail: rest } => NominalIdentityCheck { rest: rest, wanted: st.wanted, found: decl.semantic_identity_equal(item.identity, st.wanted) }
+    };
+}
+fn collect_function_value_nominals<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, nominals: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    let first: ValueNominalCollect = collect_function_value_nominals_chunk<P, N>(pages, stride, total, ValueNominalCollect { rest: values, nominals: nominals, acc: decl.NominalTypeIdentityList.NINil });
+    let second: ValueNominalCollect = collect_function_value_nominals_chunk<P, N>(pages, stride, total, first);
+    return second.acc;
+}
+fn collect_function_value_nominals_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: ValueNominalCollect) -> (result: ValueNominalCollect) {
+    iterate i up_to 1024 carrying st: ValueNominalCollect = initial {
+        if value_list_empty_local(st.rest) { return st; }
+        next st = collect_function_value_nominals_step<P, N>(pages, stride, total, st);
+    }
+    return st;
+}
+fn collect_function_value_nominals_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ValueNominalCollect) -> (result: ValueNominalCollect) {
+    return match st.rest {
+        VNil => st,
+        VCons { head: value, tail: rest } => collect_function_value_nominal_one<P, N>(pages, stride, total, st, value, rest)
+    };
+}
+fn collect_function_value_nominal_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ValueNominalCollect, value: Value, rest: ValueList) -> (result: ValueNominalCollect) {
+    return match value.ty {
+        TNamed { start: start, end: end } => collect_function_named_span<P, N>(pages, stride, total, st, start, end, rest),
+        TBool => ValueNominalCollect { ..st, rest: rest },
+        TByte => ValueNominalCollect { ..st, rest: rest },
+        TInt { width: width, signed: signed } => ValueNominalCollect { ..st, rest: rest },
+        TSeq => ValueNominalCollect { ..st, rest: rest },
+        TSeqExact { element: element, length: length, length_valid: valid } => ValueNominalCollect { ..st, rest: rest },
+        TPoison => ValueNominalCollect { ..st, rest: rest }
+    };
+}
+fn collect_function_named_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ValueNominalCollect, start: u64, end: u64, rest: ValueList) -> (result: ValueNominalCollect) {
+    if nominal_list_has_span_local(st.acc, start, end) { return ValueNominalCollect { ..st, rest: rest }; }
+    let id: decl.SemanticIdentity = nominal_identity_for_span<P, N>(pages, stride, total, st.nominals, start, end);
+    if !(id.valid) { return ValueNominalCollect { ..st, rest: rest }; }
+    let entry: decl.NominalTypeIdentity = decl.NominalTypeIdentity { start: start, end: end, identity: id, reference: true };
+    return ValueNominalCollect { rest: rest, nominals: st.nominals, acc: decl.NominalTypeIdentityList.NICons { head: entry, tail: st.acc } };
+}
+fn filter_function_imported_records(used: decl.NominalTypeIdentityList, records: decl.ImportedRecordList) -> (result: decl.ImportedRecordList) {
+    if nominal_list_empty_local(used) { return decl.ImportedRecordList.IRNil; }
+    iterate i up_to 1024 carrying st: FunctionRecordFilter = FunctionRecordFilter { rest: records, used: used, acc: decl.ImportedRecordList.IRNil } {
+        if imported_record_list_empty_local(st.rest) { return st.acc; }
+        next st = filter_function_imported_record_step(st);
+    }
+    return st.acc;
+}
+fn filter_function_imported_record_step(st: FunctionRecordFilter) -> (result: FunctionRecordFilter) {
+    return match st.rest {
+        decl.ImportedRecordList.IRNil => st,
+        decl.ImportedRecordList.IRCons { head: schema, tail: rest } => filter_function_imported_record_one(st, schema, rest)
+    };
+}
+fn filter_function_imported_record_one(st: FunctionRecordFilter, schema: decl.ImportedRecordSchema, rest: decl.ImportedRecordList) -> (result: FunctionRecordFilter) {
+    if nominal_list_has_identity_local(st.used, schema.identity) {
+        return FunctionRecordFilter { rest: rest, used: st.used, acc: decl.ImportedRecordList.IRCons { head: schema, tail: st.acc } };
+    }
+    return FunctionRecordFilter { rest: rest, used: st.used, acc: st.acc };
+}
+fn filter_function_imported_enums(used: decl.NominalTypeIdentityList, enums: decl.ImportedEnumList) -> (result: decl.ImportedEnumList) {
+    if nominal_list_empty_local(used) { return decl.ImportedEnumList.IENil; }
+    iterate i up_to 1024 carrying st: FunctionEnumFilter = FunctionEnumFilter { rest: enums, used: used, acc: decl.ImportedEnumList.IENil } {
+        if imported_enum_list_empty_local(st.rest) { return st.acc; }
+        next st = filter_function_imported_enum_step(st);
+    }
+    return st.acc;
+}
+fn filter_function_imported_enum_step(st: FunctionEnumFilter) -> (result: FunctionEnumFilter) {
+    return match st.rest {
+        decl.ImportedEnumList.IENil => st,
+        decl.ImportedEnumList.IECons { head: schema, tail: rest } => filter_function_imported_enum_one(st, schema, rest)
+    };
+}
+fn filter_function_imported_enum_one(st: FunctionEnumFilter, schema: decl.ImportedEnumSchema, rest: decl.ImportedEnumList) -> (result: FunctionEnumFilter) {
+    if nominal_list_has_identity_local(st.used, schema.identity) {
+        return FunctionEnumFilter { rest: rest, used: st.used, acc: decl.ImportedEnumList.IECons { head: schema, tail: st.acc } };
+    }
+    return FunctionEnumFilter { rest: rest, used: st.used, acc: st.acc };
 }
 fn function_support_failure(cfg_ok: bool, parameters_ok: bool, result_ok: bool, identity_ok: bool) -> (result: u64) {
     if !(cfg_ok) { return 6; }

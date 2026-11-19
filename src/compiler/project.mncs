@@ -85,6 +85,22 @@ record NominalResolutionBuild { rest: ModuleList, all: ModuleList, locals: Nomin
 record ProjectNominalIdentityWalk { rest: decl.NominalTypeIdentityList, acc: decl.NominalTypeIdentityList, count: u64 }
 record ProjectNominalModuleWalk { rest: NominalModuleList, acc: decl.NominalTypeIdentityList, count: u64 }
 record ProjectNominalContains { rest: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity, found: bool }
+record NominalModuleClosureFilter { rest: NominalModuleList, reachable: [bool; 64], acc: NominalModuleList }
+record NominalMarkerLookup { rest: decl.NominalTypeIdentityList, start: u64, end: u64, found: bool, marker: decl.NominalTypeIdentity }
+record NominalMarkerByIdLookup { rest: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity, found: bool, marker: decl.NominalTypeIdentity }
+record MarkerAddResult { markers: decl.NominalTypeIdentityList, added: bool }
+record SeedNominalMarkerWalk { rest: decl.NominalTypeIdentityList, all_markers: decl.NominalTypeIdentityList, wanted: decl.NominalTypeIdentityList }
+record SeedSigTabMarkerWalk { rest: decl.SigTab, all_markers: decl.NominalTypeIdentityList, wanted: decl.NominalTypeIdentityList }
+record SeedBindMarkerWalk { rest: decl.BindList, all_markers: decl.NominalTypeIdentityList, wanted: decl.NominalTypeIdentityList }
+record TargetSchemaState { wanted_markers: decl.NominalTypeIdentityList, records: decl.ImportedRecordList, enums: decl.ImportedEnumList, changed: bool }
+record TargetSchemaModuleWalk { rest: ModuleList, nominal_modules: NominalModuleList, all_markers: decl.NominalTypeIdentityList, state: TargetSchemaState }
+record TargetSchemaRecordWalk { rest: decl.RecordList, local: decl.NominalTypeIdentityList, all_markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, unit_records: decl.RecordList, unit_enums: decl.EnumList, state: TargetSchemaState }
+record TargetSchemaEnumWalk { rest: decl.EnumList, local: decl.NominalTypeIdentityList, all_markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, unit_records: decl.RecordList, unit_enums: decl.EnumList, state: TargetSchemaState }
+record RecordFieldMarkerWalk { rest: decl.ImportedRecordFieldList, all_markers: decl.NominalTypeIdentityList, result: MarkerAddResult }
+record EnumVariantMarkerWalk { rest: decl.ImportedEnumVariantList, all_markers: decl.NominalTypeIdentityList, result: MarkerAddResult }
+record EnumFieldMarkerWalk { rest: decl.ImportedEnumFieldList, all_markers: decl.NominalTypeIdentityList, result: MarkerAddResult }
+record ImportedRecordHasWalk { rest: decl.ImportedRecordList, wanted: decl.SemanticIdentity, found: bool }
+record ImportedEnumHasWalk { rest: decl.ImportedEnumList, wanted: decl.SemanticIdentity, found: bool }
 record ProjectRecordWalk { rest: ModuleList, nominal_modules: NominalModuleList, markers: decl.NominalTypeIdentityList, acc: decl.ImportedRecordList }
 record ProjectRecordDeclWalk { rest: decl.RecordList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedRecordList }
 record ProjectRecordFieldWalk { rest: decl.FieldList, index: u64, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, records: decl.RecordList, enums: decl.EnumList, acc: decl.ImportedRecordFieldList, ok: bool }
@@ -1202,6 +1218,35 @@ fn spans_equal_between<M: Nat, N: Nat>(
         offset: 0,
         equal: true
     } {
+        if !(st.equal) || st.offset >= st.length { return st.equal && st.offset >= st.length; }
+        next st = span_compare_step<N>(left_pages, left_stride, left_total, right_pages, right_stride, right_total, st);
+    }
+    return st.equal && st.offset >= st.length;
+}
+fn spans_equal_pages<N: Nat>(
+    left_pages: [[byte; up_to N]; up_to 1024],
+    left_stride: u64,
+    left_total: u64,
+    left_start: u64,
+    left_end: u64,
+    right_pages: [[byte; up_to N]; up_to 1024],
+    right_stride: u64,
+    right_total: u64,
+    right_start: u64,
+    right_end: u64
+) -> (result: bool) {
+    if left_end < left_start || right_end < right_start { return false; }
+    if left_end - left_start != right_end - right_start { return false; }
+    iterate i up_to 1024 carrying st: SpanCompare = SpanCompare {
+        length: left_end - left_start,
+        left_index: 0,
+        left_start: left_start,
+        right_index: 0,
+        right_start: right_start,
+        offset: 0,
+        equal: true
+    } {
+        if !(st.equal) || st.offset >= st.length { return st.equal && st.offset >= st.length; }
         next st = span_compare_step<N>(left_pages, left_stride, left_total, right_pages, right_stride, right_total, st);
     }
     return st.equal && st.offset >= st.length;
@@ -1468,21 +1513,71 @@ fn signatures_from_target_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
         MCons { head: target, tail: rest } => build_signatures_from_candidate<M, N>(sources, flat_pages, st, target, rest)
     };
 }
+record TargetFnSigWalk { rest: decl.FnList, caller: ParsedModule, target: ParsedModule, member_start: u64, member_end: u64, call: decl.CallSite, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab, resolved: ResolvedImportFactCache, found: bool }
+
 fn build_signatures_from_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetSigWalk) {
     if target.source_index != st.target_index { return TargetSigWalk { ..st, rest: rest }; }
-    let cached: ProviderSignatureLookup = provider_signature_lookup(st.provider_facts, target.source_index);
-    if cached.found { return signatures_from_cached_provider<M, N>(sources, flat_pages, st, target, cached); }
+    let target_facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.modules, target.source_index);
+    let target_nominals: decl.NominalTypeIdentityList = target_facts.facts.resolved;
+    let exported: ExportSignatureResult = signature_from_target_fns<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, st.acc, st.caller_nominals, target_nominals, st.resolved);
+    return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported.acc, resolved: exported.resolved };
+}
+fn signature_from_target_fns<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, resolved: ResolvedImportFactCache) -> (result: ExportSignatureResult) {
+    // Resolve only the called provider declaration on demand instead of
+    // collecting and identity-binding every declaration in the provider.
+    let c_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, caller.source_index);
+    let c_stride: u64 = module_stride(sources, caller.source_index);
+    let c_total: u64 = module_total(sources, caller.source_index);
     let t_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
     let t_stride: u64 = module_stride(sources, target.source_index);
     let t_total: u64 = module_total(sources, target.source_index);
-    let target_facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.modules, target.source_index);
-    let target_nominals: decl.NominalTypeIdentityList = target_facts.facts.resolved;
-    let sigs: decl.SigTabRep = decl.collect_sigtab<1024, N>(t_pages, t_stride, t_total, target.unit.fns, target.unit.records, target.unit.enums, target_nominals);
-    let owned_sigs: decl.SigTab = decl.bind_local_callable_identities<1024, N>(t_pages, t_stride, t_total, target.unit.header, sigs.tab);
-    let exported: ExportSignatureResult = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, owned_sigs, st.acc, st.caller_nominals, target_nominals, st.resolved);
-    let facts: ProviderSignatureFacts = ProviderSignatureFacts { source_index: target.source_index, signatures: owned_sigs, nominals: target_nominals };
-    let cached_facts: ProviderSignatureFactsList = ProviderSignatureFactsList.PSCons { head: facts, tail: st.provider_facts };
-    return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported.acc, provider_facts: cached_facts, resolved: exported.resolved };
+    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
+    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
+    let member_start: u64 = call.start + (prefix_end - prefix_start) + 1;
+    let initial: TargetFnSigWalk = TargetFnSigWalk { rest: target.unit.fns, caller: caller, target: target, member_start: member_start, member_end: call.end, call: call, caller_nominals: caller_nominals, target_nominals: target_nominals, acc: acc, resolved: resolved, found: false };
+    iterate chunk up_to 64 carrying st: TargetFnSigWalk = initial {
+        if st.found || decl.declared_fn_list_empty(st.rest) { return ExportSignatureResult { acc: st.acc, resolved: st.resolved }; }
+        next st = signature_from_target_fn_chunk<M, N>(sources, flat_pages, c_pages, c_stride, c_total, t_pages, t_stride, t_total, st);
+    }
+    return ExportSignatureResult { acc: st.acc, resolved: st.resolved };
+}
+fn signature_from_target_fn_chunk<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, t_pages: [[byte; up_to N]; up_to 1024], t_stride: u64, t_total: u64, initial: TargetFnSigWalk) -> (result: TargetFnSigWalk) {
+    iterate i up_to 1024 carrying st: TargetFnSigWalk = initial {
+        if st.found || decl.declared_fn_list_empty(st.rest) { return st; }
+        next st = signature_from_target_fn_step<M, N>(sources, flat_pages, c_pages, c_stride, c_total, t_pages, t_stride, t_total, st);
+    }
+    return st;
+}
+fn signature_from_target_fn_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, t_pages: [[byte; up_to N]; up_to 1024], t_stride: u64, t_total: u64, st: TargetFnSigWalk) -> (result: TargetFnSigWalk) {
+    return match st.rest {
+        decl.FnList.DNil => st,
+        decl.FnList.DCons { head: candidate, tail: rest } => signature_from_target_fn_one<M, N>(sources, flat_pages, c_pages, c_stride, c_total, t_pages, t_stride, t_total, st, candidate, rest)
+    };
+}
+fn signature_from_target_fn_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, t_pages: [[byte; up_to N]; up_to 1024], t_stride: u64, t_total: u64, st: TargetFnSigWalk, candidate: decl.FnDecl, rest: decl.FnList) -> (result: TargetFnSigWalk) {
+    if !(spans_equal_pages<N>(c_pages, c_stride, c_total, st.member_start, st.member_end, t_pages, t_stride, t_total, candidate.sig.name_start, candidate.sig.name_end)) {
+        return TargetFnSigWalk { ..st, rest: rest };
+    }
+    let rep: decl.SigRep = decl.check_sig<1024, N>(t_pages, t_stride, t_total, candidate, st.target.unit.records, st.target.unit.enums, st.target_nominals);
+    let owned: decl.Sig = decl.bind_callable_signature<1024, N>(t_pages, t_stride, t_total, st.target.unit.header.module_start, st.target.unit.header.module_end, rep.sig);
+    let transported: SignatureTransport = transport_signature<M, N>(sources, flat_pages, st.caller.source_index, st.target.source_index, owned, st.target_nominals, st.caller_nominals);
+    if !(transported.ok) { return TargetFnSigWalk { ..st, rest: rest }; }
+    let sig: decl.Sig = decl.Sig {
+        start: st.call.start,
+        end: st.call.end,
+        params: transported.params,
+        nparams: owned.nparams,
+        generic_bounds: owned.generic_bounds,
+        result: transported.result,
+        fx: decl.EffectList.XNil,
+        raw_capabilities: decl.CapList.ANil,
+        effects: owned.effects,
+        capabilities: owned.capabilities,
+        identity: owned.identity
+    };
+    let fact: ResolvedImportFact = ResolvedImportFact { member_start: st.member_start, member_end: st.member_end, provider_source_index: st.target.source_index, signature: sig };
+    let resolved: ResolvedImportFactCache = resolved_import_fact_push_bounded(fact, st.resolved);
+    return TargetFnSigWalk { ..st, rest: decl.FnList.DNil, acc: decl.SigTab.HCons { head: sig, tail: st.acc }, resolved: resolved, found: true };
 }
 fn signatures_from_cached_provider<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, cached: ProviderSignatureLookup) -> (result: TargetSigWalk) {
     let exported: ExportSignatureResult = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, cached.signatures, st.acc, st.caller_nominals, cached.nominals, st.resolved);
@@ -1736,8 +1831,75 @@ fn project_nominal_module_cons(st: ProjectNominalModuleWalk, nominal_item: Nomin
     let identities: ProjectNominalIdentityWalk = project_nominal_identity_list(nominal_item.resolved, st.acc, st.count);
     return ProjectNominalModuleWalk { rest: rest, acc: identities.acc, count: identities.count };
 }
+fn nominal_identity_list_empty(identities: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match identities {
+        NINil => true,
+        NICons { head: h, tail: t } => false
+    };
+}
+fn nominal_module_list_empty(modules: NominalModuleList) -> (result: bool) {
+    return match modules {
+        NMNil => true,
+        NMCons { head: h, tail: t } => false
+    };
+}
+fn record_decl_list_empty(records: decl.RecordList) -> (result: bool) {
+    return match records {
+        decl.RecordList.RNil => true,
+        decl.RecordList.RCons { head: h, tail: t } => false
+    };
+}
+fn enum_decl_list_empty(enums: decl.EnumList) -> (result: bool) {
+    return match enums {
+        decl.EnumList.GNil => true,
+        decl.EnumList.GCons { head: h, tail: t } => false
+    };
+}
+fn field_decl_list_empty(fields: decl.FieldList) -> (result: bool) {
+    return match fields {
+        decl.FieldList.FNil => true,
+        decl.FieldList.FCons { head: h, tail: t } => false
+    };
+}
+fn variant_decl_list_empty(variants: decl.VariantList) -> (result: bool) {
+    return match variants {
+        decl.VariantList.VNil => true,
+        decl.VariantList.VCons { head: h, tail: t } => false
+    };
+}
+fn imported_record_field_list_empty(fields: decl.ImportedRecordFieldList) -> (result: bool) {
+    return match fields {
+        decl.ImportedRecordFieldList.IRFNil => true,
+        decl.ImportedRecordFieldList.IRFCons { head: h, tail: t } => false
+    };
+}
+fn imported_enum_variant_list_empty(variants: decl.ImportedEnumVariantList) -> (result: bool) {
+    return match variants {
+        decl.ImportedEnumVariantList.IEVNil => true,
+        decl.ImportedEnumVariantList.IEVCons { head: h, tail: t } => false
+    };
+}
+fn imported_enum_field_list_empty(fields: decl.ImportedEnumFieldList) -> (result: bool) {
+    return match fields {
+        decl.ImportedEnumFieldList.IEFNil => true,
+        decl.ImportedEnumFieldList.IEFCons { head: h, tail: t } => false
+    };
+}
+fn imported_record_list_empty(records: decl.ImportedRecordList) -> (result: bool) {
+    return match records {
+        decl.ImportedRecordList.IRNil => true,
+        decl.ImportedRecordList.IRCons { head: h, tail: t } => false
+    };
+}
+fn imported_enum_list_empty(enums: decl.ImportedEnumList) -> (result: bool) {
+    return match enums {
+        decl.ImportedEnumList.IENil => true,
+        decl.ImportedEnumList.IECons { head: h, tail: t } => false
+    };
+}
 fn project_nominal_identity_list(identities: decl.NominalTypeIdentityList, acc: decl.NominalTypeIdentityList, count: u64) -> (result: ProjectNominalIdentityWalk) {
     iterate i up_to 1024 carrying st: ProjectNominalIdentityWalk = ProjectNominalIdentityWalk { rest: identities, acc: acc, count: count } {
+        if nominal_identity_list_empty(st.rest) { return st; }
         next st = project_nominal_identity_step(st);
     }
     return st;
@@ -1758,7 +1920,7 @@ fn project_nominal_identity_cons(st: ProjectNominalIdentityWalk, identity: decl.
 }
 fn project_nominal_contains(identities: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity) -> (result: ProjectNominalContains) {
     iterate i up_to 1024 carrying st: ProjectNominalContains = ProjectNominalContains { rest: identities, wanted: wanted, found: false } {
-        if st.found { return st; }
+        if st.found || nominal_identity_list_empty(st.rest) { return st; }
         next st = project_nominal_contains_step(st);
     }
     return st;
@@ -1816,6 +1978,7 @@ fn project_record_decl_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride
 }
 fn project_record_fields<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectRecordFields) {
     iterate i up_to 1024 carrying st: ProjectRecordFieldWalk = ProjectRecordFieldWalk { rest: fields, index: 0, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedRecordFieldList.IRFNil, ok: true } {
+        if field_decl_list_empty(st.rest) { return ProjectRecordFields { fields: reverse_project_record_fields(st.acc), ok: st.ok }; }
         next st = project_record_field_step<N>(pages, stride, total, st);
     }
     let ordered: decl.ImportedRecordFieldList = reverse_project_record_fields(st.acc);
@@ -1836,6 +1999,7 @@ fn project_record_field_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], strid
 }
 fn reverse_project_record_fields(fields: decl.ImportedRecordFieldList) -> (result: decl.ImportedRecordFieldList) {
     iterate i up_to 1024 carrying st: ProjectRecordFieldReverse = ProjectRecordFieldReverse { rest: fields, acc: decl.ImportedRecordFieldList.IRFNil } {
+        if imported_record_field_list_empty(st.rest) { return st.acc; }
         next st = reverse_project_record_field_step(st);
     }
     return st.acc;
@@ -1885,7 +2049,10 @@ fn project_enum_decl_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: 
 }
 fn project_enum_variants<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, variants: decl.VariantList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectEnumVariantBuild) {
     let seed: ProjectEnumVariantWalk = ProjectEnumVariantWalk { rest: variants, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedEnumVariantList.IEVNil, ok: true };
-    iterate i up_to 1024 carrying st: ProjectEnumVariantWalk = seed { next st = project_enum_variant_step<N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: ProjectEnumVariantWalk = seed {
+        if variant_decl_list_empty(st.rest) { return ProjectEnumVariantBuild { variants: reverse_project_enum_variants(st.acc), ok: st.ok }; }
+        next st = project_enum_variant_step<N>(pages, stride, total, st);
+    }
     return ProjectEnumVariantBuild { variants: reverse_project_enum_variants(st.acc), ok: st.ok };
 }
 fn project_enum_variant_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumVariantWalk) -> (result: ProjectEnumVariantWalk) {
@@ -1901,7 +2068,10 @@ fn project_enum_variant_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], strid
 }
 fn project_enum_fields<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, fields: decl.FieldList, records: decl.RecordList, enums: decl.EnumList, markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList) -> (result: ProjectEnumFields) {
     let seed: ProjectEnumFieldWalk = ProjectEnumFieldWalk { rest: fields, index: 0, markers: markers, target_nominals: target_nominals, records: records, enums: enums, acc: decl.ImportedEnumFieldList.IEFNil, ok: true };
-    iterate i up_to 1024 carrying st: ProjectEnumFieldWalk = seed { next st = project_enum_field_step<N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: ProjectEnumFieldWalk = seed {
+        if field_decl_list_empty(st.rest) { return ProjectEnumFields { fields: reverse_project_enum_fields(st.acc), ok: st.ok }; }
+        next st = project_enum_field_step<N>(pages, stride, total, st);
+    }
     return ProjectEnumFields { fields: reverse_project_enum_fields(st.acc), ok: st.ok };
 }
 fn project_enum_field_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: ProjectEnumFieldWalk) -> (result: ProjectEnumFieldWalk) {
@@ -1918,7 +2088,10 @@ fn project_enum_field_cons<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride:
     return ProjectEnumFieldWalk { rest: rest, index: st.index + 1, markers: st.markers, target_nominals: st.target_nominals, records: st.records, enums: st.enums, acc: decl.ImportedEnumFieldList.IEFCons { head: item, tail: st.acc }, ok: st.ok && valid };
 }
 fn reverse_project_enum_fields(fields: decl.ImportedEnumFieldList) -> (result: decl.ImportedEnumFieldList) {
-    iterate i up_to 1024 carrying st: ProjectEnumFieldReverse = ProjectEnumFieldReverse { rest: fields, acc: decl.ImportedEnumFieldList.IEFNil } { next st = reverse_project_enum_field_step(st); }
+    iterate i up_to 1024 carrying st: ProjectEnumFieldReverse = ProjectEnumFieldReverse { rest: fields, acc: decl.ImportedEnumFieldList.IEFNil } {
+        if imported_enum_field_list_empty(st.rest) { return st.acc; }
+        next st = reverse_project_enum_field_step(st);
+    }
     return st.acc;
 }
 fn reverse_project_enum_field_step(st: ProjectEnumFieldReverse) -> (result: ProjectEnumFieldReverse) {
@@ -1928,7 +2101,10 @@ fn reverse_project_enum_field_step(st: ProjectEnumFieldReverse) -> (result: Proj
     };
 }
 fn reverse_project_enum_variants(variants: decl.ImportedEnumVariantList) -> (result: decl.ImportedEnumVariantList) {
-    iterate i up_to 1024 carrying st: ProjectEnumVariantReverse = ProjectEnumVariantReverse { rest: variants, acc: decl.ImportedEnumVariantList.IEVNil } { next st = reverse_project_enum_variant_step(st); }
+    iterate i up_to 1024 carrying st: ProjectEnumVariantReverse = ProjectEnumVariantReverse { rest: variants, acc: decl.ImportedEnumVariantList.IEVNil } {
+        if imported_enum_variant_list_empty(st.rest) { return st.acc; }
+        next st = reverse_project_enum_variant_step(st);
+    }
     return st.acc;
 }
 fn reverse_project_enum_variant_step(st: ProjectEnumVariantReverse) -> (result: ProjectEnumVariantReverse) {
@@ -1963,7 +2139,430 @@ fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_
     let selected: TargetModuleSelection = select_target_module(modules, target_source_index);
     let dependency_closure: ProjectImportClosure = project_import_closure(imports, target_source_index, sources.len);
     let dependency_modules: ModuleList = project_modules_in_closure<64>(sources, modules, dependency_closure.reachable);
-    return lower_project_modules_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, selected.found);
+    let dependency_nominal_modules: NominalModuleList = project_nominal_modules_in_closure<64>(sources, nominal_modules, dependency_closure.reachable);
+    return lower_target_module_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, dependency_nominal_modules, selected.found);
+}
+
+fn project_nominal_modules_in_closure<M: Nat>(sources: [ProjectSource; up_to M], modules: NominalModuleList, reachable: [bool; 64]) -> (result: NominalModuleList) {
+    iterate i over sources carrying st: NominalModuleClosureFilter = NominalModuleClosureFilter {
+        rest: modules,
+        reachable: reachable,
+        acc: NominalModuleList.NMNil
+    } {
+        if nominal_module_list_empty(st.rest) { return st.acc; }
+        next st = project_nominal_module_closure_step(st);
+    }
+    return st.acc;
+}
+fn project_nominal_module_closure_step(st: NominalModuleClosureFilter) -> (result: NominalModuleClosureFilter) {
+    return match st.rest {
+        NMNil => st,
+        NMCons { head: item, tail: rest } => project_nominal_module_closure_one(st, item, rest)
+    };
+}
+fn project_nominal_module_closure_one(st: NominalModuleClosureFilter, item: NominalModule, rest: NominalModuleList) -> (result: NominalModuleClosureFilter) {
+    if item.source_index >= st.reachable.len {
+        return NominalModuleClosureFilter { rest: rest, reachable: st.reachable, acc: st.acc };
+    }
+    if !(st.reachable[item.source_index]) {
+        return NominalModuleClosureFilter { rest: rest, reachable: st.reachable, acc: st.acc };
+    }
+    return NominalModuleClosureFilter {
+        rest: rest,
+        reachable: st.reachable,
+        acc: NominalModuleList.NMCons { head: item, tail: st.acc }
+    };
+}
+
+fn empty_nominal_type_identity() -> (result: decl.NominalTypeIdentity) {
+    return decl.NominalTypeIdentity { start: 0, end: 0, identity: decl.invalid_semantic_identity(), reference: false };
+}
+fn nominal_marker_by_span(markers: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: NominalMarkerLookup) {
+    iterate i up_to 1024 carrying st: NominalMarkerLookup = NominalMarkerLookup { rest: markers, start: start, end: end, found: false, marker: empty_nominal_type_identity() } {
+        if st.found || nominal_identity_list_empty(st.rest) { return st; }
+        next st = nominal_marker_by_span_step(st);
+    }
+    return st;
+}
+fn nominal_marker_by_span_step(st: NominalMarkerLookup) -> (result: NominalMarkerLookup) {
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => nominal_marker_by_span_one(st, item, rest)
+    };
+}
+fn nominal_marker_by_span_one(st: NominalMarkerLookup, item: decl.NominalTypeIdentity, rest: decl.NominalTypeIdentityList) -> (result: NominalMarkerLookup) {
+    if item.start == st.start && item.end == st.end {
+        return NominalMarkerLookup { rest: decl.NominalTypeIdentityList.NINil, start: st.start, end: st.end, found: true, marker: item };
+    }
+    return NominalMarkerLookup { ..st, rest: rest };
+}
+fn nominal_marker_list_has_span(markers: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: bool) {
+    let found: NominalMarkerLookup = nominal_marker_by_span(markers, start, end);
+    return found.found;
+}
+fn nominal_marker_by_identity(markers: decl.NominalTypeIdentityList, wanted: decl.SemanticIdentity) -> (result: NominalMarkerByIdLookup) {
+    iterate i up_to 1024 carrying st: NominalMarkerByIdLookup = NominalMarkerByIdLookup { rest: markers, wanted: wanted, found: false, marker: empty_nominal_type_identity() } {
+        if st.found || nominal_identity_list_empty(st.rest) { return st; }
+        next st = nominal_marker_by_identity_step(st);
+    }
+    return st;
+}
+fn nominal_marker_by_identity_step(st: NominalMarkerByIdLookup) -> (result: NominalMarkerByIdLookup) {
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => nominal_marker_by_identity_one(st, item, rest)
+    };
+}
+fn nominal_marker_by_identity_one(st: NominalMarkerByIdLookup, item: decl.NominalTypeIdentity, rest: decl.NominalTypeIdentityList) -> (result: NominalMarkerByIdLookup) {
+    if decl.semantic_identity_equal(item.identity, st.wanted) {
+        return NominalMarkerByIdLookup { rest: decl.NominalTypeIdentityList.NINil, wanted: st.wanted, found: true, marker: item };
+    }
+    return NominalMarkerByIdLookup { ..st, rest: rest };
+}
+fn add_marker_if_new(state: MarkerAddResult, marker: decl.NominalTypeIdentity) -> (result: MarkerAddResult) {
+    if !(marker.identity.valid) { return state; }
+    if nominal_marker_list_has_span(state.markers, marker.start, marker.end) { return state; }
+    return MarkerAddResult { markers: decl.NominalTypeIdentityList.NICons { head: marker, tail: state.markers }, added: true };
+}
+fn add_marker_for_span(all_markers: decl.NominalTypeIdentityList, state: MarkerAddResult, start: u64, end: u64) -> (result: MarkerAddResult) {
+    let found: NominalMarkerLookup = nominal_marker_by_span(all_markers, start, end);
+    if !(found.found) { return state; }
+    return add_marker_if_new(state, found.marker);
+}
+fn add_markers_for_sem_type(all_markers: decl.NominalTypeIdentityList, ty: decl.SemType, state: MarkerAddResult) -> (result: MarkerAddResult) {
+    return match ty {
+        TBool => state,
+        TByte => state,
+        TInt { width: w, signed: s } => state,
+        TNamed { start: start, end: end } => add_marker_for_span(all_markers, state, start, end),
+        TSeq => state,
+        TSeqExact { element: element, length: length, length_valid: valid } => add_markers_for_sequence_element(all_markers, element, state),
+        TPoison => state
+    };
+}
+fn add_markers_for_sequence_element(all_markers: decl.NominalTypeIdentityList, element: decl.SemType, state: MarkerAddResult) -> (result: MarkerAddResult) {
+    return match element {
+        TBool => state,
+        TByte => state,
+        TInt { width: w, signed: s } => state,
+        TNamed { start: start, end: end } => add_marker_for_span(all_markers, state, start, end),
+        TSeq => state,
+        TSeqExact { element: nested, length: length, length_valid: valid } => add_markers_for_nested_sequence_element(all_markers, nested, state),
+        TPoison => state
+    };
+}
+fn add_markers_for_nested_sequence_element(all_markers: decl.NominalTypeIdentityList, element: decl.SemType, state: MarkerAddResult) -> (result: MarkerAddResult) {
+    return match element {
+        TBool => state,
+        TByte => state,
+        TInt { width: w, signed: s } => state,
+        TNamed { start: start, end: end } => add_marker_for_span(all_markers, state, start, end),
+        TSeq => state,
+        TSeqExact { element: nested, length: length, length_valid: valid } => state,
+        TPoison => state
+    };
+}
+fn seed_markers_from_nominals(all_markers: decl.NominalTypeIdentityList, nominals: decl.NominalTypeIdentityList, wanted: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    iterate i up_to 1024 carrying st: SeedNominalMarkerWalk = SeedNominalMarkerWalk { rest: nominals, all_markers: all_markers, wanted: wanted } {
+        if nominal_identity_list_empty(st.rest) { return st.wanted; }
+        next st = seed_markers_from_nominal_step(st);
+    }
+    return st.wanted;
+}
+fn seed_markers_from_nominal_step(st: SeedNominalMarkerWalk) -> (result: SeedNominalMarkerWalk) {
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => seed_markers_from_nominal_one(st, item, rest)
+    };
+}
+fn seed_markers_from_nominal_one(st: SeedNominalMarkerWalk, item: decl.NominalTypeIdentity, rest: decl.NominalTypeIdentityList) -> (result: SeedNominalMarkerWalk) {
+    let found: NominalMarkerByIdLookup = nominal_marker_by_identity(st.all_markers, item.identity);
+    if !(found.found) { return SeedNominalMarkerWalk { ..st, rest: rest }; }
+    let added: MarkerAddResult = add_marker_if_new(MarkerAddResult { markers: st.wanted, added: false }, found.marker);
+    return SeedNominalMarkerWalk { rest: rest, all_markers: st.all_markers, wanted: added.markers };
+}
+fn seed_markers_from_sigtab(all_markers: decl.NominalTypeIdentityList, sigs: decl.SigTab, wanted: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    iterate chunk up_to 64 carrying st: SeedSigTabMarkerWalk = SeedSigTabMarkerWalk { rest: sigs, all_markers: all_markers, wanted: wanted } {
+        if export_signature_table_empty(st.rest) { return st.wanted; }
+        next st = seed_markers_from_sigtab_chunk(st);
+    }
+    return st.wanted;
+}
+fn seed_markers_from_sigtab_chunk(initial: SeedSigTabMarkerWalk) -> (result: SeedSigTabMarkerWalk) {
+    iterate i up_to 1024 carrying st: SeedSigTabMarkerWalk = initial {
+        if export_signature_table_empty(st.rest) { return st; }
+        next st = seed_markers_from_sigtab_step(st);
+    }
+    return st;
+}
+fn seed_markers_from_sigtab_step(st: SeedSigTabMarkerWalk) -> (result: SeedSigTabMarkerWalk) {
+    return match st.rest {
+        decl.SigTab.HNil => st,
+        decl.SigTab.HCons { head: sig, tail: rest } => seed_markers_from_sig(st, sig, rest)
+    };
+}
+fn seed_markers_from_sig(st: SeedSigTabMarkerWalk, sig: decl.Sig, rest: decl.SigTab) -> (result: SeedSigTabMarkerWalk) {
+    let with_result: MarkerAddResult = add_markers_for_sem_type(st.all_markers, sig.result, MarkerAddResult { markers: st.wanted, added: false });
+    let with_params: decl.NominalTypeIdentityList = seed_markers_from_binds(st.all_markers, sig.params, with_result.markers);
+    return SeedSigTabMarkerWalk { rest: rest, all_markers: st.all_markers, wanted: with_params };
+}
+fn seed_markers_from_binds(all_markers: decl.NominalTypeIdentityList, binds: decl.BindList, wanted: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
+    iterate i up_to 1024 carrying st: SeedBindMarkerWalk = SeedBindMarkerWalk { rest: binds, all_markers: all_markers, wanted: wanted } {
+        if bind_list_empty(st.rest) { return st.wanted; }
+        next st = seed_markers_from_bind_step(st);
+    }
+    return st.wanted;
+}
+fn seed_markers_from_bind_step(st: SeedBindMarkerWalk) -> (result: SeedBindMarkerWalk) {
+    return match st.rest {
+        decl.BindList.BNil => st,
+        decl.BindList.BCons { head: bind, tail: rest } => seed_markers_from_bind_one(st, bind, rest)
+    };
+}
+fn seed_markers_from_bind_one(st: SeedBindMarkerWalk, bind: decl.Bind, rest: decl.BindList) -> (result: SeedBindMarkerWalk) {
+    let next_markers: MarkerAddResult = add_markers_for_sem_type(st.all_markers, bind.ty, MarkerAddResult { markers: st.wanted, added: false });
+    return SeedBindMarkerWalk { rest: rest, all_markers: st.all_markers, wanted: next_markers.markers };
+}
+
+fn local_nominal_identity_by_span(local: decl.NominalTypeIdentityList, name_start: u64, name_end: u64) -> (result: decl.NominalLookup) {
+    iterate i up_to 1024 carrying st: decl.NominalLookup = decl.NominalLookup { rest: local, found: false, identity: decl.invalid_semantic_identity() } {
+        if st.found || nominal_identity_list_empty(st.rest) { return st; }
+        next st = local_nominal_identity_by_span_step(st, name_start, name_end);
+    }
+    return st;
+}
+fn local_nominal_identity_by_span_step(st: decl.NominalLookup, name_start: u64, name_end: u64) -> (result: decl.NominalLookup) {
+    return match st.rest {
+        NINil => st,
+        NICons { head: item, tail: rest } => local_nominal_identity_by_span_one(st, item, rest, name_start, name_end)
+    };
+}
+fn local_nominal_identity_by_span_one(st: decl.NominalLookup, item: decl.NominalTypeIdentity, rest: decl.NominalTypeIdentityList, name_start: u64, name_end: u64) -> (result: decl.NominalLookup) {
+    if !(item.reference) && item.start == name_start && item.end == name_end && item.identity.valid {
+        return decl.NominalLookup { rest: decl.NominalTypeIdentityList.NINil, found: true, identity: item.identity };
+    }
+    return decl.NominalLookup { rest: rest, found: false, identity: st.identity };
+}
+fn imported_record_list_has(records: decl.ImportedRecordList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    iterate i up_to 1024 carrying st: ImportedRecordHasWalk = ImportedRecordHasWalk { rest: records, wanted: wanted, found: false } {
+        if st.found || imported_record_list_empty(st.rest) { return st.found; }
+        next st = imported_record_list_has_step(st);
+    }
+    return st.found;
+}
+fn imported_record_list_has_step(st: ImportedRecordHasWalk) -> (result: ImportedRecordHasWalk) {
+    return match st.rest {
+        decl.ImportedRecordList.IRNil => st,
+        decl.ImportedRecordList.IRCons { head: item, tail: rest } => imported_record_list_has_one(st, item, rest)
+    };
+}
+fn imported_record_list_has_one(st: ImportedRecordHasWalk, item: decl.ImportedRecordSchema, rest: decl.ImportedRecordList) -> (result: ImportedRecordHasWalk) {
+    if decl.semantic_identity_equal(item.identity, st.wanted) {
+        return ImportedRecordHasWalk { rest: decl.ImportedRecordList.IRNil, wanted: st.wanted, found: true };
+    }
+    return ImportedRecordHasWalk { rest: rest, wanted: st.wanted, found: false };
+}
+fn imported_enum_list_has(enums: decl.ImportedEnumList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    iterate i up_to 1024 carrying st: ImportedEnumHasWalk = ImportedEnumHasWalk { rest: enums, wanted: wanted, found: false } {
+        if st.found || imported_enum_list_empty(st.rest) { return st.found; }
+        next st = imported_enum_list_has_step(st);
+    }
+    return st.found;
+}
+fn imported_enum_list_has_step(st: ImportedEnumHasWalk) -> (result: ImportedEnumHasWalk) {
+    return match st.rest {
+        decl.ImportedEnumList.IENil => st,
+        decl.ImportedEnumList.IECons { head: item, tail: rest } => imported_enum_list_has_one(st, item, rest)
+    };
+}
+fn imported_enum_list_has_one(st: ImportedEnumHasWalk, item: decl.ImportedEnumSchema, rest: decl.ImportedEnumList) -> (result: ImportedEnumHasWalk) {
+    if decl.semantic_identity_equal(item.identity, st.wanted) {
+        return ImportedEnumHasWalk { rest: decl.ImportedEnumList.IENil, wanted: st.wanted, found: true };
+    }
+    return ImportedEnumHasWalk { rest: rest, wanted: st.wanted, found: false };
+}
+
+fn add_markers_for_record_fields(all_markers: decl.NominalTypeIdentityList, fields: decl.ImportedRecordFieldList, initial: MarkerAddResult) -> (result: MarkerAddResult) {
+    iterate i up_to 1024 carrying st: RecordFieldMarkerWalk = RecordFieldMarkerWalk { rest: fields, all_markers: all_markers, result: initial } {
+        if imported_record_field_list_empty(st.rest) { return st.result; }
+        next st = add_markers_for_record_field_step(st);
+    }
+    return st.result;
+}
+fn add_markers_for_record_field_step(st: RecordFieldMarkerWalk) -> (result: RecordFieldMarkerWalk) {
+    return match st.rest {
+        decl.ImportedRecordFieldList.IRFNil => st,
+        decl.ImportedRecordFieldList.IRFCons { head: field, tail: rest } => RecordFieldMarkerWalk { rest: rest, all_markers: st.all_markers, result: add_markers_for_sem_type(st.all_markers, field.ty, st.result) }
+    };
+}
+fn add_markers_for_enum_variants(all_markers: decl.NominalTypeIdentityList, variants: decl.ImportedEnumVariantList, initial: MarkerAddResult) -> (result: MarkerAddResult) {
+    iterate i up_to 1024 carrying st: EnumVariantMarkerWalk = EnumVariantMarkerWalk { rest: variants, all_markers: all_markers, result: initial } {
+        if imported_enum_variant_list_empty(st.rest) { return st.result; }
+        next st = add_markers_for_enum_variant_step(st);
+    }
+    return st.result;
+}
+fn add_markers_for_enum_variant_step(st: EnumVariantMarkerWalk) -> (result: EnumVariantMarkerWalk) {
+    return match st.rest {
+        decl.ImportedEnumVariantList.IEVNil => st,
+        decl.ImportedEnumVariantList.IEVCons { head: variant, tail: rest } => EnumVariantMarkerWalk { rest: rest, all_markers: st.all_markers, result: add_markers_for_enum_fields(st.all_markers, variant.fields, st.result) }
+    };
+}
+fn add_markers_for_enum_fields(all_markers: decl.NominalTypeIdentityList, fields: decl.ImportedEnumFieldList, initial: MarkerAddResult) -> (result: MarkerAddResult) {
+    iterate i up_to 1024 carrying st: EnumFieldMarkerWalk = EnumFieldMarkerWalk { rest: fields, all_markers: all_markers, result: initial } {
+        if imported_enum_field_list_empty(st.rest) { return st.result; }
+        next st = add_markers_for_enum_field_step(st);
+    }
+    return st.result;
+}
+fn add_markers_for_enum_field_step(st: EnumFieldMarkerWalk) -> (result: EnumFieldMarkerWalk) {
+    return match st.rest {
+        decl.ImportedEnumFieldList.IEFNil => st,
+        decl.ImportedEnumFieldList.IEFCons { head: field, tail: rest } => EnumFieldMarkerWalk { rest: rest, all_markers: st.all_markers, result: add_markers_for_sem_type(st.all_markers, field.ty, st.result) }
+    };
+}
+
+// Compute only the transitive nominal schema closure reachable from the
+// target module's AST and imported callable signatures.
+fn expand_target_schemas<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], dependency_modules: ModuleList, nominal_modules: NominalModuleList, all_markers: decl.NominalTypeIdentityList, seed_markers: decl.NominalTypeIdentityList) -> (result: TargetSchemaState) {
+    let initial: TargetSchemaState = TargetSchemaState {
+        wanted_markers: seed_markers,
+        records: decl.ImportedRecordList.IRNil,
+        enums: decl.ImportedEnumList.IENil,
+        changed: true
+    };
+    iterate round up_to 32 carrying st: TargetSchemaState = initial {
+        if !(st.changed) { return st; }
+        next st = expand_target_schemas_round<M, N>(sources, flat_pages, dependency_modules, nominal_modules, all_markers, TargetSchemaState { ..st, changed: false });
+    }
+    return st;
+}
+fn expand_target_schemas_round<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], dependency_modules: ModuleList, nominal_modules: NominalModuleList, all_markers: decl.NominalTypeIdentityList, state: TargetSchemaState) -> (result: TargetSchemaState) {
+    iterate i up_to 64 carrying walk: TargetSchemaModuleWalk = TargetSchemaModuleWalk { rest: dependency_modules, nominal_modules: nominal_modules, all_markers: all_markers, state: state } {
+        if module_list_empty(walk.rest) { return walk.state; }
+        next walk = expand_target_schemas_module_step<M, N>(sources, flat_pages, walk);
+    }
+    return walk.state;
+}
+fn expand_target_schemas_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], walk: TargetSchemaModuleWalk) -> (result: TargetSchemaModuleWalk) {
+    return match walk.rest {
+        MNil => walk,
+        MCons { head: parsed, tail: rest } => expand_target_schemas_module_one<M, N>(sources, flat_pages, walk, parsed, rest)
+    };
+}
+fn expand_target_schemas_module_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], walk: TargetSchemaModuleWalk, parsed: ParsedModule, rest: ModuleList) -> (result: TargetSchemaModuleWalk) {
+    let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, parsed.source_index);
+    let input_stride: u64 = module_stride(sources, parsed.source_index);
+    let input_total: u64 = module_total(sources, parsed.source_index);
+    let facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, walk.nominal_modules, parsed.source_index);
+    let target_nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, walk.all_markers, facts.facts.resolved);
+    let after_records: TargetSchemaState = expand_target_record_decls<N>(input_pages, input_stride, input_total, parsed.unit.records, facts.facts.local, walk.all_markers, target_nominals, parsed.unit.records, parsed.unit.enums, walk.state);
+    let after_enums: TargetSchemaState = expand_target_enum_decls<N>(input_pages, input_stride, input_total, parsed.unit.enums, facts.facts.local, walk.all_markers, target_nominals, parsed.unit.records, parsed.unit.enums, after_records);
+    return TargetSchemaModuleWalk { rest: rest, nominal_modules: walk.nominal_modules, all_markers: walk.all_markers, state: after_enums };
+}
+fn expand_target_record_decls<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, records: decl.RecordList, local: decl.NominalTypeIdentityList, all_markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, unit_records: decl.RecordList, unit_enums: decl.EnumList, state: TargetSchemaState) -> (result: TargetSchemaState) {
+    iterate i up_to 1024 carrying st: TargetSchemaRecordWalk = TargetSchemaRecordWalk { rest: records, local: local, all_markers: all_markers, target_nominals: target_nominals, unit_records: unit_records, unit_enums: unit_enums, state: state } {
+        if record_decl_list_empty(st.rest) { return st.state; }
+        next st = expand_target_record_decl_step<N>(pages, stride, total, st);
+    }
+    return st.state;
+}
+fn expand_target_record_decl_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: TargetSchemaRecordWalk) -> (result: TargetSchemaRecordWalk) {
+    return match st.rest {
+        decl.RecordList.RNil => st,
+        decl.RecordList.RCons { head: record_decl, tail: rest } => expand_target_record_decl_one<N>(pages, stride, total, st, record_decl, rest)
+    };
+}
+fn expand_target_record_decl_one<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: TargetSchemaRecordWalk, record_decl: decl.RecordDecl, rest: decl.RecordList) -> (result: TargetSchemaRecordWalk) {
+    let identity: decl.NominalLookup = local_nominal_identity_by_span(st.local, record_decl.name_start, record_decl.name_end);
+    if !(identity.found) { return TargetSchemaRecordWalk { ..st, rest: rest }; }
+    let wanted: ProjectNominalContains = project_nominal_contains(st.state.wanted_markers, identity.identity);
+    if !(wanted.found) || imported_record_list_has(st.state.records, identity.identity) {
+        return TargetSchemaRecordWalk { ..st, rest: rest };
+    }
+    let built_fields: ProjectRecordFields = project_record_fields<N>(pages, stride, total, record_decl.fields, st.unit_records, st.unit_enums, st.all_markers, st.target_nominals);
+    let schema: decl.ImportedRecordSchema = decl.ImportedRecordSchema { identity: identity.identity, fields: built_fields.fields };
+    let next_markers: MarkerAddResult = add_markers_for_record_fields(st.all_markers, built_fields.fields, MarkerAddResult { markers: st.state.wanted_markers, added: false });
+    let next_state: TargetSchemaState = TargetSchemaState {
+        wanted_markers: next_markers.markers,
+        records: decl.ImportedRecordList.IRCons { head: schema, tail: st.state.records },
+        enums: st.state.enums,
+        changed: st.state.changed || next_markers.added
+    };
+    return TargetSchemaRecordWalk { ..st, rest: rest, state: next_state };
+}
+fn expand_target_enum_decls<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, enums: decl.EnumList, local: decl.NominalTypeIdentityList, all_markers: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, unit_records: decl.RecordList, unit_enums: decl.EnumList, state: TargetSchemaState) -> (result: TargetSchemaState) {
+    iterate i up_to 1024 carrying st: TargetSchemaEnumWalk = TargetSchemaEnumWalk { rest: enums, local: local, all_markers: all_markers, target_nominals: target_nominals, unit_records: unit_records, unit_enums: unit_enums, state: state } {
+        if enum_decl_list_empty(st.rest) { return st.state; }
+        next st = expand_target_enum_decl_step<N>(pages, stride, total, st);
+    }
+    return st.state;
+}
+fn expand_target_enum_decl_step<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: TargetSchemaEnumWalk) -> (result: TargetSchemaEnumWalk) {
+    return match st.rest {
+        decl.EnumList.GNil => st,
+        decl.EnumList.GCons { head: enum_decl, tail: rest } => expand_target_enum_decl_one<N>(pages, stride, total, st, enum_decl, rest)
+    };
+}
+fn expand_target_enum_decl_one<N: Nat>(pages: [[byte; up_to N]; up_to 1024], stride: u64, total: u64, st: TargetSchemaEnumWalk, enum_decl: decl.EnumDecl, rest: decl.EnumList) -> (result: TargetSchemaEnumWalk) {
+    let identity: decl.NominalLookup = local_nominal_identity_by_span(st.local, enum_decl.name_start, enum_decl.name_end);
+    if !(identity.found) { return TargetSchemaEnumWalk { ..st, rest: rest }; }
+    let wanted: ProjectNominalContains = project_nominal_contains(st.state.wanted_markers, identity.identity);
+    if !(wanted.found) || imported_enum_list_has(st.state.enums, identity.identity) {
+        return TargetSchemaEnumWalk { ..st, rest: rest };
+    }
+    let built: ProjectEnumVariantBuild = project_enum_variants<N>(pages, stride, total, enum_decl.variants, st.unit_records, st.unit_enums, st.all_markers, st.target_nominals);
+    let schema: decl.ImportedEnumSchema = decl.ImportedEnumSchema { identity: identity.identity, variants: built.variants };
+    let next_markers: MarkerAddResult = add_markers_for_enum_variants(st.all_markers, built.variants, MarkerAddResult { markers: st.state.wanted_markers, added: false });
+    let next_state: TargetSchemaState = TargetSchemaState {
+        wanted_markers: next_markers.markers,
+        records: st.state.records,
+        enums: decl.ImportedEnumList.IECons { head: schema, tail: st.state.enums },
+        changed: st.state.changed || next_markers.added
+    };
+    return TargetSchemaEnumWalk { ..st, rest: rest, state: next_state };
+}
+
+fn lower_target_module_selected<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, to_lower: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, dependency_nominal_modules: NominalModuleList, target_found: bool) -> (result: ProjectBuild) {
+    if !(target_found) {
+        return begin_project_lowering_for_modules(to_lower, all_modules, imports, nominal_modules, decl.NominalTypeIdentityList.NINil, decl.ImportedRecordList.IRNil, decl.ImportedEnumList.IENil, false);
+    }
+    return match to_lower {
+        MNil => begin_project_lowering_for_modules(ModuleList.MNil, all_modules, imports, nominal_modules, decl.NominalTypeIdentityList.NINil, decl.ImportedRecordList.IRNil, decl.ImportedEnumList.IENil, false),
+        MCons { head: parsed, tail: rest } => lower_one_target_project_module<M, N>(sources, flat_pages, all_modules, imports, nominal_modules, dependency_modules, dependency_nominal_modules, parsed)
+    };
+}
+fn lower_one_target_project_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, dependency_nominal_modules: NominalModuleList, parsed: ParsedModule) -> (result: ProjectBuild) {
+    let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, parsed.source_index);
+    let input_stride: u64 = module_stride(sources, parsed.source_index);
+    let input_total: u64 = module_total(sources, parsed.source_index);
+    let all_markers: decl.NominalTypeIdentityList = project_nominal_markers(dependency_nominal_modules);
+    let facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, dependency_nominal_modules, parsed.source_index);
+    let transport_nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, all_markers, facts.facts.resolved);
+    let imported: decl.SigTab = imported_signatures<M, N>(sources, flat_pages, parsed, all_modules, transport_nominals, nominal_modules);
+    let seeded_from_ast: decl.NominalTypeIdentityList = seed_markers_from_nominals(all_markers, facts.facts.resolved, decl.NominalTypeIdentityList.NINil);
+    let seed_markers: decl.NominalTypeIdentityList = seed_markers_from_sigtab(all_markers, imported, seeded_from_ast);
+    let closure: TargetSchemaState = expand_target_schemas<M, N>(sources, flat_pages, dependency_modules, dependency_nominal_modules, all_markers, seed_markers);
+    let nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, closure.wanted_markers, facts.facts.resolved);
+    let proof: decl.UnitProve = decl.prove_parsed_unit_with_imported_schemas<1024, N>(input_pages, input_stride, input_total, parsed.unit, imported, nominals, closure.records, closure.enums);
+    let lowered: flow.LoweredUnit = flow.lower_proven_unit<1024, N>(input_pages, input_stride, input_total, proof);
+    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa_with_imported_schemas<1024, N>(input_pages, input_stride, input_total, lowered, nominals, closure.records, closure.enums);
+    let built_module: ProjectModule = ProjectModule { source_id: parsed.source_id, source_path: parsed.source_path, source_index: parsed.source_index, flow: lowered, value_ssa: value_ssa };
+    return ProjectBuild {
+        rest: ModuleList.MNil,
+        all: all_modules,
+        imports: imports,
+        nominal_modules: nominal_modules,
+        nominal_markers: closure.wanted_markers,
+        imported_records: closure.records,
+        imported_enums: closure.enums,
+        acc: ProjectModuleList.PCons { head: built_module, tail: ProjectModuleList.PNil },
+        valid: lowered.valid,
+        ssa_valid: value_ssa.valid,
+        count: 1,
+        failed: lower_stage_failure(StageFailure { stage: 0, source_index: 0, code: 0, start: 0, end: 0 }, parsed.source_index, proof, lowered),
+        target_missing: false
+    };
 }
 
 // Resolve the target's transitive import closure for schema construction.
