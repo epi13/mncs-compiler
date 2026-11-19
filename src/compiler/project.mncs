@@ -1377,8 +1377,15 @@ record UseSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureF
 record ExportSignatureResult { acc: decl.SigTab, resolved: ResolvedImportFactCache }
 record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
-record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, current: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
+record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, cache_provider_index: u64, member_start: u64, current: ParsedModule, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record ExportSigWalk { rest: decl.SigTab, caller: ParsedModule, target: ParsedModule, member_start: u64, member_end: u64, call: decl.CallSite, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab, resolved: ResolvedImportFactCache }
+record CallPrefixMatch { matched: bool, member_start: u64 }
+record LocalFnSearchWalk { rest: decl.FnList, member_start: u64, member_end: u64, found: bool }
+record ProviderDeclaringMatch { found: bool, declaring_source_index: u64 }
+record ProviderSearchState { stack: [u64; 128], sp: u64, visited: [bool; 64], found: bool, declaring_source_index: u64 }
+record ProviderVisitWalk { rest: ModuleList, target_index: u64, state: ProviderSearchState, done: bool }
+record PushUsesWalk { rest: decl.UseList, stack: [u64; 128], sp: u64, visited: [bool; 64] }
+record BareUseSearchWalk { rest: decl.UseList, found: bool, conflict: bool, declaring_source_index: u64 }
 
 fn imported_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
     let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
@@ -1406,10 +1413,220 @@ fn imported_signature_for_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
     };
 }
 fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, call: decl.CallSite, rest: decl.CallSiteList, st: CallSigWalk) -> (result: CallSigWalk) {
+    let c_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
+    let c_stride: u64 = module_stride(sources, current.source_index);
+    let c_total: u64 = module_total(sources, current.source_index);
+    if !(call_has_dot<1024, N>(c_pages, c_stride, c_total, call.start, call.end)) {
+        // Local declarations and built-in intrinsics take precedence over
+        // unqualified imported bindings without touching any provider.
+        if module_has_local_fn_same<1024, N>(c_pages, c_stride, c_total, call.start, call.end, current.unit.fns)
+            || decl.stage0_intrinsic_known<1024, N>(c_pages, c_stride, c_total, call.start, call.end) {
+            return CallSigWalk { ..st, rest: rest };
+        }
+        let bare: UseSignatureResult = resolve_bare_imported_call<M, N>(sources, flat_pages, all, current, call, st.acc, st.nominals, st.modules, st.provider_facts, st.resolved);
+        return CallSigWalk { rest: rest, acc: bare.acc, nominals: st.nominals, modules: st.modules, provider_facts: bare.provider_facts, resolved: bare.resolved };
+    }
     let uses: decl.UseList = current.unit.uses;
     let found: UseSignatureResult = signatures_from_uses<M, N>(sources, flat_pages, all, current, uses, call, st.acc, st.nominals, st.modules, st.provider_facts, st.resolved);
     return CallSigWalk { rest: rest, acc: found.acc, nominals: st.nominals, modules: st.modules, provider_facts: found.provider_facts, resolved: found.resolved };
 }
+fn call_has_dot<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
+    if end <= start || end > total { return false; }
+    let len: u64 = end - start;
+    iterate i up_to 1024 carrying idx: u64 = 0 {
+        if idx >= len { return false; }
+        if source.byte_at_global<P, N>(pages, stride, total, start + idx) == 46 { return true; }
+        next idx = idx + 1;
+    }
+    return false;
+}
+fn module_has_local_fn_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, member_start: u64, member_end: u64, fns: decl.FnList) -> (result: bool) {
+    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: fns, member_start: member_start, member_end: member_end, found: false };
+    iterate chunk up_to 64 carrying st: LocalFnSearchWalk = initial {
+        if st.found || decl.declared_fn_list_empty(st.rest) { return st.found; }
+        next st = module_has_local_fn_same_chunk<P, N>(pages, stride, total, st);
+    }
+    return st.found;
+}
+fn module_has_local_fn_same_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
+    iterate i up_to 1024 carrying st: LocalFnSearchWalk = initial {
+        if st.found || decl.declared_fn_list_empty(st.rest) { return st; }
+        next st = module_has_local_fn_same_step<P, N>(pages, stride, total, st);
+    }
+    return st;
+}
+fn module_has_local_fn_same_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
+    return match st.rest {
+        decl.FnList.DNil => st,
+        decl.FnList.DCons { head: candidate, tail: rest } => module_has_local_fn_same_one<P, N>(pages, stride, total, st, candidate, rest)
+    };
+}
+fn module_has_local_fn_same_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LocalFnSearchWalk, candidate: decl.FnDecl, rest: decl.FnList) -> (result: LocalFnSearchWalk) {
+    if decl.spans_equal<P, N>(pages, stride, total, st.member_start, st.member_end, candidate.sig.name_start, candidate.sig.name_end) {
+        return LocalFnSearchWalk { ..st, rest: decl.FnList.DNil, found: true };
+    }
+    return LocalFnSearchWalk { ..st, rest: rest };
+}
+fn module_has_local_fn_between<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller_index: u64, member_start: u64, member_end: u64, target: ParsedModule) -> (result: bool) {
+    let c_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, caller_index);
+    let c_stride: u64 = module_stride(sources, caller_index);
+    let c_total: u64 = module_total(sources, caller_index);
+    let t_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
+    let t_stride: u64 = module_stride(sources, target.source_index);
+    let t_total: u64 = module_total(sources, target.source_index);
+    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: target.unit.fns, member_start: member_start, member_end: member_end, found: false };
+    iterate chunk up_to 64 carrying st: LocalFnSearchWalk = initial {
+        if st.found || decl.declared_fn_list_empty(st.rest) { return st.found; }
+        next st = module_has_local_fn_between_chunk<N>(c_pages, c_stride, c_total, t_pages, t_stride, t_total, st);
+    }
+    return st.found;
+}
+fn module_has_local_fn_between_chunk<N: Nat>(c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, t_pages: [[byte; up_to N]; up_to 1024], t_stride: u64, t_total: u64, initial: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
+    iterate i up_to 1024 carrying st: LocalFnSearchWalk = initial {
+        if st.found || decl.declared_fn_list_empty(st.rest) { return st; }
+        next st = module_has_local_fn_between_step<N>(c_pages, c_stride, c_total, t_pages, t_stride, t_total, st);
+    }
+    return st;
+}
+fn module_has_local_fn_between_step<N: Nat>(c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, t_pages: [[byte; up_to N]; up_to 1024], t_stride: u64, t_total: u64, st: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
+    return match st.rest {
+        decl.FnList.DNil => st,
+        decl.FnList.DCons { head: candidate, tail: rest } => module_has_local_fn_between_one<N>(c_pages, c_stride, c_total, t_pages, t_stride, t_total, st, candidate, rest)
+    };
+}
+fn module_has_local_fn_between_one<N: Nat>(c_pages: [[byte; up_to N]; up_to 1024], c_stride: u64, c_total: u64, t_pages: [[byte; up_to N]; up_to 1024], t_stride: u64, t_total: u64, st: LocalFnSearchWalk, candidate: decl.FnDecl, rest: decl.FnList) -> (result: LocalFnSearchWalk) {
+    if spans_equal_pages<N>(c_pages, c_stride, c_total, st.member_start, st.member_end, t_pages, t_stride, t_total, candidate.sig.name_start, candidate.sig.name_end) {
+        return LocalFnSearchWalk { ..st, rest: decl.FnList.DNil, found: true };
+    }
+    return LocalFnSearchWalk { ..st, rest: rest };
+}
+
+// Resolve a callable member exported by `provider_index` (either declared
+// locally in `provider_index` or transitively re-exported through its `use`
+// closure), returning the original declaring module's `source_index`.
+// Pushing direct uses in declaration order onto a LIFO stack checks local
+// declarations first and resolves transitive re-exports in Stage-0's
+// deterministic import-override order.
+fn resolve_declaring_module_in_provider<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, caller_index: u64, provider_index: u64, member_start: u64, member_end: u64) -> (result: ProviderDeclaringMatch) {
+    if provider_index >= 64 { return ProviderDeclaringMatch { found: false, declaring_source_index: 0 }; }
+    let empty_stack: [u64; 128] = [0; 128];
+    let seed_stack: [u64; 128] = replace(empty_stack, 0, provider_index);
+    let empty_visited: [bool; 64] = [false; 64];
+    let initial: ProviderSearchState = ProviderSearchState { stack: seed_stack, sp: 1, visited: empty_visited, found: false, declaring_source_index: 0 };
+    iterate step up_to 128 carrying st: ProviderSearchState = initial {
+        if st.found || st.sp == 0 {
+            return ProviderDeclaringMatch { found: st.found, declaring_source_index: st.declaring_source_index };
+        }
+        next st = resolve_declaring_module_step<M, N>(sources, flat_pages, all, caller_index, member_start, member_end, st);
+    }
+    return ProviderDeclaringMatch { found: st.found, declaring_source_index: st.declaring_source_index };
+}
+fn resolve_declaring_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, caller_index: u64, member_start: u64, member_end: u64, st: ProviderSearchState) -> (result: ProviderSearchState) {
+    if st.found || st.sp == 0 || st.sp > 128 { return st; }
+    let next_sp: u64 = st.sp - 1;
+    let idx: u64 = st.stack[next_sp];
+    if idx >= 64 { return ProviderSearchState { ..st, sp: next_sp }; }
+    if st.visited[idx] { return ProviderSearchState { ..st, sp: next_sp }; }
+    let popped: ProviderSearchState = ProviderSearchState { ..st, sp: next_sp, visited: replace(st.visited, idx, true) };
+    return visit_provider_module<M, N>(sources, flat_pages, all, caller_index, idx, member_start, member_end, popped);
+}
+fn visit_provider_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, caller_index: u64, target_index: u64, member_start: u64, member_end: u64, state: ProviderSearchState) -> (result: ProviderSearchState) {
+    iterate i over sources carrying w: ProviderVisitWalk = ProviderVisitWalk { rest: all, target_index: target_index, state: state, done: false } {
+        if w.done { return w.state; }
+        next w = visit_provider_module_step<M, N>(sources, flat_pages, all, caller_index, member_start, member_end, w);
+    }
+    return w.state;
+}
+fn visit_provider_module_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, caller_index: u64, member_start: u64, member_end: u64, w: ProviderVisitWalk) -> (result: ProviderVisitWalk) {
+    return match w.rest {
+        MNil => ProviderVisitWalk { ..w, done: true },
+        MCons { head: candidate, tail: rest } => visit_provider_module_one<M, N>(sources, flat_pages, all, caller_index, member_start, member_end, w, candidate, rest)
+    };
+}
+fn visit_provider_module_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, caller_index: u64, member_start: u64, member_end: u64, w: ProviderVisitWalk, candidate: ParsedModule, rest: ModuleList) -> (result: ProviderVisitWalk) {
+    if candidate.source_index != w.target_index {
+        return ProviderVisitWalk { ..w, rest: rest };
+    }
+    if module_has_local_fn_between<M, N>(sources, flat_pages, caller_index, member_start, member_end, candidate) {
+        let matched: ProviderSearchState = ProviderSearchState { ..w.state, found: true, declaring_source_index: candidate.source_index };
+        return ProviderVisitWalk { rest: ModuleList.MNil, target_index: w.target_index, state: matched, done: true };
+    }
+    let pushed: ProviderSearchState = push_provider_uses<M, N>(sources, flat_pages, all, candidate, w.state);
+    return ProviderVisitWalk { rest: ModuleList.MNil, target_index: w.target_index, state: pushed, done: true };
+}
+fn push_provider_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, provider: ParsedModule, state: ProviderSearchState) -> (result: ProviderSearchState) {
+    let initial: PushUsesWalk = PushUsesWalk { rest: provider.unit.uses, stack: state.stack, sp: state.sp, visited: state.visited };
+    iterate i up_to 64 carrying u: PushUsesWalk = initial {
+        if decl.use_list_empty(u.rest) {
+            return ProviderSearchState { ..state, stack: u.stack, sp: u.sp };
+        }
+        next u = push_provider_use_step<M, N>(sources, flat_pages, all, provider, u);
+    }
+    return ProviderSearchState { ..state, stack: u.stack, sp: u.sp };
+}
+fn push_provider_use_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, provider: ParsedModule, u: PushUsesWalk) -> (result: PushUsesWalk) {
+    return match u.rest {
+        UNil => u,
+        UCons { head: usage, tail: rest } => push_provider_use_one<M, N>(sources, flat_pages, all, provider, u, usage, rest)
+    };
+}
+fn push_provider_use_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, provider: ParsedModule, u: PushUsesWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: PushUsesWalk) {
+    let target: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, provider, usage);
+    if !(target.found) || target.index >= 64 || u.sp >= 128 {
+        return PushUsesWalk { ..u, rest: rest };
+    }
+    if u.visited[target.index] {
+        return PushUsesWalk { ..u, rest: rest };
+    }
+    return PushUsesWalk { rest: rest, stack: replace(u.stack, u.sp, target.index), sp: u.sp + 1, visited: u.visited };
+}
+
+// Resolve a bare (unqualified) imported call against all direct imports of
+// `current`. Same-identity diamonds collapse cleanly; distinct declaring
+// modules conflict and leave the call unbound so `decl.seed_call` reports
+// MNE131 at the exact callee span.
+fn resolve_bare_imported_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache) -> (result: UseSignatureResult) {
+    let cached: ResolvedImportLookup = resolved_import_signature_lookup<M, N>(sources, flat_pages, current, call.start, call.end, 1024, resolved);
+    if cached.found {
+        let reused: decl.SigTab = reuse_resolved_import_signature(call, cached.signature, acc);
+        return UseSignatureResult { acc: reused, provider_facts: provider_facts, resolved: resolved };
+    }
+    let initial: BareUseSearchWalk = BareUseSearchWalk { rest: current.unit.uses, found: false, conflict: false, declaring_source_index: 0 };
+    iterate i up_to 64 carrying bs: BareUseSearchWalk = initial {
+        if bs.conflict || decl.use_list_empty(bs.rest) {
+            return finish_bare_imported_call<M, N>(sources, flat_pages, all, nominal_modules, current, call, acc, nominals, provider_facts, resolved, bs);
+        }
+        next bs = bare_use_search_step<M, N>(sources, flat_pages, all, current, call, bs);
+    }
+    return finish_bare_imported_call<M, N>(sources, flat_pages, all, nominal_modules, current, call, acc, nominals, provider_facts, resolved, bs);
+}
+fn bare_use_search_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, call: decl.CallSite, bs: BareUseSearchWalk) -> (result: BareUseSearchWalk) {
+    return match bs.rest {
+        UNil => bs,
+        UCons { head: usage, tail: rest } => bare_use_search_one<M, N>(sources, flat_pages, all, current, call, bs, usage, rest)
+    };
+}
+fn bare_use_search_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, call: decl.CallSite, bs: BareUseSearchWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: BareUseSearchWalk) {
+    let target: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, current, usage);
+    if !(target.found) { return BareUseSearchWalk { ..bs, rest: rest }; }
+    let resolved: ProviderDeclaringMatch = resolve_declaring_module_in_provider<M, N>(sources, flat_pages, all, current.source_index, target.index, call.start, call.end);
+    if !(resolved.found) { return BareUseSearchWalk { ..bs, rest: rest }; }
+    if !(bs.found) {
+        return BareUseSearchWalk { rest: rest, found: true, conflict: false, declaring_source_index: resolved.declaring_source_index };
+    }
+    if resolved.declaring_source_index == bs.declaring_source_index {
+        return BareUseSearchWalk { ..bs, rest: rest };
+    }
+    return BareUseSearchWalk { rest: decl.UseList.UNil, found: true, conflict: true, declaring_source_index: bs.declaring_source_index };
+}
+fn finish_bare_imported_call<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache, bs: BareUseSearchWalk) -> (result: UseSignatureResult) {
+    if !(bs.found) || bs.conflict {
+        return UseSignatureResult { acc: acc, provider_facts: provider_facts, resolved: resolved };
+    }
+    let sigs: TargetSignatureResult = signatures_from_target<M, N>(sources, flat_pages, all, nominal_modules, current, bs.declaring_source_index, 1024, call.start, call, acc, caller_nominals, provider_facts, resolved);
+    return UseSignatureResult { acc: sigs.acc, provider_facts: sigs.provider_facts, resolved: sigs.resolved };
+}
+
 fn signatures_from_uses<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, uses: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache) -> (result: UseSignatureResult) {
     iterate i up_to 1024 carrying st: UseSigWalk = UseSigWalk { rest: uses, call: call, acc: acc, nominals: nominals, modules: nominal_modules, provider_facts: provider_facts, resolved: resolved } {
         if decl.use_list_empty(st.rest) {
@@ -1426,38 +1643,51 @@ fn signatures_from_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_
     };
 }
 fn signatures_from_one_use<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, current: ParsedModule, st: UseSigWalk, usage: decl.UseDecl, rest: decl.UseList) -> (result: UseSigWalk) {
-    if !(call_has_import_prefix<M, N>(sources, flat_pages, current.source_index, st.call, usage)) { return UseSigWalk { ..st, rest: rest }; }
+    let prefix: CallPrefixMatch = call_import_prefix_match<M, N>(sources, flat_pages, current.source_index, st.call, usage);
+    if !(prefix.matched) { return UseSigWalk { ..st, rest: rest }; }
     let target: ModuleLookup = find_import_target<M, N>(sources, flat_pages, all, current, usage);
     if !(target.found) { return UseSigWalk { ..st, rest: rest }; }
-    let cached: ResolvedImportLookup = resolved_import_signature_lookup<M, N>(sources, flat_pages, current, st.call, usage, target.index, st.resolved);
+    let cached: ResolvedImportLookup = resolved_import_signature_lookup<M, N>(sources, flat_pages, current, prefix.member_start, st.call.end, target.index, st.resolved);
     if cached.found {
         let reused: decl.SigTab = reuse_resolved_import_signature(st.call, cached.signature, st.acc);
-        return UseSigWalk { rest: rest, call: st.call, acc: reused, nominals: st.nominals, modules: st.modules, provider_facts: st.provider_facts, resolved: st.resolved };
+        return UseSigWalk { rest: decl.UseList.UNil, call: st.call, acc: reused, nominals: st.nominals, modules: st.modules, provider_facts: st.provider_facts, resolved: st.resolved };
     }
-    let sigs: TargetSignatureResult = signatures_from_target<M, N>(sources, flat_pages, all, st.modules, current, target.index, usage, st.call, st.acc, st.nominals, st.provider_facts, st.resolved);
-    return UseSigWalk { rest: rest, call: st.call, acc: sigs.acc, nominals: st.nominals, modules: st.modules, provider_facts: sigs.provider_facts, resolved: sigs.resolved };
+    let declaring: ProviderDeclaringMatch = resolve_declaring_module_in_provider<M, N>(sources, flat_pages, all, current.source_index, target.index, prefix.member_start, st.call.end);
+    if !(declaring.found) { return UseSigWalk { ..st, rest: rest }; }
+    let sigs: TargetSignatureResult = signatures_from_target<M, N>(sources, flat_pages, all, st.modules, current, declaring.declaring_source_index, target.index, prefix.member_start, st.call, st.acc, st.nominals, st.provider_facts, st.resolved);
+    return UseSigWalk { rest: decl.UseList.UNil, call: st.call, acc: sigs.acc, nominals: st.nominals, modules: st.modules, provider_facts: sigs.provider_facts, resolved: sigs.resolved };
 }
-fn call_has_import_prefix<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, call: decl.CallSite, usage: decl.UseDecl) -> (result: bool) {
-    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, index);
-    let stride: u64 = module_stride(sources, index);
-    let total: u64 = module_total(sources, index);
-    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
-    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
+fn call_span_has_prefix<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, call: decl.CallSite, prefix_start: u64, prefix_end: u64) -> (result: bool) {
     if call.end <= call.start || prefix_end <= prefix_start { return false; }
     let prefix_len: u64 = prefix_end - prefix_start;
     if call.end - call.start <= prefix_len + 1 { return false; }
-    if !(decl.spans_equal<1024, N>(pages, stride, total, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
-    return source.byte_at_global<1024, N>(pages, stride, total, call.start + prefix_len) == 46;
+    if !(decl.spans_equal<P, N>(pages, stride, total, call.start, call.start + prefix_len, prefix_start, prefix_end)) { return false; }
+    return source.byte_at_global<P, N>(pages, stride, total, call.start + prefix_len) == 46;
 }
-fn resolved_import_signature_lookup<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, call: decl.CallSite, usage: decl.UseDecl, provider_source_index: u64, facts: ResolvedImportFactCache) -> (result: ResolvedImportLookup) {
+fn call_import_prefix_match<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, call: decl.CallSite, usage: decl.UseDecl) -> (result: CallPrefixMatch) {
+    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, index);
+    let stride: u64 = module_stride(sources, index);
+    let total: u64 = module_total(sources, index);
+    if usage.has_alias {
+        if call_span_has_prefix<1024, N>(pages, stride, total, call, usage.alias_start, usage.alias_end) {
+            return CallPrefixMatch { matched: true, member_start: call.start + (usage.alias_end - usage.alias_start) + 1 };
+        }
+    }
+    if call_span_has_prefix<1024, N>(pages, stride, total, call, usage.module_start, usage.module_end) {
+        return CallPrefixMatch { matched: true, member_start: call.start + (usage.module_end - usage.module_start) + 1 };
+    }
+    return CallPrefixMatch { matched: false, member_start: 0 };
+}
+fn call_has_import_prefix<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], index: u64, call: decl.CallSite, usage: decl.UseDecl) -> (result: bool) {
+    let m: CallPrefixMatch = call_import_prefix_match<M, N>(sources, flat_pages, index, call, usage);
+    return m.matched;
+}
+fn resolved_import_signature_lookup<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, member_start: u64, member_end: u64, provider_source_index: u64, facts: ResolvedImportFactCache) -> (result: ResolvedImportLookup) {
     let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
     let stride: u64 = module_stride(sources, current.source_index);
     let total: u64 = module_total(sources, current.source_index);
-    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
-    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
-    let member_start: u64 = call.start + (prefix_end - prefix_start) + 1;
     let empty_signature: decl.Sig = decl.Sig { start: 0, end: 0, params: decl.BindList.BNil, nparams: 0, generic_bounds: decl.GenericBoundList.KNil, result: decl.SemType.TPoison, fx: decl.EffectList.XNil, raw_capabilities: decl.CapList.ANil, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, identity: decl.invalid_semantic_identity() };
-    let initial: ResolvedImportLookupWalk = ResolvedImportLookupWalk { rest: facts.facts, member_start: member_start, member_end: call.end, provider_source_index: provider_source_index, found: false, signature: empty_signature };
+    let initial: ResolvedImportLookupWalk = ResolvedImportLookupWalk { rest: facts.facts, member_start: member_start, member_end: member_end, provider_source_index: provider_source_index, found: false, signature: empty_signature };
     iterate chunk up_to 64 carrying st: ResolvedImportLookupWalk = initial {
         if st.found || resolved_import_fact_list_empty(st.rest) { return ResolvedImportLookup { found: st.found, signature: st.signature }; }
         next st = resolved_import_signature_lookup_chunk<1024, N>(pages, stride, total, st);
@@ -1501,8 +1731,8 @@ fn reuse_resolved_import_signature(call: decl.CallSite, cached: decl.Sig, acc: d
     let reused: decl.Sig = decl.Sig { ..cached, start: call.start, end: call.end };
     return decl.SigTab.HCons { head: reused, tail: acc };
 }
-fn signatures_from_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, target_index: u64, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache) -> (result: TargetSignatureResult) {
-    iterate i over sources carrying st: TargetSigWalk = TargetSigWalk { rest: all, modules: nominal_modules, target_index: target_index, current: current, usage: usage, call: call, acc: acc, caller_nominals: caller_nominals, provider_facts: provider_facts, resolved: resolved } {
+fn signatures_from_target<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all: ModuleList, nominal_modules: NominalModuleList, current: ParsedModule, target_index: u64, cache_provider_index: u64, member_start: u64, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache) -> (result: TargetSignatureResult) {
+    iterate i over sources carrying st: TargetSigWalk = TargetSigWalk { rest: all, modules: nominal_modules, target_index: target_index, cache_provider_index: cache_provider_index, member_start: member_start, current: current, call: call, acc: acc, caller_nominals: caller_nominals, provider_facts: provider_facts, resolved: resolved } {
         next st = signatures_from_target_step<M, N>(sources, flat_pages, st);
     }
     return TargetSignatureResult { acc: st.acc, provider_facts: st.provider_facts, resolved: st.resolved };
@@ -1513,16 +1743,16 @@ fn signatures_from_target_step<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
         MCons { head: target, tail: rest } => build_signatures_from_candidate<M, N>(sources, flat_pages, st, target, rest)
     };
 }
-record TargetFnSigWalk { rest: decl.FnList, caller: ParsedModule, target: ParsedModule, member_start: u64, member_end: u64, call: decl.CallSite, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab, resolved: ResolvedImportFactCache, found: bool }
+record TargetFnSigWalk { rest: decl.FnList, caller: ParsedModule, target: ParsedModule, cache_provider_index: u64, member_start: u64, member_end: u64, call: decl.CallSite, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab, resolved: ResolvedImportFactCache, found: bool }
 
 fn build_signatures_from_candidate<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, rest: ModuleList) -> (result: TargetSigWalk) {
     if target.source_index != st.target_index { return TargetSigWalk { ..st, rest: rest }; }
     let target_facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, st.modules, target.source_index);
     let target_nominals: decl.NominalTypeIdentityList = target_facts.facts.resolved;
-    let exported: ExportSignatureResult = signature_from_target_fns<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, st.acc, st.caller_nominals, target_nominals, st.resolved);
+    let exported: ExportSignatureResult = signature_from_target_fns<M, N>(sources, flat_pages, st.current, target, st.cache_provider_index, st.member_start, st.call, st.acc, st.caller_nominals, target_nominals, st.resolved);
     return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported.acc, resolved: exported.resolved };
 }
-fn signature_from_target_fns<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, resolved: ResolvedImportFactCache) -> (result: ExportSignatureResult) {
+fn signature_from_target_fns<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, cache_provider_index: u64, member_start: u64, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, resolved: ResolvedImportFactCache) -> (result: ExportSignatureResult) {
     // Resolve only the called provider declaration on demand instead of
     // collecting and identity-binding every declaration in the provider.
     let c_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, caller.source_index);
@@ -1531,10 +1761,7 @@ fn signature_from_target_fns<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64],
     let t_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
     let t_stride: u64 = module_stride(sources, target.source_index);
     let t_total: u64 = module_total(sources, target.source_index);
-    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
-    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
-    let member_start: u64 = call.start + (prefix_end - prefix_start) + 1;
-    let initial: TargetFnSigWalk = TargetFnSigWalk { rest: target.unit.fns, caller: caller, target: target, member_start: member_start, member_end: call.end, call: call, caller_nominals: caller_nominals, target_nominals: target_nominals, acc: acc, resolved: resolved, found: false };
+    let initial: TargetFnSigWalk = TargetFnSigWalk { rest: target.unit.fns, caller: caller, target: target, cache_provider_index: cache_provider_index, member_start: member_start, member_end: call.end, call: call, caller_nominals: caller_nominals, target_nominals: target_nominals, acc: acc, resolved: resolved, found: false };
     iterate chunk up_to 64 carrying st: TargetFnSigWalk = initial {
         if st.found || decl.declared_fn_list_empty(st.rest) { return ExportSignatureResult { acc: st.acc, resolved: st.resolved }; }
         next st = signature_from_target_fn_chunk<M, N>(sources, flat_pages, c_pages, c_stride, c_total, t_pages, t_stride, t_total, st);
@@ -1575,12 +1802,12 @@ fn signature_from_target_fn_one<M: Nat, N: Nat>(sources: [ProjectSource; up_to 6
         capabilities: owned.capabilities,
         identity: owned.identity
     };
-    let fact: ResolvedImportFact = ResolvedImportFact { member_start: st.member_start, member_end: st.member_end, provider_source_index: st.target.source_index, signature: sig };
+    let fact: ResolvedImportFact = ResolvedImportFact { member_start: st.member_start, member_end: st.member_end, provider_source_index: st.cache_provider_index, signature: sig };
     let resolved: ResolvedImportFactCache = resolved_import_fact_push_bounded(fact, st.resolved);
     return TargetFnSigWalk { ..st, rest: decl.FnList.DNil, acc: decl.SigTab.HCons { head: sig, tail: st.acc }, resolved: resolved, found: true };
 }
 fn signatures_from_cached_provider<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], st: TargetSigWalk, target: ParsedModule, cached: ProviderSignatureLookup) -> (result: TargetSigWalk) {
-    let exported: ExportSignatureResult = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.usage, st.call, cached.signatures, st.acc, st.caller_nominals, cached.nominals, st.resolved);
+    let exported: ExportSignatureResult = signatures_from_exports<M, N>(sources, flat_pages, st.current, target, st.member_start, st.call, cached.signatures, st.acc, st.caller_nominals, cached.nominals, st.resolved);
     return TargetSigWalk { ..st, rest: ModuleList.MNil, acc: exported.acc, resolved: exported.resolved };
 }
 fn provider_signature_lookup(facts: ProviderSignatureFactsList, target_index: u64) -> (result: ProviderSignatureLookup) {
@@ -1604,13 +1831,10 @@ fn provider_signature_lookup_item(st: ProviderSignatureLookupWalk, item: Provide
     if item.source_index == st.target_index { return ProviderSignatureLookupWalk { rest: rest, target_index: st.target_index, found: true, signatures: item.signatures, nominals: item.nominals }; }
     return ProviderSignatureLookupWalk { ..st, rest: rest };
 }
-fn signatures_from_exports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, usage: decl.UseDecl, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, resolved: ResolvedImportFactCache) -> (result: ExportSignatureResult) {
+fn signatures_from_exports<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], caller: ParsedModule, target: ParsedModule, member_start: u64, call: decl.CallSite, target_sigs: decl.SigTab, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, resolved: ResolvedImportFactCache) -> (result: ExportSignatureResult) {
     // The provider signature table already carries every declaration name
     // and checked signature. Compare the imported member across source
     // identities once instead of walking FnDecls before searching this table.
-    let prefix_start: u64 = select(usage.has_alias, usage.alias_start, usage.module_start);
-    let prefix_end: u64 = select(usage.has_alias, usage.alias_end, usage.module_end);
-    let member_start: u64 = call.start + (prefix_end - prefix_start) + 1;
     iterate chunk up_to 64 carrying st: ExportSigWalk = ExportSigWalk { rest: target_sigs, caller: caller, target: target, member_start: member_start, member_end: call.end, call: call, caller_nominals: caller_nominals, target_nominals: target_nominals, acc: acc, resolved: resolved } {
         if export_signature_table_empty(st.rest) { return ExportSignatureResult { acc: st.acc, resolved: st.resolved }; }
         next st = signatures_from_export_chunk<M, N>(sources, flat_pages, st);
