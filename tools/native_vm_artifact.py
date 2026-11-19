@@ -225,16 +225,37 @@ def _sha256_hex(raw_bytes):
     return hashlib.sha256(raw_bytes).hexdigest()
 
 
+def _split_function_semantic_id(sem_id):
+    prefix = "mncs:0.2:function:"
+    if not sem_id.startswith(prefix):
+        raise ValueError(f"unexpected callable semantic identity prefix: {sem_id!r}")
+    rest = sem_id[len(prefix):]
+    if "::" not in rest:
+        raise ValueError(f"missing '::' separator in callable semantic identity: {sem_id!r}")
+    decl_module, fn_name = rest.rsplit("::", 1)
+    if not decl_module or not fn_name:
+        raise ValueError(f"empty declaring module or function name in semantic identity: {sem_id!r}")
+    return decl_module, fn_name
+
+
 def package_native_vm_artifact(
     vm_emit_result,
     source_bytes,
     *,
+    allow_multi_module=False,
+    closure_source_digests=None,
+    producer_entry=None,
+    ssa_producer_entry=None,
     emitter_source_sha256=None,
     compiler_revision=None,
     stage0_revision=None,
 ):
     """Package a verified MNCS `VmEmitResult` into a sealed canonical
     `mncs.vm.artifact/1` JSON dict.
+
+    When `allow_multi_module=True`, functions from multiple declaring modules
+    selected by MNCS closure lowering retain their original declaring-module
+    identities in both `SsaModule.functions` and `VmArtifact.callables`.
 
     Raises ValueError if `vm_emit_result["ok"]` is False.
     """
@@ -248,21 +269,28 @@ def package_native_vm_artifact(
 
     mod_start = vm_emit_result["module_name_start"]
     mod_end = vm_emit_result["module_name_end"]
-    module_name = source_bytes[mod_start:mod_end].decode("utf-8")
+    root_module_name = source_bytes[mod_start:mod_end].decode("utf-8")
     source_sha256 = _sha256_hex(source_bytes)
 
     ssa_functions = []
     callables = []
     exports = []
+    seen_sem_ids = set()
+    declaring_modules = []
 
     for fn in flist(vm_emit_result["functions"]):
         sem_id = _semantic_id_str(fn["identity"])
-        # Expected canonical format: mncs:0.2:function:<module>::<name>
-        prefix = f"mncs:0.2:function:{module_name}::"
-        if not sem_id.startswith(prefix):
-            raise ValueError(f"unexpected callable semantic identity {sem_id!r} for module {module_name!r}")
-        fn_name = sem_id[len(prefix):]
-        fn_ssa_id = f"mncs:0.4:ssa:function:{module_name}::{fn_name}"
+        decl_module, fn_name = _split_function_semantic_id(sem_id)
+        if not allow_multi_module and decl_module != root_module_name:
+            raise ValueError(
+                f"unexpected callable semantic identity {sem_id!r} for single-module artifact {root_module_name!r}"
+            )
+        if sem_id in seen_sem_ids:
+            raise ValueError(f"duplicate callable semantic identity in emitted closure: {sem_id!r}")
+        seen_sem_ids.add(sem_id)
+        if decl_module not in declaring_modules:
+            declaring_modules.append(decl_module)
+        fn_ssa_id = f"mncs:0.4:ssa:function:{decl_module}::{fn_name}"
 
         entry_blk_id = _ssa_blk_id(fn_ssa_id, 0)
         ssa_inputs = [
@@ -349,15 +377,21 @@ def package_native_vm_artifact(
             "failure": "isolated",
         })
         callables.append({
-            "module": module_name,
+            "module": decl_module,
             "name": fn_name,
             "function": fn_ssa_id,
             "semantic": sem_id,
         })
         exports.append(fn_ssa_id)
 
-    module_sem_id = f"mncs:0.2:module:{module_name}"
-    hir_fingerprint = f"sha256:{source_sha256}"
+    module_sem_id = f"mncs:0.2:module:{root_module_name}"
+    if closure_source_digests:
+        closure_digest = _sha256_hex(
+            json.dumps(list(closure_source_digests), separators=(",", ":")).encode("utf-8")
+        )
+        hir_fingerprint = f"sha256:{closure_digest}"
+    else:
+        hir_fingerprint = f"sha256:{source_sha256}"
     ssa_module_id = f"mncs:0.4:ssa:module:{_sha256_hex(f'{module_sem_id}:{hir_fingerprint}'.encode())}"
 
     ssa_module = {
@@ -375,13 +409,28 @@ def package_native_vm_artifact(
     )
     dag_module = dag_encode(ssa_module)
 
+    effective_producer = producer_entry or (
+        "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_module"
+        if allow_multi_module
+        else "mncs.compiler.vm_emit.v1::compile_and_emit_vm_module"
+    )
+    effective_ssa_producer = ssa_producer_entry or (
+        "mncs.compiler.project.v1::compile_project"
+        if allow_multi_module
+        else "mncs.compiler.ssa.v1::lower_value_ssa"
+    )
     lowering_refs = [
-        "executable-program-producer:mncs.compiler.vm_emit.v1::compile_and_emit_vm_module",
-        "native-ssa-producer:mncs.compiler.ssa.v1::lower_value_ssa",
+        f"executable-program-producer:{effective_producer}",
+        f"native-ssa-producer:{effective_ssa_producer}",
         "transport-codec:tools/native_vm_artifact.py",
         "independent-admission:mncs-vm",
-        f"source-sha256:{source_sha256}",
+        f"root-source-sha256:{source_sha256}",
     ]
+    if allow_multi_module:
+        lowering_refs.append(f"declaring-modules:{','.join(declaring_modules)}")
+    if closure_source_digests:
+        for src_id, src_sha in closure_source_digests:
+            lowering_refs.append(f"closure-source:{src_id}=sha256:{src_sha}")
     if emitter_source_sha256:
         lowering_refs.append(f"emitter-source-sha256:{emitter_source_sha256}")
     if compiler_revision:

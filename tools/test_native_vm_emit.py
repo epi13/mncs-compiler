@@ -134,10 +134,15 @@ class NativeEmitterProbe:
     def __init__(self):
         env = dict(os.environ)
         env["MNCS_LIBRARY_PATH"] = f"{ROOT / 'src'}:{STDLIB_ROOT / 'library'}"
-        env["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow,ssa"
+        env["MNCS_PROBE_MODULES"] = "source,lexer,parser,segment,decl,flow,ssa,project"
         env["MNCS_PROBE_LIBRARY_MODULES"] = "mncs.compiler.vm_emit.v1,mncs.std.text_utf8.v1"
         env["MNCS_PROBE_EXECUTION_MODULES"] = "mncs.compiler.vm_emit.v1"
         env["MNCS_PROBE_BACKEND"] = backend_policy.resolve("project")
+        env["MNCS_PROBE_BACKEND_ROOTS"] = (
+            "compile_and_emit_vm_module,emit_verified_ssa,"
+            "compile_and_emit_project_vm_module,emit_verified_project_ssa,"
+            "compile_project_for_emit"
+        )
         env["MNCS_PROBE_CACHE_DIR"] = str(CACHE_DIR)
         env["MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES"] = str(MAX_AS_BYTES)
         env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([
@@ -149,6 +154,16 @@ class NativeEmitterProbe:
             {
                 "module": "mncs.compiler.vm_emit.v1",
                 "function": "emit_verified_ssa",
+                "type_arguments": [sem.nat_arg(64), sem.nat_arg(1024)],
+            },
+            {
+                "module": "mncs.compiler.vm_emit.v1",
+                "function": "compile_and_emit_project_vm_module",
+                "type_arguments": [sem.nat_arg(64), sem.nat_arg(1024)],
+            },
+            {
+                "module": "mncs.compiler.vm_emit.v1",
+                "function": "compile_project_for_emit",
                 "type_arguments": [sem.nat_arg(64), sem.nat_arg(1024)],
             },
         ])
@@ -173,18 +188,25 @@ class NativeEmitterProbe:
     def record_types(self, module_name):
         return {r["name"]: r for r in self.send({"record_types": module_name})}
 
-    def call(self, function, args):
+    def call_raw(self, function, args, type_arguments=None):
         req = {
             "schema_version": "0.1",
             "target": {"module": "mncs.compiler.vm_emit.v1", "function": function},
             "arguments": args,
-            "type_arguments": [sem.nat_arg(64), sem.nat_arg(1024)],
-            "step_budget": 16000000,
+            "type_arguments": (
+                [sem.nat_arg(64), sem.nat_arg(1024)]
+                if type_arguments is None
+                else type_arguments
+            ),
+            "step_budget": 8000000,
         }
         resp = self.send(req)
         assert resp.get("status") == "returned", resp
         self.peak_rss_bytes = _read_proc_vmhwm_bytes(self.proc.pid) or self.peak_rss_bytes
-        return sem.decode(resp["returned"][0])
+        return resp["returned"][0]
+
+    def call(self, function, args, type_arguments=None):
+        return sem.decode(self.call_raw(function, args, type_arguments=type_arguments))
 
     def close(self):
         self.peak_rss_bytes = _read_proc_vmhwm_bytes(self.proc.pid) or self.peak_rss_bytes

@@ -2,6 +2,7 @@ mncs 0.18;
 module mncs.compiler.vm_emit.v1;
 use mncs.compiler.decl.v1 as decl;
 use mncs.compiler.parser.v1 as parser;
+use mncs.compiler.project.v1 as project;
 use mncs.compiler.ssa.v1 as ssa;
 
 // Bounded native VM emission from verified Value SSA (`mncs.compiler.ssa.v1`).
@@ -679,6 +680,15 @@ fn lower_vm_fn_one(st: FnEmitWalk, func: ssa.Function) -> (result: FnEmitWalk) {
     };
 }
 
+// Error codes:
+//  1 = unverified project/module/SSA summary
+//  2 = unverified or unsupported function
+//  4 = unsupported non-scalar type
+//  5 = unsupported SSA instruction
+//  6 = unsupported SSA terminator
+//  8 = invalid module header
+//  9 = missing callee in reachable closure
+// 10 = callee signature (arity / argument type / result type) mismatch
 fn emit_failure(code: u64, fn_idx: u64, blk_id: u64, inst_id: u64) -> (result: VmEmitResult) {
     return VmEmitResult {
         ok: false, error_code: code, error_function: fn_idx, error_block: blk_id, error_instruction: inst_id,
@@ -686,6 +696,328 @@ fn emit_failure(code: u64, fn_idx: u64, blk_id: u64, inst_id: u64) -> (result: V
         functions: VmFunctionList.VFNil, function_count: 0, block_count: 0, instruction_count: 0
     };
 }
+
+// ---------------------------------------------------------------------------
+// Whole-closure callable identity, reachability, and signature verification
+// ---------------------------------------------------------------------------
+
+fn semantic_ids_equal(a: decl.SemanticIdentity, b: decl.SemanticIdentity) -> (result: bool) {
+    if !(a.valid) || !(b.valid) || a.len != b.len || a.len > 512 { return false; }
+    iterate i up_to 512 carrying idx: u64 = 0 {
+        if idx >= a.len { return true; }
+        if a.bytes[idx] != b.bytes[idx] { return false; }
+        next idx = idx + 1;
+    }
+    return true;
+}
+fn vm_scalar_types_equal(a: VmScalarType, b: VmScalarType) -> (result: bool) {
+    return a.valid && b.valid && a.kind == b.kind && a.bits == b.bits && a.signed == b.signed;
+}
+fn dummy_vm_function() -> (result: VmFunction) {
+    return VmFunction {
+        identity: decl.invalid_semantic_identity(),
+        inputs: VmValueList.VVNil,
+        result_type: invalid_vm_type(),
+        blocks: VmBlockList.VBNil,
+        block_count: 0,
+        instruction_count: 0
+    };
+}
+
+record VmFnLookup { found: bool, fn_item: VmFunction }
+record VmFnLookupWalk { rest: VmFunctionList, wanted: decl.SemanticIdentity, found: bool, fn_item: VmFunction }
+fn find_vm_fn_by_id(fns: VmFunctionList, wanted: decl.SemanticIdentity) -> (result: VmFnLookup) {
+    let initial: VmFnLookupWalk = VmFnLookupWalk { rest: fns, wanted: wanted, found: false, fn_item: dummy_vm_function() };
+    iterate i up_to 1024 carrying st: VmFnLookupWalk = initial {
+        if st.found || vm_fn_list_empty(st.rest) {
+            return VmFnLookup { found: st.found, fn_item: st.fn_item };
+        }
+        next st = find_vm_fn_step(st);
+    }
+    return VmFnLookup { found: st.found, fn_item: st.fn_item };
+}
+fn find_vm_fn_step(st: VmFnLookupWalk) -> (result: VmFnLookupWalk) {
+    return match st.rest {
+        VFNil => st,
+        VFCons { head: fn_item, tail: rest } => find_vm_fn_one(st, fn_item, rest)
+    };
+}
+fn find_vm_fn_one(st: VmFnLookupWalk, fn_item: VmFunction, rest: VmFunctionList) -> (result: VmFnLookupWalk) {
+    if semantic_ids_equal(fn_item.identity, st.wanted) {
+        return VmFnLookupWalk { rest: VmFunctionList.VFNil, wanted: st.wanted, found: true, fn_item: fn_item };
+    }
+    return VmFnLookupWalk { ..st, rest: rest };
+}
+
+enum PendingIdList { PINil, PICons { head: decl.SemanticIdentity, tail: PendingIdList } }
+fn pending_id_list_empty(ids: PendingIdList) -> (result: bool) {
+    return match ids { PINil => true, PICons { head: h, tail: t } => false };
+}
+record PendingIdRev { rest: PendingIdList, acc: PendingIdList }
+fn reverse_pending_ids(ids: PendingIdList) -> (result: PendingIdList) {
+    iterate i up_to 1024 carrying st: PendingIdRev = PendingIdRev { rest: ids, acc: PendingIdList.PINil } {
+        if pending_id_list_empty(st.rest) { return st.acc; }
+        next st = reverse_pending_id_step(st);
+    }
+    return st.acc;
+}
+fn reverse_pending_id_step(st: PendingIdRev) -> (result: PendingIdRev) {
+    return match st.rest {
+        PINil => st,
+        PICons { head: h, tail: t } => PendingIdRev { rest: t, acc: PendingIdList.PICons { head: h, tail: st.acc } }
+    };
+}
+record PendingAppendWalk { rest: PendingIdList, tail: PendingIdList }
+fn append_pending_ids(front: PendingIdList, back: PendingIdList) -> (result: PendingIdList) {
+    let rev: PendingIdList = reverse_pending_ids(front);
+    iterate i up_to 1024 carrying st: PendingAppendWalk = PendingAppendWalk { rest: rev, tail: back } {
+        if pending_id_list_empty(st.rest) { return st.tail; }
+        next st = append_pending_id_step(st);
+    }
+    return st.tail;
+}
+fn append_pending_id_step(st: PendingAppendWalk) -> (result: PendingAppendWalk) {
+    return match st.rest {
+        PINil => st,
+        PICons { head: h, tail: t } => PendingAppendWalk { rest: t, tail: PendingIdList.PICons { head: h, tail: st.tail } }
+    };
+}
+
+record InstCalleeCollect { rest: VmInstructionList, acc: PendingIdList }
+fn collect_inst_callees(insts: VmInstructionList, acc: PendingIdList) -> (result: PendingIdList) {
+    iterate i up_to 1024 carrying st: InstCalleeCollect = InstCalleeCollect { rest: insts, acc: acc } {
+        if vm_inst_list_empty(st.rest) { return st.acc; }
+        next st = collect_inst_callee_step(st);
+    }
+    return st.acc;
+}
+fn collect_inst_callee_step(st: InstCalleeCollect) -> (result: InstCalleeCollect) {
+    return match st.rest {
+        VINil => st,
+        VICons { head: inst, tail: rest } => collect_inst_callee_one(st, inst, rest)
+    };
+}
+fn collect_inst_callee_one(st: InstCalleeCollect, inst: VmInstruction, rest: VmInstructionList) -> (result: InstCalleeCollect) {
+    if inst.opcode == 13 {
+        return InstCalleeCollect { rest: rest, acc: PendingIdList.PICons { head: inst.callee_identity, tail: st.acc } };
+    }
+    return InstCalleeCollect { rest: rest, acc: st.acc };
+}
+
+record BlockCalleeCollect { rest: VmBlockList, acc: PendingIdList }
+fn collect_fn_callees_in_order(fn_item: VmFunction) -> (result: PendingIdList) {
+    iterate i up_to 1024 carrying st: BlockCalleeCollect = BlockCalleeCollect { rest: fn_item.blocks, acc: PendingIdList.PINil } {
+        if vm_block_list_empty(st.rest) { return reverse_pending_ids(st.acc); }
+        next st = collect_block_callee_step(st);
+    }
+    return reverse_pending_ids(st.acc);
+}
+fn collect_block_callee_step(st: BlockCalleeCollect) -> (result: BlockCalleeCollect) {
+    return match st.rest {
+        VBNil => st,
+        VBCons { head: blk, tail: rest } => BlockCalleeCollect { rest: rest, acc: collect_inst_callees(blk.instructions, st.acc) }
+    };
+}
+
+record FnsCalleeCollect { rest: VmFunctionList, acc: PendingIdList }
+fn collect_fns_callees_in_order(fns: VmFunctionList) -> (result: PendingIdList) {
+    iterate i up_to 1024 carrying st: FnsCalleeCollect = FnsCalleeCollect { rest: fns, acc: PendingIdList.PINil } {
+        if vm_fn_list_empty(st.rest) { return st.acc; }
+        next st = collect_fns_callee_step(st);
+    }
+    return st.acc;
+}
+fn collect_fns_callee_step(st: FnsCalleeCollect) -> (result: FnsCalleeCollect) {
+    return match st.rest {
+        VFNil => st,
+        VFCons { head: fn_item, tail: rest } => FnsCalleeCollect {
+            rest: rest,
+            acc: append_pending_ids(st.acc, collect_fn_callees_in_order(fn_item))
+        }
+    };
+}
+
+// Value-type lookup inside a lowered VmFunction (inputs, block params, inst results).
+record VmValTypeWalk { rest: VmValueList, wanted: u64, found: bool, ty: VmScalarType }
+fn vm_value_list_find_type(values: VmValueList, wanted: u64) -> (result: VmScalarType) {
+    let initial: VmValTypeWalk = VmValTypeWalk { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() };
+    iterate i up_to 1024 carrying st: VmValTypeWalk = initial {
+        if st.found || vm_value_list_empty(st.rest) { return st.ty; }
+        next st = vm_value_list_find_step(st);
+    }
+    return st.ty;
+}
+fn vm_value_list_find_step(st: VmValTypeWalk) -> (result: VmValTypeWalk) {
+    return match st.rest {
+        VVNil => st,
+        VVCons { head: v, tail: rest } => vm_value_list_find_one(st, v, rest)
+    };
+}
+fn vm_value_list_find_one(st: VmValTypeWalk, v: VmValue, rest: VmValueList) -> (result: VmValTypeWalk) {
+    if v.id == st.wanted { return VmValTypeWalk { rest: VmValueList.VVNil, wanted: st.wanted, found: true, ty: v.ty }; }
+    return VmValTypeWalk { ..st, rest: rest };
+}
+
+record VmInstTypeWalk { rest: VmInstructionList, wanted: u64, found: bool, ty: VmScalarType }
+fn vm_inst_list_find_type(insts: VmInstructionList, wanted: u64) -> (result: VmScalarType) {
+    let initial: VmInstTypeWalk = VmInstTypeWalk { rest: insts, wanted: wanted, found: false, ty: invalid_vm_type() };
+    iterate i up_to 1024 carrying st: VmInstTypeWalk = initial {
+        if st.found || vm_inst_list_empty(st.rest) { return st.ty; }
+        next st = vm_inst_list_find_step(st);
+    }
+    return st.ty;
+}
+fn vm_inst_list_find_step(st: VmInstTypeWalk) -> (result: VmInstTypeWalk) {
+    return match st.rest {
+        VINil => st,
+        VICons { head: inst, tail: rest } => vm_inst_list_find_one(st, inst, rest)
+    };
+}
+fn vm_inst_list_find_one(st: VmInstTypeWalk, inst: VmInstruction, rest: VmInstructionList) -> (result: VmInstTypeWalk) {
+    if inst.result == st.wanted { return VmInstTypeWalk { rest: VmInstructionList.VINil, wanted: st.wanted, found: true, ty: inst.ty }; }
+    return VmInstTypeWalk { ..st, rest: rest };
+}
+
+record VmBlockTypeWalk { rest: VmBlockList, wanted: u64, found: bool, ty: VmScalarType }
+fn vm_fn_find_value_type(fn_item: VmFunction, wanted: u64) -> (result: VmScalarType) {
+    let from_inputs: VmScalarType = vm_value_list_find_type(fn_item.inputs, wanted);
+    if from_inputs.valid { return from_inputs; }
+    let initial: VmBlockTypeWalk = VmBlockTypeWalk { rest: fn_item.blocks, wanted: wanted, found: false, ty: invalid_vm_type() };
+    iterate i up_to 1024 carrying st: VmBlockTypeWalk = initial {
+        if st.found || vm_block_list_empty(st.rest) { return st.ty; }
+        next st = vm_block_type_find_step(st);
+    }
+    return st.ty;
+}
+fn vm_block_type_find_step(st: VmBlockTypeWalk) -> (result: VmBlockTypeWalk) {
+    return match st.rest {
+        VBNil => st,
+        VBCons { head: blk, tail: rest } => vm_block_type_find_one(st, blk, rest)
+    };
+}
+fn vm_block_type_find_one(st: VmBlockTypeWalk, blk: VmBlock, rest: VmBlockList) -> (result: VmBlockTypeWalk) {
+    let from_params: VmScalarType = vm_value_list_find_type(blk.parameters, st.wanted);
+    if from_params.valid { return VmBlockTypeWalk { rest: VmBlockList.VBNil, wanted: st.wanted, found: true, ty: from_params }; }
+    let from_insts: VmScalarType = vm_inst_list_find_type(blk.instructions, st.wanted);
+    if from_insts.valid { return VmBlockTypeWalk { rest: VmBlockList.VBNil, wanted: st.wanted, found: true, ty: from_insts }; }
+    return VmBlockTypeWalk { ..st, rest: rest };
+}
+
+record CallArgsMatchWalk { caller: VmFunction, args: ssa.IdList, params: VmValueList, ok: bool, done: bool }
+fn call_args_match_callee(caller: VmFunction, args: ssa.IdList, params: VmValueList) -> (result: bool) {
+    let initial: CallArgsMatchWalk = CallArgsMatchWalk { caller: caller, args: args, params: params, ok: true, done: false };
+    iterate i up_to 128 carrying st: CallArgsMatchWalk = initial {
+        if st.done || !(st.ok) { return st.ok && st.done; }
+        next st = call_args_match_step(st);
+    }
+    return st.ok && st.done;
+}
+fn call_args_match_step(st: CallArgsMatchWalk) -> (result: CallArgsMatchWalk) {
+    return match st.args {
+        ssa.IdList.INil => CallArgsMatchWalk { ..st, ok: vm_value_list_empty(st.params), done: true },
+        ssa.IdList.ICons { head: arg_id, tail: arg_rest } => call_args_match_pair(st, arg_id.value, arg_rest)
+    };
+}
+fn call_args_match_pair(st: CallArgsMatchWalk, arg_val_id: u64, arg_rest: ssa.IdList) -> (result: CallArgsMatchWalk) {
+    return match st.params {
+        VVNil => CallArgsMatchWalk { ..st, ok: false, done: true },
+        VVCons { head: param, tail: param_rest } => call_args_match_check(st, arg_val_id, arg_rest, param, param_rest)
+    };
+}
+fn call_args_match_check(st: CallArgsMatchWalk, arg_val_id: u64, arg_rest: ssa.IdList, param: VmValue, param_rest: VmValueList) -> (result: CallArgsMatchWalk) {
+    let arg_ty: VmScalarType = vm_fn_find_value_type(st.caller, arg_val_id);
+    if !(vm_scalar_types_equal(arg_ty, param.ty)) {
+        return CallArgsMatchWalk { ..st, ok: false, done: true };
+    }
+    return CallArgsMatchWalk { caller: st.caller, args: arg_rest, params: param_rest, ok: true, done: false };
+}
+
+record CallVerifyResult { ok: bool, error_code: u64, error_function: u64, error_block: u64, error_inst: u64 }
+record CallVerifyInstWalk { all_fns: VmFunctionList, caller: VmFunction, fn_idx: u64, blk_id: u64, rest: VmInstructionList, ok: bool, error_code: u64, error_inst: u64 }
+fn verify_block_calls(all_fns: VmFunctionList, caller: VmFunction, fn_idx: u64, blk: VmBlock) -> (result: CallVerifyResult) {
+    let initial: CallVerifyInstWalk = CallVerifyInstWalk { all_fns: all_fns, caller: caller, fn_idx: fn_idx, blk_id: blk.id, rest: blk.instructions, ok: true, error_code: 0, error_inst: 0 };
+    iterate i up_to 1024 carrying st: CallVerifyInstWalk = initial {
+        if !(st.ok) || vm_inst_list_empty(st.rest) {
+            return CallVerifyResult { ok: st.ok, error_code: st.error_code, error_function: fn_idx, error_block: blk.id, error_inst: st.error_inst };
+        }
+        next st = verify_block_call_step(st);
+    }
+    return CallVerifyResult { ok: st.ok, error_code: st.error_code, error_function: fn_idx, error_block: blk.id, error_inst: st.error_inst };
+}
+fn verify_block_call_step(st: CallVerifyInstWalk) -> (result: CallVerifyInstWalk) {
+    return match st.rest {
+        VINil => st,
+        VICons { head: inst, tail: rest } => verify_block_call_one(st, inst, rest)
+    };
+}
+fn verify_block_call_one(st: CallVerifyInstWalk, inst: VmInstruction, rest: VmInstructionList) -> (result: CallVerifyInstWalk) {
+    if inst.opcode != 13 { return CallVerifyInstWalk { ..st, rest: rest }; }
+    let callee: VmFnLookup = find_vm_fn_by_id(st.all_fns, inst.callee_identity);
+    if !(callee.found) {
+        return CallVerifyInstWalk { ..st, rest: VmInstructionList.VINil, ok: false, error_code: 9, error_inst: inst.id };
+    }
+    if !(vm_scalar_types_equal(inst.ty, callee.fn_item.result_type)) {
+        return CallVerifyInstWalk { ..st, rest: VmInstructionList.VINil, ok: false, error_code: 10, error_inst: inst.id };
+    }
+    if !(call_args_match_callee(st.caller, inst.inputs, callee.fn_item.inputs)) {
+        return CallVerifyInstWalk { ..st, rest: VmInstructionList.VINil, ok: false, error_code: 10, error_inst: inst.id };
+    }
+    return CallVerifyInstWalk { ..st, rest: rest };
+}
+
+record CallVerifyBlockWalk { all_fns: VmFunctionList, caller: VmFunction, fn_idx: u64, rest: VmBlockList, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
+fn verify_fn_calls(all_fns: VmFunctionList, caller: VmFunction, fn_idx: u64) -> (result: CallVerifyResult) {
+    let initial: CallVerifyBlockWalk = CallVerifyBlockWalk { all_fns: all_fns, caller: caller, fn_idx: fn_idx, rest: caller.blocks, ok: true, error_code: 0, error_block: 0, error_inst: 0 };
+    iterate i up_to 1024 carrying st: CallVerifyBlockWalk = initial {
+        if !(st.ok) || vm_block_list_empty(st.rest) {
+            return CallVerifyResult { ok: st.ok, error_code: st.error_code, error_function: fn_idx, error_block: st.error_block, error_inst: st.error_inst };
+        }
+        next st = verify_fn_call_block_step(st);
+    }
+    return CallVerifyResult { ok: st.ok, error_code: st.error_code, error_function: fn_idx, error_block: st.error_block, error_inst: st.error_inst };
+}
+fn verify_fn_call_block_step(st: CallVerifyBlockWalk) -> (result: CallVerifyBlockWalk) {
+    return match st.rest {
+        VBNil => st,
+        VBCons { head: blk, tail: rest } => verify_fn_call_block_one(st, blk, rest)
+    };
+}
+fn verify_fn_call_block_one(st: CallVerifyBlockWalk, blk: VmBlock, rest: VmBlockList) -> (result: CallVerifyBlockWalk) {
+    let checked: CallVerifyResult = verify_block_calls(st.all_fns, st.caller, st.fn_idx, blk);
+    if !(checked.ok) {
+        return CallVerifyBlockWalk { ..st, rest: VmBlockList.VBNil, ok: false, error_code: checked.error_code, error_block: checked.error_block, error_inst: checked.error_inst };
+    }
+    return CallVerifyBlockWalk { ..st, rest: rest };
+}
+
+record CallVerifyFnWalk { all_fns: VmFunctionList, rest: VmFunctionList, index: u64, ok: bool, error_code: u64, error_function: u64, error_block: u64, error_inst: u64 }
+fn verify_closure_calls(all_fns: VmFunctionList) -> (result: CallVerifyResult) {
+    let initial: CallVerifyFnWalk = CallVerifyFnWalk { all_fns: all_fns, rest: all_fns, index: 0, ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0 };
+    iterate i up_to 1024 carrying st: CallVerifyFnWalk = initial {
+        if !(st.ok) || vm_fn_list_empty(st.rest) {
+            return CallVerifyResult { ok: st.ok, error_code: st.error_code, error_function: st.error_function, error_block: st.error_block, error_inst: st.error_inst };
+        }
+        next st = verify_closure_calls_step(st);
+    }
+    return CallVerifyResult { ok: st.ok, error_code: st.error_code, error_function: st.error_function, error_block: st.error_block, error_inst: st.error_inst };
+}
+fn verify_closure_calls_step(st: CallVerifyFnWalk) -> (result: CallVerifyFnWalk) {
+    return match st.rest {
+        VFNil => st,
+        VFCons { head: caller, tail: rest } => verify_closure_calls_one(st, caller, rest)
+    };
+}
+fn verify_closure_calls_one(st: CallVerifyFnWalk, caller: VmFunction, rest: VmFunctionList) -> (result: CallVerifyFnWalk) {
+    let checked: CallVerifyResult = verify_fn_calls(st.all_fns, caller, st.index);
+    if !(checked.ok) {
+        return CallVerifyFnWalk { ..st, rest: VmFunctionList.VFNil, ok: false, error_code: checked.error_code, error_function: checked.error_function, error_block: checked.error_block, error_inst: checked.error_inst };
+    }
+    return CallVerifyFnWalk { ..st, rest: rest, index: st.index + 1 };
+}
+
+// ---------------------------------------------------------------------------
+// Single-module entry points (unchanged contract + callee verification)
+// ---------------------------------------------------------------------------
 
 // Emit a bounded VM SSA program from an already-lowered native ValueSsaSummary.
 fn emit_verified_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, summary: ssa.ValueSsaSummary, header: parser.Header) -> (result: VmEmitResult) {
@@ -698,6 +1030,10 @@ fn emit_verified_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     let lowered: FnEmitWalk = lower_vm_functions(summary);
     if !(lowered.ok) || lowered.fn_count != summary.function_count {
         return emit_failure(select(lowered.ok, 2, lowered.error_code), lowered.error_function, lowered.error_block, lowered.error_inst);
+    }
+    let verified_calls: CallVerifyResult = verify_closure_calls(lowered.acc);
+    if !(verified_calls.ok) {
+        return emit_failure(verified_calls.error_code, verified_calls.error_function, verified_calls.error_block, verified_calls.error_inst);
     }
     return VmEmitResult {
         ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
@@ -716,4 +1052,272 @@ fn compile_and_emit_vm_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     if header.code != 0 || header.state != 8 { return emit_failure(8, 0, 0, 0); }
     let value_ssa: ssa.ValueSsaSummary = ssa.lower_flow_unit_value_ssa<P, N>(pages, stride, total);
     return emit_verified_ssa<P, N>(pages, stride, total, value_ssa, header);
+}
+
+// ---------------------------------------------------------------------------
+// Multi-module Project SSA closure selection and VM emission (100% in MNCS)
+// ---------------------------------------------------------------------------
+
+fn project_module_list_empty(modules: project.ProjectModuleList) -> (result: bool) {
+    return match modules {
+        project.ProjectModuleList.PNil => true,
+        project.ProjectModuleList.PCons { head: h, tail: t } => false
+    };
+}
+fn empty_header() -> (result: parser.Header) {
+    return parser.Header { code: 1, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
+}
+
+record ReachableModulesCheck {
+    rest: project.ProjectModuleList,
+    reachable: [bool; 64],
+    target_source_index: u64,
+    all_verified: bool,
+    target_found: bool,
+    target_header: parser.Header,
+    target_ssa: ssa.ValueSsaSummary
+}
+fn inspect_reachable_project_modules(modules: project.ProjectModuleList, reachable: [bool; 64], target_source_index: u64) -> (result: ReachableModulesCheck) {
+    let initial: ReachableModulesCheck = ReachableModulesCheck {
+        rest: modules, reachable: reachable, target_source_index: target_source_index,
+        all_verified: true, target_found: false, target_header: empty_header(),
+        target_ssa: ssa.empty_ssa_summary(false)
+    };
+    iterate i up_to 64 carrying st: ReachableModulesCheck = initial {
+        if !(st.all_verified) || project_module_list_empty(st.rest) { return st; }
+        next st = inspect_reachable_project_module_step(st);
+    }
+    return st;
+}
+fn inspect_reachable_project_module_step(st: ReachableModulesCheck) -> (result: ReachableModulesCheck) {
+    return match st.rest {
+        project.ProjectModuleList.PNil => st,
+        project.ProjectModuleList.PCons { head: mod_item, tail: rest } => inspect_reachable_project_module_one(st, mod_item, rest)
+    };
+}
+fn inspect_reachable_project_module_one(st: ReachableModulesCheck, mod_item: project.ProjectModule, rest: project.ProjectModuleList) -> (result: ReachableModulesCheck) {
+    if mod_item.source_index >= 64 || !(st.reachable[mod_item.source_index]) {
+        return ReachableModulesCheck { ..st, rest: rest };
+    }
+    let mod_ok: bool = mod_item.flow.valid && mod_item.flow.proof.ok
+        && mod_item.value_ssa.valid
+        && mod_item.value_ssa.verified_function_count == mod_item.value_ssa.function_count
+        && mod_item.value_ssa.unsupported_block_count == 0;
+    if !(mod_ok) {
+        return ReachableModulesCheck { ..st, rest: project.ProjectModuleList.PNil, all_verified: false };
+    }
+    if mod_item.source_index == st.target_source_index {
+        return ReachableModulesCheck {
+            ..st, rest: rest,
+            target_found: true,
+            target_header: mod_item.flow.proof.unit.header,
+            target_ssa: mod_item.value_ssa
+        };
+    }
+    return ReachableModulesCheck { ..st, rest: rest };
+}
+
+record ReachableSsaFnLookup { found: bool, func: ssa.Function }
+record SsaSummaryIdSearch { index: u64, found: bool, func: ssa.Function }
+fn find_ssa_fn_in_summary_by_id(summary: ssa.ValueSsaSummary, wanted: decl.SemanticIdentity) -> (result: ReachableSsaFnLookup) {
+    let initial: SsaSummaryIdSearch = SsaSummaryIdSearch { index: 0, found: false, func: ssa.empty_ssa_function() };
+    iterate i up_to 1024 carrying st: SsaSummaryIdSearch = initial {
+        if st.found || st.index >= summary.function_count {
+            return ReachableSsaFnLookup { found: st.found, func: st.func };
+        }
+        next st = find_ssa_fn_in_summary_step(summary, wanted, st);
+    }
+    return ReachableSsaFnLookup { found: st.found, func: st.func };
+}
+fn find_ssa_fn_in_summary_step(summary: ssa.ValueSsaSummary, wanted: decl.SemanticIdentity, st: SsaSummaryIdSearch) -> (result: SsaSummaryIdSearch) {
+    let lookup: ssa.ValueSsaFunctionLookup = ssa.value_ssa_function_at(summary, st.index);
+    if !(lookup.found) { return SsaSummaryIdSearch { ..st, index: summary.function_count }; }
+    if semantic_ids_equal(lookup.function.identity, wanted) {
+        return SsaSummaryIdSearch { index: st.index + 1, found: true, func: lookup.function };
+    }
+    return SsaSummaryIdSearch { ..st, index: st.index + 1 };
+}
+
+record ReachableModuleFnSearch { rest: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity, found: bool, func: ssa.Function }
+fn find_ssa_fn_in_reachable_modules(modules: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity) -> (result: ReachableSsaFnLookup) {
+    let initial: ReachableModuleFnSearch = ReachableModuleFnSearch { rest: modules, reachable: reachable, wanted: wanted, found: false, func: ssa.empty_ssa_function() };
+    iterate i up_to 64 carrying st: ReachableModuleFnSearch = initial {
+        if st.found || project_module_list_empty(st.rest) {
+            return ReachableSsaFnLookup { found: st.found, func: st.func };
+        }
+        next st = find_ssa_fn_in_reachable_module_step(st);
+    }
+    return ReachableSsaFnLookup { found: st.found, func: st.func };
+}
+fn find_ssa_fn_in_reachable_module_step(st: ReachableModuleFnSearch) -> (result: ReachableModuleFnSearch) {
+    return match st.rest {
+        project.ProjectModuleList.PNil => st,
+        project.ProjectModuleList.PCons { head: mod_item, tail: rest } => find_ssa_fn_in_reachable_module_one(st, mod_item, rest)
+    };
+}
+fn find_ssa_fn_in_reachable_module_one(st: ReachableModuleFnSearch, mod_item: project.ProjectModule, rest: project.ProjectModuleList) -> (result: ReachableModuleFnSearch) {
+    if mod_item.source_index >= 64 || !(st.reachable[mod_item.source_index]) {
+        return ReachableModuleFnSearch { ..st, rest: rest };
+    }
+    let found: ReachableSsaFnLookup = find_ssa_fn_in_summary_by_id(mod_item.value_ssa, st.wanted);
+    if found.found {
+        return ReachableModuleFnSearch { rest: project.ProjectModuleList.PNil, reachable: st.reachable, wanted: st.wanted, found: true, func: found.func };
+    }
+    return ReachableModuleFnSearch { ..st, rest: rest };
+}
+
+record SingleFnLowerResult { ok: bool, error_code: u64, error_block: u64, error_inst: u64, vm_fn: VmFunction }
+fn lower_single_ssa_fn(func: ssa.Function) -> (result: SingleFnLowerResult) {
+    if !(func.supported) || !(func.verified) || !(func.identity.valid) || func.identity.len == 0 || func.block_count == 0 {
+        return SingleFnLowerResult { ok: false, error_code: 2, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let res_ty: VmScalarType = sem_type_to_vm(func.result_type);
+    if !(res_ty.valid) {
+        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let inputs: LowerValuesWalk = lower_vm_values(func.inputs, true);
+    if !(inputs.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let blocks: BlockListWalk = lower_vm_blocks(func.values, func.blocks);
+    if !(blocks.ok) {
+        return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
+    }
+    let vm_fn: VmFunction = VmFunction {
+        identity: func.identity,
+        inputs: inputs.acc,
+        result_type: res_ty,
+        blocks: blocks.acc,
+        block_count: blocks.block_count,
+        instruction_count: blocks.inst_count
+    };
+    return SingleFnLowerResult { ok: true, error_code: 0, error_block: 0, error_inst: 0, vm_fn: vm_fn };
+}
+
+record ProjectClosureWalk {
+    emitted_rev: VmFunctionList,
+    pending: PendingIdList,
+    fn_count: u64,
+    block_count: u64,
+    inst_count: u64,
+    ok: bool,
+    error_code: u64,
+    error_function: u64,
+    error_block: u64,
+    error_inst: u64
+}
+fn expand_project_vm_closure(modules: project.ProjectModuleList, reachable: [bool; 64], root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: ProjectClosureWalk) {
+    let seeded_pending: PendingIdList = collect_fns_callees_in_order(root_fns);
+    let initial: ProjectClosureWalk = ProjectClosureWalk {
+        emitted_rev: reverse_vm_fns(root_fns),
+        pending: seeded_pending,
+        fn_count: root_fn_count,
+        block_count: root_block_count,
+        inst_count: root_inst_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+    iterate step up_to 256 carrying st: ProjectClosureWalk = initial {
+        if !(st.ok) || pending_id_list_empty(st.pending) {
+            return ProjectClosureWalk { ..st, emitted_rev: reverse_vm_fns(st.emitted_rev) };
+        }
+        next st = expand_project_vm_closure_step(modules, reachable, st);
+    }
+    return ProjectClosureWalk {
+        ..st,
+        emitted_rev: reverse_vm_fns(st.emitted_rev),
+        ok: st.ok && pending_id_list_empty(st.pending),
+        error_code: select(st.ok && !(pending_id_list_empty(st.pending)), 9, st.error_code)
+    };
+}
+fn expand_project_vm_closure_step(modules: project.ProjectModuleList, reachable: [bool; 64], st: ProjectClosureWalk) -> (result: ProjectClosureWalk) {
+    return match st.pending {
+        PINil => st,
+        PICons { head: callee_id, tail: rest } => expand_project_vm_closure_one(modules, reachable, st, callee_id, rest)
+    };
+}
+fn expand_project_vm_closure_one(modules: project.ProjectModuleList, reachable: [bool; 64], st: ProjectClosureWalk, callee_id: decl.SemanticIdentity, rest: PendingIdList) -> (result: ProjectClosureWalk) {
+    let existing: VmFnLookup = find_vm_fn_by_id(st.emitted_rev, callee_id);
+    if existing.found {
+        return ProjectClosureWalk { ..st, pending: rest };
+    }
+    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(modules, reachable, callee_id);
+    if !(located.found) {
+        return ProjectClosureWalk { ..st, pending: PendingIdList.PINil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    let lowered: SingleFnLowerResult = lower_single_ssa_fn(located.func);
+    if !(lowered.ok) {
+        return ProjectClosureWalk { ..st, pending: PendingIdList.PINil, ok: false, error_code: lowered.error_code, error_function: st.fn_count, error_block: lowered.error_block, error_inst: lowered.error_inst };
+    }
+    let child_callees: PendingIdList = collect_fn_callees_in_order(lowered.vm_fn);
+    return ProjectClosureWalk {
+        emitted_rev: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.emitted_rev },
+        pending: append_pending_ids(rest, child_callees),
+        fn_count: st.fn_count + 1,
+        block_count: st.block_count + lowered.vm_fn.block_count,
+        inst_count: st.inst_count + lowered.vm_fn.instruction_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+}
+
+// Emit a bounded multi-module VM SSA program from an already-compiled native
+// ProjectResult: verifies the reachable module closure, lowers the target
+// module's functions plus all transitively reachable provider bodies retaining
+// their original declaring identities, and verifies every call target and
+// signature across the emitted closure.
+fn emit_verified_project_ssa(compiled: project.ProjectResult, target_source_index: u64) -> (result: VmEmitResult) {
+    if !(compiled.valid) || !(compiled.value_ssa_valid) || compiled.module_count == 0
+        || target_source_index >= compiled.source_count || target_source_index >= 64 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let closure: project.ProjectImportClosure = project.project_import_closure(compiled.imports, target_source_index, compiled.source_count);
+    let inspected: ReachableModulesCheck = inspect_reachable_project_modules(compiled.modules, closure.reachable, target_source_index);
+    if !(inspected.all_verified) || !(inspected.target_found) {
+        return emit_failure(1, 0, 0, 0);
+    }
+    if inspected.target_header.code != 0 || inspected.target_header.state != 8
+        || inspected.target_header.module_end <= inspected.target_header.module_start {
+        return emit_failure(8, 0, 0, 0);
+    }
+    if !(inspected.target_ssa.valid) || inspected.target_ssa.function_count == 0
+        || inspected.target_ssa.verified_function_count != inspected.target_ssa.function_count
+        || inspected.target_ssa.unsupported_block_count > 0 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let root_lowered: FnEmitWalk = lower_vm_functions(inspected.target_ssa);
+    if !(root_lowered.ok) || root_lowered.fn_count != inspected.target_ssa.function_count {
+        return emit_failure(select(root_lowered.ok, 2, root_lowered.error_code), root_lowered.error_function, root_lowered.error_block, root_lowered.error_inst);
+    }
+    let expanded: ProjectClosureWalk = expand_project_vm_closure(
+        compiled.modules, closure.reachable,
+        root_lowered.acc, root_lowered.fn_count, root_lowered.block_count, root_lowered.inst_count
+    );
+    if !(expanded.ok) {
+        return emit_failure(expanded.error_code, expanded.error_function, expanded.error_block, expanded.error_inst);
+    }
+    let verified_calls: CallVerifyResult = verify_closure_calls(expanded.emitted_rev);
+    if !(verified_calls.ok) {
+        return emit_failure(verified_calls.error_code, verified_calls.error_function, verified_calls.error_block, verified_calls.error_inst);
+    }
+    return VmEmitResult {
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
+        module_name_start: inspected.target_header.module_start,
+        module_name_end: inspected.target_header.module_end,
+        functions: expanded.emitted_rev,
+        function_count: expanded.fn_count,
+        block_count: expanded.block_count,
+        instruction_count: expanded.inst_count
+    };
+}
+
+// Compile a multi-module MNCS project natively into verified Project SSA.
+fn compile_project_for_emit<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M]) -> (result: project.ProjectResult) {
+    return project.compile_project<M, N>(snapshot, flat_pages);
+}
+
+// Compile a multi-module MNCS project natively (Project -> decl -> flow ->
+// verified Value SSA) and emit the verified reachable VM SSA closure for
+// `target_source_index`.
+fn compile_and_emit_project_vm_module<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: VmEmitResult) {
+    let compiled: project.ProjectResult = project.compile_project<M, N>(snapshot, flat_pages);
+    return emit_verified_project_ssa(compiled, target_source_index);
 }
