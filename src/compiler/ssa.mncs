@@ -102,6 +102,8 @@ record ValueSsaSummary {
 }
 record ValueSsaFunctionStatus { found: bool, supported: bool, verified: bool, identity: decl.SemanticIdentity }
 record FunctionStatusWalk { rest: FunctionList, index: u64, target: u64, status: ValueSsaFunctionStatus, done: bool }
+record ValueSsaFunctionLookup { found: bool, function: Function }
+record FunctionLookupWalk { rest: FunctionList, index: u64, target: u64, lookup: ValueSsaFunctionLookup, done: bool }
 
 record ParamBuild { rest: decl.FieldList, env: Environment, inputs: ValueList, values: ValueList, next_value: u64, ok: bool }
 record Incoming { found: bool, ok: bool, count: u64, bindings: Environment }
@@ -332,6 +334,43 @@ fn value_ssa_function_status_item(st: FunctionStatusWalk, function: Function, re
         return FunctionStatusWalk { ..st, status: status, done: true };
     }
     return FunctionStatusWalk { ..st, rest: rest, index: st.index + 1 };
+}
+fn empty_ssa_function() -> (result: Function) {
+    return Function {
+        identity: invalid_identity(),
+        nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil,
+        imported_enums: decl.ImportedEnumList.IENil,
+        inputs: ValueList.VNil,
+        result_type: decl.SemType.TPoison,
+        blocks: SsaBlockList.LNil,
+        block_count: 0,
+        values: ValueList.VNil,
+        value_count: 0,
+        supported: false,
+        verified: false
+    };
+}
+fn value_ssa_function_at(summary: ValueSsaSummary, target: u64) -> (result: ValueSsaFunctionLookup) {
+    let empty: ValueSsaFunctionLookup = ValueSsaFunctionLookup { found: false, function: empty_ssa_function() };
+    iterate i up_to 1024 carrying st: FunctionLookupWalk = FunctionLookupWalk { rest: summary.functions, index: 0, target: target, lookup: empty, done: false } {
+        if st.done || ssa_function_list_empty(st.rest) { return st.lookup; }
+        next st = value_ssa_function_at_step(st);
+    }
+    return st.lookup;
+}
+fn value_ssa_function_at_step(st: FunctionLookupWalk) -> (result: FunctionLookupWalk) {
+    return match st.rest {
+        FunctionList.FNil => FunctionLookupWalk { ..st, done: true },
+        FunctionList.FCons { head: function, tail: rest } => value_ssa_function_at_item(st, function, rest)
+    };
+}
+fn value_ssa_function_at_item(st: FunctionLookupWalk, function: Function, rest: FunctionList) -> (result: FunctionLookupWalk) {
+    if st.index == st.target {
+        let lookup: ValueSsaFunctionLookup = ValueSsaFunctionLookup { found: true, function: function };
+        return FunctionLookupWalk { ..st, lookup: lookup, done: true };
+    }
+    return FunctionLookupWalk { ..st, rest: rest, index: st.index + 1 };
 }
 fn function_list_ended<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FunctionWalk) -> (result: bool) {
     return match st.fns { DNil => st.index == flow.ssa_function_count<P, N>(pages, stride, total, st.lowered), DCons { head: h, tail: t } => false };
