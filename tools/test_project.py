@@ -65,6 +65,28 @@ def byte_sequence(raw):
     return {"sequence": {"values": [{"byte": {"value": value}} for value in raw]}}
 
 
+_BYTE_JSON = [f'{{"byte":{{"value":{value}}}}}'.encode() for value in range(256)]
+
+
+def encode_byte_sequence_json(raw):
+    return b'{"sequence":{"values":[' + b",".join(_BYTE_JSON[b] for b in raw) + b"]}}"
+
+
+def decode_project_object(obj):
+    """Collapse typed wire tags in one pass during json.loads."""
+    if len(obj) == 1:
+        tag, payload = next(iter(obj.items()))
+        if tag == "record":
+            return dict(payload["fields"])
+        if tag == "finite":
+            return {"$v": payload["discriminant"], "$p": dict(payload.get("payload", []))}
+        if tag == "sequence":
+            return payload["values"]
+        if tag in ("byte", "integer", "boolean"):
+            return payload["value"]
+    return obj
+
+
 # CP-0021: the project entry consumes one flat page array plus per-module
 # page descriptors. Fixtures transport each module as canonical pages at
 # the requested stride (default 1024: one page per fixture module).
@@ -553,6 +575,66 @@ class Probe:
                     "retained_sessions": result["retained_sessions"]}
         return result
 
+    def send_encoded_decoded(self, encoded, *, module=PROJECT_MODULE, record_digest=True, count_request=True):
+        """Send pre-encoded JSONL request bytes and decode the reply in one pass."""
+        proc = self._route({"target": {"module": module}})
+        observation = {
+            "request_index": self.requests,
+            "kind": "native_project_encoded",
+            "process": self._process_identity(proc) if self._telemetry else {"pid": proc.pid},
+            "status": "UNKNOWN",
+            "request_bytes": len(encoded) - (1 if encoded.endswith(b"\n") else 0),
+            "reply_bytes": None,
+        }
+        if self._telemetry:
+            observation["cgroup_before"] = self._cgroup_snapshot(proc.pid)
+            observation["initial_process"] = self._proc_snapshot(proc.pid)
+            observation["resource_limits"] = self._resource_limits(proc.pid)
+        write_started = time.monotonic_ns()
+        proc.stdin.write(encoded)
+        proc.stdin.flush()
+        observation["request_write_ns"] = time.monotonic_ns() - write_started
+        try:
+            line = self._readline(proc, self._request_timeout_s, observation)
+        except (ProbeTimeout, ProbeExited) as error:
+            if isinstance(error, ProbeTimeout):
+                observation["status"] = "TIMEOUT"
+                observation["classification_reason"] = "request deadline expired"
+            else:
+                status, reason = classify_probe_exit(
+                    error.observation.get("return_code"), self._stderr_tail(proc)
+                )
+                observation["status"] = status
+                observation["classification_reason"] = reason
+            if self._telemetry:
+                self._summarize_resources(observation)
+            self.request_observations.append(observation)
+            self.process_observations[str(proc.pid)] = observation
+            raise
+        observation["reply_bytes"] = len(line)
+        digest_started = time.monotonic_ns()
+        if record_digest:
+            self.digest.update(hashlib.sha256(encoded).digest())
+            self.digest.update(hashlib.sha256(line).digest())
+        observation["digest_ns"] = time.monotonic_ns() - digest_started
+        parse_started = time.monotonic_ns()
+        result = json.loads(line, object_hook=decode_project_object)
+        del line
+        observation["response_parse_ns"] = time.monotonic_ns() - parse_started
+        observation["status"] = "RESPONSE_RECEIVED"
+        observation["response_status"] = result.get("status") if isinstance(result, dict) else None
+        observation["execution_steps"] = result.get("steps") if isinstance(result, dict) else None
+        if self._telemetry:
+            observation["final_process"] = self._proc_snapshot(proc.pid)
+            observation["cgroup_after"] = self._cgroup_snapshot(proc.pid)
+            self._summarize_resources(observation)
+        self.request_observations.append(observation)
+        self.process_observations[str(proc.pid)] = observation
+        if count_request:
+            self.requests += 1
+        self.last_response = result
+        return result
+
     def send(self, request):
         if isinstance(request, dict) and "execution_status" in request:
             result = self._status()
@@ -775,6 +857,58 @@ def source_value(identities, source_id, path, page_start, page_count, stride, to
         "stride": integer(stride),
         "total": integer(total),
     })
+
+
+def encode_project_request_bytes(
+    identities,
+    sources,
+    *,
+    stride=STRIDE_DEFAULT,
+    page_bound=PAGE_BOUND,
+    target_index=None,
+    step_budget=8_000_000,
+):
+    """Encode a Project request directly to JSONL bytes without per-byte dicts."""
+    flat = []
+    descriptors = []
+    for source_id, _, text in sources:
+        chunks = chunk(text, stride)
+        descriptors.append((source_id, len(flat), len(chunks), stride, len(text)))
+        flat.extend(chunks)
+    snapshot = record(identities, "ProjectSnapshot", {
+        "fingerprint": byte_sequence(hashlib.sha256(
+            b"".join(len(source[2]).to_bytes(8, "big") + source[2] for source in sources)
+        ).hexdigest().encode()),
+        "sources": {"sequence": {"values": [
+            source_value(identities, source_id, source_id, start, count, st, total)
+            for source_id, start, count, st, total in descriptors
+        ]}},
+    })
+    snapshot_bytes = json.dumps(snapshot, separators=(",", ":")).encode()
+    pages_bytes = (
+        b'{"sequence":{"values":['
+        + b",".join(encode_byte_sequence_json(page) for page in flat)
+        + b"]}}"
+    )
+    fn_name = "compile_project_target" if target_index is not None else "compile_project"
+    args_parts = [snapshot_bytes, pages_bytes]
+    if target_index is not None:
+        args_parts.append(json.dumps(integer(target_index), separators=(",", ":")).encode())
+    type_args = json.dumps([
+        {"kind": "nat", "value": page_bound},
+        {"kind": "nat", "value": stride},
+    ], separators=(",", ":")).encode()
+    return (
+        b'{"schema_version":"0.1","target":{"module":"mncs.compiler.project.v1","function":"'
+        + fn_name.encode()
+        + b'"},"arguments":['
+        + b",".join(args_parts)
+        + b'],"type_arguments":'
+        + type_args
+        + b',"step_budget":'
+        + str(step_budget).encode()
+        + b"}\n"
+    )
 
 
 def request_value(identities, sources, stride=STRIDE_DEFAULT):

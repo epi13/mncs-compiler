@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import resource
 import subprocess
 import sys
 import time
@@ -19,9 +20,10 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 20000))
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "src" / "compiler"
 DEFAULT_STEP_BUDGET = 8_000_000
-# Profile 0.18 limits generic Nat sequence bounds to 1024. The probe uses a
-# 1024-byte stride, so a single Project request can carry at most 1 MiB.
-PROJECT_PROBE_PAGE_CAPACITY_LIMIT = 1024
+# Project declares Profile 0.19, which raises flat_pages capacity to 4096 while
+# module_pages narrows each individual module slice to <= 1024 pages at stride 1024.
+PROJECT_PROBE_PAGE_CAPACITY_LIMIT = 4096
+PROJECT_PROBE_PAGE_TIERS = (1024, 2048, 4096)
 
 
 def _source_module_name(source, module):
@@ -66,7 +68,50 @@ def _module_summary(module, source):
     return summary
 
 
-def _load_sources(module_names):
+def _stdlib_library_root():
+    configured = os.environ.get("MNCS_LIBRARY_PATH")
+    if configured:
+        root = Path(configured).expanduser()
+        if root.is_dir():
+            return root
+    for base in (ROOT.parent, ROOT.parent.parent.parent):
+        candidate = base / "mncs-stdlib" / "library"
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def _stdlib_source_for_module(module_name, library_root):
+    parts = module_name.split(".")
+    if len(parts) < 3 or parts[0] != "mncs" or not parts[-1].startswith("v"):
+        return None
+    rel = Path(*parts[1:-1]).with_suffix(".mncs")
+    candidate = library_root / rel
+    if candidate.is_file():
+        return (rel.as_posix(), candidate, candidate.read_bytes())
+    return None
+
+
+def _with_stdlib_import_closure(sources):
+    library_root = _stdlib_library_root()
+    if library_root is None:
+        return sources
+    by_module = {_module_name_from_source(src): item for item in sources for _, _, src in [item]}
+    queue = [src for _, _, src in sources]
+    while queue:
+        raw = queue.pop(0)
+        for match in re.finditer(rb"(?m)^\s*use\s+([A-Za-z0-9_.]+)", raw):
+            dep = match.group(1).decode()
+            if dep in by_module:
+                continue
+            loaded = _stdlib_source_for_module(dep, library_root)
+            if loaded is not None:
+                by_module[dep] = loaded
+                queue.append(loaded[2])
+    return sorted(by_module.values(), key=lambda item: item[0].encode())
+
+
+def _load_sources(module_names, *, include_stdlib_closure=False):
     selected = None if not module_names else set(module_names)
     paths = sorted(SOURCE_ROOT.glob("*.mncs"), key=lambda path: path.name.encode())
     if selected is not None:
@@ -74,11 +119,14 @@ def _load_sources(module_names):
         missing = selected - {path.stem for path in paths}
         if missing:
             raise ValueError(f"unknown compiler modules: {sorted(missing)}")
-    return [(path.name, path, path.read_bytes()) for path in paths]
+    sources = [(path.name, path, path.read_bytes()) for path in paths]
+    if include_stdlib_closure:
+        return _with_stdlib_import_closure(sources)
+    return sources
 
 
 def _module_name_from_source(source):
-    found = re.search(rb"\bmodule\s+([^;]+);", source)
+    found = re.search(rb"(?m)^\s*module\s+([^;\s]+)\s*;", source)
     return found.group(1).decode() if found else ""
 
 
@@ -221,12 +269,12 @@ def run_imported_signature_cache_fixture(step_budget=DEFAULT_STEP_BUDGET):
         probe.close()
 
 
-def _seed_target_specialization(*, target_only=False):
+def _seed_target_specialization(*, target_only=False, page_bound=project.PAGE_BOUND):
     seed = {
         "module": project.PROJECT_MODULE,
         "function": "compile_project_target",
         "type_arguments": [
-            {"kind": "nat", "value": project.PAGE_BOUND},
+            {"kind": "nat", "value": page_bound},
             {"kind": "nat", "value": 1024},
         ],
     }
@@ -242,17 +290,41 @@ def _seed_target_specialization(*, target_only=False):
             isinstance(item, dict)
             and (
                 (item.get("module") == project.PROJECT_MODULE
-                 and item.get("function") == "compile_project")
+                 and item.get("function") in {"compile_project", "compile_project_target"})
                 or (item.get("module") == project.SSA_MODULE
                     and item.get("function") == "verify_function")
             )
         )]
         os.environ["MNCS_PROBE_EXECUTION_MODULES"] = project.PROJECT_MODULE
+        os.environ.setdefault("MNCS_PROBE_BACKEND_ROOTS", "compile_project_target")
     if not any(item.get("module") == seed["module"]
                and item.get("function") == seed["function"]
                and item.get("type_arguments") == seed["type_arguments"]
                for item in seeds if isinstance(item, dict)):
         seeds.append(seed)
+    os.environ["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
+
+
+def _seed_whole_project_specialization(page_bound):
+    if page_bound == project.PAGE_BOUND:
+        return
+    try:
+        seeds = json.loads(os.environ.get("MNCS_PROBE_GENERIC_SEEDS", "[]"))
+    except ValueError:
+        seeds = []
+    seeds = [item for item in seeds if not (
+        isinstance(item, dict)
+        and item.get("module") == project.PROJECT_MODULE
+        and item.get("function") == "compile_project"
+    )]
+    seeds.append({
+        "module": project.PROJECT_MODULE,
+        "function": "compile_project",
+        "type_arguments": [
+            {"kind": "nat", "value": page_bound},
+            {"kind": "nat", "value": 1024},
+        ],
+    })
     os.environ["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps(seeds)
 
 
@@ -266,13 +338,14 @@ def _project_page_capacity(sources):
     if any(count > 1024 for count in per_source_page_counts):
         raise ValueError("a source exceeds Project's 1024-page per-module slice")
     total_pages = sum(per_source_page_counts)
-    if total_pages > PROJECT_PROBE_PAGE_CAPACITY_LIMIT:
-        raise ValueError(
-            f"Project input needs {total_pages} pages, exceeding Profile 0.18's "
-            f"generic sequence ceiling of {PROJECT_PROBE_PAGE_CAPACITY_LIMIT}; "
-            "select a smaller dependency closure"
-        )
-    return PROJECT_PROBE_PAGE_CAPACITY_LIMIT, total_pages
+    for tier in PROJECT_PROBE_PAGE_TIERS:
+        if total_pages <= tier:
+            return tier, total_pages
+    raise ValueError(
+        f"Project input needs {total_pages} pages, exceeding Profile 0.19's "
+        f"generic sequence ceiling of {PROJECT_PROBE_PAGE_CAPACITY_LIMIT}; "
+        "select a smaller dependency closure"
+    )
 
 
 def _target_execution_started(phase_timings_ns, response):
@@ -296,6 +369,7 @@ def run(
     step_budget=DEFAULT_STEP_BUDGET,
     prepare_program_cache_only=False,
     admission_only=False,
+    include_stdlib_closure=False,
 ):
     campaign_started = time.monotonic_ns()
     phase_timings_ns = {}
@@ -324,11 +398,13 @@ def run(
         capture_output=True, text=True,
     ).stdout.strip()
     phase_started = time.monotonic_ns()
-    sources = _load_sources(module_names)
+    sources = _load_sources(module_names, include_stdlib_closure=include_stdlib_closure)
     phase_timings_ns["source_resolution_and_dependency_selection"] = time.monotonic_ns() - phase_started
     page_bound, page_count = _project_page_capacity(sources)
     if target_last:
-        _seed_target_specialization(target_only=True)
+        _seed_target_specialization(target_only=True, page_bound=page_bound)
+    else:
+        _seed_whole_project_specialization(page_bound)
     source_identity = hashlib.sha256(b"".join(
         source_id.encode() + b"\0" + hashlib.sha256(source).digest()
         for source_id, _, source in sources
@@ -401,27 +477,32 @@ def run(
             # admission, and record identities without entering target execution.
             response = {"status": "not_run", "reason": "backend_admission_only"}
 
-        request = None
+        request_bytes = None
         if transport_failure is None and not prepare_program_cache_only and not admission_only:
             phase_started = time.monotonic_ns()
-            request = project.request_value(identities, sources)
-            request["step_budget"] = step_budget
-            if target_last:
-                request["target"] = {"module": project.PROJECT_MODULE, "function": "compile_project_target"}
-                request["arguments"].append(project.integer(target_source_index))
+            request_bytes = project.encode_project_request_bytes(
+                identities,
+                sources,
+                stride=project.STRIDE_DEFAULT,
+                page_bound=page_bound,
+                target_index=target_source_index if target_last else None,
+                step_budget=step_budget,
+            )
             phase_timings_ns["native_request_construction"] = time.monotonic_ns() - phase_started
             phase_started = time.monotonic_ns()
             try:
-                response = probe.send(request)
+                response = probe.send_encoded_decoded(request_bytes, module=project.PROJECT_MODULE)
             except (project.ProbeTimeout, project.ProbeExited) as error:
                 transport_failure = {"stage": "native_compiler_execution", **error.observation}
+            finally:
+                request_bytes = None
             phase_timings_ns["native_request_transport_and_execution"] = time.monotonic_ns() - phase_started
 
         if response.get("status") == "returned" and response.get("returned"):
             if response.get("steps") is not None:
                 probe.steps.append(response["steps"])
             phase_started = time.monotonic_ns()
-            native = project.decode(response["returned"][0])
+            native = response["returned"][0]
             for module in project.flist(native["modules"]):
                 source_index = module["source_index"]
                 source = sources[source_index][2]
@@ -513,7 +594,10 @@ def run(
             "input_total_page_count_at_stride_1024": page_count,
             "input_page_bound": page_bound,
             "input_page_capacity_limit": PROJECT_PROBE_PAGE_CAPACITY_LIMIT,
-            "input_page_capacity_selection": "fixed Profile 0.18 limit; select a smaller source closure above 1024 pages",
+            "input_page_capacity_selection": (
+                "Profile 0.19 tiered flat_pages bound (1024/2048/4096) with "
+                "per-module 1024-page ViewNarrow slice"
+            ),
             "compiler_source_sha256": source_identity,
             "compiler_source_identity_kind": "sha256 of selected compiler module ids and bytes",
             "execution_backend_requested": os.environ.get("MNCS_PROBE_BACKEND"),
@@ -635,9 +719,19 @@ def run(
 
 
 if __name__ == "__main__":
+    if os.name == "posix":
+        budget = int(os.environ.get("MNCS_FRONTIER_MAX_ADDRESS_SPACE_BYTES", str(8 * 1024**3)))
+        if budget > 0:
+            soft, hard = resource.getrlimit(resource.RLIMIT_AS)
+            for limit in (soft, hard):
+                if limit != resource.RLIM_INFINITY:
+                    budget = min(budget, limit)
+            resource.setrlimit(resource.RLIMIT_AS, (budget, hard))
+            os.environ.setdefault("MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES", str(budget))
     names = None
     args = sys.argv[1:]
     target_last = "--target-last" in args
+    include_stdlib_closure = "--include-stdlib-closure" in args
     oracle_only = "--oracle-only" in args
     signature_cache_fixture = "--signature-cache-fixture" in args
     prepare_program_cache_only = "--prepare-program-cache-only" in args
@@ -655,13 +749,14 @@ if __name__ == "__main__":
         if not 1 <= step_budget <= DEFAULT_STEP_BUDGET:
             raise SystemExit(f"--step-budget must be between 1 and {DEFAULT_STEP_BUDGET}")
     args = [arg for arg in args if arg != "--target-last"]
+    args = [arg for arg in args if arg != "--include-stdlib-closure"]
     args = [arg for arg in args if arg != "--oracle-only"]
     args = [arg for arg in args if arg != "--signature-cache-fixture"]
     args = [arg for arg in args if arg != "--prepare-program-cache-only"]
     args = [arg for arg in args if arg != "--admission-only"]
     if args:
         if args[0] != "--modules" or len(args) < 2:
-            raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--oracle-only] [--signature-cache-fixture] [--prepare-program-cache-only] [--admission-only]")
+            raise SystemExit("usage: probe_compiler_module_frontier.py [--modules module_stem ...] [--target-last] [--include-stdlib-closure] [--oracle-only] [--signature-cache-fixture] [--prepare-program-cache-only] [--admission-only]")
         names = args[1:]
     if admission_only and not target_last:
         raise SystemExit("--admission-only requires --target-last")
@@ -678,5 +773,6 @@ if __name__ == "__main__":
             step_budget=step_budget,
             prepare_program_cache_only=prepare_program_cache_only,
             admission_only=admission_only,
+            include_stdlib_closure=include_stdlib_closure,
         )
     print(json.dumps(report, indent=2))

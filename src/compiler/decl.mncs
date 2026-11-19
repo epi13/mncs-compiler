@@ -1628,13 +1628,20 @@ fn op_arity(slot: u64) -> (result: u64) {
     if slot == 7 { return 1; }
     if slot == 8 { return 3; }
     if slot == 9 { return 3; }
+    if slot == 10 { return 3; }
     return 0;
+}
+fn bare_intrinsic_arity_mismatch<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ns: u64, ne: u64, argc: u64) -> (result: bool) {
+    if argc == 3 || !(span_is_replace<P, N>(pages, stride, total, ns, ne)) { return false; }
+    let head: parser.Header = header<P, N>(pages, stride, total);
+    return profile_at_least_008<P, N>(pages, stride, total, head.version_start, head.version_end);
 }
 fn close_call<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprState, tok: lexer.Token, op: Op, rest: OpList) -> (result: ExprState) {
     if st.expect_operand && op.argc != 0 { return expr_fail(st, tok.start, tok.end); }
     if st.expect_operand {
         let empty_slot: u64 = op_slot_at<P, N>(pages, stride, total, op.name_start, op.name_end);
         if empty_slot != 5 && targ_list_empty(op.targs) { return expr_fail(st, tok.start, tok.end); }
+        if targ_list_empty(op.targs) && bare_intrinsic_arity_mismatch<P, N>(pages, stride, total, op.name_start, op.name_end, 0) { return expr_fail(st, tok.start, tok.end); }
         let node: Expr = Expr.Call { name_start: op.name_start, name_end: op.name_end, args: ExprList.ENil, targs: op.targs, start: op.name_start, end: tok.end };
         return match st.operands {
             ENil => expr_fail(st, tok.start, tok.end),
@@ -1653,6 +1660,7 @@ fn close_call_args<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     // parses as a plain generic call (Stage-0 agrees at parse), and the
     // proof rejects the unknown callee. Only bare operation calls reserve.
     if slot != 5 && targ_list_empty(op.targs) { return close_op_call<P, N>(pages, stride, total, st, tok, op, rest, args, slot, before); }
+    if targ_list_empty(op.targs) && bare_intrinsic_arity_mismatch<P, N>(pages, stride, total, op.name_start, op.name_end, op.argc + 1) { return expr_fail(st, tok.start, tok.end); }
     let node: Expr = Expr.Call { name_start: op.name_start, name_end: op.name_end, args: args, targs: op.targs, start: op.name_start, end: tok.end };
     return match before {
         ENil => expr_fail(st, tok.start, tok.end),
@@ -4054,15 +4062,13 @@ fn walk_call<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, tot
     }
     return WalkState { swords: st.swords, work: append_exprs<P, N>(pages, stride, total, args, t), acc: acc, names: st.names, total: st.total, ok: true, bad_start: 0, bad_end: 0 };
 }
-// Stage-0 language-inventory: `select` is the pure selection intrinsic,
-// introduced in Profile 0.8. Its call shape remains a proof-stage fact; this
-// resolve walk admits the name only where the pinned reference exposes it.
+// Stage-0 language-inventory: `select` and `replace` are pure Profile 0.8
+// intrinsics. Call shape and operand contracts belong to proof; this
+// resolve walk admits the names only where the pinned reference exposes them.
 fn stage0_intrinsic_known<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
-    if end <= start { return false; }
-    if end - start != 6 { return false; }
     let head: parser.Header = header<P, N>(pages, stride, total);
     if !(profile_at_least_008<P, N>(pages, stride, total, head.version_start, head.version_end)) { return false; }
-    return source.byte_at_global<P, N>(pages, stride, total, start) == 115 && source.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 2) == 108 && source.byte_at_global<P, N>(pages, stride, total, start + 3) == 101 && source.byte_at_global<P, N>(pages, stride, total, start + 4) == 99 && source.byte_at_global<P, N>(pages, stride, total, start + 5) == 116;
+    return span_is_select<P, N>(pages, stride, total, start, end) || span_is_replace<P, N>(pages, stride, total, start, end);
 }
 record TargSpanCheck { ok: bool, bad_start: u64, bad_end: u64 }
 record TargSpanWalk { rest: TypeArgList, ok: bool, bad_start: u64, bad_end: u64 }
@@ -4398,6 +4404,8 @@ fn verify_ir_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
 // 76 SEQUENCE_BASE (MNE186) 77 SEQUENCE_STATIC_BOUNDS (MNE192)
 // 78 CAST_CLASS (MNE189) 79 SEQUENCE_RUNTIME_BOUNDS (UNKNOWN)
 // 80 SELECT_CANDIDATE (MNE196) 81 SELECT_CONDITION (MNE195)
+// 104 REPLACE_BASE (MNE197) 105 REPLACE_EXACT_BOUND (MNE198)
+// 106 REPLACE_INDEX (MNE199) 107 REPLACE_ELEMENT (MNE200)
 record Obligation { kind: u64, start: u64, end: u64, status: u64 }
 enum OblList { LNil, LCons { head: Obligation, tail: OblList } }
 record OblRev { rest: OblList, acc: OblList }
@@ -6697,6 +6705,9 @@ enum SemKont {
     KSelectCondition { true_value: Expr, false_value: Expr, condition_start: u64, condition_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy },
     KSelectTrue { condition_ty: SemType, condition_start: u64, condition_end: u64, false_value: Expr, true_start: u64, true_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy },
     KSelectFalse { condition_ty: SemType, condition_start: u64, condition_end: u64, true_ty: SemType, true_start: u64, true_end: u64, false_start: u64, false_end: u64, ns: u64, ne: u64, start: u64, end: u64, exp: ExpTy },
+    KReplaceSeq { index: Expr, element: Expr, seq_start: u64, seq_end: u64, ns: u64, ne: u64, start: u64, end: u64 },
+    KReplaceIndex { base_ty: SemType, element_ty: SemType, index: Expr, element: Expr, idx_start: u64, idx_end: u64, ns: u64, ne: u64, start: u64, end: u64 },
+    KReplaceElement { base_ty: SemType, element_ty: SemType, index: Expr, elem_start: u64, elem_end: u64, ns: u64, ne: u64, start: u64, end: u64 },
     KSeqElem { remaining: ExprList, element: SemType, result_ty: SemType, count: u64, elem_start: u64, elem_end: u64, start: u64, end: u64 }
 }
 enum KontList { QNil, QCons { head: SemKont, tail: KontList } }
@@ -7560,6 +7571,72 @@ fn select_condition_obligation(st: SemState, bad: bool, start: u64, end: u64) ->
     if !(bad) { return st; }
     return sem_emit(st, 81, start, end, 1);
 }
+fn sequence_is_exact_bound(ty: SemType) -> (result: bool) {
+    return match ty {
+        TSeqExact { element: element, length: length, length_valid: valid } => valid || exact_generic_bound_index(length) > 0,
+        TSeq => false,
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: s, end: e } => false,
+        TPoison => false
+    };
+}
+fn seed_replace_call<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, ns: u64, ne: u64, args: ExprList, start: u64, end: u64) -> (result: SemState) {
+    if count_exprs<P, N>(pages, stride, total, args) != 3 { return sem_drain(sem_emit(st, 32, ns, ne, 1)); }
+    return match args {
+        ECons { head: sequence, tail: rest } => seed_replace_index_arg(st, sequence, rest, ns, ne, start, end),
+        ENil => sem_drain(sem_emit(st, 32, ns, ne, 1))
+    };
+}
+fn seed_replace_index_arg(st: SemState, sequence: Expr, args: ExprList, ns: u64, ne: u64, start: u64, end: u64) -> (result: SemState) {
+    return match args {
+        ECons { head: index, tail: rest } => seed_replace_element_arg(st, sequence, index, rest, ns, ne, start, end),
+        ENil => sem_drain(sem_emit(st, 32, ns, ne, 1))
+    };
+}
+fn seed_replace_element_arg(st: SemState, sequence: Expr, index: Expr, args: ExprList, ns: u64, ne: u64, start: u64, end: u64) -> (result: SemState) {
+    return match args {
+        ECons { head: element, tail: rest } => push_replace_seq(st, sequence, index, element, ns, ne, start, end),
+        ENil => sem_drain(sem_emit(st, 32, ns, ne, 1))
+    };
+}
+fn push_replace_seq(st: SemState, sequence: Expr, index: Expr, element: Expr, ns: u64, ne: u64, start: u64, end: u64) -> (result: SemState) {
+    let span: ExprSpan = expr_span(sequence);
+    let job: SemJob = SemJob { e: sequence, exp: ExpTy.XNone };
+    let kont: SemKont = SemKont.KReplaceSeq { index: index, element: element, seq_start: span.start, seq_end: span.end, ns: ns, ne: ne, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_replace_seq(st: SemState, index: Expr, element: Expr, seq_start: u64, seq_end: u64, ns: u64, ne: u64, start: u64, end: u64) -> (result: SemState) {
+    let base_ty: SemType = st.last_ty;
+    if !(is_sequence_sem(base_ty)) { return sem_drain(sem_emit(st, 104, seq_start, seq_end, 1)); }
+    if !(sequence_is_exact_bound(base_ty)) { return sem_drain(sem_emit(st, 105, start, end, 1)); }
+    let element_ty: SemType = sequence_sem_element(base_ty);
+    if is_poison(element_ty) { return sem_drain(sem_emit(st, 104, seq_start, seq_end, 1)); }
+    let idx_span: ExprSpan = expr_span(index);
+    let job: SemJob = SemJob { e: index, exp: ExpTy.XSome { ty: SemType.TInt { width: 64, signed: false } } };
+    let kont: SemKont = SemKont.KReplaceIndex { base_ty: base_ty, element_ty: element_ty, index: index, element: element, idx_start: idx_span.start, idx_end: idx_span.end, ns: ns, ne: ne, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_replace_index(st: SemState, base_ty: SemType, element_ty: SemType, index: Expr, element: Expr, idx_start: u64, idx_end: u64, ns: u64, ne: u64, start: u64, end: u64) -> (result: SemState) {
+    if !(is_u64_ty(st.last_ty)) { return sem_drain(sem_emit(st, 106, idx_start, idx_end, 1)); }
+    let elem_span: ExprSpan = expr_span(element);
+    let job: SemJob = SemJob { e: element, exp: ExpTy.XSome { ty: element_ty } };
+    let kont: SemKont = SemKont.KReplaceElement { base_ty: base_ty, element_ty: element_ty, index: index, elem_start: elem_span.start, elem_end: elem_span.end, ns: ns, ne: ne, start: start, end: end };
+    return SemState { ..st, jobs: JobList.JCons { head: job, tail: st.jobs }, konts: KontList.QCons { head: kont, tail: st.konts } };
+}
+fn apply_replace_element<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, base_ty: SemType, element_ty: SemType, index: Expr, elem_start: u64, elem_end: u64, ns: u64, ne: u64, start: u64, end: u64) -> (result: SemState) {
+    if !(sem_eq<P, N>(pages, stride, total, st.last_ty, element_ty)) { return sem_drain(sem_emit(st, 107, elem_start, elem_end, 1)); }
+    let bound: IndexBound = index_bound(base_ty);
+    if bound.exact && is_index_outside(index, bound.length) {
+        let sp: ExprSpan = expr_span(index);
+        return sem_drain(sem_emit(st, 77, sp.start, sp.end, 1));
+    }
+    let st1: SemState = add_index_runtime_obligation(st, bound, index);
+    let identity: SemanticIdentity = canonical_operation_identity<P, N>(pages, stride, total, ns, ne);
+    let top: TOp = TOp.TOp { slot: 10, ty: base_ty, argc: 3, ns: ns, ne: ne, identity: identity, start: start, end: end };
+    return sem_emit_top(sem_accept(st1, base_ty), top);
+}
 fn seed_enum_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, ts: u64, te: u64, vs: u64, ve: u64, fields: ConstructFieldList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let found: EnumFind = enum_lookup<P, N>(pages, stride, total, st.enumtab, ts, te);
     if found.found { return seed_local_enum_construct<P, N>(pages, stride, total, st, found.decl, ts, te, vs, ve, fields, start, end, exp); }
@@ -7998,6 +8075,9 @@ fn apply_kont<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
         KSelectCondition { true_value: tv, false_value: fv, condition_start: cs, condition_end: ce, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_condition(st, tv, fv, cs, ce, ns, ne, s, e, x),
         KSelectTrue { condition_ty: ct, condition_start: cs, condition_end: ce, false_value: fv, true_start: ts, true_end: te, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_true<P, N>(pages, stride, total, st, ct, cs, ce, fv, ts, te, ns, ne, s, e, x),
         KSelectFalse { condition_ty: ct, condition_start: cs, condition_end: ce, true_ty: tt, true_start: ts, true_end: te, false_start: fs, false_end: fe, ns: ns, ne: ne, start: s, end: e, exp: x } => apply_select_false<P, N>(pages, stride, total, st, ct, cs, ce, tt, ts, te, fs, fe, ns, ne, s, e, x),
+        KReplaceSeq { index: ix, element: el, seq_start: ss, seq_end: se, ns: ns, ne: ne, start: s, end: e } => apply_replace_seq(st, ix, el, ss, se, ns, ne, s, e),
+        KReplaceIndex { base_ty: bt, element_ty: et, index: ix, element: el, idx_start: xs, idx_end: xe, ns: ns, ne: ne, start: s, end: e } => apply_replace_index(st, bt, et, ix, el, xs, xe, ns, ne, s, e),
+        KReplaceElement { base_ty: bt, element_ty: et, index: ix, elem_start: es, elem_end: ee, ns: ns, ne: ne, start: s, end: e } => apply_replace_element<P, N>(pages, stride, total, st, bt, et, ix, es, ee, ns, ne, s, e),
         KSeqElem { remaining: remaining, element: element, result_ty: result_ty, count: count, elem_start: es, elem_end: ee, start: s, end: e } => apply_seq_elem<P, N>(pages, stride, total, st, remaining, element, result_ty, count, es, ee, s, e)
     };
 }
@@ -8483,7 +8563,7 @@ fn canonical_operation_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P
 // re-deriving the authorization proof; unlike calls, the operation node is
 // source-anchored by re-parsing, mirroring construction verification.
 fn verify_top_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, slot: u64, ty: SemType, argc: u64, ns: u64, ne: u64, identity: SemanticIdentity, start: u64, end: u64) -> (result: TDepth) {
-    if slot > 9 || argc != op_arity(slot) || is_poison(ty) || !(identity.valid) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    if slot > 10 || argc != op_arity(slot) || is_poison(ty) || !(identity.valid) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     if !(op_verify_result_ok(slot, ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     if !(semantic_identity_equal(identity, canonical_operation_identity<P, N>(pages, stride, total, ns, ne))) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     if !(op_source_valid<P, N>(pages, stride, total, slot, ty, ns, ne, argc, start, end)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
@@ -8499,6 +8579,7 @@ fn verify_top_special_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stri
     if slot == 7 { return verify_top_cast(st, t, ty); }
     if slot == 8 { return verify_top_select<P, N>(pages, stride, total, st, t, ty); }
     if slot == 9 { return verify_top_sequence_view<P, N>(pages, stride, total, st, t, ty); }
+    if slot == 10 { return verify_top_replace<P, N>(pages, stride, total, st, t, ty); }
     return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false };
 }
 fn verify_top_sequence_index<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
@@ -8573,11 +8654,35 @@ fn verify_top_select_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
     if !(is_bool_ty(condition_ty)) || !(sem_eq<P, N>(pages, stride, total, true_ty, false_ty)) || !(sem_eq<P, N>(pages, stride, total, ty, true_ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
     return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth - 2, ok: true };
 }
+fn verify_top_replace<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType) -> (result: TDepth) {
+    return match st.stack {
+        WCons { head: elem_ty, tail: after_elem } => verify_top_replace_index<P, N>(pages, stride, total, st, t, ty, elem_ty, after_elem),
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }
+    };
+}
+fn verify_top_replace_index<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, elem_ty: SemType, stack: TyStack) -> (result: TDepth) {
+    return match stack {
+        WCons { head: index_ty, tail: after_index } => verify_top_replace_base<P, N>(pages, stride, total, st, t, ty, elem_ty, index_ty, after_index),
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }
+    };
+}
+fn verify_top_replace_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, elem_ty: SemType, index_ty: SemType, stack: TyStack) -> (result: TDepth) {
+    return match stack {
+        WCons { head: base_ty, tail: rest } => verify_top_replace_types<P, N>(pages, stride, total, st, t, ty, base_ty, index_ty, elem_ty, rest),
+        WNil => TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }
+    };
+}
+fn verify_top_replace_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: TDepth, t: TOpList, ty: SemType, base_ty: SemType, index_ty: SemType, elem_ty: SemType, rest: TyStack) -> (result: TDepth) {
+    let expected_elem: SemType = sequence_sem_element(base_ty);
+    if !(sequence_is_exact_bound(base_ty)) || is_poison(expected_elem) || !(is_u64_ty(index_ty)) || !(sem_eq<P, N>(pages, stride, total, elem_ty, expected_elem)) || !(sem_eq<P, N>(pages, stride, total, ty, base_ty)) { return TDepth { rest: TOpList.PNil, stack: TyStack.WNil, depth: 0, ok: false }; }
+    return TDepth { rest: t, stack: TyStack.WCons { head: ty, tail: rest }, depth: st.depth - 2, ok: true };
+}
 fn op_verify_result_ok(slot: u64, ty: SemType) -> (result: bool) {
     if slot == 1 || slot == 8 { return !(is_poison(ty)); }
     if slot == 6 { return !(is_poison(ty)); }
     if slot == 7 { return cast_target_ok(ty); }
     if slot == 9 { return is_sequence_sem(ty); }
+    if slot == 10 { return sequence_is_exact_bound(ty); }
     return is_u64_ty(ty);
 }
 fn op_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, slot: u64, ty: SemType, ns: u64, ne: u64, argc: u64, start: u64, end: u64) -> (result: bool) {
@@ -8596,7 +8701,7 @@ fn op_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
         SequenceLiteral { elements: xs, start: s, end: e } => false,
         ScalarMatch { subject: subject, arms: arms, start: s, end: e } => false,
         Binary { op: o, left: l, right: r, start: s, end: e } => false,
-        Call { name_start: cns, name_end: cne, args: a, targs: tg, start: s, end: e } => slot == 8 && s == start && e == end && cns == ns && cne == ne && span_is_select<P, N>(pages, stride, total, cns, cne) && targ_list_empty(tg) && count_exprs<P, N>(pages, stride, total, a) == argc,
+        Call { name_start: cns, name_end: cne, args: a, targs: tg, start: s, end: e } => s == start && e == end && cns == ns && cne == ne && targ_list_empty(tg) && count_exprs<P, N>(pages, stride, total, a) == argc && ((slot == 8 && span_is_select<P, N>(pages, stride, total, cns, cne)) || (slot == 10 && span_is_replace<P, N>(pages, stride, total, cns, cne))),
         Project { base: b, field_start: fs, field_end: fe, start: s, end: e, path: p } => false,
         FiniteMatch { subject: subject, arms: arms, start: s, end: e } => false,
         EnumConstruct { type_start: ts, type_end: te, variant_start: vs, variant_end: ve, fields: f, start: s, end: e } => false,
@@ -8609,6 +8714,10 @@ fn op_source_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 fn span_is_select<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
     if end <= start || end - start != 6 { return false; }
     return segment.byte_at_global<P, N>(pages, stride, total, start) == 115 && segment.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && segment.byte_at_global<P, N>(pages, stride, total, start + 2) == 108 && segment.byte_at_global<P, N>(pages, stride, total, start + 3) == 101 && segment.byte_at_global<P, N>(pages, stride, total, start + 4) == 99 && segment.byte_at_global<P, N>(pages, stride, total, start + 5) == 116;
+}
+fn span_is_replace<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
+    if end <= start || end - start != 7 { return false; }
+    return segment.byte_at_global<P, N>(pages, stride, total, start) == 114 && segment.byte_at_global<P, N>(pages, stride, total, start + 1) == 101 && segment.byte_at_global<P, N>(pages, stride, total, start + 2) == 112 && segment.byte_at_global<P, N>(pages, stride, total, start + 3) == 108 && segment.byte_at_global<P, N>(pages, stride, total, start + 4) == 97 && segment.byte_at_global<P, N>(pages, stride, total, start + 5) == 99 && segment.byte_at_global<P, N>(pages, stride, total, start + 6) == 101;
 }
 fn cast_target_span_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, type_kind: u64, type_start: u64, type_end: u64, ty: SemType) -> (result: bool) {
     let target: TyRes = resolve_type<P, N>(pages, stride, total, type_kind, type_start, type_end, RecordList.RNil, EnumList.GNil, NominalTypeIdentityList.NINil);
@@ -8767,7 +8876,10 @@ fn preserve_call_nat_bound(index: u64, is_view: bool, element: SemType) -> (resu
 fn seed_call<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SemState, ns: u64, ne: u64, args: ExprList, tg: TypeArgList, start: u64, end: u64, exp: ExpTy) -> (result: SemState) {
     let got: SigRes = sig_lookup<P, N>(pages, stride, total, st.sigs, ns, ne);
     if !(got.found) {
-        if stage0_intrinsic_known<P, N>(pages, stride, total, ns, ne) && targ_list_empty(tg) { return seed_select_call<P, N>(pages, stride, total, st, ns, ne, args, start, end, exp); }
+        if stage0_intrinsic_known<P, N>(pages, stride, total, ns, ne) && targ_list_empty(tg) {
+            if span_is_replace<P, N>(pages, stride, total, ns, ne) { return seed_replace_call<P, N>(pages, stride, total, st, ns, ne, args, start, end); }
+            return seed_select_call<P, N>(pages, stride, total, st, ns, ne, args, start, end, exp);
+        }
         return sem_drain(sem_emit(st, 32, ns, ne, 1));
     }
     let checked: SemState = check_generic_apply<P, N>(pages, stride, total, st, got.sig, tg, ns, ne, start, end);

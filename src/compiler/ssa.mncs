@@ -1622,6 +1622,7 @@ fn lower_top_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
     if slot == 7 { return lower_scalar_cast<P, N>(pages, stride, total, st, rest, ty, ns, ne, identity, start, end); }
     if slot == 8 { return lower_select_op<P, N>(pages, stride, total, st, rest, ty, argc, popped.arguments, popped.stack, ns, ne, identity, start, end); }
     if slot == 9 { return lower_sequence_view_op<P, N>(pages, stride, total, st, rest, ty, argc, popped.arguments, popped.stack, ns, ne, identity, start, end); }
+    if slot == 10 { return lower_sequence_replace_op<P, N>(pages, stride, total, st, rest, ty, argc, popped.arguments, popped.stack, ns, ne, identity, start, end); }
     if slot > 4 { return ExprBuild { ..st, rest: rest, ok: false }; }
     let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
     let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 9, operator: slot, result: value.id, ty: ty, inputs: popped.arguments, argc: argc, params: decl.BindList.BNil, identity: identity, nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: ns, binding_end: ne, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
@@ -1660,6 +1661,42 @@ fn select_false_input<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     let true_value: LookupValue = find_value<P, N>(pages, stride, total, values, when_true.value);
     let false_value: LookupValue = find_value<P, N>(pages, stride, total, values, when_false.value);
     return id_list_empty(trailing) && true_value.found && false_value.found && decl.sem_eq<P, N>(pages, stride, total, true_value.value.ty, false_value.value.ty) && decl.sem_eq<P, N>(pages, stride, total, true_value.value.ty, result_type) && supported_value_type<P, N>(pages, stride, total, result_type, nominals);
+}
+fn lower_sequence_replace_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, arguments: IdList, remaining: ValueStack, ns: u64, ne: u64, identity: decl.SemanticIdentity, start: u64, end: u64) -> (result: ExprBuild) {
+    let valid: bool = sequence_replace_contract_ok<P, N>(pages, stride, total, st.values, st.nominals, arguments, ty, argc, ns, ne, identity, decl.EffectIdentityList.EINil, decl.CapabilityIdentityList.CINil, start, end);
+    let value: Value = Value { id: st.next_value, ty: ty, owner_block: st.block, kind: 2, index: st.sequence };
+    let inst: Instruction = Instruction { id: st.next_instruction, sequence: st.sequence, kind: 19, operator: 10, result: value.id, ty: ty, inputs: arguments, argc: 3, params: decl.BindList.BNil, identity: identity, nominal_identity: invalid_identity(), variant_start: 0, variant_end: 0, binding_start: ns, binding_end: ne, effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: start, end: end };
+    return ExprBuild { rest: rest, env: st.env, stack: ValueStack.WCons { head: value, tail: remaining }, instructions: InstructionList.QCons { head: inst, tail: st.instructions }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, next_instruction: st.next_instruction + 1, sequence: st.sequence + 1, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok && valid, failure_op: select(st.failure_op > 0, st.failure_op, select(valid, 0, 3)) };
+}
+fn sequence_replace_contract_ok<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, nominals: decl.NominalTypeIdentityList, arguments: IdList, ty: decl.SemType, argc: u64, ns: u64, ne: u64, identity: decl.SemanticIdentity, effects: decl.EffectIdentityList, capabilities: decl.CapabilityIdentityList, start: u64, end: u64) -> (result: bool) {
+    let expected: decl.SemanticIdentity = decl.canonical_operation_identity<P, N>(pages, stride, total, ns, ne);
+    let source_ok: bool = ns < ne && decl.op_source_valid<P, N>(pages, stride, total, 10, ty, ns, ne, argc, start, end);
+    return argc == 3 && decl.sequence_is_exact_bound(ty) && identity.valid && decl.semantic_identity_equal(expected, identity) && source_ok && sequence_replace_inputs_valid<P, N>(pages, stride, total, values, arguments, ty, nominals) && effect_identities_empty(effects) && capability_identities_empty(capabilities) && decl.signature_identity_valid<P, N>(pages, stride, total, effects, capabilities);
+}
+fn sequence_replace_inputs_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, arguments: IdList, result_type: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match arguments {
+        IdList.INil => false,
+        IdList.ICons { head: base, tail: rest } => sequence_replace_index_input<P, N>(pages, stride, total, values, base, rest, result_type, nominals)
+    };
+}
+fn sequence_replace_index_input<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, base: Id, rest: IdList, result_type: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match rest {
+        IdList.INil => false,
+        IdList.ICons { head: index, tail: after_index } => sequence_replace_elem_input<P, N>(pages, stride, total, values, base, index, after_index, result_type, nominals)
+    };
+}
+fn sequence_replace_elem_input<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, base: Id, index: Id, rest: IdList, result_type: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    return match rest {
+        IdList.INil => false,
+        IdList.ICons { head: element, tail: trailing } => sequence_replace_values_match<P, N>(pages, stride, total, values, base, index, element, trailing, result_type, nominals)
+    };
+}
+fn sequence_replace_values_match<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, base: Id, index: Id, element: Id, trailing: IdList, result_type: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
+    let base_value: LookupValue = find_value<P, N>(pages, stride, total, values, base.value);
+    let index_value: LookupValue = find_value<P, N>(pages, stride, total, values, index.value);
+    let elem_value: LookupValue = find_value<P, N>(pages, stride, total, values, element.value);
+    let element_ty: decl.SemType = decl.sequence_sem_element(base_value.value.ty);
+    return id_list_empty(trailing) && base_value.found && index_value.found && elem_value.found && sequence_value_type(base_value.value.ty) && decl.sequence_is_exact_bound(base_value.value.ty) && !(decl.is_poison(element_ty)) && decl.is_u64_ty(index_value.value.ty) && decl.sem_eq<P, N>(pages, stride, total, elem_value.value.ty, element_ty) && decl.sem_eq<P, N>(pages, stride, total, base_value.value.ty, result_type) && supported_value_type<P, N>(pages, stride, total, base_value.value.ty, nominals) && supported_value_type<P, N>(pages, stride, total, result_type, nominals);
 }
 fn lower_sequence_view_op<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExprBuild, rest: decl.TOpList, ty: decl.SemType, argc: u64, arguments: IdList, remaining: ValueStack, ns: u64, ne: u64, identity: decl.SemanticIdentity, start: u64, end: u64) -> (result: ExprBuild) {
     return match arguments {
@@ -2306,7 +2343,11 @@ fn verify_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     if inst.kind == 16 { return verify_record_construct_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 17 { return verify_sequence_view_instruction<P, N>(pages, stride, total, function, inst); }
     if inst.kind == 18 { return verify_sequence_construct_instruction<P, N>(pages, stride, total, function, inst); }
+    if inst.kind == 19 { return verify_sequence_replace_instruction<P, N>(pages, stride, total, function, inst); }
     return false;
+}
+fn verify_sequence_replace_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
+    return inst.kind == 19 && inst.operator == 10 && decl.bind_list_empty(inst.params) && !(inst.nominal_identity.valid) && inst.variant_start == 0 && inst.variant_end == 0 && sequence_replace_contract_ok<P, N>(pages, stride, total, function.values, function.nominals, inst.inputs, inst.ty, inst.argc, inst.binding_start, inst.binding_end, inst.identity, inst.effects, inst.capabilities, inst.start, inst.end);
 }
 fn verify_sequence_construct_instruction<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, inst: Instruction) -> (result: bool) {
     if inst.kind != 18 || inst.operator != inst.argc || inst.argc > 1024 { return false; }

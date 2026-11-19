@@ -41,6 +41,7 @@ KIND_TO_MNE = {
     92: 'MNE154', 93: 'MNE155', 94: 'MNE156', 95: 'MNE157', 96: 'MNE158',
     97: 'MNE159', 98: 'MNE160', 99: 'MNE187', 100: 'MNE188',
     101: 'MNE183', 102: 'MNE184', 103: 'MNE185',
+    104: 'MNE197', 105: 'MNE198', 106: 'MNE199', 107: 'MNE200',
 }
 UNKNOWN_KINDS = {13, 14, 16, 79}
 
@@ -256,6 +257,57 @@ CASES = [
      set()),
     ('select-old-profile',
      'mncs 0.7; module t; fn f(c: bool, a: u64, b: u64) -> (r: u64) { return select(c, a, b); }',
+     set()),
+    ('replace-clean-literal',
+     'mncs 0.18; module t; fn f(s: [u64; 3]) -> (r: [u64; 3]) { return replace(s, 1, 9); }',
+     set()),
+    ('replace-clean-dynamic',
+     'mncs 0.18; module t; fn f(s: [u64; 3], i: u64, v: u64) -> (r: [u64; 3]) { return replace(s, i, v); }',
+     {79}),
+    ('replace-generic-exact',
+     'mncs 0.18; module t; fn f<N: Nat>(s: [u64; N], i: u64, v: u64) -> (r: [u64; N]) { return replace(s, i, v); }',
+     {79}),
+    ('replace-non-sequence',
+     'mncs 0.18; module t; fn f(x: u64) -> (r: u64) { return replace(x, 0, 1); }',
+     set()),
+    ('replace-view-refused',
+     'mncs 0.18; module t; fn f(s: [u64; up_to 4]) -> (r: [u64; up_to 4]) { return replace(s, 0, 1); }',
+     set()),
+    ('replace-bad-index-type',
+     'mncs 0.18; module t; fn f(s: [u64; 4], b: bool) -> (r: [u64; 4]) { return replace(s, b, 1); }',
+     set()),
+    ('replace-bad-index-bool-literal',
+     'mncs 0.18; module t; fn f(s: [u64; 4]) -> (r: [u64; 4]) { return replace(s, true, 1); }',
+     set()),
+    ('replace-bad-index-binary',
+     'mncs 0.18; module t; fn f(s: [u64; 4], a: bool, b: bool) -> (r: [u64; 4]) { return replace(s, a && b, 1); }',
+     set()),
+    ('replace-bad-element-type',
+     'mncs 0.18; module t; fn f(s: [u64; 4], b: bool) -> (r: [u64; 4]) { return replace(s, 0, b); }',
+     set()),
+    ('replace-bad-element-call',
+     'mncs 0.18; module t; fn g() -> (r: bool) { return true; } fn f(s: [u64; 4]) -> (r: [u64; 4]) { return replace(s, 0, g()); }',
+     set()),
+    ('replace-oob-literal',
+     'mncs 0.18; module t; fn f(s: [u64; 3]) -> (r: [u64; 3]) { return replace(s, 3, 9); }',
+     set()),
+    ('replace-return-mismatch',
+     'mncs 0.18; module t; fn f(s: [u64; 3]) -> (r: [byte; 3]) { return replace(s, 0, 9); }',
+     set()),
+    ('replace-return-view-borrow',
+     'mncs 0.18; module t; fn f(s: [u64; 3]) -> (r: [u64; up_to 4]) { return replace(s, 0, 9); }',
+     set()),
+    ('replace-old-profile',
+     'mncs 0.7; module t; fn f(s: [u64; 3]) -> (r: [u64; 3]) { return replace(s, 0, 9); }',
+     set()),
+    ('replace-generic-type-arg',
+     'mncs 0.18; module t; fn f(s: [u64; 3]) -> (r: [u64; 3]) { return replace<u64>(s, 0, 9); }',
+     set()),
+    ('replace-nested-exact',
+     'mncs 0.18; module t; fn f(s: [[byte; 4]; 2]) -> (r: [[byte; 4]; 2]) { return replace(s, 0, [1 as byte, 2 as byte, 3 as byte, 4 as byte]); }',
+     set()),
+    ('replace-chained',
+     'mncs 0.18; module t; fn f(s: [u64; 3]) -> (r: [u64; 3]) { return replace(replace(s, 0, 7), 2, 9); }',
      set()),
     ('clean-let-bool-shift',
      'mncs 0.10; module t; fn f(a: u64) -> (r: u64) { let b: bool = a == 1; let c: u64 = a << 2; return c; }',
@@ -1114,7 +1166,8 @@ def suite():
                         for o in source_obls if o['status'] == 1]
         source_unknowns = sorted({o['kind'] for o in source_obls if o['status'] == 2})
         assert source_fails == source_diagnostics == [], (source_fails, source_diagnostics)
-        assert source_got['ok'] and source_got['fn_count'] == 20, source_got
+        source_oracle_ast = probe.send({'oracle': source_text})
+        assert source_got['ok'] and source_got['fn_count'] == len(source_oracle_ast['ast']['functions']) == 55, source_got
         assert set(source_unknowns) <= UNKNOWN_KINDS, source_unknowns
         probe.count += 1
         probe.steps.append(source_raw['steps'])

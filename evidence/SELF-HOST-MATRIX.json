@@ -918,6 +918,35 @@
         "stage1_claimed": false,
         "stage2_claimed": false,
         "scope": "Seven-module Source, Lexer, Parser, Segment, Decl, Flow, and SSA application closure. The selected workload has two Flow-to-SSA cases; this is not full Compiler proof or succession."
+      },
+      "sequence_replace_and_stage1_frontier_20261118": {
+        "status": "passed_bounded_sequence_replace_13_module_admission_and_standalone_vm_project_entry",
+        "observed_at": "2026-11-19T05:10:32.855663+00:00",
+        "evidence_artifact": "evidence/sequence-replace-and-stage1-frontier-20261118.json",
+        "evidence_sha256": "fb9722a24be859fa8eb299dc35c8ef9128c3c40fe29d6cabe3a3a60d826fff34",
+        "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+        "producer_identity": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09",
+        "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+        "standalone_project_vm_artifact_id": "sha256:829abf12139838b7781a4105263d7a85f00fbe5ae0e974d6244a6a5732adebdd",
+        "whole_13_module_closure_pages_1024": 1590,
+        "admitted_page_bound": 2048,
+        "verified_targets_in_13_module_closure": [
+          "kernel",
+          "segment"
+        ],
+        "verified_targets_in_standalone_vm": [
+          "demo.reproot (multi-module SequenceReplace)",
+          "mncs.std.utf8_primitives.v1"
+        ],
+        "source_mncs_proof_ok": true,
+        "source_mncs_flow_verified": 55,
+        "source_mncs_ssa_supported": 55,
+        "source_mncs_ssa_verified": 46,
+        "selected_callable_vm_proved": true,
+        "bounded_compiler_produced_artifact": "UNKNOWN",
+        "stage1_to_stage2_rebuild": "UNKNOWN",
+        "stage1_claimed": false,
+        "stage2_claimed": false
       }
     },
     "source_hash_equivalence_basis": {
@@ -1657,7 +1686,7 @@
             "canonical_vm_total_steps_change_percent": -19.57,
             "canonical_vm_wall_change_percent": -18.09,
             "maximum_steps_per_call_change_percent": 0.06,
-            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+            "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
             "canonical_vm_candidate_wall_seconds_samples": [
               9.22781,
               9.320808
@@ -3307,7 +3336,7 @@
     "artifact": ".build/campaign-artifacts/compiler-facts/campaign-20261008-compiler-module-pipeline-all.json"
   },
   "previous_next_frontier_before_20261018_decl_parse": "Current-head bounded decl.check_unit and decl.prove_unit frontiers pass on canonical VM with reference/Cranelift agreement and explicit UNKNOWN obligations. Continue smaller Compiler self-consumption closures; Language-owned fact reuse and Forge digest_app execution still require their matching authenticated scopes.",
-  "next_frontier": "Language-owned body and declaration facts are consumed by Compiler across the eight-module Project closure with exact dependency invalidation and fresh canonical VM parity. The Source/Lexer/Segment frontier is now independently revalidated against Language main b339aaa, including changed-body and imported-interface invalidation. Language source parse-cache reuse is also consumed through application-build/11; its streamed bounded accounting is correct, but this small workload does not show an end-to-end speedup. Next extend application-level invalidation across nominal types, generic specializations, and effect/capability assumptions, then continue the authenticated Forge digest_app route and reduce changed-snapshot frontend cost. Keep Stage-1 and Stage-2 unproven.",
+  "next_frontier": "Reduce imported-schema arena memory in project.mncs / Stage-0 Cranelift when lowering flow.mncs against decl.mncs (currently RESOURCE_EXHAUSTED at 7.83 GiB under 8 GiB RLIMIT_AS), add qualified imported record construction in decl.mncs (unblocking parser.mncs and lexer.mncs), resolve match-inside-iterate kind-14 loop-advance verifier affinity for the 9 remaining source.mncs functions, raise/stream mncs-vm's 10 MiB memory_cells ceiling for larger real compiler modules, and author native VM/backend artifact emission before attempting Stage-1->Stage-2.",
   "stage1_claimed": false,
   "matrix_basis": "Per-module full-pipeline evidence in modules/group_probes remains tied to its recorded source identities; candidate worktree identities and focused probes below are separate.",
   "candidate_worktree": {
@@ -9446,7 +9475,7 @@
         "canonical_vm_total_steps_change_percent": -19.57,
         "canonical_vm_wall_change_percent": -18.09,
         "maximum_steps_per_call_change_percent": 0.06,
-        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23–9.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
+        "interpretation": "The prefix scan reduced aggregate reference-interpreter and canonical-VM steps by about 19.6% across the same 85 requests. Two candidate VM batch samples were 9.23\u20139.32 s versus one 11.38 s baseline sample; CPU comparisons include differing compilation cache state and are not claimed as speedups. The maximum individual call remains the end-of-source scan.",
         "canonical_vm_candidate_wall_seconds_samples": [
           9.22781,
           9.320808
@@ -10026,7 +10055,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-10-21T22:10:09.578493+00:00",
+  "evidence_updated_at": "2026-11-19T05:10:32.855663+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -14110,7 +14139,7 @@
         "selected_intent_repositories": [
           "mncs-compiler"
         ],
-        "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
+        "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
         "language_write_attempted": false
       },
       "environment_continuity": {
@@ -14121,7 +14150,7 @@
       },
       "stage1_claimed": false,
       "stage2_claimed": false,
-      "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+      "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
     },
     {
       "kind": "mncs-test-production-vm-transport",
@@ -17996,7 +18025,7 @@
       "selected_intent_repositories": [
         "mncs-compiler"
       ],
-      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign’s current work intent includes only mncs-compiler.",
+      "missing_authority": "No exact owner-approved campaign/repository scope grant for mncs-language is configured in Control; its supported grant path requires that owner grant, and this campaign\u2019s current work intent includes only mncs-compiler.",
       "language_write_attempted": false
     },
     "environment_continuity": {
@@ -18007,7 +18036,7 @@
     },
     "stage1_claimed": false,
     "stage2_claimed": false,
-    "next_frontier": "Advance mncs.test.digest::digest_app through Forge’s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
+    "next_frontier": "Advance mncs.test.digest::digest_app through Forge\u2019s authorized native application route; in parallel, correct the remaining Control bare-root continuation selection under its owning scope and implement Language-owned verified-fact reuse when the exact mncs-language grant is available."
   },
   "current_campaign_effectful_digest_app_canonical_vm_20261019": {
     "kind": "mncs.compiler.native-test-digest-canonical-vm-execution",
@@ -18862,7 +18891,7 @@
     "tokens_compared": 3161,
     "elapsed_seconds": 12.322,
     "execution_mode": "retained_cranelift",
-    "scope": "The complete focused Segment suite matched locked Stage-0 lexical facts. The malformed-byte fixtures remain; the valid café module header is no longer misclassified as malformed UTF-8."
+    "scope": "The complete focused Segment suite matched locked Stage-0 lexical facts. The malformed-byte fixtures remain; the valid caf\u00e9 module header is no longer misclassified as malformed UTF-8."
   },
   "current_campaign_cp0001_smoke_revalidation_20261019": {
     "kind": "cp0001-current-source-smoke-revalidation",
@@ -20273,7 +20302,7 @@
     "limitations": [
       "The local bounded structured-file provider completes single-test and two-test paths, a combined eight-case heterogeneous-artifact batch, and a three-call retained VM session over that batch; the seven-case mncs-test self-suite is also exercised separately. Execution still uses the local adapter rather than Forge, Environment, and canonical Store, and it does not prove fresh-process Store readback."
     ],
-    "scope": "The harness now preserves a unique immutable checkout report per run while exporting the verifier payload under the exact declared shareable name into each invocation’s isolated artifact directory. Two back-to-back authenticated verification runs passed. Store readback covers the verifier report; provider execution remains on the bounded local canonical-VM adapter and does not establish Forge execution."
+    "scope": "The harness now preserves a unique immutable checkout report per run while exporting the verifier payload under the exact declared shareable name into each invocation\u2019s isolated artifact directory. Two back-to-back authenticated verification runs passed. Store readback covers the verifier report; provider execution remains on the bounded local canonical-VM adapter and does not establish Forge execution."
   },
   "current_campaign_source_byte_at_global_frontier_20261020": {
     "kind": "source-byte-at-global-canonical-vm-frontier",
@@ -25404,5 +25433,24 @@
       }
     },
     "performance_interpretation": "The source cache now streams bounded serialized accounting and avoids cloning over-budget parse outputs into the cache. This two-source workload proves correct compiler consumption and invalidation; its wall times are within noise, so it does not establish end-to-end speedup. Cgroup memory was unavailable."
+  },
+  "current_campaign_sequence_replace_and_stage1_frontier_20261118": {
+    "observed_at": "2026-11-19T05:10:32.855663+00:00",
+    "evidence_artifact": "evidence/sequence-replace-and-stage1-frontier-20261118.json",
+    "evidence_sha256": "fb9722a24be859fa8eb299dc35c8ef9128c3c40fe29d6cabe3a3a60d826fff34",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "producer_identity": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09",
+    "deepest_stage_proved": "Native Project compile_project_target<2048,1024> admits all 13 compiler+Stdlib modules (1,590 pages > 1,024) and lowers kernel.mncs (9/9 verified Value SSA) and segment.mncs (11/11 verified Value SSA) matching pinned Stage-0; unchanged source.mncs passes decl proof (55/55), Flow (55/55), and Value SSA lowering (55/55 supported, 46/55 verified with SequenceReplace kind-19 verified); standalone Stage-0-emitted canonical VM artifact for project.compile_project_target<1024,1024> (sha256:829abf12...) runs in a fresh mncs-vm (da99dee) process and compiles multi-module SequenceReplace and real std/utf8_primitives.mncs (3/3 verified Value SSA) matching pinned Stage-0. Bounded compiler-produced executable artifacts and Stage-1->Stage-2 rebuilds remain UNKNOWN.",
+    "first_remaining_blocker": {
+      "rank": 1,
+      "owner": "mncs-compiler (with Stage-0 Cranelift arena footprint)",
+      "summary": "Self-compiling flow.mncs (importing decl.mncs) through native project.compile_project_target<2048,1024> exhausts the 8 GiB address-space budget (RESOURCE_EXHAUSTED at 7.83 GiB RSS inside mncs-compiler-stage0-probe) while materializing decl.mncs's full imported signature/record/enum schema tables in Cranelift's bump-allocated execution arena.",
+      "reproduce_command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser segment decl flow --target-last --include-stdlib-closure"
+    },
+    "bounded_compiler_produced_artifact": "UNKNOWN",
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }

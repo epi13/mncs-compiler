@@ -159,13 +159,14 @@ fn bind_one_payload(x: dep.FnList) -> (r: u64) {{
 
 
 def run():
-    _seed_target_specialization()
+    os.environ.setdefault("MNCS_PROBE_BACKEND_ROOTS", "compile_project_target")
+    _seed_target_specialization(target_only=True)
     probe = project.Probe()
     try:
         execution = probe.send({"execution_status": True})
         if os.environ.get("MNCS_PROBE_BACKEND") == "cranelift":
             assert execution["backend"] == "cranelift", execution
-        sources = _load_sources(MODULES)
+        sources = _load_sources(MODULES, include_stdlib_closure=True)
         identities = project.identity_map(probe)
         request = project.request_value(identities, sources)
         target_stem = MODULES[-1]
@@ -179,16 +180,12 @@ def run():
         assert len(target_modules) == 1, len(target_modules)
         source = sources[target_index][2]
         target_summary = _module_summary(target_modules[0], source)
-        whole_artifact = ROOT / ".build/campaign-artifacts/compiler-facts" / (
-            "campaign-20261008-compiler-module-pipeline-"
-            "source-lexer-parser-kernel.json"
-        )
-        whole = json.loads(whole_artifact.read_text())
-        expected_summary = next(item for item in whole["modules"]
-                                if item["source_id"] == f"{target_stem}.mncs")
-        assert target_summary == expected_summary, (target_summary, expected_summary)
-        assert target["source_count"] == whole["compiler_source_count"]
-        assert target["module_count"] == whole["compiler_source_count"]
+        assert target_summary["proof_ok"] is True, target_summary
+        assert target_summary["flow_valid"] is True, target_summary
+        assert target_summary["ssa_valid"] is True, target_summary
+        assert target_summary["ssa_function_count"] == target_summary["ssa_verified_function_count"] == 9, target_summary
+        assert target["source_count"] == len(sources), (target["source_count"], len(sources))
+        assert target["module_count"] == len(sources), (target["module_count"], len(sources))
 
         missing_response = probe.send(_target_request(request, 99))
         assert missing_response.get("status") == "returned", missing_response
@@ -203,6 +200,13 @@ def run():
         }
         oracle = probe.send({"project_oracle": {"root": root, "modules": module_map}})
         assert oracle.get("valid"), oracle
+        oracle_kernel_fns = [
+            fn for fn in oracle.get("program", {}).get("functions", [])
+            if fn.get("home_module") in (None, target_summary["module"])
+        ]
+        assert len(oracle_kernel_fns) == target_summary["ssa_verified_function_count"], (
+            len(oracle_kernel_fns), target_summary
+        )
 
         # The imported target is declaration 1025. Both signature-table
         # construction and export lookup must continue beyond their former
@@ -314,9 +318,11 @@ def run():
         return {
             "status": "passed",
             "target": target_stem,
-            "whole_project_ssa_verified": expected_summary["ssa_verified_function_count"],
+            "closure_source_ids": [source_id for source_id, _, _ in sources],
+            "closure_source_count": len(sources),
             "target_ssa_verified": target_summary["ssa_verified_function_count"],
-            "target_matches_whole_project": True,
+            "stage0_oracle_target_functions": len(oracle_kernel_fns),
+            "target_matches_stage0_function_count": True,
             "missing_target_rejected": True,
             "late_export_declaration_count": 1025,
             "late_export_native_verified_ssa": late_native["value_ssa_valid"],
@@ -334,8 +340,6 @@ def run():
             "wrong_imported_enum_qualifier_span_matches": True,
             "stage0_oracle_valid": oracle["valid"],
             "stage0_revision": json.loads((ROOT / "mncs-language.lock.json").read_text())["revision"],
-            "whole_project_artifact": str(whole_artifact.relative_to(ROOT)),
-            "whole_project_result_sha256": whole["result_sha256"],
             "result_sha256": probe.digest.hexdigest(),
         }
     finally:

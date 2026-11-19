@@ -282,7 +282,10 @@ def suite():
     real_args = logical_module_args(real_source)
 
     # The independently selected Stage-0 oracle accepts this exact source.
-    flow_probe = Probe("mncs.compiler.flow.v1", ["lower_unit"], backend="cranelift")
+    flow_probe = Probe(
+        "mncs.compiler.flow.v1", ["lower_unit"], backend="cranelift",
+        backend_roots=["lower_unit"],
+    )
     flow_result = call(flow_probe, "mncs.compiler.flow.v1", "lower_unit", args)
     flow_wire = flow_result["returned"][0]
     proof_wire = field(flow_wire, "proof")
@@ -310,7 +313,8 @@ def suite():
     flow_stderr = flow_probe.close()
 
     decl_probe = Probe(
-        "mncs.compiler.decl.v1", ["local_nominal_type_identities"], backend="cranelift"
+        "mncs.compiler.decl.v1", ["local_nominal_type_identities"], backend="cranelift",
+        backend_roots=["local_nominal_type_identities"],
     )
     nominal_result = call(
         decl_probe,
@@ -336,7 +340,9 @@ def suite():
     decl_stderr = decl_probe.close()
 
     functions = ["lower_value_ssa", "verify_function"]
-    cranelift = Probe(SSA_MODULE, functions, backend="cranelift")
+    cranelift = Probe(
+        SSA_MODULE, functions, backend="cranelift", backend_roots=functions
+    )
     cranelift_raw = call(cranelift, SSA_MODULE, "lower_value_ssa", [*args, flow_wire, nominal_wire])
     summary = decode(cranelift_raw["returned"][0])
     native_functions = linked(summary["functions"])
@@ -608,11 +614,23 @@ def suite():
     ascii_row = next(row for row in real_rows if row["identity"].endswith("::ascii"))
     assert ascii_row["supported"] and ascii_row["verified"], ascii_row
     assert not ascii_row["failure_kinds"], ascii_row
-    assert ascii_row["sequence_index_instructions"] == 1, ascii_row
-    assert ascii_row["scalar_cast_instructions"] == 1, ascii_row
-    assert ascii_row["loop_guard_instructions"] == 1, ascii_row
-    assert ascii_row["loop_advance_instructions"] == 1, ascii_row
-    assert ascii_row["loop_index_initializations"] == 1, ascii_row
+    ascii_view_row = next(row for row in real_rows if row["identity"].endswith("::ascii_view"))
+    assert ascii_view_row["supported"] and ascii_view_row["verified"], ascii_view_row
+    assert not ascii_view_row["failure_kinds"], ascii_view_row
+    assert ascii_view_row["sequence_view_instructions"] >= 1, ascii_view_row
+    assert ascii_view_row["sequence_index_instructions"] >= 16, ascii_view_row
+    assert ascii_view_row["scalar_cast_instructions"] >= 16, ascii_view_row
+    assert ascii_view_row["loop_guard_instructions"] == 1, ascii_view_row
+    assert ascii_view_row["loop_advance_instructions"] == 1, ascii_view_row
+    assert ascii_view_row["loop_index_initializations"] == 1, ascii_view_row
+    validate_utf8_row = next(row for row in real_rows if row["identity"].endswith("::validate_utf8"))
+    assert validate_utf8_row["supported"] and validate_utf8_row["verified"], validate_utf8_row
+    assert not validate_utf8_row["failure_kinds"], validate_utf8_row
+    assert validate_utf8_row["sequence_index_instructions"] == 1, validate_utf8_row
+    assert validate_utf8_row["scalar_cast_instructions"] == 1, validate_utf8_row
+    assert validate_utf8_row["loop_guard_instructions"] == 1, validate_utf8_row
+    assert validate_utf8_row["loop_advance_instructions"] == 1, validate_utf8_row
+    assert validate_utf8_row["loop_index_initializations"] == 1, validate_utf8_row
 
     emitted = cranelift.send({"emit_vm_artifact": {"module": SSA_MODULE}})
     artifact = emitted["artifact"]

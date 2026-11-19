@@ -1,0 +1,619 @@
+{
+  "schema_version": "mncs.development-evidence/1",
+  "observed_at": "2026-11-19T05:10:32.855663+00:00",
+  "session_id": "ses_558ddf20ce16de17",
+  "work_intent_id": "int_2b4e13c1aa81fe29",
+  "vm_owner_session_id": "ses_79bc99be69d34ed7",
+  "vm_owner_work_intent_id": "int_81d6668f3bc92c95",
+  "baseline": {
+    "repository": "mncs-compiler",
+    "base_commit": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+    "adopted_worktree_base_commit": "6643c040492910d0d7eb3be6274e2ea82c033be7",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "stage0_probe_path": "/home/epi13/Documents/Projects/mncs-compiler/.bootstrap/target/release/mncs-compiler-stage0-probe",
+    "stage0_probe_sha256": "c72ca73d81f0296d422b8564bd69c1e5cc40937c8b8827c24bda05b3d13af9de",
+    "producer_identity": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09",
+    "producer_kind": "stage0-bootstrap-direct-emitter",
+    "vm_revision_before": "a991d9f7638307e64b6d1f806ef8b0ae28845cd8",
+    "vm_revision_after": "da99dee282336c5acdc91359b14f477745c77f77"
+  },
+  "module_source_sha256": {
+    "backend_policy": "ec5c0a48d4025d0e68c8bfef49a1a791721775ad6191e4a57030ef12de5f48e3",
+    "decl": "f987a97b0204ad162749e89bae4e2b76b1db22ff6279c980e8bdc95678d8e7b5",
+    "flow": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
+    "kernel": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+    "lexer": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+    "parser": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+    "project": "f07735ea1deff6bb95b09f315d72ac69595e9ac7b61c0626d4c7d1e618ed3257",
+    "segment": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5",
+    "source": "f9bd036f4c515eb692906685f4b13a20e28174f7f05cbcfc601efb0fc2e61a32",
+    "ssa": "0fac7b9acb2cfe73afd34c88da209e8bde936ba9629b31b1b8376f9ddb9e0cf7"
+  },
+  "stdlib_source_sha256": {
+    "std/text_utf8": "e1be1e5c4fc75571e82276d2343ff38ece1df20df326f63c6d821abfa19a67c3",
+    "std/utf8_primitives": "6f6cf43073cbd7d0e2fe22977845b38311dc3a61e2b8806607b4c4ab8c267a45",
+    "std/utf8_scalar": "43821c9e71cd5ac64d49baed55501ceacbfe4290c54bf3068f23474c4abae28c"
+  },
+  "harness_sha256": {
+    "tools/test_sem.py": "98f8d51bb4d9d57b2161f8f7330967fda3f7ce4d0dff3a50547e8e80a253ce9c",
+    "tools/test_ssa_sequence_replace.py": "7241f495a5004241ad3544b32a4307341677d746da0a8b6b403ca8285d60ec15",
+    "tools/test_ssa_sequence_length.py": "510ad5cf399f8b55286a191bbdd8f992698ab72525fcf9a19c22ad63d2ecbb33",
+    "tools/test_ssa_sequence_literal.py": "0b724f772e79ad8e0ff6a7b0a1322a99879716caf10c9d99306502df3dc92048",
+    "tools/test_project.py": "0535ddf222c224b6a4dc144357482f97477962b8eb2d9621eecc5c940a5f5cdb",
+    "tools/probe_compiler_module_frontier.py": "ebd063f58fb97839311d8f0a14b910fcdba36caeb09b22f3e8ae6b1ca5ecf463",
+    "tools/test_project_target_module.py": "dc916ffb9d17c271092e83291fd8d0f9f86e01b5758a0fd3b07933b941aa6727"
+  },
+  "baseline_reproduction": {
+    "compiler_head": "712b65cde6f55dddb59e2420cc85da0dfa341c79",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "source_path": "src/compiler/source.mncs",
+    "rejected_layer": "name_resolution (check_unit stage 2) and semantic_proof (decl.seed_call)",
+    "parser_unit_ok": true,
+    "native_fails": [
+      [
+        "MNE131",
+        32,
+        56418,
+        56425,
+        "replace"
+      ],
+      [
+        "MNE102",
+        1,
+        56475,
+        56485,
+        "next_state"
+      ]
+    ],
+    "stage0_oracle_errors": [],
+    "child_max_rss_kib": 2115368
+  },
+  "sequence_replace_verification": {
+    "test_ssa_sequence_replace": {
+      "command": "python3 -u tools/test_ssa_sequence_replace.py",
+      "status": "passed",
+      "elapsed_seconds": 628.86,
+      "max_child_rss_kib": 4695208,
+      "decl": {
+        "ok": true,
+        "fn_count": 55,
+        "obligations": 269,
+        "unknown_kinds": [
+          13,
+          14,
+          79
+        ],
+        "steps": 1,
+        "call_ms": [
+          2207.691,
+          2296.568
+        ],
+        "elapsed_seconds": 117.246
+      },
+      "decl_vm": {
+        "cases": 20,
+        "vm_wall_seconds": 44.954587,
+        "vm_peak_rss_kb": 311536,
+        "agreement": true,
+        "producer": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09"
+      },
+      "flow": {
+        "src_flow_ms": 3984.078,
+        "src_flow_steps": 1,
+        "src_flow_verified_functions": 55
+      },
+      "ssa_source_module": {
+        "function_count": 55,
+        "supported_function_count": 55,
+        "verified_function_count": 46,
+        "unsupported_block_count": 0,
+        "instruction_count": 3322,
+        "block_count": 713,
+        "line_cols_step_verified": true,
+        "line_cols_global_verified": true,
+        "line_cols_step_kind19_count": 1,
+        "steps": 1,
+        "call_ms": [
+          92434.811,
+          92547.022
+        ]
+      },
+      "ssa_tamper_rejection_count": 14,
+      "ssa_vm": {
+        "artifact_id": "sha256:ddb8bee1f9ff9aeb2dd1c525c203a2fd2e0a37eab20ef8cfcfc12515fefd0fb9",
+        "dag_footprint": {
+          "dag_nodes": 788588,
+          "expanded_nodes": 6202767,
+          "depth": 14,
+          "max_expanded_limit": 8500000
+        },
+        "batch_cases": 29,
+        "vm_wall_seconds": 58.587195,
+        "vm_peak_rss_kb": 428048,
+        "agreement": true,
+        "producer": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09"
+      },
+      "project": {
+        "project_probe_wall_seconds": 100.934,
+        "multi_module_verified_functions": 1,
+        "multi_module_kind19_count": 1,
+        "multi_module_call_ms": 65.605,
+        "negative_multi_module_matched": [
+          "MNE198",
+          "MNE200"
+        ],
+        "source_module_project": {
+          "valid": true,
+          "value_ssa_valid": false,
+          "supported_functions": 55,
+          "verified_functions": 46,
+          "kind19_count": 1,
+          "steps": 1,
+          "call_ms": [
+            23501.461,
+            17626.529
+          ],
+          "incremental_comment_edit_ms": 23477.912
+        }
+      },
+      "note": "Unchanged src/compiler/source.mncs passes declaration proof (55/55), Flow (55/55), and Value SSA lowering (55/55 supported, 46/55 verified with line_cols_step and line_cols_global verified and 1 kind-19 SequenceReplace). The 9 pre-existing unverified functions (validate_utf8_global and 8 unicode_*_plane* tables) have a match inside an iterate loop whose post-match synthetic block holds kind-14 loop advance, rejected by ssa.verify_flow_loop_links / verify_unmapped_loop_operations."
+    },
+    "test_sem": {
+      "command": "python3 -u tools/test_sem.py",
+      "status": "passed",
+      "summary": "291 semantic cases + source-module proof + 11 proof verdicts passed twice identically",
+      "elapsed_wall": "3:12.10",
+      "max_rss_kib": 3821200
+    },
+    "test_ssa_sequence_length": {
+      "command": "python3 -u tools/test_ssa_sequence_length.py",
+      "status": "passed",
+      "elapsed_seconds": 334.815,
+      "max_rss_kib": 4694264,
+      "vm_artifact_id": "sha256:ddb8bee1f9ff9aeb2dd1c525c203a2fd2e0a37eab20ef8cfcfc12515fefd0fb9",
+      "vm_peak_rss_kb": 428124,
+      "vm_wall_seconds": 58.017822,
+      "producer": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09",
+      "real_source_summary": {
+        "valid": false,
+        "function_count": 55,
+        "supported_function_count": 55,
+        "verified_function_count": 46,
+        "value_count": 6854,
+        "instruction_count": 3322,
+        "block_count": 713,
+        "unsupported_block_count": 0,
+        "first_unsupported_function": 0,
+        "first_unsupported_block": 0,
+        "first_unsupported_kind": 0
+      }
+    },
+    "test_ssa_sequence_literal": {
+      "command": "python3 -u tools/test_ssa_sequence_literal.py",
+      "status": "passed",
+      "elapsed_seconds": 406.489,
+      "max_child_rss_kib": 6782408,
+      "backend_policy_project": {
+        "valid": true,
+        "value_ssa_valid": true,
+        "verified_functions": 7,
+        "kind18_count": 39,
+        "steps": 1,
+        "call_ms": [
+          3504.488,
+          3434.603
+        ]
+      },
+      "ssa_vm": {
+        "artifact_id": "sha256:ddb8bee1f9ff9aeb2dd1c525c203a2fd2e0a37eab20ef8cfcfc12515fefd0fb9",
+        "batch_cases": 20,
+        "vm_wall_seconds": 69.616821,
+        "vm_peak_rss_kb": 428392,
+        "agreement": true,
+        "producer": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09"
+      }
+    },
+    "test_project_target_module_with_stdlib_closure": {
+      "command": "python3 -u tools/test_project_target_module.py",
+      "status": "passed",
+      "elapsed_wall": "1:00.37",
+      "max_rss_kib": 3305412,
+      "closure_source_ids": [
+        "kernel.mncs",
+        "lexer.mncs",
+        "parser.mncs",
+        "source.mncs",
+        "std/text_utf8.mncs",
+        "std/utf8_primitives.mncs",
+        "std/utf8_scalar.mncs"
+      ],
+      "target_ssa_verified": 9,
+      "stage0_oracle_target_functions": 9,
+      "stage0_oracle_valid": true,
+      "result_sha256": "c0787bc96dd4c7c47076663c99957d0853222e8c2edc4dc1708866f3152db3c3"
+    }
+  },
+  "standalone_vm_compiler_entry": {
+    "classification": "selected-callable Stage-0-produced canonical VM artifact executed in a fresh mncs-vm process",
+    "bounded_compiler_produced_artifact": "UNKNOWN",
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "entry": "mncs.compiler.project.v1::compile_project_target<1024,1024>",
+    "emit_command": "MNCS_PROBE_MODULES=source,lexer,parser,segment,decl,flow,ssa,project MNCS_PROBE_EXECUTION_MODULES=mncs.compiler.project.v1 MNCS_PROBE_BACKEND=cranelift MNCS_PROBE_BACKEND_ROOTS=compile_project_target mncs-compiler-stage0-probe --emit-vm-artifact=mncs.compiler.project.v1",
+    "producer_identity": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09",
+    "producer_kind": "stage0-bootstrap-direct-emitter",
+    "artifact_id": "sha256:829abf12139838b7781a4105263d7a85f00fbe5ae0e974d6244a6a5732adebdd",
+    "artifact_sha256": "9bb61fe58e30f1b777ca615d81227c9f68b6bfb539ccdc14c4a591e1b04254e0",
+    "dag_footprint": {
+      "dag_nodes": 867497,
+      "expanded_nodes": 6803130,
+      "depth": 15,
+      "vm_max_expanded_limit": 8500000
+    },
+    "vm_blocker_resolved": {
+      "owner": "mncs-vm",
+      "blocker": "SsaInstructionKind::ViewNarrow unsupported at step 147",
+      "resolution_commit": "da99dee282336c5acdc91359b14f477745c77f77",
+      "owner_session_id": "ses_79bc99be69d34ed7",
+      "differential_tests": "cargo test --test views (5/5 passed including view_narrow_agrees_with_oracle) and cargo test --lib (22/22 passed)"
+    },
+    "fresh_process_runs": {
+      "multi_module_sequence_replace_and_backend_policy": {
+        "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+        "vm_binary_sha256": "94db2777dc29a4ac3f91ed951763ef87c62959c51d31bdca60446376b73a48ff",
+        "vm_peak_rss_kb": 466968,
+        "calls_bytes": 209693,
+        "results_bytes": 191217,
+        "results": [
+          {
+            "id": "project:multi-module-sequence-replace",
+            "outcome": {
+              "kind": "completed"
+            },
+            "usage": {
+              "call_depth": 0,
+              "effects": 0,
+              "max_call_depth": 37,
+              "max_memory_cells": 379992,
+              "memory_cells": 39203,
+              "steps": 7095744
+            },
+            "oracle_valid": true,
+            "oracle_ssa_functions": 2,
+            "native_valid": true,
+            "native_ssa_valid": true,
+            "diagnostics": [],
+            "summary": {
+              "source_id": "b-root.mncs",
+              "module": "demo.reproot",
+              "source_sha256": "9662f97c7ad20cd8884b8fce7282e8242e60d65daaff7a2beed2b1404103141e",
+              "proof_ok": true,
+              "proof_obligation_count": 1,
+              "flow_valid": true,
+              "flow_function_count": 1,
+              "flow_verified_function_count": 1,
+              "ssa_valid": true,
+              "ssa_function_count": 1,
+              "ssa_supported_function_count": 1,
+              "ssa_verified_function_count": 1,
+              "ssa_value_count": 6,
+              "ssa_instruction_count": 3,
+              "ssa_unsupported_block_count": 0,
+              "first_unsupported": null
+            },
+            "kind18_count": 0,
+            "kind19_count": 1,
+            "semantic_digest_sha256": "12046def09ce190f51e7889433976407304c5649b11498947d2f9dd562035b5f"
+          },
+          {
+            "id": "project:real-backend_policy.mncs",
+            "outcome": {
+              "dimension": "memory_cells",
+              "kind": "budget_exhausted"
+            },
+            "usage": {
+              "call_depth": 16,
+              "effects": 0,
+              "max_call_depth": 39,
+              "max_memory_cells": 10490337,
+              "memory_cells": 10490337,
+              "steps": 79506966
+            },
+            "oracle_valid": true,
+            "oracle_ssa_functions": 7
+          }
+        ]
+      },
+      "real_stdlib_and_compiler_sources": {
+        "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+        "vm_binary_sha256": "2a1e3b581aa483856a350496dc019732fe69dbb4332dfbf657c218a521a077bf",
+        "vm_wall_seconds": 1492.207841,
+        "vm_peak_rss_kb": 466276,
+        "calls_bytes": 4370945,
+        "results_bytes": 1885344,
+        "results": [
+          {
+            "id": "real-stdlib:utf8_primitives",
+            "closure_sources": [
+              "std/utf8_primitives.mncs"
+            ],
+            "closure_pages_1024": 2,
+            "outcome": {
+              "kind": "completed"
+            },
+            "usage": {
+              "call_depth": 0,
+              "effects": 0,
+              "max_call_depth": 36,
+              "max_memory_cells": 1537365,
+              "memory_cells": 207886,
+              "steps": 22082692
+            },
+            "oracle_valid": true,
+            "oracle_root_functions": 3,
+            "native_valid": true,
+            "native_ssa_valid": true,
+            "diagnostics": [],
+            "summary": {
+              "source_id": "std/utf8_primitives.mncs",
+              "module": "mncs.std.utf8_primitives.v1",
+              "source_sha256": "6f6cf43073cbd7d0e2fe22977845b38311dc3a61e2b8806607b4c4ab8c267a45",
+              "proof_ok": true,
+              "proof_obligation_count": 0,
+              "flow_valid": true,
+              "flow_function_count": 3,
+              "flow_verified_function_count": 3,
+              "ssa_valid": true,
+              "ssa_function_count": 3,
+              "ssa_supported_function_count": 3,
+              "ssa_verified_function_count": 3,
+              "ssa_value_count": 101,
+              "ssa_instruction_count": 55,
+              "ssa_unsupported_block_count": 0,
+              "first_unsupported": null
+            },
+            "matches_oracle_valid": true,
+            "matches_oracle_root_fn_count": true,
+            "semantic_digest_sha256": "2f0201f34e61ff8916e54523253e20fe2ffc62ceb5e97936794c03e410eef15f"
+          },
+          {
+            "id": "real-stdlib:utf8_scalar",
+            "closure_sources": [
+              "std/utf8_primitives.mncs",
+              "std/utf8_scalar.mncs"
+            ],
+            "closure_pages_1024": 6,
+            "outcome": {
+              "kind": "completed"
+            },
+            "usage": {
+              "call_depth": 0,
+              "effects": 0,
+              "max_call_depth": 38,
+              "max_memory_cells": 468490,
+              "memory_cells": 51800,
+              "steps": 17799291
+            },
+            "oracle_valid": true,
+            "oracle_root_functions": 2,
+            "native_valid": false,
+            "native_ssa_valid": false,
+            "diagnostics": [
+              {
+                "$v": 5,
+                "$p": {
+                  "end": 1239,
+                  "source_index": 1,
+                  "start": 1225
+                }
+              }
+            ],
+            "summary": {
+              "source_id": "std/utf8_scalar.mncs",
+              "module": "mncs.std.utf8_scalar.v1",
+              "source_sha256": "43821c9e71cd5ac64d49baed55501ceacbfe4290c54bf3068f23474c4abae28c",
+              "proof_ok": false,
+              "proof_obligation_count": 25,
+              "flow_valid": false,
+              "flow_function_count": 0,
+              "flow_verified_function_count": 0,
+              "ssa_valid": false,
+              "ssa_function_count": 0,
+              "ssa_supported_function_count": 0,
+              "ssa_verified_function_count": 0,
+              "ssa_value_count": 0,
+              "ssa_instruction_count": 0,
+              "ssa_unsupported_block_count": 0,
+              "first_unsupported": null,
+              "proof_failure": {
+                "error_span": [
+                  1225,
+                  1239
+                ],
+                "failed_obligation_count": 7,
+                "first_failed_obligation": {
+                  "end": 1239,
+                  "kind": 32,
+                  "start": 1225,
+                  "status": 1
+                }
+              }
+            },
+            "matches_oracle_valid": false,
+            "matches_oracle_root_fn_count": false,
+            "semantic_digest_sha256": "21c598f0eb3a275ba08d39a5bf4e19a929ca03400c067eafee3ac3cdb089f4d1"
+          },
+          {
+            "id": "real-compiler:segment",
+            "closure_sources": [
+              "lexer.mncs",
+              "segment.mncs",
+              "source.mncs",
+              "std/text_utf8.mncs",
+              "std/utf8_primitives.mncs",
+              "std/utf8_scalar.mncs"
+            ],
+            "closure_pages_1024": 188,
+            "outcome": {
+              "dimension": "memory_cells",
+              "kind": "budget_exhausted"
+            },
+            "usage": {
+              "call_depth": 9,
+              "effects": 0,
+              "max_call_depth": 40,
+              "max_memory_cells": 10191736,
+              "memory_cells": 10191736,
+              "steps": 217535349
+            },
+            "oracle_valid": true,
+            "oracle_root_functions": 11
+          }
+        ]
+      }
+    }
+  },
+  "bounded_page_capacity_admission_improvement": {
+    "summary": "Enabled Profile 0.19 tiered flat_pages admission (1024/2048/4096 pages at stride 1024 with <=1024-page per-module ViewNarrow slice) and fixed a 21.82 GiB Python harness OOM via streaming byte-sequence request encoding (encode_project_request_bytes), one-pass object_hook reply decoding (send_encoded_decoded), and an 8 GiB RLIMIT_AS guard.",
+    "memory_fix_comparison": {
+      "before_oom": {
+        "cause": "python3 built 1.6M nested byte dicts + copy.deepcopy + full json.loads wire tree + project.decode + sorted re-serialization without RLIMIT_AS",
+        "observed_max_rss_kib": 21820468,
+        "outcome": "OOM-killed (oom_reaper reaped python3)"
+      },
+      "after_fix_13_module_kernel": {
+        "command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules backend_policy decl flow lexer parser project segment source ssa kernel --target-last --include-stdlib-closure",
+        "compiler_source_count": 13,
+        "total_pages_stride_1024": 1590,
+        "input_page_bound": 2048,
+        "native_project_valid": true,
+        "native_project_ssa_valid": true,
+        "target_module_summary": {
+          "source_id": "kernel.mncs",
+          "module": "mncs.compiler.kernel.v1",
+          "source_sha256": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+          "proof_ok": true,
+          "proof_obligation_count": 7,
+          "flow_valid": true,
+          "flow_function_count": 9,
+          "flow_verified_function_count": 9,
+          "ssa_valid": true,
+          "ssa_function_count": 9,
+          "ssa_supported_function_count": 9,
+          "ssa_verified_function_count": 9,
+          "ssa_value_count": 557,
+          "ssa_instruction_count": 305,
+          "ssa_unsupported_block_count": 0,
+          "first_unsupported": null
+        },
+        "stage0_oracle": {
+          "status": "valid",
+          "valid": true,
+          "diagnostics": [],
+          "linked_functions": 250,
+          "ssa_functions": 177
+        },
+        "phase_timings_ns": {
+          "source_resolution_and_dependency_selection": 10810647,
+          "retained_session_admission": 36987070302,
+          "record_type_identity_admission": 9234543,
+          "native_request_construction": 215569559,
+          "native_request_transport_and_execution": 20871934319,
+          "response_decode_and_summary": 58220,
+          "stage0_oracle": 8376421166,
+          "result_serialization": 535379
+        },
+        "request_bytes": 36555520,
+        "reply_bytes": 96154860,
+        "probe_peak_rss_bytes": 5801672704,
+        "harness_and_child_max_rss_kib": 5665696,
+        "cgroup_peak_bytes": 6543183872,
+        "elapsed_wall": "1:08.15"
+      },
+      "after_fix_13_module_segment": {
+        "command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules backend_policy decl flow kernel lexer parser project source ssa segment --target-last --include-stdlib-closure",
+        "compiler_source_count": 13,
+        "total_pages_stride_1024": 1590,
+        "input_page_bound": 2048,
+        "native_project_valid": true,
+        "native_project_ssa_valid": true,
+        "target_module_summary": {
+          "source_id": "segment.mncs",
+          "module": "mncs.compiler.segment.v1",
+          "source_sha256": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5",
+          "proof_ok": true,
+          "proof_obligation_count": 0,
+          "flow_valid": true,
+          "flow_function_count": 11,
+          "flow_verified_function_count": 11,
+          "ssa_valid": true,
+          "ssa_function_count": 11,
+          "ssa_supported_function_count": 11,
+          "ssa_verified_function_count": 11,
+          "ssa_value_count": 43,
+          "ssa_instruction_count": 11,
+          "ssa_unsupported_block_count": 0,
+          "first_unsupported": null
+        },
+        "stage0_oracle": {
+          "status": "valid",
+          "valid": true,
+          "diagnostics": [],
+          "linked_functions": 244,
+          "ssa_functions": 177
+        },
+        "phase_timings_ns": {
+          "source_resolution_and_dependency_selection": 10897207,
+          "retained_session_admission": 35374844564,
+          "record_type_identity_admission": 8311832,
+          "native_request_construction": 207119327,
+          "native_request_transport_and_execution": 19962862300,
+          "response_decode_and_summary": 42337,
+          "stage0_oracle": 7271801740,
+          "result_serialization": 505691
+        },
+        "harness_and_child_max_rss_kib": 5648608,
+        "elapsed_wall": "1:04.45"
+      },
+      "after_fix_9_module_flow_ceiling_reproducer": {
+        "command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser segment decl flow --target-last --include-stdlib-closure",
+        "compiler_source_count": 9,
+        "total_pages_stride_1024": 1058,
+        "input_page_bound": 2048,
+        "native_transport_outcome": "RESOURCE_EXHAUSTED",
+        "classification_reason": "allocator reported a failed memory allocation",
+        "probe_peak_rss_bytes": 8410087424,
+        "address_space_limit_bytes": 8589934592,
+        "stage0_oracle_status": "UNKNOWN"
+      }
+    }
+  },
+  "remaining_blockers": [
+    {
+      "rank": 1,
+      "owner": "mncs-compiler (with Stage-0 Cranelift arena footprint)",
+      "summary": "Self-compiling flow.mncs (importing decl.mncs) through native project.compile_project_target<2048,1024> exhausts the 8 GiB address-space budget (RESOURCE_EXHAUSTED at 7.83 GiB RSS inside mncs-compiler-stage0-probe) while materializing decl.mncs's full imported signature/record/enum schema tables in Cranelift's bump-allocated execution arena.",
+      "reproduce_command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser segment decl flow --target-last --include-stdlib-closure"
+    },
+    {
+      "rank": 2,
+      "owner": "mncs-compiler",
+      "summary": "parser.mncs (bytes 7580..7586, source.LineCol { ... }) and lexer.mncs (bytes 10003..10009, source.Utf8Scalar { ... }) fail native declaration proof with kind-42 MNE123 on qualified imported record construction; std/utf8_scalar.mncs fails with kind-32 MNE131 on unqualified calls to unaliased use imports; 9 functions in source.mncs remain supported-but-unverified in Value SSA due to match-inside-iterate post-match synthetic blocks holding kind-14 loop advance.",
+      "reproduce_command": "python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser --target-last --include-stdlib-closure"
+    },
+    {
+      "rank": 3,
+      "owner": "mncs-vm",
+      "summary": "Standalone canonical VM execution of compile_project_target<1024,1024> hits mncs-vm's internal 10 MiB (10,485,760 cells) memory_cells policy cap on larger real compiler closures (backend_policy.mncs at 79.5M steps / 10.49M cells; segment.mncs 6-module closure at 217.5M steps / 10.19M cells), while multi-module SequenceReplace (7.1M steps / 380K cells) and real std/utf8_primitives.mncs (22.1M steps / 1.54M cells) complete and match pinned Stage-0.",
+      "reproduce_command": "mncs-vm batch --artifact project_compile_target_1024.artifact.json --calls calls.json --output results.json"
+    },
+    {
+      "rank": 4,
+      "owner": "mncs-compiler",
+      "summary": "No MNCS-authored VM/native artifact emitter exists yet; native compilation ends at verified Value SSA, so bounded compiler-produced executable artifacts and Stage-1->Stage-2 rebuilds remain UNKNOWN/unproven.",
+      "reproduce_command": "N/A (emission stage not yet authored in MNCS)"
+    }
+  ],
+  "deepest_stage_proved": "Native Project compile_project_target<2048,1024> admits all 13 compiler+Stdlib modules (1,590 pages > 1,024) and lowers kernel.mncs (9/9 verified Value SSA) and segment.mncs (11/11 verified Value SSA) matching pinned Stage-0; unchanged source.mncs passes decl proof (55/55), Flow (55/55), and Value SSA lowering (55/55 supported, 46/55 verified with SequenceReplace kind-19 verified); standalone Stage-0-emitted canonical VM artifact for project.compile_project_target<1024,1024> (sha256:829abf12...) runs in a fresh mncs-vm (da99dee) process and compiles multi-module SequenceReplace and real std/utf8_primitives.mncs (3/3 verified Value SSA) matching pinned Stage-0. Bounded compiler-produced executable artifacts and Stage-1->Stage-2 rebuilds remain UNKNOWN.",
+  "stage1_claimed": false,
+  "stage2_claimed": false
+}
