@@ -1,0 +1,531 @@
+{
+  "schema_version": "mncs.development-evidence/1",
+  "observed_at": "2026-11-19T09:43:02.332381+00:00",
+  "session_id": "ses_de55cdd02fcfe6f9",
+  "work_intent_id": "int_2b4e13c1aa81fe29",
+  "revisions": {
+    "mncs_compiler_base": "1fe273f416f7459b09ab565b2f30dab7b3873ef1",
+    "mncs_compiler_slice1_flow_arena": "b33601130f57b0525050c132f724a0de8b2f3c4f",
+    "mncs_compiler_slice2_qualified_record": "a685b91e9069ed8bdf47a9c0abf2ef33f89b3957",
+    "mncs_compiler_slice3_native_vm_emit": "43f307ec69525b3bc2a68893d909b3ad93610721",
+    "mncs_vm": "da99dee282336c5acdc91359b14f477745c77f77",
+    "mncs_vm_binary_sha256": "2a1e3b581aa483856a350496dc019732fe69dbb4332dfbf657c218a521a077bf",
+    "stage0_lock": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "stage0_probe_sha256": "c72ca73d81f0296d422b8564bd69c1e5cc40937c8b8827c24bda05b3d13af9de",
+    "stage0_producer_identity": "sha256:9c4b6690db41e47f2c1dd5a6c904409ad27e5784fed5b7ef0abaa1a20e840e09"
+  },
+  "module_source_sha256": {
+    "backend_policy": "ec5c0a48d4025d0e68c8bfef49a1a791721775ad6191e4a57030ef12de5f48e3",
+    "decl": "8e65d55ae6a55d8ee60d01954db71bea6e13a6fdb84b89fec64451275f8ed4a0",
+    "flow": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
+    "kernel": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+    "lexer": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+    "parser": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+    "project": "2128cc0420115bba06bb95c8f9a69e50bb60e6b5d669cc73416f7f62d621d91a",
+    "segment": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5",
+    "source": "f9bd036f4c515eb692906685f4b13a20e28174f7f05cbcfc601efb0fc2e61a32",
+    "ssa": "30ba84d67cfc3dc1ab63d142a53af998776f5688a991d991c843c4e8ec867aab",
+    "vm_emit": "a3f8667381e64118a207e8f646d22aa53d22c397b7b4f4f913811c51c8958e7a"
+  },
+  "stdlib_source_sha256": {
+    "std/text_utf8": "e1be1e5c4fc75571e82276d2343ff38ece1df20df326f63c6d821abfa19a67c3",
+    "std/utf8_primitives": "6f6cf43073cbd7d0e2fe22977845b38311dc3a61e2b8806607b4c4ab8c267a45",
+    "std/utf8_scalar": "43821c9e71cd5ac64d49baed55501ceacbfe4290c54bf3068f23474c4abae28c"
+  },
+  "harness_sha256": {
+    "tools/probe_compiler_module_frontier.py": "ebd063f58fb97839311d8f0a14b910fcdba36caeb09b22f3e8ae6b1ca5ecf463",
+    "tools/test_project_imported_schema_closure.py": "ac04e42dd3337b7cbbd9f907ae1af01adeb3d3b5ffb928904809516d1b599021",
+    "tools/native_vm_artifact.py": "7e503a5a2dde2ae21f82d41825b20af1259e9d79722f1f30078f98d28d8b528c",
+    "tools/test_native_vm_emit.py": "f17f1be1d0cfd61173d276c108ddd7957f7dc6eac45f4a32ccff22673cc78243"
+  },
+  "slice1_flow_closure_memory_bottleneck": {
+    "reproduce_command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser segment decl flow --target-last --include-stdlib-closure",
+    "guard_address_space_bytes": 8589934592,
+    "backend": "cranelift",
+    "cache_state": "warm (.build/probe-cache)",
+    "root_cause": "project.mncs eagerly collected and bound all 1,232 functions and materialized all ~320 records / ~66 enums / ~400 project markers from decl.mncs even though flow.mncs uses only 5 imported functions and 16 records / 18 enums transitively; ssa.lower_function then embedded the entire module-wide imported_records and imported_enums lists into each of flow.mncs's 70 ssa.Function records, causing ~70x value-tree amplification (~3.5-4.5 GiB) during Cranelift-to-Rust ProjectResult return conversion and hitting the 8 GiB RLIMIT_AS ceiling (SIGABRT).",
+    "phase_isolated_measurements_before_fix": [
+      {
+        "phase": 1,
+        "label": "parse+dup+resolve_imports",
+        "status": "returned",
+        "returned": 23,
+        "elapsed_s": 2.873,
+        "rss_before_mib": 2741.4,
+        "peak_rss_mib": 4366.3,
+        "rss_delta_mib": 1625.0,
+        "rss_after_mib": 4223.1,
+        "hwm_after_mib": 4377.8
+      },
+      {
+        "phase": 2,
+        "label": "local+resolve_nominals",
+        "status": "returned",
+        "returned": 209,
+        "elapsed_s": 5.582,
+        "rss_before_mib": 4223.1,
+        "peak_rss_mib": 4420.9,
+        "rss_delta_mib": 197.8,
+        "rss_after_mib": 4269.9,
+        "hwm_after_mib": 4431.1
+      },
+      {
+        "phase": 3,
+        "label": "closure+project_nominal_markers",
+        "status": "returned",
+        "returned": 301,
+        "elapsed_s": 5.625,
+        "rss_before_mib": 4269.9,
+        "peak_rss_mib": 4434.9,
+        "rss_delta_mib": 165.1,
+        "rss_after_mib": 4272.4,
+        "hwm_after_mib": 4437.4
+      },
+      {
+        "phase": 51,
+        "label": "decl.collect_sigtab_only",
+        "status": "returned",
+        "returned": 511,
+        "elapsed_s": 7.218,
+        "rss_before_mib": 4272.4,
+        "peak_rss_mib": 4418.9,
+        "rss_delta_mib": 146.5,
+        "rss_after_mib": 4293.4,
+        "hwm_after_mib": 4458.4
+      },
+      {
+        "phase": 52,
+        "label": "decl.collect_sigtab+bind_local_callable_identities",
+        "status": "returned",
+        "returned": 522,
+        "elapsed_s": 9.816,
+        "rss_before_mib": 4293.4,
+        "peak_rss_mib": 4437.4,
+        "rss_delta_mib": 144.0,
+        "rss_after_mib": 4298.7,
+        "hwm_after_mib": 4463.7
+      },
+      {
+        "phase": 53,
+        "label": "full_imported_signatures_no_schemas",
+        "status": "returned",
+        "returned": 531,
+        "elapsed_s": 9.832,
+        "rss_before_mib": 4298.7,
+        "peak_rss_mib": 4423.5,
+        "rss_delta_mib": 124.9,
+        "rss_after_mib": 4299.1,
+        "hwm_after_mib": 4464.2
+      },
+      {
+        "phase": 41,
+        "label": "project_record_schemas_only",
+        "status": "returned",
+        "returned": 411,
+        "elapsed_s": 6.685,
+        "rss_before_mib": 4299.1,
+        "peak_rss_mib": 4551.7,
+        "rss_delta_mib": 252.6,
+        "rss_after_mib": 4311.9,
+        "hwm_after_mib": 4555.6
+      },
+      {
+        "phase": 42,
+        "label": "project_enum_schemas_only",
+        "status": "returned",
+        "returned": 421,
+        "elapsed_s": 6.142,
+        "rss_before_mib": 4311.9,
+        "peak_rss_mib": 4494.6,
+        "rss_delta_mib": 182.8,
+        "rss_after_mib": 4311.9,
+        "hwm_after_mib": 4555.6
+      },
+      {
+        "phase": 43,
+        "label": "record+enum_schemas",
+        "status": "returned",
+        "returned": 431,
+        "elapsed_s": 7.181,
+        "rss_before_mib": 4311.9,
+        "peak_rss_mib": 4559.5,
+        "rss_delta_mib": 247.6,
+        "rss_after_mib": 4328.3,
+        "hwm_after_mib": 4605.1
+      },
+      {
+        "phase": 6,
+        "label": "schemas+imported_signatures",
+        "status": "returned",
+        "returned": 601,
+        "elapsed_s": 11.364,
+        "rss_before_mib": 4328.3,
+        "peak_rss_mib": 4615.8,
+        "rss_delta_mib": 287.5,
+        "rss_after_mib": 4355.0,
+        "hwm_after_mib": 4631.8
+      },
+      {
+        "phase": 7,
+        "label": "prove_parsed_unit_with_imported_schemas",
+        "status": "returned",
+        "returned": 701,
+        "elapsed_s": 12.593,
+        "rss_before_mib": 4355.0,
+        "peak_rss_mib": 4608.6,
+        "rss_delta_mib": 253.6,
+        "rss_after_mib": 4371.7,
+        "hwm_after_mib": 4648.5
+      },
+      {
+        "phase": 8,
+        "label": "flow.lower_proven_unit",
+        "status": "returned",
+        "returned": 801,
+        "elapsed_s": 12.622,
+        "rss_before_mib": 4371.7,
+        "peak_rss_mib": 4631.5,
+        "rss_delta_mib": 259.8,
+        "rss_after_mib": 4371.9,
+        "hwm_after_mib": 4648.7
+      },
+      {
+        "phase": 9,
+        "label": "ssa.lower_value_ssa_with_imported_schemas",
+        "status": "returned",
+        "returned": 901,
+        "elapsed_s": 36.018,
+        "rss_before_mib": 4371.9,
+        "peak_rss_mib": 4631.1,
+        "rss_delta_mib": 259.2,
+        "rss_after_mib": 4382.3,
+        "hwm_after_mib": 4659.1
+      }
+    ],
+    "before_baseline_warm_cache": {
+      "compiler_head": "1fe273f416f7459b09ab565b2f30dab7b3873ef1",
+      "outcome": "RESOURCE_EXHAUSTED",
+      "stage": "native_compiler_execution",
+      "return_code": -6,
+      "classification_reason": "allocator reported a failed memory allocation",
+      "wait_elapsed_seconds": 73.111,
+      "probe_peak_rss_bytes": 8410406912,
+      "probe_hwm_bytes": 8410406912,
+      "native_project_valid": null,
+      "native_project_ssa_valid": null,
+      "stage0_oracle": {
+        "status": "UNKNOWN",
+        "reason": "native request and Stage-0 oracle have not completed"
+      }
+    },
+    "after_fix_flow_9_modules_warm_cache": {
+      "compiler_commit": "b33601130f57b0525050c132f724a0de8b2f3c4f",
+      "compiler_source_count": 9,
+      "total_pages_stride_1024": 1058,
+      "input_page_bound": 2048,
+      "native_project_valid": true,
+      "native_project_ssa_valid": true,
+      "target_module": {
+        "source_id": "flow.mncs",
+        "module": "mncs.compiler.flow.v1",
+        "source_sha256": "4afb6563ae0ba460c14e9d37b22553d7625470e26c27bfdaf915a3dcdb1970dd",
+        "proof_ok": true,
+        "proof_obligation_count": 13,
+        "flow_valid": true,
+        "flow_function_count": 70,
+        "flow_verified_function_count": 70,
+        "ssa_valid": true,
+        "ssa_function_count": 70,
+        "ssa_supported_function_count": 70,
+        "ssa_verified_function_count": 70,
+        "ssa_value_count": 2109,
+        "ssa_instruction_count": 898,
+        "ssa_unsupported_block_count": 0,
+        "first_unsupported": null
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 1554,
+        "ssa_functions": 552
+      },
+      "native_request_wait_seconds": 49.226,
+      "reply_bytes": 220483833,
+      "probe_peak_rss_bytes": 4977061888,
+      "probe_hwm_bytes": 5024210944,
+      "harness_and_child_max_rss_kib": 4906456,
+      "campaign_elapsed_seconds": 139.874,
+      "result_sha256": "d4f1c176b15c1d0307f6c40eccac06742f9dba307e04ca606fd689a09d686263"
+    },
+    "comparable_control_kernel_13_modules_warm_cache": {
+      "command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules backend_policy decl flow lexer parser project segment source ssa kernel --target-last --include-stdlib-closure",
+      "before_1fe273f": {
+        "native_project_valid": true,
+        "native_project_ssa_valid": true,
+        "verified_functions": 9,
+        "native_request_wait_seconds": 20.872,
+        "reply_bytes": 96154860,
+        "probe_peak_rss_bytes": 5801672704,
+        "harness_and_child_max_rss_kib": 5665696,
+        "elapsed_wall": "1:08.15"
+      },
+      "after_b336011": {
+        "native_project_valid": true,
+        "native_project_ssa_valid": true,
+        "target_module": {
+          "source_id": "kernel.mncs",
+          "module": "mncs.compiler.kernel.v1",
+          "source_sha256": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+          "proof_ok": true,
+          "proof_obligation_count": 7,
+          "flow_valid": true,
+          "flow_function_count": 9,
+          "flow_verified_function_count": 9,
+          "ssa_valid": true,
+          "ssa_function_count": 9,
+          "ssa_supported_function_count": 9,
+          "ssa_verified_function_count": 9,
+          "ssa_value_count": 557,
+          "ssa_instruction_count": 305,
+          "ssa_unsupported_block_count": 0,
+          "first_unsupported": null
+        },
+        "stage0_oracle": {
+          "status": "valid",
+          "valid": true,
+          "diagnostics": [],
+          "linked_functions": 250,
+          "ssa_functions": 177
+        },
+        "native_request_wait_seconds": 12.26,
+        "reply_bytes": 13517042,
+        "probe_peak_rss_bytes": 5903441920,
+        "probe_hwm_bytes": 5929824256,
+        "harness_and_child_max_rss_kib": 5790844,
+        "elapsed_wall": "0:58.20",
+        "result_sha256": "b040ebc9379ebd19308955b5e353ea18c8e49845a8f89b4805625dbbadec00e1"
+      }
+    },
+    "focused_imported_schema_closure_regression": {
+      "command": "python3 -u tools/test_project_imported_schema_closure.py",
+      "status": "passed",
+      "positive_normalized_semantic_sha256": "d92fdc063e5b1a5b9aea598afb4d521545b77127a106f6b098e6066e8bc5cbf6",
+      "encoded_vs_legacy_normalized_digest_equal": true,
+      "distractor_invariant_digest_equal": true,
+      "stage0_oracle_agrees": true,
+      "per_function_retained_schemas": {
+        "pure_fn": {
+          "records": 0,
+          "enums": 0
+        },
+        "transitive_record_fn": {
+          "records": 2,
+          "enums": 0
+        },
+        "transitive_enum_fn": {
+          "records": 1,
+          "enums": 1
+        },
+        "imported_record_ctor_update_fn": {
+          "records": 2,
+          "enums": 1
+        }
+      }
+    }
+  },
+  "slice2_qualified_imported_record_construct_and_update": {
+    "compiler_commit": "a685b91e9069ed8bdf47a9c0abf2ef33f89b3957",
+    "parser_module_after_fix": {
+      "command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser --target-last --include-stdlib-closure",
+      "native_project_valid": true,
+      "native_project_ssa_valid": false,
+      "target_module": {
+        "source_id": "parser.mncs",
+        "module": "mncs.compiler.parser.v1",
+        "source_sha256": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+        "proof_ok": true,
+        "proof_obligation_count": 2,
+        "flow_valid": true,
+        "flow_function_count": 8,
+        "flow_verified_function_count": 8,
+        "ssa_valid": false,
+        "ssa_function_count": 8,
+        "ssa_supported_function_count": 8,
+        "ssa_verified_function_count": 7,
+        "ssa_value_count": 876,
+        "ssa_instruction_count": 347,
+        "ssa_unsupported_block_count": 0,
+        "first_unsupported": null
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 241,
+        "ssa_functions": 176
+      },
+      "native_request_wait_seconds": 2.412,
+      "reply_bytes": 17609949,
+      "probe_peak_rss_bytes": 4719976448,
+      "note": "parser.mncs now passes full declaration proof (2 obligations), Flow (8/8 verified), and Value SSA lowering (8/8 supported, 7/8 verified including header_with_locations_global constructing source.LineCol); only scan_header_global remains unverified due to the pre-existing post-match loop-advance verifier gap."
+    },
+    "lexer_module_after_fix": {
+      "command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer --target-last --include-stdlib-closure",
+      "native_project_valid": false,
+      "native_project_ssa_valid": false,
+      "target_module": {
+        "source_id": "lexer.mncs",
+        "module": "mncs.compiler.lexer.v1",
+        "source_sha256": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+        "proof_ok": false,
+        "proof_obligation_count": 356,
+        "flow_valid": false,
+        "flow_function_count": 0,
+        "flow_verified_function_count": 0,
+        "ssa_valid": false,
+        "ssa_function_count": 0,
+        "ssa_supported_function_count": 0,
+        "ssa_verified_function_count": 0,
+        "ssa_value_count": 0,
+        "ssa_instruction_count": 0,
+        "ssa_unsupported_block_count": 0,
+        "first_unsupported": null,
+        "proof_failure": {
+          "error_span": [
+            10312,
+            10342
+          ],
+          "failed_obligation_count": 12,
+          "first_failed_obligation": {
+            "end": 10342,
+            "kind": 32,
+            "start": 10312,
+            "status": 1
+          }
+        }
+      },
+      "stage0_oracle": {
+        "status": "valid",
+        "valid": true,
+        "diagnostics": [],
+        "linked_functions": 233,
+        "ssa_functions": 176
+      },
+      "native_request_wait_seconds": 2.899,
+      "note": "lexer.mncs cleared all qualified source.Utf8Scalar and source.ByteWindow4 record constructions and advanced to the next distinct gap at 10312..10342 (text_utf8.is_whitespace_scalar, kind 32, unaliased/re-exported import resolution in std/text_utf8.mncs)."
+    }
+  },
+  "slice3_bounded_native_mncs_vm_emitter": {
+    "classification": "bounded compiler-produced executable VM artifact emitted by MNCS module mncs.compiler.vm_emit.v1 from native verified Value SSA (mncs.compiler.ssa.v1), transport-packaged by tools/native_vm_artifact.py, and independently admitted & executed in a fresh mncs-vm process",
+    "command": "python3 -u tools/test_native_vm_emit.py",
+    "results": {
+      "status": "passed",
+      "provenance": {
+        "executable_program_producer": "mncs.compiler.vm_emit.v1::compile_and_emit_vm_module",
+        "native_ssa_producer": "mncs.compiler.ssa.v1::lower_flow_unit_value_ssa",
+        "transport_codec_and_sealer": "tools/native_vm_artifact.py",
+        "independent_vm_admission_and_execution": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+        "host_probe_execution_lock": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+        "compiler_revision": "a685b91e9069ed8bdf47a9c0abf2ef33f89b3957",
+        "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+        "emitter_source_sha256": "a3f8667381e64118a207e8f646d22aa53d22c397b7b4f4f913811c51c8958e7a"
+      },
+      "utf8_primitives": {
+        "source_path": "/home/epi13/Documents/Projects/mncs-stdlib/library/std/utf8_primitives.mncs",
+        "source_sha256": "6f6cf43073cbd7d0e2fe22977845b38311dc3a61e2b8806607b4c4ab8c267a45",
+        "module": "mncs.std.utf8_primitives.v1",
+        "function_count": 3,
+        "block_count": 27,
+        "instruction_count": 55,
+        "artifact_id": "sha256:f72caf219bf61b6bc1ae5066741fa4b9cf24e2570062c75f6ffa2174cb5278ac",
+        "artifact_sha256": "183835175d9b90dcda480c6030fb47cf75938cc41bbfbebd592250f7deea2a11",
+        "artifact_bytes": 39410,
+        "deterministic_across_fresh_processes": true,
+        "emit_process1_wall_s": 38.415,
+        "emit_process1_peak_rss_bytes": 3848544256,
+        "emit_process2_wall_s": 37.63,
+        "emit_process2_peak_rss_bytes": 3848527872,
+        "vm_admission_status": "admitted",
+        "vm_differential_cases": 672,
+        "vm_differential_matches": 672,
+        "vm_session_wall_s": 0.8005,
+        "vm_resident_peak_rss_bytes": 28282880,
+        "vm_max_memory_cells": 33,
+        "vm_max_steps_per_call": 34,
+        "vm_total_steps": 13526
+      },
+      "scalar_call_witness": {
+        "module": "mncs.test.native_vm_scalar_witness.v1",
+        "function_count": 4,
+        "block_count": 8,
+        "instruction_count": 24,
+        "artifact_id": "sha256:9d4d0f8f72f4c55ddc8428c027ce24275a49f099277f8249ac362312ef33165c",
+        "differential_cases": 9,
+        "differential_matches": 9,
+        "checked_overflow_trap_matched": true,
+        "vm_resident_peak_rss_bytes": 28045312,
+        "vm_max_memory_cells": 20
+      },
+      "negative_rejections": {
+        "unverified_ssa_invalid_summary": {
+          "ok": false,
+          "error_code": 1
+        },
+        "unverified_ssa_count_mismatch": {
+          "ok": false,
+          "error_code": 1
+        },
+        "unverified_source_type_error": {
+          "ok": false,
+          "error_code": 1
+        },
+        "unsupported_record_type": {
+          "ok": false,
+          "error_code": 4
+        },
+        "unsupported_bounded_loop": {
+          "ok": false,
+          "error_code": 5
+        },
+        "tampered_artifact_vm_admission": {
+          "status": "refused",
+          "returncode": 2
+        }
+      }
+    }
+  },
+  "stage_accounting": {
+    "selected_callable_stage0_vm_artifact": "PROVED (prior frontier sha256:829abf12...)",
+    "bounded_compiler_produced_executable_artifact": "PROVED_BOUNDED_SCALAR_AND_DIRECT_CALL_SUBSET (std/utf8_primitives.mncs sha256:f72caf219bf61b6bc1ae5066741fa4b9cf24e2570062c75f6ffa2174cb5278ac; 672/672 Stage-0 differential matches in fresh mncs-vm)",
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "next_remaining_blockers": [
+    {
+      "rank": 1,
+      "owner": "mncs-compiler",
+      "summary": "Unaliased imports (`use <module>;` without `as <alias>`) and re-exported stdlib callables block unchanged std/utf8_scalar.mncs (span 1225..1239 `utf8_lead_need`, kind 32) and unchanged lexer.mncs (span 10312..10342 `text_utf8.is_whitespace_scalar`, kind 32).",
+      "reproduce_command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer --target-last --include-stdlib-closure"
+    },
+    {
+      "rank": 2,
+      "owner": "mncs-compiler",
+      "summary": "Bounded native VM emitter (`mncs.compiler.vm_emit.v1`) currently admits the pure scalar + direct-call verified Value SSA subset (`std/utf8_primitives.mncs`) and explicitly rejects records/enums (`error_code: 4`) and bounded loops/sequences (`error_code: 5`); expanding it to records, finite sums, sequences, and bounded loops is required before emitting compiler modules natively.",
+      "reproduce_command": "python3 -u tools/test_native_vm_emit.py"
+    },
+    {
+      "rank": 3,
+      "owner": "mncs-compiler",
+      "summary": "Post-match loop-advance SSA verifier gap leaves 1/8 functions in parser.mncs (`scan_header_global`) and 9/55 functions in source.mncs supported but unverified.",
+      "reproduce_command": "MNCS_PROBE_TELEMETRY=1 python3 -u tools/probe_compiler_module_frontier.py --modules source lexer parser --target-last --include-stdlib-closure"
+    },
+    {
+      "rank": 4,
+      "owner": "mncs-vm / mncs-compiler",
+      "summary": "Running larger multi-module compiler closures (such as segment.mncs, 188 pages) inside `mncs-vm` hits the default 10,000,000 `memory_cells` limit (`10,191,736` cells) recorded in the prior frontier.",
+      "reproduce_command": "See evidence/sequence-replace-and-stage1-frontier-20261118.json (real-compiler:segment)"
+    }
+  ]
+}
