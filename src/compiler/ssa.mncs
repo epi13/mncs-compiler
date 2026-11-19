@@ -160,6 +160,7 @@ record SequenceElementSupport { ty: decl.SemType, done: bool, supported: bool }
 record ExpressionBuild {
     rest: flow.TypedExprList,
     env: Environment,
+    parameter_bindings: Environment,
     instructions: InstructionList,
     values: ValueList,
     next_value: u64,
@@ -889,7 +890,7 @@ fn lower_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     let actual_env: Environment = entry_or_parameters(block.id, st.entry, st.entry_env, incoming, prepared.env);
     let params: ValueList = select_block_parameters(block.id, st.entry, prepared.params);
     let expression_seed: ExpressionBuild = ExpressionBuild {
-        rest: block.expressions, env: actual_env, instructions: InstructionList.QNil,
+        rest: block.expressions, env: actual_env, parameter_bindings: actual_env, instructions: InstructionList.QNil,
         values: prepared.values, next_value: prepared.next_value,
         next_instruction: st.next_instruction, sequence: 0, block: block.id,
         branch_value: 0, return_value: 0, has_branch: false, has_return: false,
@@ -906,7 +907,7 @@ fn lower_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     let block_ok: bool = exprs.ok && terminator_shape(block, term);
     let local_failure: u64 = classify_block_failure(block, st.entry, incoming, exprs, term, st.supported);
     let failure_kind: u64 = select(st.initial_failure_kind > 0, st.initial_failure_kind, local_failure);
-    let ssa_block: SsaBlock = SsaBlock { id: exprs.block, parameters: exprs.parameters, parameter_bindings: actual_env, instructions: instructions, terminator: term, reachable: block.reachable, has_failure_target: false, failure_target: 0, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
+    let ssa_block: SsaBlock = SsaBlock { id: exprs.block, parameters: exprs.parameters, parameter_bindings: exprs.parameter_bindings, instructions: instructions, terminator: term, reachable: block.reachable, has_failure_target: false, failure_target: 0, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
     let prior_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, exprs.generated_blocks, st.blocks);
     return SsaBuild {
         rest: rest, edges: edges, blocks: SsaBlockList.LCons { head: ssa_block, tail: prior_blocks },
@@ -1060,11 +1061,12 @@ fn lower_expression<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
     iterate i up_to 1024 carrying built: ExprBuild = seed { next built = lower_operation_step<P, N>(pages, stride, total, built); }
     let value: Value = expression_value(built.stack);
     let one_value: bool = expression_stack_single(built.stack);
-    let env: Environment = bind_let_result<P, N>(pages, stride, total, expression, st.env, value);
+    let env: Environment = bind_let_result<P, N>(pages, stride, total, expression, built.env, value);
+    let parameter_bindings: Environment = select_environment(built.block != st.block, built.env, st.parameter_bindings);
     let branch_value: u64 = select(expression.role == 2, value.id, st.branch_value);
     let return_value: u64 = select(expression.role == 3, value.id, st.return_value);
     return ExpressionBuild {
-        rest: rest, env: env, instructions: built.instructions, values: built.values,
+        rest: rest, env: env, parameter_bindings: parameter_bindings, instructions: built.instructions, values: built.values,
         next_value: built.next_value, next_instruction: built.next_instruction,
         sequence: built.sequence, block: built.block, branch_value: branch_value,
         return_value: return_value, has_branch: st.has_branch || expression.role == 2,
@@ -2193,16 +2195,16 @@ fn verify_function_with_flow<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], 
     if !(verify_function_base<P, N>(pages, stride, total, function)) || !(cfg.verified) || cfg.block_count == 0 { return false; }
     return verify_flow_loop_links<P, N>(pages, stride, total, function, cfg);
 }
-record FlowLoopLinkScan { rest: flow.BlockList, function: Function, seen: u64, ok: bool }
+record FlowLoopLinkScan { rest: flow.BlockList, function: Function, flow_block_count: u64, claimed: IdList, seen: u64, ok: bool }
 fn verify_flow_loop_links<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, cfg: flow.FunctionFlow) -> (result: bool) {
     if cfg.block_count >= function.block_count { return false; }
-    iterate i up_to 1024 carrying st: FlowLoopLinkScan = FlowLoopLinkScan { rest: cfg.blocks, function: function, seen: 0, ok: true } {
+    iterate i up_to 1024 carrying st: FlowLoopLinkScan = FlowLoopLinkScan { rest: cfg.blocks, function: function, flow_block_count: cfg.block_count, claimed: IdList.INil, seen: 0, ok: true } {
         if !(st.ok) { return false; }
-        if flow_block_list_empty(st.rest) { return st.seen == cfg.block_count && verify_unmapped_loop_operations<P, N>(pages, stride, total, function.blocks, cfg.block_count); }
+        if flow_block_list_empty(st.rest) { return st.seen == cfg.block_count && verify_unmapped_loop_operations<P, N>(pages, stride, total, function.blocks, cfg.block_count, st.claimed); }
         if st.seen >= cfg.block_count { return false; }
         next st = verify_flow_loop_link_step<P, N>(pages, stride, total, st);
     }
-    return st.ok && flow_block_list_empty(st.rest) && st.seen == cfg.block_count && verify_unmapped_loop_operations<P, N>(pages, stride, total, function.blocks, cfg.block_count);
+    return st.ok && flow_block_list_empty(st.rest) && st.seen == cfg.block_count && verify_unmapped_loop_operations<P, N>(pages, stride, total, function.blocks, cfg.block_count, st.claimed);
 }
 fn verify_flow_loop_link_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FlowLoopLinkScan) -> (result: FlowLoopLinkScan) {
     return match st.rest {
@@ -2212,9 +2214,167 @@ fn verify_flow_loop_link_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
 }
 fn verify_flow_loop_link_item<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FlowLoopLinkScan, flow_block: flow.Block, rest: flow.BlockList) -> (result: FlowLoopLinkScan) {
     let source_block: BlockLookup = find_block<P, N>(pages, stride, total, st.function.blocks, flow_block.id);
-    let linked: bool = source_block.found && source_block.block.id == flow_block.id && verify_loop_instruction_affinity(flow_block.iteration, source_block.block.instructions);
-    return FlowLoopLinkScan { rest: rest, function: st.function, seen: st.seen + 1, ok: linked };
+    if !(source_block.found) || source_block.block.id != flow_block.id {
+        return FlowLoopLinkScan { ..st, rest: rest, seen: st.seen + 1, ok: false };
+    }
+    if verify_loop_instruction_affinity(flow_block.iteration, source_block.block.instructions) {
+        return FlowLoopLinkScan { ..st, rest: rest, seen: st.seen + 1, ok: true };
+    }
+    // A loop preheader (role 1) or backedge advance (role 4) containing a
+    // match expression splits into switch -> arms -> generated join block(s).
+    // Follow the exact post-match join_target chain, verify the loop op and
+    // carried loop index on the continuation Jump edge, and uniquely claim the
+    // generated block so no unmapped or miswired loop operation is admitted.
+    if (flow_block.iteration.role == 1 || flow_block.iteration.role == 4) && !(block_has_loop_operation(source_block.block.instructions)) {
+        let cont: PostMatchLoopLookup = follow_post_match_loop_continuation<P, N>(pages, stride, total, st.function.blocks, source_block.block, st.flow_block_count);
+        if cont.found
+            && cont.block.id >= st.flow_block_count
+            && !(loop_id_list_contains(st.claimed, cont.block.id))
+            && verify_loop_instruction_affinity(flow_block.iteration, cont.block.instructions)
+            && verify_post_match_loop_edge<P, N>(pages, stride, total, st.function, flow_block, cont.block) {
+            return FlowLoopLinkScan {
+                rest: rest,
+                function: st.function,
+                flow_block_count: st.flow_block_count,
+                claimed: IdList.ICons { head: Id { value: cont.block.id }, tail: st.claimed },
+                seen: st.seen + 1,
+                ok: true
+            };
+        }
+    }
+    return FlowLoopLinkScan { ..st, rest: rest, seen: st.seen + 1, ok: false };
 }
+
+record LoopIdContainsWalk { rest: IdList, wanted: u64, found: bool }
+fn loop_id_list_contains(ids: IdList, wanted: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying st: LoopIdContainsWalk = LoopIdContainsWalk { rest: ids, wanted: wanted, found: false } {
+        if st.found || id_list_empty(st.rest) { return st.found; }
+        next st = loop_id_list_contains_step(st);
+    }
+    return st.found;
+}
+fn loop_id_list_contains_step(st: LoopIdContainsWalk) -> (result: LoopIdContainsWalk) {
+    return match st.rest {
+        INil => st,
+        ICons { head: item, tail: rest } => LoopIdContainsWalk { rest: rest, wanted: st.wanted, found: item.value == st.wanted }
+    };
+}
+
+record SwitchJoinLookup { is_switch: bool, join_target: u64 }
+fn terminator_switch_join(term: Terminator) -> (result: SwitchJoinLookup) {
+    return match term {
+        ScalarSwitch { subject: s, subject_ty: sty, result_type: rty, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => SwitchJoinLookup { is_switch: true, join_target: jt },
+        FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rty, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => SwitchJoinLookup { is_switch: true, join_target: jt },
+        Branch { condition: c, yes: yt, no: nt, yes_args: ya, no_args: na } => SwitchJoinLookup { is_switch: false, join_target: 0 },
+        Jump { target: t, arguments: a } => SwitchJoinLookup { is_switch: false, join_target: 0 },
+        Return { value: v } => SwitchJoinLookup { is_switch: false, join_target: 0 },
+        Fail => SwitchJoinLookup { is_switch: false, join_target: 0 }
+    };
+}
+
+record PostMatchLoopLookup { found: bool, block: SsaBlock }
+record PostMatchLoopWalk { current: SsaBlock, flow_block_count: u64, hops: u64, done: bool, found: bool }
+fn follow_post_match_loop_continuation<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, start_block: SsaBlock, flow_block_count: u64) -> (result: PostMatchLoopLookup) {
+    let initial: PostMatchLoopWalk = PostMatchLoopWalk { current: start_block, flow_block_count: flow_block_count, hops: 0, done: false, found: false };
+    iterate i up_to 64 carrying st: PostMatchLoopWalk = initial {
+        if st.done { return PostMatchLoopLookup { found: st.found, block: st.current }; }
+        next st = follow_post_match_loop_step<P, N>(pages, stride, total, blocks, st);
+    }
+    return PostMatchLoopLookup { found: st.found, block: st.current };
+}
+fn follow_post_match_loop_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, st: PostMatchLoopWalk) -> (result: PostMatchLoopWalk) {
+    let sw: SwitchJoinLookup = terminator_switch_join(st.current.terminator);
+    if !(sw.is_switch) {
+        return PostMatchLoopWalk { ..st, done: true, found: st.hops > 0 };
+    }
+    if block_has_loop_operation(st.current.instructions) || sw.join_target < st.flow_block_count {
+        return PostMatchLoopWalk { ..st, done: true, found: false };
+    }
+    let next_blk: BlockLookup = find_block<P, N>(pages, stride, total, blocks, sw.join_target);
+    if !(next_blk.found) {
+        return PostMatchLoopWalk { ..st, done: true, found: false };
+    }
+    return PostMatchLoopWalk { current: next_blk.block, flow_block_count: st.flow_block_count, hops: st.hops + 1, done: false, found: false };
+}
+
+record LoopResultLookup { found: bool, value_id: u64 }
+record LoopResultScan { rest: InstructionList, expected_kind: u64, found: bool, value_id: u64 }
+fn find_loop_instruction_result(instructions: InstructionList, expected_kind: u64) -> (result: LoopResultLookup) {
+    iterate i up_to 1024 carrying st: LoopResultScan = LoopResultScan { rest: instructions, expected_kind: expected_kind, found: false, value_id: 0 } {
+        if st.found || instruction_list_empty(st.rest) { return LoopResultLookup { found: st.found, value_id: st.value_id }; }
+        next st = find_loop_instruction_result_step(st);
+    }
+    return LoopResultLookup { found: st.found, value_id: st.value_id };
+}
+fn find_loop_instruction_result_step(st: LoopResultScan) -> (result: LoopResultScan) {
+    return match st.rest {
+        QNil => st,
+        QCons { head: inst, tail: rest } => find_loop_instruction_result_one(st, inst, rest)
+    };
+}
+fn find_loop_instruction_result_one(st: LoopResultScan, inst: Instruction, rest: InstructionList) -> (result: LoopResultScan) {
+    if inst.kind == st.expected_kind {
+        return LoopResultScan { rest: InstructionList.QNil, expected_kind: st.expected_kind, found: true, value_id: inst.result };
+    }
+    return LoopResultScan { ..st, rest: rest };
+}
+
+record CarriedParamEdgeWalk { args: IdList, params: ValueList, target_param_id: u64, expected_arg_id: u64, matched: bool, ok: bool }
+fn jump_passes_value_for_param(args: IdList, params: ValueList, target_param_id: u64, expected_arg_id: u64) -> (result: bool) {
+    let initial: CarriedParamEdgeWalk = CarriedParamEdgeWalk { args: args, params: params, target_param_id: target_param_id, expected_arg_id: expected_arg_id, matched: false, ok: true };
+    iterate i up_to 1024 carrying st: CarriedParamEdgeWalk = initial {
+        if !(st.ok) || id_list_empty(st.args) || value_list_empty(st.params) {
+            return st.ok && st.matched && id_list_empty(st.args) && value_list_empty(st.params);
+        }
+        next st = carried_param_edge_step(st);
+    }
+    return st.ok && st.matched && id_list_empty(st.args) && value_list_empty(st.params);
+}
+fn carried_param_edge_step(st: CarriedParamEdgeWalk) -> (result: CarriedParamEdgeWalk) {
+    return match st.args {
+        INil => CarriedParamEdgeWalk { ..st, ok: value_list_empty(st.params) },
+        ICons { head: arg, tail: arg_rest } => carried_param_edge_pair(st, arg.value, arg_rest)
+    };
+}
+fn carried_param_edge_pair(st: CarriedParamEdgeWalk, arg_val: u64, arg_rest: IdList) -> (result: CarriedParamEdgeWalk) {
+    return match st.params {
+        VNil => CarriedParamEdgeWalk { ..st, args: arg_rest, ok: false },
+        VCons { head: param, tail: param_rest } => carried_param_edge_check(st, arg_val, arg_rest, param.id, param_rest)
+    };
+}
+fn carried_param_edge_check(st: CarriedParamEdgeWalk, arg_val: u64, arg_rest: IdList, param_id: u64, param_rest: ValueList) -> (result: CarriedParamEdgeWalk) {
+    if param_id == st.target_param_id {
+        return CarriedParamEdgeWalk { args: arg_rest, params: param_rest, target_param_id: st.target_param_id, expected_arg_id: st.expected_arg_id, matched: true, ok: st.ok && arg_val == st.expected_arg_id };
+    }
+    return CarriedParamEdgeWalk { args: arg_rest, params: param_rest, target_param_id: st.target_param_id, expected_arg_id: st.expected_arg_id, matched: st.matched, ok: st.ok };
+}
+
+fn verify_post_match_loop_edge<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, flow_block: flow.Block, cont_block: SsaBlock) -> (result: bool) {
+    if flow_block.succ_count != 1 { return false; }
+    if flow_block.iteration.role == 4 && (!(flow_block.is_iteration_backedge) || flow_block.succ0 != flow_block.iteration_header_id) {
+        return false;
+    }
+    let expected_kind: u64 = expected_loop_instruction_kind(flow_block.iteration.role);
+    let loop_res: LoopResultLookup = find_loop_instruction_result(cont_block.instructions, expected_kind);
+    if !(loop_res.found) { return false; }
+    return match cont_block.terminator {
+        Jump { target: target, arguments: args } => verify_post_match_loop_jump<P, N>(pages, stride, total, function, flow_block, target, args, loop_res.value_id),
+        Branch { condition: c, yes: yt, no: nt, yes_args: ya, no_args: na } => false,
+        ScalarSwitch { subject: s, subject_ty: sty, result_type: rty, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => false,
+        FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rty, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => false,
+        Return { value: v } => false,
+        Fail => false
+    };
+}
+fn verify_post_match_loop_jump<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, flow_block: flow.Block, target: u64, args: IdList, loop_result_id: u64) -> (result: bool) {
+    if target != flow_block.succ0 { return false; }
+    let header_blk: BlockLookup = find_block<P, N>(pages, stride, total, function.blocks, target);
+    if !(header_blk.found) { return false; }
+    let header_idx: BindingLookup = loop_parameter_binding<P, N>(pages, stride, total, function, target, flow_block.iteration.index_start, flow_block.iteration.index_end);
+    if !(header_idx.found) { return false; }
+    return jump_passes_value_for_param(args, header_blk.block.parameters, header_idx.binding.value, loop_result_id);
+}
+
 record LoopInstructionAffinityScan { rest: InstructionList, meta: flow.LoopMeta, expected_kind: u64, matched: u64, ok: bool }
 fn verify_loop_instruction_affinity(meta: flow.LoopMeta, instructions: InstructionList) -> (result: bool) {
     let expected_kind: u64 = expected_loop_instruction_kind(meta.role);
@@ -2250,9 +2410,9 @@ fn loop_instruction_matches_meta(inst: Instruction, meta: flow.LoopMeta) -> (res
     if inst.kind == 15 { return common && meta.role == 1 && inst.operator == 0 && inst.variant_start == 0 && inst.variant_end == 0; }
     return false;
 }
-record UnmappedLoopOperationScan { rest: SsaBlockList, limit: u64, ok: bool }
-fn verify_unmapped_loop_operations<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, flow_block_count: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: UnmappedLoopOperationScan = UnmappedLoopOperationScan { rest: blocks, limit: flow_block_count, ok: true } {
+record UnmappedLoopOperationScan { rest: SsaBlockList, limit: u64, claimed: IdList, ok: bool }
+fn verify_unmapped_loop_operations<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blocks: SsaBlockList, flow_block_count: u64, claimed: IdList) -> (result: bool) {
+    iterate i up_to 1024 carrying st: UnmappedLoopOperationScan = UnmappedLoopOperationScan { rest: blocks, limit: flow_block_count, claimed: claimed, ok: true } {
         if !(st.ok) { return false; }
         if block_list_empty(st.rest) { return true; }
         next st = verify_unmapped_loop_operation_step<P, N>(pages, stride, total, st);
@@ -2267,8 +2427,8 @@ fn verify_unmapped_loop_operation_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; 
 }
 fn verify_unmapped_loop_operation_item<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: UnmappedLoopOperationScan, block: SsaBlock, rest: SsaBlockList) -> (result: UnmappedLoopOperationScan) {
     let has_loop_operation: bool = block_has_loop_operation(block.instructions);
-    let valid: bool = block.id < st.limit || !(has_loop_operation);
-    return UnmappedLoopOperationScan { rest: rest, limit: st.limit, ok: st.ok && valid };
+    let valid: bool = block.id < st.limit || !(has_loop_operation) || loop_id_list_contains(st.claimed, block.id);
+    return UnmappedLoopOperationScan { rest: rest, limit: st.limit, claimed: st.claimed, ok: st.ok && valid };
 }
 record BlockLoopOperationProbe { rest: InstructionList, found: bool }
 fn block_has_loop_operation(instructions: InstructionList) -> (result: bool) {
@@ -2568,7 +2728,8 @@ fn loop_parameter_binding<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
 record LoopParameterMapScan { rest: Environment, function: Function, block: u64, index: u64, ok: bool }
 fn loop_parameter_bindings_valid<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function, block: SsaBlock) -> (result: bool) {
     iterate i up_to 1024 carrying st: LoopParameterMapScan = LoopParameterMapScan { rest: block.parameter_bindings, function: function, block: block.id, index: 0, ok: true } { next st = loop_parameter_binding_step<P, N>(pages, stride, total, st); }
-    return st.ok && binding_list_empty(st.rest) && st.index == value_count<P, N>(pages, stride, total, block.parameters, function.value_count);
+    let param_total: u64 = value_count<P, N>(pages, stride, total, block.parameters, function.value_count);
+    return st.ok && binding_list_empty(st.rest) && st.index <= param_total;
 }
 fn loop_parameter_binding_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LoopParameterMapScan) -> (result: LoopParameterMapScan) {
     if !(st.ok) { return st; }
@@ -2588,16 +2749,17 @@ fn loop_instruction_metadata_clean(inst: Instruction) -> (result: bool) {
 fn effect_identities_empty(effects: decl.EffectIdentityList) -> (result: bool) { return match effects { decl.EffectIdentityList.EINil => true, decl.EffectIdentityList.EICons { head: h, tail: t } => false }; }
 fn capability_identities_empty(capabilities: decl.CapabilityIdentityList) -> (result: bool) { return match capabilities { decl.CapabilityIdentityList.CINil => true, decl.CapabilityIdentityList.CICons { head: h, tail: t } => false }; }
 record LoopStmtSource { found: bool, node: decl.Stmt }
-fn loop_stmt_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64) -> (result: LoopStmtSource) {
-    let branch: decl.BranchParse = decl.parse_branch<P, N>(pages, stride, total, cursor, true);
+fn loop_stmt_source<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, cursor: u64, limit: u64) -> (result: LoopStmtSource) {
+    if cursor >= limit || limit > total { return LoopStmtSource { found: false, node: decl.Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor } }; }
+    let branch: decl.BranchParse = decl.parse_branch<P, N>(pages, stride, limit, cursor, true);
     if !(branch.ok) { return LoopStmtSource { found: false, node: decl.Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor } }; }
     return match branch.list {
-        decl.StmtList.SCons { head: stmt, tail: rest } => LoopStmtSource { found: decl.stmt_span(stmt).start == cursor, node: stmt },
+        decl.StmtList.SCons { head: stmt, tail: rest } => LoopStmtSource { found: decl.stmt_span(stmt).start == cursor && decl.stmt_span(stmt).end == limit && decl.stmt_list_empty(rest), node: stmt },
         decl.StmtList.SNil => LoopStmtSource { found: false, node: decl.Stmt.Fail { mode_start: cursor, mode_end: cursor, start: cursor, end: cursor } }
     };
 }
 fn loop_statement_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, inst: Instruction, kind: u64) -> (result: bool) {
-    let parsed: LoopStmtSource = loop_stmt_source<P, N>(pages, stride, total, inst.start);
+    let parsed: LoopStmtSource = loop_stmt_source<P, N>(pages, stride, total, inst.start, inst.end);
     if !(parsed.found) { return false; }
     return match parsed.node {
         decl.Stmt.Iterate { name_start: ns, name_end: ne, over_source: source_expr, has_over_source: has_source, bound_start: bs, bound_end: be, state_start: ss, state_end: se, type_start: ts, type_end: te, type_kind: tk, initial: init, body: body, next_start: xs, next_end: xe, next_value: nv, start: start, end: end } => loop_name_span(ns, ne, inst) && start == inst.start && end == inst.end && loop_kind_domain<P, N>(pages, stride, total, inst, kind, has_source, source_expr, bs, be),
