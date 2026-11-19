@@ -25534,5 +25534,108 @@
     "stage1_to_stage2_rebuild": "UNKNOWN",
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_utf8_callable_resolution_and_multimodule_vm_emit_20261119": {
+    "observed_at": "2026-11-19T18:13:08.188202+00:00",
+    "session_id": "ses_febaddda675c8354",
+    "work_intent_id": "int_2b4e13c1aa81fe29",
+    "evidence_artifact": "evidence/utf8-callable-resolution-multimodule-vm-emit-and-post-match-loop-20261119.json",
+    "evidence_sha256": "1707e0e68f5d91cef89bb55094e568871cf89f699328ef018ce34d682e837e29",
+    "compiler_revisions": {
+      "base": "301288123d00cab14f16fefc0a91382753376326",
+      "slice1_callable_resolution": "d4d33293debd7b77a976003e64eda40785c4ec14",
+      "slice2_multimodule_native_vm_emit": "d05737cc847e6d4d2ba9e076493eb59edc2781fd",
+      "slice3_post_match_and_nested_loop_ssa": "10aabd0a8a268b1c53d26ed8d644300db16502e9"
+    },
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "stdlib_revision": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+    "callable_resolution_utf8_chain": {
+      "differential_positive_cases": "5/5 matched Stage-0 (unaliased bare, aliased bare, qualified transitive re-export + generics, same-identity diamond, local/provider shadowing)",
+      "differential_negative_cases": "3/3 matched Stage-0 code & exact byte spans (conflicting bare [99,105], unresolved qualified [88,98], unresolved bare [82,89])",
+      "unchanged_std_utf8_scalar": {
+        "native_project_valid": true,
+        "native_project_ssa_valid": true,
+        "verified_functions": "2/2",
+        "resolved_bare_calls_to_utf8_primitives": 7,
+        "stage0_oracle_valid": true
+      },
+      "unchanged_lexer_closure": {
+        "native_project_valid": true,
+        "proof_ok": true,
+        "proof_obligations": 401,
+        "flow_verified": "30/30",
+        "ssa_supported": "29/30",
+        "ssa_verified_after_slice1": "25/30",
+        "ssa_verified_after_slice3": "28/30",
+        "first_unsupported": {
+          "function": 11,
+          "block": 6,
+          "kind": 2
+        },
+        "stage0_oracle_valid": true,
+        "process_peak_rss_bytes_after_slice3": 5245755392
+      },
+      "unchanged_flow_9_module_recheck": {
+        "native_project_valid": true,
+        "native_project_ssa_valid": true,
+        "ssa_verified": "70/70",
+        "native_request_wait_seconds": null,
+        "reply_bytes": null,
+        "process_peak_rss_bytes": 5355040768
+      },
+      "imported_schema_regression_sha256": "d92fdc063e5b1a5b9aea598afb4d521545b77127a106f6b098e6066e8bc5cbf6"
+    },
+    "multimodule_compiler_produced_artifact": {
+      "status": "PROVED_BOUNDED_MULTIMODULE_SCALAR_AND_DIRECT_CALL_CLOSURE",
+      "closure_selection_and_lowering_producer": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_module",
+      "native_project_ssa_producer": "mncs.compiler.project.v1::compile_project",
+      "transport_codec_and_sealer": "tools/native_vm_artifact.py",
+      "independent_vm_binary": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+      "behavioral_oracle": "locked Stage-0 (6a3f6907e4acd4a98afd4a9421548a978ff266e6)",
+      "root_module": "mncs.test.utf8_app.v1",
+      "declaring_modules": [
+        "mncs.test.utf8_app.v1",
+        "mncs.std.utf8_primitives.v1",
+        "mncs.std.utf8_scalar.v1"
+      ],
+      "emitted_callables": [
+        "mncs:0.2:function:mncs.test.utf8_app.v1::classify_lead_and_cont",
+        "mncs:0.2:function:mncs.std.utf8_primitives.v1::utf8_lead_need",
+        "mncs:0.2:function:mncs.std.utf8_primitives.v1::utf8_first_continuation_valid",
+        "mncs:0.2:function:mncs.std.utf8_scalar.v1::is_whitespace_scalar",
+        "mncs:0.2:function:mncs.std.utf8_primitives.v1::is_utf8_continuation"
+      ],
+      "unreachable_distractor_excluded": "03_unused_distractor.mncs",
+      "uncalled_non_scalar_provider_fn_skipped": "mncs:0.2:function:mncs.std.utf8_scalar.v1::step_scalar_generic",
+      "artifact_id": "sha256:fe59a8fa2d2d314c6932de4f321c9f607600d489673ab7ee07cae9dc5c066dd8",
+      "artifact_sha256": "ab7990a521031886f4e0eaadee719fe4b8a507d45316d07ccdab2fdf1a1d05d1",
+      "artifact_bytes": 70439,
+      "deterministic_across_fresh_processes": true,
+      "emit_process1_peak_rss_bytes": 7339155456,
+      "emit_process2_peak_rss_bytes": 4922630144,
+      "vm_admission_status": "admitted",
+      "vm_differential_matches": "160/160",
+      "vm_resident_peak_rss_bytes": 28160000,
+      "vm_max_memory_cells": 60,
+      "vm_total_steps": 18760,
+      "negative_rejections_passed": 5,
+      "single_module_regression": "passed (672/672 utf8_primitives + 9/9 witness + 6/6 negative rejections; max 33 memory_cells; 28,426,240 B VM RSS)"
+    },
+    "post_match_and_nested_loop_ssa": {
+      "source_mncs_verified": "55/55 (valid: true; up from 46/55)",
+      "lexer_mncs_verified": "28/30 (up from 25/30; 29/30 supported)",
+      "miswired_ssa_tamper_rejections": "4/4 rejected fail-closed"
+    },
+    "deepest_stage_proved": "Native Project resolves unaliased bare imports, same-identity diamonds, shadowing, and transitive qualified re-exports matching pinned Stage-0 (6a3f6907): unchanged std/utf8_scalar.mncs passes full Project proof, Flow, and verified Value SSA (2/2, all 7 bare calls bound to mncs.std.utf8_primitives.v1); unchanged src/compiler/source.mncs passes full native Value SSA verification (55/55 verified, valid: true, up from 46/55); unchanged src/compiler/lexer.mncs closure passes Project proof (401 obligations), Flow (30/30), and Value SSA (29/30 supported, 28/30 verified, up from 25/30); unchanged 9-module flow.mncs closure remains green (70/70 verified Value SSA under 8 GiB guard). Native Project verified Value SSA connects directly to the MNCS VM emitter (`mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_module`) to emit a deterministic multi-module `mncs.vm.artifact/1` (5 callables across 3 declaring modules: `mncs.test.utf8_app.v1`, `mncs.std.utf8_primitives.v1`, `mncs.std.utf8_scalar.v1`; 70,439 B; `sha256:fe59a8fa...` on final SSA) that is independently admitted by fresh `mncs-vm` (da99dee) and matches locked Stage-0 across 160/160 differential cases (max 60 VM memory_cells, 28,160,000 B VM resident peak RSS, 5/5 negative rejections). Stage-1->Stage-2 rebuild remains UNKNOWN.",
+    "first_remaining_blocker": {
+      "rank": 1,
+      "owner": "mncs-compiler (vm_emit.mncs)",
+      "summary": "Extending native MNCS VM emission (`mncs.compiler.vm_emit.v1`) from pure scalar + direct-call closures to records/aggregates, sequences, monomorphized generics, and bounded loops needed to emit real `std/utf8_scalar.mncs::step_scalar_generic` and compiler modules.",
+      "reproduce_command": "python3 -u tools/test_native_project_vm_emit.py (currently skips uncalled `mncs.std.utf8_scalar.v1::step_scalar_generic` because `vm_emit.mncs` rejects non-scalar aggregate/sequence/loop SSA instructions with unsupported opcode error codes)"
+    },
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }
