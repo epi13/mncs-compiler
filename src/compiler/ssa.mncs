@@ -21,6 +21,8 @@ record Binding { name_start: u64, name_end: u64, value: u64, ty: decl.SemType }
 enum Environment { EnvNil, EnvCons { head: Binding, tail: Environment } }
 record Edge { source: u64, target: u64, bindings: Environment, arguments: IdList }
 enum EdgeList { ENil, ECons { head: Edge, tail: EdgeList } }
+record JoinScope { target: u64, bindings: Environment }
+enum JoinScopeList { JSNil, JSCons { head: JoinScope, tail: JoinScopeList } }
 record FiniteMatchCase { variant_start: u64, variant_end: u64, target: u64, arguments: IdList }
 enum FiniteMatchCaseList { MCNil, MCCons { head: FiniteMatchCase, tail: FiniteMatchCaseList } }
 record ScalarMatchCase { is_default: bool, negative: bool, value: u64, overflow: bool, pattern_start: u64, pattern_end: u64, target: u64, arguments: IdList }
@@ -181,6 +183,7 @@ record ExpressionBuild {
 record SsaBuild {
     rest: flow.BlockList,
     edges: EdgeList,
+    join_scopes: JoinScopeList,
     blocks: SsaBlockList,
     values: ValueList,
     inputs: ValueList,
@@ -497,19 +500,18 @@ fn summarize_terminator(terminator: Terminator) -> (result: TerminatorShape) {
 }
 record ValueCountScan { rest: ValueList, count: u64, limit: u64 }
 fn value_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, limit: u64) -> (result: u64) {
-    iterate i up_to 1024 carrying first: ValueCountScan = ValueCountScan { rest: values, count: 0, limit: limit } {
-        if value_list_empty(first.rest) { return first.count; }
-        if first.count >= first.limit { return first.limit + 1; }
-        next first = value_count_step(first);
+    iterate chunk up_to 8 carrying st: ValueCountScan = ValueCountScan { rest: values, count: 0, limit: limit } {
+        iterate i up_to 1024 carrying inner: ValueCountScan = st {
+            if value_list_empty(inner.rest) { return inner.count; }
+            if inner.count >= inner.limit { return inner.limit + 1; }
+            next inner = value_count_step(inner);
+        }
+        if value_list_empty(inner.rest) { return inner.count; }
+        if inner.count >= inner.limit { return inner.limit + 1; }
+        next st = inner;
     }
-    if value_list_empty(first.rest) { return first.count; }
-    iterate j up_to 1024 carrying second: ValueCountScan = first {
-        if value_list_empty(second.rest) { return second.count; }
-        if second.count >= second.limit { return second.limit + 1; }
-        next second = value_count_step(second);
-    }
-    if value_list_empty(second.rest) { return second.count; }
-    return second.limit + 1;
+    if value_list_empty(st.rest) { return st.count; }
+    return st.limit + 1;
 }
 fn value_count_step(st: ValueCountScan) -> (result: ValueCountScan) { return match st.rest { ValueList.VNil => st, ValueList.VCons { head: h, tail: t } => ValueCountScan { rest: t, count: st.count + 1, limit: st.limit } }; }
 fn summarize_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, instructions: InstructionList, limit: u64) -> (result: InstructionShapeScan) {
@@ -584,7 +586,7 @@ fn lower_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64
     let result_ok: bool = supported_value_type<P, N>(pages, stride, total, result_type, nominals);
     let initial_failure: u64 = function_support_failure(cfg_ok, parameters.ok, result_ok, identity.valid);
     let initial: SsaBuild = SsaBuild {
-        rest: flow.ssa_cfg_blocks(cfg), edges: EdgeList.ENil, blocks: SsaBlockList.LNil,
+        rest: flow.ssa_cfg_blocks(cfg), edges: EdgeList.ENil, join_scopes: JoinScopeList.JSNil, blocks: SsaBlockList.LNil,
         values: parameters.values, inputs: parameters.inputs, entry_env: parameters.env,
         next_value: parameters.next_value, next_instruction: 0, next_block_id: cfg.block_count,
         result_type: result_type, identity: identity, nominals: nominals, entry: flow.ssa_cfg_entry(cfg),
@@ -657,9 +659,11 @@ fn nominal_list_has_identity_step(st: NominalIdentityCheck) -> (result: NominalI
     };
 }
 fn collect_function_value_nominals<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, nominals: decl.NominalTypeIdentityList) -> (result: decl.NominalTypeIdentityList) {
-    let first: ValueNominalCollect = collect_function_value_nominals_chunk<P, N>(pages, stride, total, ValueNominalCollect { rest: values, nominals: nominals, acc: decl.NominalTypeIdentityList.NINil });
-    let second: ValueNominalCollect = collect_function_value_nominals_chunk<P, N>(pages, stride, total, first);
-    return second.acc;
+    iterate chunk up_to 8 carrying st: ValueNominalCollect = ValueNominalCollect { rest: values, nominals: nominals, acc: decl.NominalTypeIdentityList.NINil } {
+        if value_list_empty_local(st.rest) { return st.acc; }
+        next st = collect_function_value_nominals_chunk<P, N>(pages, stride, total, st);
+    }
+    return st.acc;
 }
 fn collect_function_value_nominals_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: ValueNominalCollect) -> (result: ValueNominalCollect) {
     iterate i up_to 1024 carrying st: ValueNominalCollect = initial {
@@ -902,17 +906,20 @@ fn lower_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
     iterate i up_to 1024 carrying lowered: ExpressionBuild = expression_seed { next lowered = lower_expression_step<P, N>(pages, stride, total, lowered); }
     let exprs: ExpressionBuild = finish_loop_block<P, N>(pages, stride, total, block, lowered);
     let instructions: InstructionList = reverse_instructions<P, N>(pages, stride, total, exprs.instructions);
-    let term: Terminator = make_terminator<P, N>(pages, stride, total, block, exprs, st.edges);
-    let edges: EdgeList = add_block_edges_from<P, N>(pages, stride, total, st.edges, exprs.block, block, term, exprs.env);
-    let block_ok: bool = exprs.ok && terminator_shape(block, term);
-    let local_failure: u64 = classify_block_failure(block, st.entry, incoming, exprs, term, st.supported);
+    let jump_sel: EnvironmentProjection = select_jump_env<P, N>(pages, stride, total, block, exprs.env, st.edges, st.join_scopes);
+    let exprs_checked: ExpressionBuild = ExpressionBuild { ..exprs, ok: exprs.ok && jump_sel.ok };
+    let term: Terminator = make_terminator<P, N>(pages, stride, total, block, exprs_checked, jump_sel.bindings);
+    let edges: EdgeList = add_block_edges_from<P, N>(pages, stride, total, st.edges, exprs_checked.block, block, term, exprs_checked.env, jump_sel.bindings);
+    let join_scopes: JoinScopeList = record_if_join_scope(st.join_scopes, block, exprs_checked.env);
+    let block_ok: bool = exprs_checked.ok && terminator_shape(block, term);
+    let local_failure: u64 = classify_block_failure(block, st.entry, incoming, exprs_checked, term, st.supported);
     let failure_kind: u64 = select(st.initial_failure_kind > 0, st.initial_failure_kind, local_failure);
-    let ssa_block: SsaBlock = SsaBlock { id: exprs.block, parameters: exprs.parameters, parameter_bindings: exprs.parameter_bindings, instructions: instructions, terminator: term, reachable: block.reachable, has_failure_target: false, failure_target: 0, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
-    let prior_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, exprs.generated_blocks, st.blocks);
+    let ssa_block: SsaBlock = SsaBlock { id: exprs_checked.block, parameters: exprs_checked.parameters, parameter_bindings: exprs_checked.parameter_bindings, instructions: instructions, terminator: term, reachable: block.reachable, has_failure_target: false, failure_target: 0, lowering_ok: block_ok, lowering_failure_kind: failure_kind };
+    let prior_blocks: SsaBlockList = prepend_generated_blocks<P, N>(pages, stride, total, exprs_checked.generated_blocks, st.blocks);
     return SsaBuild {
-        rest: rest, edges: edges, blocks: SsaBlockList.LCons { head: ssa_block, tail: prior_blocks },
-        values: exprs.values, inputs: st.inputs, entry_env: st.entry_env, next_value: exprs.next_value,
-        next_instruction: exprs.next_instruction, next_block_id: exprs.next_block_id, result_type: st.result_type,
+        rest: rest, edges: edges, join_scopes: join_scopes, blocks: SsaBlockList.LCons { head: ssa_block, tail: prior_blocks },
+        values: exprs_checked.values, inputs: st.inputs, entry_env: st.entry_env, next_value: exprs_checked.next_value,
+        next_instruction: exprs_checked.next_instruction, next_block_id: exprs_checked.next_block_id, result_type: st.result_type,
         identity: st.identity, nominals: st.nominals, entry: st.entry, supported: block_ok,
         initial_failure_kind: st.initial_failure_kind
     };
@@ -1982,13 +1989,12 @@ fn bind_failure_target_step(st: FailureTargetBind) -> (result: FailureTargetBind
     };
 }
 
-fn make_terminator<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, block: flow.Block, exprs: ExpressionBuild, edges: EdgeList) -> (result: Terminator) {
+fn make_terminator<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, block: flow.Block, exprs: ExpressionBuild, jump_env: Environment) -> (result: Terminator) {
     if block.kind == 1 {
         let no_env: Environment = select_loop_exit_env<P, N>(pages, stride, total, block, exprs.env);
         return Terminator.Branch { condition: exprs.branch_value, yes: block.succ0, no: block.succ1, yes_args: binding_ids<P, N>(pages, stride, total, exprs.env), no_args: binding_ids<P, N>(pages, stride, total, no_env) };
     }
     if block.kind == 2 {
-        let jump_env: Environment = select_backedge_env<P, N>(pages, stride, total, block, exprs.env, edges);
         return Terminator.Jump { target: block.succ0, arguments: binding_ids<P, N>(pages, stride, total, jump_env) };
     }
     if block.kind == 3 { return Terminator.Return { value: exprs.return_value }; }
@@ -2013,12 +2019,72 @@ fn select_loop_exit_env<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     if block.iteration.role != 2 { return env; }
     return filter_loop_bindings<P, N>(pages, stride, total, env, block.iteration, Environment.EnvNil, 0);
 }
-fn select_backedge_env<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, block: flow.Block, env: Environment, edges: EdgeList) -> (result: Environment) {
-    if block.iteration.role != 4 { return env; }
-    let shape: EdgeBindingLookup = find_target_binding_shape<P, N>(pages, stride, total, edges, block.succ0);
-    let projected: EnvironmentProjection = project_environment<P, N>(pages, stride, total, env, shape.bindings);
-    if !(shape.found) || !(projected.ok) { return Environment.EnvNil; }
-    return projected.bindings;
+fn record_if_join_scope(scopes: JoinScopeList, block: flow.Block, env: Environment) -> (result: JoinScopeList) {
+    if block.kind == 1 && block.iteration.role == 0 && block.succ_count == 2 && block.succ1 == block.succ0 + 1 {
+        return JoinScopeList.JSCons { head: JoinScope { target: block.succ1 + 1, bindings: env }, tail: scopes };
+    }
+    return scopes;
+}
+record JoinScopeLookup { rest: JoinScopeList, target: u64, found: bool, bindings: Environment }
+fn join_scope_list_empty(scopes: JoinScopeList) -> (result: bool) {
+    return match scopes { JSNil => true, JSCons { head: h, tail: t } => false };
+}
+fn find_join_scope(scopes: JoinScopeList, target: u64) -> (result: JoinScopeLookup) {
+    iterate i up_to 1024 carrying st: JoinScopeLookup = JoinScopeLookup { rest: scopes, target: target, found: false, bindings: Environment.EnvNil } {
+        if st.found || join_scope_list_empty(st.rest) { return st; }
+        next st = find_join_scope_step(st);
+    }
+    return st;
+}
+fn find_join_scope_step(st: JoinScopeLookup) -> (result: JoinScopeLookup) {
+    if st.found { return st; }
+    return match st.rest {
+        JSNil => st,
+        JSCons { head: scope, tail: rest } => JoinScopeLookup { rest: rest, target: st.target, found: scope.target == st.target, bindings: select_environment(scope.target == st.target, scope.bindings, st.bindings) }
+    };
+}
+fn lookup_binding_exact_span(env: Environment, start: u64, end: u64) -> (result: BindingLookup) {
+    iterate i up_to 1024 carrying st: BindingScan = BindingScan { rest: env, start: start, end: end, found: false, binding: Binding { name_start: 0, name_end: 0, value: 0, ty: decl.SemType.TPoison } } {
+        if st.found || binding_list_empty(st.rest) { return BindingLookup { found: st.found, binding: st.binding }; }
+        next st = binding_exact_span_step(st);
+    }
+    return BindingLookup { found: st.found, binding: st.binding };
+}
+fn binding_exact_span_step(st: BindingScan) -> (result: BindingScan) {
+    if st.found { return st; }
+    return match st.rest { EnvNil => st, EnvCons { head: h, tail: t } => binding_exact_span_cons(st, h, t) };
+}
+fn binding_exact_span_cons(st: BindingScan, h: Binding, t: Environment) -> (result: BindingScan) {
+    if h.name_start == st.start && h.name_end == st.end { return BindingScan { rest: Environment.EnvNil, start: st.start, end: st.end, found: true, binding: h }; }
+    return BindingScan { ..st, rest: t };
+}
+fn project_environment_by_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, source: Environment, shape: Environment) -> (result: EnvironmentProjection) {
+    iterate i up_to 1024 carrying st: EnvironmentProjectScan = EnvironmentProjectScan { rest: shape, source: source, acc: Environment.EnvNil, ok: true } {
+        if !(st.ok) || binding_list_empty(st.rest) { return EnvironmentProjection { bindings: reverse_environment<P, N>(pages, stride, total, st.acc), ok: st.ok && binding_list_empty(st.rest) }; }
+        next st = project_environment_by_span_step<P, N>(pages, stride, total, st);
+    }
+    return EnvironmentProjection { bindings: reverse_environment<P, N>(pages, stride, total, st.acc), ok: st.ok && binding_list_empty(st.rest) };
+}
+fn project_environment_by_span_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnvironmentProjectScan) -> (result: EnvironmentProjectScan) {
+    if !(st.ok) { return st; }
+    return match st.rest { EnvNil => st, EnvCons { head: wanted, tail: rest } => project_environment_by_span_binding<P, N>(pages, stride, total, st, wanted, rest) };
+}
+fn project_environment_by_span_binding<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnvironmentProjectScan, wanted: Binding, rest: Environment) -> (result: EnvironmentProjectScan) {
+    let found: BindingLookup = lookup_binding_exact_span(st.source, wanted.name_start, wanted.name_end);
+    let same: bool = found.found && decl.sem_eq<P, N>(pages, stride, total, found.binding.ty, wanted.ty);
+    let mapped: Binding = select_binding(same, Binding { name_start: wanted.name_start, name_end: wanted.name_end, value: found.binding.value, ty: found.binding.ty }, wanted);
+    return EnvironmentProjectScan { rest: rest, source: st.source, acc: Environment.EnvCons { head: mapped, tail: st.acc }, ok: same };
+}
+fn select_jump_env<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, block: flow.Block, env: Environment, edges: EdgeList, join_scopes: JoinScopeList) -> (result: EnvironmentProjection) {
+    if block.kind != 2 { return EnvironmentProjection { bindings: env, ok: true }; }
+    if block.iteration.role == 4 {
+        let shape: EdgeBindingLookup = find_target_binding_shape<P, N>(pages, stride, total, edges, block.succ0);
+        if !(shape.found) { return EnvironmentProjection { bindings: Environment.EnvNil, ok: false }; }
+        return project_environment<P, N>(pages, stride, total, env, shape.bindings);
+    }
+    let join_scope: JoinScopeLookup = find_join_scope(join_scopes, block.succ0);
+    if !(join_scope.found) { return EnvironmentProjection { bindings: env, ok: true }; }
+    return project_environment_by_span<P, N>(pages, stride, total, env, join_scope.bindings);
 }
 record LoopEnvironmentFilter { rest: Environment, meta: flow.LoopMeta, acc: Environment, index: u64 }
 fn filter_loop_bindings<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: Environment, meta: flow.LoopMeta, acc: Environment, index: u64) -> (result: Environment) {
@@ -2064,14 +2130,13 @@ fn project_environment_binding<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P]
     return EnvironmentProjectScan { rest: rest, source: st.source, acc: Environment.EnvCons { head: mapped, tail: st.acc }, ok: same };
 }
 fn add_block_edges<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, edges: EdgeList, block: flow.Block, term: Terminator, env: Environment) -> (result: EdgeList) {
-    return add_block_edges_from<P, N>(pages, stride, total, edges, block.id, block, term, env);
+    return add_block_edges_from<P, N>(pages, stride, total, edges, block.id, block, term, env, env);
 }
-fn add_block_edges_from<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, edges: EdgeList, source: u64, block: flow.Block, term: Terminator, env: Environment) -> (result: EdgeList) {
+fn add_block_edges_from<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, edges: EdgeList, source: u64, block: flow.Block, term: Terminator, env: Environment, jump_env: Environment) -> (result: EdgeList) {
     if block.iteration.role == 2 { return add_loop_header_edges<P, N>(pages, stride, total, edges, source, block, term, env); }
-    if block.iteration.role == 4 { return add_loop_backedge<P, N>(pages, stride, total, edges, source, block, term, env); }
     return match term {
         Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => EdgeList.ECons { head: Edge { source: source, target: n, bindings: env, arguments: na }, tail: EdgeList.ECons { head: Edge { source: source, target: y, bindings: env, arguments: ya }, tail: edges } },
-        Jump { target: target, arguments: args } => EdgeList.ECons { head: Edge { source: source, target: target, bindings: env, arguments: args }, tail: edges },
+        Jump { target: target, arguments: args } => EdgeList.ECons { head: Edge { source: source, target: target, bindings: jump_env, arguments: args }, tail: edges },
         FiniteSwitch { subject: subject, subject_ty: subject_ty, nominal_identity: nominal, result_type: result_ty, source_start: start, source_end: end, arm_count: count, join_target: join, cases: cases } => edges,
         ScalarSwitch { subject: subject, subject_ty: subject_ty, result_type: result_ty, source_start: start, source_end: end, arm_count: count, default_target: default_target, join_target: join, cases: cases } => edges,
         Return { value: v } => edges,
@@ -2092,21 +2157,6 @@ fn add_iteration_branch_edges<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
     let exit_env: Environment = select_loop_exit_env<P, N>(pages, stride, total, block, env);
     return EdgeList.ECons { head: Edge { source: source, target: no, bindings: exit_env, arguments: no_args }, tail: EdgeList.ECons { head: Edge { source: source, target: yes, bindings: env, arguments: yes_args }, tail: edges } };
 }
-fn add_loop_backedge<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, edges: EdgeList, source: u64, block: flow.Block, term: Terminator, env: Environment) -> (result: EdgeList) {
-    return match term {
-        Jump { target: target, arguments: arguments } => add_projected_backedge<P, N>(pages, stride, total, edges, source, target, env, arguments),
-        Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => edges,
-        FiniteSwitch { subject: s, subject_ty: st, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => edges,
-        ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => edges,
-        Return { value: v } => edges,
-        Fail => edges
-    };
-}
-fn add_projected_backedge<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, edges: EdgeList, source: u64, target: u64, env: Environment, arguments: IdList) -> (result: EdgeList) {
-    let shape: EdgeBindingLookup = find_target_binding_shape<P, N>(pages, stride, total, edges, target);
-    let projected: EnvironmentProjection = project_environment<P, N>(pages, stride, total, env, shape.bindings);
-    return EdgeList.ECons { head: Edge { source: source, target: target, bindings: projected.bindings, arguments: arguments }, tail: edges };
-}
 
 fn verify_function<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
     if !(verify_function_base<P, N>(pages, stride, total, function)) { return false; }
@@ -2121,7 +2171,7 @@ fn verify_function_base<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     // CP-0021: fail closed on a non-canonical page composition, mirroring
     // the parse_unit gate; project-chained lowering trusts build time.
     if source.validate_pages<P, N>(pages, stride, total) != 0 { return false; }
-    if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(supported_value_type<P, N>(pages, stride, total, function.result_type, function.nominals)) || function.block_count == 0 || function.block_count > 1024 || function.value_count == 0 || function.value_count > 2048 { return false; }
+    if !(function.identity.valid) || function.identity.len == 0 || !(function.supported) || !(supported_value_type<P, N>(pages, stride, total, function.result_type, function.nominals)) || function.block_count == 0 || function.block_count > 1024 || function.value_count == 0 || function.value_count > 8192 { return false; }
     if !(verify_value_ids<P, N>(pages, stride, total, function)) || !(verify_function_inputs<P, N>(pages, stride, total, function)) { return false; }
     if !(verify_blocks<P, N>(pages, stride, total, function, function.blocks)) || !(verify_definition_counts<P, N>(pages, stride, total, function)) { return false; }
     return true;
@@ -2446,19 +2496,20 @@ fn block_loop_operation_probe_step(st: BlockLoopOperationProbe) -> (result: Bloc
 }
 record ValueIdCheck { rest: ValueList, seen: u64, ok: bool, count: u64, nominals: decl.NominalTypeIdentityList }
 fn verify_value_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, function: Function) -> (result: bool) {
-    if function.value_count == 0 || function.value_count > 2048 { return false; }
-    iterate i up_to 1024 carrying first: ValueIdCheck = ValueIdCheck { rest: function.values, seen: 0, ok: true, count: function.value_count, nominals: function.nominals } {
-        if value_list_empty(first.rest) { return first.ok && first.seen == first.count; }
-        if first.seen >= first.count { return false; }
-        next first = value_id_step<P, N>(pages, stride, total, first);
+    if function.value_count == 0 || function.value_count > 8192 { return false; }
+    iterate chunk up_to 8 carrying st: ValueIdCheck = ValueIdCheck { rest: function.values, seen: 0, ok: true, count: function.value_count, nominals: function.nominals } {
+        iterate i up_to 1024 carrying inner: ValueIdCheck = st {
+            if !(inner.ok) { return false; }
+            if value_list_empty(inner.rest) { return inner.seen == inner.count; }
+            if inner.seen >= inner.count { return false; }
+            next inner = value_id_step<P, N>(pages, stride, total, inner);
+        }
+        if !(inner.ok) { return false; }
+        if value_list_empty(inner.rest) { return inner.seen == inner.count; }
+        if inner.seen >= inner.count { return false; }
+        next st = inner;
     }
-    if value_list_empty(first.rest) { return first.ok && first.seen == first.count; }
-    iterate j up_to 1024 carrying second: ValueIdCheck = first {
-        if value_list_empty(second.rest) { return second.ok && second.seen == second.count; }
-        if second.seen >= second.count { return false; }
-        next second = value_id_step<P, N>(pages, stride, total, second);
-    }
-    return second.ok && second.seen == second.count && value_list_empty(second.rest);
+    return st.ok && st.seen == st.count && value_list_empty(st.rest);
 }
 fn value_id_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ValueIdCheck) -> (result: ValueIdCheck) {
     if !(st.ok) { return st; }
@@ -2466,16 +2517,15 @@ fn value_id_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
 }
 record ValueIdLookup { rest: ValueList, id: u64, found: bool, limit: u64, seen: u64 }
 fn value_id_in<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, id: u64, limit: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying first: ValueIdLookup = ValueIdLookup { rest: values, id: id, found: false, limit: limit, seen: 0 } {
-        if first.found || value_list_empty(first.rest) || first.seen >= first.limit { return first.found; }
-        next first = value_id_lookup_step(first);
+    iterate chunk up_to 8 carrying st: ValueIdLookup = ValueIdLookup { rest: values, id: id, found: false, limit: limit, seen: 0 } {
+        iterate i up_to 1024 carrying inner: ValueIdLookup = st {
+            if inner.found || value_list_empty(inner.rest) || inner.seen >= inner.limit { return inner.found; }
+            next inner = value_id_lookup_step(inner);
+        }
+        if inner.found || value_list_empty(inner.rest) || inner.seen >= inner.limit { return inner.found; }
+        next st = inner;
     }
-    if first.found || value_list_empty(first.rest) || first.seen >= first.limit { return first.found; }
-    iterate j up_to 1024 carrying second: ValueIdLookup = first {
-        if second.found || value_list_empty(second.rest) || second.seen >= second.limit { return second.found; }
-        next second = value_id_lookup_step(second);
-    }
-    return second.found;
+    return st.found;
 }
 fn value_id_lookup_step(st: ValueIdLookup) -> (result: ValueIdLookup) {
     if st.found { return st; }
@@ -2506,19 +2556,18 @@ fn verify_input_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
 }
 record ValueKindCount { rest: ValueList, kind: u64, count: u64, limit: u64, seen: u64 }
 fn value_kind_count<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, kind: u64, limit: u64) -> (result: u64) {
-    iterate i up_to 1024 carrying first: ValueKindCount = ValueKindCount { rest: values, kind: kind, count: 0, limit: limit, seen: 0 } {
-        if value_list_empty(first.rest) { return first.count; }
-        if first.seen >= first.limit { return first.limit + 1; }
-        next first = value_kind_count_step(first);
+    iterate chunk up_to 8 carrying st: ValueKindCount = ValueKindCount { rest: values, kind: kind, count: 0, limit: limit, seen: 0 } {
+        iterate i up_to 1024 carrying inner: ValueKindCount = st {
+            if value_list_empty(inner.rest) { return inner.count; }
+            if inner.seen >= inner.limit { return inner.limit + 1; }
+            next inner = value_kind_count_step(inner);
+        }
+        if value_list_empty(inner.rest) { return inner.count; }
+        if inner.seen >= inner.limit { return inner.limit + 1; }
+        next st = inner;
     }
-    if value_list_empty(first.rest) { return first.count; }
-    iterate j up_to 1024 carrying second: ValueKindCount = first {
-        if value_list_empty(second.rest) { return second.count; }
-        if second.seen >= second.limit { return second.limit + 1; }
-        next second = value_kind_count_step(second);
-    }
-    if value_list_empty(second.rest) { return second.count; }
-    return second.limit + 1;
+    if value_list_empty(st.rest) { return st.count; }
+    return st.limit + 1;
 }
 fn value_kind_count_step(st: ValueKindCount) -> (result: ValueKindCount) {
     return match st.rest { VNil => st, VCons { head: value, tail: rest } => ValueKindCount { rest: rest, kind: st.kind, count: st.count + select(value.kind == st.kind, 1, 0), limit: st.limit, seen: st.seen + 1 } };
@@ -3384,11 +3433,16 @@ record ValueScan { rest: ValueList, id: u64, found: bool, value: Value }
 fn find_value<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ValueList, id: u64) -> (result: LookupValue) {
     // Values are prepended as their monotonically increasing IDs are allocated,
     // so the canonical list order is descending. Keep lookup aligned with the
-    // verifier's admitted 2,048-value envelope.
-    iterate i up_to 1024 carrying first: ValueScan = ValueScan { rest: values, id: id, found: false, value: Value { id: 0, ty: decl.SemType.TPoison, owner_block: 0, kind: 0, index: 0 } } { next first = value_scan_step(first); }
-    if first.found || value_list_empty(first.rest) { return LookupValue { found: first.found, value: first.value }; }
-    iterate j up_to 1024 carrying second: ValueScan = first { next second = value_scan_step(second); }
-    return LookupValue { found: second.found, value: second.value };
+    // verifier's admitted 8,192-value envelope and stop as soon as found.
+    iterate chunk up_to 8 carrying st: ValueScan = ValueScan { rest: values, id: id, found: false, value: Value { id: 0, ty: decl.SemType.TPoison, owner_block: 0, kind: 0, index: 0 } } {
+        iterate i up_to 1024 carrying inner: ValueScan = st {
+            if inner.found || value_list_empty(inner.rest) { return LookupValue { found: inner.found, value: inner.value }; }
+            next inner = value_scan_step(inner);
+        }
+        if inner.found || value_list_empty(inner.rest) { return LookupValue { found: inner.found, value: inner.value }; }
+        next st = inner;
+    }
+    return LookupValue { found: st.found, value: st.value };
 }
 fn value_scan_step(st: ValueScan) -> (result: ValueScan) {
     if st.found { return st; }
