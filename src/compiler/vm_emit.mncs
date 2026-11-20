@@ -1,24 +1,54 @@
 mncs 0.18;
 module mncs.compiler.vm_emit.v1;
 use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.lexer.v1 as lexer;
 use mncs.compiler.parser.v1 as parser;
 use mncs.compiler.project.v1 as project;
+use mncs.compiler.source.v1 as source;
 use mncs.compiler.ssa.v1 as ssa;
 
-// Bounded native VM emission from verified Value SSA (`mncs.compiler.ssa.v1`).
+// Bounded native VM emission from verified Value SSA (`mncs.compiler.ssa.v1`)
+// and multi-module Project SSA (`mncs.compiler.project.v1`).
 //
-// Consumes verified Value SSA and lowers the supported pure scalar + direct
-// call subset into an explicit, self-contained VM SSA IR (`VmEmitResult`)
-// carrying canonical callable identities, typed parameters/results, VM opcodes,
-// resolved operand/conversion types, and explicit terminators. Unverified SSA
-// or unsupported types, effects, instructions, or terminators fail closed with
-// a deterministic error code and anchor.
+// Owns concrete Nat specialization, bounded byte-view and nominal record type
+// resolution, closure selection, executable VM lowering, and whole-closure
+// signature/CFG verification 100% in MNCS. Unverified SSA, unresolved symbolic
+// bounds, mismatched specializations, or unsupported constructs fail closed
+// with a deterministic error code and anchor.
 
-// Scalar VM type: kind 1 = bool, 2 = byte, 3 = integer (bits: 8|16|32|64).
-record VmScalarType { kind: u64, bits: u64, signed: bool, valid: bool }
-record VmValue { id: u64, ty: VmScalarType }
+// Concrete VM type:
+//  kind 1 = bool
+//  kind 2 = byte
+//  kind 3 = integer (bits: 8|16|32|64, signed)
+//  kind 4 = bounded byte sequence (bound_kind: 1=exact, 2=up_to; bound_value > 0)
+//  kind 5 = nominal record (nominal_identity)
+record VmType {
+    kind: u64,
+    bits: u64,
+    signed: bool,
+    bound_kind: u64,
+    bound_value: u64,
+    nominal_identity: decl.SemanticIdentity,
+    valid: bool
+}
+record VmValue { id: u64, ty: VmType }
 enum VmValueList { VVNil, VVCons { head: VmValue, tail: VmValueList } }
 record VmValueRev { rest: VmValueList, acc: VmValueList }
+
+record VmNatArg { value: u64 }
+enum VmNatArgList { NANil, NACons { head: VmNatArg, tail: VmNatArgList } }
+record VmNatArgRev { rest: VmNatArgList, acc: VmNatArgList }
+record VmSpecKey { identity: decl.SemanticIdentity, nat_args: VmNatArgList }
+
+enum VmNameList { VNNil, VNCons { head: decl.SemanticIdentity, tail: VmNameList } }
+record VmNameRev { rest: VmNameList, acc: VmNameList }
+
+record VmRecordField { name: decl.SemanticIdentity, ty: VmType }
+enum VmRecordFieldList { VRFNil, VRFCons { head: VmRecordField, tail: VmRecordFieldList } }
+record VmRecordFieldRev { rest: VmRecordFieldList, acc: VmRecordFieldList }
+record VmRecordType { identity: decl.SemanticIdentity, name: decl.SemanticIdentity, fields: VmRecordFieldList }
+enum VmRecordTypeList { VRTNil, VRTCons { head: VmRecordType, tail: VmRecordTypeList } }
+record VmRecordTypeRev { rest: VmRecordTypeList, acc: VmRecordTypeList }
 
 // VM instruction opcodes produced by this native emitter:
 //  1 = Constant (integer/byte in imm_u64)
@@ -33,7 +63,10 @@ record VmValueRev { rest: VmValueList, acc: VmValueList }
 // 10 = BooleanNot
 // 11 = Convert (from_ty -> ty)
 // 12 = Select (ty)
-// 13 = Call (callee_identity)
+// 13 = Call (callee_identity + callee_nat_args)
+// 14 = SequenceLength (from_ty = concrete byte sequence type)
+// 15 = SequenceProject (from_ty = concrete byte sequence type)
+// 16 = RecordConstruct (ty = record VmType, field_names = source-order field names)
 record VmInstruction {
     id: u64,
     result: u64,
@@ -42,10 +75,12 @@ record VmInstruction {
     intent: u64,
     imm_u64: u64,
     imm_bool: bool,
-    ty: VmScalarType,
-    from_ty: VmScalarType,
+    ty: VmType,
+    from_ty: VmType,
     inputs: ssa.IdList,
-    callee_identity: decl.SemanticIdentity
+    callee_identity: decl.SemanticIdentity,
+    callee_nat_args: VmNatArgList,
+    field_names: VmNameList
 }
 enum VmInstructionList { VINil, VICons { head: VmInstruction, tail: VmInstructionList } }
 record VmInstructionRev { rest: VmInstructionList, acc: VmInstructionList }
@@ -71,8 +106,9 @@ record VmBlockRev { rest: VmBlockList, acc: VmBlockList }
 
 record VmFunction {
     identity: decl.SemanticIdentity,
+    nat_args: VmNatArgList,
     inputs: VmValueList,
-    result_type: VmScalarType,
+    result_type: VmType,
     blocks: VmBlockList,
     block_count: u64,
     instruction_count: u64
@@ -82,14 +118,17 @@ record VmFunctionRev { rest: VmFunctionList, acc: VmFunctionList }
 
 // error_code:
 //  0 = ok
-//  1 = unverified or empty ValueSsaSummary
+//  1 = unverified or empty ValueSsaSummary / ProjectResult
 //  2 = unverified/unsupported function or invalid function identity
 //  3 = unsupported effect or capability on instruction
-//  4 = unsupported non-scalar type
+//  4 = unsupported or unresolved type / missing record schema
 //  5 = unsupported instruction kind or operator
 //  6 = unsupported terminator
-//  7 = unresolved operand value or invalid operand arity/type
+//  7 = unresolved operand value or invalid operand/CFG arity or type
 //  8 = invalid module header span
+//  9 = missing callee in reachable closure
+// 10 = callee signature (arity / argument type / result type / bound) mismatch
+// 11 = unresolved, malformed, or mismatched generic specialization
 record VmEmitResult {
     ok: bool,
     error_code: u64,
@@ -98,22 +137,43 @@ record VmEmitResult {
     error_instruction: u64,
     module_name_start: u64,
     module_name_end: u64,
+    record_types: VmRecordTypeList,
+    record_type_count: u64,
     functions: VmFunctionList,
     function_count: u64,
     block_count: u64,
     instruction_count: u64
 }
 
-fn invalid_vm_type() -> (result: VmScalarType) {
-    return VmScalarType { kind: 0, bits: 0, signed: false, valid: false };
+// ---------------------------------------------------------------------------
+// Type constructors, predicates, and list utilities
+// ---------------------------------------------------------------------------
+
+fn invalid_vm_type() -> (result: VmType) {
+    return VmType { kind: 0, bits: 0, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: false };
 }
-fn bool_vm_type() -> (result: VmScalarType) {
-    return VmScalarType { kind: 1, bits: 1, signed: false, valid: true };
+fn bool_vm_type() -> (result: VmType) {
+    return VmType { kind: 1, bits: 1, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
-fn byte_vm_type() -> (result: VmScalarType) {
-    return VmScalarType { kind: 2, bits: 8, signed: false, valid: true };
+fn byte_vm_type() -> (result: VmType) {
+    return VmType { kind: 2, bits: 8, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
-fn sem_type_to_vm(ty: decl.SemType) -> (result: VmScalarType) {
+fn int_vm_type(width: u64, signed: bool) -> (result: VmType) {
+    let ok: bool = width == 8 || width == 16 || width == 32 || width == 64;
+    if !(ok) { return invalid_vm_type(); }
+    return VmType { kind: 3, bits: width, signed: signed, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+}
+fn byte_seq_vm_type(bound_kind: u64, bound_value: u64) -> (result: VmType) {
+    if (bound_kind != 1 && bound_kind != 2) || bound_value == 0 || bound_value > 65536 {
+        return invalid_vm_type();
+    }
+    return VmType { kind: 4, bits: 8, signed: false, bound_kind: bound_kind, bound_value: bound_value, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+}
+fn record_vm_type(nominal_identity: decl.SemanticIdentity) -> (result: VmType) {
+    if !(nominal_identity.valid) || nominal_identity.len == 0 { return invalid_vm_type(); }
+    return VmType { kind: 5, bits: 0, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: nominal_identity, valid: true };
+}
+fn sem_type_to_vm_scalar(ty: decl.SemType) -> (result: VmType) {
     return match ty {
         TBool => bool_vm_type(),
         TByte => byte_vm_type(),
@@ -124,14 +184,29 @@ fn sem_type_to_vm(ty: decl.SemType) -> (result: VmScalarType) {
         TPoison => invalid_vm_type()
     };
 }
-fn int_vm_type(width: u64, signed: bool) -> (result: VmScalarType) {
-    let ok: bool = width == 8 || width == 16 || width == 32 || width == 64;
-    if !(ok) { return invalid_vm_type(); }
-    return VmScalarType { kind: 3, bits: width, signed: signed, valid: true };
+fn semantic_ids_equal(a: decl.SemanticIdentity, b: decl.SemanticIdentity) -> (result: bool) {
+    if !(a.valid) || !(b.valid) || a.len != b.len || a.len > 512 { return false; }
+    iterate i up_to 512 carrying idx: u64 = 0 {
+        if idx >= a.len { return true; }
+        if a.bytes[idx] != b.bytes[idx] { return false; }
+        next idx = idx + 1;
+    }
+    return true;
 }
-fn vm_type_equal(a: VmScalarType, b: VmScalarType) -> (result: bool) {
-    return a.valid && b.valid && a.kind == b.kind && a.bits == b.bits && a.signed == b.signed;
+fn vm_type_equal(a: VmType, b: VmType) -> (result: bool) {
+    if !(a.valid) || !(b.valid) || a.kind != b.kind { return false; }
+    if a.kind == 3 { return a.bits == b.bits && a.signed == b.signed; }
+    if a.kind == 4 { return a.bound_kind == b.bound_kind && a.bound_value == b.bound_value; }
+    if a.kind == 5 { return semantic_ids_equal(a.nominal_identity, b.nominal_identity); }
+    return true;
 }
+fn is_u64_vm_type(ty: VmType) -> (result: bool) {
+    return ty.valid && ty.kind == 3 && ty.bits == 64 && !(ty.signed);
+}
+fn is_scalar_vm_type(ty: VmType) -> (result: bool) {
+    return ty.valid && (ty.kind == 1 || ty.kind == 2 || ty.kind == 3);
+}
+
 fn effects_empty(fx: decl.EffectIdentityList) -> (result: bool) {
     return match fx { decl.EffectIdentityList.EINil => true, decl.EffectIdentityList.EICons { head: h, tail: t } => false };
 }
@@ -150,6 +225,18 @@ fn vm_block_list_empty(blocks: VmBlockList) -> (result: bool) {
 fn vm_fn_list_empty(fns: VmFunctionList) -> (result: bool) {
     return match fns { VFNil => true, VFCons { head: h, tail: t } => false };
 }
+fn vm_nat_list_empty(args: VmNatArgList) -> (result: bool) {
+    return match args { NANil => true, NACons { head: h, tail: t } => false };
+}
+fn vm_name_list_empty(names: VmNameList) -> (result: bool) {
+    return match names { VNNil => true, VNCons { head: h, tail: t } => false };
+}
+fn vm_record_field_list_empty(fields: VmRecordFieldList) -> (result: bool) {
+    return match fields { VRFNil => true, VRFCons { head: h, tail: t } => false };
+}
+fn vm_record_type_list_empty(recs: VmRecordTypeList) -> (result: bool) {
+    return match recs { VRTNil => true, VRTCons { head: h, tail: t } => false };
+}
 fn ssa_value_list_empty(values: ssa.ValueList) -> (result: bool) {
     return match values { ssa.ValueList.VNil => true, ssa.ValueList.VCons { head: h, tail: t } => false };
 }
@@ -161,6 +248,27 @@ fn ssa_block_list_empty(blocks: ssa.SsaBlockList) -> (result: bool) {
 }
 fn id_list_empty(ids: ssa.IdList) -> (result: bool) {
     return match ids { ssa.IdList.INil => true, ssa.IdList.ICons { head: h, tail: t } => false };
+}
+fn decl_generic_list_empty(gs: decl.GenericParamList) -> (result: bool) {
+    return match gs { decl.GenericParamList.GNil => true, decl.GenericParamList.GCons { head: h, tail: t } => false };
+}
+fn decl_field_list_empty(fs: decl.FieldList) -> (result: bool) {
+    return match fs { decl.FieldList.FNil => true, decl.FieldList.FCons { head: h, tail: t } => false };
+}
+fn decl_fn_list_empty(fns: decl.FnList) -> (result: bool) {
+    return match fns { decl.FnList.DNil => true, decl.FnList.DCons { head: h, tail: t } => false };
+}
+fn decl_record_list_empty(recs: decl.RecordList) -> (result: bool) {
+    return match recs { decl.RecordList.RNil => true, decl.RecordList.RCons { head: h, tail: t } => false };
+}
+fn decl_targ_list_empty(targs: decl.TypeArgList) -> (result: bool) {
+    return match targs { decl.TypeArgList.TNil => true, decl.TypeArgList.TCons { head: h, tail: t } => false };
+}
+fn decl_bind_list_empty(binds: decl.BindList) -> (result: bool) {
+    return match binds { decl.BindList.BNil => true, decl.BindList.BCons { head: h, tail: t } => false };
+}
+fn ssa_env_empty(env: ssa.Environment) -> (result: bool) {
+    return match env { ssa.Environment.EnvNil => true, ssa.Environment.EnvCons { head: h, tail: t } => false };
 }
 
 fn reverse_vm_values(values: VmValueList) -> (result: VmValueList) {
@@ -174,6 +282,58 @@ fn reverse_vm_value_step(st: VmValueRev) -> (result: VmValueRev) {
     return match st.rest {
         VVNil => st,
         VVCons { head: h, tail: t } => VmValueRev { rest: t, acc: VmValueList.VVCons { head: h, tail: st.acc } }
+    };
+}
+fn reverse_vm_nat_args(args: VmNatArgList) -> (result: VmNatArgList) {
+    iterate i up_to 64 carrying st: VmNatArgRev = VmNatArgRev { rest: args, acc: VmNatArgList.NANil } {
+        if vm_nat_list_empty(st.rest) { return st.acc; }
+        next st = reverse_vm_nat_arg_step(st);
+    }
+    return st.acc;
+}
+fn reverse_vm_nat_arg_step(st: VmNatArgRev) -> (result: VmNatArgRev) {
+    return match st.rest {
+        NANil => st,
+        NACons { head: h, tail: t } => VmNatArgRev { rest: t, acc: VmNatArgList.NACons { head: h, tail: st.acc } }
+    };
+}
+fn reverse_vm_names(names: VmNameList) -> (result: VmNameList) {
+    iterate i up_to 128 carrying st: VmNameRev = VmNameRev { rest: names, acc: VmNameList.VNNil } {
+        if vm_name_list_empty(st.rest) { return st.acc; }
+        next st = reverse_vm_name_step(st);
+    }
+    return st.acc;
+}
+fn reverse_vm_name_step(st: VmNameRev) -> (result: VmNameRev) {
+    return match st.rest {
+        VNNil => st,
+        VNCons { head: h, tail: t } => VmNameRev { rest: t, acc: VmNameList.VNCons { head: h, tail: st.acc } }
+    };
+}
+fn reverse_vm_record_fields(fields: VmRecordFieldList) -> (result: VmRecordFieldList) {
+    iterate i up_to 128 carrying st: VmRecordFieldRev = VmRecordFieldRev { rest: fields, acc: VmRecordFieldList.VRFNil } {
+        if vm_record_field_list_empty(st.rest) { return st.acc; }
+        next st = reverse_vm_record_field_step(st);
+    }
+    return st.acc;
+}
+fn reverse_vm_record_field_step(st: VmRecordFieldRev) -> (result: VmRecordFieldRev) {
+    return match st.rest {
+        VRFNil => st,
+        VRFCons { head: h, tail: t } => VmRecordFieldRev { rest: t, acc: VmRecordFieldList.VRFCons { head: h, tail: st.acc } }
+    };
+}
+fn reverse_vm_record_types(recs: VmRecordTypeList) -> (result: VmRecordTypeList) {
+    iterate i up_to 256 carrying st: VmRecordTypeRev = VmRecordTypeRev { rest: recs, acc: VmRecordTypeList.VRTNil } {
+        if vm_record_type_list_empty(st.rest) { return st.acc; }
+        next st = reverse_vm_record_type_step(st);
+    }
+    return st.acc;
+}
+fn reverse_vm_record_type_step(st: VmRecordTypeRev) -> (result: VmRecordTypeRev) {
+    return match st.rest {
+        VRTNil => st,
+        VRTCons { head: h, tail: t } => VmRecordTypeRev { rest: t, acc: VmRecordTypeList.VRTCons { head: h, tail: st.acc } }
     };
 }
 fn reverse_vm_insts(insts: VmInstructionList) -> (result: VmInstructionList) {
@@ -216,39 +376,545 @@ fn reverse_vm_fn_step(st: VmFunctionRev) -> (result: VmFunctionRev) {
     };
 }
 
-record ValueTypeLookup { rest: ssa.ValueList, wanted: u64, found: bool, ty: VmScalarType }
-fn lookup_value_vm_type(values: ssa.ValueList, wanted: u64) -> (result: ValueTypeLookup) {
-    let first: ValueTypeLookup = lookup_value_vm_type_chunk(ValueTypeLookup { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() });
-    if first.found || ssa_value_list_empty(first.rest) { return first; }
-    return lookup_value_vm_type_chunk(first);
+record SsaValRev { rest: ssa.ValueList, acc: ssa.ValueList }
+fn reverse_ssa_values(values: ssa.ValueList) -> (result: ssa.ValueList) {
+    iterate i up_to 1024 carrying st: SsaValRev = SsaValRev { rest: values, acc: ssa.ValueList.VNil } {
+        if ssa_value_list_empty(st.rest) { return st.acc; }
+        next st = reverse_ssa_value_step(st);
+    }
+    return st.acc;
 }
-fn lookup_value_vm_type_chunk(initial: ValueTypeLookup) -> (result: ValueTypeLookup) {
-    iterate i up_to 1024 carrying st: ValueTypeLookup = initial {
-        if st.found || ssa_value_list_empty(st.rest) { return st; }
-        next st = lookup_value_vm_type_step(st);
+fn reverse_ssa_value_step(st: SsaValRev) -> (result: SsaValRev) {
+    return match st.rest {
+        ssa.ValueList.VNil => st,
+        ssa.ValueList.VCons { head: h, tail: t } => SsaValRev { rest: t, acc: ssa.ValueList.VCons { head: h, tail: st.acc } }
+    };
+}
+
+record NatArgsEqWalk { a: VmNatArgList, b: VmNatArgList, ok: bool, done: bool }
+fn nat_args_equal(a: VmNatArgList, b: VmNatArgList) -> (result: bool) {
+    let initial: NatArgsEqWalk = NatArgsEqWalk { a: a, b: b, ok: true, done: false };
+    iterate i up_to 64 carrying st: NatArgsEqWalk = initial {
+        if st.done || !(st.ok) { return st.ok && st.done; }
+        next st = nat_args_eq_step(st);
+    }
+    return st.ok && st.done;
+}
+fn nat_args_eq_step(st: NatArgsEqWalk) -> (result: NatArgsEqWalk) {
+    return match st.a {
+        NANil => NatArgsEqWalk { ..st, ok: vm_nat_list_empty(st.b), done: true },
+        NACons { head: ah, tail: at } => nat_args_eq_pair(st, ah.value, at)
+    };
+}
+fn nat_args_eq_pair(st: NatArgsEqWalk, av: u64, at: VmNatArgList) -> (result: NatArgsEqWalk) {
+    return match st.b {
+        NANil => NatArgsEqWalk { ..st, ok: false, done: true },
+        NACons { head: bh, tail: bt } => NatArgsEqWalk { a: at, b: bt, ok: av == bh.value, done: false }
+    };
+}
+fn spec_keys_equal(a: VmSpecKey, b: VmSpecKey) -> (result: bool) {
+    return semantic_ids_equal(a.identity, b.identity) && nat_args_equal(a.nat_args, b.nat_args);
+}
+
+// Copy a source byte span [start..end] into a SemanticIdentity carrier.
+fn span_to_ident<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: decl.SemanticIdentity) {
+    if end <= start || end > total || end - start > 512 { return decl.invalid_semantic_identity(); }
+    let seed: decl.SemanticIdentityBuild = decl.SemanticIdentityBuild { bytes: [0 as byte; 512], len: 0, valid: true };
+    let built: decl.SemanticIdentityBuild = decl.callable_identity_span<P, N>(pages, stride, total, seed, start, end);
+    return decl.SemanticIdentity { bytes: built.bytes, len: built.len, valid: built.valid && built.len == end - start };
+}
+
+// ---------------------------------------------------------------------------
+// Generic Nat binding environment & source-backed concrete type resolution
+// ---------------------------------------------------------------------------
+
+record NatBinding { name_start: u64, name_end: u64, value: u64 }
+enum NatEnv { NENil, NECons { head: NatBinding, tail: NatEnv } }
+fn nat_env_empty(env: NatEnv) -> (result: bool) {
+    return match env { NENil => true, NECons { head: h, tail: t } => false };
+}
+
+record NatEnvLookup { rest: NatEnv, start: u64, end: u64, found: bool, value: u64 }
+fn lookup_nat_env<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: NatEnv, start: u64, end: u64) -> (result: NatEnvLookup) {
+    let initial: NatEnvLookup = NatEnvLookup { rest: env, start: start, end: end, found: false, value: 0 };
+    iterate i up_to 64 carrying st: NatEnvLookup = initial {
+        if st.found || nat_env_empty(st.rest) { return st; }
+        next st = lookup_nat_env_step<P, N>(pages, stride, total, st);
     }
     return st;
 }
-fn lookup_value_vm_type_step(st: ValueTypeLookup) -> (result: ValueTypeLookup) {
+fn lookup_nat_env_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NatEnvLookup) -> (result: NatEnvLookup) {
     return match st.rest {
-        ssa.ValueList.VNil => st,
-        ssa.ValueList.VCons { head: v, tail: rest } => lookup_value_vm_type_one(st, v, rest)
+        NENil => st,
+        NECons { head: b, tail: rest } => lookup_nat_env_one<P, N>(pages, stride, total, st, b, rest)
     };
 }
-fn lookup_value_vm_type_one(st: ValueTypeLookup, v: ssa.Value, rest: ssa.ValueList) -> (result: ValueTypeLookup) {
-    if v.id == st.wanted {
-        return ValueTypeLookup { rest: ssa.ValueList.VNil, wanted: st.wanted, found: true, ty: sem_type_to_vm(v.ty) };
+fn lookup_nat_env_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NatEnvLookup, b: NatBinding, rest: NatEnv) -> (result: NatEnvLookup) {
+    if decl.spans_equal<P, N>(pages, stride, total, b.name_start, b.name_end, st.start, st.end) {
+        return NatEnvLookup { rest: NatEnv.NENil, start: st.start, end: st.end, found: true, value: b.value };
     }
-    return ValueTypeLookup { ..st, rest: rest };
+    return NatEnvLookup { ..st, rest: rest };
+}
+
+record NatEnvBuild { params: decl.GenericParamList, args: VmNatArgList, env: NatEnv, ok: bool, done: bool }
+fn build_nat_env<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, params: decl.GenericParamList, args: VmNatArgList) -> (result: NatEnvBuild) {
+    let initial: NatEnvBuild = NatEnvBuild { params: params, args: args, env: NatEnv.NENil, ok: true, done: false };
+    iterate i up_to 64 carrying st: NatEnvBuild = initial {
+        if st.done || !(st.ok) { return st; }
+        next st = build_nat_env_step<P, N>(pages, stride, total, st);
+    }
+    return NatEnvBuild { ..st, ok: st.ok && st.done };
+}
+fn build_nat_env_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NatEnvBuild) -> (result: NatEnvBuild) {
+    return match st.params {
+        decl.GenericParamList.GNil => NatEnvBuild { ..st, ok: vm_nat_list_empty(st.args), done: true },
+        decl.GenericParamList.GCons { head: gp, tail: gp_rest } => build_nat_env_pair<P, N>(pages, stride, total, st, gp, gp_rest)
+    };
+}
+fn build_nat_env_pair<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NatEnvBuild, gp: decl.GenericParam, gp_rest: decl.GenericParamList) -> (result: NatEnvBuild) {
+    return match st.args {
+        NANil => NatEnvBuild { ..st, ok: false, done: true },
+        NACons { head: arg, tail: arg_rest } => build_nat_env_bind<P, N>(pages, stride, total, st, gp, gp_rest, arg.value, arg_rest)
+    };
+}
+fn build_nat_env_bind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: NatEnvBuild, gp: decl.GenericParam, gp_rest: decl.GenericParamList, val: u64, arg_rest: VmNatArgList) -> (result: NatEnvBuild) {
+    let kind: u64 = decl.generic_bound_kind<P, N>(pages, stride, total, gp);
+    if kind != 0 || val == 0 || val > 65536 {
+        return NatEnvBuild { ..st, ok: false, done: true };
+    }
+    let next_env: NatEnv = NatEnv.NECons { head: NatBinding { name_start: gp.name_start, name_end: gp.name_end, value: val }, tail: st.env };
+    return NatEnvBuild { params: gp_rest, args: arg_rest, env: next_env, ok: true, done: false };
+}
+
+// Parse concrete `[byte; N]` or `[byte; up_to N]` from a source type span.
+record SeqTypeParseResult { ok: bool, error_code: u64, ty: VmType }
+fn parse_byte_seq_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nat_env: NatEnv) -> (result: SeqTypeParseResult) {
+    if end <= start || end > total { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    let t_open: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, start);
+    if t_open.diagnostic != 0 || t_open.kind != 69 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    let t_elem: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_open.end);
+    if t_elem.diagnostic != 0 || t_elem.kind != 4 || decl.scalar_kind<P, N>(pages, stride, total, t_elem.start, t_elem.end) != 4 {
+        return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
+    }
+    let t_semi: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_elem.end);
+    if t_semi.diagnostic != 0 || t_semi.kind != 63 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    let t_b0: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_semi.end);
+    if t_b0.diagnostic != 0 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    let is_up_to: bool = t_b0.kind == 32;
+    let bound_kind: u64 = select(is_up_to, 2, 1);
+    let t_bound: lexer.Token = select_token(is_up_to, lexer.significant_global<P, N>(pages, stride, total, t_b0.end), t_b0);
+    if t_bound.diagnostic != 0 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    let t_close: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_bound.end);
+    if t_close.diagnostic != 0 || t_close.kind != 70 || t_close.end != end {
+        return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
+    }
+    if t_bound.kind == 5 {
+        let parsed: decl.IntVal = decl.int_value<P, N>(pages, stride, total, t_bound.start, t_bound.end);
+        if parsed.overflow || parsed.value == 0 || parsed.value > 65536 {
+            return SeqTypeParseResult { ok: false, error_code: 11, ty: invalid_vm_type() };
+        }
+        return SeqTypeParseResult { ok: true, error_code: 0, ty: byte_seq_vm_type(bound_kind, parsed.value) };
+    }
+    if t_bound.kind == 4 {
+        let looked: NatEnvLookup = lookup_nat_env<P, N>(pages, stride, total, nat_env, t_bound.start, t_bound.end);
+        if !(looked.found) || looked.value == 0 || looked.value > 65536 {
+            return SeqTypeParseResult { ok: false, error_code: 11, ty: invalid_vm_type() };
+        }
+        return SeqTypeParseResult { ok: true, error_code: 0, ty: byte_seq_vm_type(bound_kind, looked.value) };
+    }
+    return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
+}
+fn select_token(pick_first: bool, a: lexer.Token, b: lexer.Token) -> (result: lexer.Token) {
+    if pick_first { return a; }
+    return b;
+}
+
+// Parse concrete `<...>` generic Nat arguments on a Call expression span.
+record CallHeadScan { cursor: u64, ok: bool, done: bool, has_targs: bool, targs_start: u64 }
+fn scan_call_head<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64) -> (result: CallHeadScan) {
+    let first: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, start);
+    if first.diagnostic != 0 || first.kind != 4 {
+        return CallHeadScan { cursor: start, ok: false, done: true, has_targs: false, targs_start: 0 };
+    }
+    let initial: CallHeadScan = CallHeadScan { cursor: first.end, ok: true, done: false, has_targs: false, targs_start: 0 };
+    iterate i up_to 16 carrying st: CallHeadScan = initial {
+        if st.done || !(st.ok) { return st; }
+        next st = scan_call_head_step<P, N>(pages, stride, total, st);
+    }
+    return CallHeadScan { ..st, ok: st.ok && st.done };
+}
+fn scan_call_head_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: CallHeadScan) -> (result: CallHeadScan) {
+    let tok: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, st.cursor);
+    if tok.diagnostic != 0 { return CallHeadScan { ..st, ok: false, done: true }; }
+    if tok.kind == 65 { return CallHeadScan { cursor: tok.end, ok: true, done: true, has_targs: false, targs_start: 0 }; }
+    if tok.kind == 58 { return CallHeadScan { cursor: tok.start, ok: true, done: true, has_targs: true, targs_start: tok.start }; }
+    if tok.kind == 61 {
+        let seg: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, tok.end);
+        if seg.diagnostic != 0 || seg.kind != 4 { return CallHeadScan { ..st, ok: false, done: true }; }
+        return CallHeadScan { cursor: seg.end, ok: true, done: false, has_targs: false, targs_start: 0 };
+    }
+    return CallHeadScan { ..st, ok: false, done: true };
+}
+
+record CallNatArgsResult { ok: bool, error_code: u64, nat_args: VmNatArgList }
+record CallNatArgsWalk { rest: decl.TypeArgList, acc: VmNatArgList, ok: bool }
+fn parse_call_nat_args<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nat_env: NatEnv) -> (result: CallNatArgsResult) {
+    if end <= start || end > total { return CallNatArgsResult { ok: false, error_code: 5, nat_args: VmNatArgList.NANil }; }
+    let head: CallHeadScan = scan_call_head<P, N>(pages, stride, total, start);
+    if !(head.ok) { return CallNatArgsResult { ok: false, error_code: 5, nat_args: VmNatArgList.NANil }; }
+    if !(head.has_targs) { return CallNatArgsResult { ok: true, error_code: 0, nat_args: VmNatArgList.NANil }; }
+    let parsed: decl.TArgsParse = decl.parse_type_args<P, N>(pages, stride, total, head.targs_start);
+    if !(parsed.ok) || decl_targ_list_empty(parsed.list) {
+        return CallNatArgsResult { ok: false, error_code: 11, nat_args: VmNatArgList.NANil };
+    }
+    let after: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, parsed.cursor);
+    if after.diagnostic != 0 || after.kind != 65 {
+        return CallNatArgsResult { ok: false, error_code: 11, nat_args: VmNatArgList.NANil };
+    }
+    let initial: CallNatArgsWalk = CallNatArgsWalk { rest: parsed.list, acc: VmNatArgList.NANil, ok: true };
+    iterate i up_to 64 carrying st: CallNatArgsWalk = initial {
+        if !(st.ok) || decl_targ_list_empty(st.rest) {
+            return CallNatArgsResult { ok: st.ok && decl_targ_list_empty(st.rest), error_code: select(st.ok && decl_targ_list_empty(st.rest), 0, 11), nat_args: reverse_vm_nat_args(st.acc) };
+        }
+        next st = parse_call_nat_arg_step<P, N>(pages, stride, total, nat_env, st);
+    }
+    return CallNatArgsResult { ok: st.ok && decl_targ_list_empty(st.rest), error_code: select(st.ok && decl_targ_list_empty(st.rest), 0, 11), nat_args: reverse_vm_nat_args(st.acc) };
+}
+fn parse_call_nat_arg_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nat_env: NatEnv, st: CallNatArgsWalk) -> (result: CallNatArgsWalk) {
+    return match st.rest {
+        decl.TypeArgList.TNil => st,
+        decl.TypeArgList.TCons { head: targ, tail: rest } => parse_call_nat_arg_one<P, N>(pages, stride, total, nat_env, st, targ, rest)
+    };
+}
+fn parse_call_nat_arg_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nat_env: NatEnv, st: CallNatArgsWalk, targ: decl.TypeArg, rest: decl.TypeArgList) -> (result: CallNatArgsWalk) {
+    if targ.kind == 10 {
+        let iv: decl.IntVal = decl.int_value<P, N>(pages, stride, total, targ.start, targ.end);
+        if iv.overflow || iv.value == 0 || iv.value > 65536 {
+            return CallNatArgsWalk { rest: decl.TypeArgList.TNil, acc: st.acc, ok: false };
+        }
+        return CallNatArgsWalk { rest: rest, acc: VmNatArgList.NACons { head: VmNatArg { value: iv.value }, tail: st.acc }, ok: true };
+    }
+    let looked: NatEnvLookup = lookup_nat_env<P, N>(pages, stride, total, nat_env, targ.start, targ.end);
+    if !(looked.found) || looked.value == 0 || looked.value > 65536 {
+        return CallNatArgsWalk { rest: decl.TypeArgList.TNil, acc: st.acc, ok: false };
+    }
+    return CallNatArgsWalk { rest: rest, acc: VmNatArgList.NACons { head: VmNatArg { value: looked.value }, tail: st.acc }, ok: true };
+}
+
+// ---------------------------------------------------------------------------
+// Record schema lookup and collection across reachable project modules
+// ---------------------------------------------------------------------------
+
+fn dummy_record_type() -> (result: VmRecordType) {
+    return VmRecordType { identity: decl.invalid_semantic_identity(), name: decl.invalid_semantic_identity(), fields: VmRecordFieldList.VRFNil };
+}
+record RecordTypeLookup { found: bool, schema: VmRecordType }
+record RecordTypeSearch { rest: VmRecordTypeList, wanted: decl.SemanticIdentity, found: bool, schema: VmRecordType }
+fn find_vm_record_type(recs: VmRecordTypeList, wanted: decl.SemanticIdentity) -> (result: RecordTypeLookup) {
+    let initial: RecordTypeSearch = RecordTypeSearch { rest: recs, wanted: wanted, found: false, schema: dummy_record_type() };
+    iterate i up_to 256 carrying st: RecordTypeSearch = initial {
+        if st.found || vm_record_type_list_empty(st.rest) { return RecordTypeLookup { found: st.found, schema: st.schema }; }
+        next st = find_vm_record_type_step(st);
+    }
+    return RecordTypeLookup { found: st.found, schema: st.schema };
+}
+fn find_vm_record_type_step(st: RecordTypeSearch) -> (result: RecordTypeSearch) {
+    return match st.rest {
+        VRTNil => st,
+        VRTCons { head: rec, tail: rest } => find_vm_record_type_one(st, rec, rest)
+    };
+}
+fn find_vm_record_type_one(st: RecordTypeSearch, rec: VmRecordType, rest: VmRecordTypeList) -> (result: RecordTypeSearch) {
+    if semantic_ids_equal(rec.identity, st.wanted) {
+        return RecordTypeSearch { rest: VmRecordTypeList.VRTNil, wanted: st.wanted, found: true, schema: rec };
+    }
+    return RecordTypeSearch { ..st, rest: rest };
+}
+
+record RecordFieldLookup { found: bool, ty: VmType }
+record RecordFieldSearch { rest: VmRecordFieldList, wanted: decl.SemanticIdentity, found: bool, ty: VmType }
+fn find_vm_record_field(fields: VmRecordFieldList, wanted: decl.SemanticIdentity) -> (result: RecordFieldLookup) {
+    let initial: RecordFieldSearch = RecordFieldSearch { rest: fields, wanted: wanted, found: false, ty: invalid_vm_type() };
+    iterate i up_to 128 carrying st: RecordFieldSearch = initial {
+        if st.found || vm_record_field_list_empty(st.rest) { return RecordFieldLookup { found: st.found, ty: st.ty }; }
+        next st = find_vm_record_field_step(st);
+    }
+    return RecordFieldLookup { found: st.found, ty: st.ty };
+}
+fn find_vm_record_field_step(st: RecordFieldSearch) -> (result: RecordFieldSearch) {
+    return match st.rest {
+        VRFNil => st,
+        VRFCons { head: fld, tail: rest } => find_vm_record_field_one(st, fld, rest)
+    };
+}
+fn find_vm_record_field_one(st: RecordFieldSearch, fld: VmRecordField, rest: VmRecordFieldList) -> (result: RecordFieldSearch) {
+    if semantic_ids_equal(fld.name, st.wanted) {
+        return RecordFieldSearch { rest: VmRecordFieldList.VRFNil, wanted: st.wanted, found: true, ty: fld.ty };
+    }
+    return RecordFieldSearch { ..st, rest: rest };
+}
+
+record NameContainsWalk { rest: VmNameList, wanted: decl.SemanticIdentity, found: bool }
+fn vm_name_list_contains(names: VmNameList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    let initial: NameContainsWalk = NameContainsWalk { rest: names, wanted: wanted, found: false };
+    iterate i up_to 128 carrying st: NameContainsWalk = initial {
+        if st.found || vm_name_list_empty(st.rest) { return st.found; }
+        next st = vm_name_list_contains_step(st);
+    }
+    return st.found;
+}
+fn vm_name_list_contains_step(st: NameContainsWalk) -> (result: NameContainsWalk) {
+    return match st.rest {
+        VNNil => st,
+        VNCons { head: n, tail: rest } => NameContainsWalk { rest: rest, wanted: st.wanted, found: semantic_ids_equal(n, st.wanted) }
+    };
+}
+
+record FieldCountWalk { rest: VmRecordFieldList, count: u64 }
+fn count_vm_record_fields(fields: VmRecordFieldList) -> (result: u64) {
+    iterate i up_to 128 carrying st: FieldCountWalk = FieldCountWalk { rest: fields, count: 0 } {
+        if vm_record_field_list_empty(st.rest) { return st.count; }
+        next st = count_vm_record_field_step(st);
+    }
+    return st.count;
+}
+fn count_vm_record_field_step(st: FieldCountWalk) -> (result: FieldCountWalk) {
+    return match st.rest {
+        VRFNil => st,
+        VRFCons { head: h, tail: t } => FieldCountWalk { rest: t, count: st.count + 1 }
+    };
+}
+
+record RecordFieldsLowerWalk { rest: decl.FieldList, acc: VmRecordFieldList, ok: bool }
+fn lower_record_decl_fields<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: decl.FieldList, nominals: decl.NominalTypeIdentityList) -> (result: RecordFieldsLowerWalk) {
+    let initial: RecordFieldsLowerWalk = RecordFieldsLowerWalk { rest: fields, acc: VmRecordFieldList.VRFNil, ok: true };
+    iterate i up_to 128 carrying st: RecordFieldsLowerWalk = initial {
+        if !(st.ok) || decl_field_list_empty(st.rest) {
+            return RecordFieldsLowerWalk { rest: st.rest, acc: reverse_vm_record_fields(st.acc), ok: st.ok && decl_field_list_empty(st.rest) };
+        }
+        next st = lower_record_decl_field_step<P, N>(pages, stride, total, nominals, st);
+    }
+    return RecordFieldsLowerWalk { rest: st.rest, acc: reverse_vm_record_fields(st.acc), ok: st.ok && decl_field_list_empty(st.rest) };
+}
+fn lower_record_decl_field_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, st: RecordFieldsLowerWalk) -> (result: RecordFieldsLowerWalk) {
+    return match st.rest {
+        decl.FieldList.FNil => st,
+        decl.FieldList.FCons { head: fld, tail: rest } => lower_record_decl_field_one<P, N>(pages, stride, total, nominals, st, fld, rest)
+    };
+}
+fn lookup_nominal_identity<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, start: u64, end: u64) -> (result: decl.NominalLookup) {
+    let by_ref: decl.NominalLookup = decl.nominal_identity_at<P, N>(pages, stride, total, nominals, start, end);
+    if by_ref.found && by_ref.identity.valid { return by_ref; }
+    return decl.nominal_identity_by_name<P, N>(pages, stride, total, nominals, start, end);
+}
+
+fn field_scalar_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fld: decl.Field) -> (result: VmType) {
+    if fld.type_kind == 3 { return bool_vm_type(); }
+    if fld.type_kind == 4 { return byte_vm_type(); }
+    if fld.type_kind == 1 { return int_vm_type(64, false); }
+    if fld.type_kind == 2 { return int_vm_type(64, true); }
+    let scalar: decl.SemType = decl.scalar_sem<P, N>(pages, stride, total, fld.type_start, fld.type_end);
+    return sem_type_to_vm_scalar(scalar);
+}
+
+fn lower_record_decl_field_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, st: RecordFieldsLowerWalk, fld: decl.Field, rest: decl.FieldList) -> (result: RecordFieldsLowerWalk) {
+    let fname: decl.SemanticIdentity = span_to_ident<P, N>(pages, stride, total, fld.name_start, fld.name_end);
+    if !(fname.valid) { return RecordFieldsLowerWalk { rest: decl.FieldList.FNil, acc: st.acc, ok: false }; }
+    let vt_scalar: VmType = field_scalar_vm_type<P, N>(pages, stride, total, fld);
+    if vt_scalar.valid {
+        return RecordFieldsLowerWalk { rest: rest, acc: VmRecordFieldList.VRFCons { head: VmRecordField { name: fname, ty: vt_scalar }, tail: st.acc }, ok: true };
+    }
+    let seq_res: SeqTypeParseResult = parse_byte_seq_vm_type<P, N>(pages, stride, total, fld.type_start, fld.type_end, NatEnv.NENil);
+    if seq_res.ok {
+        return RecordFieldsLowerWalk { rest: rest, acc: VmRecordFieldList.VRFCons { head: VmRecordField { name: fname, ty: seq_res.ty }, tail: st.acc }, ok: true };
+    }
+    let nom: decl.NominalLookup = lookup_nominal_identity<P, N>(pages, stride, total, nominals, fld.type_start, fld.type_end);
+    if nom.found && nom.identity.valid {
+        return RecordFieldsLowerWalk { rest: rest, acc: VmRecordFieldList.VRFCons { head: VmRecordField { name: fname, ty: record_vm_type(nom.identity) }, tail: st.acc }, ok: true };
+    }
+    return RecordFieldsLowerWalk { rest: decl.FieldList.FNil, acc: st.acc, ok: false };
+}
+
+fn first_fn_nominals(summary: ssa.ValueSsaSummary) -> (result: decl.NominalTypeIdentityList) {
+    if summary.function_count == 0 { return decl.NominalTypeIdentityList.NINil; }
+    let lookup: ssa.ValueSsaFunctionLookup = ssa.value_ssa_function_at(summary, 0);
+    if !(lookup.found) { return decl.NominalTypeIdentityList.NINil; }
+    return lookup.function.nominals;
+}
+
+record ModRecordsCollectWalk { rest: decl.RecordList, acc: VmRecordTypeList }
+fn collect_module_record_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, acc: VmRecordTypeList) -> (result: VmRecordTypeList) {
+    let initial: ModRecordsCollectWalk = ModRecordsCollectWalk { rest: unit.records, acc: acc };
+    iterate i up_to 256 carrying st: ModRecordsCollectWalk = initial {
+        if decl_record_list_empty(st.rest) { return st.acc; }
+        next st = collect_module_record_step<P, N>(pages, stride, total, unit.header, nominals, st);
+    }
+    return st.acc;
+}
+fn collect_module_record_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, nominals: decl.NominalTypeIdentityList, st: ModRecordsCollectWalk) -> (result: ModRecordsCollectWalk) {
+    return match st.rest {
+        decl.RecordList.RNil => st,
+        decl.RecordList.RCons { head: rec, tail: rest } => collect_module_record_one<P, N>(pages, stride, total, header, nominals, st, rec, rest)
+    };
+}
+fn collect_module_record_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, nominals: decl.NominalTypeIdentityList, st: ModRecordsCollectWalk, rec: decl.RecordDecl, rest: decl.RecordList) -> (result: ModRecordsCollectWalk) {
+    let rec_id: decl.SemanticIdentity = decl.canonical_record_type_identity<P, N>(pages, stride, total, header.module_start, header.module_end, rec, nominals);
+    let rec_name: decl.SemanticIdentity = span_to_ident<P, N>(pages, stride, total, rec.name_start, rec.name_end);
+    if !(rec_id.valid) || !(rec_name.valid) { return ModRecordsCollectWalk { rest: rest, acc: st.acc }; }
+    let existing: RecordTypeLookup = find_vm_record_type(st.acc, rec_id);
+    if existing.found { return ModRecordsCollectWalk { rest: rest, acc: st.acc }; }
+    let lowered_fields: RecordFieldsLowerWalk = lower_record_decl_fields<P, N>(pages, stride, total, rec.fields, nominals);
+    if !(lowered_fields.ok) { return ModRecordsCollectWalk { rest: rest, acc: st.acc }; }
+    let schema: VmRecordType = VmRecordType { identity: rec_id, name: rec_name, fields: lowered_fields.acc };
+    return ModRecordsCollectWalk { rest: rest, acc: VmRecordTypeList.VRTCons { head: schema, tail: st.acc } };
+}
+
+record AllModRecordsWalk { rest: project.ProjectModuleList, reachable: [bool; 64], acc: VmRecordTypeList }
+fn collect_reachable_record_types<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], modules: project.ProjectModuleList, reachable: [bool; 64]) -> (result: VmRecordTypeList) {
+    let initial: AllModRecordsWalk = AllModRecordsWalk { rest: modules, reachable: reachable, acc: VmRecordTypeList.VRTNil };
+    iterate i up_to 64 carrying st: AllModRecordsWalk = initial {
+        if project_module_list_empty(st.rest) { return reverse_vm_record_types(st.acc); }
+        next st = collect_reachable_record_step<M, N>(snapshot, flat_pages, st);
+    }
+    return reverse_vm_record_types(st.acc);
+}
+fn collect_reachable_record_step<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: AllModRecordsWalk) -> (result: AllModRecordsWalk) {
+    return match st.rest {
+        project.ProjectModuleList.PNil => st,
+        project.ProjectModuleList.PCons { head: mod_item, tail: rest } => collect_reachable_record_one<M, N>(snapshot, flat_pages, st, mod_item, rest)
+    };
+}
+fn collect_reachable_record_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: AllModRecordsWalk, mod_item: project.ProjectModule, rest: project.ProjectModuleList) -> (result: AllModRecordsWalk) {
+    if mod_item.source_index >= 64 || !(st.reachable[mod_item.source_index]) {
+        return AllModRecordsWalk { ..st, rest: rest };
+    }
+    let pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, mod_item.source_index);
+    let stride: u64 = project.module_stride(snapshot.sources, mod_item.source_index);
+    let total: u64 = project.module_total(snapshot.sources, mod_item.source_index);
+    let noms: decl.NominalTypeIdentityList = first_fn_nominals(mod_item.value_ssa);
+    let next_acc: VmRecordTypeList = collect_module_record_types<1024, N>(pages, stride, total, mod_item.flow.proof.unit, noms, st.acc);
+    return AllModRecordsWalk { rest: rest, reachable: st.reachable, acc: next_acc };
+}
+
+// Retain only record schemas actually referenced by emitted functions.
+record RecordUsageAdd { all_recs: VmRecordTypeList, used: VmRecordTypeList, count: u64 }
+fn add_used_record_type(st: RecordUsageAdd, ty: VmType) -> (result: RecordUsageAdd) {
+    if !(ty.valid) || ty.kind != 5 { return st; }
+    let already: RecordTypeLookup = find_vm_record_type(st.used, ty.nominal_identity);
+    if already.found { return st; }
+    let found: RecordTypeLookup = find_vm_record_type(st.all_recs, ty.nominal_identity);
+    if !(found.found) { return st; }
+    return RecordUsageAdd { all_recs: st.all_recs, used: VmRecordTypeList.VRTCons { head: found.schema, tail: st.used }, count: st.count + 1 };
+}
+record ValueUsageWalk { rest: VmValueList, st: RecordUsageAdd }
+fn collect_used_records_in_values(values: VmValueList, st: RecordUsageAdd) -> (result: RecordUsageAdd) {
+    iterate i up_to 1024 carrying w: ValueUsageWalk = ValueUsageWalk { rest: values, st: st } {
+        if vm_value_list_empty(w.rest) { return w.st; }
+        next w = collect_used_records_in_value_step(w);
+    }
+    return w.st;
+}
+fn collect_used_records_in_value_step(w: ValueUsageWalk) -> (result: ValueUsageWalk) {
+    return match w.rest {
+        VVNil => w,
+        VVCons { head: v, tail: rest } => ValueUsageWalk { rest: rest, st: add_used_record_type(w.st, v.ty) }
+    };
+}
+record InstUsageWalk { rest: VmInstructionList, st: RecordUsageAdd }
+fn collect_used_records_in_insts(insts: VmInstructionList, st: RecordUsageAdd) -> (result: RecordUsageAdd) {
+    iterate i up_to 1024 carrying w: InstUsageWalk = InstUsageWalk { rest: insts, st: st } {
+        if vm_inst_list_empty(w.rest) { return w.st; }
+        next w = collect_used_records_in_inst_step(w);
+    }
+    return w.st;
+}
+fn collect_used_records_in_inst_step(w: InstUsageWalk) -> (result: InstUsageWalk) {
+    return match w.rest {
+        VINil => w,
+        VICons { head: inst, tail: rest } => ValueUsageInstHelper(w.st, inst, rest)
+    };
+}
+fn ValueUsageInstHelper(st: RecordUsageAdd, inst: VmInstruction, rest: VmInstructionList) -> (result: InstUsageWalk) {
+    let s1: RecordUsageAdd = add_used_record_type(st, inst.ty);
+    let s2: RecordUsageAdd = add_used_record_type(s1, inst.from_ty);
+    return InstUsageWalk { rest: rest, st: s2 };
+}
+record BlockUsageWalk { rest: VmBlockList, st: RecordUsageAdd }
+fn collect_used_records_in_blocks(blocks: VmBlockList, st: RecordUsageAdd) -> (result: RecordUsageAdd) {
+    iterate i up_to 1024 carrying w: BlockUsageWalk = BlockUsageWalk { rest: blocks, st: st } {
+        if vm_block_list_empty(w.rest) { return w.st; }
+        next w = collect_used_records_in_block_step(w);
+    }
+    return w.st;
+}
+fn collect_used_records_in_block_step(w: BlockUsageWalk) -> (result: BlockUsageWalk) {
+    return match w.rest {
+        VBNil => w,
+        VBCons { head: blk, tail: rest } => collect_used_records_in_block_one(w.st, blk, rest)
+    };
+}
+fn collect_used_records_in_block_one(st: RecordUsageAdd, blk: VmBlock, rest: VmBlockList) -> (result: BlockUsageWalk) {
+    let s1: RecordUsageAdd = collect_used_records_in_values(blk.parameters, st);
+    let s2: RecordUsageAdd = collect_used_records_in_insts(blk.instructions, s1);
+    return BlockUsageWalk { rest: rest, st: s2 };
+}
+record FnUsageWalk { rest: VmFunctionList, st: RecordUsageAdd }
+fn retain_referenced_record_types(all_recs: VmRecordTypeList, fns: VmFunctionList) -> (result: RecordUsageAdd) {
+    let initial: FnUsageWalk = FnUsageWalk { rest: fns, st: RecordUsageAdd { all_recs: all_recs, used: VmRecordTypeList.VRTNil, count: 0 } };
+    iterate i up_to 1024 carrying w: FnUsageWalk = initial {
+        if vm_fn_list_empty(w.rest) { return RecordUsageAdd { all_recs: all_recs, used: reverse_vm_record_types(w.st.used), count: w.st.count }; }
+        next w = retain_referenced_record_step(w);
+    }
+    return RecordUsageAdd { all_recs: all_recs, used: reverse_vm_record_types(w.st.used), count: w.st.count };
+}
+fn retain_referenced_record_step(w: FnUsageWalk) -> (result: FnUsageWalk) {
+    return match w.rest {
+        VFNil => w,
+        VFCons { head: fn_item, tail: rest } => retain_referenced_record_one(w.st, fn_item, rest)
+    };
+}
+fn retain_referenced_record_one(st: RecordUsageAdd, fn_item: VmFunction, rest: VmFunctionList) -> (result: FnUsageWalk) {
+    let s1: RecordUsageAdd = add_used_record_type(st, fn_item.result_type);
+    let s2: RecordUsageAdd = collect_used_records_in_values(fn_item.inputs, s1);
+    let s3: RecordUsageAdd = collect_used_records_in_blocks(fn_item.blocks, s2);
+    return FnUsageWalk { rest: rest, st: s3 };
+}
+
+// ---------------------------------------------------------------------------
+// Value type maps & pure-scalar lowering helpers (preserved for single-module)
+// ---------------------------------------------------------------------------
+
+record VmValTypeLookup { rest: VmValueList, wanted: u64, found: bool, ty: VmType }
+fn lookup_vm_value_type(values: VmValueList, wanted: u64) -> (result: VmValTypeLookup) {
+    let first: VmValTypeLookup = lookup_vm_value_type_chunk(VmValTypeLookup { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() });
+    if first.found || vm_value_list_empty(first.rest) { return first; }
+    return lookup_vm_value_type_chunk(first);
+}
+fn lookup_vm_value_type_chunk(initial: VmValTypeLookup) -> (result: VmValTypeLookup) {
+    iterate i up_to 1024 carrying st: VmValTypeLookup = initial {
+        if st.found || vm_value_list_empty(st.rest) { return st; }
+        next st = lookup_vm_value_type_step(st);
+    }
+    return st;
+}
+fn lookup_vm_value_type_step(st: VmValTypeLookup) -> (result: VmValTypeLookup) {
+    return match st.rest {
+        VVNil => st,
+        VVCons { head: v, tail: rest } => lookup_vm_value_type_one(st, v, rest)
+    };
+}
+fn lookup_vm_value_type_one(st: VmValTypeLookup, v: VmValue, rest: VmValueList) -> (result: VmValTypeLookup) {
+    if v.id == st.wanted { return VmValTypeLookup { rest: VmValueList.VVNil, wanted: st.wanted, found: true, ty: v.ty }; }
+    return VmValTypeLookup { ..st, rest: rest };
 }
 
 record LowerValuesWalk { rest: ssa.ValueList, acc: VmValueList, ok: bool }
-fn lower_vm_values(values: ssa.ValueList, reverse_output: bool) -> (result: LowerValuesWalk) {
+fn lower_vm_scalar_values(values: ssa.ValueList, reverse_output: bool) -> (result: LowerValuesWalk) {
     iterate i up_to 1024 carrying st: LowerValuesWalk = LowerValuesWalk { rest: values, acc: VmValueList.VVNil, ok: true } {
         if !(st.ok) || ssa_value_list_empty(st.rest) {
             return LowerValuesWalk { rest: st.rest, acc: select_vm_values(reverse_output, st.acc, reverse_vm_values(st.acc)), ok: st.ok && ssa_value_list_empty(st.rest) };
         }
-        next st = lower_vm_value_step(st);
+        next st = lower_vm_scalar_value_step(st);
     }
     return LowerValuesWalk { rest: st.rest, acc: select_vm_values(reverse_output, st.acc, reverse_vm_values(st.acc)), ok: st.ok && ssa_value_list_empty(st.rest) };
 }
@@ -256,24 +922,29 @@ fn select_vm_values(keep_reversed: bool, reversed: VmValueList, forward: VmValue
     if keep_reversed { return reversed; }
     return forward;
 }
-fn lower_vm_value_step(st: LowerValuesWalk) -> (result: LowerValuesWalk) {
+fn lower_vm_scalar_value_step(st: LowerValuesWalk) -> (result: LowerValuesWalk) {
     return match st.rest {
         ssa.ValueList.VNil => st,
-        ssa.ValueList.VCons { head: v, tail: rest } => lower_vm_value_one(st, v, rest)
+        ssa.ValueList.VCons { head: v, tail: rest } => lower_vm_scalar_value_one(st, v, rest)
     };
 }
-fn lower_vm_value_one(st: LowerValuesWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: LowerValuesWalk) {
-    let vt: VmScalarType = sem_type_to_vm(v.ty);
+fn lower_vm_scalar_value_one(st: LowerValuesWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: LowerValuesWalk) {
+    let vt: VmType = sem_type_to_vm_scalar(v.ty);
     if !(vt.valid) { return LowerValuesWalk { rest: rest, acc: st.acc, ok: false }; }
     return LowerValuesWalk { rest: rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: vt }, tail: st.acc }, ok: true };
 }
+
+// ---------------------------------------------------------------------------
+// Instruction lowering (scalar + Call + SequenceLength + SequenceProject + RecordConstruct)
+// ---------------------------------------------------------------------------
 
 record InstLowerResult { ok: bool, error_code: u64, inst: VmInstruction }
 fn dummy_vm_inst() -> (result: VmInstruction) {
     return VmInstruction {
         id: 0, result: 0, opcode: 0, op_code: 0, intent: 0, imm_u64: 0, imm_bool: false,
         ty: invalid_vm_type(), from_ty: invalid_vm_type(),
-        inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity()
+        inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
     };
 }
 fn inst_error(code: u64) -> (result: InstLowerResult) {
@@ -329,12 +1000,7 @@ fn integer_arith_intent(op: u64) -> (result: u64) {
     };
 }
 
-fn lower_vm_instruction(fn_values: ssa.ValueList, inst: ssa.Instruction) -> (result: InstLowerResult) {
-    if !(effects_empty(inst.effects)) || !(capabilities_empty(inst.capabilities)) {
-        return inst_error(3);
-    }
-    let res_ty: VmScalarType = sem_type_to_vm(inst.ty);
-    if !(res_ty.valid) { return inst_error(4); }
+fn lower_vm_common_instruction(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, callee_nat_args: VmNatArgList) -> (result: InstLowerResult) {
     if inst.kind == 0 {
         if !(id_list_empty(inst.inputs)) || (res_ty.kind != 2 && res_ty.kind != 3) { return inst_error(7); }
         return InstLowerResult {
@@ -343,7 +1009,8 @@ fn lower_vm_instruction(fn_values: ssa.ValueList, inst: ssa.Instruction) -> (res
                 id: inst.id, result: inst.result, opcode: 1, op_code: 0, intent: 0,
                 imm_u64: inst.operator, imm_bool: false,
                 ty: res_ty, from_ty: invalid_vm_type(),
-                inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity()
+                inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+                callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
             }
         };
     }
@@ -355,11 +1022,12 @@ fn lower_vm_instruction(fn_values: ssa.ValueList, inst: ssa.Instruction) -> (res
                 id: inst.id, result: inst.result, opcode: 2, op_code: 0, intent: 0,
                 imm_u64: 0, imm_bool: inst.operator != 0,
                 ty: res_ty, from_ty: invalid_vm_type(),
-                inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity()
+                inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+                callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
             }
         };
     }
-    if inst.kind == 2 { return lower_vm_binary(fn_values, inst, res_ty); }
+    if inst.kind == 2 { return lower_vm_binary(val_types, inst, res_ty); }
     if inst.kind == 3 {
         if !(inst.identity.valid) || inst.identity.len == 0 { return inst_error(5); }
         return InstLowerResult {
@@ -368,7 +1036,8 @@ fn lower_vm_instruction(fn_values: ssa.ValueList, inst: ssa.Instruction) -> (res
                 id: inst.id, result: inst.result, opcode: 13, op_code: 0, intent: 0,
                 imm_u64: 0, imm_bool: false,
                 ty: res_ty, from_ty: invalid_vm_type(),
-                inputs: inst.inputs, callee_identity: inst.identity
+                inputs: inst.inputs, callee_identity: inst.identity,
+                callee_nat_args: callee_nat_args, field_names: VmNameList.VNNil
             }
         };
     }
@@ -380,7 +1049,8 @@ fn lower_vm_instruction(fn_values: ssa.ValueList, inst: ssa.Instruction) -> (res
                 id: inst.id, result: inst.result, opcode: 10, op_code: 0, intent: 0,
                 imm_u64: 0, imm_bool: false,
                 ty: res_ty, from_ty: bool_vm_type(),
-                inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
             }
         };
     }
@@ -392,51 +1062,186 @@ fn lower_vm_instruction(fn_values: ssa.ValueList, inst: ssa.Instruction) -> (res
                 id: inst.id, result: inst.result, opcode: 12, op_code: 0, intent: 0,
                 imm_u64: 0, imm_bool: false,
                 ty: res_ty, from_ty: res_ty,
-                inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
             }
         };
     }
-    if inst.kind == 12 { return lower_vm_cast(fn_values, inst, res_ty); }
+    if inst.kind == 10 { return lower_vm_seq_length(val_types, inst, res_ty); }
+    if inst.kind == 11 { return lower_vm_seq_index(val_types, inst, res_ty); }
+    if inst.kind == 12 { return lower_vm_cast(val_types, inst, res_ty); }
     return inst_error(5);
 }
 
-fn lower_vm_cast(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty: VmScalarType) -> (result: InstLowerResult) {
+fn lower_vm_seq_length(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
+    if !(is_u64_vm_type(res_ty)) || inst.argc != 1 { return inst_error(7); }
     return match inst.inputs {
         ssa.IdList.INil => inst_error(7),
-        ssa.IdList.ICons { head: src, tail: rest } => lower_vm_cast_one(fn_values, inst, res_ty, src, rest)
+        ssa.IdList.ICons { head: base_id, tail: rest } => lower_vm_seq_length_one(val_types, inst, res_ty, base_id.value, rest)
     };
 }
-fn lower_vm_cast_one(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty: VmScalarType, src: ssa.Id, rest: ssa.IdList) -> (result: InstLowerResult) {
+fn lower_vm_seq_length_one(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, base_id: u64, rest: ssa.IdList) -> (result: InstLowerResult) {
     if !(id_list_empty(rest)) { return inst_error(7); }
-    let src_ty: ValueTypeLookup = lookup_value_vm_type(fn_values, src.value);
-    if !(src_ty.found) || !(src_ty.ty.valid) { return inst_error(7); }
+    let base: VmValTypeLookup = lookup_vm_value_type(val_types, base_id);
+    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 {
+        return inst_error(7);
+    }
+    return InstLowerResult {
+        ok: true, error_code: 0,
+        inst: VmInstruction {
+            id: inst.id, result: inst.result, opcode: 14, op_code: 0, intent: 0,
+            imm_u64: 0, imm_bool: false,
+            ty: res_ty, from_ty: base.ty,
+            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+            callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+        }
+    };
+}
+
+fn lower_vm_seq_index(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
+    if res_ty.kind != 2 || inst.argc != 2 { return inst_error(7); }
+    return match inst.inputs {
+        ssa.IdList.INil => inst_error(7),
+        ssa.IdList.ICons { head: base_id, tail: rest } => lower_vm_seq_index_idx(val_types, inst, res_ty, base_id.value, rest)
+    };
+}
+fn lower_vm_seq_index_idx(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, base_id: u64, rest: ssa.IdList) -> (result: InstLowerResult) {
+    return match rest {
+        ssa.IdList.INil => inst_error(7),
+        ssa.IdList.ICons { head: idx_id, tail: trailing } => lower_vm_seq_index_pair(val_types, inst, res_ty, base_id, idx_id.value, trailing)
+    };
+}
+fn lower_vm_seq_index_pair(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, base_id: u64, idx_id: u64, trailing: ssa.IdList) -> (result: InstLowerResult) {
+    if !(id_list_empty(trailing)) { return inst_error(7); }
+    let base: VmValTypeLookup = lookup_vm_value_type(val_types, base_id);
+    let idx: VmValTypeLookup = lookup_vm_value_type(val_types, idx_id);
+    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 { return inst_error(7); }
+    if !(idx.found) || !(is_u64_vm_type(idx.ty)) { return inst_error(7); }
+    return InstLowerResult {
+        ok: true, error_code: 0,
+        inst: VmInstruction {
+            id: inst.id, result: inst.result, opcode: 15, op_code: 0, intent: 0,
+            imm_u64: 0, imm_bool: false,
+            ty: res_ty, from_ty: base.ty,
+            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+            callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+        }
+    };
+}
+
+record RecordConstructCheck {
+    val_types: VmValueList,
+    schema_fields: VmRecordFieldList,
+    inputs: ssa.IdList,
+    params: decl.BindList,
+    names_acc: VmNameList,
+    count: u64,
+    ok: bool,
+    done: bool
+}
+fn lower_vm_record_construct<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, val_types: VmValueList, all_recs: VmRecordTypeList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
+    if !(inst.nominal_identity.valid) || res_ty.kind != 5 || !(semantic_ids_equal(res_ty.nominal_identity, inst.nominal_identity)) {
+        return inst_error(4);
+    }
+    let schema_lk: RecordTypeLookup = find_vm_record_type(all_recs, inst.nominal_identity);
+    if !(schema_lk.found) { return inst_error(4); }
+    let expected_fields: u64 = count_vm_record_fields(schema_lk.schema.fields);
+    if inst.argc != expected_fields { return inst_error(7); }
+    let initial: RecordConstructCheck = RecordConstructCheck {
+        val_types: val_types, schema_fields: schema_lk.schema.fields,
+        inputs: inst.inputs, params: inst.params,
+        names_acc: VmNameList.VNNil, count: 0, ok: true, done: false
+    };
+    iterate i up_to 128 carrying st: RecordConstructCheck = initial {
+        if st.done || !(st.ok) {
+            return finish_record_construct(inst, res_ty, expected_fields, st);
+        }
+        next st = lower_vm_record_construct_step<P, N>(pages, stride, total, st);
+    }
+    return finish_record_construct(inst, res_ty, expected_fields, st);
+}
+fn finish_record_construct(inst: ssa.Instruction, res_ty: VmType, expected_fields: u64, st: RecordConstructCheck) -> (result: InstLowerResult) {
+    if !(st.ok) || !(st.done) || st.count != expected_fields { return inst_error(7); }
+    return InstLowerResult {
+        ok: true, error_code: 0,
+        inst: VmInstruction {
+            id: inst.id, result: inst.result, opcode: 16, op_code: 0, intent: 0,
+            imm_u64: 0, imm_bool: false,
+            ty: res_ty, from_ty: invalid_vm_type(),
+            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+            callee_nat_args: VmNatArgList.NANil, field_names: reverse_vm_names(st.names_acc)
+        }
+    };
+}
+fn lower_vm_record_construct_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecordConstructCheck) -> (result: RecordConstructCheck) {
+    return match st.inputs {
+        ssa.IdList.INil => RecordConstructCheck { ..st, ok: decl_bind_list_empty(st.params), done: true },
+        ssa.IdList.ICons { head: arg_id, tail: arg_rest } => lower_vm_record_construct_pair<P, N>(pages, stride, total, st, arg_id.value, arg_rest)
+    };
+}
+fn lower_vm_record_construct_pair<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecordConstructCheck, arg_id: u64, arg_rest: ssa.IdList) -> (result: RecordConstructCheck) {
+    return match st.params {
+        decl.BindList.BNil => RecordConstructCheck { ..st, ok: false, done: true },
+        decl.BindList.BCons { head: bind, tail: bind_rest } => lower_vm_record_construct_one<P, N>(pages, stride, total, st, arg_id, arg_rest, bind, bind_rest)
+    };
+}
+fn lower_vm_record_construct_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecordConstructCheck, arg_id: u64, arg_rest: ssa.IdList, bind: decl.Bind, bind_rest: decl.BindList) -> (result: RecordConstructCheck) {
+    let fname: decl.SemanticIdentity = span_to_ident<P, N>(pages, stride, total, bind.start, bind.end);
+    if !(fname.valid) || vm_name_list_contains(st.names_acc, fname) {
+        return RecordConstructCheck { ..st, ok: false, done: true };
+    }
+    let fld_lk: RecordFieldLookup = find_vm_record_field(st.schema_fields, fname);
+    let arg_lk: VmValTypeLookup = lookup_vm_value_type(st.val_types, arg_id);
+    if !(fld_lk.found) || !(arg_lk.found) || !(vm_type_equal(arg_lk.ty, fld_lk.ty)) {
+        return RecordConstructCheck { ..st, ok: false, done: true };
+    }
+    return RecordConstructCheck {
+        val_types: st.val_types, schema_fields: st.schema_fields,
+        inputs: arg_rest, params: bind_rest,
+        names_acc: VmNameList.VNCons { head: fname, tail: st.names_acc },
+        count: st.count + 1, ok: true, done: false
+    };
+}
+
+fn lower_vm_cast(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
+    if !(is_scalar_vm_type(res_ty)) { return inst_error(4); }
+    return match inst.inputs {
+        ssa.IdList.INil => inst_error(7),
+        ssa.IdList.ICons { head: src, tail: rest } => lower_vm_cast_one(val_types, inst, res_ty, src, rest)
+    };
+}
+fn lower_vm_cast_one(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, src: ssa.Id, rest: ssa.IdList) -> (result: InstLowerResult) {
+    if !(id_list_empty(rest)) { return inst_error(7); }
+    let src_ty: VmValTypeLookup = lookup_vm_value_type(val_types, src.value);
+    if !(src_ty.found) || !(is_scalar_vm_type(src_ty.ty)) { return inst_error(7); }
     return InstLowerResult {
         ok: true, error_code: 0,
         inst: VmInstruction {
             id: inst.id, result: inst.result, opcode: 11, op_code: 0, intent: 0,
             imm_u64: 0, imm_bool: false,
             ty: res_ty, from_ty: src_ty.ty,
-            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+            callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
         }
     };
 }
 
-fn lower_vm_binary(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty: VmScalarType) -> (result: InstLowerResult) {
+fn lower_vm_binary(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
     return match inst.inputs {
         ssa.IdList.INil => inst_error(7),
-        ssa.IdList.ICons { head: left, tail: rest } => lower_vm_binary_right(fn_values, inst, res_ty, left, rest)
+        ssa.IdList.ICons { head: left, tail: rest } => lower_vm_binary_right(val_types, inst, res_ty, left, rest)
     };
 }
-fn lower_vm_binary_right(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty: VmScalarType, left: ssa.Id, rest: ssa.IdList) -> (result: InstLowerResult) {
+fn lower_vm_binary_right(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, left: ssa.Id, rest: ssa.IdList) -> (result: InstLowerResult) {
     return match rest {
         ssa.IdList.INil => inst_error(7),
-        ssa.IdList.ICons { head: right, tail: trailing } => lower_vm_binary_pair(fn_values, inst, res_ty, left, right, trailing)
+        ssa.IdList.ICons { head: right, tail: trailing } => lower_vm_binary_pair(val_types, inst, res_ty, left, right, trailing)
     };
 }
-fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty: VmScalarType, left: ssa.Id, right: ssa.Id, trailing: ssa.IdList) -> (result: InstLowerResult) {
+fn lower_vm_binary_pair(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, left: ssa.Id, right: ssa.Id, trailing: ssa.IdList) -> (result: InstLowerResult) {
     if !(id_list_empty(trailing)) { return inst_error(7); }
-    let lhs: ValueTypeLookup = lookup_value_vm_type(fn_values, left.value);
-    let rhs: ValueTypeLookup = lookup_value_vm_type(fn_values, right.value);
+    let lhs: VmValTypeLookup = lookup_vm_value_type(val_types, left.value);
+    let rhs: VmValTypeLookup = lookup_vm_value_type(val_types, right.value);
     if !(lhs.found) || !(rhs.found) || !(vm_type_equal(lhs.ty, rhs.ty)) { return inst_error(7); }
     let op: u64 = inst.operator;
     if lhs.ty.kind == 1 {
@@ -447,7 +1252,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 8, op_code: code, intent: 0,
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -458,7 +1264,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 9, op_code: pred, intent: 0,
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -472,7 +1279,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 5, op_code: pred, intent: 0,
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -483,7 +1291,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 6, op_code: bit, intent: 0,
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -494,7 +1303,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 7, op_code: sh, intent: 0,
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -508,7 +1318,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 4, op_code: pred, intent: 0,
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -519,7 +1330,8 @@ fn lower_vm_binary_pair(fn_values: ssa.ValueList, inst: ssa.Instruction, res_ty:
                 inst: VmInstruction {
                     id: inst.id, result: inst.result, opcode: 3, op_code: arith, intent: integer_arith_intent(op),
                     imm_u64: 0, imm_bool: false, ty: res_ty, from_ty: lhs.ty,
-                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity()
+                    inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+                    callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
                 }
             };
         }
@@ -540,74 +1352,80 @@ fn lower_vm_terminator(term: ssa.Terminator) -> (result: TermLowerResult) {
     };
 }
 
-record InstListWalk { rest: ssa.InstructionList, fn_values: ssa.ValueList, acc: VmInstructionList, count: u64, ok: bool, error_code: u64, error_inst: u64 }
-fn lower_vm_instructions(fn_values: ssa.ValueList, insts: ssa.InstructionList) -> (result: InstListWalk) {
-    iterate i up_to 1024 carrying st: InstListWalk = InstListWalk { rest: insts, fn_values: fn_values, acc: VmInstructionList.VINil, count: 0, ok: true, error_code: 0, error_inst: 0 } {
+// ---------------------------------------------------------------------------
+// Scalar-only lowering (used by standalone & wire-only entry points)
+// ---------------------------------------------------------------------------
+
+record ScalarInstListWalk { rest: ssa.InstructionList, val_types: VmValueList, acc: VmInstructionList, count: u64, ok: bool, error_code: u64, error_inst: u64 }
+fn lower_vm_scalar_instructions(val_types: VmValueList, insts: ssa.InstructionList) -> (result: ScalarInstListWalk) {
+    iterate i up_to 1024 carrying st: ScalarInstListWalk = ScalarInstListWalk { rest: insts, val_types: val_types, acc: VmInstructionList.VINil, count: 0, ok: true, error_code: 0, error_inst: 0 } {
         if !(st.ok) || ssa_inst_list_empty(st.rest) {
-            return InstListWalk { ..st, acc: reverse_vm_insts(st.acc) };
+            return ScalarInstListWalk { ..st, acc: reverse_vm_insts(st.acc) };
         }
-        next st = lower_vm_inst_step(st);
+        next st = lower_vm_scalar_inst_step(st);
     }
-    return InstListWalk { ..st, acc: reverse_vm_insts(st.acc), ok: st.ok && ssa_inst_list_empty(st.rest), error_code: select(st.ok && !(ssa_inst_list_empty(st.rest)), 5, st.error_code) };
+    return ScalarInstListWalk { ..st, acc: reverse_vm_insts(st.acc), ok: st.ok && ssa_inst_list_empty(st.rest), error_code: select(st.ok && !(ssa_inst_list_empty(st.rest)), 5, st.error_code) };
 }
-fn lower_vm_inst_step(st: InstListWalk) -> (result: InstListWalk) {
+fn lower_vm_scalar_inst_step(st: ScalarInstListWalk) -> (result: ScalarInstListWalk) {
     return match st.rest {
         ssa.InstructionList.QNil => st,
-        ssa.InstructionList.QCons { head: inst, tail: rest } => lower_vm_inst_one(st, inst, rest)
+        ssa.InstructionList.QCons { head: inst, tail: rest } => lower_vm_scalar_inst_one(st, inst, rest)
     };
 }
-fn lower_vm_inst_one(st: InstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: InstListWalk) {
-    let lowered: InstLowerResult = lower_vm_instruction(st.fn_values, inst);
-    if !(lowered.ok) {
-        return InstListWalk { ..st, rest: rest, ok: false, error_code: lowered.error_code, error_inst: inst.id };
+fn lower_vm_scalar_inst_one(st: ScalarInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: ScalarInstListWalk) {
+    if !(effects_empty(inst.effects)) || !(capabilities_empty(inst.capabilities)) {
+        return ScalarInstListWalk { ..st, rest: rest, ok: false, error_code: 3, error_inst: inst.id };
     }
-    return InstListWalk { rest: rest, fn_values: st.fn_values, acc: VmInstructionList.VICons { head: lowered.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+    let res_ty: VmType = sem_type_to_vm_scalar(inst.ty);
+    if !(res_ty.valid) {
+        return ScalarInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
+    }
+    let lowered: InstLowerResult = lower_vm_common_instruction(st.val_types, inst, res_ty, VmNatArgList.NANil);
+    if !(lowered.ok) {
+        return ScalarInstListWalk { ..st, rest: rest, ok: false, error_code: lowered.error_code, error_inst: inst.id };
+    }
+    return ScalarInstListWalk { rest: rest, val_types: st.val_types, acc: VmInstructionList.VICons { head: lowered.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
 }
 
-record BlockListWalk { rest: ssa.SsaBlockList, fn_values: ssa.ValueList, acc: VmBlockList, block_count: u64, inst_count: u64, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
-fn lower_vm_blocks(fn_values: ssa.ValueList, blocks: ssa.SsaBlockList) -> (result: BlockListWalk) {
-    iterate i up_to 1024 carrying st: BlockListWalk = BlockListWalk { rest: blocks, fn_values: fn_values, acc: VmBlockList.VBNil, block_count: 0, inst_count: 0, ok: true, error_code: 0, error_block: 0, error_inst: 0 } {
+record ScalarBlockListWalk { rest: ssa.SsaBlockList, val_types: VmValueList, acc: VmBlockList, block_count: u64, inst_count: u64, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
+fn lower_vm_scalar_blocks(val_types: VmValueList, blocks: ssa.SsaBlockList) -> (result: ScalarBlockListWalk) {
+    iterate i up_to 1024 carrying st: ScalarBlockListWalk = ScalarBlockListWalk { rest: blocks, val_types: val_types, acc: VmBlockList.VBNil, block_count: 0, inst_count: 0, ok: true, error_code: 0, error_block: 0, error_inst: 0 } {
         if !(st.ok) || ssa_block_list_empty(st.rest) {
-            return BlockListWalk { ..st, acc: reverse_vm_blocks(st.acc) };
+            return ScalarBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc) };
         }
-        next st = lower_vm_block_step(st);
+        next st = lower_vm_scalar_block_step(st);
     }
-    return BlockListWalk { ..st, acc: reverse_vm_blocks(st.acc), ok: st.ok && ssa_block_list_empty(st.rest), error_code: select(st.ok && !(ssa_block_list_empty(st.rest)), 2, st.error_code) };
+    return ScalarBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc), ok: st.ok && ssa_block_list_empty(st.rest), error_code: select(st.ok && !(ssa_block_list_empty(st.rest)), 2, st.error_code) };
 }
-fn lower_vm_block_step(st: BlockListWalk) -> (result: BlockListWalk) {
+fn lower_vm_scalar_block_step(st: ScalarBlockListWalk) -> (result: ScalarBlockListWalk) {
     return match st.rest {
         ssa.SsaBlockList.LNil => st,
-        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_vm_block_one(st, blk, rest)
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_vm_scalar_block_one(st, blk, rest)
     };
 }
-fn lower_vm_block_one(st: BlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: BlockListWalk) {
+fn lower_vm_scalar_block_one(st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: ScalarBlockListWalk) {
     if !(blk.lowering_ok) {
-        return BlockListWalk { ..st, rest: rest, ok: false, error_code: 2, error_block: blk.id, error_inst: 0 };
+        return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: 2, error_block: blk.id, error_inst: 0 };
     }
-    // Block parameters are already in positional agreement with branch/jump arguments.
-    let params: LowerValuesWalk = lower_vm_values(blk.parameters, false);
+    let params: LowerValuesWalk = lower_vm_scalar_values(blk.parameters, false);
     if !(params.ok) {
-        return BlockListWalk { ..st, rest: rest, ok: false, error_code: 4, error_block: blk.id, error_inst: 0 };
+        return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: 4, error_block: blk.id, error_inst: 0 };
     }
-    let insts: InstListWalk = lower_vm_instructions(st.fn_values, blk.instructions);
+    let insts: ScalarInstListWalk = lower_vm_scalar_instructions(st.val_types, blk.instructions);
     if !(insts.ok) {
-        return BlockListWalk { ..st, rest: rest, ok: false, error_code: insts.error_code, error_block: blk.id, error_inst: insts.error_inst };
+        return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: insts.error_code, error_block: blk.id, error_inst: insts.error_inst };
     }
     let term: TermLowerResult = lower_vm_terminator(blk.terminator);
     if !(term.ok) {
-        return BlockListWalk { ..st, rest: rest, ok: false, error_code: term.error_code, error_block: blk.id, error_inst: 0 };
+        return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: term.error_code, error_block: blk.id, error_inst: 0 };
     }
     let vm_blk: VmBlock = VmBlock {
-        id: blk.id,
-        is_error_path: term.is_error_path,
-        parameters: params.acc,
-        instructions: insts.acc,
-        terminator: term.term,
-        has_failure_target: blk.has_failure_target,
-        failure_target: blk.failure_target
+        id: blk.id, is_error_path: term.is_error_path,
+        parameters: params.acc, instructions: insts.acc, terminator: term.term,
+        has_failure_target: blk.has_failure_target, failure_target: blk.failure_target
     };
-    return BlockListWalk {
-        rest: rest, fn_values: st.fn_values,
+    return ScalarBlockListWalk {
+        rest: rest, val_types: st.val_types,
         acc: VmBlockList.VBCons { head: vm_blk, tail: st.acc },
         block_count: st.block_count + 1, inst_count: st.inst_count + insts.count,
         ok: true, error_code: 0, error_block: 0, error_inst: 0
@@ -626,7 +1444,7 @@ record FnEmitWalk {
     error_block: u64,
     error_inst: u64
 }
-fn lower_vm_functions(summary: ssa.ValueSsaSummary) -> (result: FnEmitWalk) {
+fn lower_vm_scalar_functions(summary: ssa.ValueSsaSummary) -> (result: FnEmitWalk) {
     iterate i up_to 1024 carrying st: FnEmitWalk = FnEmitWalk {
         index: 0, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0,
         ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
@@ -634,88 +1452,569 @@ fn lower_vm_functions(summary: ssa.ValueSsaSummary) -> (result: FnEmitWalk) {
         if !(st.ok) || st.index >= summary.function_count {
             return FnEmitWalk { ..st, acc: reverse_vm_fns(st.acc) };
         }
-        next st = lower_vm_fn_step(summary, st);
+        next st = lower_vm_scalar_fn_step(summary, st);
     }
     return FnEmitWalk { ..st, acc: reverse_vm_fns(st.acc), ok: st.ok && st.index >= summary.function_count, error_code: select(st.ok && st.index < summary.function_count, 2, st.error_code) };
 }
-fn lower_vm_fn_step(summary: ssa.ValueSsaSummary, st: FnEmitWalk) -> (result: FnEmitWalk) {
+fn lower_vm_scalar_fn_step(summary: ssa.ValueSsaSummary, st: FnEmitWalk) -> (result: FnEmitWalk) {
     let lookup: ssa.ValueSsaFunctionLookup = ssa.value_ssa_function_at(summary, st.index);
     if !(lookup.found) {
         return FnEmitWalk { ..st, ok: false, error_code: 2, error_function: st.index, error_block: 0, error_inst: 0 };
     }
-    return lower_vm_fn_one(st, lookup.function);
+    let lowered: SingleFnLowerResult = lower_single_scalar_ssa_fn(lookup.function);
+    if !(lowered.ok) {
+        return FnEmitWalk { ..st, ok: false, error_code: lowered.error_code, error_function: st.index, error_block: lowered.error_block, error_inst: lowered.error_inst };
+    }
+    return FnEmitWalk {
+        index: st.index + 1,
+        acc: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.acc },
+        fn_count: st.fn_count + 1,
+        block_count: st.block_count + lowered.vm_fn.block_count,
+        inst_count: st.inst_count + lowered.vm_fn.instruction_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
 }
-fn lower_vm_fn_one(st: FnEmitWalk, func: ssa.Function) -> (result: FnEmitWalk) {
+
+record SingleFnLowerResult { ok: bool, error_code: u64, error_block: u64, error_inst: u64, vm_fn: VmFunction }
+fn lower_single_scalar_ssa_fn(func: ssa.Function) -> (result: SingleFnLowerResult) {
     if !(func.supported) || !(func.verified) || !(func.identity.valid) || func.identity.len == 0 || func.block_count == 0 {
-        return FnEmitWalk { ..st, ok: false, error_code: 2, error_function: st.index, error_block: 0, error_inst: 0 };
+        return SingleFnLowerResult { ok: false, error_code: 2, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
     }
-    let res_ty: VmScalarType = sem_type_to_vm(func.result_type);
+    let res_ty: VmType = sem_type_to_vm_scalar(func.result_type);
     if !(res_ty.valid) {
-        return FnEmitWalk { ..st, ok: false, error_code: 4, error_function: st.index, error_block: 0, error_inst: 0 };
+        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
     }
-    // ssa.Function.inputs is prepended during lowering; reversing restores source parameter order.
-    let inputs: LowerValuesWalk = lower_vm_values(func.inputs, true);
+    let all_vals: LowerValuesWalk = lower_vm_scalar_values(func.values, false);
+    if !(all_vals.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let inputs: LowerValuesWalk = lower_vm_scalar_values(func.inputs, true);
     if !(inputs.ok) {
-        return FnEmitWalk { ..st, ok: false, error_code: 4, error_function: st.index, error_block: 0, error_inst: 0 };
+        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
     }
-    let blocks: BlockListWalk = lower_vm_blocks(func.values, func.blocks);
+    let blocks: ScalarBlockListWalk = lower_vm_scalar_blocks(all_vals.acc, func.blocks);
     if !(blocks.ok) {
-        return FnEmitWalk { ..st, ok: false, error_code: blocks.error_code, error_function: st.index, error_block: blocks.error_block, error_inst: blocks.error_inst };
+        return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
     }
     let vm_fn: VmFunction = VmFunction {
         identity: func.identity,
+        nat_args: VmNatArgList.NANil,
         inputs: inputs.acc,
         result_type: res_ty,
         blocks: blocks.acc,
         block_count: blocks.block_count,
         instruction_count: blocks.inst_count
     };
-    return FnEmitWalk {
-        index: st.index + 1,
-        acc: VmFunctionList.VFCons { head: vm_fn, tail: st.acc },
-        fn_count: st.fn_count + 1,
-        block_count: st.block_count + blocks.block_count,
-        inst_count: st.inst_count + blocks.inst_count,
-        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    return SingleFnLowerResult { ok: true, error_code: 0, error_block: 0, error_inst: 0, vm_fn: vm_fn };
+}
+
+// ---------------------------------------------------------------------------
+// Source-backed specialized function lowering (concrete Nat + byte view + record)
+// ---------------------------------------------------------------------------
+
+record FnDeclLookup { found: bool, fn_decl: decl.FnDecl }
+fn dummy_fn_decl() -> (result: decl.FnDecl) {
+    let empty_sig: decl.FnSig = decl.FnSig {
+        name_start: 0, name_end: 0, generics: decl.GenericParamList.GNil,
+        params: decl.FieldList.FNil, results: decl.FieldList.FNil,
+        contracts: decl.ClauseList.CNil, effects: decl.EffectList.XNil, capabilities: decl.CapList.ANil
+    };
+    let empty_body: decl.FnBody = decl.FnBody { body: decl.StmtList.SNil, ret: decl.Expr.Integer { start: 0, end: 0, value: 0, overflow: false }, has_ret: false };
+    return decl.FnDecl { ok: false, err_start: 0, err_end: 0, sig: empty_sig, body: empty_body, fn_start: 0, fn_end: 0, cursor: 0 };
+}
+record FnDeclSearch { rest: decl.FnList, wanted: decl.SemanticIdentity, found: bool, fn_decl: decl.FnDecl }
+fn find_fn_decl_by_id<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, fns: decl.FnList, wanted: decl.SemanticIdentity) -> (result: FnDeclLookup) {
+    let initial: FnDeclSearch = FnDeclSearch { rest: fns, wanted: wanted, found: false, fn_decl: dummy_fn_decl() };
+    iterate i up_to 1024 carrying st: FnDeclSearch = initial {
+        if st.found || decl_fn_list_empty(st.rest) { return FnDeclLookup { found: st.found, fn_decl: st.fn_decl }; }
+        next st = find_fn_decl_step<P, N>(pages, stride, total, header, st);
+    }
+    return FnDeclLookup { found: st.found, fn_decl: st.fn_decl };
+}
+fn find_fn_decl_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, st: FnDeclSearch) -> (result: FnDeclSearch) {
+    return match st.rest {
+        decl.FnList.DNil => st,
+        decl.FnList.DCons { head: fd, tail: rest } => find_fn_decl_one<P, N>(pages, stride, total, header, st, fd, rest)
+    };
+}
+fn find_fn_decl_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, st: FnDeclSearch, fd: decl.FnDecl, rest: decl.FnList) -> (result: FnDeclSearch) {
+    let fid: decl.SemanticIdentity = decl.canonical_function_identity<P, N>(pages, stride, total, header.module_start, header.module_end, fd.sig.name_start, fd.sig.name_end);
+    if semantic_ids_equal(fid, st.wanted) {
+        return FnDeclSearch { rest: decl.FnList.DNil, wanted: st.wanted, found: true, fn_decl: fd };
+    }
+    return FnDeclSearch { ..st, rest: rest };
+}
+
+fn resolve_sem_type_non_seq<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: decl.SemType, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList) -> (result: VmType) {
+    let scalar: VmType = sem_type_to_vm_scalar(ty);
+    if scalar.valid { return scalar; }
+    return match ty {
+        TNamed { start: s, end: e } => resolve_named_record_vm_type<P, N>(pages, stride, total, s, e, nominals, all_recs),
+        TBool => bool_vm_type(),
+        TByte => byte_vm_type(),
+        TInt { width: w, signed: sg } => int_vm_type(w, sg),
+        TSeq => invalid_vm_type(),
+        TSeqExact { element: el, length: n, length_valid: v } => invalid_vm_type(),
+        TPoison => invalid_vm_type()
+    };
+}
+fn resolve_named_record_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList) -> (result: VmType) {
+    let nom: decl.NominalLookup = lookup_nominal_identity<P, N>(pages, stride, total, nominals, start, end);
+    if !(nom.found) || !(nom.identity.valid) { return invalid_vm_type(); }
+    let schema: RecordTypeLookup = find_vm_record_type(all_recs, nom.identity);
+    if !(schema.found) { return invalid_vm_type(); }
+    return record_vm_type(nom.identity);
+}
+
+// Lookup a parameter Field by variable name span in `fn_decl.sig.params`.
+record FieldSpanLookup { found: bool, fld: decl.Field }
+fn dummy_decl_field() -> (result: decl.Field) {
+    return decl.Field { name_start: 0, name_end: 0, type_start: 0, type_end: 0, type_kind: 0 };
+}
+record FieldSpanSearch { rest: decl.FieldList, start: u64, end: u64, found: bool, fld: decl.Field }
+fn find_field_by_name_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, fields: decl.FieldList, start: u64, end: u64) -> (result: FieldSpanLookup) {
+    let initial: FieldSpanSearch = FieldSpanSearch { rest: fields, start: start, end: end, found: false, fld: dummy_decl_field() };
+    iterate i up_to 128 carrying st: FieldSpanSearch = initial {
+        if st.found || decl_field_list_empty(st.rest) { return FieldSpanLookup { found: st.found, fld: st.fld }; }
+        next st = find_field_by_name_step<P, N>(pages, stride, total, st);
+    }
+    return FieldSpanLookup { found: st.found, fld: st.fld };
+}
+fn find_field_by_name_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FieldSpanSearch) -> (result: FieldSpanSearch) {
+    return match st.rest {
+        decl.FieldList.FNil => st,
+        decl.FieldList.FCons { head: fld, tail: rest } => find_field_by_name_one<P, N>(pages, stride, total, st, fld, rest)
+    };
+}
+fn find_field_by_name_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: FieldSpanSearch, fld: decl.Field, rest: decl.FieldList) -> (result: FieldSpanSearch) {
+    if decl.spans_equal<P, N>(pages, stride, total, fld.name_start, fld.name_end, st.start, st.end) {
+        return FieldSpanSearch { rest: decl.FieldList.FNil, start: st.start, end: st.end, found: true, fld: fld };
+    }
+    return FieldSpanSearch { ..st, rest: rest };
+}
+
+record EnvValIdLookup { found: bool, name_start: u64, name_end: u64 }
+record EnvValIdSearch { rest: ssa.Environment, wanted: u64, found: bool, name_start: u64, name_end: u64 }
+fn find_env_binding_by_val_id(env: ssa.Environment, wanted: u64) -> (result: EnvValIdLookup) {
+    let initial: EnvValIdSearch = EnvValIdSearch { rest: env, wanted: wanted, found: false, name_start: 0, name_end: 0 };
+    iterate i up_to 1024 carrying st: EnvValIdSearch = initial {
+        if st.found || ssa_env_empty(st.rest) { return EnvValIdLookup { found: st.found, name_start: st.name_start, name_end: st.name_end }; }
+        next st = find_env_binding_by_val_step(st);
+    }
+    return EnvValIdLookup { found: st.found, name_start: st.name_start, name_end: st.name_end };
+}
+fn find_env_binding_by_val_step(st: EnvValIdSearch) -> (result: EnvValIdSearch) {
+    return match st.rest {
+        ssa.Environment.EnvNil => st,
+        ssa.Environment.EnvCons { head: b, tail: rest } => find_env_binding_by_val_one(st, b, rest)
+    };
+}
+fn find_env_binding_by_val_one(st: EnvValIdSearch, b: ssa.Binding, rest: ssa.Environment) -> (result: EnvValIdSearch) {
+    if b.value == st.wanted {
+        return EnvValIdSearch { rest: ssa.Environment.EnvNil, wanted: st.wanted, found: true, name_start: b.name_start, name_end: b.name_end };
+    }
+    return EnvValIdSearch { ..st, rest: rest };
+}
+
+// Lower function inputs by zipping source-order `func.inputs` with `fn_decl.sig.params`.
+record SpecInputsWalk {
+    ssa_vals: ssa.ValueList,
+    fields: decl.FieldList,
+    acc: VmValueList,
+    ok: bool,
+    error_code: u64,
+    done: bool
+}
+fn lower_spec_inputs<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList) -> (result: SpecInputsWalk) {
+    let src_inputs: ssa.ValueList = reverse_ssa_values(func.inputs);
+    let initial: SpecInputsWalk = SpecInputsWalk { ssa_vals: src_inputs, fields: fn_decl.sig.params, acc: VmValueList.VVNil, ok: true, error_code: 0, done: false };
+    iterate i up_to 128 carrying st: SpecInputsWalk = initial {
+        if st.done || !(st.ok) {
+            return SpecInputsWalk { ..st, acc: reverse_vm_values(st.acc) };
+        }
+        next st = lower_spec_inputs_step<P, N>(pages, stride, total, func.nominals, nat_env, all_recs, st);
+    }
+    return SpecInputsWalk { ..st, acc: reverse_vm_values(st.acc), ok: st.ok && st.done };
+}
+fn lower_spec_inputs_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecInputsWalk) -> (result: SpecInputsWalk) {
+    return match st.ssa_vals {
+        ssa.ValueList.VNil => SpecInputsWalk { ..st, ok: decl_field_list_empty(st.fields), error_code: select(decl_field_list_empty(st.fields), 0, 7), done: true },
+        ssa.ValueList.VCons { head: v, tail: v_rest } => lower_spec_inputs_pair<P, N>(pages, stride, total, nominals, nat_env, all_recs, st, v, v_rest)
+    };
+}
+fn lower_spec_inputs_pair<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecInputsWalk, v: ssa.Value, v_rest: ssa.ValueList) -> (result: SpecInputsWalk) {
+    return match st.fields {
+        decl.FieldList.FNil => SpecInputsWalk { ..st, ok: false, error_code: 7, done: true },
+        decl.FieldList.FCons { head: fld, tail: f_rest } => lower_spec_input_one<P, N>(pages, stride, total, nominals, nat_env, all_recs, st, v, v_rest, fld, f_rest)
+    };
+}
+fn lower_spec_input_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecInputsWalk, v: ssa.Value, v_rest: ssa.ValueList, fld: decl.Field, f_rest: decl.FieldList) -> (result: SpecInputsWalk) {
+    let non_seq: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, v.ty, nominals, all_recs);
+    if non_seq.valid {
+        return SpecInputsWalk { ssa_vals: v_rest, fields: f_rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: non_seq }, tail: st.acc }, ok: true, error_code: 0, done: false };
+    }
+    let seq_res: SeqTypeParseResult = parse_byte_seq_vm_type<P, N>(pages, stride, total, fld.type_start, fld.type_end, nat_env);
+    if seq_res.ok {
+        return SpecInputsWalk { ssa_vals: v_rest, fields: f_rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: seq_res.ty }, tail: st.acc }, ok: true, error_code: 0, done: false };
+    }
+    return SpecInputsWalk { ..st, ok: false, error_code: seq_res.error_code, done: true };
+}
+
+fn resolve_spec_result_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList) -> (result: SeqTypeParseResult) {
+    let non_seq: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, func.result_type, func.nominals, all_recs);
+    if non_seq.valid { return SeqTypeParseResult { ok: true, error_code: 0, ty: non_seq }; }
+    return match fn_decl.sig.results {
+        decl.FieldList.FNil => SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() },
+        decl.FieldList.FCons { head: rfld, tail: rest } => parse_byte_seq_vm_type<P, N>(pages, stride, total, rfld.type_start, rfld.type_end, nat_env)
     };
 }
 
-// Error codes:
-//  1 = unverified project/module/SSA summary
-//  2 = unverified or unsupported function
-//  4 = unsupported non-scalar type
-//  5 = unsupported SSA instruction
-//  6 = unsupported SSA terminator
-//  8 = invalid module header
-//  9 = missing callee in reachable closure
-// 10 = callee signature (arity / argument type / result type) mismatch
+// Lower one block's parameters to concrete VmType values.
+record SpecBlkParamsWalk { rest: ssa.ValueList, acc: VmValueList, ok: bool, error_code: u64 }
+fn lower_spec_block_params<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blk: ssa.SsaBlock, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList) -> (result: SpecBlkParamsWalk) {
+    let initial: SpecBlkParamsWalk = SpecBlkParamsWalk { rest: blk.parameters, acc: VmValueList.VVNil, ok: true, error_code: 0 };
+    iterate i up_to 1024 carrying st: SpecBlkParamsWalk = initial {
+        if !(st.ok) || ssa_value_list_empty(st.rest) {
+            return SpecBlkParamsWalk { rest: st.rest, acc: reverse_vm_values(st.acc), ok: st.ok && ssa_value_list_empty(st.rest), error_code: st.error_code };
+        }
+        next st = lower_spec_block_param_step<P, N>(pages, stride, total, blk.parameter_bindings, func.nominals, fn_decl.sig.params, nat_env, all_recs, st);
+    }
+    return SpecBlkParamsWalk { rest: st.rest, acc: reverse_vm_values(st.acc), ok: st.ok && ssa_value_list_empty(st.rest), error_code: st.error_code };
+}
+fn lower_spec_block_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, pbinds: ssa.Environment, nominals: decl.NominalTypeIdentityList, fn_params: decl.FieldList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlkParamsWalk) -> (result: SpecBlkParamsWalk) {
+    return match st.rest {
+        ssa.ValueList.VNil => st,
+        ssa.ValueList.VCons { head: v, tail: rest } => lower_spec_block_param_one<P, N>(pages, stride, total, pbinds, nominals, fn_params, nat_env, all_recs, st, v, rest)
+    };
+}
+fn lower_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, pbinds: ssa.Environment, nominals: decl.NominalTypeIdentityList, fn_params: decl.FieldList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlkParamsWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: SpecBlkParamsWalk) {
+    let non_seq: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, v.ty, nominals, all_recs);
+    if non_seq.valid {
+        return SpecBlkParamsWalk { rest: rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: non_seq }, tail: st.acc }, ok: true, error_code: 0 };
+    }
+    let env_lk: EnvValIdLookup = find_env_binding_by_val_id(pbinds, v.id);
+    if !(env_lk.found) { return SpecBlkParamsWalk { rest: ssa.ValueList.VNil, acc: st.acc, ok: false, error_code: 4 }; }
+    let fld_lk: FieldSpanLookup = find_field_by_name_span<P, N>(pages, stride, total, fn_params, env_lk.name_start, env_lk.name_end);
+    if !(fld_lk.found) { return SpecBlkParamsWalk { rest: ssa.ValueList.VNil, acc: st.acc, ok: false, error_code: 4 }; }
+    let seq_res: SeqTypeParseResult = parse_byte_seq_vm_type<P, N>(pages, stride, total, fld_lk.fld.type_start, fld_lk.fld.type_end, nat_env);
+    if !(seq_res.ok) { return SpecBlkParamsWalk { rest: ssa.ValueList.VNil, acc: st.acc, ok: false, error_code: seq_res.error_code }; }
+    return SpecBlkParamsWalk { rest: rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: seq_res.ty }, tail: st.acc }, ok: true, error_code: 0 };
+}
+
+// Pre-build complete ValueId -> concrete VmType map for a specialized function.
+record AppendVmValsWalk { rest: VmValueList, acc: VmValueList }
+fn append_vm_values(front: VmValueList, back: VmValueList) -> (result: VmValueList) {
+    iterate i up_to 1024 carrying st: AppendVmValsWalk = AppendVmValsWalk { rest: front, acc: back } {
+        if vm_value_list_empty(st.rest) { return st.acc; }
+        next st = append_vm_values_step(st);
+    }
+    return st.acc;
+}
+fn append_vm_values_step(st: AppendVmValsWalk) -> (result: AppendVmValsWalk) {
+    return match st.rest {
+        VVNil => st,
+        VVCons { head: h, tail: t } => AppendVmValsWalk { rest: t, acc: VmValueList.VVCons { head: h, tail: st.acc } }
+    };
+}
+
+record NonSeqValMapWalk { rest: ssa.ValueList, acc: VmValueList }
+fn add_non_seq_ssa_values<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ssa.ValueList, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, acc: VmValueList) -> (result: VmValueList) {
+    let first: NonSeqValMapWalk = add_non_seq_ssa_chunk<P, N>(pages, stride, total, nominals, all_recs, NonSeqValMapWalk { rest: values, acc: acc });
+    if ssa_value_list_empty(first.rest) { return first.acc; }
+    let second: NonSeqValMapWalk = add_non_seq_ssa_chunk<P, N>(pages, stride, total, nominals, all_recs, first);
+    return second.acc;
+}
+fn add_non_seq_ssa_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, initial: NonSeqValMapWalk) -> (result: NonSeqValMapWalk) {
+    iterate i up_to 1024 carrying st: NonSeqValMapWalk = initial {
+        if ssa_value_list_empty(st.rest) { return st; }
+        next st = add_non_seq_ssa_step<P, N>(pages, stride, total, nominals, all_recs, st);
+    }
+    return st;
+}
+fn add_non_seq_ssa_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, st: NonSeqValMapWalk) -> (result: NonSeqValMapWalk) {
+    return match st.rest {
+        ssa.ValueList.VNil => st,
+        ssa.ValueList.VCons { head: v, tail: rest } => add_non_seq_ssa_one<P, N>(pages, stride, total, nominals, all_recs, st, v, rest)
+    };
+}
+fn add_non_seq_ssa_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, st: NonSeqValMapWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: NonSeqValMapWalk) {
+    let vt: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, v.ty, nominals, all_recs);
+    if vt.valid {
+        return NonSeqValMapWalk { rest: rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: vt }, tail: st.acc } };
+    }
+    return NonSeqValMapWalk { rest: rest, acc: st.acc };
+}
+
+record CollectBlkParamTypesWalk { rest: ssa.SsaBlockList, acc: VmValueList, ok: bool, error_code: u64, error_block: u64 }
+fn collect_all_spec_block_param_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seed: VmValueList) -> (result: CollectBlkParamTypesWalk) {
+    let initial: CollectBlkParamTypesWalk = CollectBlkParamTypesWalk { rest: func.blocks, acc: seed, ok: true, error_code: 0, error_block: 0 };
+    iterate i up_to 1024 carrying st: CollectBlkParamTypesWalk = initial {
+        if !(st.ok) || ssa_block_list_empty(st.rest) { return st; }
+        next st = collect_all_spec_block_param_step<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st);
+    }
+    return st;
+}
+fn collect_all_spec_block_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: CollectBlkParamTypesWalk) -> (result: CollectBlkParamTypesWalk) {
+    return match st.rest {
+        ssa.SsaBlockList.LNil => st,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => collect_all_spec_block_param_one<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st, blk, rest)
+    };
+}
+fn collect_all_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: CollectBlkParamTypesWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: CollectBlkParamTypesWalk) {
+    let lp: SpecBlkParamsWalk = lower_spec_block_params<P, N>(pages, stride, total, blk, func, fn_decl, nat_env, all_recs);
+    if !(lp.ok) {
+        return CollectBlkParamTypesWalk { rest: ssa.SsaBlockList.LNil, acc: st.acc, ok: false, error_code: lp.error_code, error_block: blk.id };
+    }
+    return CollectBlkParamTypesWalk { rest: rest, acc: append_vm_values(lp.acc, st.acc), ok: true, error_code: 0, error_block: 0 };
+}
+
+record SpecInstListWalk { rest: ssa.InstructionList, val_types: VmValueList, acc: VmInstructionList, count: u64, ok: bool, error_code: u64, error_inst: u64 }
+fn lower_spec_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, nat_env: NatEnv, all_recs: VmRecordTypeList, val_types: VmValueList, insts: ssa.InstructionList) -> (result: SpecInstListWalk) {
+    let initial: SpecInstListWalk = SpecInstListWalk { rest: insts, val_types: val_types, acc: VmInstructionList.VINil, count: 0, ok: true, error_code: 0, error_inst: 0 };
+    iterate i up_to 1024 carrying st: SpecInstListWalk = initial {
+        if !(st.ok) || ssa_inst_list_empty(st.rest) {
+            return SpecInstListWalk { ..st, acc: reverse_vm_insts(st.acc) };
+        }
+        next st = lower_spec_inst_step<P, N>(pages, stride, total, func.nominals, nat_env, all_recs, st);
+    }
+    return SpecInstListWalk { ..st, acc: reverse_vm_insts(st.acc), ok: st.ok && ssa_inst_list_empty(st.rest), error_code: select(st.ok && !(ssa_inst_list_empty(st.rest)), 5, st.error_code) };
+}
+fn lower_spec_inst_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecInstListWalk) -> (result: SpecInstListWalk) {
+    return match st.rest {
+        ssa.InstructionList.QNil => st,
+        ssa.InstructionList.QCons { head: inst, tail: rest } => lower_spec_inst_one<P, N>(pages, stride, total, nominals, nat_env, all_recs, st, inst, rest)
+    };
+}
+fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: SpecInstListWalk) {
+    if !(effects_empty(inst.effects)) || !(capabilities_empty(inst.capabilities)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 3, error_inst: inst.id };
+    }
+    let res_ty: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, inst.ty, nominals, all_recs);
+    if !(res_ty.valid) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
+    }
+    if inst.kind == 16 {
+        let rc: InstLowerResult = lower_vm_record_construct<P, N>(pages, stride, total, st.val_types, all_recs, inst, res_ty);
+        if !(rc.ok) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: rc.error_code, error_inst: inst.id }; }
+        return SpecInstListWalk { rest: rest, val_types: st.val_types, acc: VmInstructionList.VICons { head: rc.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+    }
+    let call_nats: CallNatArgsResult = select_call_nat_args<P, N>(pages, stride, total, inst, nat_env);
+    if !(call_nats.ok) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: call_nats.error_code, error_inst: inst.id };
+    }
+    let lowered: InstLowerResult = lower_vm_common_instruction(st.val_types, inst, res_ty, call_nats.nat_args);
+    if !(lowered.ok) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: lowered.error_code, error_inst: inst.id };
+    }
+    return SpecInstListWalk { rest: rest, val_types: st.val_types, acc: VmInstructionList.VICons { head: lowered.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+}
+fn select_call_nat_args<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, inst: ssa.Instruction, nat_env: NatEnv) -> (result: CallNatArgsResult) {
+    if inst.kind != 3 { return CallNatArgsResult { ok: true, error_code: 0, nat_args: VmNatArgList.NANil }; }
+    return parse_call_nat_args<P, N>(pages, stride, total, inst.start, inst.end, nat_env);
+}
+
+record SpecBlockListWalk { rest: ssa.SsaBlockList, val_types: VmValueList, acc: VmBlockList, block_count: u64, inst_count: u64, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
+fn lower_spec_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, val_types: VmValueList) -> (result: SpecBlockListWalk) {
+    let initial: SpecBlockListWalk = SpecBlockListWalk { rest: func.blocks, val_types: val_types, acc: VmBlockList.VBNil, block_count: 0, inst_count: 0, ok: true, error_code: 0, error_block: 0, error_inst: 0 };
+    iterate i up_to 1024 carrying st: SpecBlockListWalk = initial {
+        if !(st.ok) || ssa_block_list_empty(st.rest) {
+            return SpecBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc) };
+        }
+        next st = lower_spec_block_step<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st);
+    }
+    return SpecBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc), ok: st.ok && ssa_block_list_empty(st.rest), error_code: select(st.ok && !(ssa_block_list_empty(st.rest)), 2, st.error_code) };
+}
+fn lower_spec_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlockListWalk) -> (result: SpecBlockListWalk) {
+    return match st.rest {
+        ssa.SsaBlockList.LNil => st,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_spec_block_one<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st, blk, rest)
+    };
+}
+fn lower_spec_block_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: SpecBlockListWalk) {
+    if !(blk.lowering_ok) {
+        return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: 2, error_block: blk.id, error_inst: 0 };
+    }
+    let params: SpecBlkParamsWalk = lower_spec_block_params<P, N>(pages, stride, total, blk, func, fn_decl, nat_env, all_recs);
+    if !(params.ok) {
+        return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: params.error_code, error_block: blk.id, error_inst: 0 };
+    }
+    let insts: SpecInstListWalk = lower_spec_instructions<P, N>(pages, stride, total, func, nat_env, all_recs, st.val_types, blk.instructions);
+    if !(insts.ok) {
+        return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: insts.error_code, error_block: blk.id, error_inst: insts.error_inst };
+    }
+    let term: TermLowerResult = lower_vm_terminator(blk.terminator);
+    if !(term.ok) {
+        return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: term.error_code, error_block: blk.id, error_inst: 0 };
+    }
+    let vm_blk: VmBlock = VmBlock {
+        id: blk.id, is_error_path: term.is_error_path,
+        parameters: params.acc, instructions: insts.acc, terminator: term.term,
+        has_failure_target: blk.has_failure_target, failure_target: blk.failure_target
+    };
+    return SpecBlockListWalk {
+        rest: rest, val_types: st.val_types,
+        acc: VmBlockList.VBCons { head: vm_blk, tail: st.acc },
+        block_count: st.block_count + 1, inst_count: st.inst_count + insts.count,
+        ok: true, error_code: 0, error_block: 0, error_inst: 0
+    };
+}
+
+// Verify every CFG Branch/CondBranch argument and Return value inside a lowered VmFunction.
+record VmBlkLookup { found: bool, blk: VmBlock }
+fn dummy_vm_block() -> (result: VmBlock) {
+    return VmBlock { id: 0, is_error_path: false, parameters: VmValueList.VVNil, instructions: VmInstructionList.VINil, terminator: VmTerminator.VmFailure, has_failure_target: false, failure_target: 0 };
+}
+record VmBlkSearch { rest: VmBlockList, target: u64, found: bool, blk: VmBlock }
+fn find_vm_block_by_id(blocks: VmBlockList, target: u64) -> (result: VmBlkLookup) {
+    let initial: VmBlkSearch = VmBlkSearch { rest: blocks, target: target, found: false, blk: dummy_vm_block() };
+    iterate i up_to 1024 carrying st: VmBlkSearch = initial {
+        if st.found || vm_block_list_empty(st.rest) { return VmBlkLookup { found: st.found, blk: st.blk }; }
+        next st = find_vm_block_step(st);
+    }
+    return VmBlkLookup { found: st.found, blk: st.blk };
+}
+fn find_vm_block_step(st: VmBlkSearch) -> (result: VmBlkSearch) {
+    return match st.rest {
+        VBNil => st,
+        VBCons { head: blk, tail: rest } => find_vm_block_one(st, blk, rest)
+    };
+}
+fn find_vm_block_one(st: VmBlkSearch, blk: VmBlock, rest: VmBlockList) -> (result: VmBlkSearch) {
+    if blk.id == st.target { return VmBlkSearch { rest: VmBlockList.VBNil, target: st.target, found: true, blk: blk }; }
+    return VmBlkSearch { ..st, rest: rest };
+}
+
+record EdgeTypesWalk { val_types: VmValueList, args: ssa.IdList, params: VmValueList, ok: bool, done: bool }
+fn verify_edge_arg_types(val_types: VmValueList, args: ssa.IdList, params: VmValueList) -> (result: bool) {
+    let initial: EdgeTypesWalk = EdgeTypesWalk { val_types: val_types, args: args, params: params, ok: true, done: false };
+    iterate i up_to 1024 carrying st: EdgeTypesWalk = initial {
+        if st.done || !(st.ok) { return st.ok && st.done; }
+        next st = verify_edge_arg_step(st);
+    }
+    return st.ok && st.done;
+}
+fn verify_edge_arg_step(st: EdgeTypesWalk) -> (result: EdgeTypesWalk) {
+    return match st.args {
+        ssa.IdList.INil => EdgeTypesWalk { ..st, ok: vm_value_list_empty(st.params), done: true },
+        ssa.IdList.ICons { head: aid, tail: arest } => verify_edge_arg_pair(st, aid.value, arest)
+    };
+}
+fn verify_edge_arg_pair(st: EdgeTypesWalk, aid: u64, arest: ssa.IdList) -> (result: EdgeTypesWalk) {
+    return match st.params {
+        VVNil => EdgeTypesWalk { ..st, ok: false, done: true },
+        VVCons { head: param, tail: prest } => verify_edge_arg_one(st, aid, arest, param, prest)
+    };
+}
+fn verify_edge_arg_one(st: EdgeTypesWalk, aid: u64, arest: ssa.IdList, param: VmValue, prest: VmValueList) -> (result: EdgeTypesWalk) {
+    let lk: VmValTypeLookup = lookup_vm_value_type(st.val_types, aid);
+    if !(lk.found) || !(vm_type_equal(lk.ty, param.ty)) {
+        return EdgeTypesWalk { ..st, ok: false, done: true };
+    }
+    return EdgeTypesWalk { val_types: st.val_types, args: arest, params: prest, ok: true, done: false };
+}
+
+fn verify_cfg_target_edge(blocks: VmBlockList, val_types: VmValueList, target: u64, args: ssa.IdList) -> (result: bool) {
+    let blk_lk: VmBlkLookup = find_vm_block_by_id(blocks, target);
+    if !(blk_lk.found) { return false; }
+    return verify_edge_arg_types(val_types, args, blk_lk.blk.parameters);
+}
+fn verify_one_vm_terminator(fn_item: VmFunction, val_types: VmValueList, term: VmTerminator) -> (result: bool) {
+    return match term {
+        VmReturn { value: v } => verify_vm_return_type(val_types, v, fn_item.result_type),
+        VmBranch { target: tgt, arguments: args } => verify_cfg_target_edge(fn_item.blocks, val_types, tgt, args),
+        VmCondBranch { condition: cond, then_target: tt, then_arguments: ta, else_target: et, else_arguments: ea } => verify_vm_cond_branch(fn_item.blocks, val_types, cond, tt, ta, et, ea),
+        VmFailure => true
+    };
+}
+fn verify_vm_return_type(val_types: VmValueList, v: u64, expected: VmType) -> (result: bool) {
+    let lk: VmValTypeLookup = lookup_vm_value_type(val_types, v);
+    return lk.found && vm_type_equal(lk.ty, expected);
+}
+fn verify_vm_cond_branch(blocks: VmBlockList, val_types: VmValueList, cond: u64, tt: u64, ta: ssa.IdList, et: u64, ea: ssa.IdList) -> (result: bool) {
+    let clk: VmValTypeLookup = lookup_vm_value_type(val_types, cond);
+    if !(clk.found) || clk.ty.kind != 1 { return false; }
+    return verify_cfg_target_edge(blocks, val_types, tt, ta) && verify_cfg_target_edge(blocks, val_types, et, ea);
+}
+
+record CfgVerifyWalk { rest: VmBlockList, ok: bool, error_block: u64 }
+fn verify_vm_fn_cfg_types(fn_item: VmFunction, val_types: VmValueList) -> (result: CfgVerifyWalk) {
+    let initial: CfgVerifyWalk = CfgVerifyWalk { rest: fn_item.blocks, ok: true, error_block: 0 };
+    iterate i up_to 1024 carrying st: CfgVerifyWalk = initial {
+        if !(st.ok) || vm_block_list_empty(st.rest) { return st; }
+        next st = verify_vm_fn_cfg_step(fn_item, val_types, st);
+    }
+    return st;
+}
+fn verify_vm_fn_cfg_step(fn_item: VmFunction, val_types: VmValueList, st: CfgVerifyWalk) -> (result: CfgVerifyWalk) {
+    return match st.rest {
+        VBNil => st,
+        VBCons { head: blk, tail: rest } => verify_vm_fn_cfg_one(fn_item, val_types, st, blk, rest)
+    };
+}
+fn verify_vm_fn_cfg_one(fn_item: VmFunction, val_types: VmValueList, st: CfgVerifyWalk, blk: VmBlock, rest: VmBlockList) -> (result: CfgVerifyWalk) {
+    if !(verify_one_vm_terminator(fn_item, val_types, blk.terminator)) {
+        return CfgVerifyWalk { rest: VmBlockList.VBNil, ok: false, error_block: blk.id };
+    }
+    return CfgVerifyWalk { rest: rest, ok: true, error_block: 0 };
+}
+
+fn lower_ssa_fn_specialized<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_args: VmNatArgList, all_recs: VmRecordTypeList) -> (result: SingleFnLowerResult) {
+    if !(func.supported) || !(func.verified) || !(func.identity.valid) || func.identity.len == 0 || func.block_count == 0 {
+        return SingleFnLowerResult { ok: false, error_code: 2, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let nat_built: NatEnvBuild = build_nat_env<P, N>(pages, stride, total, fn_decl.sig.generics, nat_args);
+    if !(nat_built.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 11, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let res_ty: SeqTypeParseResult = resolve_spec_result_type<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs);
+    if !(res_ty.ok) {
+        return SingleFnLowerResult { ok: false, error_code: res_ty.error_code, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let inputs: SpecInputsWalk = lower_spec_inputs<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs);
+    if !(inputs.ok) {
+        return SingleFnLowerResult { ok: false, error_code: inputs.error_code, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let base_val_types: VmValueList = add_non_seq_ssa_values<P, N>(pages, stride, total, func.values, func.nominals, all_recs, inputs.acc);
+    let blk_val_types: CollectBlkParamTypesWalk = collect_all_spec_block_param_types<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, base_val_types);
+    if !(blk_val_types.ok) {
+        return SingleFnLowerResult { ok: false, error_code: blk_val_types.error_code, error_block: blk_val_types.error_block, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    let blocks: SpecBlockListWalk = lower_spec_blocks<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, blk_val_types.acc);
+    if !(blocks.ok) {
+        return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
+    }
+    let vm_fn: VmFunction = VmFunction {
+        identity: func.identity,
+        nat_args: nat_args,
+        inputs: inputs.acc,
+        result_type: res_ty.ty,
+        blocks: blocks.acc,
+        block_count: blocks.block_count,
+        instruction_count: blocks.inst_count
+    };
+    let cfg_ok: CfgVerifyWalk = verify_vm_fn_cfg_types(vm_fn, blk_val_types.acc);
+    if !(cfg_ok.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 7, error_block: cfg_ok.error_block, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
+    return SingleFnLowerResult { ok: true, error_code: 0, error_block: 0, error_inst: 0, vm_fn: vm_fn };
+}
+
+// ---------------------------------------------------------------------------
+// Whole-closure callable identity, specialization reachability, and call check
+// ---------------------------------------------------------------------------
+
 fn emit_failure(code: u64, fn_idx: u64, blk_id: u64, inst_id: u64) -> (result: VmEmitResult) {
     return VmEmitResult {
         ok: false, error_code: code, error_function: fn_idx, error_block: blk_id, error_instruction: inst_id,
         module_name_start: 0, module_name_end: 0,
+        record_types: VmRecordTypeList.VRTNil, record_type_count: 0,
         functions: VmFunctionList.VFNil, function_count: 0, block_count: 0, instruction_count: 0
     };
-}
-
-// ---------------------------------------------------------------------------
-// Whole-closure callable identity, reachability, and signature verification
-// ---------------------------------------------------------------------------
-
-fn semantic_ids_equal(a: decl.SemanticIdentity, b: decl.SemanticIdentity) -> (result: bool) {
-    if !(a.valid) || !(b.valid) || a.len != b.len || a.len > 512 { return false; }
-    iterate i up_to 512 carrying idx: u64 = 0 {
-        if idx >= a.len { return true; }
-        if a.bytes[idx] != b.bytes[idx] { return false; }
-        next idx = idx + 1;
-    }
-    return true;
-}
-fn vm_scalar_types_equal(a: VmScalarType, b: VmScalarType) -> (result: bool) {
-    return a.valid && b.valid && a.kind == b.kind && a.bits == b.bits && a.signed == b.signed;
 }
 fn dummy_vm_function() -> (result: VmFunction) {
     return VmFunction {
         identity: decl.invalid_semantic_identity(),
+        nat_args: VmNatArgList.NANil,
         inputs: VmValueList.VVNil,
         result_type: invalid_vm_type(),
         blocks: VmBlockList.VBNil,
@@ -725,13 +2024,11 @@ fn dummy_vm_function() -> (result: VmFunction) {
 }
 
 record VmFnLookup { found: bool, fn_item: VmFunction }
-record VmFnLookupWalk { rest: VmFunctionList, wanted: decl.SemanticIdentity, found: bool, fn_item: VmFunction }
-fn find_vm_fn_by_id(fns: VmFunctionList, wanted: decl.SemanticIdentity) -> (result: VmFnLookup) {
+record VmFnLookupWalk { rest: VmFunctionList, wanted: VmSpecKey, found: bool, fn_item: VmFunction }
+fn find_vm_fn_by_spec(fns: VmFunctionList, wanted: VmSpecKey) -> (result: VmFnLookup) {
     let initial: VmFnLookupWalk = VmFnLookupWalk { rest: fns, wanted: wanted, found: false, fn_item: dummy_vm_function() };
     iterate i up_to 1024 carrying st: VmFnLookupWalk = initial {
-        if st.found || vm_fn_list_empty(st.rest) {
-            return VmFnLookup { found: st.found, fn_item: st.fn_item };
-        }
+        if st.found || vm_fn_list_empty(st.rest) { return VmFnLookup { found: st.found, fn_item: st.fn_item }; }
         next st = find_vm_fn_step(st);
     }
     return VmFnLookup { found: st.found, fn_item: st.fn_item };
@@ -743,48 +2040,49 @@ fn find_vm_fn_step(st: VmFnLookupWalk) -> (result: VmFnLookupWalk) {
     };
 }
 fn find_vm_fn_one(st: VmFnLookupWalk, fn_item: VmFunction, rest: VmFunctionList) -> (result: VmFnLookupWalk) {
-    if semantic_ids_equal(fn_item.identity, st.wanted) {
+    let key: VmSpecKey = VmSpecKey { identity: fn_item.identity, nat_args: fn_item.nat_args };
+    if spec_keys_equal(key, st.wanted) {
         return VmFnLookupWalk { rest: VmFunctionList.VFNil, wanted: st.wanted, found: true, fn_item: fn_item };
     }
     return VmFnLookupWalk { ..st, rest: rest };
 }
 
-enum PendingIdList { PINil, PICons { head: decl.SemanticIdentity, tail: PendingIdList } }
-fn pending_id_list_empty(ids: PendingIdList) -> (result: bool) {
-    return match ids { PINil => true, PICons { head: h, tail: t } => false };
+enum PendingSpecList { PSNil, PSCons { head: VmSpecKey, tail: PendingSpecList } }
+fn pending_spec_list_empty(ids: PendingSpecList) -> (result: bool) {
+    return match ids { PSNil => true, PSCons { head: h, tail: t } => false };
 }
-record PendingIdRev { rest: PendingIdList, acc: PendingIdList }
-fn reverse_pending_ids(ids: PendingIdList) -> (result: PendingIdList) {
-    iterate i up_to 1024 carrying st: PendingIdRev = PendingIdRev { rest: ids, acc: PendingIdList.PINil } {
-        if pending_id_list_empty(st.rest) { return st.acc; }
-        next st = reverse_pending_id_step(st);
+record PendingSpecRev { rest: PendingSpecList, acc: PendingSpecList }
+fn reverse_pending_specs(ids: PendingSpecList) -> (result: PendingSpecList) {
+    iterate i up_to 1024 carrying st: PendingSpecRev = PendingSpecRev { rest: ids, acc: PendingSpecList.PSNil } {
+        if pending_spec_list_empty(st.rest) { return st.acc; }
+        next st = reverse_pending_spec_step(st);
     }
     return st.acc;
 }
-fn reverse_pending_id_step(st: PendingIdRev) -> (result: PendingIdRev) {
+fn reverse_pending_spec_step(st: PendingSpecRev) -> (result: PendingSpecRev) {
     return match st.rest {
-        PINil => st,
-        PICons { head: h, tail: t } => PendingIdRev { rest: t, acc: PendingIdList.PICons { head: h, tail: st.acc } }
+        PSNil => st,
+        PSCons { head: h, tail: t } => PendingSpecRev { rest: t, acc: PendingSpecList.PSCons { head: h, tail: st.acc } }
     };
 }
-record PendingAppendWalk { rest: PendingIdList, tail: PendingIdList }
-fn append_pending_ids(front: PendingIdList, back: PendingIdList) -> (result: PendingIdList) {
-    let rev: PendingIdList = reverse_pending_ids(front);
-    iterate i up_to 1024 carrying st: PendingAppendWalk = PendingAppendWalk { rest: rev, tail: back } {
-        if pending_id_list_empty(st.rest) { return st.tail; }
-        next st = append_pending_id_step(st);
+record PendingSpecAppend { rest: PendingSpecList, tail: PendingSpecList }
+fn append_pending_specs(front: PendingSpecList, back: PendingSpecList) -> (result: PendingSpecList) {
+    let rev: PendingSpecList = reverse_pending_specs(front);
+    iterate i up_to 1024 carrying st: PendingSpecAppend = PendingSpecAppend { rest: rev, tail: back } {
+        if pending_spec_list_empty(st.rest) { return st.tail; }
+        next st = append_pending_spec_step(st);
     }
     return st.tail;
 }
-fn append_pending_id_step(st: PendingAppendWalk) -> (result: PendingAppendWalk) {
+fn append_pending_spec_step(st: PendingSpecAppend) -> (result: PendingSpecAppend) {
     return match st.rest {
-        PINil => st,
-        PICons { head: h, tail: t } => PendingAppendWalk { rest: t, tail: PendingIdList.PICons { head: h, tail: st.tail } }
+        PSNil => st,
+        PSCons { head: h, tail: t } => PendingSpecAppend { rest: t, tail: PendingSpecList.PSCons { head: h, tail: st.tail } }
     };
 }
 
-record InstCalleeCollect { rest: VmInstructionList, acc: PendingIdList }
-fn collect_inst_callees(insts: VmInstructionList, acc: PendingIdList) -> (result: PendingIdList) {
+record InstCalleeCollect { rest: VmInstructionList, acc: PendingSpecList }
+fn collect_inst_callees(insts: VmInstructionList, acc: PendingSpecList) -> (result: PendingSpecList) {
     iterate i up_to 1024 carrying st: InstCalleeCollect = InstCalleeCollect { rest: insts, acc: acc } {
         if vm_inst_list_empty(st.rest) { return st.acc; }
         next st = collect_inst_callee_step(st);
@@ -799,18 +2097,19 @@ fn collect_inst_callee_step(st: InstCalleeCollect) -> (result: InstCalleeCollect
 }
 fn collect_inst_callee_one(st: InstCalleeCollect, inst: VmInstruction, rest: VmInstructionList) -> (result: InstCalleeCollect) {
     if inst.opcode == 13 {
-        return InstCalleeCollect { rest: rest, acc: PendingIdList.PICons { head: inst.callee_identity, tail: st.acc } };
+        let key: VmSpecKey = VmSpecKey { identity: inst.callee_identity, nat_args: inst.callee_nat_args };
+        return InstCalleeCollect { rest: rest, acc: PendingSpecList.PSCons { head: key, tail: st.acc } };
     }
     return InstCalleeCollect { rest: rest, acc: st.acc };
 }
 
-record BlockCalleeCollect { rest: VmBlockList, acc: PendingIdList }
-fn collect_fn_callees_in_order(fn_item: VmFunction) -> (result: PendingIdList) {
-    iterate i up_to 1024 carrying st: BlockCalleeCollect = BlockCalleeCollect { rest: fn_item.blocks, acc: PendingIdList.PINil } {
-        if vm_block_list_empty(st.rest) { return reverse_pending_ids(st.acc); }
+record BlockCalleeCollect { rest: VmBlockList, acc: PendingSpecList }
+fn collect_fn_callees_in_order(fn_item: VmFunction) -> (result: PendingSpecList) {
+    iterate i up_to 1024 carrying st: BlockCalleeCollect = BlockCalleeCollect { rest: fn_item.blocks, acc: PendingSpecList.PSNil } {
+        if vm_block_list_empty(st.rest) { return reverse_pending_specs(st.acc); }
         next st = collect_block_callee_step(st);
     }
-    return reverse_pending_ids(st.acc);
+    return reverse_pending_specs(st.acc);
 }
 fn collect_block_callee_step(st: BlockCalleeCollect) -> (result: BlockCalleeCollect) {
     return match st.rest {
@@ -819,9 +2118,9 @@ fn collect_block_callee_step(st: BlockCalleeCollect) -> (result: BlockCalleeColl
     };
 }
 
-record FnsCalleeCollect { rest: VmFunctionList, acc: PendingIdList }
-fn collect_fns_callees_in_order(fns: VmFunctionList) -> (result: PendingIdList) {
-    iterate i up_to 1024 carrying st: FnsCalleeCollect = FnsCalleeCollect { rest: fns, acc: PendingIdList.PINil } {
+record FnsCalleeCollect { rest: VmFunctionList, acc: PendingSpecList }
+fn collect_fns_callees_in_order(fns: VmFunctionList) -> (result: PendingSpecList) {
+    iterate i up_to 1024 carrying st: FnsCalleeCollect = FnsCalleeCollect { rest: fns, acc: PendingSpecList.PSNil } {
         if vm_fn_list_empty(st.rest) { return st.acc; }
         next st = collect_fns_callee_step(st);
     }
@@ -832,34 +2131,14 @@ fn collect_fns_callee_step(st: FnsCalleeCollect) -> (result: FnsCalleeCollect) {
         VFNil => st,
         VFCons { head: fn_item, tail: rest } => FnsCalleeCollect {
             rest: rest,
-            acc: append_pending_ids(st.acc, collect_fn_callees_in_order(fn_item))
+            acc: append_pending_specs(st.acc, collect_fn_callees_in_order(fn_item))
         }
     };
 }
 
 // Value-type lookup inside a lowered VmFunction (inputs, block params, inst results).
-record VmValTypeWalk { rest: VmValueList, wanted: u64, found: bool, ty: VmScalarType }
-fn vm_value_list_find_type(values: VmValueList, wanted: u64) -> (result: VmScalarType) {
-    let initial: VmValTypeWalk = VmValTypeWalk { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() };
-    iterate i up_to 1024 carrying st: VmValTypeWalk = initial {
-        if st.found || vm_value_list_empty(st.rest) { return st.ty; }
-        next st = vm_value_list_find_step(st);
-    }
-    return st.ty;
-}
-fn vm_value_list_find_step(st: VmValTypeWalk) -> (result: VmValTypeWalk) {
-    return match st.rest {
-        VVNil => st,
-        VVCons { head: v, tail: rest } => vm_value_list_find_one(st, v, rest)
-    };
-}
-fn vm_value_list_find_one(st: VmValTypeWalk, v: VmValue, rest: VmValueList) -> (result: VmValTypeWalk) {
-    if v.id == st.wanted { return VmValTypeWalk { rest: VmValueList.VVNil, wanted: st.wanted, found: true, ty: v.ty }; }
-    return VmValTypeWalk { ..st, rest: rest };
-}
-
-record VmInstTypeWalk { rest: VmInstructionList, wanted: u64, found: bool, ty: VmScalarType }
-fn vm_inst_list_find_type(insts: VmInstructionList, wanted: u64) -> (result: VmScalarType) {
+record VmInstTypeWalk { rest: VmInstructionList, wanted: u64, found: bool, ty: VmType }
+fn vm_inst_list_find_type(insts: VmInstructionList, wanted: u64) -> (result: VmType) {
     let initial: VmInstTypeWalk = VmInstTypeWalk { rest: insts, wanted: wanted, found: false, ty: invalid_vm_type() };
     iterate i up_to 1024 carrying st: VmInstTypeWalk = initial {
         if st.found || vm_inst_list_empty(st.rest) { return st.ty; }
@@ -878,10 +2157,10 @@ fn vm_inst_list_find_one(st: VmInstTypeWalk, inst: VmInstruction, rest: VmInstru
     return VmInstTypeWalk { ..st, rest: rest };
 }
 
-record VmBlockTypeWalk { rest: VmBlockList, wanted: u64, found: bool, ty: VmScalarType }
-fn vm_fn_find_value_type(fn_item: VmFunction, wanted: u64) -> (result: VmScalarType) {
-    let from_inputs: VmScalarType = vm_value_list_find_type(fn_item.inputs, wanted);
-    if from_inputs.valid { return from_inputs; }
+record VmBlockTypeWalk { rest: VmBlockList, wanted: u64, found: bool, ty: VmType }
+fn vm_fn_find_value_type(fn_item: VmFunction, wanted: u64) -> (result: VmType) {
+    let from_inputs: VmValTypeLookup = lookup_vm_value_type(fn_item.inputs, wanted);
+    if from_inputs.found && from_inputs.ty.valid { return from_inputs.ty; }
     let initial: VmBlockTypeWalk = VmBlockTypeWalk { rest: fn_item.blocks, wanted: wanted, found: false, ty: invalid_vm_type() };
     iterate i up_to 1024 carrying st: VmBlockTypeWalk = initial {
         if st.found || vm_block_list_empty(st.rest) { return st.ty; }
@@ -896,9 +2175,9 @@ fn vm_block_type_find_step(st: VmBlockTypeWalk) -> (result: VmBlockTypeWalk) {
     };
 }
 fn vm_block_type_find_one(st: VmBlockTypeWalk, blk: VmBlock, rest: VmBlockList) -> (result: VmBlockTypeWalk) {
-    let from_params: VmScalarType = vm_value_list_find_type(blk.parameters, st.wanted);
-    if from_params.valid { return VmBlockTypeWalk { rest: VmBlockList.VBNil, wanted: st.wanted, found: true, ty: from_params }; }
-    let from_insts: VmScalarType = vm_inst_list_find_type(blk.instructions, st.wanted);
+    let from_params: VmValTypeLookup = lookup_vm_value_type(blk.parameters, st.wanted);
+    if from_params.found && from_params.ty.valid { return VmBlockTypeWalk { rest: VmBlockList.VBNil, wanted: st.wanted, found: true, ty: from_params.ty }; }
+    let from_insts: VmType = vm_inst_list_find_type(blk.instructions, st.wanted);
     if from_insts.valid { return VmBlockTypeWalk { rest: VmBlockList.VBNil, wanted: st.wanted, found: true, ty: from_insts }; }
     return VmBlockTypeWalk { ..st, rest: rest };
 }
@@ -925,8 +2204,8 @@ fn call_args_match_pair(st: CallArgsMatchWalk, arg_val_id: u64, arg_rest: ssa.Id
     };
 }
 fn call_args_match_check(st: CallArgsMatchWalk, arg_val_id: u64, arg_rest: ssa.IdList, param: VmValue, param_rest: VmValueList) -> (result: CallArgsMatchWalk) {
-    let arg_ty: VmScalarType = vm_fn_find_value_type(st.caller, arg_val_id);
-    if !(vm_scalar_types_equal(arg_ty, param.ty)) {
+    let arg_ty: VmType = vm_fn_find_value_type(st.caller, arg_val_id);
+    if !(vm_type_equal(arg_ty, param.ty)) {
         return CallArgsMatchWalk { ..st, ok: false, done: true };
     }
     return CallArgsMatchWalk { caller: st.caller, args: arg_rest, params: param_rest, ok: true, done: false };
@@ -952,11 +2231,12 @@ fn verify_block_call_step(st: CallVerifyInstWalk) -> (result: CallVerifyInstWalk
 }
 fn verify_block_call_one(st: CallVerifyInstWalk, inst: VmInstruction, rest: VmInstructionList) -> (result: CallVerifyInstWalk) {
     if inst.opcode != 13 { return CallVerifyInstWalk { ..st, rest: rest }; }
-    let callee: VmFnLookup = find_vm_fn_by_id(st.all_fns, inst.callee_identity);
+    let key: VmSpecKey = VmSpecKey { identity: inst.callee_identity, nat_args: inst.callee_nat_args };
+    let callee: VmFnLookup = find_vm_fn_by_spec(st.all_fns, key);
     if !(callee.found) {
         return CallVerifyInstWalk { ..st, rest: VmInstructionList.VINil, ok: false, error_code: 9, error_inst: inst.id };
     }
-    if !(vm_scalar_types_equal(inst.ty, callee.fn_item.result_type)) {
+    if !(vm_type_equal(inst.ty, callee.fn_item.result_type)) {
         return CallVerifyInstWalk { ..st, rest: VmInstructionList.VINil, ok: false, error_code: 10, error_inst: inst.id };
     }
     if !(call_args_match_callee(st.caller, inst.inputs, callee.fn_item.inputs)) {
@@ -1016,10 +2296,9 @@ fn verify_closure_calls_one(st: CallVerifyFnWalk, caller: VmFunction, rest: VmFu
 }
 
 // ---------------------------------------------------------------------------
-// Single-module entry points (unchanged contract + callee verification)
+// Single-module entry points
 // ---------------------------------------------------------------------------
 
-// Emit a bounded VM SSA program from an already-lowered native ValueSsaSummary.
 fn emit_verified_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, summary: ssa.ValueSsaSummary, header: parser.Header) -> (result: VmEmitResult) {
     if !(summary.valid) || summary.function_count == 0 || summary.verified_function_count != summary.function_count || summary.unsupported_block_count > 0 {
         return emit_failure(1, 0, 0, 0);
@@ -1027,7 +2306,7 @@ fn emit_verified_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     if header.code != 0 || header.state != 8 || header.module_end <= header.module_start || header.module_end > total {
         return emit_failure(8, 0, 0, 0);
     }
-    let lowered: FnEmitWalk = lower_vm_functions(summary);
+    let lowered: FnEmitWalk = lower_vm_scalar_functions(summary);
     if !(lowered.ok) || lowered.fn_count != summary.function_count {
         return emit_failure(select(lowered.ok, 2, lowered.error_code), lowered.error_function, lowered.error_block, lowered.error_inst);
     }
@@ -1038,6 +2317,7 @@ fn emit_verified_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     return VmEmitResult {
         ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
         module_name_start: header.module_start, module_name_end: header.module_end,
+        record_types: VmRecordTypeList.VRTNil, record_type_count: 0,
         functions: lowered.acc,
         function_count: lowered.fn_count,
         block_count: lowered.block_count,
@@ -1045,8 +2325,6 @@ fn emit_verified_ssa<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     };
 }
 
-// Compile one standalone MNCS module natively (decl -> flow -> verified Value SSA)
-// and emit its bounded VM SSA program.
 fn compile_and_emit_vm_module<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64) -> (result: VmEmitResult) {
     let header: parser.Header = parser.header_global<P, N>(pages, stride, total);
     if header.code != 0 || header.state != 8 { return emit_failure(8, 0, 0, 0); }
@@ -1067,6 +2345,9 @@ fn project_module_list_empty(modules: project.ProjectModuleList) -> (result: boo
 fn empty_header() -> (result: parser.Header) {
     return parser.Header { code: 1, start: 0, end: 0, version_start: 0, version_end: 0, module_start: 0, module_end: 0, next_offset: 0, state: 0 };
 }
+fn empty_unit() -> (result: decl.Unit) {
+    return decl.Unit { ok: false, err_start: 0, err_end: 0, header: empty_header(), uses: decl.UseList.UNil, records: decl.RecordList.RNil, enums: decl.EnumList.GNil, fns: decl.FnList.DNil, cursor: 0 };
+}
 
 record ReachableModulesCheck {
     rest: project.ProjectModuleList,
@@ -1075,13 +2356,14 @@ record ReachableModulesCheck {
     all_verified: bool,
     target_found: bool,
     target_header: parser.Header,
+    target_unit: decl.Unit,
     target_ssa: ssa.ValueSsaSummary
 }
 fn inspect_reachable_project_modules(modules: project.ProjectModuleList, reachable: [bool; 64], target_source_index: u64) -> (result: ReachableModulesCheck) {
     let initial: ReachableModulesCheck = ReachableModulesCheck {
         rest: modules, reachable: reachable, target_source_index: target_source_index,
         all_verified: true, target_found: false, target_header: empty_header(),
-        target_ssa: ssa.empty_ssa_summary(false)
+        target_unit: empty_unit(), target_ssa: ssa.empty_ssa_summary(false)
     };
     iterate i up_to 64 carrying st: ReachableModulesCheck = initial {
         if !(st.all_verified) || project_module_list_empty(st.rest) { return st; }
@@ -1111,23 +2393,22 @@ fn inspect_reachable_project_module_one(st: ReachableModulesCheck, mod_item: pro
             ..st, rest: rest,
             target_found: true,
             target_header: mod_item.flow.proof.unit.header,
+            target_unit: mod_item.flow.proof.unit,
             target_ssa: mod_item.value_ssa
         };
     }
     return ReachableModulesCheck { ..st, rest: rest };
 }
 
-record ReachableSsaFnLookup { found: bool, func: ssa.Function }
+record ReachableSsaFnLookup { found: bool, source_index: u64, unit: decl.Unit, func: ssa.Function }
 record SsaSummaryIdSearch { index: u64, found: bool, func: ssa.Function }
-fn find_ssa_fn_in_summary_by_id(summary: ssa.ValueSsaSummary, wanted: decl.SemanticIdentity) -> (result: ReachableSsaFnLookup) {
+fn find_ssa_fn_in_summary_by_id(summary: ssa.ValueSsaSummary, wanted: decl.SemanticIdentity) -> (result: SsaSummaryIdSearch) {
     let initial: SsaSummaryIdSearch = SsaSummaryIdSearch { index: 0, found: false, func: ssa.empty_ssa_function() };
     iterate i up_to 1024 carrying st: SsaSummaryIdSearch = initial {
-        if st.found || st.index >= summary.function_count {
-            return ReachableSsaFnLookup { found: st.found, func: st.func };
-        }
+        if st.found || st.index >= summary.function_count { return st; }
         next st = find_ssa_fn_in_summary_step(summary, wanted, st);
     }
-    return ReachableSsaFnLookup { found: st.found, func: st.func };
+    return st;
 }
 fn find_ssa_fn_in_summary_step(summary: ssa.ValueSsaSummary, wanted: decl.SemanticIdentity, st: SsaSummaryIdSearch) -> (result: SsaSummaryIdSearch) {
     let lookup: ssa.ValueSsaFunctionLookup = ssa.value_ssa_function_at(summary, st.index);
@@ -1138,16 +2419,16 @@ fn find_ssa_fn_in_summary_step(summary: ssa.ValueSsaSummary, wanted: decl.Semant
     return SsaSummaryIdSearch { ..st, index: st.index + 1 };
 }
 
-record ReachableModuleFnSearch { rest: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity, found: bool, func: ssa.Function }
+record ReachableModuleFnSearch { rest: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity, found: bool, source_index: u64, unit: decl.Unit, func: ssa.Function }
 fn find_ssa_fn_in_reachable_modules(modules: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity) -> (result: ReachableSsaFnLookup) {
-    let initial: ReachableModuleFnSearch = ReachableModuleFnSearch { rest: modules, reachable: reachable, wanted: wanted, found: false, func: ssa.empty_ssa_function() };
+    let initial: ReachableModuleFnSearch = ReachableModuleFnSearch { rest: modules, reachable: reachable, wanted: wanted, found: false, source_index: 0, unit: empty_unit(), func: ssa.empty_ssa_function() };
     iterate i up_to 64 carrying st: ReachableModuleFnSearch = initial {
         if st.found || project_module_list_empty(st.rest) {
-            return ReachableSsaFnLookup { found: st.found, func: st.func };
+            return ReachableSsaFnLookup { found: st.found, source_index: st.source_index, unit: st.unit, func: st.func };
         }
         next st = find_ssa_fn_in_reachable_module_step(st);
     }
-    return ReachableSsaFnLookup { found: st.found, func: st.func };
+    return ReachableSsaFnLookup { found: st.found, source_index: st.source_index, unit: st.unit, func: st.func };
 }
 fn find_ssa_fn_in_reachable_module_step(st: ReachableModuleFnSearch) -> (result: ReachableModuleFnSearch) {
     return match st.rest {
@@ -1159,44 +2440,20 @@ fn find_ssa_fn_in_reachable_module_one(st: ReachableModuleFnSearch, mod_item: pr
     if mod_item.source_index >= 64 || !(st.reachable[mod_item.source_index]) {
         return ReachableModuleFnSearch { ..st, rest: rest };
     }
-    let found: ReachableSsaFnLookup = find_ssa_fn_in_summary_by_id(mod_item.value_ssa, st.wanted);
+    let found: SsaSummaryIdSearch = find_ssa_fn_in_summary_by_id(mod_item.value_ssa, st.wanted);
     if found.found {
-        return ReachableModuleFnSearch { rest: project.ProjectModuleList.PNil, reachable: st.reachable, wanted: st.wanted, found: true, func: found.func };
+        return ReachableModuleFnSearch {
+            rest: project.ProjectModuleList.PNil, reachable: st.reachable, wanted: st.wanted,
+            found: true, source_index: mod_item.source_index, unit: mod_item.flow.proof.unit, func: found.func
+        };
     }
     return ReachableModuleFnSearch { ..st, rest: rest };
 }
 
-record SingleFnLowerResult { ok: bool, error_code: u64, error_block: u64, error_inst: u64, vm_fn: VmFunction }
-fn lower_single_ssa_fn(func: ssa.Function) -> (result: SingleFnLowerResult) {
-    if !(func.supported) || !(func.verified) || !(func.identity.valid) || func.identity.len == 0 || func.block_count == 0 {
-        return SingleFnLowerResult { ok: false, error_code: 2, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
-    }
-    let res_ty: VmScalarType = sem_type_to_vm(func.result_type);
-    if !(res_ty.valid) {
-        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
-    }
-    let inputs: LowerValuesWalk = lower_vm_values(func.inputs, true);
-    if !(inputs.ok) {
-        return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
-    }
-    let blocks: BlockListWalk = lower_vm_blocks(func.values, func.blocks);
-    if !(blocks.ok) {
-        return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
-    }
-    let vm_fn: VmFunction = VmFunction {
-        identity: func.identity,
-        inputs: inputs.acc,
-        result_type: res_ty,
-        blocks: blocks.acc,
-        block_count: blocks.block_count,
-        instruction_count: blocks.inst_count
-    };
-    return SingleFnLowerResult { ok: true, error_code: 0, error_block: 0, error_inst: 0, vm_fn: vm_fn };
-}
-
+// Wire-only scalar multi-module closure expansion (for `emit_verified_project_ssa` wire tests).
 record ProjectClosureWalk {
     emitted_rev: VmFunctionList,
-    pending: PendingIdList,
+    pending: PendingSpecList,
     fn_count: u64,
     block_count: u64,
     inst_count: u64,
@@ -1206,52 +2463,49 @@ record ProjectClosureWalk {
     error_block: u64,
     error_inst: u64
 }
-fn expand_project_vm_closure(modules: project.ProjectModuleList, reachable: [bool; 64], root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: ProjectClosureWalk) {
-    let seeded_pending: PendingIdList = collect_fns_callees_in_order(root_fns);
+fn expand_project_vm_closure_scalar(modules: project.ProjectModuleList, reachable: [bool; 64], root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: ProjectClosureWalk) {
+    let seeded_pending: PendingSpecList = collect_fns_callees_in_order(root_fns);
     let initial: ProjectClosureWalk = ProjectClosureWalk {
-        emitted_rev: reverse_vm_fns(root_fns),
-        pending: seeded_pending,
-        fn_count: root_fn_count,
-        block_count: root_block_count,
-        inst_count: root_inst_count,
+        emitted_rev: reverse_vm_fns(root_fns), pending: seeded_pending,
+        fn_count: root_fn_count, block_count: root_block_count, inst_count: root_inst_count,
         ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
     };
     iterate step up_to 256 carrying st: ProjectClosureWalk = initial {
-        if !(st.ok) || pending_id_list_empty(st.pending) {
+        if !(st.ok) || pending_spec_list_empty(st.pending) {
             return ProjectClosureWalk { ..st, emitted_rev: reverse_vm_fns(st.emitted_rev) };
         }
-        next st = expand_project_vm_closure_step(modules, reachable, st);
+        next st = expand_project_vm_closure_scalar_step(modules, reachable, st);
     }
     return ProjectClosureWalk {
-        ..st,
-        emitted_rev: reverse_vm_fns(st.emitted_rev),
-        ok: st.ok && pending_id_list_empty(st.pending),
-        error_code: select(st.ok && !(pending_id_list_empty(st.pending)), 9, st.error_code)
+        ..st, emitted_rev: reverse_vm_fns(st.emitted_rev),
+        ok: st.ok && pending_spec_list_empty(st.pending),
+        error_code: select(st.ok && !(pending_spec_list_empty(st.pending)), 9, st.error_code)
     };
 }
-fn expand_project_vm_closure_step(modules: project.ProjectModuleList, reachable: [bool; 64], st: ProjectClosureWalk) -> (result: ProjectClosureWalk) {
+fn expand_project_vm_closure_scalar_step(modules: project.ProjectModuleList, reachable: [bool; 64], st: ProjectClosureWalk) -> (result: ProjectClosureWalk) {
     return match st.pending {
-        PINil => st,
-        PICons { head: callee_id, tail: rest } => expand_project_vm_closure_one(modules, reachable, st, callee_id, rest)
+        PSNil => st,
+        PSCons { head: spec_key, tail: rest } => expand_project_vm_closure_scalar_one(modules, reachable, st, spec_key, rest)
     };
 }
-fn expand_project_vm_closure_one(modules: project.ProjectModuleList, reachable: [bool; 64], st: ProjectClosureWalk, callee_id: decl.SemanticIdentity, rest: PendingIdList) -> (result: ProjectClosureWalk) {
-    let existing: VmFnLookup = find_vm_fn_by_id(st.emitted_rev, callee_id);
-    if existing.found {
-        return ProjectClosureWalk { ..st, pending: rest };
+fn expand_project_vm_closure_scalar_one(modules: project.ProjectModuleList, reachable: [bool; 64], st: ProjectClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList) -> (result: ProjectClosureWalk) {
+    if !(vm_nat_list_empty(spec_key.nat_args)) {
+        return ProjectClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 11, error_function: st.fn_count, error_block: 0, error_inst: 0 };
     }
-    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(modules, reachable, callee_id);
+    let existing: VmFnLookup = find_vm_fn_by_spec(st.emitted_rev, spec_key);
+    if existing.found { return ProjectClosureWalk { ..st, pending: rest }; }
+    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(modules, reachable, spec_key.identity);
     if !(located.found) {
-        return ProjectClosureWalk { ..st, pending: PendingIdList.PINil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+        return ProjectClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0 };
     }
-    let lowered: SingleFnLowerResult = lower_single_ssa_fn(located.func);
+    let lowered: SingleFnLowerResult = lower_single_scalar_ssa_fn(located.func);
     if !(lowered.ok) {
-        return ProjectClosureWalk { ..st, pending: PendingIdList.PINil, ok: false, error_code: lowered.error_code, error_function: st.fn_count, error_block: lowered.error_block, error_inst: lowered.error_inst };
+        return ProjectClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: lowered.error_code, error_function: st.fn_count, error_block: lowered.error_block, error_inst: lowered.error_inst };
     }
-    let child_callees: PendingIdList = collect_fn_callees_in_order(lowered.vm_fn);
+    let child_callees: PendingSpecList = collect_fn_callees_in_order(lowered.vm_fn);
     return ProjectClosureWalk {
         emitted_rev: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.emitted_rev },
-        pending: append_pending_ids(rest, child_callees),
+        pending: append_pending_specs(rest, child_callees),
         fn_count: st.fn_count + 1,
         block_count: st.block_count + lowered.vm_fn.block_count,
         inst_count: st.inst_count + lowered.vm_fn.instruction_count,
@@ -1259,11 +2513,6 @@ fn expand_project_vm_closure_one(modules: project.ProjectModuleList, reachable: 
     };
 }
 
-// Emit a bounded multi-module VM SSA program from an already-compiled native
-// ProjectResult: verifies the reachable module closure, lowers the target
-// module's functions plus all transitively reachable provider bodies retaining
-// their original declaring identities, and verifies every call target and
-// signature across the emitted closure.
 fn emit_verified_project_ssa(compiled: project.ProjectResult, target_source_index: u64) -> (result: VmEmitResult) {
     if !(compiled.valid) || !(compiled.value_ssa_valid) || compiled.module_count == 0
         || target_source_index >= compiled.source_count || target_source_index >= 64 {
@@ -1271,9 +2520,7 @@ fn emit_verified_project_ssa(compiled: project.ProjectResult, target_source_inde
     }
     let closure: project.ProjectImportClosure = project.project_import_closure(compiled.imports, target_source_index, compiled.source_count);
     let inspected: ReachableModulesCheck = inspect_reachable_project_modules(compiled.modules, closure.reachable, target_source_index);
-    if !(inspected.all_verified) || !(inspected.target_found) {
-        return emit_failure(1, 0, 0, 0);
-    }
+    if !(inspected.all_verified) || !(inspected.target_found) { return emit_failure(1, 0, 0, 0); }
     if inspected.target_header.code != 0 || inspected.target_header.state != 8
         || inspected.target_header.module_end <= inspected.target_header.module_start {
         return emit_failure(8, 0, 0, 0);
@@ -1283,11 +2530,11 @@ fn emit_verified_project_ssa(compiled: project.ProjectResult, target_source_inde
         || inspected.target_ssa.unsupported_block_count > 0 {
         return emit_failure(1, 0, 0, 0);
     }
-    let root_lowered: FnEmitWalk = lower_vm_functions(inspected.target_ssa);
+    let root_lowered: FnEmitWalk = lower_vm_scalar_functions(inspected.target_ssa);
     if !(root_lowered.ok) || root_lowered.fn_count != inspected.target_ssa.function_count {
         return emit_failure(select(root_lowered.ok, 2, root_lowered.error_code), root_lowered.error_function, root_lowered.error_block, root_lowered.error_inst);
     }
-    let expanded: ProjectClosureWalk = expand_project_vm_closure(
+    let expanded: ProjectClosureWalk = expand_project_vm_closure_scalar(
         compiled.modules, closure.reachable,
         root_lowered.acc, root_lowered.fn_count, root_lowered.block_count, root_lowered.inst_count
     );
@@ -1302,6 +2549,155 @@ fn emit_verified_project_ssa(compiled: project.ProjectResult, target_source_inde
         ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
         module_name_start: inspected.target_header.module_start,
         module_name_end: inspected.target_header.module_end,
+        record_types: VmRecordTypeList.VRTNil, record_type_count: 0,
+        functions: expanded.emitted_rev,
+        function_count: expanded.fn_count,
+        block_count: expanded.block_count,
+        instruction_count: expanded.inst_count
+    };
+}
+
+// Source-backed multi-module closure lowering with concrete Nat specialization,
+// bounded byte-view lowering, and nominal record construction/return.
+fn lower_target_concrete_functions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, summary: ssa.ValueSsaSummary, all_recs: VmRecordTypeList) -> (result: FnEmitWalk) {
+    iterate i up_to 1024 carrying st: FnEmitWalk = FnEmitWalk {
+        index: 0, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    } {
+        if !(st.ok) || st.index >= summary.function_count {
+            return FnEmitWalk { ..st, acc: reverse_vm_fns(st.acc) };
+        }
+        next st = lower_target_concrete_fn_step<P, N>(pages, stride, total, unit, summary, all_recs, st);
+    }
+    return FnEmitWalk { ..st, acc: reverse_vm_fns(st.acc), ok: st.ok && st.index >= summary.function_count, error_code: select(st.ok && st.index < summary.function_count, 2, st.error_code) };
+}
+fn lower_target_concrete_fn_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, summary: ssa.ValueSsaSummary, all_recs: VmRecordTypeList, st: FnEmitWalk) -> (result: FnEmitWalk) {
+    let lookup: ssa.ValueSsaFunctionLookup = ssa.value_ssa_function_at(summary, st.index);
+    if !(lookup.found) {
+        return FnEmitWalk { ..st, ok: false, error_code: 2, error_function: st.index, error_block: 0, error_inst: 0 };
+    }
+    let decl_lk: FnDeclLookup = find_fn_decl_by_id<P, N>(pages, stride, total, unit.header, unit.fns, lookup.function.identity);
+    if !(decl_lk.found) {
+        return FnEmitWalk { ..st, ok: false, error_code: 2, error_function: st.index, error_block: 0, error_inst: 0 };
+    }
+    // Generic templates in the target module are only instantiated at concrete call sites.
+    if !(decl_generic_list_empty(decl_lk.fn_decl.sig.generics)) {
+        return FnEmitWalk { ..st, index: st.index + 1 };
+    }
+    let lowered: SingleFnLowerResult = lower_ssa_fn_specialized<P, N>(pages, stride, total, lookup.function, decl_lk.fn_decl, VmNatArgList.NANil, all_recs);
+    if !(lowered.ok) {
+        return FnEmitWalk { ..st, ok: false, error_code: lowered.error_code, error_function: st.index, error_block: lowered.error_block, error_inst: lowered.error_inst };
+    }
+    return FnEmitWalk {
+        index: st.index + 1,
+        acc: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.acc },
+        fn_count: st.fn_count + 1,
+        block_count: st.block_count + lowered.vm_fn.block_count,
+        inst_count: st.inst_count + lowered.vm_fn.instruction_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+}
+
+fn expand_project_vm_closure_with_sources<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], modules: project.ProjectModuleList, reachable: [bool; 64], all_recs: VmRecordTypeList, root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: ProjectClosureWalk) {
+    let seeded_pending: PendingSpecList = collect_fns_callees_in_order(root_fns);
+    let initial: ProjectClosureWalk = ProjectClosureWalk {
+        emitted_rev: reverse_vm_fns(root_fns), pending: seeded_pending,
+        fn_count: root_fn_count, block_count: root_block_count, inst_count: root_inst_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+    iterate step up_to 256 carrying st: ProjectClosureWalk = initial {
+        if !(st.ok) || pending_spec_list_empty(st.pending) {
+            return ProjectClosureWalk { ..st, emitted_rev: reverse_vm_fns(st.emitted_rev) };
+        }
+        next st = expand_project_vm_closure_src_step<M, N>(snapshot, flat_pages, modules, reachable, all_recs, st);
+    }
+    return ProjectClosureWalk {
+        ..st, emitted_rev: reverse_vm_fns(st.emitted_rev),
+        ok: st.ok && pending_spec_list_empty(st.pending),
+        error_code: select(st.ok && !(pending_spec_list_empty(st.pending)), 9, st.error_code)
+    };
+}
+fn expand_project_vm_closure_src_step<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], modules: project.ProjectModuleList, reachable: [bool; 64], all_recs: VmRecordTypeList, st: ProjectClosureWalk) -> (result: ProjectClosureWalk) {
+    return match st.pending {
+        PSNil => st,
+        PSCons { head: spec_key, tail: rest } => expand_project_vm_closure_src_one<M, N>(snapshot, flat_pages, modules, reachable, all_recs, st, spec_key, rest)
+    };
+}
+fn expand_project_vm_closure_src_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], modules: project.ProjectModuleList, reachable: [bool; 64], all_recs: VmRecordTypeList, st: ProjectClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList) -> (result: ProjectClosureWalk) {
+    let existing: VmFnLookup = find_vm_fn_by_spec(st.emitted_rev, spec_key);
+    if existing.found { return ProjectClosureWalk { ..st, pending: rest }; }
+    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(modules, reachable, spec_key.identity);
+    if !(located.found) {
+        return ProjectClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    let pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, located.source_index);
+    let stride: u64 = project.module_stride(snapshot.sources, located.source_index);
+    let total: u64 = project.module_total(snapshot.sources, located.source_index);
+    let decl_lk: FnDeclLookup = find_fn_decl_by_id<1024, N>(pages, stride, total, located.unit.header, located.unit.fns, located.func.identity);
+    if !(decl_lk.found) {
+        return ProjectClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 2, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    let lowered: SingleFnLowerResult = lower_ssa_fn_specialized<1024, N>(pages, stride, total, located.func, decl_lk.fn_decl, spec_key.nat_args, all_recs);
+    if !(lowered.ok) {
+        return ProjectClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: lowered.error_code, error_function: st.fn_count, error_block: lowered.error_block, error_inst: lowered.error_inst };
+    }
+    let child_callees: PendingSpecList = collect_fn_callees_in_order(lowered.vm_fn);
+    return ProjectClosureWalk {
+        emitted_rev: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.emitted_rev },
+        pending: append_pending_specs(rest, child_callees),
+        fn_count: st.fn_count + 1,
+        block_count: st.block_count + lowered.vm_fn.block_count,
+        inst_count: st.inst_count + lowered.vm_fn.instruction_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+}
+
+fn emit_verified_project_ssa_with_sources<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], compiled: project.ProjectResult, target_source_index: u64) -> (result: VmEmitResult) {
+    if !(compiled.valid) || !(compiled.value_ssa_valid) || compiled.module_count == 0
+        || target_source_index >= compiled.source_count || target_source_index >= 64 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let closure: project.ProjectImportClosure = project.project_import_closure(compiled.imports, target_source_index, compiled.source_count);
+    let inspected: ReachableModulesCheck = inspect_reachable_project_modules(compiled.modules, closure.reachable, target_source_index);
+    if !(inspected.all_verified) || !(inspected.target_found) { return emit_failure(1, 0, 0, 0); }
+    if inspected.target_header.code != 0 || inspected.target_header.state != 8
+        || inspected.target_header.module_end <= inspected.target_header.module_start {
+        return emit_failure(8, 0, 0, 0);
+    }
+    if !(inspected.target_ssa.valid) || inspected.target_ssa.function_count == 0
+        || inspected.target_ssa.verified_function_count != inspected.target_ssa.function_count
+        || inspected.target_ssa.unsupported_block_count > 0 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let all_recs: VmRecordTypeList = collect_reachable_record_types<M, N>(snapshot, flat_pages, compiled.modules, closure.reachable);
+    let root_pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, target_source_index);
+    let root_stride: u64 = project.module_stride(snapshot.sources, target_source_index);
+    let root_total: u64 = project.module_total(snapshot.sources, target_source_index);
+    let root_lowered: FnEmitWalk = lower_target_concrete_functions<1024, N>(root_pages, root_stride, root_total, inspected.target_unit, inspected.target_ssa, all_recs);
+    if !(root_lowered.ok) {
+        return emit_failure(root_lowered.error_code, root_lowered.error_function, root_lowered.error_block, root_lowered.error_inst);
+    }
+    if root_lowered.fn_count == 0 {
+        return emit_failure(11, 0, 0, 0);
+    }
+    let expanded: ProjectClosureWalk = expand_project_vm_closure_with_sources<M, N>(
+        snapshot, flat_pages, compiled.modules, closure.reachable, all_recs,
+        root_lowered.acc, root_lowered.fn_count, root_lowered.block_count, root_lowered.inst_count
+    );
+    if !(expanded.ok) {
+        return emit_failure(expanded.error_code, expanded.error_function, expanded.error_block, expanded.error_inst);
+    }
+    let verified_calls: CallVerifyResult = verify_closure_calls(expanded.emitted_rev);
+    if !(verified_calls.ok) {
+        return emit_failure(verified_calls.error_code, verified_calls.error_function, verified_calls.error_block, verified_calls.error_inst);
+    }
+    let retained_recs: RecordUsageAdd = retain_referenced_record_types(all_recs, expanded.emitted_rev);
+    return VmEmitResult {
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
+        module_name_start: inspected.target_header.module_start,
+        module_name_end: inspected.target_header.module_end,
+        record_types: retained_recs.used,
+        record_type_count: retained_recs.count,
         functions: expanded.emitted_rev,
         function_count: expanded.fn_count,
         block_count: expanded.block_count,
@@ -1316,8 +2712,9 @@ fn compile_project_for_emit<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, f
 
 // Compile a multi-module MNCS project natively (Project -> decl -> flow ->
 // verified Value SSA) and emit the verified reachable VM SSA closure for
-// `target_source_index`.
+// `target_source_index` (including concrete Nat specializations, bounded
+// byte views, and nominal records).
 fn compile_and_emit_project_vm_module<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: VmEmitResult) {
     let compiled: project.ProjectResult = project.compile_project<M, N>(snapshot, flat_pages);
-    return emit_verified_project_ssa(compiled, target_source_index);
+    return emit_verified_project_ssa_with_sources<M, N>(snapshot, flat_pages, compiled, target_source_index);
 }

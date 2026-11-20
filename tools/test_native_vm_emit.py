@@ -141,7 +141,7 @@ class NativeEmitterProbe:
         env["MNCS_PROBE_BACKEND_ROOTS"] = (
             "compile_and_emit_vm_module,emit_verified_ssa,"
             "compile_and_emit_project_vm_module,emit_verified_project_ssa,"
-            "compile_project_for_emit"
+            "emit_verified_project_ssa_with_sources,compile_project_for_emit"
         )
         env["MNCS_PROBE_CACHE_DIR"] = str(CACHE_DIR)
         env["MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES"] = str(MAX_AS_BYTES)
@@ -159,6 +159,11 @@ class NativeEmitterProbe:
             {
                 "module": "mncs.compiler.vm_emit.v1",
                 "function": "compile_and_emit_project_vm_module",
+                "type_arguments": [sem.nat_arg(64), sem.nat_arg(1024)],
+            },
+            {
+                "module": "mncs.compiler.vm_emit.v1",
+                "function": "emit_verified_project_ssa_with_sources",
                 "type_arguments": [sem.nat_arg(64), sem.nat_arg(1024)],
             },
             {
@@ -275,7 +280,7 @@ class FreshVmSession:
         self.req_id = 0
         self.peak_rss_bytes = None
 
-    def call(self, module_name, function, args):
+    def call(self, module_name, function, args, *, type_arguments=None, expect_ok=True):
         self.req_id += 1
         req = {
             "schema_version": "mncs.vm.session/1",
@@ -284,7 +289,7 @@ class FreshVmSession:
                 "schema_version": "0.1",
                 "target": {"module": module_name, "function": function},
                 "arguments": args,
-                "type_arguments": [],
+                "type_arguments": type_arguments or [],
                 "step_budget": 1000000,
             },
         }
@@ -293,6 +298,8 @@ class FreshVmSession:
         line = self.proc.stdout.readline()
         assert line, f"mncs-vm serve terminated: {self.proc.stderr.read()}"
         reply = json.loads(line)
+        if not expect_ok:
+            return reply
         assert reply.get("ok") is True, reply
         return reply["result"]
 
