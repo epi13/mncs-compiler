@@ -1,0 +1,196 @@
+mncs 0.18;
+module tests.compiler_ssa_if_join;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.flow.v1 as flow;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Source bytes: "x y z x" at spans:
+// "x" = 0..1 (outer let x: u64)
+// "y" = 2..3 (branch-local let y: u64)
+// "z" = 4..5 (branch-local let z: u64)
+// "x" = 6..7 (shadowed inner let x: bool or u64)
+fn test_pages() -> (result: [[byte; up_to 64]; up_to 1]) {
+    let p: [byte; up_to 64] = [120, 32, 121, 32, 122, 32, 120];
+    return [p];
+}
+
+fn u64_ty() -> (result: decl.SemType) {
+    return decl.SemType.TInt { width: 64, signed: false };
+}
+
+fn make_cfg_block(id: u64, kind: u64, succ0: u64, succ1: u64, succ_count: u64, is_join: bool, exprs: flow.TypedExprList) -> (result: flow.Block) {
+    let base: flow.Block = flow.empty_block(id, true, is_join);
+    return flow.Block {
+        ..base,
+        kind: kind,
+        succ0: succ0,
+        succ1: succ1,
+        succ_count: succ_count,
+        expressions: exprs
+    };
+}
+
+fn bool_branch_expr() -> (result: flow.TypedExprList) {
+    let op: decl.TOp = decl.TOp.TBool { value: true, ty: decl.SemType.TBool, start: 0, end: 1 };
+    let expr: flow.TypedExpr = flow.TypedExpr {
+        role: 2, start: 0, end: 1, binding_start: 0, binding_end: 0,
+        ops: decl.TOpList.PCons { head: op, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    return flow.TypedExprList.ECons { head: expr, tail: flow.TypedExprList.ENil };
+}
+
+fn let_int_expr(name_start: u64, name_end: u64, val: u64) -> (result: flow.TypedExpr) {
+    let op: decl.TOp = decl.TOp.TInt { value: val, ty: u64_ty(), start: name_start, end: name_end };
+    return flow.TypedExpr {
+        role: 1, start: name_start, end: name_end, binding_start: name_start, binding_end: name_end,
+        ops: decl.TOpList.PCons { head: op, tail: decl.TOpList.PNil }, op_count: 1
+    };
+}
+
+fn let_bool_expr(name_start: u64, name_end: u64, val: bool) -> (result: flow.TypedExpr) {
+    let op: decl.TOp = decl.TOp.TBool { value: val, ty: decl.SemType.TBool, start: name_start, end: name_end };
+    return flow.TypedExpr {
+        role: 1, start: name_start, end: name_end, binding_start: name_start, binding_end: name_end,
+        ops: decl.TOpList.PCons { head: op, tail: decl.TOpList.PNil }, op_count: 1
+    };
+}
+
+fn return_outer_x_expr() -> (result: flow.TypedExprList) {
+    let op: decl.TOp = decl.TOp.TName { ty: u64_ty(), start: 0, end: 1 };
+    let expr: flow.TypedExpr = flow.TypedExpr {
+        role: 3, start: 0, end: 1, binding_start: 0, binding_end: 0,
+        ops: decl.TOpList.PCons { head: op, tail: decl.TOpList.PNil }, op_count: 1
+    };
+    return flow.TypedExprList.ECons { head: expr, tail: flow.TypedExprList.ENil };
+}
+
+fn seed_for_blocks(blocks: flow.BlockList, next_block_id: u64) -> (result: ssa.SsaBuild) {
+    let outer_x: ssa.Binding = ssa.Binding { name_start: 0, name_end: 1, value: 0, ty: u64_ty() };
+    let entry_env: ssa.Environment = ssa.Environment.EnvCons { head: outer_x, tail: ssa.Environment.EnvNil };
+    let entry_val: ssa.Value = ssa.Value { id: 0, ty: u64_ty(), owner_block: 0, kind: 0, index: 0 };
+    let entry_vals: ssa.ValueList = ssa.ValueList.VCons { head: entry_val, tail: ssa.ValueList.VNil };
+    return ssa.SsaBuild {
+        rest: blocks, edges: ssa.EdgeList.ENil, join_scopes: ssa.JoinScopeList.JSNil,
+        blocks: ssa.SsaBlockList.LNil, values: entry_vals, inputs: entry_vals,
+        entry_env: entry_env, next_value: 1, next_instruction: 0, next_block_id: next_block_id,
+        result_type: u64_ty(), identity: ssa.invalid_identity(),
+        nominals: decl.NominalTypeIdentityList.NINil, entry: 0,
+        supported: true, initial_failure_kind: 0
+    };
+}
+
+test branch_local_disappears_at_if_join() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let b0: flow.Block = make_cfg_block(0, 1, 1, 2, 2, false, bool_branch_expr());
+    let b1: flow.Block = make_cfg_block(1, 2, 3, 0, 1, false, flow.TypedExprList.ECons {
+        head: let_int_expr(2, 3, 11),
+        tail: flow.TypedExprList.ENil
+    });
+    let b2: flow.Block = make_cfg_block(2, 2, 3, 0, 1, false, flow.TypedExprList.ECons {
+        head: let_int_expr(4, 5, 22),
+        tail: flow.TypedExprList.ENil
+    });
+    let b3: flow.Block = make_cfg_block(3, 3, 0, 0, 0, true, return_outer_x_expr());
+    let blocks: flow.BlockList = flow.BlockList.BCons {
+        head: b0, tail: flow.BlockList.BCons {
+        head: b1, tail: flow.BlockList.BCons {
+        head: b2, tail: flow.BlockList.BCons {
+        head: b3, tail: flow.BlockList.BNil }}}
+    };
+    let walk: ssa.SsaBlockWalk = ssa.lower_flow_blocks<1, 64>(pages, 64, 7, 4, seed_for_blocks(blocks, 4));
+    let join3_in: ssa.Incoming = ssa.incoming_for<1, 64>(pages, 64, 7, 3, walk.build.edges);
+    let has_x: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 0, 1);
+    let has_y: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 2, 3);
+    let has_z: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 4, 5);
+    let ok: bool = walk.processed == 4
+        && walk.build.supported
+        && join3_in.found && join3_in.ok && join3_in.count == 2
+        && has_x.found && !has_y.found && !has_z.found;
+    return from_assertion(equals_bool(true, ok, 1001));
+}
+
+test shadowed_outer_binding_retains_identity_and_type() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let b0: flow.Block = make_cfg_block(0, 1, 1, 2, 2, false, bool_branch_expr());
+    // B1 (block param v2 for outer x: u64 at 0..1) shadows x with inner `let x: bool = true` (v3 at 6..7)
+    let b1: flow.Block = make_cfg_block(1, 2, 3, 0, 1, false, flow.TypedExprList.ECons {
+        head: let_bool_expr(6, 7, true),
+        tail: flow.TypedExprList.ENil
+    });
+    // B2 (block param v4 for outer x: u64 at 0..1) shadows x with inner `let x: u64 = 99` (v5 at 6..7)
+    let b2: flow.Block = make_cfg_block(2, 2, 3, 0, 1, false, flow.TypedExprList.ECons {
+        head: let_int_expr(6, 7, 99),
+        tail: flow.TypedExprList.ENil
+    });
+    let b3: flow.Block = make_cfg_block(3, 3, 0, 0, 0, true, return_outer_x_expr());
+    let blocks: flow.BlockList = flow.BlockList.BCons {
+        head: b0, tail: flow.BlockList.BCons {
+        head: b1, tail: flow.BlockList.BCons {
+        head: b2, tail: flow.BlockList.BCons {
+        head: b3, tail: flow.BlockList.BNil }}}
+    };
+    let walk: ssa.SsaBlockWalk = ssa.lower_flow_blocks<1, 64>(pages, 64, 7, 4, seed_for_blocks(blocks, 4));
+    let join3_in: ssa.Incoming = ssa.incoming_for<1, 64>(pages, 64, 7, 3, walk.build.edges);
+    let outer_x: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 0, 1);
+    let shadow_x: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 6, 7);
+    let ok: bool = walk.processed == 4
+        && walk.build.supported
+        && join3_in.found && join3_in.ok && join3_in.count == 2
+        && outer_x.found
+        && outer_x.binding.name_start == 0
+        && outer_x.binding.name_end == 1
+        && (outer_x.binding.value == 2 || outer_x.binding.value == 4)
+        && outer_x.binding.value != 3
+        && outer_x.binding.value != 5
+        && decl.is_u64_ty(outer_x.binding.ty)
+        && !shadow_x.found;
+    return from_assertion(equals_bool(true, ok, 1002));
+}
+
+test nested_no_else_if_join_regression() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let b0: flow.Block = make_cfg_block(0, 1, 1, 2, 2, false, bool_branch_expr());
+    let b1_exprs: flow.TypedExprList = flow.TypedExprList.ECons {
+        head: let_int_expr(2, 3, 11),
+        tail: bool_branch_expr()
+    };
+    let b1: flow.Block = make_cfg_block(1, 1, 4, 5, 2, false, b1_exprs);
+    let b4_exprs: flow.TypedExprList = flow.TypedExprList.ECons {
+        head: let_int_expr(4, 5, 22),
+        tail: flow.TypedExprList.ENil
+    };
+    let b4: flow.Block = make_cfg_block(4, 2, 6, 0, 1, false, b4_exprs);
+    let b5: flow.Block = make_cfg_block(5, 2, 6, 0, 1, false, flow.TypedExprList.ENil);
+    let b6: flow.Block = make_cfg_block(6, 2, 3, 0, 1, true, flow.TypedExprList.ENil);
+    let b2: flow.Block = make_cfg_block(2, 2, 3, 0, 1, false, flow.TypedExprList.ENil);
+    let b3: flow.Block = make_cfg_block(3, 3, 0, 0, 0, true, return_outer_x_expr());
+
+    let blocks: flow.BlockList = flow.BlockList.BCons {
+        head: b0, tail: flow.BlockList.BCons {
+        head: b1, tail: flow.BlockList.BCons {
+        head: b4, tail: flow.BlockList.BCons {
+        head: b5, tail: flow.BlockList.BCons {
+        head: b6, tail: flow.BlockList.BCons {
+        head: b2, tail: flow.BlockList.BCons {
+        head: b3, tail: flow.BlockList.BNil }}}}}}
+    };
+    let walk: ssa.SsaBlockWalk = ssa.lower_flow_blocks<1, 64>(pages, 64, 7, 7, seed_for_blocks(blocks, 7));
+    let join6_in: ssa.Incoming = ssa.incoming_for<1, 64>(pages, 64, 7, 6, walk.build.edges);
+    let join6_has_x: ssa.BindingLookup = ssa.lookup_binding_exact_span(join6_in.bindings, 0, 1);
+    let join6_has_y: ssa.BindingLookup = ssa.lookup_binding_exact_span(join6_in.bindings, 2, 3);
+    let join6_has_z: ssa.BindingLookup = ssa.lookup_binding_exact_span(join6_in.bindings, 4, 5);
+    let join3_in: ssa.Incoming = ssa.incoming_for<1, 64>(pages, 64, 7, 3, walk.build.edges);
+    let join3_has_x: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 0, 1);
+    let join3_has_y: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 2, 3);
+    let join3_has_z: ssa.BindingLookup = ssa.lookup_binding_exact_span(join3_in.bindings, 4, 5);
+    let ok: bool = walk.processed == 7
+        && walk.build.supported
+        && join6_in.found && join6_in.ok && join6_in.count == 2
+        && join6_has_x.found && join6_has_y.found && !join6_has_z.found
+        && join3_in.found && join3_in.ok && join3_in.count == 2
+        && join3_has_x.found && !join3_has_y.found && !join3_has_z.found;
+    return from_assertion(equals_bool(true, ok, 1003));
+}

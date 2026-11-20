@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 47,
+  "revision": 48,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -2251,6 +2251,61 @@
           "definition_identity"
         ],
         "execution_fields": [
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.ssa-scoped-if-join-native",
+      "title": "First-class MNCS SSA suite verifies scoped if-join projection, shadowed outer bindings, and nested no-else fallthrough",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.ssa.v1::lower_flow_blocks",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::select_jump_env",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::project_environment_by_span",
+        "mncs:0.2:function:mncs.compiler.ssa.v1::incoming_for"
+      ],
+      "invalidation_dependencies": [
+        "tests/ssa_if_join_suite.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/source.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/ssa_if_join_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
           "executor_identity",
           "verifier_identity",
           "invalidation_identity"

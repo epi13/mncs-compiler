@@ -226,7 +226,10 @@ fn scalar_type(ty: decl.SemType) -> (result: bool) {
 }
 fn supported_sequence_element<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: decl.SemType, nominals: decl.NominalTypeIdentityList) -> (result: bool) {
     let initial: SequenceElementSupport = SequenceElementSupport { ty: ty, done: false, supported: false };
-    iterate i up_to 32 carrying st: SequenceElementSupport = initial { next st = sequence_element_support_step<P, N>(pages, stride, total, nominals, st); }
+    iterate i up_to 32 carrying st: SequenceElementSupport = initial {
+        if st.done { return st.supported; }
+        next st = sequence_element_support_step<P, N>(pages, stride, total, nominals, st);
+    }
     return st.done && st.supported;
 }
 fn sequence_element_support_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, st: SequenceElementSupport) -> (result: SequenceElementSupport) {
@@ -886,6 +889,16 @@ fn lower_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u
         flow.BlockList.BCons { head: block, tail: rest } => lower_one_block<P, N>(pages, stride, total, st, block, rest)
     };
 }
+fn typed_expr_list_empty(exprs: flow.TypedExprList) -> (result: bool) {
+    return match exprs { flow.TypedExprList.ENil => true, flow.TypedExprList.ECons { head: h, tail: t } => false };
+}
+fn lower_block_expressions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, seed: ExpressionBuild) -> (result: ExpressionBuild) {
+    iterate i up_to 1024 carrying lowered: ExpressionBuild = seed {
+        if typed_expr_list_empty(lowered.rest) { return lowered; }
+        next lowered = lower_expression_step<P, N>(pages, stride, total, lowered);
+    }
+    return lowered;
+}
 fn lower_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: SsaBuild, block: flow.Block, rest: flow.BlockList) -> (result: SsaBuild) {
     let incoming: Incoming = incoming_for<P, N>(pages, stride, total, block.id, st.edges);
     let prepared: BlockParamBuild = prepare_block_environment<P, N>(pages, stride, total, block.id, incoming, st.next_value, st.values, st.nominals);
@@ -903,7 +916,7 @@ fn lower_one_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
         ok: st.supported && (block.id == st.entry || (incoming.found && incoming.ok)),
         failure_op: 0
     };
-    iterate i up_to 1024 carrying lowered: ExpressionBuild = expression_seed { next lowered = lower_expression_step<P, N>(pages, stride, total, lowered); }
+    let lowered: ExpressionBuild = lower_block_expressions<P, N>(pages, stride, total, expression_seed);
     let exprs: ExpressionBuild = finish_loop_block<P, N>(pages, stride, total, block, lowered);
     let instructions: InstructionList = reverse_instructions<P, N>(pages, stride, total, exprs.instructions);
     let jump_sel: EnvironmentProjection = select_jump_env<P, N>(pages, stride, total, block, exprs.env, st.edges, st.join_scopes);
@@ -965,7 +978,10 @@ fn emit_loop_index_advance<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
 }
 record GeneratedBlockPrepend { rest: SsaBlockList, blocks: SsaBlockList }
 fn prepend_generated_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, generated: SsaBlockList, blocks: SsaBlockList) -> (result: SsaBlockList) {
-    iterate i up_to 1024 carrying st: GeneratedBlockPrepend = GeneratedBlockPrepend { rest: generated, blocks: blocks } { next st = prepend_generated_step(st); }
+    iterate i up_to 1024 carrying st: GeneratedBlockPrepend = GeneratedBlockPrepend { rest: generated, blocks: blocks } {
+        if block_list_empty(st.rest) { return st.blocks; }
+        next st = prepend_generated_step(st);
+    }
     return st.blocks;
 }
 fn prepend_generated_step(st: GeneratedBlockPrepend) -> (result: GeneratedBlockPrepend) {
@@ -999,12 +1015,18 @@ fn entry_or_parameters(block: u64, entry: u64, entry_env: Environment, incoming:
 
 fn prepare_block_environment<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, block: u64, incoming: Incoming, next_value: u64, values: ValueList, nominals: decl.NominalTypeIdentityList) -> (result: BlockParamBuild) {
     if !(incoming.found) || !(incoming.ok) { return BlockParamBuild { rest: Environment.EnvNil, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, nominals: nominals, ok: block == 0 }; }
-    iterate i up_to 1024 carrying built: BlockParamBuild = BlockParamBuild { rest: incoming.bindings, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, nominals: nominals, ok: true } { next built = block_parameter_step<P, N>(pages, stride, total, built); }
+    iterate i up_to 1024 carrying built: BlockParamBuild = BlockParamBuild { rest: incoming.bindings, env: Environment.EnvNil, params: ValueList.VNil, values: values, next_value: next_value, parameter_index: 0, block: block, nominals: nominals, ok: true } {
+        if binding_list_empty(built.rest) { return BlockParamBuild { ..built, env: reverse_environment<P, N>(pages, stride, total, built.env) }; }
+        next built = block_parameter_step<P, N>(pages, stride, total, built);
+    }
     return BlockParamBuild { ..built, env: reverse_environment<P, N>(pages, stride, total, built.env) };
 }
 record EnvironmentReverse { rest: Environment, acc: Environment }
 fn reverse_environment<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: Environment) -> (result: Environment) {
-    iterate i up_to 1024 carrying st: EnvironmentReverse = EnvironmentReverse { rest: env, acc: Environment.EnvNil } { next st = reverse_environment_step(st); }
+    iterate i up_to 1024 carrying st: EnvironmentReverse = EnvironmentReverse { rest: env, acc: Environment.EnvNil } {
+        if binding_list_empty(st.rest) { return st.acc; }
+        next st = reverse_environment_step(st);
+    }
     return st.acc;
 }
 fn reverse_environment_step(st: EnvironmentReverse) -> (result: EnvironmentReverse) {
@@ -1022,8 +1044,14 @@ fn add_block_parameter<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     return BlockParamBuild { rest: rest, env: Environment.EnvCons { head: mapped, tail: st.env }, params: ValueList.VCons { head: value, tail: st.params }, values: ValueList.VCons { head: value, tail: st.values }, next_value: st.next_value + 1, parameter_index: st.parameter_index + 1, block: st.block, nominals: st.nominals, ok: st.ok && supported_value_type<P, N>(pages, stride, total, binding.ty, st.nominals) };
 }
 
+fn edge_list_empty(edges: EdgeList) -> (result: bool) {
+    return match edges { ENil => true, ECons { head: h, tail: t } => false };
+}
 fn incoming_for<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, target: u64, edges: EdgeList) -> (result: Incoming) {
-    iterate i up_to 1024 carrying st: IncomingScan = IncomingScan { rest: edges, target: target, found: false, ok: true, count: 0, bindings: Environment.EnvNil } { next st = incoming_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: IncomingScan = IncomingScan { rest: edges, target: target, found: false, ok: true, count: 0, bindings: Environment.EnvNil } {
+        if edge_list_empty(st.rest) { return Incoming { found: st.found, ok: st.ok, count: st.count, bindings: st.bindings }; }
+        next st = incoming_step<P, N>(pages, stride, total, st);
+    }
     return Incoming { found: st.found, ok: st.ok, count: st.count, bindings: st.bindings };
 }
 fn incoming_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: IncomingScan) -> (result: IncomingScan) {
@@ -1039,7 +1067,10 @@ fn incoming_cons<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64,
 }
 record BindingPairCheck { left: Environment, right: Environment, ok: bool }
 fn same_binding_shape<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, left: Environment, right: Environment) -> (result: bool) {
-    iterate i up_to 1024 carrying st: BindingPairCheck = BindingPairCheck { left: left, right: right, ok: true } { next st = binding_pair_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: BindingPairCheck = BindingPairCheck { left: left, right: right, ok: true } {
+        if !(st.ok) || (binding_list_empty(st.left) && binding_list_empty(st.right)) { return st.ok && binding_list_empty(st.left) && binding_list_empty(st.right); }
+        next st = binding_pair_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && binding_list_empty(st.left) && binding_list_empty(st.right);
 }
 fn binding_list_empty(bindings: Environment) -> (result: bool) { return match bindings { EnvNil => true, EnvCons { head: h, tail: t } => false }; }
@@ -1063,9 +1094,19 @@ fn lower_expression_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stri
         flow.TypedExprList.ECons { head: expression, tail: rest } => lower_expression<P, N>(pages, stride, total, st, expression, rest)
     };
 }
+fn top_list_empty(ops: decl.TOpList) -> (result: bool) {
+    return match ops { decl.TOpList.PNil => true, decl.TOpList.PCons { head: h, tail: t } => false };
+}
+fn lower_expression_ops<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, seed: ExprBuild) -> (result: ExprBuild) {
+    iterate i up_to 1024 carrying built: ExprBuild = seed {
+        if top_list_empty(built.rest) { return built; }
+        next built = lower_operation_step<P, N>(pages, stride, total, built);
+    }
+    return built;
+}
 fn lower_expression<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: ExpressionBuild, expression: flow.TypedExpr, rest: flow.TypedExprList) -> (result: ExpressionBuild) {
     let seed: ExprBuild = ExprBuild { rest: expression.ops, env: st.env, stack: ValueStack.WNil, instructions: st.instructions, values: st.values, next_value: st.next_value, next_instruction: st.next_instruction, sequence: st.sequence, block: st.block, parameters: st.parameters, generated_blocks: st.generated_blocks, next_block_id: st.next_block_id, nominals: st.nominals, ok: st.ok, failure_op: 0 };
-    iterate i up_to 1024 carrying built: ExprBuild = seed { next built = lower_operation_step<P, N>(pages, stride, total, built); }
+    let built: ExprBuild = lower_expression_ops<P, N>(pages, stride, total, seed);
     let value: Value = expression_value(built.stack);
     let one_value: bool = expression_stack_single(built.stack);
     let env: Environment = bind_let_result<P, N>(pages, stride, total, expression, built.env, value);
@@ -1091,7 +1132,13 @@ fn bind_let_result<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 }
 record RebindScan { rest: Environment, replacement: Binding, acc: Environment, found: bool }
 fn rebind_name<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: Environment, replacement: Binding) -> (result: Environment) {
-    iterate i up_to 1024 carrying st: RebindScan = RebindScan { rest: env, replacement: replacement, acc: Environment.EnvNil, found: false } { next st = rebind_name_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: RebindScan = RebindScan { rest: env, replacement: replacement, acc: Environment.EnvNil, found: false } {
+        if binding_list_empty(st.rest) {
+            if st.found { return reverse_environment<P, N>(pages, stride, total, st.acc); }
+            return Environment.EnvCons { head: replacement, tail: env };
+        }
+        next st = rebind_name_step<P, N>(pages, stride, total, st);
+    }
     let rebuilt: Environment = reverse_environment<P, N>(pages, stride, total, st.acc);
     if st.found { return rebuilt; }
     return Environment.EnvCons { head: replacement, tail: env };
@@ -1750,7 +1797,10 @@ fn lower_name<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, to
 record BindingLookup { found: bool, binding: Binding }
 record BindingScan { rest: Environment, start: u64, end: u64, found: bool, binding: Binding }
 fn lookup_binding<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: Environment, start: u64, end: u64) -> (result: BindingLookup) {
-    iterate i up_to 1024 carrying st: BindingScan = BindingScan { rest: env, start: start, end: end, found: false, binding: Binding { name_start: 0, name_end: 0, value: 0, ty: decl.SemType.TPoison } } { next st = binding_scan_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: BindingScan = BindingScan { rest: env, start: start, end: end, found: false, binding: Binding { name_start: 0, name_end: 0, value: 0, ty: decl.SemType.TPoison } } {
+        if st.found || binding_list_empty(st.rest) { return BindingLookup { found: st.found, binding: st.binding }; }
+        next st = binding_scan_step<P, N>(pages, stride, total, st);
+    }
     return BindingLookup { found: st.found, binding: st.binding };
 }
 fn binding_scan_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: BindingScan) -> (result: BindingScan) {
@@ -1955,7 +2005,10 @@ fn pop_call_arg(st: PopArgs) -> (result: PopArgs) {
 }
 
 fn reverse_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, instructions: InstructionList) -> (result: InstructionList) {
-    iterate i up_to 1024 carrying st: InstructionReverse = InstructionReverse { rest: instructions, acc: InstructionList.QNil } { next st = reverse_instruction_step(st); }
+    iterate i up_to 1024 carrying st: InstructionReverse = InstructionReverse { rest: instructions, acc: InstructionList.QNil } {
+        if instruction_list_empty(st.rest) { return st.acc; }
+        next st = reverse_instruction_step(st);
+    }
     return st.acc;
 }
 record InstructionReverse { rest: InstructionList, acc: InstructionList }
@@ -2008,7 +2061,10 @@ fn terminator_shape(block: flow.Block, term: Terminator) -> (result: bool) {
     return false;
 }
 fn binding_ids<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, bindings: Environment) -> (result: IdList) {
-    iterate i up_to 1024 carrying st: BindingIdBuild = BindingIdBuild { rest: bindings, acc: IdList.INil } { next st = binding_id_step(st); }
+    iterate i up_to 1024 carrying st: BindingIdBuild = BindingIdBuild { rest: bindings, acc: IdList.INil } {
+        if binding_list_empty(st.rest) { return st.acc; }
+        next st = binding_id_step(st);
+    }
     return st.acc;
 }
 record BindingIdBuild { rest: Environment, acc: IdList }
@@ -2088,7 +2144,10 @@ fn select_jump_env<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u6
 }
 record LoopEnvironmentFilter { rest: Environment, meta: flow.LoopMeta, acc: Environment, index: u64 }
 fn filter_loop_bindings<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, env: Environment, meta: flow.LoopMeta, acc: Environment, index: u64) -> (result: Environment) {
-    iterate i up_to 1024 carrying st: LoopEnvironmentFilter = LoopEnvironmentFilter { rest: env, meta: meta, acc: acc, index: index } { next st = filter_loop_binding_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: LoopEnvironmentFilter = LoopEnvironmentFilter { rest: env, meta: meta, acc: acc, index: index } {
+        if binding_list_empty(st.rest) { return reverse_environment<P, N>(pages, stride, total, st.acc); }
+        next st = filter_loop_binding_step<P, N>(pages, stride, total, st);
+    }
     return reverse_environment<P, N>(pages, stride, total, st.acc);
 }
 fn filter_loop_binding_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LoopEnvironmentFilter) -> (result: LoopEnvironmentFilter) {
@@ -2106,7 +2165,10 @@ fn filter_loop_binding_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], st
 fn select_environment(skip: bool, prior: Environment, with_binding: Environment) -> (result: Environment) { if skip { return prior; } return with_binding; }
 record EdgeBindingLookup { rest: EdgeList, target: u64, found: bool, bindings: Environment }
 fn find_target_binding_shape<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, edges: EdgeList, target: u64) -> (result: EdgeBindingLookup) {
-    iterate i up_to 1024 carrying st: EdgeBindingLookup = EdgeBindingLookup { rest: edges, target: target, found: false, bindings: Environment.EnvNil } { next st = find_target_binding_shape_step(st); }
+    iterate i up_to 1024 carrying st: EdgeBindingLookup = EdgeBindingLookup { rest: edges, target: target, found: false, bindings: Environment.EnvNil } {
+        if st.found || edge_list_empty(st.rest) { return st; }
+        next st = find_target_binding_shape_step(st);
+    }
     return EdgeBindingLookup { rest: st.rest, target: st.target, found: st.found, bindings: st.bindings };
 }
 fn find_target_binding_shape_step(st: EdgeBindingLookup) -> (result: EdgeBindingLookup) {
@@ -2116,7 +2178,10 @@ fn find_target_binding_shape_step(st: EdgeBindingLookup) -> (result: EdgeBinding
 record EnvironmentProjection { bindings: Environment, ok: bool }
 record EnvironmentProjectScan { rest: Environment, source: Environment, acc: Environment, ok: bool }
 fn project_environment<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, source: Environment, shape: Environment) -> (result: EnvironmentProjection) {
-    iterate i up_to 1024 carrying st: EnvironmentProjectScan = EnvironmentProjectScan { rest: shape, source: source, acc: Environment.EnvNil, ok: true } { next st = project_environment_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 1024 carrying st: EnvironmentProjectScan = EnvironmentProjectScan { rest: shape, source: source, acc: Environment.EnvNil, ok: true } {
+        if !(st.ok) || binding_list_empty(st.rest) { return EnvironmentProjection { bindings: reverse_environment<P, N>(pages, stride, total, st.acc), ok: st.ok && binding_list_empty(st.rest) }; }
+        next st = project_environment_step<P, N>(pages, stride, total, st);
+    }
     return EnvironmentProjection { bindings: reverse_environment<P, N>(pages, stride, total, st.acc), ok: st.ok && binding_list_empty(st.rest) };
 }
 fn project_environment_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: EnvironmentProjectScan) -> (result: EnvironmentProjectScan) {

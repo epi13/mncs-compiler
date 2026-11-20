@@ -4769,7 +4769,10 @@ fn is_poison(ty: SemType) -> (result: bool) {
 fn sem_eq<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, a: SemType, b: SemType) -> (result: bool) {
     let seed: SemTypePair = SemTypePair { left: a, right: b };
     let initial: SemEqWalk = SemEqWalk { rest: SemTypePairs.STPCons { head: seed, tail: SemTypePairs.STPNil }, ok: true };
-    iterate i up_to 32 carrying st: SemEqWalk = initial { next st = sem_eq_step<P, N>(pages, stride, total, st); }
+    iterate i up_to 32 carrying st: SemEqWalk = initial {
+        if !(st.ok) || sem_type_pairs_empty(st.rest) { return st.ok && sem_type_pairs_empty(st.rest); }
+        next st = sem_eq_step<P, N>(pages, stride, total, st);
+    }
     return st.ok && sem_type_pairs_empty(st.rest);
 }
 fn sem_type_pairs_empty(pairs: SemTypePairs) -> (result: bool) {
