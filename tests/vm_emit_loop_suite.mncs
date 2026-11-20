@@ -1,0 +1,311 @@
+mncs 0.18;
+module tests.compiler_vm_emit_loop;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Source bytes (len 45): "N:Nat s:[byte;up_to N] result:bool 8 [byte;N]"
+// Spans:
+//   0..1  = "N"
+//   2..5  = "Nat"
+//   6..7  = "s"
+//   8..22 = "[byte;up_to N]"
+//  11..12 = "t"
+//  23..29 = "result"
+//  30..34 = "bool"
+//  35..36 = "8"
+//  37..45 = "[byte;N]"
+fn test_pages() -> (result: [[byte; up_to 64]; up_to 1]) {
+    let p: [byte; up_to 64] = [
+        78, 58, 78, 97, 116, 32,
+        115, 58, 91, 98, 121, 116, 101, 59, 117, 112, 95, 116, 111, 32, 78, 93, 32,
+        114, 101, 115, 117, 108, 116, 58, 98, 111, 111, 108, 32,
+        56, 32,
+        91, 98, 121, 116, 101, 59, 78, 93
+    ];
+    return [p];
+}
+
+fn u64_ty() -> (result: decl.SemType) {
+    return decl.SemType.TInt { width: 64, signed: false };
+}
+
+fn seq_exact_ty() -> (result: decl.SemType) {
+    return decl.SemType.TSeqExact { element: decl.SemType.TByte, length: 0, length_valid: false };
+}
+
+fn make_inst(id: u64, kind: u64, op: u64, res: u64, ty: decl.SemType, inputs: ssa.IdList, argc: u64, vs: u64, ve: u64) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: id, sequence: id, kind: kind, operator: op, result: res, ty: ty,
+        inputs: inputs, argc: argc, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: vs, variant_end: ve, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 0
+    };
+}
+
+fn make_blk(id: u64, params: ssa.ValueList, pbinds: ssa.Environment, insts: ssa.InstructionList, term: ssa.Terminator) -> (result: ssa.SsaBlock) {
+    return ssa.SsaBlock {
+        id: id, parameters: params, parameter_bindings: pbinds,
+        instructions: insts, terminator: term, reachable: true,
+        has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0
+    };
+}
+
+fn make_fn_decl(params: decl.FieldList) -> (result: decl.FnDecl) {
+    let gp: decl.GenericParam = decl.GenericParam { name_start: 0, name_end: 1, bound_start: 2, bound_end: 5, has_bound: true };
+    let res_fld: decl.Field = decl.Field { name_start: 23, name_end: 29, type_start: 30, type_end: 34, type_kind: 3 };
+    let sig: decl.FnSig = decl.FnSig {
+        name_start: 6, name_end: 7,
+        generics: decl.GenericParamList.GCons { head: gp, tail: decl.GenericParamList.GNil },
+        params: params,
+        results: decl.FieldList.FCons { head: res_fld, tail: decl.FieldList.FNil },
+        contracts: decl.ClauseList.CNil,
+        effects: decl.EffectList.XNil,
+        capabilities: decl.CapList.ANil
+    };
+    let body: decl.FnBody = decl.FnBody {
+        body: decl.StmtList.SNil,
+        ret: decl.Expr.Boolean { start: 0, end: 1, value: true },
+        has_ret: false
+    };
+    return decl.FnDecl { ok: true, err_start: 0, err_end: 0, sig: sig, body: body, fn_start: 0, fn_end: 45, cursor: 45 };
+}
+
+fn has_vm_opcode(insts: vm_emit.VmInstructionList, wanted: u64) -> (result: bool) {
+    iterate i up_to 64 carrying cur: vm_emit.VmInstructionList = insts {
+        let hit: bool = match cur {
+            vm_emit.VmInstructionList.VINil => false,
+            vm_emit.VmInstructionList.VICons { head: inst, tail: _t } => inst.opcode == wanted
+        };
+        if hit { return true; }
+        let nxt: vm_emit.VmInstructionList = match cur {
+            vm_emit.VmInstructionList.VINil => cur,
+            vm_emit.VmInstructionList.VICons { head: _h, tail: t } => t
+        };
+        next cur = nxt;
+    }
+    return false;
+}
+
+fn find_vm_block(blocks: vm_emit.VmBlockList, id: u64) -> (result: vm_emit.VmBlock) {
+    iterate i up_to 32 carrying cur: vm_emit.VmBlockList = blocks {
+        let found: bool = match cur {
+            vm_emit.VmBlockList.VBNil => false,
+            vm_emit.VmBlockList.VBCons { head: b, tail: _t } => b.id == id
+        };
+        if found {
+            return match cur {
+                vm_emit.VmBlockList.VBNil => vm_emit.dummy_vm_block(),
+                vm_emit.VmBlockList.VBCons { head: b, tail: _t } => b
+            };
+        }
+        let nxt: vm_emit.VmBlockList = match cur {
+            vm_emit.VmBlockList.VBNil => cur,
+            vm_emit.VmBlockList.VBCons { head: _h, tail: t } => t
+        };
+        next cur = nxt;
+    }
+    return vm_emit.dummy_vm_block();
+}
+
+test over_sequence_loop_resolves_view_param_and_region() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let fn_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 45, 6, 7);
+    let s_fld: decl.Field = decl.Field { name_start: 6, name_end: 7, type_start: 8, type_end: 22, type_kind: 8 };
+    let fn_decl: decl.FnDecl = make_fn_decl(decl.FieldList.FCons { head: s_fld, tail: decl.FieldList.FNil });
+
+    let v_in_s: ssa.Value = ssa.Value { id: 0, ty: decl.SemType.TSeq, owner_block: 0, kind: 0, index: 0 };
+    let v_zero: ssa.Value = ssa.Value { id: 1, ty: u64_ty(), owner_block: 0, kind: 2, index: 0 };
+    let v_one: ssa.Value = ssa.Value { id: 2, ty: u64_ty(), owner_block: 0, kind: 2, index: 1 };
+    let v_view0: ssa.Value = ssa.Value { id: 3, ty: seq_exact_ty(), owner_block: 0, kind: 2, index: 2 };
+    let v_acc0: ssa.Value = ssa.Value { id: 4, ty: decl.SemType.TBool, owner_block: 0, kind: 2, index: 3 };
+    let v_idx0: ssa.Value = ssa.Value { id: 5, ty: u64_ty(), owner_block: 0, kind: 2, index: 4 };
+    let v_guard: ssa.Value = ssa.Value { id: 14, ty: decl.SemType.TBool, owner_block: 1, kind: 2, index: 0 };
+    let v_next_idx: ssa.Value = ssa.Value { id: 24, ty: u64_ty(), owner_block: 2, kind: 2, index: 0 };
+
+    // Header (b1), body/backedge (b2), exit (b3) parameters; deliberately omit s/view from fn_decl binding names!
+    let p_h_s: ssa.Value = ssa.Value { id: 10, ty: decl.SemType.TSeq, owner_block: 1, kind: 1, index: 0 };
+    let p_h_view: ssa.Value = ssa.Value { id: 11, ty: seq_exact_ty(), owner_block: 1, kind: 1, index: 1 };
+    let p_h_acc: ssa.Value = ssa.Value { id: 12, ty: decl.SemType.TBool, owner_block: 1, kind: 1, index: 2 };
+    let p_h_idx: ssa.Value = ssa.Value { id: 13, ty: u64_ty(), owner_block: 1, kind: 1, index: 3 };
+
+    let p_b_s: ssa.Value = ssa.Value { id: 20, ty: decl.SemType.TSeq, owner_block: 2, kind: 1, index: 0 };
+    let p_b_view: ssa.Value = ssa.Value { id: 21, ty: seq_exact_ty(), owner_block: 2, kind: 1, index: 1 };
+    let p_b_acc: ssa.Value = ssa.Value { id: 22, ty: decl.SemType.TBool, owner_block: 2, kind: 1, index: 2 };
+    let p_b_idx: ssa.Value = ssa.Value { id: 23, ty: u64_ty(), owner_block: 2, kind: 1, index: 3 };
+
+    let p_e_acc: ssa.Value = ssa.Value { id: 30, ty: decl.SemType.TBool, owner_block: 3, kind: 1, index: 0 };
+
+    let i_zero: ssa.Instruction = make_inst(0, 0, 0, 1, u64_ty(), ssa.IdList.INil, 0, 0, 0);
+    let i_one: ssa.Instruction = make_inst(1, 0, 1, 2, u64_ty(), ssa.IdList.INil, 0, 0, 0);
+    let view_in: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 0 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 2 }, tail: ssa.IdList.INil } } };
+    let i_view: ssa.Instruction = make_inst(2, 17, 9, 3, seq_exact_ty(), view_in, 3, 0, 0);
+    let i_acc0: ssa.Instruction = make_inst(3, 1, 1, 4, decl.SemType.TBool, ssa.IdList.INil, 0, 0, 0);
+    let i_init: ssa.Instruction = make_inst(4, 15, 0, 5, u64_ty(), ssa.IdList.INil, 0, 0, 0);
+    let b0_insts: ssa.InstructionList = ssa.InstructionList.QCons { head: i_zero, tail: ssa.InstructionList.QCons { head: i_one, tail: ssa.InstructionList.QCons { head: i_view, tail: ssa.InstructionList.QCons { head: i_acc0, tail: ssa.InstructionList.QCons { head: i_init, tail: ssa.InstructionList.QNil } } } } };
+    let b0_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 0 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 4 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 5 }, tail: ssa.IdList.INil } } } };
+    let b0: ssa.SsaBlock = make_blk(0, ssa.ValueList.VNil, ssa.Environment.EnvNil, b0_insts, ssa.Terminator.Jump { target: 1, arguments: b0_args });
+
+    let g_in: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 13 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 11 }, tail: ssa.IdList.INil } };
+    let i_guard: ssa.Instruction = make_inst(5, 13, 2, 14, decl.SemType.TBool, g_in, 2, 0, 0);
+    let h_params: ssa.ValueList = ssa.ValueList.VCons { head: p_h_s, tail: ssa.ValueList.VCons { head: p_h_view, tail: ssa.ValueList.VCons { head: p_h_acc, tail: ssa.ValueList.VCons { head: p_h_idx, tail: ssa.ValueList.VNil } } } };
+    let h_yes_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 10 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 11 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 12 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 13 }, tail: ssa.IdList.INil } } } };
+    let h_no_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 12 }, tail: ssa.IdList.INil };
+    let b1: ssa.SsaBlock = make_blk(1, h_params, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_guard, tail: ssa.InstructionList.QNil }, ssa.Terminator.Branch { condition: 14, yes: 2, no: 3, yes_args: h_yes_args, no_args: h_no_args });
+
+    let i_adv: ssa.Instruction = make_inst(6, 14, 0, 24, u64_ty(), ssa.IdList.ICons { head: ssa.Id { value: 23 }, tail: ssa.IdList.INil }, 1, 0, 0);
+    let b_params: ssa.ValueList = ssa.ValueList.VCons { head: p_b_s, tail: ssa.ValueList.VCons { head: p_b_view, tail: ssa.ValueList.VCons { head: p_b_acc, tail: ssa.ValueList.VCons { head: p_b_idx, tail: ssa.ValueList.VNil } } } };
+    let b_back_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 20 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 21 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 22 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 24 }, tail: ssa.IdList.INil } } } };
+    let b2: ssa.SsaBlock = make_blk(2, b_params, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_adv, tail: ssa.InstructionList.QNil }, ssa.Terminator.Jump { target: 1, arguments: b_back_args });
+
+    let b3: ssa.SsaBlock = make_blk(3, ssa.ValueList.VCons { head: p_e_acc, tail: ssa.ValueList.VNil }, ssa.Environment.EnvNil, ssa.InstructionList.QNil, ssa.Terminator.Return { value: 30 });
+
+    let all_vals: ssa.ValueList = ssa.ValueList.VCons { head: v_in_s, tail: ssa.ValueList.VCons { head: v_zero, tail: ssa.ValueList.VCons { head: v_one, tail: ssa.ValueList.VCons { head: v_view0, tail: ssa.ValueList.VCons { head: v_acc0, tail: ssa.ValueList.VCons { head: v_idx0, tail: ssa.ValueList.VCons { head: v_guard, tail: ssa.ValueList.VCons { head: v_next_idx, tail: ssa.ValueList.VNil } } } } } } } };
+    let blocks: ssa.SsaBlockList = ssa.SsaBlockList.LCons { head: b0, tail: ssa.SsaBlockList.LCons { head: b1, tail: ssa.SsaBlockList.LCons { head: b2, tail: ssa.SsaBlockList.LCons { head: b3, tail: ssa.SsaBlockList.LNil } } } };
+    let func: ssa.Function = ssa.Function {
+        identity: fn_id, nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil, imported_enums: decl.ImportedEnumList.IENil,
+        inputs: ssa.ValueList.VCons { head: v_in_s, tail: ssa.ValueList.VNil },
+        result_type: decl.SemType.TBool, blocks: blocks, block_count: 4,
+        values: all_vals, value_count: 31, supported: true, verified: true
+    };
+    let nats: vm_emit.VmNatArgList = vm_emit.VmNatArgList.NACons { head: vm_emit.VmNatArg { value: 16 }, tail: vm_emit.VmNatArgList.NANil };
+    let res: vm_emit.SingleFnLowerResult = vm_emit.lower_ssa_fn_specialized<1, 64>(pages, 64, 45, func, fn_decl, nats, vm_emit.VmRecordTypeList.VRTNil);
+    let vm_b0: vm_emit.VmBlock = find_vm_block(res.vm_fn.blocks, 0);
+    let vm_b1: vm_emit.VmBlock = find_vm_block(res.vm_fn.blocks, 1);
+    let vm_b2: vm_emit.VmBlock = find_vm_block(res.vm_fn.blocks, 2);
+    let iter_ok: bool = match res.vm_fn.bounded_iterations {
+        vm_emit.VmBoundedIterationList.VBINil => false,
+        vm_emit.VmBoundedIterationList.VBICons { head: it, tail: t } =>
+            vm_emit.vm_bounded_iter_list_empty(t)
+            && it.domain_kind == 2
+            && it.bound == 16
+            && it.sequence_bound.kind == 4
+            && it.sequence_bound.bound_kind == 2
+            && it.sequence_bound.bound_value == 16
+            && it.state_type.kind == 1
+            && it.preheader_block == 0
+            && it.header_block == 1
+            && it.body_entry_block == 2
+            && it.backedge_block == 2
+            && it.exit_block == 3
+            && vm_emit.id_in_list(it.body_blocks, 2)
+            && !(vm_emit.id_in_list(it.body_blocks, 1))
+            && !(vm_emit.id_in_list(it.body_blocks, 3))
+    };
+    let ok: bool = res.ok
+        && res.vm_fn.block_count == 4
+        && iter_ok
+        && has_vm_opcode(vm_b0.instructions, 17)
+        && has_vm_opcode(vm_b1.instructions, 14)
+        && has_vm_opcode(vm_b1.instructions, 4)
+        && has_vm_opcode(vm_b2.instructions, 3);
+    return from_assertion(equals_bool(true, ok, 2001));
+}
+
+test counted_up_to_nat_bound_lowers_and_collects_region() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let fn_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 45, 6, 7);
+    let fn_decl: decl.FnDecl = make_fn_decl(decl.FieldList.FNil);
+
+    let v_acc0: ssa.Value = ssa.Value { id: 0, ty: decl.SemType.TBool, owner_block: 0, kind: 2, index: 0 };
+    let v_idx0: ssa.Value = ssa.Value { id: 1, ty: u64_ty(), owner_block: 0, kind: 2, index: 1 };
+    let v_guard: ssa.Value = ssa.Value { id: 12, ty: decl.SemType.TBool, owner_block: 1, kind: 2, index: 0 };
+    let v_next_idx: ssa.Value = ssa.Value { id: 22, ty: u64_ty(), owner_block: 2, kind: 2, index: 0 };
+
+    let p_h_acc: ssa.Value = ssa.Value { id: 10, ty: decl.SemType.TBool, owner_block: 1, kind: 1, index: 0 };
+    let p_h_idx: ssa.Value = ssa.Value { id: 11, ty: u64_ty(), owner_block: 1, kind: 1, index: 1 };
+    let p_b_acc: ssa.Value = ssa.Value { id: 20, ty: decl.SemType.TBool, owner_block: 2, kind: 1, index: 0 };
+    let p_b_idx: ssa.Value = ssa.Value { id: 21, ty: u64_ty(), owner_block: 2, kind: 1, index: 1 };
+    let p_e_acc: ssa.Value = ssa.Value { id: 30, ty: decl.SemType.TBool, owner_block: 3, kind: 1, index: 0 };
+
+    let i_acc0: ssa.Instruction = make_inst(0, 1, 1, 0, decl.SemType.TBool, ssa.IdList.INil, 0, 0, 0);
+    let i_init: ssa.Instruction = make_inst(1, 15, 0, 1, u64_ty(), ssa.IdList.INil, 0, 0, 0);
+    let b0_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 0 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil } };
+    let b0: ssa.SsaBlock = make_blk(0, ssa.ValueList.VNil, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_acc0, tail: ssa.InstructionList.QCons { head: i_init, tail: ssa.InstructionList.QNil } }, ssa.Terminator.Jump { target: 1, arguments: b0_args });
+
+    // `up_to N` with generic span 0..1 ("N") instantiated via <8>
+    let i_guard: ssa.Instruction = make_inst(2, 13, 1, 12, decl.SemType.TBool, ssa.IdList.ICons { head: ssa.Id { value: 11 }, tail: ssa.IdList.INil }, 1, 0, 1);
+    let h_params: ssa.ValueList = ssa.ValueList.VCons { head: p_h_acc, tail: ssa.ValueList.VCons { head: p_h_idx, tail: ssa.ValueList.VNil } };
+    let h_yes_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 10 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 11 }, tail: ssa.IdList.INil } };
+    let b1: ssa.SsaBlock = make_blk(1, h_params, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_guard, tail: ssa.InstructionList.QNil }, ssa.Terminator.Branch { condition: 12, yes: 2, no: 3, yes_args: h_yes_args, no_args: ssa.IdList.ICons { head: ssa.Id { value: 10 }, tail: ssa.IdList.INil } });
+
+    let i_adv: ssa.Instruction = make_inst(3, 14, 0, 22, u64_ty(), ssa.IdList.ICons { head: ssa.Id { value: 21 }, tail: ssa.IdList.INil }, 1, 0, 0);
+    let b_params: ssa.ValueList = ssa.ValueList.VCons { head: p_b_acc, tail: ssa.ValueList.VCons { head: p_b_idx, tail: ssa.ValueList.VNil } };
+    let b_back_args: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 20 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 22 }, tail: ssa.IdList.INil } };
+    let b2: ssa.SsaBlock = make_blk(2, b_params, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_adv, tail: ssa.InstructionList.QNil }, ssa.Terminator.Jump { target: 1, arguments: b_back_args });
+
+    let b3: ssa.SsaBlock = make_blk(3, ssa.ValueList.VCons { head: p_e_acc, tail: ssa.ValueList.VNil }, ssa.Environment.EnvNil, ssa.InstructionList.QNil, ssa.Terminator.Return { value: 30 });
+
+    let all_vals: ssa.ValueList = ssa.ValueList.VCons { head: v_acc0, tail: ssa.ValueList.VCons { head: v_idx0, tail: ssa.ValueList.VCons { head: v_guard, tail: ssa.ValueList.VCons { head: v_next_idx, tail: ssa.ValueList.VNil } } } };
+    let blocks: ssa.SsaBlockList = ssa.SsaBlockList.LCons { head: b0, tail: ssa.SsaBlockList.LCons { head: b1, tail: ssa.SsaBlockList.LCons { head: b2, tail: ssa.SsaBlockList.LCons { head: b3, tail: ssa.SsaBlockList.LNil } } } };
+    let func: ssa.Function = ssa.Function {
+        identity: fn_id, nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil, imported_enums: decl.ImportedEnumList.IENil,
+        inputs: ssa.ValueList.VNil,
+        result_type: decl.SemType.TBool, blocks: blocks, block_count: 4,
+        values: all_vals, value_count: 31, supported: true, verified: true
+    };
+    let nats: vm_emit.VmNatArgList = vm_emit.VmNatArgList.NACons { head: vm_emit.VmNatArg { value: 8 }, tail: vm_emit.VmNatArgList.NANil };
+    let res: vm_emit.SingleFnLowerResult = vm_emit.lower_ssa_fn_specialized<1, 64>(pages, 64, 45, func, fn_decl, nats, vm_emit.VmRecordTypeList.VRTNil);
+    let vm_b1: vm_emit.VmBlock = find_vm_block(res.vm_fn.blocks, 1);
+    let iter_ok: bool = match res.vm_fn.bounded_iterations {
+        vm_emit.VmBoundedIterationList.VBINil => false,
+        vm_emit.VmBoundedIterationList.VBICons { head: it, tail: t } =>
+            vm_emit.vm_bounded_iter_list_empty(t)
+            && it.domain_kind == 1
+            && it.bound == 8
+            && it.preheader_block == 0
+            && it.header_block == 1
+            && it.body_entry_block == 2
+            && it.backedge_block == 2
+            && it.exit_block == 3
+    };
+    let ok: bool = res.ok && iter_ok && has_vm_opcode(vm_b1.instructions, 1) && has_vm_opcode(vm_b1.instructions, 4);
+    return from_assertion(equals_bool(true, ok, 2002));
+}
+
+test propagate_seq_types_rejects_conflicting_sequence_bounds() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let fn_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 45, 6, 7);
+    // Two inputs: s ([byte; up_to N]) and t ([byte; N]), merged at block 1 param 10 -> bound mismatch!
+    let s_fld: decl.Field = decl.Field { name_start: 6, name_end: 7, type_start: 8, type_end: 22, type_kind: 8 };
+    let t_fld: decl.Field = decl.Field { name_start: 11, name_end: 12, type_start: 37, type_end: 45, type_kind: 7 };
+    let fn_decl: decl.FnDecl = make_fn_decl(decl.FieldList.FCons { head: s_fld, tail: decl.FieldList.FCons { head: t_fld, tail: decl.FieldList.FNil } });
+
+    let v_in_s: ssa.Value = ssa.Value { id: 0, ty: decl.SemType.TSeq, owner_block: 0, kind: 0, index: 0 };
+    let v_in_t: ssa.Value = ssa.Value { id: 1, ty: seq_exact_ty(), owner_block: 0, kind: 0, index: 1 };
+    let v_cond: ssa.Value = ssa.Value { id: 2, ty: decl.SemType.TBool, owner_block: 0, kind: 2, index: 0 };
+    let v_res: ssa.Value = ssa.Value { id: 11, ty: decl.SemType.TBool, owner_block: 1, kind: 2, index: 0 };
+    let p_join_seq: ssa.Value = ssa.Value { id: 10, ty: decl.SemType.TSeq, owner_block: 1, kind: 1, index: 0 };
+
+    let i_cond: ssa.Instruction = make_inst(0, 1, 1, 2, decl.SemType.TBool, ssa.IdList.INil, 0, 0, 0);
+    let b0: ssa.SsaBlock = make_blk(0, ssa.ValueList.VNil, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_cond, tail: ssa.InstructionList.QNil }, ssa.Terminator.Branch {
+        condition: 2, yes: 1, no: 1,
+        yes_args: ssa.IdList.ICons { head: ssa.Id { value: 0 }, tail: ssa.IdList.INil },
+        no_args: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil }
+    });
+    let i_ret: ssa.Instruction = make_inst(1, 1, 1, 11, decl.SemType.TBool, ssa.IdList.INil, 0, 0, 0);
+    let b1: ssa.SsaBlock = make_blk(1, ssa.ValueList.VCons { head: p_join_seq, tail: ssa.ValueList.VNil }, ssa.Environment.EnvNil, ssa.InstructionList.QCons { head: i_ret, tail: ssa.InstructionList.QNil }, ssa.Terminator.Return { value: 11 });
+
+    // Note: func.inputs is stored reversed (most recent cons first), so lower_spec_inputs reverses it to [s, t]
+    let rev_inputs: ssa.ValueList = ssa.ValueList.VCons { head: v_in_t, tail: ssa.ValueList.VCons { head: v_in_s, tail: ssa.ValueList.VNil } };
+    let all_vals: ssa.ValueList = ssa.ValueList.VCons { head: v_in_s, tail: ssa.ValueList.VCons { head: v_in_t, tail: ssa.ValueList.VCons { head: v_cond, tail: ssa.ValueList.VCons { head: v_res, tail: ssa.ValueList.VNil } } } };
+    let blocks: ssa.SsaBlockList = ssa.SsaBlockList.LCons { head: b0, tail: ssa.SsaBlockList.LCons { head: b1, tail: ssa.SsaBlockList.LNil } };
+    let func: ssa.Function = ssa.Function {
+        identity: fn_id, nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil, imported_enums: decl.ImportedEnumList.IENil,
+        inputs: rev_inputs,
+        result_type: decl.SemType.TBool, blocks: blocks, block_count: 2,
+        values: all_vals, value_count: 12, supported: true, verified: true
+    };
+    let nats: vm_emit.VmNatArgList = vm_emit.VmNatArgList.NACons { head: vm_emit.VmNatArg { value: 16 }, tail: vm_emit.VmNatArgList.NANil };
+    let res: vm_emit.SingleFnLowerResult = vm_emit.lower_ssa_fn_specialized<1, 64>(pages, 64, 45, func, fn_decl, nats, vm_emit.VmRecordTypeList.VRTNil);
+    let ok: bool = !(res.ok) && res.error_code == 7;
+    return from_assertion(equals_bool(true, ok, 2003));
+}

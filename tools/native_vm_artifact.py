@@ -225,7 +225,52 @@ def _vm_inst_kind(inst, record_names=None):
                 "field_names": field_names,
             }
         }
+    if opcode == 17:
+        view_bound = _seq_bound(inst["ty"])
+        assert "up_to" in view_bound, f"ViewConstruct must produce UpTo view: {inst['ty']}"
+        return {
+            "ViewConstruct": {
+                "source_bound": _seq_bound(inst["from_ty"]),
+                "view_bound": view_bound,
+            }
+        }
     raise ValueError(f"unsupported VmInstruction opcode: {opcode}")
+
+
+def _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names=None):
+    out = []
+    for it in raw_iters:
+        domain_kind = int(it["domain_kind"])
+        if domain_kind == 1:
+            domain = "attempts"
+            seq_bound = None
+        elif domain_kind == 2:
+            domain = {"over_sequence": {"element_type": "byte"}}
+            seq_bound = _seq_bound(it["sequence_bound"])
+        else:
+            raise ValueError(f"unsupported VmBoundedIteration domain_kind: {domain_kind}")
+        entry = {
+            "identity": f"{fn_ssa_id}:iter:{it['header_block']}",
+            "bound": int(it["bound"]),
+            "domain": domain,
+        }
+        if seq_bound is not None:
+            entry["sequence_bound"] = seq_bound
+        entry.update({
+            "state_type": _body_type(it["state_type"], record_names),
+            "preheader": _ssa_blk_id(fn_ssa_id, it["preheader_block"]),
+            "header": _ssa_blk_id(fn_ssa_id, it["header_block"]),
+            "body_entry": _ssa_blk_id(fn_ssa_id, it["body_entry_block"]),
+            "backedge": _ssa_blk_id(fn_ssa_id, it["backedge_block"]),
+            "exit": _ssa_blk_id(fn_ssa_id, it["exit_block"]),
+            "body_blocks": [_ssa_blk_id(fn_ssa_id, item["value"]) for item in flist(it["body_blocks"])],
+            "callees": [],
+            "required_capabilities": [],
+            "completion_modes": ["early_return", "exhausted", "failure"],
+            "obligations": [],
+        })
+        out.append(entry)
+    return out
 
 
 def _vm_terminator(fn_ssa_id, term):
@@ -474,14 +519,19 @@ def package_native_vm_artifact(
                 ),
             })
 
-        ssa_functions.append({
+        ssa_fn_entry = {
             "identity": fn_ssa_id,
             "semantic_identity": sem_id,
             "inputs": ssa_inputs,
             "outputs": ssa_outputs,
-            "blocks": ssa_blocks,
-            "failure": "isolated",
-        })
+        }
+        raw_iters = flist(fn.get("bounded_iterations"))
+        if raw_iters:
+            ssa_fn_entry["cycle_policy"] = "bounded_iteration_only"
+            ssa_fn_entry["bounded_iterations"] = _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names)
+        ssa_fn_entry["blocks"] = ssa_blocks
+        ssa_fn_entry["failure"] = "isolated"
+        ssa_functions.append(ssa_fn_entry)
         callables.append({
             "module": decl_module,
             "name": fn_name,
@@ -563,9 +613,14 @@ def package_native_vm_artifact(
 
     # Keys inside `target` must be sorted because Rust deserializes `target`
     # into `serde_json::Value` (BTreeMap) before recomputing `canonical_bytes()`.
+    has_bounded_iters = any(bool(fn.get("bounded_iterations")) for fn in ssa_functions)
     target_meta = {
         "assumptions": {
-            "bounded-iteration": "not admitted in bounded native vm_emit subset",
+            "bounded-iteration": (
+                "bounded over concrete sequence or attempt bounds in mncs.compiler.vm_emit.v1"
+                if has_bounded_iters
+                else "not admitted in bounded native vm_emit subset"
+            ),
             "failure": "MNCS SSA explicit failure semantics",
             "integer": "MNCS SSA integer semantics",
             "runtime": "mncs-vm reference engine",

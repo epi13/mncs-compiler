@@ -67,6 +67,7 @@ record VmRecordTypeRev { rest: VmRecordTypeList, acc: VmRecordTypeList }
 // 14 = SequenceLength (from_ty = concrete byte sequence type)
 // 15 = SequenceProject (from_ty = concrete byte sequence type)
 // 16 = RecordConstruct (ty = record VmType, field_names = source-order field names)
+// 17 = ViewConstruct (from_ty = source sequence VmType, ty = UpTo view VmType)
 record VmInstruction {
     id: u64,
     result: u64,
@@ -104,12 +105,30 @@ record VmBlock {
 enum VmBlockList { VBNil, VBCons { head: VmBlock, tail: VmBlockList } }
 record VmBlockRev { rest: VmBlockList, acc: VmBlockList }
 
+// Bounded iteration metadata lowered from SSA loop blocks & resolved bounds:
+//  domain_kind 1 = attempts (up_to N), domain_kind 2 = over_sequence
+record VmBoundedIteration {
+    header_block: u64,
+    preheader_block: u64,
+    body_entry_block: u64,
+    backedge_block: u64,
+    exit_block: u64,
+    domain_kind: u64,
+    bound: u64,
+    sequence_bound: VmType,
+    state_type: VmType,
+    body_blocks: ssa.IdList
+}
+enum VmBoundedIterationList { VBINil, VBICons { head: VmBoundedIteration, tail: VmBoundedIterationList } }
+record VmBoundedIterRev { rest: VmBoundedIterationList, acc: VmBoundedIterationList }
+
 record VmFunction {
     identity: decl.SemanticIdentity,
     nat_args: VmNatArgList,
     inputs: VmValueList,
     result_type: VmType,
     blocks: VmBlockList,
+    bounded_iterations: VmBoundedIterationList,
     block_count: u64,
     instruction_count: u64
 }
@@ -163,11 +182,25 @@ fn int_vm_type(width: u64, signed: bool) -> (result: VmType) {
     if !(ok) { return invalid_vm_type(); }
     return VmType { kind: 3, bits: width, signed: signed, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
+fn u64_vm_type() -> (result: VmType) {
+    return int_vm_type(64, false);
+}
 fn byte_seq_vm_type(bound_kind: u64, bound_value: u64) -> (result: VmType) {
     if (bound_kind != 1 && bound_kind != 2) || bound_value == 0 || bound_value > 65536 {
         return invalid_vm_type();
     }
     return VmType { kind: 4, bits: 8, signed: false, bound_kind: bound_kind, bound_value: bound_value, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+}
+fn is_seq_sem_type(ty: decl.SemType) -> (result: bool) {
+    return match ty {
+        TBool => false,
+        TByte => false,
+        TInt { width: w, signed: s } => false,
+        TNamed { start: a, end: b } => false,
+        TSeq => true,
+        TSeqExact { element: el, length: n, length_valid: v } => true,
+        TPoison => false
+    };
 }
 fn record_vm_type(nominal_identity: decl.SemanticIdentity) -> (result: VmType) {
     if !(nominal_identity.valid) || nominal_identity.len == 0 { return invalid_vm_type(); }
@@ -391,6 +424,53 @@ fn reverse_ssa_value_step(st: SsaValRev) -> (result: SsaValRev) {
     };
 }
 
+record SsaIdRev { rest: ssa.IdList, acc: ssa.IdList }
+fn reverse_ssa_ids(ids: ssa.IdList) -> (result: ssa.IdList) {
+    iterate i up_to 1024 carrying st: SsaIdRev = SsaIdRev { rest: ids, acc: ssa.IdList.INil } {
+        if id_list_empty(st.rest) { return st.acc; }
+        next st = reverse_ssa_id_step(st);
+    }
+    return st.acc;
+}
+fn reverse_ssa_id_step(st: SsaIdRev) -> (result: SsaIdRev) {
+    return match st.rest {
+        ssa.IdList.INil => st,
+        ssa.IdList.ICons { head: h, tail: t } => SsaIdRev { rest: t, acc: ssa.IdList.ICons { head: h, tail: st.acc } }
+    };
+}
+
+record IdContainsWalk { rest: ssa.IdList, wanted: u64, found: bool }
+fn id_in_list(ids: ssa.IdList, wanted: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying st: IdContainsWalk = IdContainsWalk { rest: ids, wanted: wanted, found: false } {
+        if st.found || id_list_empty(st.rest) { return st.found; }
+        next st = id_in_list_step(st);
+    }
+    return st.found;
+}
+fn id_in_list_step(st: IdContainsWalk) -> (result: IdContainsWalk) {
+    return match st.rest {
+        ssa.IdList.INil => st,
+        ssa.IdList.ICons { head: h, tail: t } => IdContainsWalk { rest: t, wanted: st.wanted, found: h.value == st.wanted }
+    };
+}
+
+fn vm_bounded_iter_list_empty(iters: VmBoundedIterationList) -> (result: bool) {
+    return match iters { VBINil => true, VBICons { head: h, tail: t } => false };
+}
+fn reverse_vm_bounded_iters(iters: VmBoundedIterationList) -> (result: VmBoundedIterationList) {
+    iterate i up_to 128 carrying st: VmBoundedIterRev = VmBoundedIterRev { rest: iters, acc: VmBoundedIterationList.VBINil } {
+        if vm_bounded_iter_list_empty(st.rest) { return st.acc; }
+        next st = reverse_vm_bounded_iter_step(st);
+    }
+    return st.acc;
+}
+fn reverse_vm_bounded_iter_step(st: VmBoundedIterRev) -> (result: VmBoundedIterRev) {
+    return match st.rest {
+        VBINil => st,
+        VBICons { head: h, tail: t } => VmBoundedIterRev { rest: t, acc: VmBoundedIterationList.VBICons { head: h, tail: st.acc } }
+    };
+}
+
 record NatArgsEqWalk { a: VmNatArgList, b: VmNatArgList, ok: bool, done: bool }
 fn nat_args_equal(a: VmNatArgList, b: VmNatArgList) -> (result: bool) {
     let initial: NatArgsEqWalk = NatArgsEqWalk { a: a, b: b, ok: true, done: false };
@@ -486,6 +566,38 @@ fn build_nat_env_bind<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride:
     return NatEnvBuild { params: gp_rest, args: arg_rest, env: next_env, ok: true, done: false };
 }
 
+// Resolve a literal integer or Nat parameter token into a bounded 1..=65536 ceiling.
+record NatBoundResult { ok: bool, error_code: u64, value: u64 }
+fn resolve_nat_token<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nat_env: NatEnv, tok: lexer.Token) -> (result: NatBoundResult) {
+    if tok.diagnostic != 0 { return NatBoundResult { ok: false, error_code: 4, value: 0 }; }
+    if tok.kind == 5 {
+        let parsed: decl.IntVal = decl.int_value<P, N>(pages, stride, total, tok.start, tok.end);
+        if parsed.overflow || parsed.value == 0 || parsed.value > 65536 {
+            return NatBoundResult { ok: false, error_code: 11, value: 0 };
+        }
+        return NatBoundResult { ok: true, error_code: 0, value: parsed.value };
+    }
+    if tok.kind == 4 {
+        let looked: NatEnvLookup = lookup_nat_env<P, N>(pages, stride, total, nat_env, tok.start, tok.end);
+        if !(looked.found) || looked.value == 0 || looked.value > 65536 {
+            return NatBoundResult { ok: false, error_code: 11, value: 0 };
+        }
+        return NatBoundResult { ok: true, error_code: 0, value: looked.value };
+    }
+    return NatBoundResult { ok: false, error_code: 4, value: 0 };
+}
+
+fn resolve_nat_bound_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nat_env: NatEnv) -> (result: NatBoundResult) {
+    if end <= start || end > total { return NatBoundResult { ok: false, error_code: 11, value: 0 }; }
+    let tok: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, start);
+    if tok.diagnostic != 0 || tok.end > end {
+        return NatBoundResult { ok: false, error_code: 11, value: 0 };
+    }
+    let res: NatBoundResult = resolve_nat_token<P, N>(pages, stride, total, nat_env, tok);
+    if !(res.ok) { return NatBoundResult { ok: false, error_code: 11, value: 0 }; }
+    return res;
+}
+
 // Parse concrete `[byte; N]` or `[byte; up_to N]` from a source type span.
 record SeqTypeParseResult { ok: bool, error_code: u64, ty: VmType }
 fn parse_byte_seq_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nat_env: NatEnv) -> (result: SeqTypeParseResult) {
@@ -508,21 +620,11 @@ fn parse_byte_seq_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     if t_close.diagnostic != 0 || t_close.kind != 70 || t_close.end != end {
         return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
     }
-    if t_bound.kind == 5 {
-        let parsed: decl.IntVal = decl.int_value<P, N>(pages, stride, total, t_bound.start, t_bound.end);
-        if parsed.overflow || parsed.value == 0 || parsed.value > 65536 {
-            return SeqTypeParseResult { ok: false, error_code: 11, ty: invalid_vm_type() };
-        }
-        return SeqTypeParseResult { ok: true, error_code: 0, ty: byte_seq_vm_type(bound_kind, parsed.value) };
+    let nat_res: NatBoundResult = resolve_nat_token<P, N>(pages, stride, total, nat_env, t_bound);
+    if !(nat_res.ok) {
+        return SeqTypeParseResult { ok: false, error_code: nat_res.error_code, ty: invalid_vm_type() };
     }
-    if t_bound.kind == 4 {
-        let looked: NatEnvLookup = lookup_nat_env<P, N>(pages, stride, total, nat_env, t_bound.start, t_bound.end);
-        if !(looked.found) || looked.value == 0 || looked.value > 65536 {
-            return SeqTypeParseResult { ok: false, error_code: 11, ty: invalid_vm_type() };
-        }
-        return SeqTypeParseResult { ok: true, error_code: 0, ty: byte_seq_vm_type(bound_kind, looked.value) };
-    }
-    return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
+    return SeqTypeParseResult { ok: true, error_code: 0, ty: byte_seq_vm_type(bound_kind, nat_res.value) };
 }
 fn select_token(pick_first: bool, a: lexer.Token, b: lexer.Token) -> (result: lexer.Token) {
     if pick_first { return a; }
@@ -886,9 +988,11 @@ fn retain_referenced_record_one(st: RecordUsageAdd, fn_item: VmFunction, rest: V
 
 record VmValTypeLookup { rest: VmValueList, wanted: u64, found: bool, ty: VmType }
 fn lookup_vm_value_type(values: VmValueList, wanted: u64) -> (result: VmValTypeLookup) {
-    let first: VmValTypeLookup = lookup_vm_value_type_chunk(VmValTypeLookup { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() });
-    if first.found || vm_value_list_empty(first.rest) { return first; }
-    return lookup_vm_value_type_chunk(first);
+    iterate chunk up_to 8 carrying st: VmValTypeLookup = VmValTypeLookup { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() } {
+        if st.found || vm_value_list_empty(st.rest) { return st; }
+        next st = lookup_vm_value_type_chunk(st);
+    }
+    return st;
 }
 fn lookup_vm_value_type_chunk(initial: VmValTypeLookup) -> (result: VmValTypeLookup) {
     iterate i up_to 1024 carrying st: VmValTypeLookup = initial {
@@ -1502,6 +1606,7 @@ fn lower_single_scalar_ssa_fn(func: ssa.Function) -> (result: SingleFnLowerResul
         inputs: inputs.acc,
         result_type: res_ty,
         blocks: blocks.acc,
+        bounded_iterations: VmBoundedIterationList.VBINil,
         block_count: blocks.block_count,
         instruction_count: blocks.inst_count
     };
@@ -1669,28 +1774,303 @@ fn resolve_spec_result_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     };
 }
 
+// Find an SSA block by numeric block ID.
+record SsaBlkLookup { found: bool, blk: ssa.SsaBlock }
+record SsaBlkSearch { rest: ssa.SsaBlockList, target: u64, found: bool, blk: ssa.SsaBlock }
+fn dummy_ssa_block() -> (result: ssa.SsaBlock) {
+    return ssa.SsaBlock {
+        id: 0, parameters: ssa.ValueList.VNil, parameter_bindings: ssa.Environment.EnvNil,
+        instructions: ssa.InstructionList.QNil, terminator: ssa.Terminator.Fail,
+        reachable: false, has_failure_target: false, failure_target: 0,
+        lowering_ok: false, lowering_failure_kind: 0
+    };
+}
+fn find_ssa_block_by_id(blocks: ssa.SsaBlockList, target: u64) -> (result: SsaBlkLookup) {
+    let initial: SsaBlkSearch = SsaBlkSearch { rest: blocks, target: target, found: false, blk: dummy_ssa_block() };
+    iterate i up_to 1024 carrying st: SsaBlkSearch = initial {
+        if st.found || ssa_block_list_empty(st.rest) { return SsaBlkLookup { found: st.found, blk: st.blk }; }
+        next st = find_ssa_block_step(st);
+    }
+    return SsaBlkLookup { found: st.found, blk: st.blk };
+}
+fn find_ssa_block_step(st: SsaBlkSearch) -> (result: SsaBlkSearch) {
+    return match st.rest {
+        ssa.SsaBlockList.LNil => st,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => find_ssa_block_one(st, blk, rest)
+    };
+}
+fn find_ssa_block_one(st: SsaBlkSearch, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: SsaBlkSearch) {
+    if blk.id == st.target { return SsaBlkSearch { rest: ssa.SsaBlockList.LNil, target: st.target, found: true, blk: blk }; }
+    return SsaBlkSearch { ..st, rest: rest };
+}
+
+// Compute disjoint fresh value/instruction IDs for expanded loop instructions.
+record FnMaxIds { next_val: u64, next_inst: u64 }
+record MaxValsWalk { rest: ssa.ValueList, next_val: u64 }
+fn max_u64(a: u64, b: u64) -> (result: u64) {
+    if a >= b { return a; }
+    return b;
+}
+fn max_val_ids_in_values(values: ssa.ValueList, seed: u64) -> (result: u64) {
+    iterate chunk up_to 8 carrying st: MaxValsWalk = MaxValsWalk { rest: values, next_val: seed } {
+        if ssa_value_list_empty(st.rest) { return st.next_val; }
+        next st = max_val_ids_chunk(st);
+    }
+    return st.next_val;
+}
+fn max_val_ids_chunk(initial: MaxValsWalk) -> (result: MaxValsWalk) {
+    iterate i up_to 1024 carrying st: MaxValsWalk = initial {
+        if ssa_value_list_empty(st.rest) { return st; }
+        next st = max_val_ids_step(st);
+    }
+    return st;
+}
+fn max_val_ids_step(st: MaxValsWalk) -> (result: MaxValsWalk) {
+    return match st.rest {
+        ssa.ValueList.VNil => st,
+        ssa.ValueList.VCons { head: v, tail: rest } => MaxValsWalk { rest: rest, next_val: max_u64(st.next_val, v.id + 1) }
+    };
+}
+record MaxInstsWalk { rest: ssa.InstructionList, next_val: u64, next_inst: u64 }
+fn max_ids_in_insts(insts: ssa.InstructionList, seed: FnMaxIds) -> (result: FnMaxIds) {
+    let init: MaxInstsWalk = MaxInstsWalk { rest: insts, next_val: seed.next_val, next_inst: seed.next_inst };
+    iterate i up_to 1024 carrying st: MaxInstsWalk = init {
+        if ssa_inst_list_empty(st.rest) { return FnMaxIds { next_val: st.next_val, next_inst: st.next_inst }; }
+        next st = max_ids_in_inst_step(st);
+    }
+    return FnMaxIds { next_val: st.next_val, next_inst: st.next_inst };
+}
+fn max_ids_in_inst_step(st: MaxInstsWalk) -> (result: MaxInstsWalk) {
+    return match st.rest {
+        ssa.InstructionList.QNil => st,
+        ssa.InstructionList.QCons { head: inst, tail: rest } => MaxInstsWalk {
+            rest: rest,
+            next_val: max_u64(st.next_val, inst.result + 1),
+            next_inst: max_u64(st.next_inst, inst.id + 1)
+        }
+    };
+}
+record MaxBlkIdsWalk { rest: ssa.SsaBlockList, ids: FnMaxIds }
+fn max_fn_val_inst_ids(func: ssa.Function) -> (result: FnMaxIds) {
+    let seed_val: u64 = max_u64(func.value_count + 1, max_val_ids_in_values(func.values, 1));
+    let init: MaxBlkIdsWalk = MaxBlkIdsWalk { rest: func.blocks, ids: FnMaxIds { next_val: seed_val, next_inst: 1 } };
+    iterate i up_to 1024 carrying st: MaxBlkIdsWalk = init {
+        if ssa_block_list_empty(st.rest) { return st.ids; }
+        next st = max_blk_ids_step(st);
+    }
+    return st.ids;
+}
+fn max_blk_ids_step(st: MaxBlkIdsWalk) -> (result: MaxBlkIdsWalk) {
+    return match st.rest {
+        ssa.SsaBlockList.LNil => st,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => max_blk_ids_one(st.ids, blk, rest)
+    };
+}
+fn max_blk_ids_one(ids: FnMaxIds, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: MaxBlkIdsWalk) {
+    let nv: u64 = max_val_ids_in_values(blk.parameters, ids.next_val);
+    let updated: FnMaxIds = max_ids_in_insts(blk.instructions, FnMaxIds { next_val: nv, next_inst: ids.next_inst });
+    return MaxBlkIdsWalk { rest: rest, ids: updated };
+}
+
+// Seed sequence-typed inputs and propagate bounded byte-sequence VmTypes across
+// SequenceView instructions and CFG block-parameter edges to a fixed point.
+record SeqSeedWalk { rest: VmValueList, acc: VmValueList }
+fn seed_seq_inputs(inputs: VmValueList) -> (result: VmValueList) {
+    iterate i up_to 128 carrying st: SeqSeedWalk = SeqSeedWalk { rest: inputs, acc: VmValueList.VVNil } {
+        if vm_value_list_empty(st.rest) { return st.acc; }
+        next st = seed_seq_input_step(st);
+    }
+    return st.acc;
+}
+fn seed_seq_input_step(st: SeqSeedWalk) -> (result: SeqSeedWalk) {
+    return match st.rest {
+        VVNil => st,
+        VVCons { head: v, tail: rest } => seed_seq_input_one(st, v, rest)
+    };
+}
+fn seed_seq_input_one(st: SeqSeedWalk, v: VmValue, rest: VmValueList) -> (result: SeqSeedWalk) {
+    if v.ty.valid && v.ty.kind == 4 {
+        return SeqSeedWalk { rest: rest, acc: VmValueList.VVCons { head: v, tail: st.acc } };
+    }
+    return SeqSeedWalk { rest: rest, acc: st.acc };
+}
+
+record SeqPropState {
+    blocks: ssa.SsaBlockList,
+    seq_vals: VmValueList,
+    changed: bool,
+    ok: bool,
+    error_code: u64,
+    error_block: u64,
+    error_inst: u64
+}
+fn record_seq_val(st: SeqPropState, id: u64, ty: VmType, blk_id: u64, inst_id: u64) -> (result: SeqPropState) {
+    let lk: VmValTypeLookup = lookup_vm_value_type(st.seq_vals, id);
+    if lk.found {
+        if vm_type_equal(lk.ty, ty) { return st; }
+        return SeqPropState { ..st, ok: false, error_code: 7, error_block: blk_id, error_inst: inst_id };
+    }
+    return SeqPropState {
+        ..st,
+        seq_vals: VmValueList.VVCons { head: VmValue { id: id, ty: ty }, tail: st.seq_vals },
+        changed: true
+    };
+}
+
+record PropBlkInstsWalk { prop: SeqPropState, blk_id: u64, rest: ssa.InstructionList }
+fn prop_seq_blk_insts(prop: SeqPropState, blk_id: u64, insts: ssa.InstructionList) -> (result: SeqPropState) {
+    let init: PropBlkInstsWalk = PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: insts };
+    iterate i up_to 1024 carrying w: PropBlkInstsWalk = init {
+        if !(w.prop.ok) || ssa_inst_list_empty(w.rest) { return w.prop; }
+        next w = prop_seq_blk_inst_step(w);
+    }
+    return w.prop;
+}
+fn prop_seq_blk_inst_step(w: PropBlkInstsWalk) -> (result: PropBlkInstsWalk) {
+    return match w.rest {
+        ssa.InstructionList.QNil => w,
+        ssa.InstructionList.QCons { head: inst, tail: rest } => prop_seq_blk_inst_one(w.prop, w.blk_id, inst, rest)
+    };
+}
+fn prop_seq_blk_inst_one(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: PropBlkInstsWalk) {
+    if inst.kind != 17 || inst.operator != 9 || inst.argc != 3 {
+        return PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest };
+    }
+    return match inst.inputs {
+        ssa.IdList.INil => PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest },
+        ssa.IdList.ICons { head: base_id, tail: trailing } => prop_seq_view_from_base(prop, blk_id, inst, rest, base_id.value)
+    };
+}
+fn prop_seq_view_from_base(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64) -> (result: PropBlkInstsWalk) {
+    let base: VmValTypeLookup = lookup_vm_value_type(prop.seq_vals, base_id);
+    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 {
+        return PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest };
+    }
+    let view_ty: VmType = byte_seq_vm_type(2, base.ty.bound_value);
+    if !(view_ty.valid) {
+        return PropBlkInstsWalk { prop: SeqPropState { ..prop, ok: false, error_code: 4, error_block: blk_id, error_inst: inst.id }, blk_id: blk_id, rest: ssa.InstructionList.QNil };
+    }
+    let next_prop: SeqPropState = record_seq_val(prop, inst.result, view_ty, blk_id, inst.id);
+    return PropBlkInstsWalk { prop: next_prop, blk_id: blk_id, rest: rest };
+}
+
+record PropEdgeZipWalk { prop: SeqPropState, from_blk: u64, tgt_blk: u64, args: ssa.IdList, params: ssa.ValueList, done: bool }
+fn prop_seq_edge(prop: SeqPropState, from_blk: u64, target: u64, args: ssa.IdList) -> (result: SeqPropState) {
+    let blk_lk: SsaBlkLookup = find_ssa_block_by_id(prop.blocks, target);
+    if !(blk_lk.found) {
+        return SeqPropState { ..prop, ok: false, error_code: 7, error_block: from_blk, error_inst: 0 };
+    }
+    let init: PropEdgeZipWalk = PropEdgeZipWalk { prop: prop, from_blk: from_blk, tgt_blk: target, args: args, params: blk_lk.blk.parameters, done: false };
+    iterate i up_to 128 carrying w: PropEdgeZipWalk = init {
+        if !(w.prop.ok) || w.done { return w.prop; }
+        next w = prop_seq_edge_step(w);
+    }
+    return w.prop;
+}
+fn prop_seq_edge_step(w: PropEdgeZipWalk) -> (result: PropEdgeZipWalk) {
+    return match w.args {
+        ssa.IdList.INil => prop_edge_end(w),
+        ssa.IdList.ICons { head: aid, tail: arest } => prop_edge_pair(w, aid.value, arest)
+    };
+}
+fn prop_edge_end(w: PropEdgeZipWalk) -> (result: PropEdgeZipWalk) {
+    if !(ssa_value_list_empty(w.params)) {
+        return PropEdgeZipWalk { ..w, prop: SeqPropState { ..w.prop, ok: false, error_code: 7, error_block: w.from_blk, error_inst: 0 }, done: true };
+    }
+    return PropEdgeZipWalk { ..w, done: true };
+}
+fn prop_edge_pair(w: PropEdgeZipWalk, aid: u64, arest: ssa.IdList) -> (result: PropEdgeZipWalk) {
+    return match w.params {
+        ssa.ValueList.VNil => PropEdgeZipWalk { ..w, prop: SeqPropState { ..w.prop, ok: false, error_code: 7, error_block: w.from_blk, error_inst: 0 }, done: true },
+        ssa.ValueList.VCons { head: param, tail: prest } => prop_edge_one(w, aid, arest, param, prest)
+    };
+}
+fn prop_edge_one(w: PropEdgeZipWalk, aid: u64, arest: ssa.IdList, param: ssa.Value, prest: ssa.ValueList) -> (result: PropEdgeZipWalk) {
+    if !(is_seq_sem_type(param.ty)) {
+        return PropEdgeZipWalk { ..w, args: arest, params: prest };
+    }
+    let arg_lk: VmValTypeLookup = lookup_vm_value_type(w.prop.seq_vals, aid);
+    if !(arg_lk.found) {
+        return PropEdgeZipWalk { ..w, args: arest, params: prest };
+    }
+    let next_prop: SeqPropState = record_seq_val(w.prop, param.id, arg_lk.ty, w.tgt_blk, 0);
+    return PropEdgeZipWalk { ..w, prop: next_prop, args: arest, params: prest };
+}
+
+fn prop_seq_blk_term(prop: SeqPropState, blk: ssa.SsaBlock) -> (result: SeqPropState) {
+    return match blk.terminator {
+        ssa.Terminator.Jump { target: tgt, arguments: args } => prop_seq_edge(prop, blk.id, tgt, args),
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => prop_seq_branch(prop, blk.id, y, ya, n, na),
+        ssa.Terminator.Return { value: v } => prop,
+        ssa.Terminator.Fail => prop,
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: st, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => prop,
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => prop
+    };
+}
+fn prop_seq_branch(prop: SeqPropState, blk_id: u64, yes_t: u64, ya: ssa.IdList, no_t: u64, na: ssa.IdList) -> (result: SeqPropState) {
+    let p1: SeqPropState = prop_seq_edge(prop, blk_id, yes_t, ya);
+    if !(p1.ok) { return p1; }
+    return prop_seq_edge(p1, blk_id, no_t, na);
+}
+
+record PropSeqBlksWalk { prop: SeqPropState, rest: ssa.SsaBlockList }
+fn prop_seq_blocks_pass(prop: SeqPropState) -> (result: SeqPropState) {
+    let init: PropSeqBlksWalk = PropSeqBlksWalk { prop: SeqPropState { ..prop, changed: false }, rest: prop.blocks };
+    iterate i up_to 1024 carrying w: PropSeqBlksWalk = init {
+        if !(w.prop.ok) || ssa_block_list_empty(w.rest) { return w.prop; }
+        next w = prop_seq_block_step(w);
+    }
+    return w.prop;
+}
+fn prop_seq_block_step(w: PropSeqBlksWalk) -> (result: PropSeqBlksWalk) {
+    return match w.rest {
+        ssa.SsaBlockList.LNil => w,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => prop_seq_block_one(w.prop, blk, rest)
+    };
+}
+fn prop_seq_block_one(prop: SeqPropState, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: PropSeqBlksWalk) {
+    let p1: SeqPropState = prop_seq_blk_insts(prop, blk.id, blk.instructions);
+    if !(p1.ok) { return PropSeqBlksWalk { prop: p1, rest: ssa.SsaBlockList.LNil }; }
+    let p2: SeqPropState = prop_seq_blk_term(p1, blk);
+    return PropSeqBlksWalk { prop: p2, rest: rest };
+}
+
+fn propagate_spec_seq_types(blocks: ssa.SsaBlockList, fn_inputs: VmValueList) -> (result: SeqPropState) {
+    let seeded: VmValueList = seed_seq_inputs(fn_inputs);
+    let init: SeqPropState = SeqPropState { blocks: blocks, seq_vals: seeded, changed: true, ok: true, error_code: 0, error_block: 0, error_inst: 0 };
+    iterate pass up_to 128 carrying st: SeqPropState = init {
+        if !(st.ok) || !(st.changed) { return st; }
+        next st = prop_seq_blocks_pass(st);
+    }
+    return st;
+}
+
 // Lower one block's parameters to concrete VmType values.
 record SpecBlkParamsWalk { rest: ssa.ValueList, acc: VmValueList, ok: bool, error_code: u64 }
-fn lower_spec_block_params<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blk: ssa.SsaBlock, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList) -> (result: SpecBlkParamsWalk) {
+fn lower_spec_block_params<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, blk: ssa.SsaBlock, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList) -> (result: SpecBlkParamsWalk) {
     let initial: SpecBlkParamsWalk = SpecBlkParamsWalk { rest: blk.parameters, acc: VmValueList.VVNil, ok: true, error_code: 0 };
     iterate i up_to 1024 carrying st: SpecBlkParamsWalk = initial {
         if !(st.ok) || ssa_value_list_empty(st.rest) {
             return SpecBlkParamsWalk { rest: st.rest, acc: reverse_vm_values(st.acc), ok: st.ok && ssa_value_list_empty(st.rest), error_code: st.error_code };
         }
-        next st = lower_spec_block_param_step<P, N>(pages, stride, total, blk.parameter_bindings, func.nominals, fn_decl.sig.params, nat_env, all_recs, st);
+        next st = lower_spec_block_param_step<P, N>(pages, stride, total, blk.parameter_bindings, func.nominals, fn_decl.sig.params, nat_env, all_recs, seq_vals, st);
     }
     return SpecBlkParamsWalk { rest: st.rest, acc: reverse_vm_values(st.acc), ok: st.ok && ssa_value_list_empty(st.rest), error_code: st.error_code };
 }
-fn lower_spec_block_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, pbinds: ssa.Environment, nominals: decl.NominalTypeIdentityList, fn_params: decl.FieldList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlkParamsWalk) -> (result: SpecBlkParamsWalk) {
+fn lower_spec_block_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, pbinds: ssa.Environment, nominals: decl.NominalTypeIdentityList, fn_params: decl.FieldList, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, st: SpecBlkParamsWalk) -> (result: SpecBlkParamsWalk) {
     return match st.rest {
         ssa.ValueList.VNil => st,
-        ssa.ValueList.VCons { head: v, tail: rest } => lower_spec_block_param_one<P, N>(pages, stride, total, pbinds, nominals, fn_params, nat_env, all_recs, st, v, rest)
+        ssa.ValueList.VCons { head: v, tail: rest } => lower_spec_block_param_one<P, N>(pages, stride, total, pbinds, nominals, fn_params, nat_env, all_recs, seq_vals, st, v, rest)
     };
 }
-fn lower_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, pbinds: ssa.Environment, nominals: decl.NominalTypeIdentityList, fn_params: decl.FieldList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlkParamsWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: SpecBlkParamsWalk) {
+fn lower_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, pbinds: ssa.Environment, nominals: decl.NominalTypeIdentityList, fn_params: decl.FieldList, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, st: SpecBlkParamsWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: SpecBlkParamsWalk) {
     let non_seq: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, v.ty, nominals, all_recs);
     if non_seq.valid {
         return SpecBlkParamsWalk { rest: rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: non_seq }, tail: st.acc }, ok: true, error_code: 0 };
+    }
+    let prop_seq: VmValTypeLookup = lookup_vm_value_type(seq_vals, v.id);
+    if prop_seq.found && prop_seq.ty.valid {
+        return SpecBlkParamsWalk { rest: rest, acc: VmValueList.VVCons { head: VmValue { id: v.id, ty: prop_seq.ty }, tail: st.acc }, ok: true, error_code: 0 };
     }
     let env_lk: EnvValIdLookup = find_env_binding_by_val_id(pbinds, v.id);
     if !(env_lk.found) { return SpecBlkParamsWalk { rest: ssa.ValueList.VNil, acc: st.acc, ok: false, error_code: 4 }; }
@@ -1703,26 +2083,32 @@ fn lower_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P],
 
 // Pre-build complete ValueId -> concrete VmType map for a specialized function.
 record AppendVmValsWalk { rest: VmValueList, acc: VmValueList }
-fn append_vm_values(front: VmValueList, back: VmValueList) -> (result: VmValueList) {
+fn append_unique_vm_values(front: VmValueList, back: VmValueList) -> (result: VmValueList) {
     iterate i up_to 1024 carrying st: AppendVmValsWalk = AppendVmValsWalk { rest: front, acc: back } {
         if vm_value_list_empty(st.rest) { return st.acc; }
-        next st = append_vm_values_step(st);
+        next st = append_unique_vm_values_step(st);
     }
     return st.acc;
 }
-fn append_vm_values_step(st: AppendVmValsWalk) -> (result: AppendVmValsWalk) {
+fn append_unique_vm_values_step(st: AppendVmValsWalk) -> (result: AppendVmValsWalk) {
     return match st.rest {
         VVNil => st,
-        VVCons { head: h, tail: t } => AppendVmValsWalk { rest: t, acc: VmValueList.VVCons { head: h, tail: st.acc } }
+        VVCons { head: h, tail: t } => append_unique_vm_values_one(h, t, st.acc)
     };
+}
+fn append_unique_vm_values_one(h: VmValue, t: VmValueList, acc: VmValueList) -> (result: AppendVmValsWalk) {
+    let existing: VmValTypeLookup = lookup_vm_value_type(acc, h.id);
+    if existing.found { return AppendVmValsWalk { rest: t, acc: acc }; }
+    return AppendVmValsWalk { rest: t, acc: VmValueList.VVCons { head: h, tail: acc } };
 }
 
 record NonSeqValMapWalk { rest: ssa.ValueList, acc: VmValueList }
 fn add_non_seq_ssa_values<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, values: ssa.ValueList, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, acc: VmValueList) -> (result: VmValueList) {
-    let first: NonSeqValMapWalk = add_non_seq_ssa_chunk<P, N>(pages, stride, total, nominals, all_recs, NonSeqValMapWalk { rest: values, acc: acc });
-    if ssa_value_list_empty(first.rest) { return first.acc; }
-    let second: NonSeqValMapWalk = add_non_seq_ssa_chunk<P, N>(pages, stride, total, nominals, all_recs, first);
-    return second.acc;
+    iterate chunk up_to 8 carrying st: NonSeqValMapWalk = NonSeqValMapWalk { rest: values, acc: acc } {
+        if ssa_value_list_empty(st.rest) { return st.acc; }
+        next st = add_non_seq_ssa_chunk<P, N>(pages, stride, total, nominals, all_recs, st);
+    }
+    return st.acc;
 }
 fn add_non_seq_ssa_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, initial: NonSeqValMapWalk) -> (result: NonSeqValMapWalk) {
     iterate i up_to 1024 carrying st: NonSeqValMapWalk = initial {
@@ -1746,31 +2132,244 @@ fn add_non_seq_ssa_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
 }
 
 record CollectBlkParamTypesWalk { rest: ssa.SsaBlockList, acc: VmValueList, ok: bool, error_code: u64, error_block: u64 }
-fn collect_all_spec_block_param_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seed: VmValueList) -> (result: CollectBlkParamTypesWalk) {
+fn collect_all_spec_block_param_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, seed: VmValueList) -> (result: CollectBlkParamTypesWalk) {
     let initial: CollectBlkParamTypesWalk = CollectBlkParamTypesWalk { rest: func.blocks, acc: seed, ok: true, error_code: 0, error_block: 0 };
     iterate i up_to 1024 carrying st: CollectBlkParamTypesWalk = initial {
         if !(st.ok) || ssa_block_list_empty(st.rest) { return st; }
-        next st = collect_all_spec_block_param_step<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st);
+        next st = collect_all_spec_block_param_step<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, seq_vals, st);
     }
     return st;
 }
-fn collect_all_spec_block_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: CollectBlkParamTypesWalk) -> (result: CollectBlkParamTypesWalk) {
+fn collect_all_spec_block_param_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, st: CollectBlkParamTypesWalk) -> (result: CollectBlkParamTypesWalk) {
     return match st.rest {
         ssa.SsaBlockList.LNil => st,
-        ssa.SsaBlockList.LCons { head: blk, tail: rest } => collect_all_spec_block_param_one<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st, blk, rest)
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => collect_all_spec_block_param_one<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, seq_vals, st, blk, rest)
     };
 }
-fn collect_all_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: CollectBlkParamTypesWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: CollectBlkParamTypesWalk) {
-    let lp: SpecBlkParamsWalk = lower_spec_block_params<P, N>(pages, stride, total, blk, func, fn_decl, nat_env, all_recs);
+fn collect_all_spec_block_param_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, st: CollectBlkParamTypesWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: CollectBlkParamTypesWalk) {
+    let lp: SpecBlkParamsWalk = lower_spec_block_params<P, N>(pages, stride, total, blk, func, fn_decl, nat_env, all_recs, seq_vals);
     if !(lp.ok) {
         return CollectBlkParamTypesWalk { rest: ssa.SsaBlockList.LNil, acc: st.acc, ok: false, error_code: lp.error_code, error_block: blk.id };
     }
-    return CollectBlkParamTypesWalk { rest: rest, acc: append_vm_values(lp.acc, st.acc), ok: true, error_code: 0, error_block: 0 };
+    return CollectBlkParamTypesWalk { rest: rest, acc: append_unique_vm_values(lp.acc, st.acc), ok: true, error_code: 0, error_block: 0 };
 }
 
-record SpecInstListWalk { rest: ssa.InstructionList, val_types: VmValueList, acc: VmInstructionList, count: u64, ok: bool, error_code: u64, error_inst: u64 }
-fn lower_spec_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, nat_env: NatEnv, all_recs: VmRecordTypeList, val_types: VmValueList, insts: ssa.InstructionList) -> (result: SpecInstListWalk) {
-    let initial: SpecInstListWalk = SpecInstListWalk { rest: insts, val_types: val_types, acc: VmInstructionList.VINil, count: 0, ok: true, error_code: 0, error_inst: 0 };
+record SpecInstListWalk {
+    rest: ssa.InstructionList,
+    val_types: VmValueList,
+    acc: VmInstructionList,
+    count: u64,
+    next_val_id: u64,
+    next_inst_id: u64,
+    ok: bool,
+    error_code: u64,
+    error_inst: u64
+}
+fn lower_spec_seq_view(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: SpecInstListWalk) {
+    if inst.operator != 9 { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 5, error_inst: inst.id }; }
+    if inst.argc != 3 { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+    return match inst.inputs {
+        ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+        ssa.IdList.ICons { head: base_id, tail: after_base } => lower_spec_seq_view_start(st, inst, rest, base_id.value, after_base)
+    };
+}
+fn lower_spec_seq_view_start(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64, after_base: ssa.IdList) -> (result: SpecInstListWalk) {
+    return match after_base {
+        ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+        ssa.IdList.ICons { head: start_id, tail: after_start } => lower_spec_seq_view_end(st, inst, rest, base_id, start_id.value, after_start)
+    };
+}
+fn lower_spec_seq_view_end(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64, start_id: u64, after_start: ssa.IdList) -> (result: SpecInstListWalk) {
+    return match after_start {
+        ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+        ssa.IdList.ICons { head: end_id, tail: trailing } => lower_spec_seq_view_emit(st, inst, rest, base_id, start_id, end_id.value, trailing)
+    };
+}
+fn lower_spec_seq_view_emit(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64, start_id: u64, end_id: u64, trailing: ssa.IdList) -> (result: SpecInstListWalk) {
+    if !(id_list_empty(trailing)) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+    let base: VmValTypeLookup = lookup_vm_value_type(st.val_types, base_id);
+    let start_v: VmValTypeLookup = lookup_vm_value_type(st.val_types, start_id);
+    let end_v: VmValTypeLookup = lookup_vm_value_type(st.val_types, end_id);
+    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    if !(start_v.found) || !(is_u64_vm_type(start_v.ty)) || !(end_v.found) || !(is_u64_vm_type(end_v.ty)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let view_ty: VmType = byte_seq_vm_type(2, base.ty.bound_value);
+    if !(view_ty.valid) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
+    }
+    let res_lk: VmValTypeLookup = lookup_vm_value_type(st.val_types, inst.result);
+    if res_lk.found && !(vm_type_equal(res_lk.ty, view_ty)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let next_vals: VmValueList = select_vm_values(res_lk.found, st.val_types, VmValueList.VVCons { head: VmValue { id: inst.result, ty: view_ty }, tail: st.val_types });
+    let vm_inst: VmInstruction = VmInstruction {
+        id: inst.id, result: inst.result, opcode: 17, op_code: 0, intent: 0,
+        imm_u64: 0, imm_bool: false,
+        ty: view_ty, from_ty: base.ty,
+        inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    return SpecInstListWalk {
+        ..st, rest: rest, val_types: next_vals,
+        acc: VmInstructionList.VICons { head: vm_inst, tail: st.acc },
+        count: st.count + 1, ok: true, error_code: 0, error_inst: 0
+    };
+}
+
+fn lower_vm_loop_index_init(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, res_ty: VmType) -> (result: SpecInstListWalk) {
+    if inst.operator != 0 || inst.argc != 0 || !(id_list_empty(inst.inputs)) || !(is_u64_vm_type(res_ty)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let vm_inst: VmInstruction = VmInstruction {
+        id: inst.id, result: inst.result, opcode: 1, op_code: 0, intent: 0,
+        imm_u64: 0, imm_bool: false,
+        ty: u64_vm_type(), from_ty: invalid_vm_type(),
+        inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    return SpecInstListWalk {
+        ..st, rest: rest,
+        acc: VmInstructionList.VICons { head: vm_inst, tail: st.acc },
+        count: st.count + 1, ok: true, error_code: 0, error_inst: 0
+    };
+}
+
+fn lower_vm_loop_index_advance(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, res_ty: VmType) -> (result: SpecInstListWalk) {
+    if inst.operator != 0 || inst.argc != 1 || !(is_u64_vm_type(res_ty)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    return match inst.inputs {
+        ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+        ssa.IdList.ICons { head: idx_id, tail: trailing } => lower_vm_loop_advance_emit(st, inst, rest, idx_id.value, trailing)
+    };
+}
+fn lower_vm_loop_advance_emit(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, idx_id: u64, trailing: ssa.IdList) -> (result: SpecInstListWalk) {
+    if !(id_list_empty(trailing)) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+    let idx: VmValTypeLookup = lookup_vm_value_type(st.val_types, idx_id);
+    if !(idx.found) || !(is_u64_vm_type(idx.ty)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let u64_ty: VmType = u64_vm_type();
+    let one_id: u64 = st.next_val_id;
+    let one_inst: VmInstruction = VmInstruction {
+        id: st.next_inst_id, result: one_id, opcode: 1, op_code: 0, intent: 0,
+        imm_u64: 1, imm_bool: false, ty: u64_ty, from_ty: invalid_vm_type(),
+        inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    let add_inputs: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: idx_id }, tail: ssa.IdList.ICons { head: ssa.Id { value: one_id }, tail: ssa.IdList.INil } };
+    let add_inst: VmInstruction = VmInstruction {
+        id: st.next_inst_id + 1, result: inst.result, opcode: 3, op_code: 1, intent: 1,
+        imm_u64: 0, imm_bool: false, ty: u64_ty, from_ty: u64_ty,
+        inputs: add_inputs, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    let acc1: VmInstructionList = VmInstructionList.VICons { head: one_inst, tail: st.acc };
+    let acc2: VmInstructionList = VmInstructionList.VICons { head: add_inst, tail: acc1 };
+    let next_vals: VmValueList = VmValueList.VVCons { head: VmValue { id: one_id, ty: u64_ty }, tail: st.val_types };
+    return SpecInstListWalk {
+        rest: rest, val_types: next_vals, acc: acc2,
+        count: st.count + 2, next_val_id: st.next_val_id + 1, next_inst_id: st.next_inst_id + 2,
+        ok: true, error_code: 0, error_inst: 0
+    };
+}
+
+fn lower_vm_loop_guard<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nat_env: NatEnv, st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, res_ty: VmType) -> (result: SpecInstListWalk) {
+    if res_ty.kind != 1 { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+    if inst.operator == 2 {
+        if inst.argc != 2 { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+        return match inst.inputs {
+            ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+            ssa.IdList.ICons { head: idx_id, tail: after_idx } => lower_vm_seq_guard_seq(st, inst, rest, idx_id.value, after_idx)
+        };
+    }
+    if inst.operator == 1 {
+        if inst.argc != 1 { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+        return match inst.inputs {
+            ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+            ssa.IdList.ICons { head: idx_id, tail: trailing } => lower_vm_up_to_guard_emit<P, N>(pages, stride, total, nat_env, st, inst, rest, idx_id.value, trailing)
+        };
+    }
+    return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 5, error_inst: inst.id };
+}
+fn lower_vm_seq_guard_seq(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, idx_id: u64, after_idx: ssa.IdList) -> (result: SpecInstListWalk) {
+    return match after_idx {
+        ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+        ssa.IdList.ICons { head: seq_id, tail: trailing } => lower_vm_seq_guard_emit(st, inst, rest, idx_id, seq_id.value, trailing)
+    };
+}
+fn lower_vm_seq_guard_emit(st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, idx_id: u64, seq_id: u64, trailing: ssa.IdList) -> (result: SpecInstListWalk) {
+    if !(id_list_empty(trailing)) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+    let idx: VmValTypeLookup = lookup_vm_value_type(st.val_types, idx_id);
+    let seq: VmValTypeLookup = lookup_vm_value_type(st.val_types, seq_id);
+    if !(idx.found) || !(is_u64_vm_type(idx.ty)) || !(seq.found) || !(seq.ty.valid) || seq.ty.kind != 4 || seq.ty.bound_value == 0 {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let u64_ty: VmType = u64_vm_type();
+    let len_id: u64 = st.next_val_id;
+    let len_inst: VmInstruction = VmInstruction {
+        id: st.next_inst_id, result: len_id, opcode: 14, op_code: 0, intent: 0,
+        imm_u64: 0, imm_bool: false, ty: u64_ty, from_ty: seq.ty,
+        inputs: ssa.IdList.ICons { head: ssa.Id { value: seq_id }, tail: ssa.IdList.INil },
+        callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    let cmp_inputs: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: idx_id }, tail: ssa.IdList.ICons { head: ssa.Id { value: len_id }, tail: ssa.IdList.INil } };
+    let cmp_inst: VmInstruction = VmInstruction {
+        id: st.next_inst_id + 1, result: inst.result, opcode: 4, op_code: 3, intent: 0,
+        imm_u64: 0, imm_bool: false, ty: bool_vm_type(), from_ty: u64_ty,
+        inputs: cmp_inputs, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    let acc1: VmInstructionList = VmInstructionList.VICons { head: len_inst, tail: st.acc };
+    let acc2: VmInstructionList = VmInstructionList.VICons { head: cmp_inst, tail: acc1 };
+    let next_vals: VmValueList = VmValueList.VVCons { head: VmValue { id: len_id, ty: u64_ty }, tail: st.val_types };
+    return SpecInstListWalk {
+        rest: rest, val_types: next_vals, acc: acc2,
+        count: st.count + 2, next_val_id: st.next_val_id + 1, next_inst_id: st.next_inst_id + 2,
+        ok: true, error_code: 0, error_inst: 0
+    };
+}
+fn lower_vm_up_to_guard_emit<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nat_env: NatEnv, st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, idx_id: u64, trailing: ssa.IdList) -> (result: SpecInstListWalk) {
+    if !(id_list_empty(trailing)) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
+    let idx: VmValTypeLookup = lookup_vm_value_type(st.val_types, idx_id);
+    if !(idx.found) || !(is_u64_vm_type(idx.ty)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let bound_res: NatBoundResult = resolve_nat_bound_span<P, N>(pages, stride, total, inst.variant_start, inst.variant_end, nat_env);
+    if !(bound_res.ok) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: bound_res.error_code, error_inst: inst.id };
+    }
+    let u64_ty: VmType = u64_vm_type();
+    let bound_id: u64 = st.next_val_id;
+    let bound_inst: VmInstruction = VmInstruction {
+        id: st.next_inst_id, result: bound_id, opcode: 1, op_code: 0, intent: 0,
+        imm_u64: bound_res.value, imm_bool: false, ty: u64_ty, from_ty: invalid_vm_type(),
+        inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    let cmp_inputs: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: idx_id }, tail: ssa.IdList.ICons { head: ssa.Id { value: bound_id }, tail: ssa.IdList.INil } };
+    let cmp_inst: VmInstruction = VmInstruction {
+        id: st.next_inst_id + 1, result: inst.result, opcode: 4, op_code: 3, intent: 0,
+        imm_u64: 0, imm_bool: false, ty: bool_vm_type(), from_ty: u64_ty,
+        inputs: cmp_inputs, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+    let acc1: VmInstructionList = VmInstructionList.VICons { head: bound_inst, tail: st.acc };
+    let acc2: VmInstructionList = VmInstructionList.VICons { head: cmp_inst, tail: acc1 };
+    let next_vals: VmValueList = VmValueList.VVCons { head: VmValue { id: bound_id, ty: u64_ty }, tail: st.val_types };
+    return SpecInstListWalk {
+        rest: rest, val_types: next_vals, acc: acc2,
+        count: st.count + 2, next_val_id: st.next_val_id + 1, next_inst_id: st.next_inst_id + 2,
+        ok: true, error_code: 0, error_inst: 0
+    };
+}
+
+fn lower_spec_instructions<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, nat_env: NatEnv, all_recs: VmRecordTypeList, val_types: VmValueList, insts: ssa.InstructionList, next_val_id: u64, next_inst_id: u64) -> (result: SpecInstListWalk) {
+    let initial: SpecInstListWalk = SpecInstListWalk { rest: insts, val_types: val_types, acc: VmInstructionList.VINil, count: 0, next_val_id: next_val_id, next_inst_id: next_inst_id, ok: true, error_code: 0, error_inst: 0 };
     iterate i up_to 1024 carrying st: SpecInstListWalk = initial {
         if !(st.ok) || ssa_inst_list_empty(st.rest) {
             return SpecInstListWalk { ..st, acc: reverse_vm_insts(st.acc) };
@@ -1789,6 +2388,9 @@ fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     if !(effects_empty(inst.effects)) || !(capabilities_empty(inst.capabilities)) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 3, error_inst: inst.id };
     }
+    if inst.kind == 17 {
+        return lower_spec_seq_view(st, inst, rest);
+    }
     let res_ty: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, inst.ty, nominals, all_recs);
     if !(res_ty.valid) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
@@ -1796,7 +2398,16 @@ fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     if inst.kind == 16 {
         let rc: InstLowerResult = lower_vm_record_construct<P, N>(pages, stride, total, st.val_types, all_recs, inst, res_ty);
         if !(rc.ok) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: rc.error_code, error_inst: inst.id }; }
-        return SpecInstListWalk { rest: rest, val_types: st.val_types, acc: VmInstructionList.VICons { head: rc.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+        return SpecInstListWalk { ..st, rest: rest, acc: VmInstructionList.VICons { head: rc.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+    }
+    if inst.kind == 15 {
+        return lower_vm_loop_index_init(st, inst, rest, res_ty);
+    }
+    if inst.kind == 14 {
+        return lower_vm_loop_index_advance(st, inst, rest, res_ty);
+    }
+    if inst.kind == 13 {
+        return lower_vm_loop_guard<P, N>(pages, stride, total, nat_env, st, inst, rest, res_ty);
     }
     let call_nats: CallNatArgsResult = select_call_nat_args<P, N>(pages, stride, total, inst, nat_env);
     if !(call_nats.ok) {
@@ -1806,39 +2417,55 @@ fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     if !(lowered.ok) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: lowered.error_code, error_inst: inst.id };
     }
-    return SpecInstListWalk { rest: rest, val_types: st.val_types, acc: VmInstructionList.VICons { head: lowered.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+    return SpecInstListWalk { ..st, rest: rest, acc: VmInstructionList.VICons { head: lowered.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
 }
 fn select_call_nat_args<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, inst: ssa.Instruction, nat_env: NatEnv) -> (result: CallNatArgsResult) {
     if inst.kind != 3 { return CallNatArgsResult { ok: true, error_code: 0, nat_args: VmNatArgList.NANil }; }
     return parse_call_nat_args<P, N>(pages, stride, total, inst.start, inst.end, nat_env);
 }
 
-record SpecBlockListWalk { rest: ssa.SsaBlockList, val_types: VmValueList, acc: VmBlockList, block_count: u64, inst_count: u64, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
-fn lower_spec_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, val_types: VmValueList) -> (result: SpecBlockListWalk) {
-    let initial: SpecBlockListWalk = SpecBlockListWalk { rest: func.blocks, val_types: val_types, acc: VmBlockList.VBNil, block_count: 0, inst_count: 0, ok: true, error_code: 0, error_block: 0, error_inst: 0 };
+record SpecBlockListWalk {
+    rest: ssa.SsaBlockList,
+    val_types: VmValueList,
+    acc: VmBlockList,
+    block_count: u64,
+    inst_count: u64,
+    next_val_id: u64,
+    next_inst_id: u64,
+    ok: bool,
+    error_code: u64,
+    error_block: u64,
+    error_inst: u64
+}
+fn lower_spec_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, val_types: VmValueList, next_val_id: u64, next_inst_id: u64) -> (result: SpecBlockListWalk) {
+    let initial: SpecBlockListWalk = SpecBlockListWalk {
+        rest: func.blocks, val_types: val_types, acc: VmBlockList.VBNil,
+        block_count: 0, inst_count: 0, next_val_id: next_val_id, next_inst_id: next_inst_id,
+        ok: true, error_code: 0, error_block: 0, error_inst: 0
+    };
     iterate i up_to 1024 carrying st: SpecBlockListWalk = initial {
         if !(st.ok) || ssa_block_list_empty(st.rest) {
             return SpecBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc) };
         }
-        next st = lower_spec_block_step<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st);
+        next st = lower_spec_block_step<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, seq_vals, st);
     }
     return SpecBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc), ok: st.ok && ssa_block_list_empty(st.rest), error_code: select(st.ok && !(ssa_block_list_empty(st.rest)), 2, st.error_code) };
 }
-fn lower_spec_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlockListWalk) -> (result: SpecBlockListWalk) {
+fn lower_spec_block_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, st: SpecBlockListWalk) -> (result: SpecBlockListWalk) {
     return match st.rest {
         ssa.SsaBlockList.LNil => st,
-        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_spec_block_one<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, st, blk, rest)
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_spec_block_one<P, N>(pages, stride, total, func, fn_decl, nat_env, all_recs, seq_vals, st, blk, rest)
     };
 }
-fn lower_spec_block_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: SpecBlockListWalk) {
+fn lower_spec_block_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, st: SpecBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: SpecBlockListWalk) {
     if !(blk.lowering_ok) {
         return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: 2, error_block: blk.id, error_inst: 0 };
     }
-    let params: SpecBlkParamsWalk = lower_spec_block_params<P, N>(pages, stride, total, blk, func, fn_decl, nat_env, all_recs);
+    let params: SpecBlkParamsWalk = lower_spec_block_params<P, N>(pages, stride, total, blk, func, fn_decl, nat_env, all_recs, seq_vals);
     if !(params.ok) {
         return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: params.error_code, error_block: blk.id, error_inst: 0 };
     }
-    let insts: SpecInstListWalk = lower_spec_instructions<P, N>(pages, stride, total, func, nat_env, all_recs, st.val_types, blk.instructions);
+    let insts: SpecInstListWalk = lower_spec_instructions<P, N>(pages, stride, total, func, nat_env, all_recs, st.val_types, blk.instructions, st.next_val_id, st.next_inst_id);
     if !(insts.ok) {
         return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: insts.error_code, error_block: blk.id, error_inst: insts.error_inst };
     }
@@ -1852,9 +2479,10 @@ fn lower_spec_block_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
         has_failure_target: blk.has_failure_target, failure_target: blk.failure_target
     };
     return SpecBlockListWalk {
-        rest: rest, val_types: st.val_types,
+        rest: rest, val_types: insts.val_types,
         acc: VmBlockList.VBCons { head: vm_blk, tail: st.acc },
         block_count: st.block_count + 1, inst_count: st.inst_count + insts.count,
+        next_val_id: insts.next_val_id, next_inst_id: insts.next_inst_id,
         ok: true, error_code: 0, error_block: 0, error_inst: 0
     };
 }
@@ -1958,6 +2586,233 @@ fn verify_vm_fn_cfg_one(fn_item: VmFunction, val_types: VmValueList, st: CfgVeri
     return CfgVerifyWalk { rest: rest, ok: true, error_block: 0 };
 }
 
+// Collect bounded-iteration region metadata from verified SSA loop blocks.
+record BlockHasKindWalk { rest: ssa.InstructionList, kind: u64, found: bool, inst: ssa.Instruction }
+fn find_inst_of_kind_in_list(insts: ssa.InstructionList, kind: u64) -> (result: BlockHasKindWalk) {
+    let dummy_inst: ssa.Instruction = ssa.Instruction {
+        id: 0, sequence: 0, kind: 0, operator: 0, result: 0, ty: decl.SemType.TPoison,
+        inputs: ssa.IdList.INil, argc: 0, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: 0, end: 0
+    };
+    let init: BlockHasKindWalk = BlockHasKindWalk { rest: insts, kind: kind, found: false, inst: dummy_inst };
+    iterate i up_to 1024 carrying w: BlockHasKindWalk = init {
+        if w.found || ssa_inst_list_empty(w.rest) { return w; }
+        next w = find_inst_of_kind_step(w);
+    }
+    return w;
+}
+fn find_inst_of_kind_step(w: BlockHasKindWalk) -> (result: BlockHasKindWalk) {
+    return match w.rest {
+        ssa.InstructionList.QNil => w,
+        ssa.InstructionList.QCons { head: inst, tail: rest } => find_inst_of_kind_one(w, inst, rest)
+    };
+}
+fn find_inst_of_kind_one(w: BlockHasKindWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: BlockHasKindWalk) {
+    if inst.kind == w.kind { return BlockHasKindWalk { rest: ssa.InstructionList.QNil, kind: w.kind, found: true, inst: inst }; }
+    return BlockHasKindWalk { ..w, rest: rest };
+}
+
+record JumpMatchLookup { found: bool, block_id: u64 }
+record JumpMatchWalk { rest: ssa.SsaBlockList, target: u64, inst_kind: u64, found: bool, block_id: u64 }
+fn find_jump_predecessor_with_inst(blocks: ssa.SsaBlockList, target: u64, inst_kind: u64) -> (result: JumpMatchLookup) {
+    let init: JumpMatchWalk = JumpMatchWalk { rest: blocks, target: target, inst_kind: inst_kind, found: false, block_id: 0 };
+    iterate i up_to 1024 carrying w: JumpMatchWalk = init {
+        if w.found || ssa_block_list_empty(w.rest) { return JumpMatchLookup { found: w.found, block_id: w.block_id }; }
+        next w = find_jump_pred_step(w);
+    }
+    return JumpMatchLookup { found: w.found, block_id: w.block_id };
+}
+fn find_jump_pred_step(w: JumpMatchWalk) -> (result: JumpMatchWalk) {
+    return match w.rest {
+        ssa.SsaBlockList.LNil => w,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => find_jump_pred_one(w, blk, rest)
+    };
+}
+fn find_jump_pred_one(w: JumpMatchWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: JumpMatchWalk) {
+    let jumps_to_target: bool = match blk.terminator {
+        ssa.Terminator.Jump { target: tgt, arguments: args } => tgt == w.target,
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false,
+        ssa.Terminator.Return { value: v } => false,
+        ssa.Terminator.Fail => false,
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: st, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => false,
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => false
+    };
+    if jumps_to_target && find_inst_of_kind_in_list(blk.instructions, w.inst_kind).found {
+        return JumpMatchWalk { rest: ssa.SsaBlockList.LNil, target: w.target, inst_kind: w.inst_kind, found: true, block_id: blk.id };
+    }
+    return JumpMatchWalk { ..w, rest: rest };
+}
+
+record BodyReachState { blocks: ssa.SsaBlockList, header_id: u64, exit_id: u64, acc: ssa.IdList, changed: bool }
+fn maybe_add_body_block(st: BodyReachState, target: u64) -> (result: BodyReachState) {
+    if target == st.header_id || target == st.exit_id || id_in_list(st.acc, target) { return st; }
+    if !(find_ssa_block_by_id(st.blocks, target).found) { return st; }
+    return BodyReachState { ..st, acc: ssa.IdList.ICons { head: ssa.Id { value: target }, tail: st.acc }, changed: true };
+}
+fn expand_body_term(st: BodyReachState, term: ssa.Terminator) -> (result: BodyReachState) {
+    return match term {
+        ssa.Terminator.Jump { target: tgt, arguments: args } => maybe_add_body_block(st, tgt),
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => maybe_add_body_block(maybe_add_body_block(st, y), n),
+        ssa.Terminator.Return { value: v } => st,
+        ssa.Terminator.Fail => st,
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => st,
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: sty, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => st
+    };
+}
+record BodyScanWalk { state: BodyReachState, rest: ssa.SsaBlockList }
+fn collect_body_blocks_pass(st: BodyReachState) -> (result: BodyReachState) {
+    let init: BodyScanWalk = BodyScanWalk { state: BodyReachState { ..st, changed: false }, rest: st.blocks };
+    iterate i up_to 1024 carrying w: BodyScanWalk = init {
+        if ssa_block_list_empty(w.rest) { return w.state; }
+        next w = collect_body_blocks_step(w);
+    }
+    return w.state;
+}
+fn collect_body_blocks_step(w: BodyScanWalk) -> (result: BodyScanWalk) {
+    return match w.rest {
+        ssa.SsaBlockList.LNil => w,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => collect_body_blocks_one(w.state, blk, rest)
+    };
+}
+fn collect_body_blocks_one(st: BodyReachState, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: BodyScanWalk) {
+    if id_in_list(st.acc, blk.id) {
+        return BodyScanWalk { state: expand_body_term(st, blk.terminator), rest: rest };
+    }
+    return BodyScanWalk { state: st, rest: rest };
+}
+fn collect_loop_body_blocks(blocks: ssa.SsaBlockList, header_id: u64, body_entry: u64, exit_id: u64) -> (result: ssa.IdList) {
+    if body_entry == header_id || body_entry == exit_id || !(find_ssa_block_by_id(blocks, body_entry).found) {
+        return ssa.IdList.INil;
+    }
+    let init: BodyReachState = BodyReachState {
+        blocks: blocks, header_id: header_id, exit_id: exit_id,
+        acc: ssa.IdList.ICons { head: ssa.Id { value: body_entry }, tail: ssa.IdList.INil },
+        changed: true
+    };
+    iterate pass up_to 128 carrying st: BodyReachState = init {
+        if !(st.changed) { return reverse_ssa_ids(st.acc); }
+        next st = collect_body_blocks_pass(st);
+    }
+    return reverse_ssa_ids(st.acc);
+}
+
+record LoopStatePickWalk { rest: ssa.ValueList, val_types: VmValueList, index_id: u64, found_bool: bool, bool_ty: VmType, found_scalar: bool, scalar_ty: VmType }
+fn pick_loop_state_type(params: ssa.ValueList, val_types: VmValueList, index_id: u64) -> (result: VmType) {
+    let init: LoopStatePickWalk = LoopStatePickWalk { rest: params, val_types: val_types, index_id: index_id, found_bool: false, bool_ty: invalid_vm_type(), found_scalar: false, scalar_ty: invalid_vm_type() };
+    iterate i up_to 128 carrying w: LoopStatePickWalk = init {
+        if w.found_bool || ssa_value_list_empty(w.rest) {
+            if w.found_bool { return w.bool_ty; }
+            if w.found_scalar { return w.scalar_ty; }
+            return bool_vm_type();
+        }
+        next w = pick_loop_state_step(w);
+    }
+    if w.found_bool { return w.bool_ty; }
+    if w.found_scalar { return w.scalar_ty; }
+    return bool_vm_type();
+}
+fn pick_loop_state_step(w: LoopStatePickWalk) -> (result: LoopStatePickWalk) {
+    return match w.rest {
+        ssa.ValueList.VNil => w,
+        ssa.ValueList.VCons { head: v, tail: rest } => pick_loop_state_one(w, v, rest)
+    };
+}
+fn pick_loop_state_one(w: LoopStatePickWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: LoopStatePickWalk) {
+    if v.id == w.index_id { return LoopStatePickWalk { ..w, rest: rest }; }
+    let lk: VmValTypeLookup = lookup_vm_value_type(w.val_types, v.id);
+    if !(lk.found) || !(lk.ty.valid) || lk.ty.kind == 4 { return LoopStatePickWalk { ..w, rest: rest }; }
+    if lk.ty.kind == 1 {
+        return LoopStatePickWalk { ..w, rest: ssa.ValueList.VNil, found_bool: true, bool_ty: lk.ty };
+    }
+    if !(w.found_scalar) {
+        return LoopStatePickWalk { ..w, rest: rest, found_scalar: true, scalar_ty: lk.ty };
+    }
+    return LoopStatePickWalk { ..w, rest: rest };
+}
+
+record GuardBranchTargets { ok: bool, body_entry: u64, exit_block: u64 }
+fn guard_branch_targets(term: ssa.Terminator, cond_id: u64) -> (result: GuardBranchTargets) {
+    return match term {
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => GuardBranchTargets { ok: c == cond_id, body_entry: y, exit_block: n },
+        ssa.Terminator.Jump { target: t, arguments: a } => GuardBranchTargets { ok: false, body_entry: 0, exit_block: 0 },
+        ssa.Terminator.Return { value: v } => GuardBranchTargets { ok: false, body_entry: 0, exit_block: 0 },
+        ssa.Terminator.Fail => GuardBranchTargets { ok: false, body_entry: 0, exit_block: 0 },
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => GuardBranchTargets { ok: false, body_entry: 0, exit_block: 0 },
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: sty, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => GuardBranchTargets { ok: false, body_entry: 0, exit_block: 0 }
+    };
+}
+
+record BoundedItersCollect { rest: ssa.SsaBlockList, acc: VmBoundedIterationList, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
+fn collect_vm_bounded_iterations<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, nat_env: NatEnv, val_types: VmValueList) -> (result: BoundedItersCollect) {
+    let init: BoundedItersCollect = BoundedItersCollect { rest: func.blocks, acc: VmBoundedIterationList.VBINil, ok: true, error_code: 0, error_block: 0, error_inst: 0 };
+    iterate i up_to 1024 carrying w: BoundedItersCollect = init {
+        if !(w.ok) || ssa_block_list_empty(w.rest) {
+            return BoundedItersCollect { ..w, acc: reverse_vm_bounded_iters(w.acc) };
+        }
+        next w = collect_bounded_iter_step<P, N>(pages, stride, total, func.blocks, nat_env, val_types, w);
+    }
+    return BoundedItersCollect { ..w, acc: reverse_vm_bounded_iters(w.acc) };
+}
+fn collect_bounded_iter_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, all_blocks: ssa.SsaBlockList, nat_env: NatEnv, val_types: VmValueList, w: BoundedItersCollect) -> (result: BoundedItersCollect) {
+    return match w.rest {
+        ssa.SsaBlockList.LNil => w,
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => collect_bounded_iter_block<P, N>(pages, stride, total, all_blocks, nat_env, val_types, w, blk, rest)
+    };
+}
+fn collect_bounded_iter_block<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, all_blocks: ssa.SsaBlockList, nat_env: NatEnv, val_types: VmValueList, w: BoundedItersCollect, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: BoundedItersCollect) {
+    let glk: BlockHasKindWalk = find_inst_of_kind_in_list(blk.instructions, 13);
+    if !(glk.found) { return BoundedItersCollect { ..w, rest: rest }; }
+    let tgts: GuardBranchTargets = guard_branch_targets(blk.terminator, glk.inst.result);
+    if !(tgts.ok) {
+        return BoundedItersCollect { ..w, rest: rest, ok: false, error_code: 6, error_block: blk.id, error_inst: glk.inst.id };
+    }
+    let pre: JumpMatchLookup = find_jump_predecessor_with_inst(all_blocks, blk.id, 15);
+    if !(pre.found) {
+        return BoundedItersCollect { ..w, rest: rest, ok: false, error_code: 6, error_block: blk.id, error_inst: glk.inst.id };
+    }
+    let back: JumpMatchLookup = find_jump_predecessor_with_inst(all_blocks, blk.id, 14);
+    let back_blk: u64 = select(back.found, back.block_id, tgts.body_entry);
+    let idx_id: u64 = match glk.inst.inputs { ssa.IdList.INil => 0, ssa.IdList.ICons { head: h, tail: t } => h.value };
+    let state_ty: VmType = pick_loop_state_type(blk.parameters, val_types, idx_id);
+    let body_blks: ssa.IdList = collect_loop_body_blocks(all_blocks, blk.id, tgts.body_entry, tgts.exit_block);
+    if glk.inst.operator == 1 {
+        let bound_res: NatBoundResult = resolve_nat_bound_span<P, N>(pages, stride, total, glk.inst.variant_start, glk.inst.variant_end, nat_env);
+        if !(bound_res.ok) {
+            return BoundedItersCollect { ..w, rest: rest, ok: false, error_code: bound_res.error_code, error_block: blk.id, error_inst: glk.inst.id };
+        }
+        let region: VmBoundedIteration = VmBoundedIteration {
+            header_block: blk.id, preheader_block: pre.block_id,
+            body_entry_block: tgts.body_entry, backedge_block: back_blk, exit_block: tgts.exit_block,
+            domain_kind: 1, bound: bound_res.value, sequence_bound: invalid_vm_type(),
+            state_type: state_ty, body_blocks: body_blks
+        };
+        return BoundedItersCollect { ..w, rest: rest, acc: VmBoundedIterationList.VBICons { head: region, tail: w.acc } };
+    }
+    if glk.inst.operator == 2 {
+        return collect_bounded_seq_iter(w, blk, rest, glk.inst, pre.block_id, tgts, back_blk, state_ty, body_blks, val_types);
+    }
+    return BoundedItersCollect { ..w, rest: rest, ok: false, error_code: 5, error_block: blk.id, error_inst: glk.inst.id };
+}
+fn collect_bounded_seq_iter(w: BoundedItersCollect, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, guard: ssa.Instruction, pre_id: u64, tgts: GuardBranchTargets, back_id: u64, state_ty: VmType, body_blks: ssa.IdList, val_types: VmValueList) -> (result: BoundedItersCollect) {
+    let seq_id: u64 = match guard.inputs {
+        ssa.IdList.INil => 0,
+        ssa.IdList.ICons { head: h, tail: after } => match after { ssa.IdList.INil => 0, ssa.IdList.ICons { head: s, tail: t } => s.value }
+    };
+    let seq_lk: VmValTypeLookup = lookup_vm_value_type(val_types, seq_id);
+    if !(seq_lk.found) || !(seq_lk.ty.valid) || seq_lk.ty.kind != 4 || seq_lk.ty.bound_value == 0 {
+        return BoundedItersCollect { ..w, rest: rest, ok: false, error_code: 7, error_block: blk.id, error_inst: guard.id };
+    }
+    let region: VmBoundedIteration = VmBoundedIteration {
+        header_block: blk.id, preheader_block: pre_id,
+        body_entry_block: tgts.body_entry, backedge_block: back_id, exit_block: tgts.exit_block,
+        domain_kind: 2, bound: seq_lk.ty.bound_value, sequence_bound: seq_lk.ty,
+        state_type: state_ty, body_blocks: body_blks
+    };
+    return BoundedItersCollect { ..w, rest: rest, acc: VmBoundedIterationList.VBICons { head: region, tail: w.acc } };
+}
+
 fn lower_ssa_fn_specialized<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_args: VmNatArgList, all_recs: VmRecordTypeList) -> (result: SingleFnLowerResult) {
     if !(func.supported) || !(func.verified) || !(func.identity.valid) || func.identity.len == 0 || func.block_count == 0 {
         return SingleFnLowerResult { ok: false, error_code: 2, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
@@ -1974,14 +2829,24 @@ fn lower_ssa_fn_specialized<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     if !(inputs.ok) {
         return SingleFnLowerResult { ok: false, error_code: inputs.error_code, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
     }
-    let base_val_types: VmValueList = add_non_seq_ssa_values<P, N>(pages, stride, total, func.values, func.nominals, all_recs, inputs.acc);
-    let blk_val_types: CollectBlkParamTypesWalk = collect_all_spec_block_param_types<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, base_val_types);
+    let seq_prop: SeqPropState = propagate_spec_seq_types(func.blocks, inputs.acc);
+    if !(seq_prop.ok) {
+        return SingleFnLowerResult { ok: false, error_code: seq_prop.error_code, error_block: seq_prop.error_block, error_inst: seq_prop.error_inst, vm_fn: dummy_vm_function() };
+    }
+    let non_seq_vals: VmValueList = add_non_seq_ssa_values<P, N>(pages, stride, total, func.values, func.nominals, all_recs, inputs.acc);
+    let base_val_types: VmValueList = append_unique_vm_values(seq_prop.seq_vals, non_seq_vals);
+    let blk_val_types: CollectBlkParamTypesWalk = collect_all_spec_block_param_types<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, seq_prop.seq_vals, base_val_types);
     if !(blk_val_types.ok) {
         return SingleFnLowerResult { ok: false, error_code: blk_val_types.error_code, error_block: blk_val_types.error_block, error_inst: 0, vm_fn: dummy_vm_function() };
     }
-    let blocks: SpecBlockListWalk = lower_spec_blocks<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, blk_val_types.acc);
+    let max_ids: FnMaxIds = max_fn_val_inst_ids(func);
+    let blocks: SpecBlockListWalk = lower_spec_blocks<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, seq_prop.seq_vals, blk_val_types.acc, max_ids.next_val, max_ids.next_inst);
     if !(blocks.ok) {
         return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
+    }
+    let iters: BoundedItersCollect = collect_vm_bounded_iterations<P, N>(pages, stride, total, func, nat_built.env, blocks.val_types);
+    if !(iters.ok) {
+        return SingleFnLowerResult { ok: false, error_code: iters.error_code, error_block: iters.error_block, error_inst: iters.error_inst, vm_fn: dummy_vm_function() };
     }
     let vm_fn: VmFunction = VmFunction {
         identity: func.identity,
@@ -1989,10 +2854,11 @@ fn lower_ssa_fn_specialized<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
         inputs: inputs.acc,
         result_type: res_ty.ty,
         blocks: blocks.acc,
+        bounded_iterations: iters.acc,
         block_count: blocks.block_count,
         instruction_count: blocks.inst_count
     };
-    let cfg_ok: CfgVerifyWalk = verify_vm_fn_cfg_types(vm_fn, blk_val_types.acc);
+    let cfg_ok: CfgVerifyWalk = verify_vm_fn_cfg_types(vm_fn, blocks.val_types);
     if !(cfg_ok.ok) {
         return SingleFnLowerResult { ok: false, error_code: 7, error_block: cfg_ok.error_block, error_inst: 0, vm_fn: dummy_vm_function() };
     }
@@ -2018,6 +2884,7 @@ fn dummy_vm_function() -> (result: VmFunction) {
         inputs: VmValueList.VVNil,
         result_type: invalid_vm_type(),
         blocks: VmBlockList.VBNil,
+        bounded_iterations: VmBoundedIterationList.VBINil,
         block_count: 0,
         instruction_count: 0
     };

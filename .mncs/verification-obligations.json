@@ -2311,6 +2311,62 @@
           "invalidation_identity"
         ]
       }
+    },
+    {
+      "identity": "mncs-compiler.vm-emit-bounded-loop-native",
+      "title": "First-class MNCS vm_emit suite verifies bounded-loop ViewConstruct lowering, sequence type propagation, and bound-conflict rejection",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_ssa_fn_specialized",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::propagate_spec_seq_types",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_spec_instructions",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::collect_vm_bounded_iterations"
+      ],
+      "invalidation_dependencies": [
+        "tests/vm_emit_loop_suite.mncs",
+        "src/compiler/vm_emit.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/source.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/vm_emit_loop_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
     }
   ]
 }
