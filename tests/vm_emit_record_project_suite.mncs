@@ -1,0 +1,182 @@
+mncs 0.18;
+module tests.compiler_vm_emit_record_project;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Byte layout (len 44):
+//   0..5   "Token"
+//   6..11  "Other"
+//  12..17  "Ghost"
+//  18..22  "kind"
+//  23..28  "start"
+//  29..32  "end"
+//  33..43  "diagnostic"
+fn test_pages() -> (result: [[byte; up_to 64]; up_to 1]) {
+    let p: [byte; up_to 64] = [
+        84, 111, 107, 101, 110, 32,
+        79, 116, 104, 101, 114, 32,
+        71, 104, 111, 115, 116, 32,
+        107, 105, 110, 100, 32,
+        115, 116, 97, 114, 116, 32,
+        101, 110, 100, 32,
+        100, 105, 97, 103, 110, 111, 115, 116, 105, 99, 32
+    ];
+    return [p];
+}
+
+fn u64_vm() -> (result: vm_emit.VmType) {
+    return vm_emit.int_vm_type(64, false);
+}
+
+fn build_token_schema(pages: [[byte; up_to 64]; up_to 1]) -> (result: vm_emit.VmRecordType) {
+    let tok_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 0, 5);
+    let f_kind: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 18, 22);
+    let f_start: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 23, 28);
+    let f_end: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 29, 32);
+    let f_diag: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 33, 43);
+    let fields: vm_emit.VmRecordFieldList = vm_emit.VmRecordFieldList.VRFCons {
+        head: vm_emit.VmRecordField { name: f_kind, ty: u64_vm() },
+        tail: vm_emit.VmRecordFieldList.VRFCons {
+            head: vm_emit.VmRecordField { name: f_start, ty: u64_vm() },
+            tail: vm_emit.VmRecordFieldList.VRFCons {
+                head: vm_emit.VmRecordField { name: f_end, ty: u64_vm() },
+                tail: vm_emit.VmRecordFieldList.VRFCons {
+                    head: vm_emit.VmRecordField { name: f_diag, ty: u64_vm() },
+                    tail: vm_emit.VmRecordFieldList.VRFNil
+                }
+            }
+        }
+    };
+    return vm_emit.VmRecordType { identity: tok_id, name: tok_id, fields: fields };
+}
+
+fn build_other_schema(pages: [[byte; up_to 64]; up_to 1]) -> (result: vm_emit.VmRecordType) {
+    let other_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 6, 11);
+    let f_kind: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 18, 22);
+    let fields: vm_emit.VmRecordFieldList = vm_emit.VmRecordFieldList.VRFCons {
+        head: vm_emit.VmRecordField { name: f_kind, ty: u64_vm() },
+        tail: vm_emit.VmRecordFieldList.VRFNil
+    };
+    return vm_emit.VmRecordType { identity: other_id, name: other_id, fields: fields };
+}
+
+fn make_project_inst(owner: decl.SemanticIdentity, field_idx: u64, fstart: u64, fend: u64, base_val_id: u64) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: 1, sequence: 1, kind: 8, operator: field_idx, result: 2,
+        ty: decl.SemType.TInt { width: 64, signed: false },
+        inputs: ssa.IdList.ICons { head: ssa.Id { value: base_val_id }, tail: ssa.IdList.INil },
+        argc: 1, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: owner,
+        variant_start: 0, variant_end: 0, binding_start: fstart, binding_end: fend,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 44
+    };
+}
+
+fn single_field_name_matches(names: vm_emit.VmNameList, expected: decl.SemanticIdentity) -> (result: bool) {
+    return match names {
+        vm_emit.VmNameList.VNNil => false,
+        vm_emit.VmNameList.VNCons { head: h, tail: t } => vm_emit.semantic_ids_equal(h, expected) && match t {
+            vm_emit.VmNameList.VNNil => true,
+            vm_emit.VmNameList.VNCons { head: _h2, tail: _t2 } => false
+        }
+    };
+}
+
+test record_project_lowers_verified_schema_field() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let tok_schema: vm_emit.VmRecordType = build_token_schema(pages);
+    let all_recs: vm_emit.VmRecordTypeList = vm_emit.VmRecordTypeList.VRTCons {
+        head: tok_schema, tail: vm_emit.VmRecordTypeList.VRTNil
+    };
+    let tok_ty: vm_emit.VmType = vm_emit.record_vm_type(tok_schema.identity);
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: tok_ty }, tail: vm_emit.VmValueList.VVNil
+    };
+
+    let inst_kind: ssa.Instruction = make_project_inst(tok_schema.identity, 0, 18, 22, 0);
+    let r_kind: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, inst_kind, u64_vm());
+    let f_kind: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 18, 22);
+
+    let inst_diag: ssa.Instruction = make_project_inst(tok_schema.identity, 3, 33, 43, 0);
+    let r_diag: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, inst_diag, u64_vm());
+    let f_diag: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 33, 43);
+
+    let ok: bool = r_kind.ok
+        && r_kind.inst.opcode == 18
+        && r_kind.inst.op_code == 0
+        && vm_emit.vm_type_equal(r_kind.inst.ty, u64_vm())
+        && vm_emit.vm_type_equal(r_kind.inst.from_ty, tok_ty)
+        && single_field_name_matches(r_kind.inst.field_names, f_kind)
+        && r_diag.ok
+        && r_diag.inst.opcode == 18
+        && r_diag.inst.op_code == 3
+        && vm_emit.vm_type_equal(r_diag.inst.ty, u64_vm())
+        && vm_emit.vm_type_equal(r_diag.inst.from_ty, tok_ty)
+        && single_field_name_matches(r_diag.inst.field_names, f_diag);
+    return from_assertion(equals_bool(true, ok, 4001));
+}
+
+test record_project_rejects_mismatched_owner_and_unknown_schema() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let tok_schema: vm_emit.VmRecordType = build_token_schema(pages);
+    let other_schema: vm_emit.VmRecordType = build_other_schema(pages);
+    let ghost_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(pages, 64, 44, 12, 17);
+    let all_recs: vm_emit.VmRecordTypeList = vm_emit.VmRecordTypeList.VRTCons {
+        head: tok_schema,
+        tail: vm_emit.VmRecordTypeList.VRTCons { head: other_schema, tail: vm_emit.VmRecordTypeList.VRTNil }
+    };
+    let tok_ty: vm_emit.VmType = vm_emit.record_vm_type(tok_schema.identity);
+    let ghost_ty: vm_emit.VmType = vm_emit.record_vm_type(ghost_id);
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: tok_ty },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 5, ty: ghost_ty },
+            tail: vm_emit.VmValueList.VVNil
+        }
+    };
+
+    // Operand is Token (id 0), but instruction names Other.
+    let bad_owner: ssa.Instruction = make_project_inst(other_schema.identity, 0, 18, 22, 0);
+    let r_owner: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, bad_owner, u64_vm());
+
+    // Operand and instruction both name Ghost, which has no verified schema in all_recs.
+    let bad_schema: ssa.Instruction = make_project_inst(ghost_id, 0, 18, 22, 5);
+    let r_schema: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, bad_schema, u64_vm());
+
+    let ok: bool = !(r_owner.ok) && r_owner.error_code == 7 && !(r_schema.ok) && r_schema.error_code == 4;
+    return from_assertion(equals_bool(true, ok, 4002));
+}
+
+test record_project_rejects_mismatched_field_and_result_type() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = test_pages();
+    let tok_schema: vm_emit.VmRecordType = build_token_schema(pages);
+    let all_recs: vm_emit.VmRecordTypeList = vm_emit.VmRecordTypeList.VRTCons {
+        head: tok_schema, tail: vm_emit.VmRecordTypeList.VRTNil
+    };
+    let tok_ty: vm_emit.VmType = vm_emit.record_vm_type(tok_schema.identity);
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: tok_ty }, tail: vm_emit.VmValueList.VVNil
+    };
+
+    // Field index 1 ("start") disagrees with span 18..22 ("kind").
+    let bad_idx: ssa.Instruction = make_project_inst(tok_schema.identity, 1, 18, 22, 0);
+    let r_idx: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, bad_idx, u64_vm());
+
+    // Field index 0 ("kind") disagrees with span 23..28 ("start").
+    let bad_name: ssa.Instruction = make_project_inst(tok_schema.identity, 0, 23, 28, 0);
+    let r_name: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, bad_name, u64_vm());
+
+    // Result type bool disagrees with schema field type u64.
+    let ok_inst: ssa.Instruction = make_project_inst(tok_schema.identity, 0, 18, 22, 0);
+    let r_ty: vm_emit.InstLowerResult = vm_emit.lower_vm_record_project<1, 64>(pages, 64, 44, val_types, all_recs, ok_inst, vm_emit.bool_vm_type());
+
+    let ok: bool = !(r_idx.ok) && r_idx.error_code == 7
+        && !(r_name.ok) && r_name.error_code == 7
+        && !(r_ty.ok) && r_ty.error_code == 7;
+    return from_assertion(equals_bool(true, ok, 4003));
+}

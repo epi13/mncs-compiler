@@ -474,15 +474,6 @@ def main():
                 targs256,
             )
             assert neg_generic["ok"] is False and neg_generic["error_code"] == 11, neg_generic
-
-            next_blocker_is_trivia = p1.call(
-                "compile_and_emit_project_vm_callable",
-                base_args + [_make_semantic_id_wire(recs1, TARGET_IS_TRIVIA_ID)],
-                targs256,
-            )
-            assert next_blocker_is_trivia["ok"] is False and next_blocker_is_trivia["error_code"] == 5, (
-                next_blocker_is_trivia
-            )
         finally:
             p1.close()
         emit1_wall_s = time.monotonic() - t1
@@ -756,15 +747,6 @@ def main():
                 "uninstantiated_generic_callable": {"ok": neg_generic["ok"], "error_code": neg_generic["error_code"]},
                 "tampered_artifact_vm_admission": {"status": tamper_payload["status"], "returncode": admit_bad.returncode},
                 "malformed_scalar_switch_and_join": tamper_results,
-            },
-            "next_reproduced_lexer_blocker": {
-                "target_callable": TARGET_IS_TRIVIA_ID,
-                "ok": next_blocker_is_trivia["ok"],
-                "error_code": next_blocker_is_trivia["error_code"],
-                "error_function": next_blocker_is_trivia["error_function"],
-                "error_block": next_blocker_is_trivia["error_block"],
-                "error_instruction": next_blocker_is_trivia["error_instruction"],
-                "cause": "Record field projection (SSA instruction kind 8) in lexer::is_trivia(token: Token) is not yet lowered by vm_emit.mncs",
             },
         }
         if args.json_out:

@@ -68,6 +68,7 @@ record VmRecordTypeRev { rest: VmRecordTypeList, acc: VmRecordTypeList }
 // 15 = SequenceProject (from_ty = concrete byte sequence type)
 // 16 = RecordConstruct (ty = record VmType, field_names = source-order field names)
 // 17 = ViewConstruct (from_ty = source sequence VmType, ty = UpTo view VmType)
+// 18 = RecordProject (from_ty = nominal record VmType, ty = field VmType, op_code = field_index, field_names = [field_name])
 record VmInstruction {
     id: u64,
     result: u64,
@@ -756,6 +757,37 @@ fn find_vm_record_field_one(st: RecordFieldSearch, fld: VmRecordField, rest: VmR
     return RecordFieldSearch { ..st, rest: rest };
 }
 
+record RecordFieldAtLookup { found: bool, name: decl.SemanticIdentity, ty: VmType }
+record RecordFieldAtSearch { rest: VmRecordFieldList, index: u64, target: u64, found: bool, name: decl.SemanticIdentity, ty: VmType }
+fn find_vm_record_field_at(fields: VmRecordFieldList, target_index: u64) -> (result: RecordFieldAtLookup) {
+    let initial: RecordFieldAtSearch = RecordFieldAtSearch {
+        rest: fields, index: 0, target: target_index, found: false,
+        name: decl.invalid_semantic_identity(), ty: invalid_vm_type()
+    };
+    iterate i up_to 128 carrying st: RecordFieldAtSearch = initial {
+        if st.found || vm_record_field_list_empty(st.rest) {
+            return RecordFieldAtLookup { found: st.found, name: st.name, ty: st.ty };
+        }
+        next st = find_vm_record_field_at_step(st);
+    }
+    return RecordFieldAtLookup { found: st.found, name: st.name, ty: st.ty };
+}
+fn find_vm_record_field_at_step(st: RecordFieldAtSearch) -> (result: RecordFieldAtSearch) {
+    return match st.rest {
+        VRFNil => st,
+        VRFCons { head: fld, tail: rest } => find_vm_record_field_at_one(st, fld, rest)
+    };
+}
+fn find_vm_record_field_at_one(st: RecordFieldAtSearch, fld: VmRecordField, rest: VmRecordFieldList) -> (result: RecordFieldAtSearch) {
+    if st.index == st.target {
+        return RecordFieldAtSearch {
+            rest: VmRecordFieldList.VRFNil, index: st.index, target: st.target,
+            found: true, name: fld.name, ty: fld.ty
+        };
+    }
+    return RecordFieldAtSearch { ..st, rest: rest, index: st.index + 1 };
+}
+
 record NameContainsWalk { rest: VmNameList, wanted: decl.SemanticIdentity, found: bool }
 fn vm_name_list_contains(names: VmNameList, wanted: decl.SemanticIdentity) -> (result: bool) {
     let initial: NameContainsWalk = NameContainsWalk { rest: names, wanted: wanted, found: false };
@@ -1304,6 +1336,48 @@ fn lower_vm_record_construct_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
         inputs: arg_rest, params: bind_rest,
         names_acc: VmNameList.VNCons { head: fname, tail: st.names_acc },
         count: st.count + 1, ok: true, done: false
+    };
+}
+
+fn lower_vm_record_project<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, val_types: VmValueList, all_recs: VmRecordTypeList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
+    if inst.argc != 1 || !(inst.nominal_identity.valid) || inst.binding_end <= inst.binding_start {
+        return inst_error(7);
+    }
+    return match inst.inputs {
+        ssa.IdList.INil => inst_error(7),
+        ssa.IdList.ICons { head: base_id, tail: rest } => lower_vm_record_project_one<P, N>(pages, stride, total, val_types, all_recs, inst, res_ty, base_id.value, rest)
+    };
+}
+fn lower_vm_record_project_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, val_types: VmValueList, all_recs: VmRecordTypeList, inst: ssa.Instruction, res_ty: VmType, base_id: u64, rest: ssa.IdList) -> (result: InstLowerResult) {
+    if !(id_list_empty(rest)) { return inst_error(7); }
+    let base_lk: VmValTypeLookup = lookup_vm_value_type(val_types, base_id);
+    if !(base_lk.found) || !(base_lk.ty.valid) || base_lk.ty.kind != 5 || !(base_lk.ty.nominal_identity.valid) {
+        return inst_error(4);
+    }
+    if !(semantic_ids_equal(base_lk.ty.nominal_identity, inst.nominal_identity)) {
+        return inst_error(7);
+    }
+    let schema_lk: RecordTypeLookup = find_vm_record_type(all_recs, inst.nominal_identity);
+    if !(schema_lk.found) { return inst_error(4); }
+    let fname: decl.SemanticIdentity = span_to_ident<P, N>(pages, stride, total, inst.binding_start, inst.binding_end);
+    if !(fname.valid) { return inst_error(7); }
+    let fld_at: RecordFieldAtLookup = find_vm_record_field_at(schema_lk.schema.fields, inst.operator);
+    if !(fld_at.found) || !(semantic_ids_equal(fld_at.name, fname)) {
+        return inst_error(7);
+    }
+    if !(res_ty.valid) || !(vm_type_equal(res_ty, fld_at.ty)) {
+        return inst_error(7);
+    }
+    return InstLowerResult {
+        ok: true, error_code: 0,
+        inst: VmInstruction {
+            id: inst.id, result: inst.result, opcode: 18, op_code: inst.operator, intent: 0,
+            imm_u64: 0, imm_bool: false,
+            ty: res_ty, from_ty: base_lk.ty,
+            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+            callee_nat_args: VmNatArgList.NANil,
+            field_names: VmNameList.VNCons { head: fld_at.name, tail: VmNameList.VNNil }
+        }
     };
 }
 
@@ -2840,6 +2914,11 @@ fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     let res_ty: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, inst.ty, nominals, all_recs);
     if !(res_ty.valid) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
+    }
+    if inst.kind == 8 {
+        let rp: InstLowerResult = lower_vm_record_project<P, N>(pages, stride, total, st.val_types, all_recs, inst, res_ty);
+        if !(rp.ok) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: rp.error_code, error_inst: inst.id }; }
+        return SpecInstListWalk { ..st, rest: rest, acc: VmInstructionList.VICons { head: rp.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
     }
     if inst.kind == 16 {
         let rc: InstLowerResult = lower_vm_record_construct<P, N>(pages, stride, total, st.val_types, all_recs, inst, res_ty);

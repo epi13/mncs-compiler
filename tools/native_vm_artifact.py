@@ -234,6 +234,16 @@ def _vm_inst_kind(inst, record_names=None):
                 "view_bound": view_bound,
             }
         }
+    if opcode == 18:
+        rec_id = _semantic_id_str(inst["from_ty"]["nominal_identity"])
+        field_names = [_semantic_id_str(n) for n in flist(inst["field_names"])]
+        assert len(field_names) == 1, f"RecordProject must have exactly 1 field name: {field_names}"
+        return {
+            "RecordProject": {
+                "type_identity": rec_id,
+                "field": field_names[0],
+            }
+        }
     raise ValueError(f"unsupported VmInstruction opcode: {opcode}")
 
 
