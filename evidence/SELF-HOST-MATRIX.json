@@ -25747,10 +25747,37 @@
     "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
     "ambient_verification_ssa_if_join": {
       "obligation": "mncs-compiler.ssa-scoped-if-join-native",
-      "cold_entry": {"verdict": "PASS", "evidence_id": "ver-193c1a78dc78", "elapsed_s": 190.742, "wall": "3:40.60", "peak_rss_kib": 5449564},
-      "unchanged_reentry": {"epoch_reused": true, "reused": true, "new_provider_launches": 0, "elapsed_s": 0.178, "wall": "0:15.32", "peak_rss_kib": 622240},
-      "revert_invalidation": {"reason": "input_changed", "verdict": "FAIL", "evidence_id": "ver-46495e54ff72", "failing_assertion_codes": [1001, 1002, 1003]},
-      "restore_pass": {"reason": "input_changed", "verdict": "PASS", "evidence_id": "ver-63431ffc20eb", "run_identity": "b39b0d67a2d36adc41b87695c000f4e297b6e26f189ae10fd27648176b278bf8"},
+      "cold_entry": {
+        "verdict": "PASS",
+        "evidence_id": "ver-193c1a78dc78",
+        "elapsed_s": 190.742,
+        "wall": "3:40.60",
+        "peak_rss_kib": 5449564
+      },
+      "unchanged_reentry": {
+        "epoch_reused": true,
+        "reused": true,
+        "new_provider_launches": 0,
+        "elapsed_s": 0.178,
+        "wall": "0:15.32",
+        "peak_rss_kib": 622240
+      },
+      "revert_invalidation": {
+        "reason": "input_changed",
+        "verdict": "FAIL",
+        "evidence_id": "ver-46495e54ff72",
+        "failing_assertion_codes": [
+          1001,
+          1002,
+          1003
+        ]
+      },
+      "restore_pass": {
+        "reason": "input_changed",
+        "verdict": "PASS",
+        "evidence_id": "ver-63431ffc20eb",
+        "run_identity": "b39b0d67a2d36adc41b87695c000f4e297b6e26f189ae10fd27648176b278bf8"
+      },
       "separated_prep_wall": "2:47.93",
       "separated_prep_peak_rss_kib": 3538428,
       "separated_exec_wall": "0:15.33",
@@ -25786,11 +25813,23 @@
       "verdict": "PASS",
       "passed": 3,
       "total": 3,
-      "summary": {"current": 4, "executed": 2, "failed": 0, "blockers": 0, "obligations": 54},
+      "summary": {
+        "current": 4,
+        "executed": 2,
+        "failed": 0,
+        "blockers": 0,
+        "obligations": 54
+      },
       "elapsed_s": 409.487,
       "wall": "7:45.02",
       "peak_rss_kib": 6104316,
-      "unchanged_reentry": {"epoch_reused": true, "reused": true, "elapsed_s": 0.069, "wall": "0:15.10", "peak_rss_kib": 623656}
+      "unchanged_reentry": {
+        "epoch_reused": true,
+        "reused": true,
+        "elapsed_s": 0.069,
+        "wall": "0:15.10",
+        "peak_rss_kib": 623656
+      }
     },
     "deepest_stage_proved": "Ambient native verification via `mncs-env enter` cleanly discovers, executes, caches/reuses (`0` new launches), invalidates on revert, and re-passes Compiler's first-class MNCS suites (`ssa_if_join_suite.mncs` and `vm_emit_loop_suite.mncs`). Furthermore, native Project SSA -> native `mncs.compiler.vm_emit.v1` lowers unchanged `src/compiler/source.mncs` callables `source::ascii<32>` and `source::ascii_view<32>` (including `ViewConstruct`, `over_sequence` loop init/guard/advance, fixed-point sequence type propagation across blocks, and `bounded_iterations` metadata) into a bit-for-bit deterministic `mncs.vm.artifact/1` (252,458 B) admitted and differentially verified against locked Stage-0 by fresh `mncs-vm` across 21/21 cases plus `<32>`/`<24>` non-aliasing (5/5), counted `up_to 6` loop parity (5/5), `iterations` budget enforcement, and 6/6 negative rejections. Does NOT claim switches/record updates in `vm_emit`, `lexer` VM emission, or Stage-1->Stage-2 succession.",
     "first_remaining_blocker": {
@@ -25798,6 +25837,131 @@
       "owner": "mncs-compiler (vm_emit.mncs)",
       "summary": "Extending `vm_emit.mncs` to scalar/finite match switches, record updates/projections, and larger project page closure capacity (M >= 256) to emit lexer/parser/decl/ssa compiler modules into executable VM artifacts.",
       "reproduce_command": "python3 -u tools/test_native_source_ascii_loop_vm_emit.py (lowers source::ascii<32>/ascii_view<32> cleanly; lexer/decl switch & record-update callables remain outside bounded vm_emit subset)"
+    },
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "current_campaign_lexer_punctuation_switch_and_ambient_prep_20261121": {
+    "observed_at": "2026-11-21T20:42:32.427105+00:00",
+    "session_id": "ses_7316dc2d03650800",
+    "evidence_artifact": "evidence/lexer-punctuation-switch-and-ambient-prep-20261121.json",
+    "evidence_sha256": "39c6692cf43dab08a0f8d759cdd7a3c73e59d719b852299d3cd7be3c113000c9",
+    "compiler_base": "b453a9831fac367de5533c30455428cdde439a47",
+    "mncs_language_revision": "058b299d7ad449c08c2545ed29c3a35a5a72ae90",
+    "environment_revision": "f77ce9d840b4a443b8074f67704cf4f1e4f5525a",
+    "test_revision": "9c3461ebecbe8e9f42fb7bec4f5a6aa12d883fa3",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "sequence_replace_harness_repaired": {
+      "direct_ssa_source_verified": "55/55",
+      "project_source_verified": "55/55",
+      "incremental_comment_edit_verified": "55/55",
+      "tamper_rejections_passed": 14,
+      "ssa_vm_agreement": true,
+      "later_failures_exposed": 0
+    },
+    "lexer_punctuation_vm_artifact": {
+      "status": "PROVED_SCALAR_SWITCH_AND_CALLABLE_SELECTION_FROM_UNCHANGED_LEXER_SOURCE",
+      "target_callable": "mncs:0.2:function:mncs.compiler.lexer.v1::punctuation",
+      "unchanged_lexer_mncs_sha256": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+      "artifact_id": "sha256:6f84dcb84ede0f1551517af5172e0e697a2b0d0bdaf1765b2d3ef179e9ca0ac9",
+      "ssa_module_identity": "mncs:0.4:ssa:module:5138053dcbfde26be830b05480d13faf671f7c1ea304a70438af602c42c46fc8",
+      "artifact_sha256": "585b45bbe77dd202286e668b31477a94dc2a2cf01cdc08a6d8e79ec6a6a98936",
+      "artifact_bytes": 83307,
+      "function_count": 1,
+      "block_count": 91,
+      "instruction_count": 118,
+      "conditional_branch_count": 39,
+      "deterministic_across_fresh_processes": true,
+      "vm_admission_status": "admitted",
+      "vm_differential_matches": "192/192",
+      "semantic_digest": "93be03a618c118e1b2160bbb61fb255a860f9da1ca05033f62064e2599c477da",
+      "vm_max_memory_cells": 52,
+      "vm_max_steps_per_call": 92,
+      "vm_total_steps": 10944,
+      "vm_resident_peak_rss_bytes": 28569600,
+      "whole_module_switch_entry_preserved": true,
+      "malformed_switch_and_join_rejections_passed": 9,
+      "preserved_source_ascii_loop_regression": "passed (21/21 Stage-0 matches, iterations budget enforced)"
+    },
+    "ambient_test_preparation_improvement": {
+      "owning_repository": "mncs-language",
+      "mncs_language_revision": "058b299d7ad449c08c2545ed29c3a35a5a72ae90",
+      "ssa_if_join_before_vs_after": {
+        "wall_s": [
+          183.08,
+          71.74
+        ],
+        "compiler_total_ms": [
+          108699,
+          14683
+        ],
+        "embed_admit_open_ms": [
+          32500,
+          3597
+        ],
+        "artifact_bytes": [
+          814870124,
+          188598312
+        ],
+        "peak_rss_kib": [
+          5449196,
+          2249208
+        ],
+        "compiled_functions": [
+          2478,
+          971
+        ]
+      },
+      "vm_emit_loop_before_vs_after": {
+        "wall_s": [
+          248.38,
+          114.42
+        ],
+        "compiler_total_ms": [
+          116070,
+          7597
+        ],
+        "embed_admit_open_ms": [
+          36500,
+          2101
+        ],
+        "artifact_bytes_after": 109669458,
+        "peak_rss_kib": [
+          6236312,
+          2783616
+        ],
+        "compiled_functions": [
+          2871,
+          445
+        ]
+      },
+      "vm_emit_scalar_switch_native_suite": {
+        "obligation": "mncs-compiler.vm-emit-scalar-switch-native",
+        "evidence_id": "ver-13bee23afcd7",
+        "verdict": "PASS",
+        "tests": "3/3",
+        "compiled_functions": "149/2780",
+        "artifact_bytes": 30327810
+      },
+      "ambient_enter_peak_rss_kib_before_vs_after": [
+        6104596,
+        2783316
+      ],
+      "ambient_enter_wall_s_before_2_vs_after_3_suites": [
+        476.12,
+        366.97
+      ],
+      "unchanged_reentry_epoch_reused": true,
+      "covered_source_change_invalidation_verified": true
+    },
+    "deepest_stage_proved": "Native Project SSA (`compile_project_target`) -> native `mncs.compiler.vm_emit.v1` (`compile_and_emit_project_vm_callable`) lowers unchanged `src/compiler/lexer.mncs::punctuation` (nested `ScalarSwitch` -> canonical `Constant` + `IntegerCompare` + `ConditionalBranch` dispatch chain, entry block 0 placed first in MNCS) into a bit-for-bit deterministic `mncs.vm.artifact/1` (83,307 B) independently admitted and executed by fresh canonical `mncs-vm` matching locked Stage-0 (`6a3f6907`) across 192/192 cases, with 9/9 malformed switch/join tamper rejections, preserved whole-module & `source::ascii<32>` regressions, repaired 55/55 `test_ssa_sequence_replace.py`, a third first-class Compiler native suite (`vm-emit-scalar-switch-native`) passing via MNCS Environment, and a 4.3x-8x reduction in native test artifact size + 7.4x-15.3x faster compiler backend preparation + 54%-59% lower peak RSS in `mncs-language` (`058b299`). Does NOT claim record field projection, full `lexer.mncs` closure VM emission, or Stage-1->Stage-2 rebuild.",
+    "first_remaining_blocker": {
+      "rank": 1,
+      "owner": "mncs-compiler (vm_emit.mncs)",
+      "summary": "Record field projection (SSA instruction kind 8) blocks emitting `mncs.compiler.lexer.v1::is_trivia(token: Token)` (`error_code: 5, error_function: 9, error_block: 0, error_instruction: 0`), followed by record update (`kind 16, operator 1`), `FiniteSwitch`, and paged sequence lowering toward a larger `lexer.mncs` closure.",
+      "reproduce_command": "python3 -u tools/test_native_lexer_punctuation_vm_emit.py (emits punctuation 192/192 and reproduces lexer::is_trivia error_code=5)"
     },
     "stage1_to_stage2_rebuild": "UNKNOWN",
     "stage1_claimed": false,
