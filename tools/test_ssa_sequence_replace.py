@@ -527,7 +527,7 @@ def test_ssa_and_vm(flow_res: dict, src_nominal_wire: dict, src_args: list) -> d
         assert src_ssa_dec["function_count"] == 55, src_ssa_dec
         assert src_ssa_dec["supported_function_count"] == 55, src_ssa_dec
         assert src_ssa_dec["unsupported_block_count"] == 0, src_ssa_dec
-        assert src_ssa_dec["verified_function_count"] == 46, src_ssa_dec
+        assert src_ssa_dec["verified_function_count"] == 55, src_ssa_dec
 
         src_fn_wires = wire_linked(field(src_ssa1["returned"][0], "functions"))
         line_cols_step_wire = src_fn_wires[43]
@@ -736,7 +736,7 @@ def test_project_pipeline() -> dict:
         assert src_proj_dec["valid"] is True and src_oracle["valid"] is True, (src_proj_dec["diagnostics"], src_oracle["diagnostics"])
         src_mod = project.flist(src_proj_dec["modules"])[0]
         assert src_mod["flow"]["proof"]["ok"] is True and src_mod["flow"]["valid"] is True
-        assert src_mod["value_ssa"]["supported_function_count"] == 55 and src_mod["value_ssa"]["verified_function_count"] == 46
+        assert src_mod["value_ssa"]["supported_function_count"] == 55 and src_mod["value_ssa"]["verified_function_count"] == 55
         proj_k19 = sum(
             1
             for fn in project.flist(src_mod["value_ssa"]["functions"])
@@ -752,7 +752,7 @@ def test_project_pipeline() -> dict:
         inc_dec = inc_resp["returned"][0]
         assert inc_dec["valid"] is True
         inc_mod = project.flist(inc_dec["modules"])[0]
-        assert inc_mod["value_ssa"]["verified_function_count"] == 46 and inc_mod["value_ssa"]["supported_function_count"] == 55
+        assert inc_mod["value_ssa"]["verified_function_count"] == 55 and inc_mod["value_ssa"]["supported_function_count"] == 55
     finally:
         probe_wall_s = time.monotonic() - t0
         probe.close()
