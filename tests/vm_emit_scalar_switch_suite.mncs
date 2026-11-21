@@ -1,0 +1,173 @@
+mncs 0.18;
+module tests.compiler_vm_emit_scalar_switch;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Source bytes (len 12): "switch_fn u64"
+fn test_pages() -> (result: [[byte; up_to 32]; up_to 1]) {
+    let p: [byte; up_to 32] = [115, 119, 105, 116, 99, 104, 95, 102, 110, 32, 117, 54, 52];
+    return [p];
+}
+
+fn u64_ty() -> (result: decl.SemType) {
+    return decl.SemType.TInt { width: 64, signed: false };
+}
+
+fn make_const_inst(id: u64, res: u64, value: u64) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: id, sequence: id, kind: 0, operator: value, result: res, ty: u64_ty(),
+        inputs: ssa.IdList.INil, argc: 0, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 0
+    };
+}
+
+fn make_bool_inst(id: u64, res: u64) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: id, sequence: id, kind: 1, operator: 1, result: res, ty: decl.SemType.TBool,
+        inputs: ssa.IdList.INil, argc: 0, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 0
+    };
+}
+
+fn make_blk(id: u64, params: ssa.ValueList, insts: ssa.InstructionList, term: ssa.Terminator) -> (result: ssa.SsaBlock) {
+    return ssa.SsaBlock {
+        id: id, parameters: params, parameter_bindings: ssa.Environment.EnvNil,
+        instructions: insts, terminator: term, reachable: true,
+        has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0
+    };
+}
+
+fn make_case(is_default: bool, value: u64, target: u64) -> (result: ssa.ScalarMatchCase) {
+    return ssa.ScalarMatchCase {
+        is_default: is_default, negative: false, value: value, overflow: false,
+        pattern_start: 0, pattern_end: 1, target: target, arguments: ssa.IdList.INil
+    };
+}
+
+record CondBranchCount { cur: vm_emit.VmBlockList, acc: u64 }
+
+fn count_cond_branches(blocks: vm_emit.VmBlockList) -> (result: u64) {
+    iterate i up_to 32 carrying st: CondBranchCount = CondBranchCount { cur: blocks, acc: 0 } {
+        let done: bool = match st.cur {
+            vm_emit.VmBlockList.VBNil => true,
+            vm_emit.VmBlockList.VBCons { head: _h, tail: _t } => false
+        };
+        if done { return st.acc; }
+        let is_cb: bool = match st.cur {
+            vm_emit.VmBlockList.VBNil => false,
+            vm_emit.VmBlockList.VBCons { head: b, tail: _t } => match b.terminator {
+                vm_emit.VmTerminator.VmCondBranch { condition: _c, then_target: _tt, then_arguments: _ta, else_target: _et, else_arguments: _ea } => true,
+                vm_emit.VmTerminator.VmBranch { target: _t2, arguments: _a2 } => false,
+                vm_emit.VmTerminator.VmReturn { value: _v } => false,
+                vm_emit.VmTerminator.VmFailure => false
+            }
+        };
+        let nxt: vm_emit.VmBlockList = match st.cur {
+            vm_emit.VmBlockList.VBNil => st.cur,
+            vm_emit.VmBlockList.VBCons { head: _h, tail: t } => t
+        };
+        next st = CondBranchCount { cur: nxt, acc: st.acc + select(is_cb, 1, 0) };
+    }
+    return st.acc;
+}
+
+fn first_block_id(blocks: vm_emit.VmBlockList) -> (result: u64) {
+    return match blocks {
+        vm_emit.VmBlockList.VBNil => 999,
+        vm_emit.VmBlockList.VBCons { head: b, tail: _t } => b.id
+    };
+}
+
+fn build_valid_switch_fn(fn_id: decl.SemanticIdentity, default_target_override: u64, arm1_bad_bool: bool) -> (result: ssa.Function) {
+    let v_in: ssa.Value = ssa.Value { id: 0, ty: u64_ty(), owner_block: 0, kind: 0, index: 0 };
+    let v_c1: ssa.Value = ssa.Value { id: 1, ty: select_sem_ty(arm1_bad_bool, decl.SemType.TBool, u64_ty()), owner_block: 1, kind: 2, index: 0 };
+    let v_c2: ssa.Value = ssa.Value { id: 2, ty: u64_ty(), owner_block: 2, kind: 2, index: 0 };
+    let v_cd: ssa.Value = ssa.Value { id: 3, ty: u64_ty(), owner_block: 3, kind: 2, index: 0 };
+    let v_join: ssa.Value = ssa.Value { id: 4, ty: u64_ty(), owner_block: 4, kind: 1, index: 0 };
+
+    let cases: ssa.ScalarMatchCaseList = ssa.ScalarMatchCaseList.SCCons {
+        head: make_case(false, 43, 1),
+        tail: ssa.ScalarMatchCaseList.SCCons {
+            head: make_case(false, 45, 2),
+            tail: ssa.ScalarMatchCaseList.SCCons {
+                head: make_case(true, 0, 3),
+                tail: ssa.ScalarMatchCaseList.SCNil
+            }
+        }
+    };
+    let sw_term: ssa.Terminator = ssa.Terminator.ScalarSwitch {
+        subject: 0, subject_ty: u64_ty(), result_type: u64_ty(),
+        source_start: 0, source_end: 9, arm_count: 3,
+        default_target: default_target_override, join_target: 4, cases: cases
+    };
+    let b0: ssa.SsaBlock = make_blk(0, ssa.ValueList.VNil, ssa.InstructionList.QNil, sw_term);
+
+    let i1: ssa.Instruction = select_inst(arm1_bad_bool, make_bool_inst(1, 1), make_const_inst(1, 1, 50));
+    let b1: ssa.SsaBlock = make_blk(1, ssa.ValueList.VNil, ssa.InstructionList.QCons { head: i1, tail: ssa.InstructionList.QNil }, ssa.Terminator.Jump { target: 4, arguments: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil } });
+    let b2: ssa.SsaBlock = make_blk(2, ssa.ValueList.VNil, ssa.InstructionList.QCons { head: make_const_inst(2, 2, 51), tail: ssa.InstructionList.QNil }, ssa.Terminator.Jump { target: 4, arguments: ssa.IdList.ICons { head: ssa.Id { value: 2 }, tail: ssa.IdList.INil } });
+    let b3: ssa.SsaBlock = make_blk(3, ssa.ValueList.VNil, ssa.InstructionList.QCons { head: make_const_inst(3, 3, 0), tail: ssa.InstructionList.QNil }, ssa.Terminator.Jump { target: 4, arguments: ssa.IdList.ICons { head: ssa.Id { value: 3 }, tail: ssa.IdList.INil } });
+    let b4: ssa.SsaBlock = make_blk(4, ssa.ValueList.VCons { head: v_join, tail: ssa.ValueList.VNil }, ssa.InstructionList.QNil, ssa.Terminator.Return { value: 4 });
+
+    let values: ssa.ValueList = ssa.ValueList.VCons { head: v_in, tail: ssa.ValueList.VCons { head: v_c1, tail: ssa.ValueList.VCons { head: v_c2, tail: ssa.ValueList.VCons { head: v_cd, tail: ssa.ValueList.VCons { head: v_join, tail: ssa.ValueList.VNil } } } } };
+    let blocks: ssa.SsaBlockList = ssa.SsaBlockList.LCons { head: b0, tail: ssa.SsaBlockList.LCons { head: b1, tail: ssa.SsaBlockList.LCons { head: b2, tail: ssa.SsaBlockList.LCons { head: b3, tail: ssa.SsaBlockList.LCons { head: b4, tail: ssa.SsaBlockList.LNil } } } } };
+    return ssa.Function {
+        identity: fn_id, nominals: decl.NominalTypeIdentityList.NINil,
+        imported_records: decl.ImportedRecordList.IRNil, imported_enums: decl.ImportedEnumList.IENil,
+        inputs: ssa.ValueList.VCons { head: v_in, tail: ssa.ValueList.VNil },
+        result_type: u64_ty(), blocks: blocks, block_count: 5,
+        values: values, value_count: 5, supported: true, verified: true
+    };
+}
+
+fn select_sem_ty(pick_first: bool, a: decl.SemType, b: decl.SemType) -> (result: decl.SemType) {
+    if pick_first { return a; }
+    return b;
+}
+
+fn select_inst(pick_first: bool, a: ssa.Instruction, b: ssa.Instruction) -> (result: ssa.Instruction) {
+    if pick_first { return a; }
+    return b;
+}
+
+test scalar_switch_lowers_to_canonical_dispatch_chain() -> (result: TestResult) {
+    let pages: [[byte; up_to 32]; up_to 1] = test_pages();
+    let fn_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 32>(pages, 32, 13, 0, 9);
+    let func: ssa.Function = build_valid_switch_fn(fn_id, 3, false);
+    let res: vm_emit.SingleFnLowerResult = vm_emit.lower_single_scalar_ssa_fn(func);
+    // 5 original blocks + 1 synthetic dispatch block for the second literal arm = 6 blocks;
+    // 2 CondBranch dispatch blocks (b0 and synthetic b5); 3 arm constants + 2*(const+cmp) = 7 instructions.
+    let ok: bool = res.ok
+        && res.vm_fn.block_count == 6
+        && res.vm_fn.instruction_count == 7
+        && first_block_id(res.vm_fn.blocks) == 0
+        && count_cond_branches(res.vm_fn.blocks) == 2;
+    return from_assertion(equals_bool(true, ok, 3001));
+}
+
+test scalar_switch_rejects_mismatched_default_target() -> (result: TestResult) {
+    let pages: [[byte; up_to 32]; up_to 1] = test_pages();
+    let fn_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 32>(pages, 32, 13, 0, 9);
+    let func: ssa.Function = build_valid_switch_fn(fn_id, 99, false);
+    let res: vm_emit.SingleFnLowerResult = vm_emit.lower_single_scalar_ssa_fn(func);
+    let ok: bool = !(res.ok) && res.error_code == 7 && res.error_block == 0;
+    return from_assertion(equals_bool(true, ok, 3002));
+}
+
+test scalar_switch_rejects_mismatched_join_argument_type() -> (result: TestResult) {
+    let pages: [[byte; up_to 32]; up_to 1] = test_pages();
+    let fn_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 32>(pages, 32, 13, 0, 9);
+    let func: ssa.Function = build_valid_switch_fn(fn_id, 3, true);
+    let res: vm_emit.SingleFnLowerResult = vm_emit.lower_single_scalar_ssa_fn(func);
+    let ok: bool = !(res.ok) && res.error_code == 7 && res.error_block == 1;
+    return from_assertion(equals_bool(true, ok, 3003));
+}

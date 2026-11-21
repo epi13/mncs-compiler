@@ -1457,6 +1457,387 @@ fn lower_vm_terminator(term: ssa.Terminator) -> (result: TermLowerResult) {
 }
 
 // ---------------------------------------------------------------------------
+// ScalarSwitch lowering into canonical VM Constant + Compare + CondBranch chain
+// ---------------------------------------------------------------------------
+
+fn scalar_cases_empty(cases: ssa.ScalarMatchCaseList) -> (result: bool) {
+    return match cases {
+        ssa.ScalarMatchCaseList.SCNil => true,
+        ssa.ScalarMatchCaseList.SCCons { head: h, tail: t } => false
+    };
+}
+fn dummy_scalar_case() -> (result: ssa.ScalarMatchCase) {
+    return ssa.ScalarMatchCase {
+        is_default: false, negative: false, value: 0, overflow: false,
+        pattern_start: 0, pattern_end: 0, target: 0, arguments: ssa.IdList.INil
+    };
+}
+record ScalarCaseRev { rest: ssa.ScalarMatchCaseList, acc: ssa.ScalarMatchCaseList }
+fn reverse_scalar_cases(cases: ssa.ScalarMatchCaseList) -> (result: ssa.ScalarMatchCaseList) {
+    iterate i up_to 1024 carrying st: ScalarCaseRev = ScalarCaseRev { rest: cases, acc: ssa.ScalarMatchCaseList.SCNil } {
+        if scalar_cases_empty(st.rest) { return st.acc; }
+        next st = reverse_scalar_case_step(st);
+    }
+    return st.acc;
+}
+fn reverse_scalar_case_step(st: ScalarCaseRev) -> (result: ScalarCaseRev) {
+    return match st.rest {
+        ssa.ScalarMatchCaseList.SCNil => st,
+        ssa.ScalarMatchCaseList.SCCons { head: h, tail: t } => ScalarCaseRev { rest: t, acc: ssa.ScalarMatchCaseList.SCCons { head: h, tail: st.acc } }
+    };
+}
+
+fn scalar_case_value_fits(ty: VmType, val: u64) -> (result: bool) {
+    if !(ty.valid) { return false; }
+    if ty.kind == 2 { return val <= 255; }
+    if ty.kind != 3 { return false; }
+    if !(ty.signed) {
+        if ty.bits == 8 { return val <= 255; }
+        if ty.bits == 16 { return val <= 65535; }
+        if ty.bits == 32 { return val <= 4294967295; }
+        return ty.bits == 64;
+    }
+    if ty.bits == 8 { return val <= 127; }
+    if ty.bits == 16 { return val <= 32767; }
+    if ty.bits == 32 { return val <= 2147483647; }
+    if ty.bits == 64 { return val <= 9223372036854775807; }
+    return false;
+}
+
+fn append_two_vm_insts(insts: VmInstructionList, first: VmInstruction, second: VmInstruction) -> (result: VmInstructionList) {
+    let rev: VmInstructionList = reverse_vm_insts(insts);
+    let rev1: VmInstructionList = VmInstructionList.VICons { head: first, tail: rev };
+    let rev2: VmInstructionList = VmInstructionList.VICons { head: second, tail: rev1 };
+    return reverse_vm_insts(rev2);
+}
+
+fn make_scalar_const_inst(inst_id: u64, val_id: u64, ty: VmType, value: u64) -> (result: VmInstruction) {
+    return VmInstruction {
+        id: inst_id, result: val_id, opcode: 1, op_code: 0, intent: 0,
+        imm_u64: value, imm_bool: false, ty: ty, from_ty: invalid_vm_type(),
+        inputs: ssa.IdList.INil, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+}
+fn make_scalar_eq_inst(inst_id: u64, val_id: u64, subj_ty: VmType, subject: u64, rhs_val: u64) -> (result: VmInstruction) {
+    let cmp_opcode: u64 = select(subj_ty.kind == 2, 5, 4);
+    let cmp_inputs: ssa.IdList = ssa.IdList.ICons {
+        head: ssa.Id { value: subject },
+        tail: ssa.IdList.ICons { head: ssa.Id { value: rhs_val }, tail: ssa.IdList.INil }
+    };
+    return VmInstruction {
+        id: inst_id, result: val_id, opcode: cmp_opcode, op_code: 1, intent: 0,
+        imm_u64: 0, imm_bool: false, ty: bool_vm_type(), from_ty: subj_ty,
+        inputs: cmp_inputs, callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+    };
+}
+
+fn verify_scalar_switch_arm_target(all_blocks: ssa.SsaBlockList, target: u64, join_target: u64) -> (result: bool) {
+    let blk_lk: SsaBlkLookup = find_ssa_block_by_id(all_blocks, target);
+    if !(blk_lk.found) { return false; }
+    return match blk_lk.blk.terminator {
+        ssa.Terminator.Jump { target: tgt, arguments: args } => tgt == join_target,
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => true,
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: inner_jt, cases: cs } => verify_nested_scalar_join(all_blocks, inner_jt, join_target),
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: st, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: inner_jt, cases: cs } => false,
+        ssa.Terminator.Return { value: v } => false,
+        ssa.Terminator.Fail => false
+    };
+}
+fn verify_nested_scalar_join(all_blocks: ssa.SsaBlockList, inner_jt: u64, outer_jt: u64) -> (result: bool) {
+    let blk_lk: SsaBlkLookup = find_ssa_block_by_id(all_blocks, inner_jt);
+    if !(blk_lk.found) { return false; }
+    return match blk_lk.blk.terminator {
+        ssa.Terminator.Jump { target: tgt, arguments: args } => tgt == outer_jt,
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => false,
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => false,
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: st, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => false,
+        ssa.Terminator.Return { value: v } => false,
+        ssa.Terminator.Fail => false
+    };
+}
+
+fn verify_scalar_switch_join_head(all_blocks: ssa.SsaBlockList, val_types: VmValueList, blk_id: u64, join_target: u64, res_vm_ty: VmType, res_is_seq: bool) -> (result: bool) {
+    if join_target == blk_id { return false; }
+    let join_lk: SsaBlkLookup = find_ssa_block_by_id(all_blocks, join_target);
+    if !(join_lk.found) { return false; }
+    return match join_lk.blk.parameters {
+        ssa.ValueList.VNil => false,
+        ssa.ValueList.VCons { head: jres, tail: rest } => verify_join_head_value(val_types, jres.id, res_vm_ty, res_is_seq)
+    };
+}
+fn verify_join_head_value(val_types: VmValueList, jres_id: u64, res_vm_ty: VmType, res_is_seq: bool) -> (result: bool) {
+    let jlk: VmValTypeLookup = lookup_vm_value_type(val_types, jres_id);
+    if !(jlk.found) || !(jlk.ty.valid) { return false; }
+    if res_is_seq { return jlk.ty.kind == 4; }
+    return res_vm_ty.valid && vm_type_equal(jlk.ty, res_vm_ty);
+}
+
+record ScalarSwitchScan {
+    rest: ssa.ScalarMatchCaseList,
+    seen_targets: ssa.IdList,
+    seen_values: ssa.IdList,
+    non_defaults_rev: ssa.ScalarMatchCaseList,
+    default_case: ssa.ScalarMatchCase,
+    default_count: u64,
+    total_count: u64,
+    ok: bool,
+    error_code: u64
+}
+fn scan_scalar_switch_cases(all_blocks: ssa.SsaBlockList, blk_id: u64, subj_ty: VmType, arm_count: u64, default_target: u64, join_target: u64, cases: ssa.ScalarMatchCaseList) -> (result: ScalarSwitchScan) {
+    let initial: ScalarSwitchScan = ScalarSwitchScan {
+        rest: cases, seen_targets: ssa.IdList.INil, seen_values: ssa.IdList.INil,
+        non_defaults_rev: ssa.ScalarMatchCaseList.SCNil, default_case: dummy_scalar_case(),
+        default_count: 0, total_count: 0, ok: true, error_code: 0
+    };
+    if arm_count == 0 {
+        return ScalarSwitchScan { ..initial, ok: false, error_code: 6 };
+    }
+    iterate i up_to 1024 carrying st: ScalarSwitchScan = initial {
+        if !(st.ok) || scalar_cases_empty(st.rest) {
+            return finish_scalar_switch_scan(st, arm_count);
+        }
+        next st = scan_scalar_switch_step(all_blocks, blk_id, subj_ty, default_target, join_target, st);
+    }
+    return finish_scalar_switch_scan(st, arm_count);
+}
+fn finish_scalar_switch_scan(st: ScalarSwitchScan, arm_count: u64) -> (result: ScalarSwitchScan) {
+    if !(st.ok) { return st; }
+    if !(scalar_cases_empty(st.rest)) || st.total_count != arm_count || st.default_count != 1 {
+        return ScalarSwitchScan { ..st, ok: false, error_code: 7 };
+    }
+    return ScalarSwitchScan { ..st, non_defaults_rev: reverse_scalar_cases(st.non_defaults_rev) };
+}
+fn scan_scalar_switch_step(all_blocks: ssa.SsaBlockList, blk_id: u64, subj_ty: VmType, default_target: u64, join_target: u64, st: ScalarSwitchScan) -> (result: ScalarSwitchScan) {
+    return match st.rest {
+        ssa.ScalarMatchCaseList.SCNil => st,
+        ssa.ScalarMatchCaseList.SCCons { head: cs, tail: rest } => scan_scalar_switch_one(all_blocks, blk_id, subj_ty, default_target, join_target, st, cs, rest)
+    };
+}
+fn scan_scalar_switch_one(all_blocks: ssa.SsaBlockList, blk_id: u64, subj_ty: VmType, default_target: u64, join_target: u64, st: ScalarSwitchScan, cs: ssa.ScalarMatchCase, rest: ssa.ScalarMatchCaseList) -> (result: ScalarSwitchScan) {
+    if cs.target == blk_id || cs.target == join_target || id_in_list(st.seen_targets, cs.target) {
+        return ScalarSwitchScan { ..st, rest: ssa.ScalarMatchCaseList.SCNil, ok: false, error_code: 7 };
+    }
+    if !(verify_scalar_switch_arm_target(all_blocks, cs.target, join_target)) {
+        return ScalarSwitchScan { ..st, rest: ssa.ScalarMatchCaseList.SCNil, ok: false, error_code: 7 };
+    }
+    let next_targets: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: cs.target }, tail: st.seen_targets };
+    if cs.is_default {
+        if st.default_count > 0 || cs.target != default_target {
+            return ScalarSwitchScan { ..st, rest: ssa.ScalarMatchCaseList.SCNil, ok: false, error_code: 7 };
+        }
+        return ScalarSwitchScan {
+            rest: rest, seen_targets: next_targets, seen_values: st.seen_values,
+            non_defaults_rev: st.non_defaults_rev, default_case: cs,
+            default_count: st.default_count + 1, total_count: st.total_count + 1,
+            ok: true, error_code: 0
+        };
+    }
+    if cs.overflow || !(scalar_case_value_fits(subj_ty, cs.value)) {
+        return ScalarSwitchScan { ..st, rest: ssa.ScalarMatchCaseList.SCNil, ok: false, error_code: 7 };
+    }
+    if cs.negative {
+        return ScalarSwitchScan { ..st, rest: ssa.ScalarMatchCaseList.SCNil, ok: false, error_code: 6 };
+    }
+    if id_in_list(st.seen_values, cs.value) {
+        return ScalarSwitchScan { ..st, rest: ssa.ScalarMatchCaseList.SCNil, ok: false, error_code: 7 };
+    }
+    let next_values: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: cs.value }, tail: st.seen_values };
+    return ScalarSwitchScan {
+        rest: rest, seen_targets: next_targets, seen_values: next_values,
+        non_defaults_rev: ssa.ScalarMatchCaseList.SCCons { head: cs, tail: st.non_defaults_rev },
+        default_case: st.default_case, default_count: st.default_count,
+        total_count: st.total_count + 1, ok: true, error_code: 0
+    };
+}
+
+record ScalarSwitchLowerResult {
+    ok: bool,
+    error_code: u64,
+    val_types: VmValueList,
+    acc: VmBlockList,
+    block_count: u64,
+    inst_count: u64,
+    next_val_id: u64,
+    next_inst_id: u64,
+    next_blk_id: u64
+}
+record DispatchChainWalk {
+    rest: ssa.ScalarMatchCaseList,
+    cur_blk_id: u64,
+    val_types: VmValueList,
+    acc: VmBlockList,
+    block_count: u64,
+    inst_count: u64,
+    next_val_id: u64,
+    next_inst_id: u64,
+    next_blk_id: u64
+}
+fn emit_scalar_dispatch_chain(subject: u64, subj_ty: VmType, default_case: ssa.ScalarMatchCase, initial: DispatchChainWalk) -> (result: DispatchChainWalk) {
+    iterate i up_to 1024 carrying st: DispatchChainWalk = initial {
+        if scalar_cases_empty(st.rest) { return st; }
+        next st = emit_scalar_dispatch_step(subject, subj_ty, default_case, st);
+    }
+    return st;
+}
+fn emit_scalar_dispatch_step(subject: u64, subj_ty: VmType, default_case: ssa.ScalarMatchCase, st: DispatchChainWalk) -> (result: DispatchChainWalk) {
+    return match st.rest {
+        ssa.ScalarMatchCaseList.SCNil => st,
+        ssa.ScalarMatchCaseList.SCCons { head: cs, tail: more } => emit_scalar_dispatch_one(subject, subj_ty, default_case, st, cs, more)
+    };
+}
+fn emit_scalar_dispatch_one(subject: u64, subj_ty: VmType, default_case: ssa.ScalarMatchCase, st: DispatchChainWalk, cs: ssa.ScalarMatchCase, more: ssa.ScalarMatchCaseList) -> (result: DispatchChainWalk) {
+    let const_val_id: u64 = st.next_val_id;
+    let cmp_val_id: u64 = st.next_val_id + 1;
+    let c_inst: VmInstruction = make_scalar_const_inst(st.next_inst_id, const_val_id, subj_ty, cs.value);
+    let eq_inst: VmInstruction = make_scalar_eq_inst(st.next_inst_id + 1, cmp_val_id, subj_ty, subject, const_val_id);
+    let disp_insts: VmInstructionList = VmInstructionList.VICons {
+        head: c_inst,
+        tail: VmInstructionList.VICons { head: eq_inst, tail: VmInstructionList.VINil }
+    };
+    let vt1: VmValueList = VmValueList.VVCons { head: VmValue { id: const_val_id, ty: subj_ty }, tail: st.val_types };
+    let vt2: VmValueList = VmValueList.VVCons { head: VmValue { id: cmp_val_id, ty: bool_vm_type() }, tail: vt1 };
+    let is_last: bool = scalar_cases_empty(more);
+    let else_tgt: u64 = select(is_last, default_case.target, st.next_blk_id);
+    let else_args: ssa.IdList = select_id_list(is_last, default_case.arguments, ssa.IdList.INil);
+    let next_blk_alloc: u64 = select(is_last, st.next_blk_id, st.next_blk_id + 1);
+    let disp_term: VmTerminator = VmTerminator.VmCondBranch {
+        condition: cmp_val_id,
+        then_target: cs.target, then_arguments: cs.arguments,
+        else_target: else_tgt, else_arguments: else_args
+    };
+    let disp_blk: VmBlock = VmBlock {
+        id: st.cur_blk_id, is_error_path: false, parameters: VmValueList.VVNil,
+        instructions: disp_insts, terminator: disp_term,
+        has_failure_target: false, failure_target: 0
+    };
+    return DispatchChainWalk {
+        rest: more, cur_blk_id: else_tgt, val_types: vt2,
+        acc: VmBlockList.VBCons { head: disp_blk, tail: st.acc },
+        block_count: st.block_count + 1, inst_count: st.inst_count + 2,
+        next_val_id: st.next_val_id + 2, next_inst_id: st.next_inst_id + 2,
+        next_blk_id: next_blk_alloc
+    };
+}
+fn select_id_list(pick_first: bool, a: ssa.IdList, b: ssa.IdList) -> (result: ssa.IdList) {
+    if pick_first { return a; }
+    return b;
+}
+
+fn lower_scalar_switch_block(
+    all_blocks: ssa.SsaBlockList,
+    blk_id: u64,
+    params: VmValueList,
+    insts: VmInstructionList,
+    blk_inst_count: u64,
+    has_failure_target: bool,
+    failure_target: u64,
+    val_types: VmValueList,
+    blocks_acc: VmBlockList,
+    block_count: u64,
+    inst_count: u64,
+    next_val_id: u64,
+    next_inst_id: u64,
+    next_blk_id: u64,
+    subject: u64,
+    subject_ty: decl.SemType,
+    res_vm_ty: VmType,
+    res_is_seq: bool,
+    arm_count: u64,
+    default_target: u64,
+    join_target: u64,
+    cases: ssa.ScalarMatchCaseList
+) -> (result: ScalarSwitchLowerResult) {
+    let subj_ty: VmType = sem_type_to_vm_scalar(subject_ty);
+    if !(subj_ty.valid) || (subj_ty.kind != 2 && subj_ty.kind != 3) {
+        return ScalarSwitchLowerResult { ok: false, error_code: 4, val_types: val_types, acc: blocks_acc, block_count: block_count, inst_count: inst_count, next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id };
+    }
+    let subj_lk: VmValTypeLookup = lookup_vm_value_type(val_types, subject);
+    if !(subj_lk.found) || !(vm_type_equal(subj_lk.ty, subj_ty)) {
+        return ScalarSwitchLowerResult { ok: false, error_code: 7, val_types: val_types, acc: blocks_acc, block_count: block_count, inst_count: inst_count, next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id };
+    }
+    if !(verify_scalar_switch_join_head(all_blocks, val_types, blk_id, join_target, res_vm_ty, res_is_seq)) {
+        return ScalarSwitchLowerResult { ok: false, error_code: 7, val_types: val_types, acc: blocks_acc, block_count: block_count, inst_count: inst_count, next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id };
+    }
+    let scanned: ScalarSwitchScan = scan_scalar_switch_cases(all_blocks, blk_id, subj_ty, arm_count, default_target, join_target, cases);
+    if !(scanned.ok) {
+        return ScalarSwitchLowerResult { ok: false, error_code: scanned.error_code, val_types: val_types, acc: blocks_acc, block_count: block_count, inst_count: inst_count, next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id };
+    }
+    return match scanned.non_defaults_rev {
+        ssa.ScalarMatchCaseList.SCNil => emit_scalar_switch_default_only(blk_id, params, insts, blk_inst_count, has_failure_target, failure_target, val_types, blocks_acc, block_count, inst_count, next_val_id, next_inst_id, next_blk_id, scanned.default_case),
+        ssa.ScalarMatchCaseList.SCCons { head: first_case, tail: rest_cases } => emit_scalar_switch_with_arms(blk_id, params, insts, blk_inst_count, has_failure_target, failure_target, val_types, blocks_acc, block_count, inst_count, next_val_id, next_inst_id, next_blk_id, subject, subj_ty, first_case, rest_cases, scanned.default_case)
+    };
+}
+fn emit_scalar_switch_default_only(
+    blk_id: u64, params: VmValueList, insts: VmInstructionList, blk_inst_count: u64,
+    has_failure_target: bool, failure_target: u64, val_types: VmValueList, blocks_acc: VmBlockList,
+    block_count: u64, inst_count: u64, next_val_id: u64, next_inst_id: u64, next_blk_id: u64,
+    default_case: ssa.ScalarMatchCase
+) -> (result: ScalarSwitchLowerResult) {
+    let vm_blk: VmBlock = VmBlock {
+        id: blk_id, is_error_path: false, parameters: params, instructions: insts,
+        terminator: VmTerminator.VmBranch { target: default_case.target, arguments: default_case.arguments },
+        has_failure_target: has_failure_target, failure_target: failure_target
+    };
+    return ScalarSwitchLowerResult {
+        ok: true, error_code: 0, val_types: val_types,
+        acc: VmBlockList.VBCons { head: vm_blk, tail: blocks_acc },
+        block_count: block_count + 1, inst_count: inst_count + blk_inst_count,
+        next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id
+    };
+}
+fn emit_scalar_switch_with_arms(
+    blk_id: u64, params: VmValueList, insts: VmInstructionList, blk_inst_count: u64,
+    has_failure_target: bool, failure_target: u64, val_types: VmValueList, blocks_acc: VmBlockList,
+    block_count: u64, inst_count: u64, next_val_id: u64, next_inst_id: u64, next_blk_id: u64,
+    subject: u64, subj_ty: VmType, first_case: ssa.ScalarMatchCase, rest_cases: ssa.ScalarMatchCaseList,
+    default_case: ssa.ScalarMatchCase
+) -> (result: ScalarSwitchLowerResult) {
+    let c0_val: u64 = next_val_id;
+    let eq0_val: u64 = next_val_id + 1;
+    let c0_inst: VmInstruction = make_scalar_const_inst(next_inst_id, c0_val, subj_ty, first_case.value);
+    let eq0_inst: VmInstruction = make_scalar_eq_inst(next_inst_id + 1, eq0_val, subj_ty, subject, c0_val);
+    let head_insts: VmInstructionList = append_two_vm_insts(insts, c0_inst, eq0_inst);
+    let vt1: VmValueList = VmValueList.VVCons { head: VmValue { id: c0_val, ty: subj_ty }, tail: val_types };
+    let vt2: VmValueList = VmValueList.VVCons { head: VmValue { id: eq0_val, ty: bool_vm_type() }, tail: vt1 };
+    let is_single: bool = scalar_cases_empty(rest_cases);
+    let else_tgt: u64 = select(is_single, default_case.target, next_blk_id);
+    let else_args: ssa.IdList = select_id_list(is_single, default_case.arguments, ssa.IdList.INil);
+    let alloc_blk: u64 = select(is_single, next_blk_id, next_blk_id + 1);
+    let head_blk: VmBlock = VmBlock {
+        id: blk_id, is_error_path: false, parameters: params, instructions: head_insts,
+        terminator: VmTerminator.VmCondBranch {
+            condition: eq0_val,
+            then_target: first_case.target, then_arguments: first_case.arguments,
+            else_target: else_tgt, else_arguments: else_args
+        },
+        has_failure_target: has_failure_target, failure_target: failure_target
+    };
+    let acc1: VmBlockList = VmBlockList.VBCons { head: head_blk, tail: blocks_acc };
+    let bc1: u64 = block_count + 1;
+    let ic1: u64 = inst_count + blk_inst_count + 2;
+    if is_single {
+        return ScalarSwitchLowerResult {
+            ok: true, error_code: 0, val_types: vt2, acc: acc1,
+            block_count: bc1, inst_count: ic1,
+            next_val_id: next_val_id + 2, next_inst_id: next_inst_id + 2, next_blk_id: alloc_blk
+        };
+    }
+    let chain_init: DispatchChainWalk = DispatchChainWalk {
+        rest: rest_cases, cur_blk_id: else_tgt, val_types: vt2, acc: acc1,
+        block_count: bc1, inst_count: ic1,
+        next_val_id: next_val_id + 2, next_inst_id: next_inst_id + 2, next_blk_id: alloc_blk
+    };
+    let done: DispatchChainWalk = emit_scalar_dispatch_chain(subject, subj_ty, default_case, chain_init);
+    return ScalarSwitchLowerResult {
+        ok: true, error_code: 0, val_types: done.val_types, acc: done.acc,
+        block_count: done.block_count, inst_count: done.inst_count,
+        next_val_id: done.next_val_id, next_inst_id: done.next_inst_id, next_blk_id: done.next_blk_id
+    };
+}
+
+// ---------------------------------------------------------------------------
 // Scalar-only lowering (used by standalone & wire-only entry points)
 // ---------------------------------------------------------------------------
 
@@ -1491,23 +1872,29 @@ fn lower_vm_scalar_inst_one(st: ScalarInstListWalk, inst: ssa.Instruction, rest:
     return ScalarInstListWalk { rest: rest, val_types: st.val_types, acc: VmInstructionList.VICons { head: lowered.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
 }
 
-record ScalarBlockListWalk { rest: ssa.SsaBlockList, val_types: VmValueList, acc: VmBlockList, block_count: u64, inst_count: u64, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
-fn lower_vm_scalar_blocks(val_types: VmValueList, blocks: ssa.SsaBlockList) -> (result: ScalarBlockListWalk) {
-    iterate i up_to 1024 carrying st: ScalarBlockListWalk = ScalarBlockListWalk { rest: blocks, val_types: val_types, acc: VmBlockList.VBNil, block_count: 0, inst_count: 0, ok: true, error_code: 0, error_block: 0, error_inst: 0 } {
+record ScalarBlockListWalk { rest: ssa.SsaBlockList, val_types: VmValueList, acc: VmBlockList, block_count: u64, inst_count: u64, next_val_id: u64, next_inst_id: u64, next_blk_id: u64, ok: bool, error_code: u64, error_block: u64, error_inst: u64 }
+fn lower_vm_scalar_blocks(all_blocks: ssa.SsaBlockList, val_types: VmValueList, next_val_id: u64, next_inst_id: u64, next_blk_id: u64) -> (result: ScalarBlockListWalk) {
+    let initial: ScalarBlockListWalk = ScalarBlockListWalk {
+        rest: all_blocks, val_types: val_types, acc: VmBlockList.VBNil,
+        block_count: 0, inst_count: 0,
+        next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id,
+        ok: true, error_code: 0, error_block: 0, error_inst: 0
+    };
+    iterate i up_to 1024 carrying st: ScalarBlockListWalk = initial {
         if !(st.ok) || ssa_block_list_empty(st.rest) {
             return ScalarBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc) };
         }
-        next st = lower_vm_scalar_block_step(st);
+        next st = lower_vm_scalar_block_step(all_blocks, st);
     }
     return ScalarBlockListWalk { ..st, acc: reverse_vm_blocks(st.acc), ok: st.ok && ssa_block_list_empty(st.rest), error_code: select(st.ok && !(ssa_block_list_empty(st.rest)), 2, st.error_code) };
 }
-fn lower_vm_scalar_block_step(st: ScalarBlockListWalk) -> (result: ScalarBlockListWalk) {
+fn lower_vm_scalar_block_step(all_blocks: ssa.SsaBlockList, st: ScalarBlockListWalk) -> (result: ScalarBlockListWalk) {
     return match st.rest {
         ssa.SsaBlockList.LNil => st,
-        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_vm_scalar_block_one(st, blk, rest)
+        ssa.SsaBlockList.LCons { head: blk, tail: rest } => lower_vm_scalar_block_one(all_blocks, st, blk, rest)
     };
 }
-fn lower_vm_scalar_block_one(st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: ScalarBlockListWalk) {
+fn lower_vm_scalar_block_one(all_blocks: ssa.SsaBlockList, st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: ScalarBlockListWalk) {
     if !(blk.lowering_ok) {
         return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: 2, error_block: blk.id, error_inst: 0 };
     }
@@ -1519,19 +1906,52 @@ fn lower_vm_scalar_block_one(st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: s
     if !(insts.ok) {
         return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: insts.error_code, error_block: blk.id, error_inst: insts.error_inst };
     }
+    return lower_vm_scalar_block_term(all_blocks, st, blk, rest, params.acc, insts.acc, insts.count);
+}
+fn lower_vm_scalar_block_term(all_blocks: ssa.SsaBlockList, st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, params: VmValueList, insts: VmInstructionList, blk_inst_count: u64) -> (result: ScalarBlockListWalk) {
+    return match blk.terminator {
+        ssa.Terminator.ScalarSwitch { subject: subj, subject_ty: subj_ty, result_type: res_ty, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => lower_vm_scalar_switch_finish(all_blocks, st, blk, rest, params, insts, blk_inst_count, subj, subj_ty, res_ty, ac, dt, jt, cs),
+        ssa.Terminator.Return { value: v } => lower_vm_scalar_plain_term(st, blk, rest, params, insts, blk_inst_count),
+        ssa.Terminator.Jump { target: tgt, arguments: args } => lower_vm_scalar_plain_term(st, blk, rest, params, insts, blk_inst_count),
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => lower_vm_scalar_plain_term(st, blk, rest, params, insts, blk_inst_count),
+        ssa.Terminator.Fail => lower_vm_scalar_plain_term(st, blk, rest, params, insts, blk_inst_count),
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: 6, error_block: blk.id, error_inst: 0 }
+    };
+}
+fn lower_vm_scalar_switch_finish(all_blocks: ssa.SsaBlockList, st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, params: VmValueList, insts: VmInstructionList, blk_inst_count: u64, subject: u64, subject_ty: decl.SemType, res_ty: decl.SemType, arm_count: u64, default_target: u64, join_target: u64, cases: ssa.ScalarMatchCaseList) -> (result: ScalarBlockListWalk) {
+    let res_vm: VmType = sem_type_to_vm_scalar(res_ty);
+    let sw: ScalarSwitchLowerResult = lower_scalar_switch_block(
+        all_blocks, blk.id, params, insts, blk_inst_count,
+        blk.has_failure_target, blk.failure_target,
+        st.val_types, st.acc, st.block_count, st.inst_count,
+        st.next_val_id, st.next_inst_id, st.next_blk_id,
+        subject, subject_ty, res_vm, false, arm_count, default_target, join_target, cases
+    );
+    if !(sw.ok) {
+        return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: sw.error_code, error_block: blk.id, error_inst: 0 };
+    }
+    return ScalarBlockListWalk {
+        rest: rest, val_types: sw.val_types, acc: sw.acc,
+        block_count: sw.block_count, inst_count: sw.inst_count,
+        next_val_id: sw.next_val_id, next_inst_id: sw.next_inst_id, next_blk_id: sw.next_blk_id,
+        ok: true, error_code: 0, error_block: 0, error_inst: 0
+    };
+}
+fn lower_vm_scalar_plain_term(st: ScalarBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, params: VmValueList, insts: VmInstructionList, blk_inst_count: u64) -> (result: ScalarBlockListWalk) {
     let term: TermLowerResult = lower_vm_terminator(blk.terminator);
     if !(term.ok) {
         return ScalarBlockListWalk { ..st, rest: rest, ok: false, error_code: term.error_code, error_block: blk.id, error_inst: 0 };
     }
     let vm_blk: VmBlock = VmBlock {
         id: blk.id, is_error_path: term.is_error_path,
-        parameters: params.acc, instructions: insts.acc, terminator: term.term,
+        parameters: params, instructions: insts, terminator: term.term,
         has_failure_target: blk.has_failure_target, failure_target: blk.failure_target
     };
     return ScalarBlockListWalk {
         rest: rest, val_types: st.val_types,
         acc: VmBlockList.VBCons { head: vm_blk, tail: st.acc },
-        block_count: st.block_count + 1, inst_count: st.inst_count + insts.count,
+        block_count: st.block_count + 1, inst_count: st.inst_count + blk_inst_count,
+        next_val_id: st.next_val_id, next_inst_id: st.next_inst_id, next_blk_id: st.next_blk_id,
         ok: true, error_code: 0, error_block: 0, error_inst: 0
     };
 }
@@ -1596,20 +2016,29 @@ fn lower_single_scalar_ssa_fn(func: ssa.Function) -> (result: SingleFnLowerResul
     if !(inputs.ok) {
         return SingleFnLowerResult { ok: false, error_code: 4, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
     }
-    let blocks: ScalarBlockListWalk = lower_vm_scalar_blocks(all_vals.acc, func.blocks);
+    let max_ids: FnMaxIds = max_fn_val_inst_ids(func);
+    let blocks: ScalarBlockListWalk = lower_vm_scalar_blocks(func.blocks, all_vals.acc, max_ids.next_val, max_ids.next_inst, max_ids.next_blk);
     if !(blocks.ok) {
         return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
+    }
+    let ordered: EntryOrderResult = place_entry_block_first(blocks.acc);
+    if !(ordered.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 7, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
     }
     let vm_fn: VmFunction = VmFunction {
         identity: func.identity,
         nat_args: VmNatArgList.NANil,
         inputs: inputs.acc,
         result_type: res_ty,
-        blocks: blocks.acc,
+        blocks: ordered.blocks,
         bounded_iterations: VmBoundedIterationList.VBINil,
         block_count: blocks.block_count,
         instruction_count: blocks.inst_count
     };
+    let cfg_ok: CfgVerifyWalk = verify_vm_fn_cfg_types(vm_fn, blocks.val_types);
+    if !(cfg_ok.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 7, error_block: cfg_ok.error_block, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
     return SingleFnLowerResult { ok: true, error_code: 0, error_block: 0, error_inst: 0, vm_fn: vm_fn };
 }
 
@@ -1804,8 +2233,8 @@ fn find_ssa_block_one(st: SsaBlkSearch, blk: ssa.SsaBlock, rest: ssa.SsaBlockLis
     return SsaBlkSearch { ..st, rest: rest };
 }
 
-// Compute disjoint fresh value/instruction IDs for expanded loop instructions.
-record FnMaxIds { next_val: u64, next_inst: u64 }
+// Compute disjoint fresh value/instruction/block IDs for expanded loop & switch lowerings.
+record FnMaxIds { next_val: u64, next_inst: u64, next_blk: u64 }
 record MaxValsWalk { rest: ssa.ValueList, next_val: u64 }
 fn max_u64(a: u64, b: u64) -> (result: u64) {
     if a >= b { return a; }
@@ -1835,10 +2264,10 @@ record MaxInstsWalk { rest: ssa.InstructionList, next_val: u64, next_inst: u64 }
 fn max_ids_in_insts(insts: ssa.InstructionList, seed: FnMaxIds) -> (result: FnMaxIds) {
     let init: MaxInstsWalk = MaxInstsWalk { rest: insts, next_val: seed.next_val, next_inst: seed.next_inst };
     iterate i up_to 1024 carrying st: MaxInstsWalk = init {
-        if ssa_inst_list_empty(st.rest) { return FnMaxIds { next_val: st.next_val, next_inst: st.next_inst }; }
+        if ssa_inst_list_empty(st.rest) { return FnMaxIds { next_val: st.next_val, next_inst: st.next_inst, next_blk: seed.next_blk }; }
         next st = max_ids_in_inst_step(st);
     }
-    return FnMaxIds { next_val: st.next_val, next_inst: st.next_inst };
+    return FnMaxIds { next_val: st.next_val, next_inst: st.next_inst, next_blk: seed.next_blk };
 }
 fn max_ids_in_inst_step(st: MaxInstsWalk) -> (result: MaxInstsWalk) {
     return match st.rest {
@@ -1853,7 +2282,8 @@ fn max_ids_in_inst_step(st: MaxInstsWalk) -> (result: MaxInstsWalk) {
 record MaxBlkIdsWalk { rest: ssa.SsaBlockList, ids: FnMaxIds }
 fn max_fn_val_inst_ids(func: ssa.Function) -> (result: FnMaxIds) {
     let seed_val: u64 = max_u64(func.value_count + 1, max_val_ids_in_values(func.values, 1));
-    let init: MaxBlkIdsWalk = MaxBlkIdsWalk { rest: func.blocks, ids: FnMaxIds { next_val: seed_val, next_inst: 1 } };
+    let seed_blk: u64 = max_u64(func.block_count, 1);
+    let init: MaxBlkIdsWalk = MaxBlkIdsWalk { rest: func.blocks, ids: FnMaxIds { next_val: seed_val, next_inst: 1, next_blk: seed_blk } };
     iterate i up_to 1024 carrying st: MaxBlkIdsWalk = init {
         if ssa_block_list_empty(st.rest) { return st.ids; }
         next st = max_blk_ids_step(st);
@@ -1868,7 +2298,8 @@ fn max_blk_ids_step(st: MaxBlkIdsWalk) -> (result: MaxBlkIdsWalk) {
 }
 fn max_blk_ids_one(ids: FnMaxIds, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: MaxBlkIdsWalk) {
     let nv: u64 = max_val_ids_in_values(blk.parameters, ids.next_val);
-    let updated: FnMaxIds = max_ids_in_insts(blk.instructions, FnMaxIds { next_val: nv, next_inst: ids.next_inst });
+    let nb: u64 = max_u64(ids.next_blk, blk.id + 1);
+    let updated: FnMaxIds = max_ids_in_insts(blk.instructions, FnMaxIds { next_val: nv, next_inst: ids.next_inst, next_blk: nb });
     return MaxBlkIdsWalk { rest: rest, ids: updated };
 }
 
@@ -2004,7 +2435,22 @@ fn prop_seq_blk_term(prop: SeqPropState, blk: ssa.SsaBlock) -> (result: SeqPropS
         ssa.Terminator.Return { value: v } => prop,
         ssa.Terminator.Fail => prop,
         ssa.Terminator.FiniteSwitch { subject: s, subject_ty: st, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => prop,
-        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => prop
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: st, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => prop_seq_scalar_switch_cases(prop, blk.id, cs)
+    };
+}
+record PropScalarCasesWalk { prop: SeqPropState, blk_id: u64, rest: ssa.ScalarMatchCaseList }
+fn prop_seq_scalar_switch_cases(prop: SeqPropState, blk_id: u64, cases: ssa.ScalarMatchCaseList) -> (result: SeqPropState) {
+    let init: PropScalarCasesWalk = PropScalarCasesWalk { prop: prop, blk_id: blk_id, rest: cases };
+    iterate i up_to 1024 carrying w: PropScalarCasesWalk = init {
+        if !(w.prop.ok) || scalar_cases_empty(w.rest) { return w.prop; }
+        next w = prop_seq_scalar_case_step(w);
+    }
+    return w.prop;
+}
+fn prop_seq_scalar_case_step(w: PropScalarCasesWalk) -> (result: PropScalarCasesWalk) {
+    return match w.rest {
+        ssa.ScalarMatchCaseList.SCNil => w,
+        ssa.ScalarMatchCaseList.SCCons { head: cs, tail: rest } => PropScalarCasesWalk { prop: prop_seq_edge(w.prop, w.blk_id, cs.target, cs.arguments), blk_id: w.blk_id, rest: rest }
     };
 }
 fn prop_seq_branch(prop: SeqPropState, blk_id: u64, yes_t: u64, ya: ssa.IdList, no_t: u64, na: ssa.IdList) -> (result: SeqPropState) {
@@ -2432,15 +2878,16 @@ record SpecBlockListWalk {
     inst_count: u64,
     next_val_id: u64,
     next_inst_id: u64,
+    next_blk_id: u64,
     ok: bool,
     error_code: u64,
     error_block: u64,
     error_inst: u64
 }
-fn lower_spec_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, val_types: VmValueList, next_val_id: u64, next_inst_id: u64) -> (result: SpecBlockListWalk) {
+fn lower_spec_blocks<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, fn_decl: decl.FnDecl, nat_env: NatEnv, all_recs: VmRecordTypeList, seq_vals: VmValueList, val_types: VmValueList, next_val_id: u64, next_inst_id: u64, next_blk_id: u64) -> (result: SpecBlockListWalk) {
     let initial: SpecBlockListWalk = SpecBlockListWalk {
         rest: func.blocks, val_types: val_types, acc: VmBlockList.VBNil,
-        block_count: 0, inst_count: 0, next_val_id: next_val_id, next_inst_id: next_inst_id,
+        block_count: 0, inst_count: 0, next_val_id: next_val_id, next_inst_id: next_inst_id, next_blk_id: next_blk_id,
         ok: true, error_code: 0, error_block: 0, error_inst: 0
     };
     iterate i up_to 1024 carrying st: SpecBlockListWalk = initial {
@@ -2469,20 +2916,53 @@ fn lower_spec_block_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
     if !(insts.ok) {
         return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: insts.error_code, error_block: blk.id, error_inst: insts.error_inst };
     }
+    return lower_spec_block_term<P, N>(pages, stride, total, func, all_recs, st, blk, rest, params.acc, insts);
+}
+fn lower_spec_block_term<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, all_recs: VmRecordTypeList, st: SpecBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, params: VmValueList, insts: SpecInstListWalk) -> (result: SpecBlockListWalk) {
+    return match blk.terminator {
+        ssa.Terminator.ScalarSwitch { subject: subj, subject_ty: subj_ty, result_type: res_ty, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => lower_spec_scalar_switch_finish<P, N>(pages, stride, total, func, all_recs, st, blk, rest, params, insts, subj, subj_ty, res_ty, ac, dt, jt, cs),
+        ssa.Terminator.Return { value: v } => lower_spec_plain_term(st, blk, rest, params, insts),
+        ssa.Terminator.Jump { target: tgt, arguments: args } => lower_spec_plain_term(st, blk, rest, params, insts),
+        ssa.Terminator.Branch { condition: c, yes: y, no: n, yes_args: ya, no_args: na } => lower_spec_plain_term(st, blk, rest, params, insts),
+        ssa.Terminator.Fail => lower_spec_plain_term(st, blk, rest, params, insts),
+        ssa.Terminator.FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: 6, error_block: blk.id, error_inst: 0 }
+    };
+}
+fn lower_spec_scalar_switch_finish<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, func: ssa.Function, all_recs: VmRecordTypeList, st: SpecBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, params: VmValueList, insts: SpecInstListWalk, subject: u64, subject_ty: decl.SemType, res_ty: decl.SemType, arm_count: u64, default_target: u64, join_target: u64, cases: ssa.ScalarMatchCaseList) -> (result: SpecBlockListWalk) {
+    let res_is_seq: bool = is_seq_sem_type(res_ty);
+    let res_vm: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, res_ty, func.nominals, all_recs);
+    let sw: ScalarSwitchLowerResult = lower_scalar_switch_block(
+        func.blocks, blk.id, params, insts.acc, insts.count,
+        blk.has_failure_target, blk.failure_target,
+        insts.val_types, st.acc, st.block_count, st.inst_count,
+        insts.next_val_id, insts.next_inst_id, st.next_blk_id,
+        subject, subject_ty, res_vm, res_is_seq, arm_count, default_target, join_target, cases
+    );
+    if !(sw.ok) {
+        return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: sw.error_code, error_block: blk.id, error_inst: 0 };
+    }
+    return SpecBlockListWalk {
+        rest: rest, val_types: sw.val_types, acc: sw.acc,
+        block_count: sw.block_count, inst_count: sw.inst_count,
+        next_val_id: sw.next_val_id, next_inst_id: sw.next_inst_id, next_blk_id: sw.next_blk_id,
+        ok: true, error_code: 0, error_block: 0, error_inst: 0
+    };
+}
+fn lower_spec_plain_term(st: SpecBlockListWalk, blk: ssa.SsaBlock, rest: ssa.SsaBlockList, params: VmValueList, insts: SpecInstListWalk) -> (result: SpecBlockListWalk) {
     let term: TermLowerResult = lower_vm_terminator(blk.terminator);
     if !(term.ok) {
         return SpecBlockListWalk { ..st, rest: rest, ok: false, error_code: term.error_code, error_block: blk.id, error_inst: 0 };
     }
     let vm_blk: VmBlock = VmBlock {
         id: blk.id, is_error_path: term.is_error_path,
-        parameters: params.acc, instructions: insts.acc, terminator: term.term,
+        parameters: params, instructions: insts.acc, terminator: term.term,
         has_failure_target: blk.has_failure_target, failure_target: blk.failure_target
     };
     return SpecBlockListWalk {
         rest: rest, val_types: insts.val_types,
         acc: VmBlockList.VBCons { head: vm_blk, tail: st.acc },
         block_count: st.block_count + 1, inst_count: st.inst_count + insts.count,
-        next_val_id: insts.next_val_id, next_inst_id: insts.next_inst_id,
+        next_val_id: insts.next_val_id, next_inst_id: insts.next_inst_id, next_blk_id: st.next_blk_id,
         ok: true, error_code: 0, error_block: 0, error_inst: 0
     };
 }
@@ -2510,6 +2990,34 @@ fn find_vm_block_step(st: VmBlkSearch) -> (result: VmBlkSearch) {
 fn find_vm_block_one(st: VmBlkSearch, blk: VmBlock, rest: VmBlockList) -> (result: VmBlkSearch) {
     if blk.id == st.target { return VmBlkSearch { rest: VmBlockList.VBNil, target: st.target, found: true, blk: blk }; }
     return VmBlkSearch { ..st, rest: rest };
+}
+
+record VmBlkFilterWalk { rest: VmBlockList, skip_id: u64, acc: VmBlockList }
+fn remove_vm_block_by_id(blocks: VmBlockList, skip_id: u64) -> (result: VmBlockList) {
+    let initial: VmBlkFilterWalk = VmBlkFilterWalk { rest: blocks, skip_id: skip_id, acc: VmBlockList.VBNil };
+    iterate i up_to 1024 carrying st: VmBlkFilterWalk = initial {
+        if vm_block_list_empty(st.rest) { return reverse_vm_blocks(st.acc); }
+        next st = remove_vm_block_step(st);
+    }
+    return reverse_vm_blocks(st.acc);
+}
+fn remove_vm_block_step(st: VmBlkFilterWalk) -> (result: VmBlkFilterWalk) {
+    return match st.rest {
+        VBNil => st,
+        VBCons { head: blk, tail: rest } => remove_vm_block_one(st, blk, rest)
+    };
+}
+fn remove_vm_block_one(st: VmBlkFilterWalk, blk: VmBlock, rest: VmBlockList) -> (result: VmBlkFilterWalk) {
+    if blk.id == st.skip_id { return VmBlkFilterWalk { rest: rest, skip_id: st.skip_id, acc: st.acc }; }
+    return VmBlkFilterWalk { rest: rest, skip_id: st.skip_id, acc: VmBlockList.VBCons { head: blk, tail: st.acc } };
+}
+record EntryOrderResult { ok: bool, blocks: VmBlockList }
+fn place_entry_block_first(blocks: VmBlockList) -> (result: EntryOrderResult) {
+    let entry: VmBlkLookup = find_vm_block_by_id(blocks, 0);
+    if !(entry.found) || !(vm_value_list_empty(entry.blk.parameters)) {
+        return EntryOrderResult { ok: false, blocks: blocks };
+    }
+    return EntryOrderResult { ok: true, blocks: VmBlockList.VBCons { head: entry.blk, tail: remove_vm_block_by_id(blocks, 0) } };
 }
 
 record EdgeTypesWalk { val_types: VmValueList, args: ssa.IdList, params: VmValueList, ok: bool, done: bool }
@@ -2658,7 +3166,22 @@ fn expand_body_term(st: BodyReachState, term: ssa.Terminator) -> (result: BodyRe
         ssa.Terminator.Return { value: v } => st,
         ssa.Terminator.Fail => st,
         ssa.Terminator.FiniteSwitch { subject: s, subject_ty: sty, nominal_identity: ni, result_type: rt, source_start: ss, source_end: se, arm_count: ac, join_target: jt, cases: cs } => st,
-        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: sty, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => st
+        ssa.Terminator.ScalarSwitch { subject: s, subject_ty: sty, result_type: rt, source_start: ss, source_end: se, arm_count: ac, default_target: dt, join_target: jt, cases: cs } => expand_body_scalar_switch_cases(maybe_add_body_block(st, jt), cs)
+    };
+}
+record BodyScalarCasesWalk { state: BodyReachState, rest: ssa.ScalarMatchCaseList }
+fn expand_body_scalar_switch_cases(st: BodyReachState, cases: ssa.ScalarMatchCaseList) -> (result: BodyReachState) {
+    let init: BodyScalarCasesWalk = BodyScalarCasesWalk { state: st, rest: cases };
+    iterate i up_to 1024 carrying w: BodyScalarCasesWalk = init {
+        if scalar_cases_empty(w.rest) { return w.state; }
+        next w = expand_body_scalar_case_step(w);
+    }
+    return w.state;
+}
+fn expand_body_scalar_case_step(w: BodyScalarCasesWalk) -> (result: BodyScalarCasesWalk) {
+    return match w.rest {
+        ssa.ScalarMatchCaseList.SCNil => w,
+        ssa.ScalarMatchCaseList.SCCons { head: cs, tail: rest } => BodyScalarCasesWalk { state: maybe_add_body_block(w.state, cs.target), rest: rest }
     };
 }
 record BodyScanWalk { state: BodyReachState, rest: ssa.SsaBlockList }
@@ -2840,7 +3363,7 @@ fn lower_ssa_fn_specialized<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
         return SingleFnLowerResult { ok: false, error_code: blk_val_types.error_code, error_block: blk_val_types.error_block, error_inst: 0, vm_fn: dummy_vm_function() };
     }
     let max_ids: FnMaxIds = max_fn_val_inst_ids(func);
-    let blocks: SpecBlockListWalk = lower_spec_blocks<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, seq_prop.seq_vals, blk_val_types.acc, max_ids.next_val, max_ids.next_inst);
+    let blocks: SpecBlockListWalk = lower_spec_blocks<P, N>(pages, stride, total, func, fn_decl, nat_built.env, all_recs, seq_prop.seq_vals, blk_val_types.acc, max_ids.next_val, max_ids.next_inst, max_ids.next_blk);
     if !(blocks.ok) {
         return SingleFnLowerResult { ok: false, error_code: blocks.error_code, error_block: blocks.error_block, error_inst: blocks.error_inst, vm_fn: dummy_vm_function() };
     }
@@ -2848,12 +3371,16 @@ fn lower_ssa_fn_specialized<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
     if !(iters.ok) {
         return SingleFnLowerResult { ok: false, error_code: iters.error_code, error_block: iters.error_block, error_inst: iters.error_inst, vm_fn: dummy_vm_function() };
     }
+    let ordered: EntryOrderResult = place_entry_block_first(blocks.acc);
+    if !(ordered.ok) {
+        return SingleFnLowerResult { ok: false, error_code: 7, error_block: 0, error_inst: 0, vm_fn: dummy_vm_function() };
+    }
     let vm_fn: VmFunction = VmFunction {
         identity: func.identity,
         nat_args: nat_args,
         inputs: inputs.acc,
         result_type: res_ty.ty,
-        blocks: blocks.acc,
+        blocks: ordered.blocks,
         bounded_iterations: iters.acc,
         block_count: blocks.block_count,
         instruction_count: blocks.inst_count
@@ -3572,9 +4099,96 @@ fn emit_verified_project_ssa_with_sources<M: Nat, N: Nat>(snapshot: project.Proj
     };
 }
 
+// Targeted single-callable lowering in a verified target module.
+fn lower_target_selected_callable<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, summary: ssa.ValueSsaSummary, all_recs: VmRecordTypeList, target_callable: decl.SemanticIdentity) -> (result: FnEmitWalk) {
+    if !(target_callable.valid) || target_callable.len == 0 {
+        return FnEmitWalk { index: 0, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0, ok: false, error_code: 9, error_function: 0, error_block: 0, error_inst: 0 };
+    }
+    let found: SsaSummaryIdSearch = find_ssa_fn_in_summary_by_id(summary, target_callable);
+    if !(found.found) {
+        return FnEmitWalk { index: 0, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0, ok: false, error_code: 9, error_function: 0, error_block: 0, error_inst: 0 };
+    }
+    let fn_idx: u64 = select(found.index > 0, found.index - 1, 0);
+    let decl_lk: FnDeclLookup = find_fn_decl_by_id<P, N>(pages, stride, total, unit.header, unit.fns, found.func.identity);
+    if !(decl_lk.found) {
+        return FnEmitWalk { index: fn_idx, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0, ok: false, error_code: 2, error_function: fn_idx, error_block: 0, error_inst: 0 };
+    }
+    if !(decl_generic_list_empty(decl_lk.fn_decl.sig.generics)) {
+        return FnEmitWalk { index: fn_idx, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0, ok: false, error_code: 11, error_function: fn_idx, error_block: 0, error_inst: 0 };
+    }
+    let lowered: SingleFnLowerResult = lower_ssa_fn_specialized<P, N>(pages, stride, total, found.func, decl_lk.fn_decl, VmNatArgList.NANil, all_recs);
+    if !(lowered.ok) {
+        return FnEmitWalk { index: fn_idx, acc: VmFunctionList.VFNil, fn_count: 0, block_count: 0, inst_count: 0, ok: false, error_code: lowered.error_code, error_function: fn_idx, error_block: lowered.error_block, error_inst: lowered.error_inst };
+    }
+    return FnEmitWalk {
+        index: fn_idx + 1,
+        acc: VmFunctionList.VFCons { head: lowered.vm_fn, tail: VmFunctionList.VFNil },
+        fn_count: 1,
+        block_count: lowered.vm_fn.block_count,
+        inst_count: lowered.vm_fn.instruction_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+}
+
+fn emit_verified_project_ssa_callable_with_sources<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], compiled: project.ProjectResult, target_source_index: u64, target_callable: decl.SemanticIdentity) -> (result: VmEmitResult) {
+    if !(compiled.valid) || !(compiled.value_ssa_valid) || compiled.module_count == 0
+        || target_source_index >= compiled.source_count || target_source_index >= 64 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let closure: project.ProjectImportClosure = project.project_import_closure(compiled.imports, target_source_index, compiled.source_count);
+    let inspected: ReachableModulesCheck = inspect_reachable_project_modules(compiled.modules, closure.reachable, target_source_index);
+    if !(inspected.all_verified) || !(inspected.target_found) { return emit_failure(1, 0, 0, 0); }
+    if inspected.target_header.code != 0 || inspected.target_header.state != 8
+        || inspected.target_header.module_end <= inspected.target_header.module_start {
+        return emit_failure(8, 0, 0, 0);
+    }
+    if !(inspected.target_ssa.valid) || inspected.target_ssa.function_count == 0
+        || inspected.target_ssa.verified_function_count != inspected.target_ssa.function_count
+        || inspected.target_ssa.unsupported_block_count > 0 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let all_recs: VmRecordTypeList = collect_reachable_record_types<M, N>(snapshot, flat_pages, compiled.modules, closure.reachable);
+    let root_pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, target_source_index);
+    let root_stride: u64 = project.module_stride(snapshot.sources, target_source_index);
+    let root_total: u64 = project.module_total(snapshot.sources, target_source_index);
+    let root_lowered: FnEmitWalk = lower_target_selected_callable<1024, N>(root_pages, root_stride, root_total, inspected.target_unit, inspected.target_ssa, all_recs, target_callable);
+    if !(root_lowered.ok) {
+        return emit_failure(root_lowered.error_code, root_lowered.error_function, root_lowered.error_block, root_lowered.error_inst);
+    }
+    let expanded: ProjectClosureWalk = expand_project_vm_closure_with_sources<M, N>(
+        snapshot, flat_pages, compiled.modules, closure.reachable, all_recs,
+        root_lowered.acc, root_lowered.fn_count, root_lowered.block_count, root_lowered.inst_count
+    );
+    if !(expanded.ok) {
+        return emit_failure(expanded.error_code, expanded.error_function, expanded.error_block, expanded.error_inst);
+    }
+    let verified_calls: CallVerifyResult = verify_closure_calls(expanded.emitted_rev);
+    if !(verified_calls.ok) {
+        return emit_failure(verified_calls.error_code, verified_calls.error_function, verified_calls.error_block, verified_calls.error_inst);
+    }
+    let retained_recs: RecordUsageAdd = retain_referenced_record_types(all_recs, expanded.emitted_rev);
+    return VmEmitResult {
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
+        module_name_start: inspected.target_header.module_start,
+        module_name_end: inspected.target_header.module_end,
+        record_types: retained_recs.used,
+        record_type_count: retained_recs.count,
+        functions: expanded.emitted_rev,
+        function_count: expanded.fn_count,
+        block_count: expanded.block_count,
+        instruction_count: expanded.inst_count
+    };
+}
+
 // Compile a multi-module MNCS project natively into verified Project SSA.
 fn compile_project_for_emit<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M]) -> (result: project.ProjectResult) {
     return project.compile_project<M, N>(snapshot, flat_pages);
+}
+
+// Compile a single target module inside a multi-module MNCS project natively
+// into verified Project SSA (retaining all other modules as providers).
+fn compile_project_target_for_emit<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: project.ProjectResult) {
+    return project.compile_project_target<M, N>(snapshot, flat_pages, target_source_index);
 }
 
 // Compile a multi-module MNCS project natively (Project -> decl -> flow ->
@@ -3584,4 +4198,12 @@ fn compile_project_for_emit<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, f
 fn compile_and_emit_project_vm_module<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: VmEmitResult) {
     let compiled: project.ProjectResult = project.compile_project<M, N>(snapshot, flat_pages);
     return emit_verified_project_ssa_with_sources<M, N>(snapshot, flat_pages, compiled, target_source_index);
+}
+
+// Compile a target module inside a multi-module MNCS project natively into
+// verified Value SSA and emit only `target_callable` plus its verified
+// reachable callees.
+fn compile_and_emit_project_vm_callable<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64, target_callable: decl.SemanticIdentity) -> (result: VmEmitResult) {
+    let compiled: project.ProjectResult = project.compile_project_target<M, N>(snapshot, flat_pages, target_source_index);
+    return emit_verified_project_ssa_callable_with_sources<M, N>(snapshot, flat_pages, compiled, target_source_index, target_callable);
 }

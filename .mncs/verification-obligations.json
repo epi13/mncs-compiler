@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 48,
+  "revision": 49,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -2342,6 +2342,61 @@
         "entrypoint": "mncs-test run",
         "source_paths": [
           "tests/vm_emit_loop_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.vm-emit-scalar-switch-native",
+      "title": "First-class MNCS vm_emit suite verifies ScalarSwitch dispatch-chain lowering and malformed switch/join rejection",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_scalar_switch_block",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_single_scalar_ssa_fn",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::place_entry_block_first"
+      ],
+      "invalidation_dependencies": [
+        "tests/vm_emit_scalar_switch_suite.mncs",
+        "src/compiler/vm_emit.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/source.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/vm_emit_scalar_switch_suite.mncs"
         ],
         "library_paths": [
           "src"
