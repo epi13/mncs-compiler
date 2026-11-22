@@ -8,7 +8,7 @@ independently admitting/executing it in a fresh canonical VM (`mncs-vm`).
 Provenance boundary:
 - Selected-target context + on-demand provider schema & verified-body handoff:
       100% MNCS (`mncs.compiler.project.v1::compile_project_target_with_context`,
-      `mncs.compiler.project.v1::materialize_provider_module`).
+      `mncs.compiler.project.v1::materialize_provider_callable`).
 - Targeted callable selection, RecordUpdate (kind 16 op 1) lowering,
   exact scalar SequenceConstruct (kind 18) lowering, concrete Nat
   specialization, and closure verification:
@@ -814,7 +814,7 @@ def main():
             "provenance": {
                 "callable_selection_and_lowering": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
                 "native_project_ssa_producer": "mncs.compiler.project.v1::compile_project_target_with_context",
-                "provider_body_materializer": "mncs.compiler.project.v1::materialize_provider_module",
+                "provider_body_materializer": "mncs.compiler.project.v1::materialize_provider_callable",
                 "whole_project_differential_control": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable_whole_project",
                 "transport_codec_and_sealer": "tools/native_vm_artifact.py",
                 "independent_vm_admission_and_execution": str(single_emit.VM_BIN),

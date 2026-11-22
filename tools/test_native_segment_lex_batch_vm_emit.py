@@ -513,58 +513,22 @@ def _run_focused_finite_rejections():
     return out
 
 
-def _probe_next_frontier(base_sources):
-    """Probe unchanged `decl::parse_use<4,32>` using M=1024, N=1024 (so decl.mncs fits)."""
-    parser_b = (ROOT / "src/compiler/parser.mncs").read_bytes()
-    decl_b = (ROOT / "src/compiler/decl.mncs").read_bytes()
-    srcs = list(base_sources) + [
-        ("04_parser.mncs", ROOT / "src/compiler/parser.mncs", parser_b),
-        ("05_decl.mncs", ROOT / "src/compiler/decl.mncs", decl_b),
-        ("06_parse_use_caller.mncs", Path("06_parse_use_caller.mncs"), PARSE_USE_CALLER_SRC.encode("utf-8")),
+def _lexer_sources():
+    stdlib_dir = single_emit.STDLIB_ROOT / "library" / "std"
+    sources_lexer = [
+        ("00_utf8_primitives.mncs", stdlib_dir / "utf8_primitives.mncs", (stdlib_dir / "utf8_primitives.mncs").read_bytes()),
+        ("01_utf8_scalar.mncs", stdlib_dir / "utf8_scalar.mncs", (stdlib_dir / "utf8_scalar.mncs").read_bytes()),
+        ("02_text_utf8.mncs", stdlib_dir / "text_utf8.mncs", (stdlib_dir / "text_utf8.mncs").read_bytes()),
+        ("03_source.mncs", ROOT / "src/compiler/source.mncs", (ROOT / "src/compiler/source.mncs").read_bytes()),
+        ("04_lexer.mncs", ROOT / "src/compiler/lexer.mncs", (ROOT / "src/compiler/lexer.mncs").read_bytes()),
     ]
-    targs = [sem.nat_arg(1024), sem.nat_arg(1024)]
-    p = punct.LexerCallableEmitterProbe(
-        roots=["compile_and_emit_project_vm_callable"],
-        seeds=[{
-            "module": "mncs.compiler.vm_emit.v1",
-            "function": "compile_and_emit_project_vm_callable",
-            "type_arguments": targs,
-        }],
-    )
-    try:
-        recs = p.record_types("mncs.compiler.vm_emit.v1")
-        args = proj_emit._build_project_args(recs, srcs, len(srcs) - 1, stride=1024) + [
-            punct._make_semantic_id_wire(recs, TARGET_PARSE_USE_CALLER)
-        ]
-        t0 = time.monotonic()
-        emit_res = p.call("compile_and_emit_project_vm_callable", args, targs)
-        elapsed_s = round(time.monotonic() - t0, 3)
-    finally:
-        p.close()
+    return sources_lexer
 
-    entry = {
-        "target_callable": TARGET_PARSE_USE_CALLER,
-        "target_specialization": "mncs.compiler.decl.v1::parse_use<4, 32>",
-        "emit_elapsed_s": elapsed_s,
-        "emit_ok": bool(emit_res.get("ok")),
-    }
-    if not emit_res.get("ok"):
-        entry["refusal"] = _emit_detail_summary(emit_res)
-        return {"decl_parse_use_4_32": entry}
 
-    art = _package(emit_res, srcs, len(srcs) - 1)
-    with tempfile.TemporaryDirectory(prefix="mncs-frontier-parse-use-") as td:
-        art_path = Path(td) / "artifact.json"
-        art_path.write_text(json.dumps(art, separators=(",", ":")), encoding="utf-8")
-        adm = _admit_artifact(art_path)
-        entry["admitted"] = adm["ok"]
-        entry["function_count"] = emit_res.get("function_count")
-        entry["record_type_count"] = emit_res.get("record_type_count")
-        entry["finite_type_count"] = emit_res.get("finite_type_count")
-        entry["artifact_id"] = art["artifact_id"]
-        if not adm["ok"]:
-            entry["admit_error"] = adm
-    return {"decl_parse_use_4_32": entry}
+def _segment_sources(sources_lexer):
+    return sources_lexer + [
+        ("05_segment.mncs", ROOT / "src/compiler/segment.mncs", (ROOT / "src/compiler/segment.mncs").read_bytes()),
+    ]
 
 
 def main():
@@ -575,17 +539,8 @@ def main():
     args = ap.parse_args()
 
     targs256 = [sem.nat_arg(256), sem.nat_arg(1024)]
-    stdlib_dir = single_emit.STDLIB_ROOT / "library" / "std"
-    sources_lexer = [
-        ("00_utf8_primitives.mncs", stdlib_dir / "utf8_primitives.mncs", (stdlib_dir / "utf8_primitives.mncs").read_bytes()),
-        ("01_utf8_scalar.mncs", stdlib_dir / "utf8_scalar.mncs", (stdlib_dir / "utf8_scalar.mncs").read_bytes()),
-        ("02_text_utf8.mncs", stdlib_dir / "text_utf8.mncs", (stdlib_dir / "text_utf8.mncs").read_bytes()),
-        ("03_source.mncs", ROOT / "src/compiler/source.mncs", (ROOT / "src/compiler/source.mncs").read_bytes()),
-        ("04_lexer.mncs", ROOT / "src/compiler/lexer.mncs", (ROOT / "src/compiler/lexer.mncs").read_bytes()),
-    ]
-    base_sources = sources_lexer + [
-        ("05_segment.mncs", ROOT / "src/compiler/segment.mncs", (ROOT / "src/compiler/segment.mncs").read_bytes()),
-    ]
+    sources_lexer = _lexer_sources()
+    base_sources = _segment_sources(sources_lexer)
     batch_sources = base_sources + [
         ("06_lex_batch_caller.mncs", Path("06_lex_batch_caller.mncs"), LEX_BATCH_CALLER_SRC.encode("utf-8")),
     ]
@@ -846,9 +801,13 @@ def main():
     # Optional next-frontier probe
     if args.probe_frontier:
         print("[frontier] Probing unchanged decl::parse_use<4,32>...")
-        report["next_frontier"] = _probe_next_frontier(base_sources)
-        for k, v in report["next_frontier"].items():
-            print(f"    {k}: emit_ok={v['emit_ok']} {v.get('refusal') or v.get('artifact_id')}")
+        import test_native_decl_vm_emit as declaration_emit
+
+        declaration_emit.guard_host_memory()
+        with tempfile.TemporaryDirectory(prefix="mncs-frontier-parse-use-") as scratch:
+            result = declaration_emit.run_attempt("parse_use", None, Path(scratch) / "artifact.json")
+        report["next_frontier"] = {"decl_parse_use_4_32": result}
+        print(f"    parse_use<4,32>: {result['emission']['status']}")
 
     report["max_rss_kib"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     if args.json_out is not None:

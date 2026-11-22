@@ -1032,7 +1032,7 @@ def main():
             "provenance": {
                 "callable_selection_and_lowering": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
                 "native_project_ssa_producer": "mncs.compiler.project.v1::compile_project_target_with_context",
-                "provider_body_materializer": "mncs.compiler.project.v1::materialize_provider_module",
+                "provider_body_materializer": "mncs.compiler.project.v1::materialize_provider_callable",
                 "transport_codec_and_sealer": "tools/native_vm_artifact.py",
                 "independent_vm_admission_and_execution": str(single_emit.VM_BIN),
                 "behavioral_oracle": f"locked Stage-0 mncs-compiler-stage0-probe ({stage0_rev})",

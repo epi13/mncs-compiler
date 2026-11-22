@@ -1,0 +1,37 @@
+mncs 0.18;
+module tests.compiler_decl_use;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+fn same_use(a: decl.UseDecl, b: decl.UseDecl) -> (result: bool) {
+    return a.ok == b.ok && a.err_start == b.err_start && a.err_end == b.err_end
+        && a.module_start == b.module_start && a.module_end == b.module_end
+        && a.alias_start == b.alias_start && a.alias_end == b.alias_end
+        && a.has_alias == b.has_alias && a.cursor == b.cursor;
+}
+
+test parse_use_keeps_spans_across_a_split_name() -> (result: TestResult) {
+    // use alpha.beta as x;
+    let split: [[byte; up_to 32]; up_to 4] = [[117, 115, 101, 32, 97, 108, 112, 104], [97, 46, 98, 101, 116, 97, 32, 97], [115, 32, 120, 59]];
+    let joined: [[byte; up_to 32]; up_to 4] = [[117, 115, 101, 32, 97, 108, 112, 104, 97, 46, 98, 101, 116, 97, 32, 97, 115, 32, 120, 59]];
+    let expected: decl.UseDecl = decl.UseDecl {
+        ok: true, err_start: 0, err_end: 0, module_start: 4, module_end: 14,
+        alias_start: 18, alias_end: 19, has_alias: true, cursor: 20
+    };
+    let actual_split: decl.UseDecl = decl.parse_use<4, 32>(split, 8, 20, 3);
+    let actual_joined: decl.UseDecl = decl.parse_use<4, 32>(joined, 32, 20, 3);
+    return from_assertion(equals_bool(true, same_use(actual_split, expected) && same_use(actual_joined, expected), 7201));
+}
+
+test parse_use_preserves_the_caller_cursor_on_a_bad_segment() -> (result: TestResult) {
+    // use alpha..beta;
+    let pages: [[byte; up_to 32]; up_to 4] = [[117, 115, 101, 32, 97, 108, 112, 104], [97, 46, 46, 98, 101, 116, 97, 59]];
+    let expected: decl.UseDecl = decl.UseDecl {
+        ok: false, err_start: 9, err_end: 11, module_start: 4, module_end: 9,
+        alias_start: 0, alias_end: 0, has_alias: false, cursor: 3
+    };
+    let result: decl.UseDecl = decl.parse_use<4, 32>(pages, 8, 16, 3);
+    return from_assertion(equals_bool(true, same_use(result, expected), 7202));
+}

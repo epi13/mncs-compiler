@@ -26,6 +26,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -255,6 +256,11 @@ def _identity_module(identity: str) -> str:
     return parts[-1] if parts else ""
 
 
+def _source_label(checkout: Path, path: Path) -> str:
+    resolved = path.resolve()
+    return str(resolved.relative_to(checkout.resolve())) if resolved.is_relative_to(checkout.resolve()) else str(resolved)
+
+
 def _query_language_service(
     checkout: Path,
     workspace_root: Path,
@@ -281,109 +287,138 @@ def _query_language_service(
     mncs_bin = Path(os.environ.get("MNCS_REFERENCE_BIN") or (workspace_root / "mncs-language" / "target" / "release" / "mncs"))
     stdlib_lib = workspace_root / "mncs-stdlib" / "library"
 
+    wanted = {identity for identity in identities if identity}
+    declaring_paths = {
+        identity: _module_to_source_path(checkout, workspace_root, _identity_module(identity))
+        for identity in sorted(wanted)
+    }
     ls_status = "unavailable"
     ls_detail = ""
     ls_profile_mismatch = False
+    env = dict(os.environ)
+    env["MNCS_LANGUAGE_ROOT"] = str(workspace_root / "mncs-language")
+    env["MNCS_STDLIB_ROOT"] = str(workspace_root / "mncs-stdlib")
+    env["MNCS_LIBRARY_PATH"] = str(stdlib_lib)
+
+    def query(method, params):
+        nonlocal launches
+        launches += 1
+        response = subprocess.run(
+            [sys.executable, str(mnls_provider), "--timeout", "10", "query",
+             "--workspace", str(checkout), "--method", method,
+             "--params", json.dumps(params)],
+            env=env, capture_output=True, text=True, timeout=15, check=False,
+        )
+        return json.loads(response.stdout) if response.returncode == 0 else {}
 
     if mnls_provider.is_file():
-        env = dict(os.environ)
-        env["MNCS_LANGUAGE_ROOT"] = str(workspace_root / "mncs-language")
-        env["MNCS_STDLIB_ROOT"] = str(workspace_root / "mncs-stdlib")
-        env["MNCS_LIBRARY_PATH"] = str(stdlib_lib)
         try:
             launches += 1
             st = subprocess.run(
                 [sys.executable, str(mnls_provider), "status", "--workspace", str(checkout)],
                 env=env, capture_output=True, text=True, timeout=10, check=False,
             )
-            if st.returncode == 0 and st.stdout.strip():
-                st_doc = json.loads(st.stdout)
-                if st_doc.get("ready"):
-                    ls_status = "available"
-                    ls_detail = "resident language service ready"
-                else:
-                    ls_status = "resident_absent"
-                    ls_detail = str(st_doc.get("detail") or "resident not running")
-                    # Probe one document only when a 0.19 compatibility check is needed,
-                    # leaving no stray resident running.
-                    if source_paths:
-                        first_text = source_paths[0].read_text(encoding="utf-8", errors="replace")[:64]
-                        if "mncs 0.19;" in first_text:
+            status = json.loads(st.stdout) if st.returncode == 0 and st.stdout.strip() else {}
+            ls_status = str(status.get("state") or "unavailable")
+            ls_detail = str(status.get("detail") or "")
+            if status.get("ready"):
+                ls_status = "resident_ready"
+                unresolved_paths = set()
+                for identity, path in declaring_paths.items():
+                    if path is None:
+                        continue
+                    uri = path.resolve().as_uri()
+                    reply = query("describe_identity", {"uri": uri, "identity": identity})
+                    snapshot = reply.get("snapshot") or {}
+                    subject = reply.get("subject") or {}
+                    symbol = subject.get("summary") or {}
+                    span = symbol.get("range") or {}
+                    if not snapshot.get("current") or snapshot.get("uri") != uri or symbol.get("identity") != identity or not span:
+                        unresolved_paths.add(path)
+                        continue
+                    declarations[identity] = {
+                        "identity": identity,
+                        "kind": symbol.get("kind"),
+                        "module": subject.get("module"),
+                        "name": symbol.get("name"),
+                        "file": _source_label(checkout, path),
+                        "line": span["start_line"] + 1,
+                        "column": span["start_character"] + 1,
+                        "byte_span": [span["start_byte"], span["end_byte"]],
+                        "source_identity": snapshot.get("source_identity"),
+                        "source_profile": snapshot.get("language_profile"),
+                        "provider": "mncs-language-service",
+                    }
+                for path in sorted(unresolved_paths):
+                    diagnostics = query("document_diagnostics", {"uri": path.resolve().as_uri()})
+                    for item in diagnostics.get("items", []):
+                        if any(diagnostic.get("code") == "MNP008"
+                               for diagnostic in [item, *item.get("related", [])]):
                             ls_profile_mismatch = True
-                            ls_status = "stale_profile_unsupported"
-                            ls_detail = (
-                                "resident mnls-language-service-host supports profiles 0.1..0.18 "
-                                "(MNP008 on mncs 0.19 source); using bound mncs-language declaration-inventory"
-                            )
-        except (OSError, ValueError, subprocess.SubprocessError) as exc:
+                            break
+                    if ls_profile_mismatch:
+                        break
+                if unresolved_paths:
+                    ls_status = "profile_unsupported" if ls_profile_mismatch else "identity_unresolved"
+                    ls_detail = "resident declaration query did not resolve the selected identities"
+        except (OSError, ValueError, KeyError, subprocess.SubprocessError) as exc:
             ls_status = "unavailable"
-            ls_detail = f"mnls_provider status failed: {exc}"
+            ls_detail = f"Language Service query failed: {exc}"
 
-    # Authoritative declaration-inventory from bound mncs-language (supports 0.19)
-    inv_status = "unavailable"
-    if mncs_bin.is_file() and source_paths:
-        env_inv = dict(os.environ)
-        env_inv["MNCS_LIBRARY_PATH"] = f"{stdlib_lib}:{checkout / 'src'}"
-        wanted_set = {i for i in identities if i}
-        seen_paths: set[Path] = set()
-        for sp in source_paths:
-            sp_res = sp.resolve()
-            if sp_res in seen_paths or not sp_res.is_file():
-                continue
-            seen_paths.add(sp_res)
+    # Syntax-only inventory gives authoritative declaration identities and spans
+    # without elaborating the entire declaration module and its imported bodies.
+    inv_status = "not_needed"
+    missing = wanted - declarations.keys()
+    fallback_paths = {declaring_paths[identity] for identity in missing if declaring_paths[identity] is not None}
+    if any(declaring_paths[identity] is None for identity in missing):
+        fallback_paths.update(source_paths)
+    if missing:
+        inv_status = "unavailable"
+    if mncs_bin.is_file() and missing:
+        for path in sorted(fallback_paths):
             try:
                 launches += 1
                 res = subprocess.run(
-                    [str(mncs_bin), "declaration-inventory", str(sp_res)],
-                    env=env_inv, capture_output=True, text=True, timeout=15, check=False,
+                    [str(mncs_bin), "declaration-inventory", str(path.resolve()), "--syntax-only"],
+                    env=env, capture_output=True, text=True, timeout=15, check=False,
                 )
-                if res.returncode == 0 and res.stdout.strip():
-                    doc = json.loads(res.stdout)
-                    if doc.get("valid") and isinstance(doc.get("inventory"), dict):
-                        inv_status = "available"
-                        rel_file = (
-                            str(sp_res.relative_to(checkout.resolve()))
-                            if sp_res.is_relative_to(checkout.resolve())
-                            else str(sp_res)
-                        )
-                        for decl_item in doc["inventory"].get("declarations", []):
-                            did = str(decl_item.get("identity") or "")
-                            if not did:
-                                continue
-                            # Match exact identity or record-type prefix (before field-hash suffix)
-                            matched = did in wanted_set or any(
-                                w and (did == w or did.startswith(w + "::") or w.startswith(did + "::"))
-                                for w in wanted_set
-                            )
-                            if matched:
-                                span = decl_item.get("source_span") or {}
-                                entry = {
-                                    "identity": did,
-                                    "kind": decl_item.get("kind"),
-                                    "module": decl_item.get("module"),
-                                    "name": decl_item.get("name"),
-                                    "file": rel_file,
-                                    "line": span.get("line"),
-                                    "column": span.get("column"),
-                                    "byte_span": [span.get("start"), span.get("end")] if span else None,
-                                    "source_profile": doc["inventory"].get("source_profile"),
-                                }
-                                existing = declarations.get(did)
-                                is_declaring = decl_item.get("module") == _identity_module(did)
-                                if existing is None or (entry["line"] is not None and (existing.get("line") is None or is_declaring)):
-                                    declarations[did] = entry
+                reply = json.loads(res.stdout) if res.returncode == 0 else {}
+                if not reply.get("valid") or not isinstance(reply.get("inventory"), dict):
+                    continue
+                inventory = reply["inventory"]
+                for item in inventory.get("declarations", []):
+                    identity = item.get("identity")
+                    if not identity or not any(
+                        identity == expected or identity.startswith(expected + "::") for expected in missing
+                    ):
+                        continue
+                    span = item.get("source_span") or {}
+                    declarations[identity] = {
+                        "identity": identity,
+                        "kind": item.get("kind"),
+                        "module": item.get("module"),
+                        "name": item.get("name"),
+                        "file": _source_label(checkout, path),
+                        "line": span.get("line"),
+                        "column": span.get("column"),
+                        "byte_span": [span.get("start"), span.get("end")] if span else None,
+                        "source_profile": inventory.get("source_profile"),
+                        "provider": "mncs-language:declaration-inventory",
+                    }
+                    inv_status = "available"
             except (OSError, ValueError, subprocess.SubprocessError):
                 continue
 
     info = {
         "provider": "mncs-language-service",
-        "status": "available" if ls_status == "available" else (
-            "partial_fallback_mncs_language" if inv_status == "available" else "unavailable"
+        "status": "partial_fallback_mncs_language" if inv_status == "available" else (
+            "available" if any(item["provider"] == "mncs-language-service" for item in declarations.values())
+            else "unavailable"
         ),
         "resident_status": ls_status,
         "declaration_inventory_status": inv_status,
         "profile_0_19_mismatch": ls_profile_mismatch,
-        "detail": ls_detail or ("resolved via bound mncs declaration-inventory" if inv_status == "available" else "unavailable"),
+        "detail": ls_detail,
     }
     return info, declarations, launches
 
@@ -598,27 +633,30 @@ def build_diagnosis_document(
     *,
     target_callable: str,
     target_specialization: str,
-    emit_res: dict[str, Any],
+    emit_res: dict[str, Any] | None,
     source_paths: list[Path],
+    request_failure: dict[str, Any] | None = None,
+    declaration_identity: str | None = None,
     compiler_entry: str = "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
     admitted: bool | None = None,
     executed: bool | None = None,
     artifact_id: str | None = None,
     disabled_providers: set[str] | None = None,
 ) -> dict[str, Any]:
+    if (emit_res is None) == (request_failure is None):
+        raise ValueError("expected one emitter result or one request failure")
     t0 = time.monotonic()
     disabled = disabled_providers or set()
     workspace_root = resolve_workspace_root(checkout)
     bootstrap = load_bootstrap_status(checkout)
 
-    err_code = int(emit_res.get("error_code", 0))
-    err_fn = int(emit_res.get("error_function", 0))
-    err_blk = int(emit_res.get("error_block", 0))
-    err_inst = int(emit_res.get("error_instruction", 0))
+    emit_res = emit_res or {}
+    err_code = int(emit_res.get("error_code", 0)) if request_failure is None else None
 
     raw_detail = emit_res.get("error_detail") if isinstance(emit_res.get("error_detail"), dict) else {}
     phase_id = int(raw_detail.get("phase", 0))
     ssa_kind_id = int(raw_detail.get("ssa_kind", 0))
+    ssa_block_located = ssa_kind_id != 0 or phase_id == 7
     exp_kind_id = int(raw_detail.get("expected_type_kind", 0))
     obs_kind_id = int(raw_detail.get("observed_type_kind", 0))
     err_callable = decode_semantic_id(raw_detail.get("callable"))
@@ -628,7 +666,8 @@ def build_diagnosis_document(
 
     # Build source file map and discover declaring files for Language Service lookup
     candidate_paths: list[Path] = [Path(p) for p in source_paths if Path(p).is_file()]
-    for ident in (target_callable, err_callable, obs_nominal):
+    identities = [target_callable, declaration_identity or "", err_callable, obs_nominal]
+    for ident in identities:
         mod = _identity_module(ident)
         if mod:
             mp = _module_to_source_path(checkout, workspace_root, mod)
@@ -646,7 +685,7 @@ def build_diagnosis_document(
 
     ls_info, decls, ls_launches = _query_language_service(
         checkout, workspace_root, candidate_paths,
-        [target_callable, err_callable, obs_nominal], disabled,
+        identities, disabled,
     )
     doc_info, doc_launches = _query_doctor(
         checkout, workspace_root, bootstrap, err_callable, obs_nominal, disabled,
@@ -665,6 +704,9 @@ def build_diagnosis_document(
 
     last_completed = _infer_last_completed_phase(emit_res, phase_id, admitted, executed)
     failing_phase = None if emit_res.get("ok") else PHASE_LABELS.get(phase_id, f"phase_{phase_id}")
+    if request_failure is not None:
+        last_completed = "none"
+        failing_phase = request_failure["phase"]
 
     # Resolve source snippet for byte span if available in declaring module
     err_mod = _identity_module(err_callable)
@@ -710,6 +752,7 @@ def build_diagnosis_document(
             "stage0_lock_revision": stage0_lock,
             "selected_target": target_callable,
             "selected_specialization": target_specialization,
+            "declaration_identity": declaration_identity,
             "last_completed_phase": last_completed,
             "failing_phase": failing_phase,
             "owner": {
@@ -722,12 +765,12 @@ def build_diagnosis_document(
         "diagnosis": {
             "ok": bool(emit_res.get("ok")),
             "error_code": err_code,
-            "error_label": ERROR_CODE_LABELS.get(err_code, f"error_{err_code}"),
+            "error_label": request_failure["phase"] if request_failure else ERROR_CODE_LABELS.get(err_code, f"error_{err_code}"),
             "error_phase": failing_phase,
             "error_callable": err_callable or None,
-            "error_function_index": err_fn,
-            "error_block": err_blk,
-            "error_instruction": err_inst,
+            "error_function_index": emit_res.get("error_function") if ssa_block_located else None,
+            "error_block": emit_res.get("error_block") if ssa_block_located else None,
+            "error_instruction": emit_res.get("error_instruction") if 0 < ssa_kind_id < 100 else None,
             "ssa_operation": {
                 "kind_id": ssa_kind_id,
                 "kind": SSA_KIND_LABELS.get(ssa_kind_id, f"ssa_kind_{ssa_kind_id}"),
@@ -741,6 +784,7 @@ def build_diagnosis_document(
                 "observed_nominal_identity": obs_nominal or None,
             },
             "authoritative_declarations": decls,
+            **({"request_failure": request_failure} if request_failure is not None else {}),
             "function_count": int(emit_res.get("function_count", 0)),
             "block_count": int(emit_res.get("block_count", 0)),
             "instruction_count": int(emit_res.get("instruction_count", 0)),
@@ -867,7 +911,15 @@ def evaluate_cached_diagnosis(
 def write_cached_diagnosis(checkout: Path, doc: dict[str, Any], cache_path: Path | None = None) -> Path:
     target = cache_path or (checkout / CACHE_REL_PATH)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=target.parent, delete=False) as staging:
+        staged = Path(staging.name)
+        try:
+            json.dump(doc, staging, indent=2, sort_keys=True)
+            staging.write("\n")
+            staging.close()
+            staged.replace(target)
+        finally:
+            staged.unlink(missing_ok=True)
     return target
 
 

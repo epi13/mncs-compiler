@@ -2488,6 +2488,7 @@
         "mncs:0.2:function:mncs.compiler.project.v1::project_import_closure",
         "mncs:0.2:function:mncs.compiler.project.v1::project_modules_in_closure",
         "mncs:0.2:function:mncs.compiler.project.v1::project_nominal_modules_in_closure",
+        "mncs:0.2:function:mncs.compiler.project.v1::materialize_provider_callable",
         "mncs:0.2:function:mncs.compiler.vm_emit.v1::collect_context_record_types",
         "mncs:0.2:function:mncs.compiler.vm_emit.v1::find_provider_source_for_callable",
         "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_record_update",
@@ -2627,6 +2628,56 @@
         "entrypoint": "mncs-test run",
         "source_paths": [
           "tests/vm_emit_finite_enum_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.decl-parse-use-native",
+      "title": "First-class use declaration tests preserve spans and cursor across page layouts and malformed paths",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_use",
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_module_path",
+        "mncs:0.2:function:mncs.compiler.decl.v1::parse_use_alias"
+      ],
+      "invalidation_dependencies": [
+        "tests/decl_use_suite.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/source.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/decl_use_suite.mncs"
         ],
         "library_paths": [
           "src"

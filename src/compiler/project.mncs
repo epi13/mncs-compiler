@@ -454,11 +454,14 @@ record SelectedProjectContext {
     result: ProjectResult,
     reachable: [bool; 64],
     dependency_modules: ModuleList,
-    dependency_nominal_modules: NominalModuleList
+    dependency_nominal_modules: NominalModuleList,
+    nominal_markers: decl.NominalTypeIdentityList
 }
 record MaterializedProviderBuild {
     ok: bool,
-    modules: ProjectModuleList
+    modules: ProjectModuleList,
+    start: u64,
+    end: u64
 }
 
 record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64, parse_failed: bool, parse_index: u64, parse_start: u64, parse_end: u64 }
@@ -1390,12 +1393,12 @@ record ResolvedImportLookup { found: bool, signature: decl.Sig }
 record TargetSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record UseSignatureResult { acc: decl.SigTab, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record ExportSignatureResult { acc: decl.SigTab, resolved: ResolvedImportFactCache }
-record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
+record CallSigWalk { rest: decl.CallSiteList, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, local_declarations: decl.FnList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record UseSigWalk { rest: decl.UseList, call: decl.CallSite, acc: decl.SigTab, nominals: decl.NominalTypeIdentityList, modules: NominalModuleList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record TargetSigWalk { rest: ModuleList, modules: NominalModuleList, target_index: u64, cache_provider_index: u64, member_start: u64, current: ParsedModule, call: decl.CallSite, acc: decl.SigTab, caller_nominals: decl.NominalTypeIdentityList, provider_facts: ProviderSignatureFactsList, resolved: ResolvedImportFactCache }
 record ExportSigWalk { rest: decl.SigTab, caller: ParsedModule, target: ParsedModule, member_start: u64, member_end: u64, call: decl.CallSite, caller_nominals: decl.NominalTypeIdentityList, target_nominals: decl.NominalTypeIdentityList, acc: decl.SigTab, resolved: ResolvedImportFactCache }
 record CallPrefixMatch { matched: bool, member_start: u64 }
-record LocalFnSearchWalk { rest: decl.FnList, member_start: u64, member_end: u64, found: bool }
+record LocalFnSearchWalk { rest: decl.FnList, member_start: u64, member_end: u64, found: bool, selected: decl.FnList }
 record ProviderDeclaringMatch { found: bool, declaring_source_index: u64 }
 record ProviderSearchState { stack: [u64; 128], sp: u64, visited: [bool; 64], found: bool, declaring_source_index: u64 }
 record ProviderVisitWalk { rest: ModuleList, target_index: u64, state: ProviderSearchState, done: bool }
@@ -1403,11 +1406,14 @@ record PushUsesWalk { rest: decl.UseList, stack: [u64; 128], sp: u64, visited: [
 record BareUseSearchWalk { rest: decl.UseList, found: bool, conflict: bool, declaring_source_index: u64 }
 
 fn imported_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList) -> (result: decl.SigTab) {
+    return resolve_call_signatures<M, N>(sources, flat_pages, current, all, nominals, nominal_modules, decl.FnList.DNil);
+}
+fn resolve_call_signatures<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], current: ParsedModule, all: ModuleList, nominals: decl.NominalTypeIdentityList, nominal_modules: NominalModuleList, local_declarations: decl.FnList) -> (result: decl.SigTab) {
     let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, current.source_index);
     let input_stride: u64 = module_stride(sources, current.source_index);
     let input_total: u64 = module_total(sources, current.source_index);
     let calls: decl.CallSiteList = decl.collect_call_sites<1024, N>(input_pages, input_stride, input_total, current.unit.fns);
-    let initial: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules, provider_facts: ProviderSignatureFactsList.PSNil, resolved: ResolvedImportFactCache { facts: ResolvedImportFactList.RIFNil, count: 0 } };
+    let initial: CallSigWalk = CallSigWalk { rest: calls, acc: decl.SigTab.HNil, nominals: nominals, modules: nominal_modules, local_declarations: local_declarations, provider_facts: ProviderSignatureFactsList.PSNil, resolved: ResolvedImportFactCache { facts: ResolvedImportFactList.RIFNil, count: 0 } };
     iterate chunk up_to 64 carrying st: CallSigWalk = initial {
         if decl.call_site_list_empty(st.rest) { return st.acc; }
         next st = imported_signature_chunk<M, N>(sources, flat_pages, current, all, st);
@@ -1434,16 +1440,34 @@ fn imported_signature_for_one_call<M: Nat, N: Nat>(sources: [ProjectSource; up_t
     if !(call_has_dot<1024, N>(c_pages, c_stride, c_total, call.start, call.end)) {
         // Local declarations and built-in intrinsics take precedence over
         // unqualified imported bindings without touching any provider.
-        if module_has_local_fn_same<1024, N>(c_pages, c_stride, c_total, call.start, call.end, current.unit.fns)
-            || decl.stage0_intrinsic_known<1024, N>(c_pages, c_stride, c_total, call.start, call.end) {
+        if module_has_local_fn_same<1024, N>(c_pages, c_stride, c_total, call.start, call.end, current.unit.fns) {
+            return CallSigWalk { ..st, rest: rest };
+        }
+        let local: LocalFnSearchWalk = find_local_fn_same<1024, N>(c_pages, c_stride, c_total, call.start, call.end, st.local_declarations);
+        if local.found {
+            let signature: decl.SigTab = selected_local_signature<1024, N>(c_pages, c_stride, c_total, current.unit, st.nominals, local.selected, st.acc);
+            return CallSigWalk { ..st, rest: rest, acc: signature };
+        }
+        if decl.stage0_intrinsic_known<1024, N>(c_pages, c_stride, c_total, call.start, call.end) {
             return CallSigWalk { ..st, rest: rest };
         }
         let bare: UseSignatureResult = resolve_bare_imported_call<M, N>(sources, flat_pages, all, current, call, st.acc, st.nominals, st.modules, st.provider_facts, st.resolved);
-        return CallSigWalk { rest: rest, acc: bare.acc, nominals: st.nominals, modules: st.modules, provider_facts: bare.provider_facts, resolved: bare.resolved };
+        return CallSigWalk { ..st, rest: rest, acc: bare.acc, provider_facts: bare.provider_facts, resolved: bare.resolved };
     }
     let uses: decl.UseList = current.unit.uses;
     let found: UseSignatureResult = signatures_from_uses<M, N>(sources, flat_pages, all, current, uses, call, st.acc, st.nominals, st.modules, st.provider_facts, st.resolved);
-    return CallSigWalk { rest: rest, acc: found.acc, nominals: st.nominals, modules: st.modules, provider_facts: found.provider_facts, resolved: found.resolved };
+    return CallSigWalk { ..st, rest: rest, acc: found.acc, provider_facts: found.provider_facts, resolved: found.resolved };
+}
+fn selected_local_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, selected: decl.FnList, acc: decl.SigTab) -> (result: decl.SigTab) {
+    return match selected {
+        DNil => acc,
+        DCons { head: fd, tail: rest } => prepend_selected_local_signature<P, N>(pages, stride, total, unit, nominals, fd, acc)
+    };
+}
+fn prepend_selected_local_signature<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, fd: decl.FnDecl, acc: decl.SigTab) -> (result: decl.SigTab) {
+    let rep: decl.SigRep = decl.check_sig<P, N>(pages, stride, total, fd, unit.records, unit.enums, nominals);
+    let owned: decl.Sig = decl.bind_callable_signature<P, N>(pages, stride, total, unit.header.module_start, unit.header.module_end, rep.sig);
+    return decl.SigTab.HCons { head: owned, tail: acc };
 }
 fn call_has_dot<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: bool) {
     if end <= start || end > total { return false; }
@@ -1456,12 +1480,16 @@ fn call_has_dot<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, 
     return false;
 }
 fn module_has_local_fn_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, member_start: u64, member_end: u64, fns: decl.FnList) -> (result: bool) {
-    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: fns, member_start: member_start, member_end: member_end, found: false };
+    let walk: LocalFnSearchWalk = find_local_fn_same<P, N>(pages, stride, total, member_start, member_end, fns);
+    return walk.found;
+}
+fn find_local_fn_same<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, member_start: u64, member_end: u64, fns: decl.FnList) -> (result: LocalFnSearchWalk) {
+    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: fns, member_start: member_start, member_end: member_end, found: false, selected: decl.FnList.DNil };
     iterate chunk up_to 64 carrying st: LocalFnSearchWalk = initial {
-        if st.found || decl.declared_fn_list_empty(st.rest) { return st.found; }
+        if st.found || decl.declared_fn_list_empty(st.rest) { return st; }
         next st = module_has_local_fn_same_chunk<P, N>(pages, stride, total, st);
     }
-    return st.found;
+    return st;
 }
 fn module_has_local_fn_same_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, initial: LocalFnSearchWalk) -> (result: LocalFnSearchWalk) {
     iterate i up_to 1024 carrying st: LocalFnSearchWalk = initial {
@@ -1478,7 +1506,7 @@ fn module_has_local_fn_same_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
 }
 fn module_has_local_fn_same_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: LocalFnSearchWalk, candidate: decl.FnDecl, rest: decl.FnList) -> (result: LocalFnSearchWalk) {
     if decl.spans_equal<P, N>(pages, stride, total, st.member_start, st.member_end, candidate.sig.name_start, candidate.sig.name_end) {
-        return LocalFnSearchWalk { ..st, rest: decl.FnList.DNil, found: true };
+        return LocalFnSearchWalk { ..st, rest: decl.FnList.DNil, found: true, selected: decl.FnList.DCons { head: candidate, tail: decl.FnList.DNil } };
     }
     return LocalFnSearchWalk { ..st, rest: rest };
 }
@@ -1489,7 +1517,7 @@ fn module_has_local_fn_between<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64
     let t_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, target.source_index);
     let t_stride: u64 = module_stride(sources, target.source_index);
     let t_total: u64 = module_total(sources, target.source_index);
-    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: target.unit.fns, member_start: member_start, member_end: member_end, found: false };
+    let initial: LocalFnSearchWalk = LocalFnSearchWalk { rest: target.unit.fns, member_start: member_start, member_end: member_end, found: false, selected: decl.FnList.DNil };
     iterate chunk up_to 64 carrying st: LocalFnSearchWalk = initial {
         if st.found || decl.declared_fn_list_empty(st.rest) { return st.found; }
         next st = module_has_local_fn_between_chunk<N>(c_pages, c_stride, c_total, t_pages, t_stride, t_total, st);
@@ -2379,7 +2407,8 @@ fn lower_project_modules_for_source<M: Nat, N: Nat>(sources: [ProjectSource; up_
     let dependency_closure: ProjectImportClosure = project_import_closure(imports, target_source_index, sources.len);
     let dependency_modules: ModuleList = project_modules_in_closure<64>(sources, modules, dependency_closure.reachable);
     let dependency_nominal_modules: NominalModuleList = project_nominal_modules_in_closure<64>(sources, nominal_modules, dependency_closure.reachable);
-    return lower_target_module_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, dependency_nominal_modules, selected.found);
+    let markers: decl.NominalTypeIdentityList = project_nominal_markers(dependency_nominal_modules);
+    return lower_target_module_selected<M, N>(sources, flat_pages, modules, selected.selected, imports, nominal_modules, dependency_modules, dependency_nominal_modules, markers, selected.found);
 }
 
 fn project_nominal_modules_in_closure<M: Nat>(sources: [ProjectSource; up_to M], modules: NominalModuleList, reachable: [bool; 64]) -> (result: NominalModuleList) {
@@ -2762,20 +2791,19 @@ fn expand_target_enum_decl_one<N: Nat>(pages: [[byte; up_to N]; up_to 1024], str
     return TargetSchemaEnumWalk { ..st, rest: rest, state: next_state };
 }
 
-fn lower_target_module_selected<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, to_lower: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, dependency_nominal_modules: NominalModuleList, target_found: bool) -> (result: ProjectBuild) {
+fn lower_target_module_selected<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, to_lower: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, dependency_nominal_modules: NominalModuleList, all_markers: decl.NominalTypeIdentityList, target_found: bool) -> (result: ProjectBuild) {
     if !(target_found) {
         return begin_project_lowering_for_modules(to_lower, all_modules, imports, nominal_modules, decl.NominalTypeIdentityList.NINil, decl.ImportedRecordList.IRNil, decl.ImportedEnumList.IENil, false);
     }
     return match to_lower {
         MNil => begin_project_lowering_for_modules(ModuleList.MNil, all_modules, imports, nominal_modules, decl.NominalTypeIdentityList.NINil, decl.ImportedRecordList.IRNil, decl.ImportedEnumList.IENil, false),
-        MCons { head: parsed, tail: rest } => lower_one_target_project_module<M, N>(sources, flat_pages, all_modules, imports, nominal_modules, dependency_modules, dependency_nominal_modules, parsed)
+        MCons { head: parsed, tail: rest } => lower_one_target_project_module<M, N>(sources, flat_pages, all_modules, imports, nominal_modules, dependency_modules, dependency_nominal_modules, all_markers, parsed)
     };
 }
-fn lower_one_target_project_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, dependency_nominal_modules: NominalModuleList, parsed: ParsedModule) -> (result: ProjectBuild) {
+fn lower_one_target_project_module<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], all_modules: ModuleList, imports: ImportList, nominal_modules: NominalModuleList, dependency_modules: ModuleList, dependency_nominal_modules: NominalModuleList, all_markers: decl.NominalTypeIdentityList, parsed: ParsedModule) -> (result: ProjectBuild) {
     let input_pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(sources, flat_pages, parsed.source_index);
     let input_stride: u64 = module_stride(sources, parsed.source_index);
     let input_total: u64 = module_total(sources, parsed.source_index);
-    let all_markers: decl.NominalTypeIdentityList = project_nominal_markers(dependency_nominal_modules);
     let facts: NominalModuleLookup = nominal_module_by_index<M, N>(sources, flat_pages, dependency_nominal_modules, parsed.source_index);
     let transport_nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(input_pages, input_stride, input_total, all_markers, facts.facts.resolved);
     let imported: decl.SigTab = imported_signatures<M, N>(sources, flat_pages, parsed, all_modules, transport_nominals, nominal_modules);
@@ -2802,6 +2830,27 @@ fn lower_one_target_project_module<M: Nat, N: Nat>(sources: [ProjectSource; up_t
         failed: lower_stage_failure(StageFailure { stage: 0, source_index: 0, code: 0, start: 0, end: 0 }, parsed.source_index, proof, lowered),
         target_missing: false
     };
+}
+
+fn prove_provider_body<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, imported: decl.SigTab, nominals: decl.NominalTypeIdentityList, schemas: TargetSchemaState) -> (result: decl.UnitProve) {
+    // Provider selection established a single, unambiguous declaration and
+    // the resolved nominal identities already include the source's locals.
+    let sigs: decl.SigTabRep = decl.collect_sigtab<P, N>(pages, stride, total, unit.fns, unit.records, unit.enums, nominals);
+    let local: decl.SigTab = decl.bind_local_callable_identities<P, N>(pages, stride, total, unit.header, sigs.tab);
+    let signatures: decl.SigTab = decl.merge_sig_tables<P, N>(pages, stride, total, local, imported);
+    let profile_011: bool = decl.profile_at_least_minor<P, N>(pages, stride, total, unit.header.version_start, unit.header.version_end, 11);
+    let profile_013: bool = decl.profile_at_least_013<P, N>(pages, stride, total, unit.header.version_start, unit.header.version_end);
+    let initial: decl.BodyWalk = decl.BodyWalk {
+        rest: unit.fns, tab: signatures, rectab: unit.records, enumtab: unit.enums,
+        nominals: nominals, imported_records: schemas.records, imported_enums: schemas.enums,
+        total: total, profile_011: profile_011, profile_013: profile_013,
+        obls: sigs.obls, tops: decl.TopsList.TLNil, ok: true, n: 0
+    };
+    let body: decl.BodyWalk = decl.prove_bodies_step<P, N>(pages, stride, total, initial);
+    let ok: bool = body.ok && body.n == 1 && decl.declared_fn_list_empty(body.rest)
+        && !(decl.obl_has_fail<P, N>(pages, stride, total, body.obls));
+    let err: decl.ExprSpan = decl.first_fail_span<P, N>(pages, stride, total, body.obls);
+    return decl.UnitProve { ok: ok, err_start: select(ok, 0, err.start), err_end: select(ok, 0, err.end), unit: unit, obls: body.obls, tops: body.tops, fn_count: body.n };
 }
 
 // Resolve the target's transitive import closure for schema construction.
@@ -3187,7 +3236,8 @@ fn compile_project_target_with_context<M: Nat, N: Nat>(snapshot: ProjectSnapshot
     let dependency_closure: ProjectImportClosure = project_import_closure(resolved.imports, target_source_index, snapshot.sources.len);
     let dependency_modules: ModuleList = project_modules_in_closure<64>(snapshot.sources, parsed, dependency_closure.reachable);
     let dependency_nominal_modules: NominalModuleList = project_nominal_modules_in_closure<64>(snapshot.sources, nominal_modules, dependency_closure.reachable);
-    let lowered: ProjectBuild = lower_target_module_selected<M, N>(snapshot.sources, flat_pages, parsed, selected.selected, resolved.imports, nominal_modules, dependency_modules, dependency_nominal_modules, selected.found);
+    let markers: decl.NominalTypeIdentityList = project_nominal_markers(dependency_nominal_modules);
+    let lowered: ProjectBuild = lower_target_module_selected<M, N>(snapshot.sources, flat_pages, parsed, selected.selected, resolved.imports, nominal_modules, dependency_modules, dependency_nominal_modules, markers, selected.found);
     let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, counts_match);
     let diagnostics1: DiagnosticList = append_diagnostics<64>(snapshot.sources, basic, duplicate);
     let diagnostics2: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);
@@ -3214,58 +3264,107 @@ fn compile_project_target_with_context<M: Nat, N: Nat>(snapshot: ProjectSnapshot
         result: proj_res,
         reachable: dependency_closure.reachable,
         dependency_modules: dependency_modules,
-        dependency_nominal_modules: dependency_nominal_modules
+        dependency_nominal_modules: dependency_nominal_modules,
+        nominal_markers: markers
     };
 }
 
-// Materialize one reachable provider module through declaration proof, Flow,
-// and verified Value SSA on demand, reusing the resolved import closure and
-// nominal identities established by `compile_project_target_with_context`.
-fn materialize_provider_module<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, provider_source_index: u64) -> (result: MaterializedProviderBuild) {
+// Resolve once for the immutable import closure used by provider bodies.
+fn project_provider_schemas<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext) -> (result: TargetSchemaState) {
+    let records: decl.ImportedRecordList = project_record_schemas<M, N>(snapshot.sources, flat_pages, ctx.dependency_modules, ctx.dependency_nominal_modules, ctx.nominal_markers);
+    let enums: decl.ImportedEnumList = project_enum_schemas<M, N>(snapshot.sources, flat_pages, ctx.dependency_modules, ctx.dependency_nominal_modules, ctx.nominal_markers);
+    return TargetSchemaState { wanted_markers: ctx.nominal_markers, records: records, enums: enums, changed: false };
+}
+// Materialize one reachable body from the already syntax-checked provider.
+// The body stays in its original paged view and the complete signature
+// inventory remains available for calls in that body.
+fn materialize_provider_callable<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, schemas: TargetSchemaState, provider_source_index: u64, start: u64, end: u64) -> (result: MaterializedProviderBuild) {
+    let refused: MaterializedProviderBuild = MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: 0, end: 0 };
     if !(ctx.result.valid) || provider_source_index >= snapshot.sources.len || provider_source_index >= 64 {
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+        return refused;
     }
     if !(ctx.reachable[provider_source_index]) {
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+        return refused;
     }
+    let selected: TargetModuleSelection = select_target_module(ctx.dependency_modules, provider_source_index);
+    return match selected.selected {
+        MNil => refused,
+        MCons { head: provider, tail: rest } => build_provider_callable<M, N>(snapshot, flat_pages, ctx, schemas, provider, start, end)
+    };
+}
+
+record LocalCallDeclarations { rest: decl.CallSiteList, declarations: decl.FnList }
+fn local_declarations_for_calls<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, body: decl.FnList, declarations: decl.FnList) -> (result: decl.FnList) {
+    let calls: decl.CallSiteList = decl.collect_call_sites<P, N>(pages, stride, total, body);
+    let initial: LocalCallDeclarations = LocalCallDeclarations { rest: calls, declarations: decl.FnList.DNil };
+    iterate chunk up_to 64 carrying outer: LocalCallDeclarations = initial {
+        iterate i up_to 1024 carrying inner: LocalCallDeclarations = outer {
+            if decl.call_site_list_empty(inner.rest) { return inner.declarations; }
+            next inner = local_call_declarations_step<P, N>(pages, stride, total, declarations, inner);
+        }
+        next outer = inner;
+    }
+    return outer.declarations;
+}
+fn local_call_declarations_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, declarations: decl.FnList, st: LocalCallDeclarations) -> (result: LocalCallDeclarations) {
+    return match st.rest {
+        CNil => st,
+        CCons { head: call, tail: rest } => local_call_declarations_one<P, N>(pages, stride, total, declarations, st.declarations, call, rest)
+    };
+}
+fn local_call_declarations_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, declarations: decl.FnList, selected: decl.FnList, call: decl.CallSite, rest: decl.CallSiteList) -> (result: LocalCallDeclarations) {
+    if call_has_dot<P, N>(pages, stride, total, call.start, call.end) || module_has_local_fn_same<P, N>(pages, stride, total, call.start, call.end, selected) {
+        return LocalCallDeclarations { rest: rest, declarations: selected };
+    }
+    let match_fn: LocalFnSearchWalk = find_local_fn_same<P, N>(pages, stride, total, call.start, call.end, declarations);
+    let next_declarations: decl.FnList = match match_fn.selected {
+        DNil => selected,
+        DCons { head: fd, tail: unused } => decl.FnList.DCons { head: fd, tail: selected }
+    };
+    return LocalCallDeclarations { rest: rest, declarations: next_declarations };
+}
+
+fn build_provider_callable<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, schemas: TargetSchemaState, provider: ParsedModule, start: u64, end: u64) -> (result: MaterializedProviderBuild) {
+    let provider_source_index: u64 = provider.source_index;
     let item: ProjectSource = snapshot.sources[provider_source_index];
     let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(snapshot.sources, flat_pages, provider_source_index);
-    let unit: decl.Unit = decl.parse_unit<1024, N>(pages, item.stride, item.total);
-    if !(unit.ok) {
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+    let keyword: decl.Expect = decl.expect<1024, N>(pages, item.stride, item.total, start, 12);
+    if !(keyword.ok) {
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: keyword.err_start, end: keyword.err_end };
     }
+    let profile_013: bool = decl.profile_at_least_013<1024, N>(pages, item.stride, item.total, provider.unit.header.version_start, provider.unit.header.version_end);
+    let body: decl.FnDecl = decl.parse_fn<1024, N>(pages, item.stride, item.total, keyword.cursor, start, profile_013, true);
+    if !(body.ok) || body.fn_end != end {
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: body.err_start, end: body.err_end };
+    }
+    let unit: decl.Unit = decl.Unit { ..provider.unit, fns: decl.FnList.DCons { head: body, tail: decl.FnList.DNil } };
     let parsed_provider: ParsedModule = ParsedModule {
-        source_id: item.source_id,
-        source_path: item.source_path,
-        source_index: provider_source_index,
+        ..provider,
         unit: unit
     };
-    let prov_closure: ProjectImportClosure = project_import_closure(ctx.result.imports, provider_source_index, snapshot.sources.len);
-    let prov_dep_modules: ModuleList = project_modules_in_closure<64>(snapshot.sources, ctx.dependency_modules, prov_closure.reachable);
+    let local_calls: decl.FnList = local_declarations_for_calls<1024, N>(pages, item.stride, item.total, unit.fns, provider.unit.fns);
+    // Include the exact type spans of directly called signatures in the
+    // nominal environment. Their bodies are still parsed and proved only
+    // when the emitter reaches each callable.
+    let nominal_unit: decl.Unit = decl.Unit { ..unit, records: decl.RecordList.RNil, enums: decl.EnumList.GNil, fns: decl.FnList.DCons { head: body, tail: local_calls } };
+    let nominal_provider: ParsedModule = ParsedModule { ..parsed_provider, unit: nominal_unit };
     let existing_nom: NominalModuleLookup = nominal_module_by_index<M, N>(snapshot.sources, flat_pages, ctx.dependency_nominal_modules, provider_source_index);
     let refreshed_resolved: decl.NominalTypeIdentityList = project_nominal_type_identities<M, N>(
-        snapshot.sources, flat_pages, parsed_provider,
+        snapshot.sources, flat_pages, nominal_provider,
         ctx.dependency_modules, ctx.dependency_nominal_modules, existing_nom.facts.local
     );
-    let refreshed_nom: NominalModule = NominalModule {
-        source_index: provider_source_index,
-        local: existing_nom.facts.local,
-        resolved: refreshed_resolved
-    };
-    let prov_other_mask: [bool; 64] = replace(prov_closure.reachable, provider_source_index, false);
-    let prov_dep_nominals: NominalModuleList = NominalModuleList.NMCons {
-        head: refreshed_nom,
-        tail: project_nominal_modules_in_closure<64>(snapshot.sources, ctx.dependency_nominal_modules, prov_other_mask)
-    };
-    let built: ProjectBuild = lower_one_target_project_module<M, N>(
-        snapshot.sources, flat_pages,
-        ctx.dependency_modules, ctx.result.imports, ctx.dependency_nominal_modules,
-        prov_dep_modules, prov_dep_nominals, parsed_provider
-    );
-    if !(built.valid) || !(built.ssa_valid) || built.count != 1 {
-        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+    let resolved: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, item.stride, item.total, refreshed_resolved, existing_nom.facts.resolved);
+    let nominals: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, item.stride, item.total, ctx.nominal_markers, resolved);
+    let signatures: decl.SigTab = resolve_call_signatures<M, N>(snapshot.sources, flat_pages, parsed_provider, ctx.dependency_modules, nominals, ctx.dependency_nominal_modules, local_calls);
+    let proof: decl.UnitProve = prove_provider_body<1024, N>(pages, item.stride, item.total, unit, signatures, nominals, schemas);
+    let lowered: flow.LoweredUnit = flow.lower_proven_unit<1024, N>(pages, item.stride, item.total, proof);
+    let value_ssa: ssa.ValueSsaSummary = ssa.lower_value_ssa_with_imported_schemas<1024, N>(pages, item.stride, item.total, lowered, nominals, schemas.records, schemas.enums);
+    if !(lowered.valid) || !(value_ssa.valid) {
+        let failed: StageFailure = lower_stage_failure(StageFailure { stage: 0, source_index: 0, code: 0, start: 0, end: 0 }, provider_source_index, proof, lowered);
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil, start: failed.start, end: failed.end };
     }
-    return MaterializedProviderBuild { ok: true, modules: built.acc };
+    let built_module: ProjectModule = ProjectModule { source_id: provider.source_id, source_path: provider.source_path, source_index: provider_source_index, flow: lowered, value_ssa: value_ssa };
+    return MaterializedProviderBuild { ok: true, modules: ProjectModuleList.PCons { head: built_module, tail: ProjectModuleList.PNil }, start: 0, end: 0 };
 }
 
 // Compile one ordered snapshot source through proof, CFG, and verified SSA

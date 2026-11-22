@@ -273,7 +273,8 @@ test provider_handoff_locates_reachable_callable_and_ignores_unrelated() -> (res
     // Unrelated out-of-subset callable must NOT be found under reachable=[0,2].
     let found_unrel: vm_emit.ProviderCallableLookup = vm_emit.find_provider_source_for_callable<4, 64>(snap, pages, parsed_all, reachable, id_unrel_secret());
 
-    let ok: bool = found_prov.found && found_prov.source_index == 0 && !(found_unrel.found);
+    let ok: bool = found_prov.found && found_prov.source_index == 0
+        && found_prov.start == 38 && found_prov.end == 49 && !(found_unrel.found);
     return from_assertion(equals_bool(true, ok, 5003));
 }
 
@@ -379,4 +380,19 @@ test record_update_and_exact_seq_construct_lower_and_fail_closed() -> (result: T
         && r_seq_ok.ok && r_seq_ok.inst.opcode == 19 && vm_emit.vm_type_equal(r_seq_ok.inst.ty, seq_ty)
         && !(r_seq_bad.ok) && r_seq_bad.error_code == 7;
     return from_assertion(equals_bool(true, ok, 5004));
+}
+
+test record_catalog_keeps_early_providers_past_256_entries() -> (result: TestResult) {
+    let early_id: decl.SemanticIdentity = make_ident([84, 111, 107, 101, 110]);
+    let later_id: decl.SemanticIdentity = make_ident([76, 97, 116, 101, 114]);
+    let early: vm_emit.VmRecordType = vm_emit.VmRecordType { identity: early_id, name: early_id, fields: vm_emit.VmRecordFieldList.VRFNil };
+    let later: vm_emit.VmRecordType = vm_emit.VmRecordType { identity: later_id, name: later_id, fields: vm_emit.VmRecordFieldList.VRFNil };
+    let first: vm_emit.VmRecordTypeList = vm_emit.VmRecordTypeList.VRTCons { head: early, tail: vm_emit.VmRecordTypeList.VRTNil };
+    iterate i up_to 256 carrying entries: vm_emit.VmRecordTypeList = first {
+        next entries = vm_emit.VmRecordTypeList.VRTCons { head: later, tail: entries };
+    }
+    let tail_lookup: vm_emit.RecordTypeLookup = vm_emit.find_vm_record_type(entries, early_id);
+    let reversed: vm_emit.VmRecordTypeList = vm_emit.reverse_vm_record_types(entries);
+    let first_lookup: vm_emit.RecordTypeLookup = vm_emit.find_vm_record_type(reversed, early_id);
+    return from_assertion(equals_bool(true, tail_lookup.found && first_lookup.found, 5006));
 }

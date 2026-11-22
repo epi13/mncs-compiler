@@ -222,19 +222,25 @@ class NativeEmitterProbe:
 class Stage0ModuleOracle:
     """Locked Stage-0 probe executing a target library module directly for differential comparison."""
 
-    def __init__(self, module_name, library_paths):
+    def __init__(self, module_name, library_paths, *, generic_seeds=(), probe_bin=PROBE_BIN,
+                 toolchain_identity_root=None):
         env = dict(os.environ)
         env.pop("MNCS_PROBE_BACKEND", None)
         env["MNCS_LIBRARY_PATH"] = ":".join(str(p) for p in library_paths)
         env["MNCS_PROBE_MODULES"] = ""
         env["MNCS_PROBE_LIBRARY_MODULES"] = module_name
         env["MNCS_PROBE_EXECUTION_MODULES"] = module_name
-        env["MNCS_PROBE_GENERIC_SEEDS"] = "[]"
+        env["MNCS_PROBE_GENERIC_SEEDS"] = json.dumps([
+            {"module": module_name, "function": function, "type_arguments": arguments}
+            for function, arguments in generic_seeds
+        ])
         env["MNCS_PROBE_CACHE_DIR"] = str(CACHE_DIR)
         env["MNCS_PROBE_MAX_ADDRESS_SPACE_BYTES"] = str(MAX_AS_BYTES)
+        if toolchain_identity_root is not None:
+            env["MNCS_PROBE_TOOLCHAIN_IDENTITY_ROOT"] = str(toolchain_identity_root)
         self.module_name = module_name
         self.proc = subprocess.Popen(
-            [str(PROBE_BIN)],
+            [str(probe_bin)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
@@ -242,12 +248,12 @@ class Stage0ModuleOracle:
             env=env,
         )
 
-    def call(self, function, args):
+    def call(self, function, args, *, type_arguments=()):
         req = {
             "schema_version": "0.1",
             "target": {"module": self.module_name, "function": function},
             "arguments": args,
-            "type_arguments": [],
+            "type_arguments": list(type_arguments),
             "step_budget": 1000000,
         }
         self.proc.stdin.write(json.dumps(req) + "\n")

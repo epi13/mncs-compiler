@@ -1,4 +1,4 @@
-mncs 0.18;
+mncs 0.19;
 module mncs.compiler.vm_emit.v1;
 use mncs.compiler.decl.v1 as decl;
 use mncs.compiler.lexer.v1 as lexer;
@@ -495,8 +495,10 @@ fn reverse_vm_record_field_step(st: VmRecordFieldRev) -> (result: VmRecordFieldR
         VRFCons { head: h, tail: t } => VmRecordFieldRev { rest: t, acc: VmRecordFieldList.VRFCons { head: h, tail: st.acc } }
     };
 }
+// The working catalog can contain the full project nominal marker envelope.
+// Only schemas referenced by the emitted closure go into the artifact.
 fn reverse_vm_record_types(recs: VmRecordTypeList) -> (result: VmRecordTypeList) {
-    iterate i up_to 256 carrying st: VmRecordTypeRev = VmRecordTypeRev { rest: recs, acc: VmRecordTypeList.VRTNil } {
+    iterate i up_to 1024 carrying st: VmRecordTypeRev = VmRecordTypeRev { rest: recs, acc: VmRecordTypeList.VRTNil } {
         if vm_record_type_list_empty(st.rest) { return st.acc; }
         next st = reverse_vm_record_type_step(st);
     }
@@ -912,7 +914,7 @@ fn rec_type_tail(recs: VmRecordTypeList) -> (result: VmRecordTypeList) {
     return match recs { VRTNil => VmRecordTypeList.VRTNil, VRTCons { head: rec, tail: t } => t };
 }
 fn find_vm_record_type(recs: VmRecordTypeList, wanted: decl.SemanticIdentity) -> (result: RecordTypeLookup) {
-    iterate i up_to 256 carrying rest: VmRecordTypeList = recs {
+    iterate i up_to 1024 carrying rest: VmRecordTypeList = recs {
         if vm_record_type_list_empty(rest) { return RecordTypeLookup { found: false, schema: dummy_record_type() }; }
         if rec_type_head_eq(rest, wanted) { return RecordTypeLookup { found: true, schema: rec_type_head(rest) }; }
         next rest = rec_type_tail(rest);
@@ -1052,7 +1054,7 @@ fn first_fn_nominals(summary: ssa.ValueSsaSummary) -> (result: decl.NominalTypeI
 record ModRecordsCollectWalk { rest: decl.RecordList, acc: VmRecordTypeList }
 fn collect_module_record_types<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, unit: decl.Unit, nominals: decl.NominalTypeIdentityList, acc: VmRecordTypeList) -> (result: VmRecordTypeList) {
     let initial: ModRecordsCollectWalk = ModRecordsCollectWalk { rest: unit.records, acc: acc };
-    iterate i up_to 256 carrying st: ModRecordsCollectWalk = initial {
+    iterate i up_to 1024 carrying st: ModRecordsCollectWalk = initial {
         if decl_record_list_empty(st.rest) { return st.acc; }
         next st = collect_module_record_step<P, N>(pages, stride, total, unit.header, nominals, st);
     }
@@ -3330,14 +3332,21 @@ fn dummy_fn_decl() -> (result: decl.FnDecl) {
     let empty_body: decl.FnBody = decl.FnBody { body: decl.StmtList.SNil, ret: decl.Expr.Integer { start: 0, end: 0, value: 0, overflow: false }, has_ret: false };
     return decl.FnDecl { ok: false, err_start: 0, err_end: 0, sig: empty_sig, body: empty_body, fn_start: 0, fn_end: 0, cursor: 0 };
 }
-record FnDeclSearch { rest: decl.FnList, wanted: decl.SemanticIdentity, found: bool, fn_decl: decl.FnDecl }
+record FnDeclSearch { rest: decl.FnList, wanted: decl.SemanticIdentity, found: bool, ambiguous: bool, fn_decl: decl.FnDecl }
 fn find_fn_decl_by_id<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, fns: decl.FnList, wanted: decl.SemanticIdentity) -> (result: FnDeclLookup) {
-    let initial: FnDeclSearch = FnDeclSearch { rest: fns, wanted: wanted, found: false, fn_decl: dummy_fn_decl() };
+    let initial: FnDeclSearch = FnDeclSearch { rest: fns, wanted: wanted, found: false, ambiguous: false, fn_decl: dummy_fn_decl() };
+    iterate chunk up_to 64 carrying st: FnDeclSearch = initial {
+        if st.ambiguous || decl_fn_list_empty(st.rest) { return FnDeclLookup { found: st.found && !(st.ambiguous), fn_decl: st.fn_decl }; }
+        next st = find_fn_decl_chunk<P, N>(pages, stride, total, header, st);
+    }
+    return FnDeclLookup { found: st.found && !(st.ambiguous) && decl_fn_list_empty(st.rest), fn_decl: st.fn_decl };
+}
+fn find_fn_decl_chunk<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, initial: FnDeclSearch) -> (result: FnDeclSearch) {
     iterate i up_to 1024 carrying st: FnDeclSearch = initial {
-        if st.found || decl_fn_list_empty(st.rest) { return FnDeclLookup { found: st.found, fn_decl: st.fn_decl }; }
+        if st.ambiguous || decl_fn_list_empty(st.rest) { return st; }
         next st = find_fn_decl_step<P, N>(pages, stride, total, header, st);
     }
-    return FnDeclLookup { found: st.found, fn_decl: st.fn_decl };
+    return st;
 }
 fn find_fn_decl_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, st: FnDeclSearch) -> (result: FnDeclSearch) {
     return match st.rest {
@@ -3346,11 +3355,27 @@ fn find_fn_decl_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: 
     };
 }
 fn find_fn_decl_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, header: parser.Header, st: FnDeclSearch, fd: decl.FnDecl, rest: decl.FnList) -> (result: FnDeclSearch) {
+    if !(identity_function_name_matches<P, N>(pages, stride, total, st.wanted, fd.sig.name_start, fd.sig.name_end)) {
+        return FnDeclSearch { ..st, rest: rest };
+    }
     let fid: decl.SemanticIdentity = decl.canonical_function_identity<P, N>(pages, stride, total, header.module_start, header.module_end, fd.sig.name_start, fd.sig.name_end);
     if semantic_ids_equal(fid, st.wanted) {
-        return FnDeclSearch { rest: decl.FnList.DNil, wanted: st.wanted, found: true, fn_decl: fd };
+        return FnDeclSearch { ..st, rest: rest, found: true, ambiguous: st.found, fn_decl: fd };
     }
     return FnDeclSearch { ..st, rest: rest };
+}
+fn identity_function_name_matches<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, wanted: decl.SemanticIdentity, start: u64, end: u64) -> (result: bool) {
+    if !(wanted.valid) || wanted.len > wanted.bytes.len || start >= end || end > total { return false; }
+    let size: u64 = end - start;
+    if size >= wanted.len { return false; }
+    let offset: u64 = wanted.len - size;
+    if wanted.bytes[offset - 1] != 58 { return false; }
+    iterate i up_to 512 carrying n: u64 = 0 {
+        if n >= size { return true; }
+        if (source.byte_at_global<P, N>(pages, stride, total, start + n) as byte) != wanted.bytes[offset + n] { return false; }
+        next n = n + 1;
+    }
+    return n == size;
 }
 
 fn resolve_sem_type_non_seq<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, ty: decl.SemType, nominals: decl.NominalTypeIdentityList, schemas: VmSchemas) -> (result: VmType) {
@@ -5331,7 +5356,7 @@ fn find_ssa_fn_in_summary_step(summary: ssa.ValueSsaSummary, wanted: decl.Semant
 record ReachableModuleFnSearch { rest: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity, found: bool, source_index: u64, unit: decl.Unit, func: ssa.Function }
 fn find_ssa_fn_in_reachable_modules(modules: project.ProjectModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity) -> (result: ReachableSsaFnLookup) {
     let initial: ReachableModuleFnSearch = ReachableModuleFnSearch { rest: modules, reachable: reachable, wanted: wanted, found: false, source_index: 0, unit: empty_unit(), func: ssa.empty_ssa_function() };
-    iterate i up_to 64 carrying st: ReachableModuleFnSearch = initial {
+    iterate i up_to 256 carrying st: ReachableModuleFnSearch = initial {
         if st.found || project_module_list_empty(st.rest) {
             return ReachableSsaFnLookup { found: st.found, source_index: st.source_index, unit: st.unit, func: st.func };
         }
@@ -5822,25 +5847,27 @@ fn collect_context_finite_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot,
     return ContextFinitesWalk { ..st, rest: rest, acc: next_acc };
 }
 
-record ProviderCallableLookup { found: bool, source_index: u64 }
+record ProviderCallableLookup { found: bool, source_index: u64, start: u64, end: u64 }
 record ProviderCallableSearch {
     rest: project.ModuleList,
     reachable: [bool; 64],
     wanted: decl.SemanticIdentity,
     found: bool,
-    source_index: u64
+    source_index: u64,
+    start: u64,
+    end: u64
 }
 fn find_provider_source_for_callable<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], dep_modules: project.ModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity) -> (result: ProviderCallableLookup) {
     let initial: ProviderCallableSearch = ProviderCallableSearch {
-        rest: dep_modules, reachable: reachable, wanted: wanted, found: false, source_index: 0
+        rest: dep_modules, reachable: reachable, wanted: wanted, found: false, source_index: 0, start: 0, end: 0
     };
     iterate i up_to 64 carrying st: ProviderCallableSearch = initial {
         if st.found || parsed_module_list_empty(st.rest) {
-            return ProviderCallableLookup { found: st.found, source_index: st.source_index };
+            return ProviderCallableLookup { found: st.found, source_index: st.source_index, start: st.start, end: st.end };
         }
         next st = find_provider_source_step<M, N>(snapshot, flat_pages, st);
     }
-    return ProviderCallableLookup { found: st.found, source_index: st.source_index };
+    return ProviderCallableLookup { found: st.found, source_index: st.source_index, start: st.start, end: st.end };
 }
 fn find_provider_source_step<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: ProviderCallableSearch) -> (result: ProviderCallableSearch) {
     return match st.rest {
@@ -5859,7 +5886,7 @@ fn find_provider_source_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, f
     if decl_lk.found {
         return ProviderCallableSearch {
             rest: project.ModuleList.MNil, reachable: st.reachable, wanted: st.wanted,
-            found: true, source_index: parsed.source_index
+            found: true, source_index: parsed.source_index, start: decl_lk.fn_decl.fn_start, end: decl_lk.fn_decl.fn_end
         };
     }
     return ProviderCallableSearch { ..st, rest: rest };
@@ -5867,7 +5894,8 @@ fn find_provider_source_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, f
 
 record OnDemandClosureWalk {
     loaded_modules: project.ProjectModuleList,
-    materialized: [bool; 64],
+    provider_schemas: project.TargetSchemaState,
+    has_provider_schemas: bool,
     emitted_rev: VmFunctionList,
     pending: PendingSpecList,
     fn_count: u64,
@@ -5886,13 +5914,15 @@ fn project_module_verified_for_emit(mod_item: project.ProjectModule) -> (result:
         && mod_item.value_ssa.verified_function_count == mod_item.value_ssa.function_count
         && mod_item.value_ssa.unsupported_block_count == 0;
 }
-fn expand_project_vm_closure_on_demand<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, target_source_index: u64, schemas: VmSchemas, root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: OnDemandClosureWalk) {
-    let empty_mat: [bool; 64] = [false; 64];
-    let init_mat: [bool; 64] = replace(empty_mat, target_source_index, true);
+fn expand_project_vm_closure_on_demand<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, schemas: VmSchemas, root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: OnDemandClosureWalk) {
     let seeded_pending: PendingSpecList = collect_fns_callees_in_order(root_fns);
     let initial: OnDemandClosureWalk = OnDemandClosureWalk {
         loaded_modules: ctx.result.modules,
-        materialized: init_mat,
+        provider_schemas: project.TargetSchemaState {
+            wanted_markers: decl.NominalTypeIdentityList.NINil,
+            records: decl.ImportedRecordList.IRNil, enums: decl.ImportedEnumList.IENil, changed: false
+        },
+        has_provider_schemas: false,
         emitted_rev: reverse_vm_fns(root_fns),
         pending: seeded_pending,
         fn_count: root_fn_count, block_count: root_block_count, inst_count: root_inst_count,
@@ -5925,29 +5955,34 @@ fn expand_project_vm_closure_od_one<M: Nat, N: Nat>(snapshot: project.ProjectSna
         return lower_od_located_callee<M, N>(snapshot, flat_pages, schemas, st, spec_key, rest, located);
     }
     let prov: ProviderCallableLookup = find_provider_source_for_callable<M, N>(snapshot, flat_pages, ctx.dependency_modules, ctx.reachable, spec_key.identity);
-    if !(prov.found) || prov.source_index >= 64 || !(ctx.reachable[prov.source_index]) || st.materialized[prov.source_index] {
+    if !(prov.found) {
         return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0, error_detail: phase_failure_detail(spec_key.identity, 12, 0, 0, 0, decl.invalid_semantic_identity(), 0, 0) };
     }
-    let built: project.MaterializedProviderBuild = project.materialize_provider_module<M, N>(snapshot, flat_pages, ctx, prov.source_index);
+    let ready: OnDemandClosureWalk = prepare_provider_schemas<M, N>(snapshot, flat_pages, ctx, st);
+    let built: project.MaterializedProviderBuild = project.materialize_provider_callable<M, N>(snapshot, flat_pages, ctx, ready.provider_schemas, prov.source_index, prov.start, prov.end);
     if !(built.ok) {
-        return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0, error_detail: phase_failure_detail(spec_key.identity, 12, 0, 0, 0, decl.invalid_semantic_identity(), 0, 0) };
+        return OnDemandClosureWalk { ..ready, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0, error_detail: phase_failure_detail(spec_key.identity, 12, 0, 0, 0, decl.invalid_semantic_identity(), built.start, built.end) };
     }
-    return attach_and_lower_od_provider<M, N>(snapshot, flat_pages, ctx, schemas, st, spec_key, rest, prov.source_index, built.modules);
+    return attach_and_lower_od_provider<M, N>(snapshot, flat_pages, ctx, schemas, ready, spec_key, rest, built.modules);
 }
-fn attach_and_lower_od_provider<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, schemas: VmSchemas, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, provider_index: u64, built_modules: project.ProjectModuleList) -> (result: OnDemandClosureWalk) {
+fn prepare_provider_schemas<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, st: OnDemandClosureWalk) -> (result: OnDemandClosureWalk) {
+    if st.has_provider_schemas { return st; }
+    let schemas: project.TargetSchemaState = project.project_provider_schemas<M, N>(snapshot, flat_pages, ctx);
+    return OnDemandClosureWalk { ..st, provider_schemas: schemas, has_provider_schemas: true };
+}
+fn attach_and_lower_od_provider<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, schemas: VmSchemas, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, built_modules: project.ProjectModuleList) -> (result: OnDemandClosureWalk) {
     return match built_modules {
         project.ProjectModuleList.PNil => OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0, error_detail: phase_failure_detail(spec_key.identity, 12, 0, 0, 0, decl.invalid_semantic_identity(), 0, 0) },
-        project.ProjectModuleList.PCons { head: mod_item, tail: ignored_tail } => attach_and_lower_od_provider_one<M, N>(snapshot, flat_pages, ctx, schemas, st, spec_key, rest, provider_index, mod_item)
+        project.ProjectModuleList.PCons { head: mod_item, tail: ignored_tail } => attach_and_lower_od_provider_one<M, N>(snapshot, flat_pages, ctx, schemas, st, spec_key, rest, mod_item)
     };
 }
-fn attach_and_lower_od_provider_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, schemas: VmSchemas, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, provider_index: u64, mod_item: project.ProjectModule) -> (result: OnDemandClosureWalk) {
+fn attach_and_lower_od_provider_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, schemas: VmSchemas, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, mod_item: project.ProjectModule) -> (result: OnDemandClosureWalk) {
     if !(project_module_verified_for_emit(mod_item)) {
         return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0, error_detail: phase_failure_detail(spec_key.identity, 12, 0, 0, 0, decl.invalid_semantic_identity(), 0, 0) };
     }
     let next_loaded: project.ProjectModuleList = project.ProjectModuleList.PCons { head: mod_item, tail: st.loaded_modules };
-    let next_mat: [bool; 64] = replace(st.materialized, provider_index, true);
-    let updated_st: OnDemandClosureWalk = OnDemandClosureWalk { ..st, loaded_modules: next_loaded, materialized: next_mat };
-    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(next_loaded, ctx.reachable, spec_key.identity);
+    let updated_st: OnDemandClosureWalk = OnDemandClosureWalk { ..st, loaded_modules: next_loaded };
+    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(project.ProjectModuleList.PCons { head: mod_item, tail: project.ProjectModuleList.PNil }, ctx.reachable, spec_key.identity);
     if !(located.found) {
         return OnDemandClosureWalk { ..updated_st, pending: PendingSpecList.PSNil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0, error_detail: phase_failure_detail(spec_key.identity, 12, 0, 0, 0, decl.invalid_semantic_identity(), 0, 0) };
     }
@@ -5967,8 +6002,7 @@ fn lower_od_located_callee<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, fl
     }
     let child_callees: PendingSpecList = collect_fn_callees_in_order(lowered.vm_fn);
     return OnDemandClosureWalk {
-        loaded_modules: st.loaded_modules,
-        materialized: st.materialized,
+        ..st,
         emitted_rev: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.emitted_rev },
         pending: append_pending_specs(rest, child_callees),
         fn_count: st.fn_count + 1,
@@ -6007,7 +6041,7 @@ fn emit_verified_selected_project_callable<M: Nat, N: Nat>(snapshot: project.Pro
         return emit_failure_detailed(root_lowered.error_code, root_lowered.error_function, root_lowered.error_block, root_lowered.error_inst, root_lowered.error_detail);
     }
     let expanded: OnDemandClosureWalk = expand_project_vm_closure_on_demand<M, N>(
-        snapshot, flat_pages, ctx, target_source_index, schemas,
+        snapshot, flat_pages, ctx, schemas,
         root_lowered.acc, root_lowered.fn_count, root_lowered.block_count, root_lowered.inst_count
     );
     if !(expanded.ok) {

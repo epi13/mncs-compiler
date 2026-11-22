@@ -866,6 +866,9 @@ def encode_project_request_bytes(
     stride=STRIDE_DEFAULT,
     page_bound=PAGE_BOUND,
     target_index=None,
+    target_module=PROJECT_MODULE,
+    target_function=None,
+    extra_arguments=(),
     step_budget=8_000_000,
 ):
     """Encode a Project request directly to JSONL bytes without per-byte dicts."""
@@ -890,18 +893,22 @@ def encode_project_request_bytes(
         + b",".join(encode_byte_sequence_json(page) for page in flat)
         + b"]}}"
     )
-    fn_name = "compile_project_target" if target_index is not None else "compile_project"
     args_parts = [snapshot_bytes, pages_bytes]
     if target_index is not None:
         args_parts.append(json.dumps(integer(target_index), separators=(",", ":")).encode())
+    args_parts.extend(json.dumps(arg, separators=(",", ":")).encode() for arg in extra_arguments)
+    target_bytes = json.dumps({
+        "module": target_module,
+        "function": target_function or ("compile_project_target" if target_index is not None else "compile_project"),
+    }, separators=(",", ":")).encode()
     type_args = json.dumps([
         {"kind": "nat", "value": page_bound},
         {"kind": "nat", "value": stride},
     ], separators=(",", ":")).encode()
     return (
-        b'{"schema_version":"0.1","target":{"module":"mncs.compiler.project.v1","function":"'
-        + fn_name.encode()
-        + b'"},"arguments":['
+        b'{"schema_version":"0.1","target":'
+        + target_bytes
+        + b',"arguments":['
         + b",".join(args_parts)
         + b'],"type_arguments":'
         + type_args

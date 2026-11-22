@@ -1,0 +1,37 @@
+{
+  "artifact_kind": "mncs.capability_gap",
+  "contract_revision": "0.1",
+  "gap_id": "stage1-declaration-cranelift-observation-address-space",
+  "producer": "mncs-compiler:tools/test_native_decl_vm_emit.py",
+  "compiler_identity": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+  "source_revision": "529583476ebb58a1aa2ddfaf2bbef13e1ad687b1",
+  "source_artifact": "sha256:fd5e8a67943011eec33e8d5e37f1865bcbaaa4190efe320a475d88eee35de71c",
+  "source_location": "src/compiler/decl.mncs:2947",
+  "requested_semantics": "Deliver the unchanged selected parse_use<4,32> emitter result in an 8 GiB Stage-0 probe process.",
+  "obstruction": "backend",
+  "active_profile": "0.19",
+  "backends": [
+    "cranelift",
+    "research-bytecode"
+  ],
+  "closest_supported_semantics": "The sorted 1,031-page closure verifies the wrapper through Project Value SSA. Cranelift reaches composite observation decode, where an allocation aborts. Research bytecode exhausts its supported 8,000,000-step request.",
+  "reproducer": "RUST_BACKTRACE=1 MNCS_PROBE_RELEASE_PROGRAMS_AFTER_IDENTITIES=1 python3 -u tools/test_native_decl_vm_emit.py parse_use",
+  "protected_properties": [
+    "8 GiB host and child address-space guard",
+    "unchanged parse_use source and callable specialization",
+    "locked Stage-0 oracle revision 6a3f6907"
+  ],
+  "approximation_prohibited": true,
+  "evidence_requirements": [
+    "canonical VM admission and complete UseDecl parity",
+    "deterministic artifact bytes",
+    "independent Project and Stage-0 transport observations"
+  ],
+  "status": "FAIL",
+  "unresolved_fields": [
+    "emitter_result",
+    "vm_admission",
+    "vm_execution"
+  ],
+  "identity": "mncs:0.2:capability-gap:a1ab41c100f9e904de1cd327542640f20039abb573fb47aea407b2c672f42f9e"
+}
