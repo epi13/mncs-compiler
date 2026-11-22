@@ -22,12 +22,18 @@ use mncs.compiler.ssa.v1 as ssa;
 //  kind 3 = integer (bits: 8|16|32|64, signed)
 //  kind 4 = bounded scalar sequence (bits: 0=byte, 1=bool, 8|16|32|64=integer; signed; bound_kind: 1=exact, 2=up_to; bound_value > 0)
 //  kind 5 = nominal record (nominal_identity)
+//  kind 6 = nested bounded scalar sequence ([[T; inner_bound]; outer_bound]:
+//            bits/signed = inner scalar element type (0=byte, 1=bool, 8|16|32|64=integer),
+//            inner_bound_kind: 1=exact/2=up_to, inner_bound_value > 0,
+//            bound_kind: 1=exact/2=up_to, bound_value > 0)
 record VmType {
     kind: u64,
     bits: u64,
     signed: bool,
     bound_kind: u64,
     bound_value: u64,
+    inner_bound_kind: u64,
+    inner_bound_value: u64,
     nominal_identity: decl.SemanticIdentity,
     valid: bool
 }
@@ -171,27 +177,56 @@ record VmEmitResult {
 // ---------------------------------------------------------------------------
 
 fn invalid_vm_type() -> (result: VmType) {
-    return VmType { kind: 0, bits: 0, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: false };
+    return VmType { kind: 0, bits: 0, signed: false, bound_kind: 0, bound_value: 0, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: false };
 }
 fn bool_vm_type() -> (result: VmType) {
-    return VmType { kind: 1, bits: 1, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    return VmType { kind: 1, bits: 1, signed: false, bound_kind: 0, bound_value: 0, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
 fn byte_vm_type() -> (result: VmType) {
-    return VmType { kind: 2, bits: 8, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    return VmType { kind: 2, bits: 8, signed: false, bound_kind: 0, bound_value: 0, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
 fn int_vm_type(width: u64, signed: bool) -> (result: VmType) {
     let ok: bool = width == 8 || width == 16 || width == 32 || width == 64;
     if !(ok) { return invalid_vm_type(); }
-    return VmType { kind: 3, bits: width, signed: signed, bound_kind: 0, bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    return VmType { kind: 3, bits: width, signed: signed, bound_kind: 0, bound_value: 0, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
 fn u64_vm_type() -> (result: VmType) {
     return int_vm_type(64, false);
 }
-fn byte_seq_vm_type(bound_kind: u64, bound_value: u64) -> (result: VmType) {
-    if (bound_kind != 1 && bound_kind != 2) || bound_value == 0 || bound_value > 65536 {
+fn scalar_seq_vm_type(elem: VmType, bound_kind: u64, bound_value: u64) -> (result: VmType) {
+    if !(elem.valid) || (bound_kind != 1 && bound_kind != 2) || bound_value == 0 || bound_value > 65536 {
         return invalid_vm_type();
     }
-    return VmType { kind: 4, bits: 0, signed: false, bound_kind: bound_kind, bound_value: bound_value, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    if elem.kind == 2 {
+        return VmType { kind: 4, bits: 0, signed: false, bound_kind: bound_kind, bound_value: bound_value, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    }
+    if elem.kind == 1 {
+        return VmType { kind: 4, bits: 1, signed: false, bound_kind: bound_kind, bound_value: bound_value, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    }
+    if elem.kind == 3 {
+        return VmType { kind: 4, bits: elem.bits, signed: elem.signed, bound_kind: bound_kind, bound_value: bound_value, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    }
+    return invalid_vm_type();
+}
+fn byte_seq_vm_type(bound_kind: u64, bound_value: u64) -> (result: VmType) {
+    return scalar_seq_vm_type(byte_vm_type(), bound_kind, bound_value);
+}
+fn nested_seq_vm_type(inner: VmType, outer_bound_kind: u64, outer_bound_value: u64) -> (result: VmType) {
+    if !(inner.valid) || inner.kind != 4 || (inner.bound_kind != 1 && inner.bound_kind != 2) || inner.bound_value == 0 || inner.bound_value > 65536 {
+        return invalid_vm_type();
+    }
+    if (outer_bound_kind != 1 && outer_bound_kind != 2) || outer_bound_value == 0 || outer_bound_value > 65536 {
+        return invalid_vm_type();
+    }
+    return VmType {
+        kind: 6, bits: inner.bits, signed: inner.signed,
+        bound_kind: outer_bound_kind, bound_value: outer_bound_value,
+        inner_bound_kind: inner.bound_kind, inner_bound_value: inner.bound_value,
+        nominal_identity: decl.invalid_semantic_identity(), valid: true
+    };
+}
+fn is_seq_vm_type(ty: VmType) -> (result: bool) {
+    return ty.valid && (ty.kind == 4 || ty.kind == 6);
 }
 fn is_seq_sem_type(ty: decl.SemType) -> (result: bool) {
     return match ty {
@@ -206,7 +241,7 @@ fn is_seq_sem_type(ty: decl.SemType) -> (result: bool) {
 }
 fn record_vm_type(nominal_identity: decl.SemanticIdentity) -> (result: VmType) {
     if !(nominal_identity.valid) || nominal_identity.len == 0 { return invalid_vm_type(); }
-    return VmType { kind: 5, bits: 0, signed: false, bound_kind: 0, bound_value: 0, nominal_identity: nominal_identity, valid: true };
+    return VmType { kind: 5, bits: 0, signed: false, bound_kind: 0, bound_value: 0, inner_bound_kind: 0, inner_bound_value: 0, nominal_identity: nominal_identity, valid: true };
 }
 fn sem_type_to_vm_scalar(ty: decl.SemType) -> (result: VmType) {
     return match ty {
@@ -233,26 +268,35 @@ fn vm_type_equal(a: VmType, b: VmType) -> (result: bool) {
     if a.kind == 3 { return a.bits == b.bits && a.signed == b.signed; }
     if a.kind == 4 { return a.bits == b.bits && a.signed == b.signed && a.bound_kind == b.bound_kind && a.bound_value == b.bound_value; }
     if a.kind == 5 { return semantic_ids_equal(a.nominal_identity, b.nominal_identity); }
+    if a.kind == 6 {
+        return a.bits == b.bits && a.signed == b.signed
+            && a.bound_kind == b.bound_kind && a.bound_value == b.bound_value
+            && a.inner_bound_kind == b.inner_bound_kind && a.inner_bound_value == b.inner_bound_value;
+    }
     return true;
 }
 fn seq_element_vm_type(seq_ty: VmType) -> (result: VmType) {
-    if !(seq_ty.valid) || seq_ty.kind != 4 || seq_ty.bound_value == 0 { return invalid_vm_type(); }
-    if seq_ty.bits == 0 { return byte_vm_type(); }
-    if seq_ty.bits == 1 { return bool_vm_type(); }
-    return int_vm_type(seq_ty.bits, seq_ty.signed);
-}
-fn exact_scalar_seq_vm_type(elem: VmType, length: u64) -> (result: VmType) {
-    if !(elem.valid) || length == 0 { return invalid_vm_type(); }
-    if elem.kind == 2 {
-        return VmType { kind: 4, bits: 0, signed: false, bound_kind: 1, bound_value: length, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    if !(seq_ty.valid) || seq_ty.bound_value == 0 { return invalid_vm_type(); }
+    if seq_ty.kind == 4 {
+        if seq_ty.bits == 0 { return byte_vm_type(); }
+        if seq_ty.bits == 1 { return bool_vm_type(); }
+        return int_vm_type(seq_ty.bits, seq_ty.signed);
     }
-    if elem.kind == 1 {
-        return VmType { kind: 4, bits: 1, signed: false, bound_kind: 1, bound_value: length, nominal_identity: decl.invalid_semantic_identity(), valid: true };
-    }
-    if elem.kind == 3 {
-        return VmType { kind: 4, bits: elem.bits, signed: elem.signed, bound_kind: 1, bound_value: length, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    if seq_ty.kind == 6 {
+        if (seq_ty.inner_bound_kind != 1 && seq_ty.inner_bound_kind != 2) || seq_ty.inner_bound_value == 0 || seq_ty.inner_bound_value > 65536 {
+            return invalid_vm_type();
+        }
+        return VmType {
+            kind: 4, bits: seq_ty.bits, signed: seq_ty.signed,
+            bound_kind: seq_ty.inner_bound_kind, bound_value: seq_ty.inner_bound_value,
+            inner_bound_kind: 0, inner_bound_value: 0,
+            nominal_identity: decl.invalid_semantic_identity(), valid: true
+        };
     }
     return invalid_vm_type();
+}
+fn exact_scalar_seq_vm_type(elem: VmType, length: u64) -> (result: VmType) {
+    return scalar_seq_vm_type(elem, 1, length);
 }
 fn is_u64_vm_type(ty: VmType) -> (result: bool) {
     return ty.valid && ty.kind == 3 && ty.bits == 64 && !(ty.signed);
@@ -460,19 +504,19 @@ fn reverse_ssa_id_step(st: SsaIdRev) -> (result: SsaIdRev) {
     };
 }
 
-record IdContainsWalk { rest: ssa.IdList, wanted: u64, found: bool }
-fn id_in_list(ids: ssa.IdList, wanted: u64) -> (result: bool) {
-    iterate i up_to 1024 carrying st: IdContainsWalk = IdContainsWalk { rest: ids, wanted: wanted, found: false } {
-        if st.found || id_list_empty(st.rest) { return st.found; }
-        next st = id_in_list_step(st);
-    }
-    return st.found;
+fn id_list_head_eq(ids: ssa.IdList, wanted: u64) -> (result: bool) {
+    return match ids { ssa.IdList.INil => false, ssa.IdList.ICons { head: h, tail: t } => h.value == wanted };
 }
-fn id_in_list_step(st: IdContainsWalk) -> (result: IdContainsWalk) {
-    return match st.rest {
-        ssa.IdList.INil => st,
-        ssa.IdList.ICons { head: h, tail: t } => IdContainsWalk { rest: t, wanted: st.wanted, found: h.value == st.wanted }
-    };
+fn id_list_tail(ids: ssa.IdList) -> (result: ssa.IdList) {
+    return match ids { ssa.IdList.INil => ssa.IdList.INil, ssa.IdList.ICons { head: h, tail: t } => t };
+}
+fn id_in_list(ids: ssa.IdList, wanted: u64) -> (result: bool) {
+    iterate i up_to 1024 carrying rest: ssa.IdList = ids {
+        if id_list_empty(rest) { return false; }
+        if id_list_head_eq(rest, wanted) { return true; }
+        next rest = id_list_tail(rest);
+    }
+    return false;
 }
 
 fn vm_bounded_iter_list_empty(iters: VmBoundedIterationList) -> (result: bool) {
@@ -619,33 +663,85 @@ fn resolve_nat_bound_span<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], str
     return res;
 }
 
-// Parse concrete `[byte; N]` or `[byte; up_to N]` from a source type span.
+// Parse concrete flat `[T; N]` / `[T; up_to N]` or nested `[[T; N]; P]` / `[[T; up_to N]; up_to P]`
+// from a source type span, where T is a concrete scalar type (`byte`, `bool`, or integer).
 record SeqTypeParseResult { ok: bool, error_code: u64, ty: VmType }
+record SeqBoundCloseResult { ok: bool, error_code: u64, bound_kind: u64, bound_value: u64, close_end: u64 }
+fn parse_seq_bound_after_semi<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, after_elem: u64, nat_env: NatEnv) -> (result: SeqBoundCloseResult) {
+    let t_semi: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, after_elem);
+    if t_semi.diagnostic != 0 || t_semi.kind != 63 {
+        return SeqBoundCloseResult { ok: false, error_code: 4, bound_kind: 0, bound_value: 0, close_end: 0 };
+    }
+    let t_b0: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_semi.end);
+    if t_b0.diagnostic != 0 {
+        return SeqBoundCloseResult { ok: false, error_code: 4, bound_kind: 0, bound_value: 0, close_end: 0 };
+    }
+    let is_up_to: bool = t_b0.kind == 32;
+    let bound_kind: u64 = select(is_up_to, 2, 1);
+    let t_bound: lexer.Token = select_token(is_up_to, lexer.significant_global<P, N>(pages, stride, total, t_b0.end), t_b0);
+    if t_bound.diagnostic != 0 {
+        return SeqBoundCloseResult { ok: false, error_code: 4, bound_kind: 0, bound_value: 0, close_end: 0 };
+    }
+    let t_close: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_bound.end);
+    if t_close.diagnostic != 0 || t_close.kind != 70 {
+        return SeqBoundCloseResult { ok: false, error_code: 4, bound_kind: 0, bound_value: 0, close_end: 0 };
+    }
+    let nat_res: NatBoundResult = resolve_nat_token<P, N>(pages, stride, total, nat_env, t_bound);
+    if !(nat_res.ok) {
+        return SeqBoundCloseResult { ok: false, error_code: nat_res.error_code, bound_kind: 0, bound_value: 0, close_end: 0 };
+    }
+    return SeqBoundCloseResult { ok: true, error_code: 0, bound_kind: bound_kind, bound_value: nat_res.value, close_end: t_close.end };
+}
+fn parse_scalar_elem_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64) -> (result: VmType) {
+    let sk: u64 = decl.scalar_kind<P, N>(pages, stride, total, start, end);
+    if sk == 4 { return byte_vm_type(); }
+    if sk == 3 { return bool_vm_type(); }
+    if sk == 1 { return int_vm_type(64, false); }
+    if sk == 2 { return int_vm_type(64, true); }
+    let elem_sem: decl.SemType = decl.scalar_sem<P, N>(pages, stride, total, start, end);
+    return sem_type_to_vm_scalar(elem_sem);
+}
+record FlatSeqParseWithEnd { ok: bool, error_code: u64, ty: VmType, close_end: u64 }
+fn parse_flat_scalar_seq_at<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, t_elem: lexer.Token, nat_env: NatEnv) -> (result: FlatSeqParseWithEnd) {
+    if t_elem.diagnostic != 0 || t_elem.kind != 4 {
+        return FlatSeqParseWithEnd { ok: false, error_code: 4, ty: invalid_vm_type(), close_end: 0 };
+    }
+    let elem_ty: VmType = parse_scalar_elem_vm_type<P, N>(pages, stride, total, t_elem.start, t_elem.end);
+    if !(elem_ty.valid) {
+        return FlatSeqParseWithEnd { ok: false, error_code: 4, ty: invalid_vm_type(), close_end: 0 };
+    }
+    let bnd: SeqBoundCloseResult = parse_seq_bound_after_semi<P, N>(pages, stride, total, t_elem.end, nat_env);
+    if !(bnd.ok) {
+        return FlatSeqParseWithEnd { ok: false, error_code: bnd.error_code, ty: invalid_vm_type(), close_end: 0 };
+    }
+    let seq_ty: VmType = scalar_seq_vm_type(elem_ty, bnd.bound_kind, bnd.bound_value);
+    if !(seq_ty.valid) {
+        return FlatSeqParseWithEnd { ok: false, error_code: 4, ty: invalid_vm_type(), close_end: 0 };
+    }
+    return FlatSeqParseWithEnd { ok: true, error_code: 0, ty: seq_ty, close_end: bnd.close_end };
+}
 fn parse_byte_seq_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nat_env: NatEnv) -> (result: SeqTypeParseResult) {
     if end <= start || end > total { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
     let t_open: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, start);
     if t_open.diagnostic != 0 || t_open.kind != 69 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
-    let t_elem: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_open.end);
-    if t_elem.diagnostic != 0 || t_elem.kind != 4 || decl.scalar_kind<P, N>(pages, stride, total, t_elem.start, t_elem.end) != 4 {
-        return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
+    let t_next: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_open.end);
+    if t_next.diagnostic != 0 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    if t_next.kind == 69 {
+        // Nested bounded sequence: `[[T; inner_bound]; outer_bound]`
+        let t_inner_elem: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_next.end);
+        let inner: FlatSeqParseWithEnd = parse_flat_scalar_seq_at<P, N>(pages, stride, total, t_inner_elem, nat_env);
+        if !(inner.ok) { return SeqTypeParseResult { ok: false, error_code: inner.error_code, ty: invalid_vm_type() }; }
+        let outer_bnd: SeqBoundCloseResult = parse_seq_bound_after_semi<P, N>(pages, stride, total, inner.close_end, nat_env);
+        if !(outer_bnd.ok) { return SeqTypeParseResult { ok: false, error_code: outer_bnd.error_code, ty: invalid_vm_type() }; }
+        if outer_bnd.close_end != end { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+        let nested: VmType = nested_seq_vm_type(inner.ty, outer_bnd.bound_kind, outer_bnd.bound_value);
+        if !(nested.valid) { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+        return SeqTypeParseResult { ok: true, error_code: 0, ty: nested };
     }
-    let t_semi: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_elem.end);
-    if t_semi.diagnostic != 0 || t_semi.kind != 63 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
-    let t_b0: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_semi.end);
-    if t_b0.diagnostic != 0 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
-    let is_up_to: bool = t_b0.kind == 32;
-    let bound_kind: u64 = select(is_up_to, 2, 1);
-    let t_bound: lexer.Token = select_token(is_up_to, lexer.significant_global<P, N>(pages, stride, total, t_b0.end), t_b0);
-    if t_bound.diagnostic != 0 { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
-    let t_close: lexer.Token = lexer.significant_global<P, N>(pages, stride, total, t_bound.end);
-    if t_close.diagnostic != 0 || t_close.kind != 70 || t_close.end != end {
-        return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() };
-    }
-    let nat_res: NatBoundResult = resolve_nat_token<P, N>(pages, stride, total, nat_env, t_bound);
-    if !(nat_res.ok) {
-        return SeqTypeParseResult { ok: false, error_code: nat_res.error_code, ty: invalid_vm_type() };
-    }
-    return SeqTypeParseResult { ok: true, error_code: 0, ty: byte_seq_vm_type(bound_kind, nat_res.value) };
+    let flat: FlatSeqParseWithEnd = parse_flat_scalar_seq_at<P, N>(pages, stride, total, t_next, nat_env);
+    if !(flat.ok) { return SeqTypeParseResult { ok: false, error_code: flat.error_code, ty: invalid_vm_type() }; }
+    if flat.close_end != end { return SeqTypeParseResult { ok: false, error_code: 4, ty: invalid_vm_type() }; }
+    return SeqTypeParseResult { ok: true, error_code: 0, ty: flat.ty };
 }
 fn select_token(pick_first: bool, a: lexer.Token, b: lexer.Token) -> (result: lexer.Token) {
     if pick_first { return a; }
@@ -732,80 +828,58 @@ fn dummy_record_type() -> (result: VmRecordType) {
     return VmRecordType { identity: decl.invalid_semantic_identity(), name: decl.invalid_semantic_identity(), fields: VmRecordFieldList.VRFNil };
 }
 record RecordTypeLookup { found: bool, schema: VmRecordType }
-record RecordTypeSearch { rest: VmRecordTypeList, wanted: decl.SemanticIdentity, found: bool, schema: VmRecordType }
+fn rec_type_head_eq(recs: VmRecordTypeList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    return match recs { VRTNil => false, VRTCons { head: rec, tail: t } => semantic_ids_equal(rec.identity, wanted) };
+}
+fn rec_type_head(recs: VmRecordTypeList) -> (result: VmRecordType) {
+    return match recs { VRTNil => dummy_record_type(), VRTCons { head: rec, tail: t } => rec };
+}
+fn rec_type_tail(recs: VmRecordTypeList) -> (result: VmRecordTypeList) {
+    return match recs { VRTNil => VmRecordTypeList.VRTNil, VRTCons { head: rec, tail: t } => t };
+}
 fn find_vm_record_type(recs: VmRecordTypeList, wanted: decl.SemanticIdentity) -> (result: RecordTypeLookup) {
-    let initial: RecordTypeSearch = RecordTypeSearch { rest: recs, wanted: wanted, found: false, schema: dummy_record_type() };
-    iterate i up_to 256 carrying st: RecordTypeSearch = initial {
-        if st.found || vm_record_type_list_empty(st.rest) { return RecordTypeLookup { found: st.found, schema: st.schema }; }
-        next st = find_vm_record_type_step(st);
+    iterate i up_to 256 carrying rest: VmRecordTypeList = recs {
+        if vm_record_type_list_empty(rest) { return RecordTypeLookup { found: false, schema: dummy_record_type() }; }
+        if rec_type_head_eq(rest, wanted) { return RecordTypeLookup { found: true, schema: rec_type_head(rest) }; }
+        next rest = rec_type_tail(rest);
     }
-    return RecordTypeLookup { found: st.found, schema: st.schema };
-}
-fn find_vm_record_type_step(st: RecordTypeSearch) -> (result: RecordTypeSearch) {
-    return match st.rest {
-        VRTNil => st,
-        VRTCons { head: rec, tail: rest } => find_vm_record_type_one(st, rec, rest)
-    };
-}
-fn find_vm_record_type_one(st: RecordTypeSearch, rec: VmRecordType, rest: VmRecordTypeList) -> (result: RecordTypeSearch) {
-    if semantic_ids_equal(rec.identity, st.wanted) {
-        return RecordTypeSearch { rest: VmRecordTypeList.VRTNil, wanted: st.wanted, found: true, schema: rec };
-    }
-    return RecordTypeSearch { ..st, rest: rest };
+    return RecordTypeLookup { found: false, schema: dummy_record_type() };
 }
 
 record RecordFieldLookup { found: bool, ty: VmType }
-record RecordFieldSearch { rest: VmRecordFieldList, wanted: decl.SemanticIdentity, found: bool, ty: VmType }
+fn rec_field_head_eq(fields: VmRecordFieldList, wanted: decl.SemanticIdentity) -> (result: bool) {
+    return match fields { VRFNil => false, VRFCons { head: fld, tail: t } => semantic_ids_equal(fld.name, wanted) };
+}
+fn rec_field_head_ty(fields: VmRecordFieldList) -> (result: VmType) {
+    return match fields { VRFNil => invalid_vm_type(), VRFCons { head: fld, tail: t } => fld.ty };
+}
+fn rec_field_head_name(fields: VmRecordFieldList) -> (result: decl.SemanticIdentity) {
+    return match fields { VRFNil => decl.invalid_semantic_identity(), VRFCons { head: fld, tail: t } => fld.name };
+}
+fn rec_field_tail(fields: VmRecordFieldList) -> (result: VmRecordFieldList) {
+    return match fields { VRFNil => VmRecordFieldList.VRFNil, VRFCons { head: fld, tail: t } => t };
+}
 fn find_vm_record_field(fields: VmRecordFieldList, wanted: decl.SemanticIdentity) -> (result: RecordFieldLookup) {
-    let initial: RecordFieldSearch = RecordFieldSearch { rest: fields, wanted: wanted, found: false, ty: invalid_vm_type() };
-    iterate i up_to 128 carrying st: RecordFieldSearch = initial {
-        if st.found || vm_record_field_list_empty(st.rest) { return RecordFieldLookup { found: st.found, ty: st.ty }; }
-        next st = find_vm_record_field_step(st);
+    iterate i up_to 128 carrying rest: VmRecordFieldList = fields {
+        if vm_record_field_list_empty(rest) { return RecordFieldLookup { found: false, ty: invalid_vm_type() }; }
+        if rec_field_head_eq(rest, wanted) { return RecordFieldLookup { found: true, ty: rec_field_head_ty(rest) }; }
+        next rest = rec_field_tail(rest);
     }
-    return RecordFieldLookup { found: st.found, ty: st.ty };
-}
-fn find_vm_record_field_step(st: RecordFieldSearch) -> (result: RecordFieldSearch) {
-    return match st.rest {
-        VRFNil => st,
-        VRFCons { head: fld, tail: rest } => find_vm_record_field_one(st, fld, rest)
-    };
-}
-fn find_vm_record_field_one(st: RecordFieldSearch, fld: VmRecordField, rest: VmRecordFieldList) -> (result: RecordFieldSearch) {
-    if semantic_ids_equal(fld.name, st.wanted) {
-        return RecordFieldSearch { rest: VmRecordFieldList.VRFNil, wanted: st.wanted, found: true, ty: fld.ty };
-    }
-    return RecordFieldSearch { ..st, rest: rest };
+    return RecordFieldLookup { found: false, ty: invalid_vm_type() };
 }
 
 record RecordFieldAtLookup { found: bool, name: decl.SemanticIdentity, ty: VmType }
-record RecordFieldAtSearch { rest: VmRecordFieldList, index: u64, target: u64, found: bool, name: decl.SemanticIdentity, ty: VmType }
 fn find_vm_record_field_at(fields: VmRecordFieldList, target_index: u64) -> (result: RecordFieldAtLookup) {
-    let initial: RecordFieldAtSearch = RecordFieldAtSearch {
-        rest: fields, index: 0, target: target_index, found: false,
-        name: decl.invalid_semantic_identity(), ty: invalid_vm_type()
-    };
-    iterate i up_to 128 carrying st: RecordFieldAtSearch = initial {
-        if st.found || vm_record_field_list_empty(st.rest) {
-            return RecordFieldAtLookup { found: st.found, name: st.name, ty: st.ty };
+    iterate i up_to 128 carrying rest: VmRecordFieldList = fields {
+        if vm_record_field_list_empty(rest) {
+            return RecordFieldAtLookup { found: false, name: decl.invalid_semantic_identity(), ty: invalid_vm_type() };
         }
-        next st = find_vm_record_field_at_step(st);
+        if i == target_index {
+            return RecordFieldAtLookup { found: true, name: rec_field_head_name(rest), ty: rec_field_head_ty(rest) };
+        }
+        next rest = rec_field_tail(rest);
     }
-    return RecordFieldAtLookup { found: st.found, name: st.name, ty: st.ty };
-}
-fn find_vm_record_field_at_step(st: RecordFieldAtSearch) -> (result: RecordFieldAtSearch) {
-    return match st.rest {
-        VRFNil => st,
-        VRFCons { head: fld, tail: rest } => find_vm_record_field_at_one(st, fld, rest)
-    };
-}
-fn find_vm_record_field_at_one(st: RecordFieldAtSearch, fld: VmRecordField, rest: VmRecordFieldList) -> (result: RecordFieldAtSearch) {
-    if st.index == st.target {
-        return RecordFieldAtSearch {
-            rest: VmRecordFieldList.VRFNil, index: st.index, target: st.target,
-            found: true, name: fld.name, ty: fld.ty
-        };
-    }
-    return RecordFieldAtSearch { ..st, rest: rest, index: st.index + 1 };
+    return RecordFieldAtLookup { found: false, name: decl.invalid_semantic_identity(), ty: invalid_vm_type() };
 }
 
 record NameContainsWalk { rest: VmNameList, wanted: decl.SemanticIdentity, found: bool }
@@ -1038,30 +1112,27 @@ fn retain_referenced_record_one(st: RecordUsageAdd, fn_item: VmFunction, rest: V
 // Value type maps & pure-scalar lowering helpers (preserved for single-module)
 // ---------------------------------------------------------------------------
 
-record VmValTypeLookup { rest: VmValueList, wanted: u64, found: bool, ty: VmType }
+record VmValTypeLookup { found: bool, ty: VmType }
+fn vm_val_head_id_eq(values: VmValueList, wanted: u64) -> (result: bool) {
+    return match values { VVNil => false, VVCons { head: v, tail: t } => v.id == wanted };
+}
+fn vm_val_head_ty(values: VmValueList) -> (result: VmType) {
+    return match values { VVNil => invalid_vm_type(), VVCons { head: v, tail: t } => v.ty };
+}
+fn vm_val_tail(values: VmValueList) -> (result: VmValueList) {
+    return match values { VVNil => VmValueList.VVNil, VVCons { head: v, tail: t } => t };
+}
 fn lookup_vm_value_type(values: VmValueList, wanted: u64) -> (result: VmValTypeLookup) {
-    iterate chunk up_to 8 carrying st: VmValTypeLookup = VmValTypeLookup { rest: values, wanted: wanted, found: false, ty: invalid_vm_type() } {
-        if st.found || vm_value_list_empty(st.rest) { return st; }
-        next st = lookup_vm_value_type_chunk(st);
+    iterate chunk up_to 8 carrying cur: VmValueList = values {
+        if vm_value_list_empty(cur) { return VmValTypeLookup { found: false, ty: invalid_vm_type() }; }
+        iterate i up_to 1024 carrying rest: VmValueList = cur {
+            if vm_value_list_empty(rest) { return VmValTypeLookup { found: false, ty: invalid_vm_type() }; }
+            if vm_val_head_id_eq(rest, wanted) { return VmValTypeLookup { found: true, ty: vm_val_head_ty(rest) }; }
+            next rest = vm_val_tail(rest);
+        }
+        next cur = rest;
     }
-    return st;
-}
-fn lookup_vm_value_type_chunk(initial: VmValTypeLookup) -> (result: VmValTypeLookup) {
-    iterate i up_to 1024 carrying st: VmValTypeLookup = initial {
-        if st.found || vm_value_list_empty(st.rest) { return st; }
-        next st = lookup_vm_value_type_step(st);
-    }
-    return st;
-}
-fn lookup_vm_value_type_step(st: VmValTypeLookup) -> (result: VmValTypeLookup) {
-    return match st.rest {
-        VVNil => st,
-        VVCons { head: v, tail: rest } => lookup_vm_value_type_one(st, v, rest)
-    };
-}
-fn lookup_vm_value_type_one(st: VmValTypeLookup, v: VmValue, rest: VmValueList) -> (result: VmValTypeLookup) {
-    if v.id == st.wanted { return VmValTypeLookup { rest: VmValueList.VVNil, wanted: st.wanted, found: true, ty: v.ty }; }
-    return VmValTypeLookup { ..st, rest: rest };
+    return VmValTypeLookup { found: false, ty: invalid_vm_type() };
 }
 
 record LowerValuesWalk { rest: ssa.ValueList, acc: VmValueList, ok: bool }
@@ -1239,7 +1310,7 @@ fn lower_vm_seq_length(val_types: VmValueList, inst: ssa.Instruction, res_ty: Vm
 fn lower_vm_seq_length_one(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType, base_id: u64, rest: ssa.IdList) -> (result: InstLowerResult) {
     if !(id_list_empty(rest)) { return inst_error(7); }
     let base: VmValTypeLookup = lookup_vm_value_type(val_types, base_id);
-    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 {
+    if !(base.found) || !(is_seq_vm_type(base.ty)) || base.ty.bound_value == 0 {
         return inst_error(7);
     }
     return InstLowerResult {
@@ -1255,7 +1326,8 @@ fn lower_vm_seq_length_one(val_types: VmValueList, inst: ssa.Instruction, res_ty
 }
 
 fn lower_vm_seq_index(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
-    if !(is_scalar_vm_type(res_ty)) || inst.argc != 2 { return inst_error(7); }
+    let valid_res: bool = res_ty.valid && (is_scalar_vm_type(res_ty) || res_ty.kind == 4);
+    if !(valid_res) || inst.argc != 2 { return inst_error(7); }
     return match inst.inputs {
         ssa.IdList.INil => inst_error(7),
         ssa.IdList.ICons { head: base_id, tail: rest } => lower_vm_seq_index_idx(val_types, inst, res_ty, base_id.value, rest)
@@ -1271,7 +1343,7 @@ fn lower_vm_seq_index_pair(val_types: VmValueList, inst: ssa.Instruction, res_ty
     if !(id_list_empty(trailing)) { return inst_error(7); }
     let base: VmValTypeLookup = lookup_vm_value_type(val_types, base_id);
     let idx: VmValTypeLookup = lookup_vm_value_type(val_types, idx_id);
-    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 { return inst_error(7); }
+    if !(base.found) || !(is_seq_vm_type(base.ty)) || base.ty.bound_value == 0 { return inst_error(7); }
     let elem_ty: VmType = seq_element_vm_type(base.ty);
     if !(vm_type_equal(elem_ty, res_ty)) { return inst_error(7); }
     if !(idx.found) || !(is_u64_vm_type(idx.ty)) { return inst_error(7); }
@@ -1938,7 +2010,7 @@ fn verify_scalar_switch_join_head(all_blocks: ssa.SsaBlockList, val_types: VmVal
 fn verify_join_head_value(val_types: VmValueList, jres_id: u64, res_vm_ty: VmType, res_is_seq: bool) -> (result: bool) {
     let jlk: VmValTypeLookup = lookup_vm_value_type(val_types, jres_id);
     if !(jlk.found) || !(jlk.ty.valid) { return false; }
-    if res_is_seq { return jlk.ty.kind == 4; }
+    if res_is_seq { return is_seq_vm_type(jlk.ty); }
     return res_vm_ty.valid && vm_type_equal(jlk.ty, res_vm_ty);
 }
 
@@ -2578,7 +2650,6 @@ fn resolve_spec_result_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
 
 // Find an SSA block by numeric block ID.
 record SsaBlkLookup { found: bool, blk: ssa.SsaBlock }
-record SsaBlkSearch { rest: ssa.SsaBlockList, target: u64, found: bool, blk: ssa.SsaBlock }
 fn dummy_ssa_block() -> (result: ssa.SsaBlock) {
     return ssa.SsaBlock {
         id: 0, parameters: ssa.ValueList.VNil, parameter_bindings: ssa.Environment.EnvNil,
@@ -2587,23 +2658,22 @@ fn dummy_ssa_block() -> (result: ssa.SsaBlock) {
         lowering_ok: false, lowering_failure_kind: 0
     };
 }
+fn ssa_blk_head_id_eq(blocks: ssa.SsaBlockList, target: u64) -> (result: bool) {
+    return match blocks { ssa.SsaBlockList.LNil => false, ssa.SsaBlockList.LCons { head: b, tail: t } => b.id == target };
+}
+fn ssa_blk_head(blocks: ssa.SsaBlockList) -> (result: ssa.SsaBlock) {
+    return match blocks { ssa.SsaBlockList.LNil => dummy_ssa_block(), ssa.SsaBlockList.LCons { head: b, tail: t } => b };
+}
+fn ssa_blk_tail(blocks: ssa.SsaBlockList) -> (result: ssa.SsaBlockList) {
+    return match blocks { ssa.SsaBlockList.LNil => ssa.SsaBlockList.LNil, ssa.SsaBlockList.LCons { head: b, tail: t } => t };
+}
 fn find_ssa_block_by_id(blocks: ssa.SsaBlockList, target: u64) -> (result: SsaBlkLookup) {
-    let initial: SsaBlkSearch = SsaBlkSearch { rest: blocks, target: target, found: false, blk: dummy_ssa_block() };
-    iterate i up_to 1024 carrying st: SsaBlkSearch = initial {
-        if st.found || ssa_block_list_empty(st.rest) { return SsaBlkLookup { found: st.found, blk: st.blk }; }
-        next st = find_ssa_block_step(st);
+    iterate i up_to 1024 carrying rest: ssa.SsaBlockList = blocks {
+        if ssa_block_list_empty(rest) { return SsaBlkLookup { found: false, blk: dummy_ssa_block() }; }
+        if ssa_blk_head_id_eq(rest, target) { return SsaBlkLookup { found: true, blk: ssa_blk_head(rest) }; }
+        next rest = ssa_blk_tail(rest);
     }
-    return SsaBlkLookup { found: st.found, blk: st.blk };
-}
-fn find_ssa_block_step(st: SsaBlkSearch) -> (result: SsaBlkSearch) {
-    return match st.rest {
-        ssa.SsaBlockList.LNil => st,
-        ssa.SsaBlockList.LCons { head: blk, tail: rest } => find_ssa_block_one(st, blk, rest)
-    };
-}
-fn find_ssa_block_one(st: SsaBlkSearch, blk: ssa.SsaBlock, rest: ssa.SsaBlockList) -> (result: SsaBlkSearch) {
-    if blk.id == st.target { return SsaBlkSearch { rest: ssa.SsaBlockList.LNil, target: st.target, found: true, blk: blk }; }
-    return SsaBlkSearch { ..st, rest: rest };
+    return SsaBlkLookup { found: false, blk: dummy_ssa_block() };
 }
 
 // Compute disjoint fresh value/instruction/block IDs for expanded loop & switch lowerings.
@@ -2693,7 +2763,7 @@ fn seed_seq_input_step(st: SeqSeedWalk) -> (result: SeqSeedWalk) {
     };
 }
 fn seed_seq_input_one(st: SeqSeedWalk, v: VmValue, rest: VmValueList) -> (result: SeqSeedWalk) {
-    if v.ty.valid && v.ty.kind == 4 {
+    if is_seq_vm_type(v.ty) {
         return SeqSeedWalk { rest: rest, acc: VmValueList.VVCons { head: v, tail: st.acc } };
     }
     return SeqSeedWalk { rest: rest, acc: st.acc };
@@ -2737,6 +2807,12 @@ fn prop_seq_blk_inst_step(w: PropBlkInstsWalk) -> (result: PropBlkInstsWalk) {
     };
 }
 fn prop_seq_blk_inst_one(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: PropBlkInstsWalk) {
+    if inst.kind == 11 && inst.argc == 2 {
+        return match inst.inputs {
+            ssa.IdList.INil => PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest },
+            ssa.IdList.ICons { head: base_id, tail: trailing } => prop_seq_project_from_base(prop, blk_id, inst, rest, base_id.value)
+        };
+    }
     if inst.kind != 17 || inst.operator != 9 || inst.argc != 3 {
         return PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest };
     }
@@ -2745,12 +2821,33 @@ fn prop_seq_blk_inst_one(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction,
         ssa.IdList.ICons { head: base_id, tail: trailing } => prop_seq_view_from_base(prop, blk_id, inst, rest, base_id.value)
     };
 }
-fn prop_seq_view_from_base(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64) -> (result: PropBlkInstsWalk) {
+fn prop_seq_project_from_base(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64) -> (result: PropBlkInstsWalk) {
     let base: VmValTypeLookup = lookup_vm_value_type(prop.seq_vals, base_id);
-    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 {
+    if !(base.found) || !(base.ty.valid) || base.ty.kind != 6 {
         return PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest };
     }
-    let view_ty: VmType = byte_seq_vm_type(2, base.ty.bound_value);
+    let elem_ty: VmType = seq_element_vm_type(base.ty);
+    if !(elem_ty.valid) || elem_ty.kind != 4 {
+        return PropBlkInstsWalk { prop: SeqPropState { ..prop, ok: false, error_code: 4, error_block: blk_id, error_inst: inst.id }, blk_id: blk_id, rest: ssa.InstructionList.QNil };
+    }
+    let next_prop: SeqPropState = record_seq_val(prop, inst.result, elem_ty, blk_id, inst.id);
+    return PropBlkInstsWalk { prop: next_prop, blk_id: blk_id, rest: rest };
+}
+fn seq_view_up_to_type(base_ty: VmType) -> (result: VmType) {
+    if !(is_seq_vm_type(base_ty)) || base_ty.bound_value == 0 || base_ty.bound_value > 65536 {
+        return invalid_vm_type();
+    }
+    if base_ty.kind == 4 {
+        return VmType { ..base_ty, bound_kind: 2 };
+    }
+    return nested_seq_vm_type(seq_element_vm_type(base_ty), 2, base_ty.bound_value);
+}
+fn prop_seq_view_from_base(prop: SeqPropState, blk_id: u64, inst: ssa.Instruction, rest: ssa.InstructionList, base_id: u64) -> (result: PropBlkInstsWalk) {
+    let base: VmValTypeLookup = lookup_vm_value_type(prop.seq_vals, base_id);
+    if !(base.found) || !(is_seq_vm_type(base.ty)) || base.ty.bound_value == 0 {
+        return PropBlkInstsWalk { prop: prop, blk_id: blk_id, rest: rest };
+    }
+    let view_ty: VmType = seq_view_up_to_type(base.ty);
     if !(view_ty.valid) {
         return PropBlkInstsWalk { prop: SeqPropState { ..prop, ok: false, error_code: 4, error_block: blk_id, error_inst: inst.id }, blk_id: blk_id, rest: ssa.InstructionList.QNil };
     }
@@ -3009,13 +3106,13 @@ fn lower_spec_seq_view_emit(st: SpecInstListWalk, inst: ssa.Instruction, rest: s
     let base: VmValTypeLookup = lookup_vm_value_type(st.val_types, base_id);
     let start_v: VmValTypeLookup = lookup_vm_value_type(st.val_types, start_id);
     let end_v: VmValTypeLookup = lookup_vm_value_type(st.val_types, end_id);
-    if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 {
+    if !(base.found) || !(is_seq_vm_type(base.ty)) || base.ty.bound_value == 0 {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
     }
     if !(start_v.found) || !(is_u64_vm_type(start_v.ty)) || !(end_v.found) || !(is_u64_vm_type(end_v.ty)) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
     }
-    let view_ty: VmType = byte_seq_vm_type(2, base.ty.bound_value);
+    let view_ty: VmType = seq_view_up_to_type(base.ty);
     if !(view_ty.valid) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
     }
@@ -3124,7 +3221,7 @@ fn lower_vm_seq_guard_emit(st: SpecInstListWalk, inst: ssa.Instruction, rest: ss
     if !(id_list_empty(trailing)) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id }; }
     let idx: VmValTypeLookup = lookup_vm_value_type(st.val_types, idx_id);
     let seq: VmValTypeLookup = lookup_vm_value_type(st.val_types, seq_id);
-    if !(idx.found) || !(is_u64_vm_type(idx.ty)) || !(seq.found) || !(seq.ty.valid) || seq.ty.kind != 4 || seq.ty.bound_value == 0 {
+    if !(idx.found) || !(is_u64_vm_type(idx.ty)) || !(seq.found) || !(is_seq_vm_type(seq.ty)) || seq.ty.bound_value == 0 {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
     }
     let u64_ty: VmType = u64_vm_type();
@@ -3203,6 +3300,17 @@ fn lower_spec_inst_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], strid
         ssa.InstructionList.QCons { head: inst, tail: rest } => lower_spec_inst_one<P, N>(pages, stride, total, nominals, nat_env, all_recs, st, inst, rest)
     };
 }
+fn resolve_spec_inst_result_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, inst: ssa.Instruction, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList, val_types: VmValueList) -> (result: VmType) {
+    let non_seq: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, inst.ty, nominals, all_recs);
+    if non_seq.valid { return non_seq; }
+    if is_seq_sem_type(inst.ty) {
+        let seq_lk: VmValTypeLookup = lookup_vm_value_type(val_types, inst.result);
+        if seq_lk.found && is_seq_vm_type(seq_lk.ty) {
+            return seq_lk.ty;
+        }
+    }
+    return invalid_vm_type();
+}
 fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, nominals: decl.NominalTypeIdentityList, nat_env: NatEnv, all_recs: VmRecordTypeList, st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: SpecInstListWalk) {
     if !(effects_empty(inst.effects)) || !(capabilities_empty(inst.capabilities)) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 3, error_inst: inst.id };
@@ -3210,7 +3318,7 @@ fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
     if inst.kind == 17 {
         return lower_spec_seq_view(st, inst, rest);
     }
-    let res_ty: VmType = resolve_sem_type_non_seq<P, N>(pages, stride, total, inst.ty, nominals, all_recs);
+    let res_ty: VmType = resolve_spec_inst_result_type<P, N>(pages, stride, total, inst, nominals, all_recs, st.val_types);
     if !(res_ty.valid) {
         return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
     }
@@ -3361,24 +3469,22 @@ record VmBlkLookup { found: bool, blk: VmBlock }
 fn dummy_vm_block() -> (result: VmBlock) {
     return VmBlock { id: 0, is_error_path: false, parameters: VmValueList.VVNil, instructions: VmInstructionList.VINil, terminator: VmTerminator.VmFailure, has_failure_target: false, failure_target: 0 };
 }
-record VmBlkSearch { rest: VmBlockList, target: u64, found: bool, blk: VmBlock }
+fn vm_blk_head_id_eq(blocks: VmBlockList, target: u64) -> (result: bool) {
+    return match blocks { VBNil => false, VBCons { head: b, tail: t } => b.id == target };
+}
+fn vm_blk_head(blocks: VmBlockList) -> (result: VmBlock) {
+    return match blocks { VBNil => dummy_vm_block(), VBCons { head: b, tail: t } => b };
+}
+fn vm_blk_tail(blocks: VmBlockList) -> (result: VmBlockList) {
+    return match blocks { VBNil => VmBlockList.VBNil, VBCons { head: b, tail: t } => t };
+}
 fn find_vm_block_by_id(blocks: VmBlockList, target: u64) -> (result: VmBlkLookup) {
-    let initial: VmBlkSearch = VmBlkSearch { rest: blocks, target: target, found: false, blk: dummy_vm_block() };
-    iterate i up_to 1024 carrying st: VmBlkSearch = initial {
-        if st.found || vm_block_list_empty(st.rest) { return VmBlkLookup { found: st.found, blk: st.blk }; }
-        next st = find_vm_block_step(st);
+    iterate i up_to 1024 carrying rest: VmBlockList = blocks {
+        if vm_block_list_empty(rest) { return VmBlkLookup { found: false, blk: dummy_vm_block() }; }
+        if vm_blk_head_id_eq(rest, target) { return VmBlkLookup { found: true, blk: vm_blk_head(rest) }; }
+        next rest = vm_blk_tail(rest);
     }
-    return VmBlkLookup { found: st.found, blk: st.blk };
-}
-fn find_vm_block_step(st: VmBlkSearch) -> (result: VmBlkSearch) {
-    return match st.rest {
-        VBNil => st,
-        VBCons { head: blk, tail: rest } => find_vm_block_one(st, blk, rest)
-    };
-}
-fn find_vm_block_one(st: VmBlkSearch, blk: VmBlock, rest: VmBlockList) -> (result: VmBlkSearch) {
-    if blk.id == st.target { return VmBlkSearch { rest: VmBlockList.VBNil, target: st.target, found: true, blk: blk }; }
-    return VmBlkSearch { ..st, rest: rest };
+    return VmBlkLookup { found: false, blk: dummy_vm_block() };
 }
 
 record VmBlkFilterWalk { rest: VmBlockList, skip_id: u64, acc: VmBlockList }
@@ -3484,31 +3590,32 @@ fn verify_vm_fn_cfg_one(fn_item: VmFunction, val_types: VmValueList, st: CfgVeri
 }
 
 // Collect bounded-iteration region metadata from verified SSA loop blocks.
-record BlockHasKindWalk { rest: ssa.InstructionList, kind: u64, found: bool, inst: ssa.Instruction }
-fn find_inst_of_kind_in_list(insts: ssa.InstructionList, kind: u64) -> (result: BlockHasKindWalk) {
-    let dummy_inst: ssa.Instruction = ssa.Instruction {
+record BlockHasKindWalk { found: bool, inst: ssa.Instruction }
+fn dummy_ssa_inst() -> (result: ssa.Instruction) {
+    return ssa.Instruction {
         id: 0, sequence: 0, kind: 0, operator: 0, result: 0, ty: decl.SemType.TPoison,
         inputs: ssa.IdList.INil, argc: 0, params: decl.BindList.BNil,
         identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
         variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
         effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil, start: 0, end: 0
     };
-    let init: BlockHasKindWalk = BlockHasKindWalk { rest: insts, kind: kind, found: false, inst: dummy_inst };
-    iterate i up_to 1024 carrying w: BlockHasKindWalk = init {
-        if w.found || ssa_inst_list_empty(w.rest) { return w; }
-        next w = find_inst_of_kind_step(w);
+}
+fn ssa_inst_head_kind_eq(insts: ssa.InstructionList, kind: u64) -> (result: bool) {
+    return match insts { ssa.InstructionList.QNil => false, ssa.InstructionList.QCons { head: inst, tail: t } => inst.kind == kind };
+}
+fn ssa_inst_head(insts: ssa.InstructionList) -> (result: ssa.Instruction) {
+    return match insts { ssa.InstructionList.QNil => dummy_ssa_inst(), ssa.InstructionList.QCons { head: inst, tail: t } => inst };
+}
+fn ssa_inst_tail(insts: ssa.InstructionList) -> (result: ssa.InstructionList) {
+    return match insts { ssa.InstructionList.QNil => ssa.InstructionList.QNil, ssa.InstructionList.QCons { head: inst, tail: t } => t };
+}
+fn find_inst_of_kind_in_list(insts: ssa.InstructionList, kind: u64) -> (result: BlockHasKindWalk) {
+    iterate i up_to 1024 carrying rest: ssa.InstructionList = insts {
+        if ssa_inst_list_empty(rest) { return BlockHasKindWalk { found: false, inst: dummy_ssa_inst() }; }
+        if ssa_inst_head_kind_eq(rest, kind) { return BlockHasKindWalk { found: true, inst: ssa_inst_head(rest) }; }
+        next rest = ssa_inst_tail(rest);
     }
-    return w;
-}
-fn find_inst_of_kind_step(w: BlockHasKindWalk) -> (result: BlockHasKindWalk) {
-    return match w.rest {
-        ssa.InstructionList.QNil => w,
-        ssa.InstructionList.QCons { head: inst, tail: rest } => find_inst_of_kind_one(w, inst, rest)
-    };
-}
-fn find_inst_of_kind_one(w: BlockHasKindWalk, inst: ssa.Instruction, rest: ssa.InstructionList) -> (result: BlockHasKindWalk) {
-    if inst.kind == w.kind { return BlockHasKindWalk { rest: ssa.InstructionList.QNil, kind: w.kind, found: true, inst: inst }; }
-    return BlockHasKindWalk { ..w, rest: rest };
+    return BlockHasKindWalk { found: false, inst: dummy_ssa_inst() };
 }
 
 record JumpMatchLookup { found: bool, block_id: u64 }
@@ -3634,7 +3741,7 @@ fn pick_loop_state_step(w: LoopStatePickWalk) -> (result: LoopStatePickWalk) {
 fn pick_loop_state_one(w: LoopStatePickWalk, v: ssa.Value, rest: ssa.ValueList) -> (result: LoopStatePickWalk) {
     if v.id == w.index_id { return LoopStatePickWalk { ..w, rest: rest }; }
     let lk: VmValTypeLookup = lookup_vm_value_type(w.val_types, v.id);
-    if !(lk.found) || !(lk.ty.valid) || lk.ty.kind == 4 { return LoopStatePickWalk { ..w, rest: rest }; }
+    if !(lk.found) || !(lk.ty.valid) || is_seq_vm_type(lk.ty) { return LoopStatePickWalk { ..w, rest: rest }; }
     if lk.ty.kind == 1 {
         return LoopStatePickWalk { ..w, rest: ssa.ValueList.VNil, found_bool: true, bool_ty: lk.ty };
     }
@@ -3713,7 +3820,7 @@ fn collect_bounded_seq_iter(w: BoundedItersCollect, blk: ssa.SsaBlock, rest: ssa
         ssa.IdList.ICons { head: h, tail: after } => match after { ssa.IdList.INil => 0, ssa.IdList.ICons { head: s, tail: t } => s.value }
     };
     let seq_lk: VmValTypeLookup = lookup_vm_value_type(val_types, seq_id);
-    if !(seq_lk.found) || !(seq_lk.ty.valid) || seq_lk.ty.kind != 4 || seq_lk.ty.bound_value == 0 {
+    if !(seq_lk.found) || !(is_seq_vm_type(seq_lk.ty)) || seq_lk.ty.bound_value == 0 {
         return BoundedItersCollect { ..w, rest: rest, ok: false, error_code: 7, error_block: blk.id, error_inst: guard.id };
     }
     let region: VmBoundedIteration = VmBoundedIteration {
@@ -3807,27 +3914,25 @@ fn dummy_vm_function() -> (result: VmFunction) {
 }
 
 record VmFnLookup { found: bool, fn_item: VmFunction }
-record VmFnLookupWalk { rest: VmFunctionList, wanted: VmSpecKey, found: bool, fn_item: VmFunction }
-fn find_vm_fn_by_spec(fns: VmFunctionList, wanted: VmSpecKey) -> (result: VmFnLookup) {
-    let initial: VmFnLookupWalk = VmFnLookupWalk { rest: fns, wanted: wanted, found: false, fn_item: dummy_vm_function() };
-    iterate i up_to 1024 carrying st: VmFnLookupWalk = initial {
-        if st.found || vm_fn_list_empty(st.rest) { return VmFnLookup { found: st.found, fn_item: st.fn_item }; }
-        next st = find_vm_fn_step(st);
-    }
-    return VmFnLookup { found: st.found, fn_item: st.fn_item };
-}
-fn find_vm_fn_step(st: VmFnLookupWalk) -> (result: VmFnLookupWalk) {
-    return match st.rest {
-        VFNil => st,
-        VFCons { head: fn_item, tail: rest } => find_vm_fn_one(st, fn_item, rest)
+fn vm_fn_head_spec_eq(fns: VmFunctionList, wanted: VmSpecKey) -> (result: bool) {
+    return match fns {
+        VFNil => false,
+        VFCons { head: fn_item, tail: t } => spec_keys_equal(VmSpecKey { identity: fn_item.identity, nat_args: fn_item.nat_args }, wanted)
     };
 }
-fn find_vm_fn_one(st: VmFnLookupWalk, fn_item: VmFunction, rest: VmFunctionList) -> (result: VmFnLookupWalk) {
-    let key: VmSpecKey = VmSpecKey { identity: fn_item.identity, nat_args: fn_item.nat_args };
-    if spec_keys_equal(key, st.wanted) {
-        return VmFnLookupWalk { rest: VmFunctionList.VFNil, wanted: st.wanted, found: true, fn_item: fn_item };
+fn vm_fn_head(fns: VmFunctionList) -> (result: VmFunction) {
+    return match fns { VFNil => dummy_vm_function(), VFCons { head: fn_item, tail: t } => fn_item };
+}
+fn vm_fn_tail(fns: VmFunctionList) -> (result: VmFunctionList) {
+    return match fns { VFNil => VmFunctionList.VFNil, VFCons { head: fn_item, tail: t } => t };
+}
+fn find_vm_fn_by_spec(fns: VmFunctionList, wanted: VmSpecKey) -> (result: VmFnLookup) {
+    iterate i up_to 1024 carrying rest: VmFunctionList = fns {
+        if vm_fn_list_empty(rest) { return VmFnLookup { found: false, fn_item: dummy_vm_function() }; }
+        if vm_fn_head_spec_eq(rest, wanted) { return VmFnLookup { found: true, fn_item: vm_fn_head(rest) }; }
+        next rest = vm_fn_tail(rest);
     }
-    return VmFnLookupWalk { ..st, rest: rest };
+    return VmFnLookup { found: false, fn_item: dummy_vm_function() };
 }
 
 enum PendingSpecList { PSNil, PSCons { head: VmSpecKey, tail: PendingSpecList } }

@@ -1,0 +1,194 @@
+mncs 0.18;
+module tests.compiler_vm_emit_nested_seq;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Single compact source page (257 bytes):
+//   0..1     "P"
+//   2..3     "N"
+//   4..30    "[[byte; up_to N]; up_to P]"
+//  31..58    "[[byte; up_to 32]; up_to 8]"
+//  59..86    "[[byte; up_to 16]; up_to 4]"
+//  87..113   "[[u64; up_to 32]; up_to 4]"
+// 114..135   "[[byte; 32]; up_to 4]"
+// 136..164   "[[Token; up_to 32]; up_to 4]"
+// 165..202   "[[[byte; up_to 4]; up_to 4]; up_to 2]"
+// 203..229   "[[byte; up_to 0]; up_to 4]"
+// 230..257   "[[byte; up_to 32]; up_to M]"
+fn type_pages() -> (result: [[byte; up_to 320]; up_to 1]) {
+    let p: [byte; up_to 320] = [
+        80, 32, 78, 32, 91, 91, 98, 121, 116, 101, 59, 32, 117, 112, 95, 116,
+        111, 32, 78, 93, 59, 32, 117, 112, 95, 116, 111, 32, 80, 93, 32, 91,
+        91, 98, 121, 116, 101, 59, 32, 117, 112, 95, 116, 111, 32, 51, 50, 93,
+        59, 32, 117, 112, 95, 116, 111, 32, 56, 93, 32, 91, 91, 98, 121, 116,
+        101, 59, 32, 117, 112, 95, 116, 111, 32, 49, 54, 93, 59, 32, 117, 112,
+        95, 116, 111, 32, 52, 93, 32, 91, 91, 117, 54, 52, 59, 32, 117, 112,
+        95, 116, 111, 32, 51, 50, 93, 59, 32, 117, 112, 95, 116, 111, 32, 52,
+        93, 32, 91, 91, 98, 121, 116, 101, 59, 32, 51, 50, 93, 59, 32, 117,
+        112, 95, 116, 111, 32, 52, 93, 32, 91, 91, 84, 111, 107, 101, 110, 59,
+        32, 117, 112, 95, 116, 111, 32, 51, 50, 93, 59, 32, 117, 112, 95, 116,
+        111, 32, 52, 93, 32, 91, 91, 91, 98, 121, 116, 101, 59, 32, 117, 112,
+        95, 116, 111, 32, 52, 93, 59, 32, 117, 112, 95, 116, 111, 32, 52, 93,
+        59, 32, 117, 112, 95, 116, 111, 32, 50, 93, 32, 91, 91, 98, 121, 116,
+        101, 59, 32, 117, 112, 95, 116, 111, 32, 48, 93, 59, 32, 117, 112, 95,
+        116, 111, 32, 52, 93, 32, 91, 91, 98, 121, 116, 101, 59, 32, 117, 112,
+        95, 116, 111, 32, 51, 50, 93, 59, 32, 117, 112, 95, 116, 111, 32, 77,
+        93
+    ];
+    return [p];
+}
+
+fn nat_env_p4_n32() -> (result: vm_emit.NatEnv) {
+    return vm_emit.NatEnv.NECons {
+        head: vm_emit.NatBinding { name_start: 0, name_end: 1, value: 4 },
+        tail: vm_emit.NatEnv.NECons {
+            head: vm_emit.NatBinding { name_start: 2, name_end: 3, value: 32 },
+            tail: vm_emit.NatEnv.NENil
+        }
+    };
+}
+
+fn mk_index_inst(id: u64, result_id: u64, base_id: u64, idx_id: u64, ty: decl.SemType) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: id, sequence: id, kind: 11, operator: 0, result: result_id, ty: ty,
+        inputs: ssa.IdList.ICons {
+            head: ssa.Id { value: base_id },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: idx_id }, tail: ssa.IdList.INil }
+        },
+        argc: 2, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 10
+    };
+}
+
+fn mk_len_inst(id: u64, result_id: u64, base_id: u64) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: id, sequence: id, kind: 10, operator: 0, result: result_id,
+        ty: decl.SemType.TInt { width: 64, signed: false },
+        inputs: ssa.IdList.ICons { head: ssa.Id { value: base_id }, tail: ssa.IdList.INil },
+        argc: 1, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 10
+    };
+}
+
+test nested_page_projection_lowers_outer_to_page_and_page_to_byte() -> (result: TestResult) {
+    let page_ty: vm_emit.VmType = vm_emit.byte_seq_vm_type(2, 32);
+    let pages_ty: vm_emit.VmType = vm_emit.nested_seq_vm_type(page_ty, 2, 4);
+    let u64_ty: vm_emit.VmType = vm_emit.u64_vm_type();
+    let byte_ty: vm_emit.VmType = vm_emit.byte_vm_type();
+
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: pages_ty },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 1, ty: u64_ty },
+            tail: vm_emit.VmValueList.VVCons {
+                head: vm_emit.VmValue { id: 2, ty: page_ty },
+                tail: vm_emit.VmValueList.VVCons {
+                    head: vm_emit.VmValue { id: 3, ty: u64_ty },
+                    tail: vm_emit.VmValueList.VVNil
+                }
+            }
+        }
+    };
+
+    // Outer projection: pages[pi] -> [byte; up_to 32]
+    let outer_inst: ssa.Instruction = mk_index_inst(1, 2, 0, 1, decl.SemType.TSeq);
+    let r_outer: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_index(val_types, outer_inst, page_ty);
+    // Inner projection: page[bi] -> byte
+    let inner_inst: ssa.Instruction = mk_index_inst(2, 4, 2, 3, decl.SemType.TByte);
+    let r_inner: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_index(val_types, inner_inst, byte_ty);
+    // Lengths on both outer pages and inner page
+    let r_len_outer: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_length(val_types, mk_len_inst(3, 5, 0), u64_ty);
+    let r_len_inner: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_length(val_types, mk_len_inst(4, 6, 2), u64_ty);
+
+    let ok: bool = pages_ty.valid && pages_ty.kind == 6
+        && vm_emit.vm_type_equal(vm_emit.seq_element_vm_type(pages_ty), page_ty)
+        && vm_emit.vm_type_equal(vm_emit.seq_element_vm_type(page_ty), byte_ty)
+        && r_outer.ok && r_outer.inst.opcode == 15
+        && vm_emit.vm_type_equal(r_outer.inst.from_ty, pages_ty)
+        && vm_emit.vm_type_equal(r_outer.inst.ty, page_ty)
+        && r_inner.ok && r_inner.inst.opcode == 15
+        && vm_emit.vm_type_equal(r_inner.inst.from_ty, page_ty)
+        && vm_emit.vm_type_equal(r_inner.inst.ty, byte_ty)
+        && r_len_outer.ok && r_len_outer.inst.opcode == 14
+        && vm_emit.vm_type_equal(r_len_outer.inst.from_ty, pages_ty)
+        && r_len_inner.ok && r_len_inner.inst.opcode == 14
+        && vm_emit.vm_type_equal(r_len_inner.inst.from_ty, page_ty);
+    return from_assertion(equals_bool(true, ok, 6001));
+}
+
+test nested_seq_preserves_independent_bounds_and_element_type() -> (result: TestResult) {
+    let pages: [[byte; up_to 320]; up_to 1] = type_pages();
+    let env: vm_emit.NatEnv = nat_env_p4_n32();
+
+    // Parse symbolic `[[byte; up_to N]; up_to P]` under P=4, N=32.
+    let parsed_sym: vm_emit.SeqTypeParseResult = vm_emit.parse_byte_seq_vm_type<1, 320>(pages, 320, 257, 4, 30, env);
+    let t_4_32: vm_emit.VmType = vm_emit.nested_seq_vm_type(vm_emit.byte_seq_vm_type(2, 32), 2, 4);
+    let t_8_32: vm_emit.VmType = vm_emit.nested_seq_vm_type(vm_emit.byte_seq_vm_type(2, 32), 2, 8);
+    let t_4_16: vm_emit.VmType = vm_emit.nested_seq_vm_type(vm_emit.byte_seq_vm_type(2, 16), 2, 4);
+    let t_u64: vm_emit.VmType = vm_emit.nested_seq_vm_type(vm_emit.scalar_seq_vm_type(vm_emit.u64_vm_type(), 2, 32), 2, 4);
+    let t_exact: vm_emit.VmType = vm_emit.nested_seq_vm_type(vm_emit.byte_seq_vm_type(1, 32), 2, 4);
+
+    let ok: bool = parsed_sym.ok
+        && vm_emit.vm_type_equal(parsed_sym.ty, t_4_32)
+        && !(vm_emit.vm_type_equal(t_4_32, t_8_32))
+        && !(vm_emit.vm_type_equal(t_4_32, t_4_16))
+        && !(vm_emit.vm_type_equal(t_4_32, t_u64))
+        && !(vm_emit.vm_type_equal(t_4_32, t_exact))
+        && !(vm_emit.vm_type_equal(t_4_32, vm_emit.byte_seq_vm_type(2, 32)));
+    return from_assertion(equals_bool(true, ok, 6002));
+}
+
+test nested_seq_rejects_malformed_types_and_projections() -> (result: TestResult) {
+    let pages: [[byte; up_to 320]; up_to 1] = type_pages();
+    let env: vm_emit.NatEnv = nat_env_p4_n32();
+
+    // Non-scalar inner element `[[Token; up_to 32]; up_to 4]` -> error_code 4
+    let r_rec: vm_emit.SeqTypeParseResult = vm_emit.parse_byte_seq_vm_type<1, 320>(pages, 320, 257, 136, 164, env);
+    // Unbound outer Nat `[[byte; up_to 32]; up_to M]` -> error_code 11
+    let r_unbound: vm_emit.SeqTypeParseResult = vm_emit.parse_byte_seq_vm_type<1, 320>(pages, 320, 257, 230, 257, env);
+
+    // Malformed projections fail closed with error_code 7
+    let page32: vm_emit.VmType = vm_emit.byte_seq_vm_type(2, 32);
+    let page16: vm_emit.VmType = vm_emit.byte_seq_vm_type(2, 16);
+    let pages_4_32: vm_emit.VmType = vm_emit.nested_seq_vm_type(page32, 2, 4);
+    let u64_ty: vm_emit.VmType = vm_emit.u64_vm_type();
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: pages_4_32 },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 1, ty: u64_ty },
+            tail: vm_emit.VmValueList.VVCons {
+                head: vm_emit.VmValue { id: 2, ty: page32 },
+                tail: vm_emit.VmValueList.VVNil
+            }
+        }
+    };
+    let inst_outer: ssa.Instruction = mk_index_inst(1, 3, 0, 1, decl.SemType.TSeq);
+    // Claiming scalar byte result from outer [[byte; up_to 32]; up_to 4]
+    let r_wrong_elem: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_index(val_types, inst_outer, vm_emit.byte_vm_type());
+    // Claiming wrong inner bound [byte; up_to 16] from [[byte; up_to 32]; up_to 4]
+    let r_wrong_inner: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_index(val_types, inst_outer, page16);
+    // Indexing a scalar u64 (id 1) as a sequence
+    let inst_scalar: ssa.Instruction = mk_index_inst(2, 4, 1, 1, decl.SemType.TByte);
+    let r_non_seq: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_index(val_types, inst_scalar, vm_emit.byte_vm_type());
+    // Zero inner/outer bounds on constructors fail closed
+    let zero_inner: vm_emit.VmType = vm_emit.nested_seq_vm_type(vm_emit.byte_seq_vm_type(2, 0), 2, 4);
+    let zero_outer: vm_emit.VmType = vm_emit.nested_seq_vm_type(page32, 2, 0);
+
+    let ok: bool = !(r_rec.ok) && r_rec.error_code == 4
+        && !(r_unbound.ok) && r_unbound.error_code == 11
+        && !(r_wrong_elem.ok) && r_wrong_elem.error_code == 7
+        && !(r_wrong_inner.ok) && r_wrong_inner.error_code == 7
+        && !(r_non_seq.ok) && r_non_seq.error_code == 7
+        && !(zero_inner.valid) && !(zero_outer.valid);
+    return from_assertion(equals_bool(true, ok, 6003));
+}

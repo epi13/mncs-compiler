@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 51,
+  "revision": 52,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -2511,6 +2511,64 @@
         "entrypoint": "mncs-test run",
         "source_paths": [
           "tests/vm_emit_provider_handoff_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.vm-emit-nested-seq-native",
+      "title": "First-class MNCS vm_emit suite verifies nested bounded-sequence page projection, independent outer/inner bounds, and malformed type/projection rejection",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::nested_seq_vm_type",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::seq_element_vm_type",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::vm_type_equal",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::parse_byte_seq_vm_type",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_seq_index",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_seq_length"
+      ],
+      "invalidation_dependencies": [
+        "tests/vm_emit_nested_seq_suite.mncs",
+        "src/compiler/vm_emit.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/source.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/vm_emit_nested_seq_suite.mncs"
         ],
         "library_paths": [
           "src"

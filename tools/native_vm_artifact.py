@@ -83,16 +83,34 @@ def _semantic_id_str(ident):
     return bytes(ident["bytes"][:ident["len"]]).decode("utf-8")
 
 
-def _seq_bound(vm_ty):
-    assert vm_ty["valid"] and vm_ty["kind"] == 4, f"expected sequence VmType: {vm_ty}"
-    bound_kind = vm_ty["bound_kind"]
-    bound_val = vm_ty["bound_value"]
-    assert bound_val > 0, f"sequence bound must be > 0: {vm_ty}"
+def _bound_dict(bound_kind, bound_val, ctx):
+    assert bound_val > 0, f"sequence bound must be > 0: {ctx}"
     if bound_kind == 1:
         return {"exact": bound_val}
     if bound_kind == 2:
         return {"up_to": bound_val}
     raise ValueError(f"unsupported sequence bound_kind: {bound_kind}")
+
+
+def _seq_bound(vm_ty):
+    assert vm_ty["valid"] and vm_ty["kind"] in (4, 6), f"expected sequence VmType: {vm_ty}"
+    return _bound_dict(vm_ty["bound_kind"], vm_ty["bound_value"], vm_ty)
+
+
+def _inner_seq_bound(vm_ty):
+    assert vm_ty["valid"] and vm_ty["kind"] == 6, f"expected nested sequence VmType: {vm_ty}"
+    return _bound_dict(vm_ty["inner_bound_kind"], vm_ty["inner_bound_value"], vm_ty)
+
+
+def _scalar_seq_elem(vm_ty):
+    bits = int(vm_ty.get("bits", 0))
+    if bits == 0:
+        return "byte"
+    if bits == 1:
+        return "bool"
+    if bits in (8, 16, 32, 64):
+        return {"integer": {"bits": bits, "signed": bool(vm_ty["signed"])}}
+    raise ValueError(f"unsupported sequence element bits: {bits}")
 
 
 def _record_short_name(rec_id, record_names):
@@ -116,19 +134,13 @@ def _body_type(vm_ty, record_names=None):
     if kind == 3:
         return {"integer": {"bits": vm_ty["bits"], "signed": vm_ty["signed"]}}
     if kind == 4:
-        bits = int(vm_ty.get("bits", 0))
-        if bits == 0:
-            elem = "byte"
-        elif bits == 1:
-            elem = "bool"
-        elif bits in (8, 16, 32, 64):
-            elem = {"integer": {"bits": bits, "signed": bool(vm_ty["signed"])}}
-        else:
-            raise ValueError(f"unsupported sequence element bits: {bits}")
-        return {"sequence": {"element": elem, "bound": _seq_bound(vm_ty)}}
+        return {"sequence": {"element": _scalar_seq_elem(vm_ty), "bound": _seq_bound(vm_ty)}}
     if kind == 5:
         rec_id = _semantic_id_str(vm_ty["nominal_identity"])
         return {"record": {"identity": rec_id, "name": _record_short_name(rec_id, record_names)}}
+    if kind == 6:
+        inner = {"sequence": {"element": _scalar_seq_elem(vm_ty), "bound": _inner_seq_bound(vm_ty)}}
+        return {"sequence": {"element": inner, "bound": _seq_bound(vm_ty)}}
     raise ValueError(f"unsupported VmType kind: {kind}")
 
 

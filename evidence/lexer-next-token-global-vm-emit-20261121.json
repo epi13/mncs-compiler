@@ -1,0 +1,775 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-campaign-evidence",
+  "campaign": "lexer-next-token-global-vm-emit-20261121",
+  "observed_at": "2026-11-22T08:14:51.030701+00:00",
+  "reconciled_pinned_heads": {
+    "mncs-compiler_base": "f32f577b7a7d150134a7ac1a9070571c90665457",
+    "mncs-language": "ece0d77ef462ed6f31c1d1a86627dc8690d79718",
+    "mncs-environment": "be0676100ac8bf59d4f56833725b7ae49189bf7f",
+    "mncs-test": "39304e66be28951cdd1b753389739911607ac933",
+    "mncs-vm": "da99dee282336c5acdc91359b14f477745c77f77",
+    "mncs-stdlib": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+    "stage0_lock": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+  },
+  "environment_session": {
+    "session_id": "ses_124c5667194329fa",
+    "consumer_id": "lexer-next-token-global-20261121"
+  },
+  "paged_input_trace_and_arena_fix": {
+    "first_loss_point": "src/compiler/vm_emit.mncs::parse_byte_seq_vm_type expected scalar `byte` immediately after `[`, and `VmType` lacked inner sequence bound fields, causing error_code 4 on `pages: [[byte; up_to 32]; up_to 4]` while canonical mncs-vm (`BodyType::Sequence { element: Box<BodyType>, bound }`) already represented nested sequences natively.",
+    "scalar_elem_fix": "decl.scalar_sem handles only 2-3 char integer spellings (`u8`..`u64`/`i8`..`i64`); added parse_scalar_elem_vm_type dispatching decl.scalar_kind first for `byte`/`bool`/`u64`/`i64`.",
+    "jit_arena_exhaustion_fix": "During lexer::next_token_global<4,32> lowering, 7 linear search loops in vm_emit.mncs (lookup_vm_value_type, find_ssa_block_by_id, find_vm_block_by_id, find_inst_of_kind_in_list, find_vm_record_type, find_vm_record_field, find_vm_record_field_at, find_vm_fn_by_spec, id_in_list) carried full 600B-1.1KB result structs per miss step, exhausting the 1 GiB bump-only Cranelift JIT canonical arena. Refactoring them to carry only the list tail pointer (`rest`) eliminated per-step bump allocations and unblocked next_token_global<4,32>, significant_global<4,32>, scan_header_global<4,32>, and header_global<4,32>."
+  },
+  "harness_results": {
+    "status": "passed",
+    "provenance": {
+      "callable_selection_and_lowering": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+      "native_project_ssa_producer": "mncs.compiler.project.v1::compile_project_target_with_context",
+      "provider_body_materializer": "mncs.compiler.project.v1::materialize_provider_module",
+      "transport_codec_and_sealer": "tools/native_vm_artifact.py",
+      "independent_vm_admission_and_execution": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+      "behavioral_oracle": "locked Stage-0 mncs-compiler-stage0-probe (6a3f6907e4acd4a98afd4a9421548a978ff266e6)",
+      "compiler_revision": "f32f577b7a7d150134a7ac1a9070571c90665457",
+      "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+      "emitter_source_sha256": "5623b00f5a0316a7c9ec2f9663a484067019af9533acea80843f4ee23d13c999"
+    },
+    "checkpoint1_source_byte_at_global": {
+      "specializations": {
+        "4_32": {
+          "artifact_id": "sha256:1119617fb31960bede9d218e0b91778118e2028e6c3f833c9a4a52c9c76f4f45",
+          "specialized_callable": "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global__spec_503d154c",
+          "vm_admission_status": "admitted",
+          "vm_differential_matches": 9
+        },
+        "8_32": {
+          "artifact_id": "sha256:0e62b34a3b809d897db1be83dbd40f4c50adf981d039357e433c2f850daa604d",
+          "specialized_callable": "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global__spec_904a97ee",
+          "vm_admission_status": "admitted",
+          "vm_differential_matches": 2
+        },
+        "4_16": {
+          "artifact_id": "sha256:caa1e0d0a4e42b1340351310a221013927c1a95e42e5f7381b183720d5974f00",
+          "specialized_callable": "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global__spec_b4ed3b1b",
+          "vm_admission_status": "admitted",
+          "vm_differential_matches": 2
+        }
+      },
+      "distinct_specialization_keys": true
+    },
+    "lexer_next_token_global_4_32": {
+      "target_callable": "mncs:0.2:function:mncs.test.next_token_global_caller.v1::call_next_token_global",
+      "target_specialization": "mncs.compiler.lexer.v1::next_token_global<4, 32>",
+      "unchanged_lexer_mncs_sha256": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+      "unchanged_source_mncs_sha256": "f9bd036f4c515eb692906685f4b13a20e28174f7f05cbcfc601efb0fc2e61a32",
+      "emitted_callables": [
+        "mncs:0.2:function:mncs.test.next_token_global_caller.v1::call_next_token_global",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_scalar_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_window4_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::identifier_start_scalar",
+        "mncs:0.2:function:mncs.std.utf8_scalar.v1::is_whitespace_scalar",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_line_comment_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::token_from_nonword_scan",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::token_from_word_scan_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_block_comment_scalar_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_unicode_scalar_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_word_tail_window",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::punctuation",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_lead_continuations",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_first_continuation_valid",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_continuation",
+        "mncs:0.2:function:mncs.compiler.source.v1::missing_window4",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global_delta__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_line_comment_window__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::keyword__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::keyword_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::identifier_continue_scalar",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::word_char",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::space",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::digit",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane0",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane1",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane2",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane3",
+        "mncs:0.2:function:mncs.compiler.source.v1::global_page_address",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane0",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane1",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane2",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane3"
+      ],
+      "emitted_record_schemas": [
+        "ByteWindow4",
+        "GlobalPageAddress",
+        "Scan",
+        "Token",
+        "UnicodeRangeSearch",
+        "Utf8Scalar"
+      ],
+      "function_count": 38,
+      "block_count": 1041,
+      "instruction_count": 6151,
+      "record_type_count": 6,
+      "symbolic_bounds_remaining": 0,
+      "artifact_id": "sha256:4051562bfa59c3a6dddd11818ccbc88afc5377a8d8a01d291786f060105e0645",
+      "ssa_module_identity": "mncs:0.4:ssa:module:4b0846cec495d881bce7607f9e84355406543ed0e21dee7a9d7c54937a943ef7",
+      "artifact_sha256": "050c47a23a7a3595e43d238e4dac07f7fd7e547184f005ecf5169f141a1ee281",
+      "artifact_bytes": 4282476,
+      "deterministic_across_fresh_processes": true,
+      "emit_process1_wall_s": 659.837,
+      "emit_process1_child_peak_rss_bytes": 6794641408,
+      "emit_process2_wall_s": 163.081,
+      "emit_process2_child_peak_rss_bytes": 6371487744,
+      "host_python_peak_rss_kib": 8812368,
+      "vm_admission_status": "admitted",
+      "tampered_artifact_vm_admission": {
+        "status": "refused",
+        "returncode": 2
+      },
+      "vm_differential_cases": 39,
+      "vm_differential_matches": 39,
+      "layout_invariance_stream_tokens": 46,
+      "layout_invariance_layouts_identical_through_eof": true,
+      "semantic_digest": "7eafcf8a52d946ddb586e09b3074d7abb61b4b7501c0b4f348aef857642f80dc",
+      "vm_direct_generic_dispatch_matched": true,
+      "vm_uncompiled_8_32_refused": true,
+      "vm_uncompiled_4_16_refused": true,
+      "vm_session_wall_s": 0.4797,
+      "vm_resident_peak_rss_bytes": 51884032,
+      "vm_max_memory_cells": 13563,
+      "vm_max_steps_per_call": 3377,
+      "vm_total_steps": 99254,
+      "direct_uninstantiated_refusal": {
+        "ok": false,
+        "error_code": 11,
+        "error_function": 21
+      }
+    },
+    "focused_rejections": {
+      "wrong_inner_element_e2e": {
+        "ok": false,
+        "error_code": 1,
+        "rejecting_layer": "project_decl_proof"
+      },
+      "wrong_inner_element_vm_emit": {
+        "ok": false,
+        "error_code": 10,
+        "rejecting_layer": "vm_emit_closure_signature_check"
+      },
+      "wrong_outer_capacity_vm_emit": {
+        "ok": false,
+        "error_code": 10,
+        "rejecting_layer": "vm_emit_closure_signature_check"
+      },
+      "wrong_inner_capacity_vm_emit": {
+        "ok": false,
+        "error_code": 10,
+        "rejecting_layer": "vm_emit_closure_signature_check"
+      },
+      "nonscalar_inner_element_vm_emit": {
+        "ok": false,
+        "error_code": 4,
+        "rejecting_layer": "vm_emit_type_parse"
+      },
+      "malformed_outer_projection_result_type": {
+        "ok": false,
+        "error_code": 7,
+        "rejecting_layer": "vm_emit_instruction_lowering"
+      },
+      "malformed_outer_projection_arity": {
+        "ok": false,
+        "error_code": 4,
+        "rejecting_layer": "vm_emit_seq_type_propagation"
+      },
+      "malformed_inner_projection_arity": {
+        "ok": false,
+        "error_code": 7,
+        "rejecting_layer": "vm_emit_instruction_lowering"
+      }
+    },
+    "next_frontier_probes": {
+      "lexer_significant_global_4_32": {
+        "emitted": true,
+        "error_code": 0,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "function_count": 40,
+        "block_count": 1063,
+        "instruction_count": 6193,
+        "record_type_count": 6,
+        "admitted": true,
+        "executed_sample": true,
+        "artifact_id": "sha256:6461f2b792b2b251da9e1f56a9b708fd5dc6eb2bf84328465219c27ed99fdc66",
+        "sample_result": {
+          "type_identity": "mncs:0.2:record-type:mncs.compiler.lexer.v1::Token::diagnostic%3Au64%3Bend%3Au64%3Bkind%3Au64%3Bstart%3Au64%3B",
+          "name": "Token",
+          "kind": 11,
+          "start": 11,
+          "end": 17,
+          "diagnostic": 0
+        }
+      },
+      "parser_scan_header_global_4_32": {
+        "emitted": true,
+        "error_code": 0,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "function_count": 42,
+        "block_count": 1118,
+        "instruction_count": 6412,
+        "record_type_count": 7,
+        "admitted": true,
+        "executed_sample": true,
+        "artifact_id": "sha256:704913a3a9a6849fd2375fb3743d1b9b3a6de084c7d9608ef71006568e3633b2",
+        "sample_result": {
+          "code": 0,
+          "start": 0,
+          "end": 0,
+          "version_start": 5,
+          "version_end": 9,
+          "module_start": 18,
+          "module_end": 21,
+          "next_offset": 22,
+          "state": 8
+        }
+      },
+      "parser_header_global_4_32": {
+        "emitted": true,
+        "error_code": 0,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "function_count": 49,
+        "block_count": 1345,
+        "instruction_count": 6902,
+        "record_type_count": 9,
+        "admitted": true,
+        "executed_sample": true,
+        "artifact_id": "sha256:ab5c30878c3aebca9e0e4ad3c29a6edab283d3556d58babcdf814636f3ac0dd4",
+        "sample_result": {
+          "code": 0,
+          "start": 0,
+          "end": 0,
+          "version_start": 5,
+          "version_end": 9,
+          "module_start": 18,
+          "module_end": 21,
+          "next_offset": 22,
+          "state": 8
+        }
+      },
+      "segment_lex_batch_from_4_32": {
+        "emitted": false,
+        "error_code": 4,
+        "error_function": 2,
+        "error_block": 0,
+        "error_instruction": 0,
+        "function_count": 0,
+        "block_count": 0,
+        "instruction_count": 0,
+        "record_type_count": 0,
+        "admitted": false,
+        "executed_sample": false
+      }
+    }
+  },
+  "preserved_regressions": {
+    "lexer_skip_trivia_32": {
+      "status": "passed",
+      "artifact_id": "sha256:d875e6bd38c0d1c5adc37e376c3bc5b2a5910f1de775d02cfe33253dab904c1f",
+      "vm_differential_matches": "36/36",
+      "semantic_digest": "25f2195b33650748c6e9638407df485555b633467b7d502c819ce2aa2a161cfe",
+      "next_token_global_probe_now_ok": true
+    },
+    "source_ascii_32_and_bounded_loops": {
+      "status": "passed",
+      "artifact_id": "sha256:7d872b549b81164ebb8823f181fc3bd0080c48cec502b54ce1b4523c61f648ec",
+      "vm_differential_matches": "21/21",
+      "dual_capacity_matches": 5,
+      "counted_loop_matches": 5
+    },
+    "utf8_scalar_flat_byte_view_generic": {
+      "status": "passed",
+      "artifact_id": "sha256:461c9b842e6d79c1e7230b1d4de08d072f5ca7230301ef8e8daa986f6b2592cc",
+      "vm_differential_matches": "47/47",
+      "dual_capacity_matches": 9
+    }
+  },
+  "ambient_environment_verification": {
+    "new_native_suite": {
+      "obligation_identity": "mncs-compiler.vm-emit-nested-seq-native",
+      "source_path": "tests/vm_emit_nested_seq_suite.mncs",
+      "inventory_revision": 52,
+      "named_cases": [
+        "nested_page_projection_lowers_outer_to_page_and_page_to_byte",
+        "nested_seq_preserves_independent_bounds_and_element_type",
+        "nested_seq_rejects_malformed_types_and_projections"
+      ],
+      "verdict": "PASS"
+    },
+    "baseline_entry_on_f32f577": {
+      "session_id": "ses_124c5667194329fa",
+      "evidence_id": "mncs-store:ses_124c5667194329fa:verification:8ff6c7da19f58c705983c08619404713c4683b0374ae881cbf56ef1e7f042a94",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 57,
+      "current": 7,
+      "executed_in_epoch": 7,
+      "failed": 0,
+      "failed_ids": [],
+      "blockers": 0,
+      "verification_elapsed_s": 259.553,
+      "full_entry_wall_s": 299.74,
+      "peak_rss_kib": 2623844,
+      "new_provider_launches": 7,
+      "cumulative_run_dirs": 7
+    },
+    "run1_entry_with_nested_seq_suite": {
+      "session_id": "ses_124c5667194329fa",
+      "evidence_id": "mncs-store:ses_124c5667194329fa:verification:7079f6cd7368edf1a58e95a7ab7e22d61abef94d1c45eff9d54d0bd247a1c8f9",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 58,
+      "current": 8,
+      "executed_in_epoch": 5,
+      "failed": 0,
+      "failed_ids": [],
+      "blockers": 0,
+      "verification_elapsed_s": 251.294,
+      "full_entry_wall_s": 334.99,
+      "peak_rss_kib": 2690128,
+      "new_provider_launches": 5,
+      "reused_unaffected_suites": 3,
+      "cumulative_run_dirs": 12,
+      "launched_runs": [
+        {
+          "run_dir": "bb98b566-d1af6caf",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "counted_up_to_nat_bound_lowers_and_collects_region",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_loop::counted_up_to_nat_bound_lowers_and_collects_region::cd44945bec967d2d1e2019cbfb28fc8c413bb0bc73de1f701faa854ce5ae3583",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "over_sequence_loop_resolves_view_param_and_region",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_loop::over_sequence_loop_resolves_view_param_and_region::600b95fae1f05869b0ee2a858a947d4b8a31a27faa6aa9c365eccb847ab35818",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "propagate_seq_types_rejects_conflicting_sequence_bounds",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_loop::propagate_seq_types_rejects_conflicting_sequence_bounds::507f04dc841480b9b27514545266345c2f21da42101f5144be607a11f61f388f",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:c619d3df9a99f8d9993b5c79ac82bbefc1a5108cb8baede1aa506d5930efb69c",
+          "compiled_function_count": 502,
+          "module_elaboration_cache": {
+            "reused_count": 2,
+            "linked_count": 12,
+            "invalidated_count": 12,
+            "published_entry_count": 12,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "d91dc071-d1af6caf",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "nested_page_projection_lowers_outer_to_page_and_page_to_byte",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_nested_seq::nested_page_projection_lowers_outer_to_page_and_page_to_byte::5b8cabaea60f3e455835b96edf8879b9e705357a8cad5508230bc15e0cd24990",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "nested_seq_preserves_independent_bounds_and_element_type",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_nested_seq::nested_seq_preserves_independent_bounds_and_element_type::ddd4606fcbbffc9a6bc1b6e22d3a884514d41fe708a251bc5f42383c9fe62616",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "nested_seq_rejects_malformed_types_and_projections",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_nested_seq::nested_seq_rejects_malformed_types_and_projections::bdad7036084ca91cb94e633838cc79ce29e16c81f6bb6a09992b8aaeefa320dd",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:e1ecd0de946c2de78baf076841cc16aaf7440c0af67528a9c0227e67f1971033",
+          "compiled_function_count": 131,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "40c8f969-d1af6caf",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "provider_handoff_closure_filters_unreachable_modules",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_closure_filters_unreachable_modules::e2e217e6819bc603c0ebc1303f0bdea19d588468df76225b0a39883047ca1b34",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "provider_handoff_collects_reachable_record_schema_and_excludes_unrelated",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_collects_reachable_record_schema_and_excludes_unrelated::2f817a933f8fd0b58c60c75b62d6c4dbf166fe253db91522dc2a2c8fd622bceb",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "provider_handoff_locates_reachable_callable_and_ignores_unrelated",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_locates_reachable_callable_and_ignores_unrelated::0025b306aeec12d9f2797d95cccba60f61033d514f8a1e7121dd93075f1b3dc6",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "record_update_and_exact_seq_construct_lower_and_fail_closed",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::record_update_and_exact_seq_construct_lower_and_fail_closed::a3ddf0d750a07a57ff8aa70db9850ccfb02220149615e9e492b7f34d24169bc3",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:d9e263a789424eb87cd78a2f5b29715a97005e29a1b9322a17fa5bff6040d6a0",
+          "compiled_function_count": 344,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "3bbd4926-d1af6caf",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "record_project_lowers_verified_schema_field",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_lowers_verified_schema_field::62a666166e67ddda77f706381cd38ba6ade3ce9024c40f48507ed12439c5b926",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "record_project_rejects_mismatched_field_and_result_type",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_field_and_result_type::05175047f6a3c8f9802fad6dc4ac99bc5b4af8bfad6b750fc28f372b69b2c92c",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "record_project_rejects_mismatched_owner_and_unknown_schema",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_owner_and_unknown_schema::a3e9ffb361652c0e270f5fe034836b9d801c25969afc3871c50ee8c47f871505",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:9bb086312164fe26c9988f28006c902e88723093e06800d5e98101d8343781b3",
+          "compiled_function_count": 56,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "83fcd5bf-d1af6caf",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "scalar_switch_lowers_to_canonical_dispatch_chain",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_lowers_to_canonical_dispatch_chain::4c61386526dadb7030fe04b9339ba1da1e1592054a08f864caaf301cc722c0e4",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "scalar_switch_rejects_mismatched_default_target",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_default_target::a6622cfac26dba3243c168976ae5d6a2011b2c71e91837127f703199b69626b2",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "scalar_switch_rejects_mismatched_join_argument_type",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_join_argument_type::443553643aab125ebf0839bf6a51b69f93f293af9a8ffec88ca58f5a3845f5a3",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:8fccdddc5a2e854c04810e44a48cc153efac5152b8a8c69157d68c4d75436ba4",
+          "compiled_function_count": 154,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        }
+      ]
+    },
+    "run2_covered_edit_named_failure": {
+      "session_id": "ses_124c5667194329fa",
+      "evidence_id": "mncs-store:ses_124c5667194329fa:verification:55bcfe3287406bfc8b820cb72755b33db764a23baf4c498d44782cbb1f89f050",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 58,
+      "current": 7,
+      "executed_in_epoch": 5,
+      "failed": 1,
+      "failed_ids": [
+        "mncs-compiler.vm-emit-nested-seq-native"
+      ],
+      "blockers": 1,
+      "verification_elapsed_s": 245.475,
+      "full_entry_wall_s": 263.84,
+      "peak_rss_kib": 2613436,
+      "edited_file": "src/compiler/vm_emit.mncs",
+      "edited_function": "vm_type_equal",
+      "intended_named_failure": "tests.compiler_vm_emit_nested_seq::nested_seq_preserves_independent_bounds_and_element_type (failure_code=6002)",
+      "new_provider_launches": 5,
+      "reused_unaffected_suites": 3,
+      "cumulative_run_dirs": 17,
+      "launched_runs": [
+        {
+          "run_dir": "bb98b566-e8e6fd34",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "counted_up_to_nat_bound_lowers_and_collects_region",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_loop::counted_up_to_nat_bound_lowers_and_collects_region::cd44945bec967d2d1e2019cbfb28fc8c413bb0bc73de1f701faa854ce5ae3583",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "over_sequence_loop_resolves_view_param_and_region",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_loop::over_sequence_loop_resolves_view_param_and_region::600b95fae1f05869b0ee2a858a947d4b8a31a27faa6aa9c365eccb847ab35818",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "propagate_seq_types_rejects_conflicting_sequence_bounds",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_loop::propagate_seq_types_rejects_conflicting_sequence_bounds::507f04dc841480b9b27514545266345c2f21da42101f5144be607a11f61f388f",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:1d1700b386821997b9915ee0620f798a399181ecb44b266892b94dfb6760f45e",
+          "compiled_function_count": 502,
+          "module_elaboration_cache": {
+            "reused_count": 13,
+            "linked_count": 1,
+            "invalidated_count": 1,
+            "published_entry_count": 1,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "d91dc071-e8e6fd34",
+          "verdict": "FAIL",
+          "tests": [
+            {
+              "entry": "nested_page_projection_lowers_outer_to_page_and_page_to_byte",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_nested_seq::nested_page_projection_lowers_outer_to_page_and_page_to_byte::5b8cabaea60f3e455835b96edf8879b9e705357a8cad5508230bc15e0cd24990",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "nested_seq_preserves_independent_bounds_and_element_type",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_nested_seq::nested_seq_preserves_independent_bounds_and_element_type::ddd4606fcbbffc9a6bc1b6e22d3a884514d41fe708a251bc5f42383c9fe62616",
+              "verdict": "FAIL",
+              "failure_code": 6002
+            },
+            {
+              "entry": "nested_seq_rejects_malformed_types_and_projections",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_nested_seq::nested_seq_rejects_malformed_types_and_projections::bdad7036084ca91cb94e633838cc79ce29e16c81f6bb6a09992b8aaeefa320dd",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:cb463caad962463b1f0cf22a382435d35f4f4529c382b211b57a9b71b2ec6e5d",
+          "compiled_function_count": 131,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "40c8f969-e8e6fd34",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "provider_handoff_closure_filters_unreachable_modules",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_closure_filters_unreachable_modules::e2e217e6819bc603c0ebc1303f0bdea19d588468df76225b0a39883047ca1b34",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "provider_handoff_collects_reachable_record_schema_and_excludes_unrelated",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_collects_reachable_record_schema_and_excludes_unrelated::2f817a933f8fd0b58c60c75b62d6c4dbf166fe253db91522dc2a2c8fd622bceb",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "provider_handoff_locates_reachable_callable_and_ignores_unrelated",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_locates_reachable_callable_and_ignores_unrelated::0025b306aeec12d9f2797d95cccba60f61033d514f8a1e7121dd93075f1b3dc6",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "record_update_and_exact_seq_construct_lower_and_fail_closed",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::record_update_and_exact_seq_construct_lower_and_fail_closed::a3ddf0d750a07a57ff8aa70db9850ccfb02220149615e9e492b7f34d24169bc3",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:767dea7a6b44be009b53638b46de6b972d8ae1261bb24e714bc22cfce802e59b",
+          "compiled_function_count": 344,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "3bbd4926-e8e6fd34",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "record_project_lowers_verified_schema_field",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_lowers_verified_schema_field::62a666166e67ddda77f706381cd38ba6ade3ce9024c40f48507ed12439c5b926",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "record_project_rejects_mismatched_field_and_result_type",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_field_and_result_type::05175047f6a3c8f9802fad6dc4ac99bc5b4af8bfad6b750fc28f372b69b2c92c",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "record_project_rejects_mismatched_owner_and_unknown_schema",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_owner_and_unknown_schema::a3e9ffb361652c0e270f5fe034836b9d801c25969afc3871c50ee8c47f871505",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:95d7baea11c4c394a49d1a23382771544bea05bcb414a828556d5f5f1b3b0b08",
+          "compiled_function_count": 56,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        },
+        {
+          "run_dir": "83fcd5bf-e8e6fd34",
+          "verdict": "PASS",
+          "tests": [
+            {
+              "entry": "scalar_switch_lowers_to_canonical_dispatch_chain",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_lowers_to_canonical_dispatch_chain::4c61386526dadb7030fe04b9339ba1da1e1592054a08f864caaf301cc722c0e4",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "scalar_switch_rejects_mismatched_default_target",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_default_target::a6622cfac26dba3243c168976ae5d6a2011b2c71e91837127f703199b69626b2",
+              "verdict": "PASS",
+              "failure_code": 0
+            },
+            {
+              "entry": "scalar_switch_rejects_mismatched_join_argument_type",
+              "id": "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_join_argument_type::443553643aab125ebf0839bf6a51b69f93f293af9a8ffec88ca58f5a3845f5a3",
+              "verdict": "PASS",
+              "failure_code": 0
+            }
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:0f3da85840a07ebec5ece7b608e8ccf766cd745631d0f76d0cd2a56a104104d2",
+          "compiled_function_count": 154,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "evicted_entry_count": 0
+          }
+        }
+      ]
+    },
+    "run3_restored_clean_pass": {
+      "session_id": "ses_124c5667194329fa",
+      "evidence_id": "mncs-store:ses_124c5667194329fa:verification:98ac3b88b55f06692b95331bd0849dbf613452e7f8e2c3d517fc94482cd7c5b9",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 58,
+      "current": 8,
+      "executed_in_epoch": 5,
+      "failed": 0,
+      "failed_ids": [],
+      "blockers": 0,
+      "verification_elapsed_s": 247.459,
+      "full_entry_wall_s": 265.98,
+      "peak_rss_kib": 2615288,
+      "restored_vm_emit_sha256": "5623b00f5a0316a7c9ec2f9663a484067019af9533acea80843f4ee23d13c999",
+      "new_provider_launches": 5,
+      "reused_unaffected_suites": 3,
+      "cumulative_run_dirs": 22
+    },
+    "run4_unchanged_reentry_reuse": {
+      "session_id": "ses_124c5667194329fa",
+      "evidence_id": "mncs-store:ses_124c5667194329fa:verification:98ac3b88b55f06692b95331bd0849dbf613452e7f8e2c3d517fc94482cd7c5b9",
+      "reused": true,
+      "epoch_reused": true,
+      "obligations_total": 58,
+      "current": 8,
+      "executed_in_epoch": 5,
+      "failed": 0,
+      "failed_ids": [],
+      "blockers": 0,
+      "verification_elapsed_s": 2.896,
+      "full_entry_wall_s": 20.29,
+      "peak_rss_kib": 662400,
+      "new_provider_launches": 0,
+      "cumulative_run_dirs": 22
+    }
+  },
+  "first_remaining_blocker": {
+    "rank": 1,
+    "owner": "mncs-compiler (vm_emit.mncs / tools/native_vm_artifact.py)",
+    "callable": "mncs:0.2:function:mncs.compiler.segment.v1::lex_batch_from<4, 32> -> mncs.compiler.lexer.v1::lex_batch_from<4, 32>",
+    "operation_or_type": "nominal-record sequence field `tokens: [Token; 64]` inside `lexer.BatchResult` (and `SequenceReplace` / `replace(...)` over record sequences)",
+    "diagnostic": {
+      "ok": false,
+      "error_code": 4,
+      "error_function": 2,
+      "error_block": 0,
+      "error_instruction": 0
+    },
+    "summary": "Unchanged lexer::significant_global<4,32> (40 fns), parser::scan_header_global<4,32> (42 fns), and parser::header_global<4,32> (49 fns) all emit, pass fresh mncs-vm admission, and execute cleanly. The first remaining refusal along the compiler pipeline is segment::lex_batch_from<4,32> (`error_code: 4`, `error_function: 2`), because `lexer.BatchResult` contains a sequence of nominal records (`[Token; 64]`), whereas VmType currently models only flat scalar sequences (kind 4) and 2-level nested scalar sequences (kind 6), not nominal-record sequences or `SequenceReplace`.",
+    "reproduce_command": "python3 -u tools/test_native_lexer_next_token_global_vm_emit.py"
+  },
+  "stage1_to_stage2_rebuild": "UNKNOWN",
+  "stage1_claimed": false,
+  "stage2_claimed": false
+}
