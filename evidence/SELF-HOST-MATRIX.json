@@ -10055,7 +10055,7 @@
     "status": "passed_with_expected_proof_rejection",
     "workspace_resolution": "derived from the Compiler linked worktree Git common directory; source repository top-level and Doctor manifest identity checked"
   },
-  "evidence_updated_at": "2026-11-19T05:10:32.855663+00:00",
+  "evidence_updated_at": "2026-11-22T01:50:14.100929+00:00",
   "stage0_revision_role": "Historical Stage-0 identity for the matrix capture and its module-stage evidence; later exact Stage-0 pins are recorded per campaign and do not silently retarget prior evidence.",
   "candidate_worktree_role": "Historical candidate source-content snapshot associated with compiler_head; not a current Git worktree or current delivery identity.",
   "previous_campaign_frontier_update": {
@@ -25962,6 +25962,113 @@
       "owner": "mncs-compiler (vm_emit.mncs)",
       "summary": "Record field projection (SSA instruction kind 8) blocks emitting `mncs.compiler.lexer.v1::is_trivia(token: Token)` (`error_code: 5, error_function: 9, error_block: 0, error_instruction: 0`), followed by record update (`kind 16, operator 1`), `FiniteSwitch`, and paged sequence lowering toward a larger `lexer.mncs` closure.",
       "reproduce_command": "python3 -u tools/test_native_lexer_punctuation_vm_emit.py (emits punctuation 192/192 and reproduces lexer::is_trivia error_code=5)"
+    },
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
+  },
+  "current_campaign_lexer_is_trivia_dependency_reuse_and_elab_cache_20261121": {
+    "observed_at": "2026-11-22T01:50:14.100929+00:00",
+    "session_id": "ses_74a168e897ecb1ba",
+    "evidence_artifact": "evidence/lexer-is-trivia-dependency-reuse-and-elab-cache-20261121.json",
+    "evidence_sha256": "0a64c2c2e4a4cd3f17b5009520273377ca7f032428cfb30ce058230e4e83b8f7",
+    "compiler_base": "f34701124d9cbcd0f119702facb9dc04aed5c4a5",
+    "compiler_slice1_code": "e7364c7a4eab849f0929c5392fcdee0d5d431e57",
+    "mncs_language_revision": "ece0d77ef462ed6f31c1d1a86627dc8690d79718",
+    "environment_revision": "be0676100ac8bf59d4f56833725b7ae49189bf7f",
+    "test_revision": "39304e66be28951cdd1b753389739911607ac933",
+    "stage0_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "lexer_is_trivia_vm_artifact": {
+      "status": "PROVED_RECORD_PROJECT_FROM_UNCHANGED_LEXER_SOURCE",
+      "target_callable": "mncs:0.2:function:mncs.compiler.lexer.v1::is_trivia",
+      "unchanged_lexer_mncs_sha256": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+      "artifact_id": "sha256:89455cf19ced3b02952f5e89337556f4ca7e7e3037fb428d9f81e19ed498f5cb",
+      "ssa_module_identity": "mncs:0.4:ssa:module:5138053dcbfde26be830b05480d13faf671f7c1ea304a70438af602c42c46fc8",
+      "artifact_sha256": "b3da6879d5bc065011b0447dbc8aa97ef780d4e3f44e97d30d3eeb5139556ad5",
+      "artifact_bytes": 9261,
+      "function_count": 1,
+      "block_count": 2,
+      "instruction_count": 11,
+      "record_project_count": 3,
+      "deterministic_across_fresh_processes": true,
+      "vm_admission_status": "admitted",
+      "vm_differential_matches": "48/48",
+      "semantic_digest": "174890f46ba001cb118e27524899a0a04a4e692661ba457d465b4dd80214d753",
+      "malformed_record_project_rejections_passed": 9,
+      "bonus_lexer_is_trivia_cont_ok": true,
+      "first_class_native_suite": {
+        "obligation": "mncs-compiler.vm-emit-record-project-native",
+        "receipt": "mncs-store:ses_74a168e897ecb1ba:verification:81c87677420e83bb2da944c7ef1e82d35471e1e9a15c3ed27432008edb58974a",
+        "verdict": "PASS",
+        "tests": "3/3"
+      }
+    },
+    "verified_dependency_reuse_and_elab_cache": {
+      "coherence_contract": "mncs.test-verification-coherence/2",
+      "closure_fileset": "env-resolved-imports-v1",
+      "direct_scalar_switch_before_vs_warm_after": {
+        "elaboration_ms": [
+          90574,
+          13891
+        ],
+        "wall_s": [
+          108.77,
+          31.7
+        ],
+        "peak_rss_kib": [
+          2778160,
+          2436320
+        ],
+        "cache_reused_modules": 14,
+        "cache_evicted": 0
+      },
+      "ordinary_enter_before_vs_after": {
+        "cold_entry_6_suites_wall_s": [
+          464.292,
+          230.32
+        ],
+        "cold_entry_6_suites_peak_rss_kib": [
+          2805120,
+          2597712
+        ],
+        "unchanged_reentry_provider_launches": [
+          0,
+          0
+        ],
+        "suite_only_edit_provider_launches": [
+          1,
+          1
+        ],
+        "suite_only_edit_wall_s": [
+          166.279,
+          111.15
+        ],
+        "suite_only_edit_peak_rss_kib": [
+          2778044,
+          2436628
+        ],
+        "shared_vm_emit_edit_provider_launches": [
+          3,
+          3
+        ],
+        "shared_vm_emit_edit_wall_s": [
+          383.524,
+          193.438
+        ],
+        "shared_vm_emit_edit_named_failure_verified": true,
+        "restored_pass_wall_s": [
+          399.915,
+          226.484
+        ]
+      }
+    },
+    "deepest_stage_proved": "Native Project SSA (`compile_project_target`) -> native `mncs.compiler.vm_emit.v1` (`compile_and_emit_project_vm_callable`) lowers unchanged `src/compiler/lexer.mncs::is_trivia` (kind-8 record field projection -> canonical VM `RecordProject` bound to nominal `Token` schema, field index/name, and concrete `u64` result type) into a bit-for-bit deterministic `mncs.vm.artifact/1` (9,261 B) independently admitted and executed by fresh canonical `mncs-vm` matching locked Stage-0 (`6a3f6907`) across 48/48 cases, with 9/9 malformed owner/field/type tamper rejections, preserved `punctuation` (192/192) and `source::ascii<32>` (21/21) regressions, a fourth first-class Compiler native suite (`vm-emit-record-project-native`) verified PASS via MNCS Environment, verified resolved-import closure reuse (`mncs.test-verification-coherence/2`) rerunning only affected suites on ordinary `mncs-env enter` (0 launches unchanged, 1 launch suite-only edit, 3 launches shared `vm_emit` edit with exact named failure), and bounded disk-backed `ModuleElaborationCache` + indexed import merging cutting `vm_emit_scalar_switch_suite.mncs` elaboration from 90.57s to 13.89s warm (6.5x) and cold ordinary entry from 464.3s to 230.3s (2.0x) with 207-341 MiB lower peak RSS. Does NOT claim multi-module caller emission (`lexer::skip_trivia<32>`), full `lexer.mncs` closure VM emission, or Stage-1->Stage-2 rebuild.",
+    "first_remaining_blocker": {
+      "rank": 1,
+      "owner": "mncs-compiler (project.mncs / vm_emit.mncs)",
+      "summary": "Emitting a caller consuming a projected `Token` (`lexer::skip_trivia<32>`) from a cross-module root hits `error_code: 4` (missing nominal record schema / callee SSA in imported provider module `mncs.compiler.lexer.v1`) because `compile_project_target` retains `unit.records` and `value_ssa` only for the target module and does not materialize imported provider modules' schemas/SSA for multi-module record + generic call emission; direct uninstantiated `lexer::skip_trivia` hits `error_code: 11` (generic template parameter `N`).",
+      "reproduce_command": "python3 -u tools/test_native_lexer_is_trivia_vm_emit.py"
     },
     "stage1_to_stage2_rebuild": "UNKNOWN",
     "stage1_claimed": false,
