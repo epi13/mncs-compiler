@@ -26529,5 +26529,151 @@
     "stage1_to_stage2_rebuild": "UNKNOWN",
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_stage1_declaration_frontier_20261122": {
+    "date": "2026-11-22",
+    "evidence_artifact": "evidence/self-host-stage1-declaration-frontier-20261122.json",
+    "evidence_sha256": "d71abd5fb0b002b0fe6bf974d54bb8df546c67e7681c8efbeadcf9ae4f47a110",
+    "compiler_revision_base": "529583476ebb58a1aa2ddfaf2bbef13e1ad687b1",
+    "compiler_implementation_revision": "58ee1c3c8f6ff98753dbb570c0c7af5f108e32f7",
+    "environment_revision": "d0882f8ac8ba61381d3417a1a18de1306bc5b17c",
+    "language_transport_revision": "8fa2e71ac3f62548ca61ea7b12d8640e85d4fc08",
+    "language_service_revision": "82e134bf51f52a9a53d830ef02e1e3ee6daf2251",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "stage0_lock_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "declaration_source_sha256": "fd5e8a67943011eec33e8d5e37f1865bcbaaa4190efe320a475d88eee35de71c",
+    "project_capacity": {
+      "source_pages": {
+        "00_utf8_primitives.mncs": 2,
+        "01_utf8_scalar.mncs": 4,
+        "02_text_utf8.mncs": 57,
+        "03_source.mncs": 62,
+        "04_lexer.mncs": 60,
+        "05_segment.mncs": 3,
+        "04_parser.mncs": 8,
+        "05_decl.mncs": 834,
+        "06_parse_use_caller.mncs": 1
+      },
+      "total_pages": 1031,
+      "emitter_specialization": [
+        2048,
+        1024
+      ],
+      "maximum_pages_per_module": 1024,
+      "host_and_child_address_space_guard_bytes": 8589934592
+    },
+    "parse_use": {
+      "specialization": [
+        4,
+        32
+      ],
+      "emission": "emitted",
+      "admission": "admitted",
+      "execution": "returned",
+      "artifact_id": "sha256:ac2acd22807a5de1af4bad1665aa5c60c2130336dafbdf3f23c7d90480e10aa6",
+      "artifact_bytes_sha256": "71d630baf79a6d55111533299e6f79bcecc04b091fb64c4283ec57b99bc0f1df",
+      "artifact_bytes": 4465853,
+      "fresh_emitter_processes": [
+        1499111,
+        1501447
+      ],
+      "byte_identical": true,
+      "complete_locked_stage0_parity_cases_per_run": 11,
+      "identical_records_for_two_page_layouts": true,
+      "cold_measurements": {
+        "host_peak_rss_bytes": 1326051328,
+        "child_peak_rss_bytes": 7298134016,
+        "vm_peak_rss_bytes": 54665216,
+        "vm_max_memory_cells": 10290,
+        "emitter_stream_request_bytes": 23682799,
+        "emitter_stream_response_bytes": 407240403
+      },
+      "warm_measurements": {
+        "host_peak_rss_bytes": 1325735936,
+        "child_peak_rss_bytes": 5984944128,
+        "vm_peak_rss_bytes": 55070720,
+        "vm_max_memory_cells": 10290,
+        "emitter_stream_request_bytes": 23682799,
+        "emitter_stream_response_bytes": 407240403
+      }
+    },
+    "parse_unit_signatures": {
+      "specialization": [
+        4,
+        32
+      ],
+      "emission": "refused",
+      "admission": "not_started",
+      "execution": "not_started",
+      "locked_stage0_cases": [
+        "valid_unit",
+        "malformed_declaration"
+      ],
+      "measurements": {
+        "host_peak_rss_bytes": 128028672,
+        "child_peak_rss_bytes": 5122818048,
+        "vm_peak_rss_bytes": null,
+        "vm_max_memory_cells": null,
+        "emitter_stream_request_bytes": 23683675,
+        "emitter_stream_response_bytes": 26369
+      }
+    },
+    "ambient": {
+      "cold_cache_status": "no_recorded_diagnosis",
+      "undersized_capacity": [
+        1024,
+        1031
+      ],
+      "correctly_sized_attempt_phase": "provider_materialization",
+      "successful_invocation_current_inline": true,
+      "unchanged_reentry_heavyweight_compile_launched": false,
+      "unchanged_reentry_provider_launches": 0,
+      "historical_token_list_refusal_superseded": true,
+      "native_coverage_case": "record_catalog_keeps_early_providers_past_256_entries",
+      "native_coverage_case_verdicts": [
+        "PASS",
+        "FAIL",
+        "PASS"
+      ],
+      "unaffected_native_suites_reused": 7,
+      "declaration_provider": "mncs-language-service",
+      "declaration_byte_span": [
+        239243,
+        240406
+      ],
+      "declaration_inventory_fallback": "explicit"
+    },
+    "first_remaining_blocker": {
+      "rank": 1,
+      "owner": "mncs-compiler",
+      "callable": "mncs:0.2:function:mncs.test.parse_unit_signatures_caller.v1::call_parse_unit_signatures",
+      "operation_or_type": "VM result-type schema lookup for decl.Unit; its header field requires parser.Header",
+      "diagnostic": {
+        "phase": "signature_type_lowering",
+        "operation": "resolve named result type through the VM record catalogue",
+        "callable": "mncs:0.2:function:mncs.test.parse_unit_signatures_caller.v1::call_parse_unit_signatures",
+        "wrapper_result_annotation_span": [
+          200,
+          209
+        ],
+        "unresolved_record_field": {
+          "file": "src/compiler/decl.mncs",
+          "line": 116,
+          "span": [
+            7625,
+            7638
+          ],
+          "type": "parser.Header"
+        },
+        "owner": "mncs-compiler",
+        "cause": "The 1024-step nominal-span walk consumes functions before record fields. It never reaches the qualified field in the 1240-function declaration module.",
+        "ssa_instruction_coordinates": null
+      },
+      "reproduce_command": "python3 tools/test_native_decl_vm_emit.py parse_unit_signatures",
+      "reduced_reproducer": "The same failure occurs with a decl.Unit identity function. In a minimal three-module fixture 1023 dummy functions admit the qualified header field and 1024 suppress it."
+    },
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }
