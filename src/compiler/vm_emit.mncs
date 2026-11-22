@@ -20,7 +20,7 @@ use mncs.compiler.ssa.v1 as ssa;
 //  kind 1 = bool
 //  kind 2 = byte
 //  kind 3 = integer (bits: 8|16|32|64, signed)
-//  kind 4 = bounded byte sequence (bound_kind: 1=exact, 2=up_to; bound_value > 0)
+//  kind 4 = bounded scalar sequence (bits: 0=byte, 1=bool, 8|16|32|64=integer; signed; bound_kind: 1=exact, 2=up_to; bound_value > 0)
 //  kind 5 = nominal record (nominal_identity)
 record VmType {
     kind: u64,
@@ -69,6 +69,7 @@ record VmRecordTypeRev { rest: VmRecordTypeList, acc: VmRecordTypeList }
 // 16 = RecordConstruct (ty = record VmType, field_names = source-order field names)
 // 17 = ViewConstruct (from_ty = source sequence VmType, ty = UpTo view VmType)
 // 18 = RecordProject (from_ty = nominal record VmType, ty = field VmType, op_code = field_index, field_names = [field_name])
+// 19 = SequenceConstruct (ty = exact scalar sequence VmType, from_ty = scalar element VmType, inputs = element value ids)
 record VmInstruction {
     id: u64,
     result: u64,
@@ -190,7 +191,7 @@ fn byte_seq_vm_type(bound_kind: u64, bound_value: u64) -> (result: VmType) {
     if (bound_kind != 1 && bound_kind != 2) || bound_value == 0 || bound_value > 65536 {
         return invalid_vm_type();
     }
-    return VmType { kind: 4, bits: 8, signed: false, bound_kind: bound_kind, bound_value: bound_value, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    return VmType { kind: 4, bits: 0, signed: false, bound_kind: bound_kind, bound_value: bound_value, nominal_identity: decl.invalid_semantic_identity(), valid: true };
 }
 fn is_seq_sem_type(ty: decl.SemType) -> (result: bool) {
     return match ty {
@@ -230,9 +231,28 @@ fn semantic_ids_equal(a: decl.SemanticIdentity, b: decl.SemanticIdentity) -> (re
 fn vm_type_equal(a: VmType, b: VmType) -> (result: bool) {
     if !(a.valid) || !(b.valid) || a.kind != b.kind { return false; }
     if a.kind == 3 { return a.bits == b.bits && a.signed == b.signed; }
-    if a.kind == 4 { return a.bound_kind == b.bound_kind && a.bound_value == b.bound_value; }
+    if a.kind == 4 { return a.bits == b.bits && a.signed == b.signed && a.bound_kind == b.bound_kind && a.bound_value == b.bound_value; }
     if a.kind == 5 { return semantic_ids_equal(a.nominal_identity, b.nominal_identity); }
     return true;
+}
+fn seq_element_vm_type(seq_ty: VmType) -> (result: VmType) {
+    if !(seq_ty.valid) || seq_ty.kind != 4 || seq_ty.bound_value == 0 { return invalid_vm_type(); }
+    if seq_ty.bits == 0 { return byte_vm_type(); }
+    if seq_ty.bits == 1 { return bool_vm_type(); }
+    return int_vm_type(seq_ty.bits, seq_ty.signed);
+}
+fn exact_scalar_seq_vm_type(elem: VmType, length: u64) -> (result: VmType) {
+    if !(elem.valid) || length == 0 { return invalid_vm_type(); }
+    if elem.kind == 2 {
+        return VmType { kind: 4, bits: 0, signed: false, bound_kind: 1, bound_value: length, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    }
+    if elem.kind == 1 {
+        return VmType { kind: 4, bits: 1, signed: false, bound_kind: 1, bound_value: length, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    }
+    if elem.kind == 3 {
+        return VmType { kind: 4, bits: elem.bits, signed: elem.signed, bound_kind: 1, bound_value: length, nominal_identity: decl.invalid_semantic_identity(), valid: true };
+    }
+    return invalid_vm_type();
 }
 fn is_u64_vm_type(ty: VmType) -> (result: bool) {
     return ty.valid && ty.kind == 3 && ty.bits == 64 && !(ty.signed);
@@ -1235,7 +1255,7 @@ fn lower_vm_seq_length_one(val_types: VmValueList, inst: ssa.Instruction, res_ty
 }
 
 fn lower_vm_seq_index(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
-    if res_ty.kind != 2 || inst.argc != 2 { return inst_error(7); }
+    if !(is_scalar_vm_type(res_ty)) || inst.argc != 2 { return inst_error(7); }
     return match inst.inputs {
         ssa.IdList.INil => inst_error(7),
         ssa.IdList.ICons { head: base_id, tail: rest } => lower_vm_seq_index_idx(val_types, inst, res_ty, base_id.value, rest)
@@ -1252,6 +1272,8 @@ fn lower_vm_seq_index_pair(val_types: VmValueList, inst: ssa.Instruction, res_ty
     let base: VmValTypeLookup = lookup_vm_value_type(val_types, base_id);
     let idx: VmValTypeLookup = lookup_vm_value_type(val_types, idx_id);
     if !(base.found) || !(base.ty.valid) || base.ty.kind != 4 || base.ty.bound_value == 0 { return inst_error(7); }
+    let elem_ty: VmType = seq_element_vm_type(base.ty);
+    if !(vm_type_equal(elem_ty, res_ty)) { return inst_error(7); }
     if !(idx.found) || !(is_u64_vm_type(idx.ty)) { return inst_error(7); }
     return InstLowerResult {
         ok: true, error_code: 0,
@@ -1262,6 +1284,65 @@ fn lower_vm_seq_index_pair(val_types: VmValueList, inst: ssa.Instruction, res_ty
             inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
             callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
         }
+    };
+}
+
+record SeqConstructCheck {
+    val_types: VmValueList,
+    elem_ty: VmType,
+    inputs: ssa.IdList,
+    count: u64,
+    ok: bool,
+    done: bool
+}
+fn lower_vm_seq_construct(val_types: VmValueList, inst: ssa.Instruction, res_ty: VmType) -> (result: InstLowerResult) {
+    if !(res_ty.valid) || res_ty.kind != 4 || res_ty.bound_kind != 1 || res_ty.bound_value == 0 {
+        return inst_error(4);
+    }
+    if inst.argc != res_ty.bound_value || inst.operator != res_ty.bound_value {
+        return inst_error(7);
+    }
+    let elem_ty: VmType = seq_element_vm_type(res_ty);
+    if !(elem_ty.valid) { return inst_error(4); }
+    let initial: SeqConstructCheck = SeqConstructCheck {
+        val_types: val_types, elem_ty: elem_ty,
+        inputs: inst.inputs, count: 0, ok: true, done: false
+    };
+    iterate i up_to 1024 carrying st: SeqConstructCheck = initial {
+        if st.done || !(st.ok) {
+            return finish_seq_construct(inst, res_ty, elem_ty, st);
+        }
+        next st = lower_vm_seq_construct_step(st);
+    }
+    return finish_seq_construct(inst, res_ty, elem_ty, st);
+}
+fn finish_seq_construct(inst: ssa.Instruction, res_ty: VmType, elem_ty: VmType, st: SeqConstructCheck) -> (result: InstLowerResult) {
+    if !(st.ok) || !(st.done) || st.count != res_ty.bound_value { return inst_error(7); }
+    return InstLowerResult {
+        ok: true, error_code: 0,
+        inst: VmInstruction {
+            id: inst.id, result: inst.result, opcode: 19, op_code: 0, intent: 0,
+            imm_u64: res_ty.bound_value, imm_bool: false,
+            ty: res_ty, from_ty: elem_ty,
+            inputs: inst.inputs, callee_identity: decl.invalid_semantic_identity(),
+            callee_nat_args: VmNatArgList.NANil, field_names: VmNameList.VNNil
+        }
+    };
+}
+fn lower_vm_seq_construct_step(st: SeqConstructCheck) -> (result: SeqConstructCheck) {
+    return match st.inputs {
+        ssa.IdList.INil => SeqConstructCheck { ..st, ok: true, done: true },
+        ssa.IdList.ICons { head: arg_id, tail: rest } => lower_vm_seq_construct_one(st, arg_id.value, rest)
+    };
+}
+fn lower_vm_seq_construct_one(st: SeqConstructCheck, arg_id: u64, rest: ssa.IdList) -> (result: SeqConstructCheck) {
+    let arg_lk: VmValTypeLookup = lookup_vm_value_type(st.val_types, arg_id);
+    if !(arg_lk.found) || !(vm_type_equal(arg_lk.ty, st.elem_ty)) {
+        return SeqConstructCheck { ..st, ok: false, done: true };
+    }
+    return SeqConstructCheck {
+        val_types: st.val_types, elem_ty: st.elem_ty,
+        inputs: rest, count: st.count + 1, ok: true, done: false
     };
 }
 
@@ -1336,6 +1417,219 @@ fn lower_vm_record_construct_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to 
         inputs: arg_rest, params: bind_rest,
         names_acc: VmNameList.VNCons { head: fname, tail: st.names_acc },
         count: st.count + 1, ok: true, done: false
+    };
+}
+
+// Functional record update (`Rec { ..base, f1: v1, ... }`, kind 16 operator 1):
+// validates base owner and every override against the nominal record schema,
+// projects unchanged fields from `base` via canonical `RecordProject` (opcode 18),
+// and emits a full `RecordConstruct` (opcode 16) in canonical schema field order.
+record RecordOverride { name: decl.SemanticIdentity, val_id: u64 }
+enum RecordOverrideList { RONil, ROCons { head: RecordOverride, tail: RecordOverrideList } }
+fn record_override_list_empty(xs: RecordOverrideList) -> (result: bool) {
+    return match xs { RONil => true, ROCons { head: h, tail: t } => false };
+}
+record RecordOverrideLookup { found: bool, val_id: u64 }
+record RecordOverrideSearch { rest: RecordOverrideList, wanted: decl.SemanticIdentity, found: bool, val_id: u64 }
+fn find_record_override(overrides: RecordOverrideList, wanted: decl.SemanticIdentity) -> (result: RecordOverrideLookup) {
+    let initial: RecordOverrideSearch = RecordOverrideSearch { rest: overrides, wanted: wanted, found: false, val_id: 0 };
+    iterate i up_to 128 carrying st: RecordOverrideSearch = initial {
+        if st.found || record_override_list_empty(st.rest) {
+            return RecordOverrideLookup { found: st.found, val_id: st.val_id };
+        }
+        next st = find_record_override_step(st);
+    }
+    return RecordOverrideLookup { found: st.found, val_id: st.val_id };
+}
+fn find_record_override_step(st: RecordOverrideSearch) -> (result: RecordOverrideSearch) {
+    return match st.rest {
+        RONil => st,
+        ROCons { head: item, tail: rest } => find_record_override_one(st, item, rest)
+    };
+}
+fn find_record_override_one(st: RecordOverrideSearch, item: RecordOverride, rest: RecordOverrideList) -> (result: RecordOverrideSearch) {
+    if semantic_ids_equal(item.name, st.wanted) {
+        return RecordOverrideSearch { rest: RecordOverrideList.RONil, wanted: st.wanted, found: true, val_id: item.val_id };
+    }
+    return RecordOverrideSearch { ..st, rest: rest };
+}
+
+record RecordUpdateOverrideCheck {
+    val_types: VmValueList,
+    schema_fields: VmRecordFieldList,
+    inputs: ssa.IdList,
+    params: decl.BindList,
+    names_seen: VmNameList,
+    overrides: RecordOverrideList,
+    count: u64,
+    ok: bool,
+    done: bool
+}
+fn check_record_update_overrides<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, val_types: VmValueList, schema_fields: VmRecordFieldList, override_inputs: ssa.IdList, params: decl.BindList) -> (result: RecordUpdateOverrideCheck) {
+    let initial: RecordUpdateOverrideCheck = RecordUpdateOverrideCheck {
+        val_types: val_types, schema_fields: schema_fields,
+        inputs: override_inputs, params: params,
+        names_seen: VmNameList.VNNil, overrides: RecordOverrideList.RONil,
+        count: 0, ok: true, done: false
+    };
+    iterate i up_to 128 carrying st: RecordUpdateOverrideCheck = initial {
+        if st.done || !(st.ok) { return st; }
+        next st = check_record_update_override_step<P, N>(pages, stride, total, st);
+    }
+    return st;
+}
+fn check_record_update_override_step<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecordUpdateOverrideCheck) -> (result: RecordUpdateOverrideCheck) {
+    return match st.inputs {
+        ssa.IdList.INil => RecordUpdateOverrideCheck { ..st, ok: decl_bind_list_empty(st.params), done: true },
+        ssa.IdList.ICons { head: arg_id, tail: arg_rest } => check_record_update_override_pair<P, N>(pages, stride, total, st, arg_id.value, arg_rest)
+    };
+}
+fn check_record_update_override_pair<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecordUpdateOverrideCheck, arg_id: u64, arg_rest: ssa.IdList) -> (result: RecordUpdateOverrideCheck) {
+    return match st.params {
+        decl.BindList.BNil => RecordUpdateOverrideCheck { ..st, ok: false, done: true },
+        decl.BindList.BCons { head: bind, tail: bind_rest } => check_record_update_override_one<P, N>(pages, stride, total, st, arg_id, arg_rest, bind, bind_rest)
+    };
+}
+fn check_record_update_override_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, st: RecordUpdateOverrideCheck, arg_id: u64, arg_rest: ssa.IdList, bind: decl.Bind, bind_rest: decl.BindList) -> (result: RecordUpdateOverrideCheck) {
+    let fname: decl.SemanticIdentity = span_to_ident<P, N>(pages, stride, total, bind.start, bind.end);
+    if !(fname.valid) || vm_name_list_contains(st.names_seen, fname) {
+        return RecordUpdateOverrideCheck { ..st, ok: false, done: true };
+    }
+    let fld_lk: RecordFieldLookup = find_vm_record_field(st.schema_fields, fname);
+    let arg_lk: VmValTypeLookup = lookup_vm_value_type(st.val_types, arg_id);
+    if !(fld_lk.found) || !(arg_lk.found) || !(vm_type_equal(arg_lk.ty, fld_lk.ty)) {
+        return RecordUpdateOverrideCheck { ..st, ok: false, done: true };
+    }
+    return RecordUpdateOverrideCheck {
+        val_types: st.val_types, schema_fields: st.schema_fields,
+        inputs: arg_rest, params: bind_rest,
+        names_seen: VmNameList.VNCons { head: fname, tail: st.names_seen },
+        overrides: RecordOverrideList.ROCons { head: RecordOverride { name: fname, val_id: arg_id }, tail: st.overrides },
+        count: st.count + 1, ok: true, done: false
+    };
+}
+
+record RecordUpdateEmitWalk {
+    rest_fields: VmRecordFieldList,
+    field_index: u64,
+    base_id: u64,
+    base_ty: VmType,
+    overrides: RecordOverrideList,
+    val_types: VmValueList,
+    inst_acc: VmInstructionList,
+    inst_count: u64,
+    next_val_id: u64,
+    next_inst_id: u64,
+    construct_inputs_rev: ssa.IdList,
+    construct_names_rev: VmNameList
+}
+fn emit_record_update_fields(initial: RecordUpdateEmitWalk) -> (result: RecordUpdateEmitWalk) {
+    iterate i up_to 128 carrying w: RecordUpdateEmitWalk = initial {
+        if vm_record_field_list_empty(w.rest_fields) { return w; }
+        next w = emit_record_update_field_step(w);
+    }
+    return w;
+}
+fn emit_record_update_field_step(w: RecordUpdateEmitWalk) -> (result: RecordUpdateEmitWalk) {
+    return match w.rest_fields {
+        VRFNil => w,
+        VRFCons { head: fld, tail: rest } => emit_record_update_field_one(w, fld, rest)
+    };
+}
+fn emit_record_update_field_one(w: RecordUpdateEmitWalk, fld: VmRecordField, rest: VmRecordFieldList) -> (result: RecordUpdateEmitWalk) {
+    let ov: RecordOverrideLookup = find_record_override(w.overrides, fld.name);
+    if ov.found {
+        return RecordUpdateEmitWalk {
+            ..w,
+            rest_fields: rest,
+            field_index: w.field_index + 1,
+            construct_inputs_rev: ssa.IdList.ICons { head: ssa.Id { value: ov.val_id }, tail: w.construct_inputs_rev },
+            construct_names_rev: VmNameList.VNCons { head: fld.name, tail: w.construct_names_rev }
+        };
+    }
+    let proj_val_id: u64 = w.next_val_id;
+    let proj_inst_id: u64 = w.next_inst_id;
+    let proj_inst: VmInstruction = VmInstruction {
+        id: proj_inst_id, result: proj_val_id, opcode: 18, op_code: w.field_index, intent: 0,
+        imm_u64: 0, imm_bool: false,
+        ty: fld.ty, from_ty: w.base_ty,
+        inputs: ssa.IdList.ICons { head: ssa.Id { value: w.base_id }, tail: ssa.IdList.INil },
+        callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil,
+        field_names: VmNameList.VNCons { head: fld.name, tail: VmNameList.VNNil }
+    };
+    return RecordUpdateEmitWalk {
+        rest_fields: rest,
+        field_index: w.field_index + 1,
+        base_id: w.base_id,
+        base_ty: w.base_ty,
+        overrides: w.overrides,
+        val_types: VmValueList.VVCons { head: VmValue { id: proj_val_id, ty: fld.ty }, tail: w.val_types },
+        inst_acc: VmInstructionList.VICons { head: proj_inst, tail: w.inst_acc },
+        inst_count: w.inst_count + 1,
+        next_val_id: proj_val_id + 1,
+        next_inst_id: proj_inst_id + 1,
+        construct_inputs_rev: ssa.IdList.ICons { head: ssa.Id { value: proj_val_id }, tail: w.construct_inputs_rev },
+        construct_names_rev: VmNameList.VNCons { head: fld.name, tail: w.construct_names_rev }
+    };
+}
+
+fn lower_vm_record_update<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, all_recs: VmRecordTypeList, st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, res_ty: VmType) -> (result: SpecInstListWalk) {
+    if !(inst.nominal_identity.valid) || res_ty.kind != 5 || !(semantic_ids_equal(res_ty.nominal_identity, inst.nominal_identity)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
+    }
+    let schema_lk: RecordTypeLookup = find_vm_record_type(all_recs, inst.nominal_identity);
+    if !(schema_lk.found) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 4, error_inst: inst.id };
+    }
+    if inst.argc < 1 {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    return match inst.inputs {
+        ssa.IdList.INil => SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id },
+        ssa.IdList.ICons { head: base_id, tail: override_inputs } => lower_vm_record_update_body<P, N>(pages, stride, total, schema_lk.schema, st, inst, rest, res_ty, base_id.value, override_inputs)
+    };
+}
+fn lower_vm_record_update_body<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, schema: VmRecordType, st: SpecInstListWalk, inst: ssa.Instruction, rest: ssa.InstructionList, res_ty: VmType, base_id: u64, override_inputs: ssa.IdList) -> (result: SpecInstListWalk) {
+    let base_lk: VmValTypeLookup = lookup_vm_value_type(st.val_types, base_id);
+    if !(base_lk.found) || !(base_lk.ty.valid) || base_lk.ty.kind != 5 || !(semantic_ids_equal(base_lk.ty.nominal_identity, inst.nominal_identity)) {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let checked: RecordUpdateOverrideCheck = check_record_update_overrides<P, N>(pages, stride, total, st.val_types, schema.fields, override_inputs, inst.params);
+    if !(checked.ok) || !(checked.done) || checked.count + 1 != inst.argc {
+        return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 7, error_inst: inst.id };
+    }
+    let built: RecordUpdateEmitWalk = emit_record_update_fields(RecordUpdateEmitWalk {
+        rest_fields: schema.fields,
+        field_index: 0,
+        base_id: base_id,
+        base_ty: base_lk.ty,
+        overrides: checked.overrides,
+        val_types: st.val_types,
+        inst_acc: st.acc,
+        inst_count: st.count,
+        next_val_id: st.next_val_id,
+        next_inst_id: st.next_inst_id,
+        construct_inputs_rev: ssa.IdList.INil,
+        construct_names_rev: VmNameList.VNNil
+    });
+    let rc_inst: VmInstruction = VmInstruction {
+        id: inst.id, result: inst.result, opcode: 16, op_code: 0, intent: 0,
+        imm_u64: 0, imm_bool: false,
+        ty: res_ty, from_ty: invalid_vm_type(),
+        inputs: reverse_ssa_ids(built.construct_inputs_rev),
+        callee_identity: decl.invalid_semantic_identity(),
+        callee_nat_args: VmNatArgList.NANil,
+        field_names: reverse_vm_names(built.construct_names_rev)
+    };
+    return SpecInstListWalk {
+        rest: rest,
+        val_types: built.val_types,
+        acc: VmInstructionList.VICons { head: rc_inst, tail: built.inst_acc },
+        count: built.inst_count + 1,
+        next_val_id: built.next_val_id,
+        next_inst_id: built.next_inst_id,
+        ok: true, error_code: 0, error_inst: 0
     };
 }
 
@@ -2162,9 +2456,14 @@ fn resolve_sem_type_non_seq<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], s
         TByte => byte_vm_type(),
         TInt { width: w, signed: sg } => int_vm_type(w, sg),
         TSeq => invalid_vm_type(),
-        TSeqExact { element: el, length: n, length_valid: v } => invalid_vm_type(),
+        TSeqExact { element: el, length: n, length_valid: v } => resolve_exact_scalar_seq_vm_type(el, n, v),
         TPoison => invalid_vm_type()
     };
+}
+fn resolve_exact_scalar_seq_vm_type(element: decl.SemType, length: u64, length_valid: bool) -> (result: VmType) {
+    if !(length_valid) || length == 0 { return invalid_vm_type(); }
+    let elem_ty: VmType = sem_type_to_vm_scalar(element);
+    return exact_scalar_seq_vm_type(elem_ty, length);
 }
 fn resolve_named_record_vm_type<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride: u64, total: u64, start: u64, end: u64, nominals: decl.NominalTypeIdentityList, all_recs: VmRecordTypeList) -> (result: VmType) {
     let nom: decl.NominalLookup = lookup_nominal_identity<P, N>(pages, stride, total, nominals, start, end);
@@ -2920,7 +3219,18 @@ fn lower_spec_inst_one<P: Nat, N: Nat>(pages: [[byte; up_to N]; up_to P], stride
         if !(rp.ok) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: rp.error_code, error_inst: inst.id }; }
         return SpecInstListWalk { ..st, rest: rest, acc: VmInstructionList.VICons { head: rp.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
     }
+    if inst.kind == 18 {
+        let sc: InstLowerResult = lower_vm_seq_construct(st.val_types, inst, res_ty);
+        if !(sc.ok) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: sc.error_code, error_inst: inst.id }; }
+        return SpecInstListWalk { ..st, rest: rest, acc: VmInstructionList.VICons { head: sc.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
+    }
     if inst.kind == 16 {
+        if inst.operator == 1 {
+            return lower_vm_record_update<P, N>(pages, stride, total, all_recs, st, inst, rest, res_ty);
+        }
+        if inst.operator != 0 {
+            return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: 5, error_inst: inst.id };
+        }
         let rc: InstLowerResult = lower_vm_record_construct<P, N>(pages, stride, total, st.val_types, all_recs, inst, res_ty);
         if !(rc.ok) { return SpecInstListWalk { ..st, rest: rest, ok: false, error_code: rc.error_code, error_inst: inst.id }; }
         return SpecInstListWalk { ..st, rest: rest, acc: VmInstructionList.VICons { head: rc.inst, tail: st.acc }, count: st.count + 1, ok: true, error_code: 0, error_inst: 0 };
@@ -4279,10 +4589,270 @@ fn compile_and_emit_project_vm_module<M: Nat, N: Nat>(snapshot: project.ProjectS
     return emit_verified_project_ssa_with_sources<M, N>(snapshot, flat_pages, compiled, target_source_index);
 }
 
+// ---------------------------------------------------------------------------
+// On-demand provider schema & verified-body handoff for selected callables
+// ---------------------------------------------------------------------------
+
+fn parsed_module_list_empty(modules: project.ModuleList) -> (result: bool) {
+    return match modules {
+        project.ModuleList.MNil => true,
+        project.ModuleList.MCons { head: h, tail: t } => false
+    };
+}
+
+record ContextRecordsWalk {
+    rest: project.ModuleList,
+    dep_nominals: project.NominalModuleList,
+    all_markers: decl.NominalTypeIdentityList,
+    reachable: [bool; 64],
+    acc: VmRecordTypeList
+}
+fn collect_context_record_types<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], dep_modules: project.ModuleList, dep_nominals: project.NominalModuleList, reachable: [bool; 64]) -> (result: VmRecordTypeList) {
+    let all_markers: decl.NominalTypeIdentityList = project.project_nominal_markers(dep_nominals);
+    let initial: ContextRecordsWalk = ContextRecordsWalk {
+        rest: dep_modules, dep_nominals: dep_nominals, all_markers: all_markers,
+        reachable: reachable, acc: VmRecordTypeList.VRTNil
+    };
+    iterate i up_to 64 carrying st: ContextRecordsWalk = initial {
+        if parsed_module_list_empty(st.rest) { return reverse_vm_record_types(st.acc); }
+        next st = collect_context_record_step<M, N>(snapshot, flat_pages, st);
+    }
+    return reverse_vm_record_types(st.acc);
+}
+fn collect_context_record_step<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: ContextRecordsWalk) -> (result: ContextRecordsWalk) {
+    return match st.rest {
+        project.ModuleList.MNil => st,
+        project.ModuleList.MCons { head: parsed, tail: rest } => collect_context_record_one<M, N>(snapshot, flat_pages, st, parsed, rest)
+    };
+}
+fn collect_context_record_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: ContextRecordsWalk, parsed: project.ParsedModule, rest: project.ModuleList) -> (result: ContextRecordsWalk) {
+    if parsed.source_index >= 64 || !(st.reachable[parsed.source_index]) {
+        return ContextRecordsWalk { ..st, rest: rest };
+    }
+    let pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, parsed.source_index);
+    let stride: u64 = project.module_stride(snapshot.sources, parsed.source_index);
+    let total: u64 = project.module_total(snapshot.sources, parsed.source_index);
+    let facts: project.NominalModuleLookup = project.nominal_module_by_index<M, N>(snapshot.sources, flat_pages, st.dep_nominals, parsed.source_index);
+    let noms: decl.NominalTypeIdentityList = decl.combine_nominal_type_identities<1024, N>(pages, stride, total, st.all_markers, facts.facts.resolved);
+    let next_acc: VmRecordTypeList = collect_module_record_types<1024, N>(pages, stride, total, parsed.unit, noms, st.acc);
+    return ContextRecordsWalk { ..st, rest: rest, acc: next_acc };
+}
+
+record ProviderCallableLookup { found: bool, source_index: u64 }
+record ProviderCallableSearch {
+    rest: project.ModuleList,
+    reachable: [bool; 64],
+    wanted: decl.SemanticIdentity,
+    found: bool,
+    source_index: u64
+}
+fn find_provider_source_for_callable<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], dep_modules: project.ModuleList, reachable: [bool; 64], wanted: decl.SemanticIdentity) -> (result: ProviderCallableLookup) {
+    let initial: ProviderCallableSearch = ProviderCallableSearch {
+        rest: dep_modules, reachable: reachable, wanted: wanted, found: false, source_index: 0
+    };
+    iterate i up_to 64 carrying st: ProviderCallableSearch = initial {
+        if st.found || parsed_module_list_empty(st.rest) {
+            return ProviderCallableLookup { found: st.found, source_index: st.source_index };
+        }
+        next st = find_provider_source_step<M, N>(snapshot, flat_pages, st);
+    }
+    return ProviderCallableLookup { found: st.found, source_index: st.source_index };
+}
+fn find_provider_source_step<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: ProviderCallableSearch) -> (result: ProviderCallableSearch) {
+    return match st.rest {
+        project.ModuleList.MNil => st,
+        project.ModuleList.MCons { head: parsed, tail: rest } => find_provider_source_one<M, N>(snapshot, flat_pages, st, parsed, rest)
+    };
+}
+fn find_provider_source_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], st: ProviderCallableSearch, parsed: project.ParsedModule, rest: project.ModuleList) -> (result: ProviderCallableSearch) {
+    if parsed.source_index >= 64 || !(st.reachable[parsed.source_index]) {
+        return ProviderCallableSearch { ..st, rest: rest };
+    }
+    let pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, parsed.source_index);
+    let stride: u64 = project.module_stride(snapshot.sources, parsed.source_index);
+    let total: u64 = project.module_total(snapshot.sources, parsed.source_index);
+    let decl_lk: FnDeclLookup = find_fn_decl_by_id<1024, N>(pages, stride, total, parsed.unit.header, parsed.unit.fns, st.wanted);
+    if decl_lk.found {
+        return ProviderCallableSearch {
+            rest: project.ModuleList.MNil, reachable: st.reachable, wanted: st.wanted,
+            found: true, source_index: parsed.source_index
+        };
+    }
+    return ProviderCallableSearch { ..st, rest: rest };
+}
+
+record OnDemandClosureWalk {
+    loaded_modules: project.ProjectModuleList,
+    materialized: [bool; 64],
+    emitted_rev: VmFunctionList,
+    pending: PendingSpecList,
+    fn_count: u64,
+    block_count: u64,
+    inst_count: u64,
+    ok: bool,
+    error_code: u64,
+    error_function: u64,
+    error_block: u64,
+    error_inst: u64
+}
+fn project_module_verified_for_emit(mod_item: project.ProjectModule) -> (result: bool) {
+    return mod_item.flow.valid && mod_item.flow.proof.ok
+        && mod_item.value_ssa.valid
+        && mod_item.value_ssa.verified_function_count == mod_item.value_ssa.function_count
+        && mod_item.value_ssa.unsupported_block_count == 0;
+}
+fn expand_project_vm_closure_on_demand<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, target_source_index: u64, all_recs: VmRecordTypeList, root_fns: VmFunctionList, root_fn_count: u64, root_block_count: u64, root_inst_count: u64) -> (result: OnDemandClosureWalk) {
+    let empty_mat: [bool; 64] = [false; 64];
+    let init_mat: [bool; 64] = replace(empty_mat, target_source_index, true);
+    let seeded_pending: PendingSpecList = collect_fns_callees_in_order(root_fns);
+    let initial: OnDemandClosureWalk = OnDemandClosureWalk {
+        loaded_modules: ctx.result.modules,
+        materialized: init_mat,
+        emitted_rev: reverse_vm_fns(root_fns),
+        pending: seeded_pending,
+        fn_count: root_fn_count, block_count: root_block_count, inst_count: root_inst_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+    iterate step up_to 256 carrying st: OnDemandClosureWalk = initial {
+        if !(st.ok) || pending_spec_list_empty(st.pending) {
+            return OnDemandClosureWalk { ..st, emitted_rev: reverse_vm_fns(st.emitted_rev) };
+        }
+        next st = expand_project_vm_closure_od_step<M, N>(snapshot, flat_pages, ctx, all_recs, st);
+    }
+    return OnDemandClosureWalk {
+        ..st, emitted_rev: reverse_vm_fns(st.emitted_rev),
+        ok: st.ok && pending_spec_list_empty(st.pending),
+        error_code: select(st.ok && !(pending_spec_list_empty(st.pending)), 9, st.error_code)
+    };
+}
+fn expand_project_vm_closure_od_step<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, all_recs: VmRecordTypeList, st: OnDemandClosureWalk) -> (result: OnDemandClosureWalk) {
+    return match st.pending {
+        PSNil => st,
+        PSCons { head: spec_key, tail: rest } => expand_project_vm_closure_od_one<M, N>(snapshot, flat_pages, ctx, all_recs, st, spec_key, rest)
+    };
+}
+fn expand_project_vm_closure_od_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, all_recs: VmRecordTypeList, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList) -> (result: OnDemandClosureWalk) {
+    let existing: VmFnLookup = find_vm_fn_by_spec(st.emitted_rev, spec_key);
+    if existing.found { return OnDemandClosureWalk { ..st, pending: rest }; }
+    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(st.loaded_modules, ctx.reachable, spec_key.identity);
+    if located.found {
+        return lower_od_located_callee<M, N>(snapshot, flat_pages, all_recs, st, spec_key, rest, located);
+    }
+    let prov: ProviderCallableLookup = find_provider_source_for_callable<M, N>(snapshot, flat_pages, ctx.dependency_modules, ctx.reachable, spec_key.identity);
+    if !(prov.found) || prov.source_index >= 64 || !(ctx.reachable[prov.source_index]) || st.materialized[prov.source_index] {
+        return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    let built: project.MaterializedProviderBuild = project.materialize_provider_module<M, N>(snapshot, flat_pages, ctx, prov.source_index);
+    if !(built.ok) {
+        return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    return attach_and_lower_od_provider<M, N>(snapshot, flat_pages, ctx, all_recs, st, spec_key, rest, prov.source_index, built.modules);
+}
+fn attach_and_lower_od_provider<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, all_recs: VmRecordTypeList, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, provider_index: u64, built_modules: project.ProjectModuleList) -> (result: OnDemandClosureWalk) {
+    return match built_modules {
+        project.ProjectModuleList.PNil => OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0 },
+        project.ProjectModuleList.PCons { head: mod_item, tail: ignored_tail } => attach_and_lower_od_provider_one<M, N>(snapshot, flat_pages, ctx, all_recs, st, spec_key, rest, provider_index, mod_item)
+    };
+}
+fn attach_and_lower_od_provider_one<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, all_recs: VmRecordTypeList, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, provider_index: u64, mod_item: project.ProjectModule) -> (result: OnDemandClosureWalk) {
+    if !(project_module_verified_for_emit(mod_item)) {
+        return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 1, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    let next_loaded: project.ProjectModuleList = project.ProjectModuleList.PCons { head: mod_item, tail: st.loaded_modules };
+    let next_mat: [bool; 64] = replace(st.materialized, provider_index, true);
+    let updated_st: OnDemandClosureWalk = OnDemandClosureWalk { ..st, loaded_modules: next_loaded, materialized: next_mat };
+    let located: ReachableSsaFnLookup = find_ssa_fn_in_reachable_modules(next_loaded, ctx.reachable, spec_key.identity);
+    if !(located.found) {
+        return OnDemandClosureWalk { ..updated_st, pending: PendingSpecList.PSNil, ok: false, error_code: 9, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    return lower_od_located_callee<M, N>(snapshot, flat_pages, all_recs, updated_st, spec_key, rest, located);
+}
+fn lower_od_located_callee<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], all_recs: VmRecordTypeList, st: OnDemandClosureWalk, spec_key: VmSpecKey, rest: PendingSpecList, located: ReachableSsaFnLookup) -> (result: OnDemandClosureWalk) {
+    let pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, located.source_index);
+    let stride: u64 = project.module_stride(snapshot.sources, located.source_index);
+    let total: u64 = project.module_total(snapshot.sources, located.source_index);
+    let decl_lk: FnDeclLookup = find_fn_decl_by_id<1024, N>(pages, stride, total, located.unit.header, located.unit.fns, located.func.identity);
+    if !(decl_lk.found) {
+        return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: 2, error_function: st.fn_count, error_block: 0, error_inst: 0 };
+    }
+    let lowered: SingleFnLowerResult = lower_ssa_fn_specialized<1024, N>(pages, stride, total, located.func, decl_lk.fn_decl, spec_key.nat_args, all_recs);
+    if !(lowered.ok) {
+        return OnDemandClosureWalk { ..st, pending: PendingSpecList.PSNil, ok: false, error_code: lowered.error_code, error_function: st.fn_count, error_block: lowered.error_block, error_inst: lowered.error_inst };
+    }
+    let child_callees: PendingSpecList = collect_fn_callees_in_order(lowered.vm_fn);
+    return OnDemandClosureWalk {
+        loaded_modules: st.loaded_modules,
+        materialized: st.materialized,
+        emitted_rev: VmFunctionList.VFCons { head: lowered.vm_fn, tail: st.emitted_rev },
+        pending: append_pending_specs(rest, child_callees),
+        fn_count: st.fn_count + 1,
+        block_count: st.block_count + lowered.vm_fn.block_count,
+        inst_count: st.inst_count + lowered.vm_fn.instruction_count,
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_inst: 0
+    };
+}
+
+fn emit_verified_selected_project_callable<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: project.SelectedProjectContext, target_source_index: u64, target_callable: decl.SemanticIdentity) -> (result: VmEmitResult) {
+    let compiled: project.ProjectResult = ctx.result;
+    if !(compiled.valid) || !(compiled.value_ssa_valid) || compiled.module_count == 0
+        || target_source_index >= compiled.source_count || target_source_index >= 64 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let inspected: ReachableModulesCheck = inspect_reachable_project_modules(compiled.modules, ctx.reachable, target_source_index);
+    if !(inspected.all_verified) || !(inspected.target_found) { return emit_failure(1, 0, 0, 0); }
+    if inspected.target_header.code != 0 || inspected.target_header.state != 8
+        || inspected.target_header.module_end <= inspected.target_header.module_start {
+        return emit_failure(8, 0, 0, 0);
+    }
+    if !(inspected.target_ssa.valid) || inspected.target_ssa.function_count == 0
+        || inspected.target_ssa.verified_function_count != inspected.target_ssa.function_count
+        || inspected.target_ssa.unsupported_block_count > 0 {
+        return emit_failure(1, 0, 0, 0);
+    }
+    let all_recs: VmRecordTypeList = collect_context_record_types<M, N>(snapshot, flat_pages, ctx.dependency_modules, ctx.dependency_nominal_modules, ctx.reachable);
+    let root_pages: [[byte; up_to N]; up_to 1024] = project.module_pages<M, N>(snapshot.sources, flat_pages, target_source_index);
+    let root_stride: u64 = project.module_stride(snapshot.sources, target_source_index);
+    let root_total: u64 = project.module_total(snapshot.sources, target_source_index);
+    let root_lowered: FnEmitWalk = lower_target_selected_callable<1024, N>(root_pages, root_stride, root_total, inspected.target_unit, inspected.target_ssa, all_recs, target_callable);
+    if !(root_lowered.ok) {
+        return emit_failure(root_lowered.error_code, root_lowered.error_function, root_lowered.error_block, root_lowered.error_inst);
+    }
+    let expanded: OnDemandClosureWalk = expand_project_vm_closure_on_demand<M, N>(
+        snapshot, flat_pages, ctx, target_source_index, all_recs,
+        root_lowered.acc, root_lowered.fn_count, root_lowered.block_count, root_lowered.inst_count
+    );
+    if !(expanded.ok) {
+        return emit_failure(expanded.error_code, expanded.error_function, expanded.error_block, expanded.error_inst);
+    }
+    let verified_calls: CallVerifyResult = verify_closure_calls(expanded.emitted_rev);
+    if !(verified_calls.ok) {
+        return emit_failure(verified_calls.error_code, verified_calls.error_function, verified_calls.error_block, verified_calls.error_inst);
+    }
+    let retained_recs: RecordUsageAdd = retain_referenced_record_types(all_recs, expanded.emitted_rev);
+    return VmEmitResult {
+        ok: true, error_code: 0, error_function: 0, error_block: 0, error_instruction: 0,
+        module_name_start: inspected.target_header.module_start,
+        module_name_end: inspected.target_header.module_end,
+        record_types: retained_recs.used,
+        record_type_count: retained_recs.count,
+        functions: expanded.emitted_rev,
+        function_count: expanded.fn_count,
+        block_count: expanded.block_count,
+        instruction_count: expanded.inst_count
+    };
+}
+
 // Compile a target module inside a multi-module MNCS project natively into
 // verified Value SSA and emit only `target_callable` plus its verified
-// reachable callees.
+// reachable callees, materializing provider schemas and bodies on demand.
 fn compile_and_emit_project_vm_callable<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64, target_callable: decl.SemanticIdentity) -> (result: VmEmitResult) {
-    let compiled: project.ProjectResult = project.compile_project_target<M, N>(snapshot, flat_pages, target_source_index);
+    let ctx: project.SelectedProjectContext = project.compile_project_target_with_context<M, N>(snapshot, flat_pages, target_source_index);
+    return emit_verified_selected_project_callable<M, N>(snapshot, flat_pages, ctx, target_source_index, target_callable);
+}
+
+// Whole-project differential control: compiles every module eagerly via
+// `project.compile_project` and selects `target_callable` + reachable callees.
+fn compile_and_emit_project_vm_callable_whole_project<M: Nat, N: Nat>(snapshot: project.ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64, target_callable: decl.SemanticIdentity) -> (result: VmEmitResult) {
+    let compiled: project.ProjectResult = project.compile_project<M, N>(snapshot, flat_pages);
     return emit_verified_project_ssa_callable_with_sources<M, N>(snapshot, flat_pages, compiled, target_source_index, target_callable);
 }

@@ -1,0 +1,576 @@
+{
+  "schema_version": 1,
+  "kind": "mncs-compiler-campaign-evidence",
+  "campaign": "lexer-skip-trivia-provider-handoff-20261121",
+  "observed_at": "2026-11-22T05:50:45.469965+00:00",
+  "reconciled_pinned_heads": {
+    "mncs-compiler_base": "3d05820f9038fa80ee5155e4fa818fa184eab610",
+    "mncs-language": "ece0d77ef462ed6f31c1d1a86627dc8690d79718",
+    "mncs-environment": "be0676100ac8bf59d4f56833725b7ae49189bf7f",
+    "mncs-test": "39304e66be28951cdd1b753389739911607ac933",
+    "mncs-vm": "da99dee282336c5acdc91359b14f477745c77f77",
+    "mncs-stdlib": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+    "stage0_lock": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+  },
+  "environment_session": {
+    "session_id": "ses_140a69bed7ab0650",
+    "work_intent_id": "int_ab76053753313970",
+    "consumer_id": "lexer-skip-trivia-20261121"
+  },
+  "baseline_cross_module_refusals_on_3d05820": {
+    "direct_uninstantiated_lexer_skip_trivia": {
+      "ok": false,
+      "error_code": 11,
+      "error_function": 10,
+      "error_block": 0,
+      "error_instruction": 0,
+      "cause": "Uninstantiated generic template parameter N on lexer::skip_trivia (kept fail-closed)."
+    },
+    "cross_module_call_skip_trivia_missing_token_schema": {
+      "ok": false,
+      "error_code": 4,
+      "error_function": 0,
+      "error_block": 0,
+      "error_instruction": 0,
+      "cause": "compile_project_target retained only target module in compiled.modules, leaving imported lexer.Token schema absent from all_recs."
+    },
+    "cross_module_scalar_call_punct_missing_provider_body": {
+      "ok": false,
+      "error_code": 9,
+      "error_function": 1,
+      "error_block": 0,
+      "error_instruction": 0,
+      "cause": "Target caller lowered cleanly on scalar signature, then closure expansion lacked imported provider lexer::punctuation body in compiled.modules."
+    }
+  },
+  "memory_crash_diagnosis_and_mitigation": {
+    "cause": "Streaming a 6-module real compiler ProjectResult JSON out of stage0-probe via call_raw('compile_project_for_emit', ...) into Python json.loads() bypassed the probe's 8 GiB RLIMIT_AS guard and inflated ~10x into host Python objects.",
+    "mitigation": "Added in-MNCS compile_and_emit_project_vm_callable_whole_project differential control so multi-module real compiler probes only return compact VmEmitResult; restricted call_raw('compile_project_for_emit', ...) strictly to 1-2 module synthetic fixtures."
+  },
+  "provider_handoff_and_lexer_skip_trivia_32": {
+    "status": "passed",
+    "provenance": {
+      "callable_selection_and_lowering": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+      "native_project_ssa_producer": "mncs.compiler.project.v1::compile_project_target_with_context",
+      "provider_body_materializer": "mncs.compiler.project.v1::materialize_provider_module",
+      "whole_project_differential_control": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable_whole_project",
+      "transport_codec_and_sealer": "tools/native_vm_artifact.py",
+      "independent_vm_admission_and_execution": "/home/epi13/Documents/Projects/mncs-vm/target/release/mncs-vm",
+      "behavioral_oracle": "locked Stage-0 mncs-compiler-stage0-probe (6a3f6907e4acd4a98afd4a9421548a978ff266e6)",
+      "compiler_revision": "3d05820f9038fa80ee5155e4fa818fa184eab610",
+      "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+      "emitter_source_sha256": "22d118895efd5a1df390b2e7a49ecf233fa13a924017b6678edb3392ded85546",
+      "project_source_sha256": "d8b3a654080eb0b40765fc72c0e4938dbacd59fa961088bc57d348f23db7e7ce"
+    },
+    "small_fixture_and_negatives": {
+      "two_module_handoff": {
+        "ok": true,
+        "function_count": 2,
+        "block_count": 4,
+        "instruction_count": 15,
+        "record_type_count": 1,
+        "matches_whole_project_control": true,
+        "unrelated_out_of_subset_source_excluded": true,
+        "vm_execution_verified": true
+      },
+      "record_update_and_seq_construct_regression": {
+        "ok": true,
+        "function_count": 1,
+        "block_count": 2,
+        "instruction_count": 15,
+        "vm_execution_verified": true
+      },
+      "negative_rejections": {
+        "direct_uninstantiated_generic_two_mod": {
+          "ok": false,
+          "error_code": 11
+        },
+        "missing_provider_body": {
+          "ok": false,
+          "error_code": 9
+        },
+        "target_only_missing_provider_schema": {
+          "ok": false,
+          "error_code": 4
+        },
+        "mismatched_specialization_missing_nat_arg": {
+          "ok": false,
+          "error_code": 11
+        },
+        "mismatched_specialization_capacity": {
+          "ok": false,
+          "error_code": 10
+        },
+        "wrong_nominal_owner_record_update": {
+          "ok": false,
+          "error_code": 4
+        },
+        "malformed_sequence_construct_length": {
+          "ok": false,
+          "error_code": 7
+        }
+      }
+    },
+    "lexer_skip_trivia_32": {
+      "target_callable": "mncs:0.2:function:mncs.test.skip_trivia_caller.v1::call_skip_trivia",
+      "target_specialization": "mncs.compiler.lexer.v1::skip_trivia<32>",
+      "unchanged_lexer_mncs_sha256": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+      "unchanged_source_mncs_sha256": "f9bd036f4c515eb692906685f4b13a20e28174f7f05cbcfc601efb0fc2e61a32",
+      "emitted_callables": [
+        "mncs:0.2:function:mncs.test.skip_trivia_caller.v1::call_skip_trivia",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::skip_trivia__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::is_trivia",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::next_token__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_scalar__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.source.v1::identifier_start_scalar",
+        "mncs:0.2:function:mncs.std.utf8_scalar.v1::is_whitespace_scalar",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_step__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::keyword__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::punctuation",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_lead_continuations",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_first_continuation_valid",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_continuation",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic",
+        "mncs:0.2:function:mncs.compiler.source.v1::identifier_continue_scalar",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::word_char",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::space",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::digit",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane0",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane1",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane2",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane3",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane0",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane1",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane2",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane3"
+      ],
+      "emitted_record_schemas": [
+        "Scan",
+        "Token",
+        "UnicodeRangeSearch",
+        "Utf8Scalar"
+      ],
+      "token_record_identity": "mncs:0.2:record-type:mncs.compiler.lexer.v1::Token::diagnostic%3Au64%3Bend%3Au64%3Bkind%3Au64%3Bstart%3Au64%3B",
+      "function_count": 28,
+      "block_count": 529,
+      "instruction_count": 3820,
+      "record_type_count": 4,
+      "symbolic_bounds_remaining": 0,
+      "unrelated_out_of_subset_source_excluded": true,
+      "artifact_id": "sha256:43e76cb61bd441b0edbc283b9152f132b3f2257a3d01712304ed3dd8390402c2",
+      "ssa_module_identity": "mncs:0.4:ssa:module:dcde2a4d6164f0bec5a99ec0e1a8769b9ce82ab331c6a0cfc774c758382fe9ff",
+      "artifact_sha256": "ae5807910132ecf4419b8db98e802f318d261ef1c246e8aa84de5444250df594",
+      "artifact_bytes": 2090228,
+      "deterministic_across_fresh_processes": true,
+      "emit_process1_wall_s": 354.247,
+      "emit_process1_peak_rss_bytes": 5427908608,
+      "emit_process2_wall_s": 135.748,
+      "emit_process2_peak_rss_bytes": 5434884096,
+      "vm_admission_status": "admitted",
+      "tampered_artifact_vm_admission": {
+        "status": "refused",
+        "returncode": 2
+      },
+      "vm_differential_cases": 36,
+      "vm_differential_matches": 36,
+      "semantic_digest": "25f2195b33650748c6e9638407df485555b633467b7d502c819ce2aa2a161cfe",
+      "vm_direct_generic_dispatch_matched": true,
+      "vm_uncompiled_spec16_refused": true,
+      "vm_session_wall_s": 0.1659,
+      "vm_resident_peak_rss_bytes": 35745792,
+      "vm_max_memory_cells": 7169,
+      "vm_max_steps_per_call": 2925,
+      "vm_total_steps": 15215,
+      "direct_uninstantiated_lexer_skip_trivia_refusal": {
+        "ok": false,
+        "error_code": 11,
+        "error_function": 10
+      }
+    },
+    "next_frontier_probes": {
+      "lexer_significant_32": {
+        "ok": true,
+        "error_code": 0,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "function_count": 29,
+        "block_count": 543,
+        "instruction_count": 3837
+      },
+      "lexer_next_token_global_4_32": {
+        "ok": false,
+        "error_code": 4,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 0,
+        "function_count": 0,
+        "block_count": 0,
+        "instruction_count": 0
+      }
+    }
+  },
+  "preserved_regressions": {
+    "lexer_is_trivia": {
+      "status": "passed",
+      "artifact_id": "sha256:75ffcb716f719de73f15335415c300e829297e9f44d2c52697bc01bad3b5031f",
+      "vm_differential_matches": "48/48",
+      "semantic_digest": "174890f46ba001cb118e27524899a0a04a4e692661ba457d465b4dd80214d753",
+      "malformed_record_project_rejections": 9,
+      "call_skip_trivia_probe_now_ok": true,
+      "direct_uninstantiated_skip_trivia_still_code_11": true
+    },
+    "lexer_punctuation": {
+      "status": "passed",
+      "artifact_id": "sha256:465f5ed82e3e8ef282f64a6c192e743368489b89039871de118e8b021c52d4c8",
+      "vm_differential_matches": "192/192",
+      "semantic_digest": "93be03a618c118e1b2160bbb61fb255a860f9da1ca05033f62064e2599c477da",
+      "malformed_switch_rejections": 9
+    },
+    "source_ascii_bounded_loop": {
+      "status": "passed",
+      "artifact_id": "sha256:3d185ab822b73e87090598e45078198ccdedf125cf6c874d94fdd3ae71d79430",
+      "vm_differential_matches": "21/21",
+      "dual_capacity_matches": 5,
+      "counted_loop_matches": 5
+    }
+  },
+  "ambient_environment_verification": {
+    "new_native_suite": {
+      "obligation_identity": "mncs-compiler.vm-emit-provider-handoff-native",
+      "source_path": "tests/vm_emit_provider_handoff_suite.mncs",
+      "inventory_revision": 51,
+      "tests": 4,
+      "verdict": "PASS"
+    },
+    "baseline_entry_on_3d05820": {
+      "session_id": "ses_140a69bed7ab0650",
+      "evidence_id": "mncs-store:ses_140a69bed7ab0650:verification:230b4d39a882d7e3a2a46a299586e5033aaaf5d422c3a922b12faeaf5474f690",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 56,
+      "current": 6,
+      "executed_in_epoch": 6,
+      "failed": 0,
+      "blockers": 0,
+      "verification_elapsed_s": 214.197,
+      "full_entry_wall_s": 254.44,
+      "peak_rss_kib": 2597784,
+      "new_provider_launches": 6,
+      "cumulative_run_dirs": 6
+    },
+    "run1_entry_with_provider_handoff_and_new_suite": {
+      "session_id": "ses_140a69bed7ab0650",
+      "evidence_id": "mncs-store:ses_140a69bed7ab0650:verification:6a3016e2a564666aaddb3e130a566e6401ee4936a7c2a0324c2c3933a06c46b9",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 57,
+      "current": 7,
+      "executed_in_epoch": 4,
+      "failed": 0,
+      "blockers": 0,
+      "verification_elapsed_s": 198.699,
+      "full_entry_wall_s": 358.59,
+      "peak_rss_kib": 2685896,
+      "new_provider_launches": 4,
+      "reused_unaffected_suites": 3,
+      "cumulative_run_dirs": 10,
+      "launched_runs": [
+        {
+          "run_dir": "bb98b566-3346e982",
+          "verdict": "PASS",
+          "test_entries": [
+            "counted_up_to_nat_bound_lowers_and_collects_region",
+            "over_sequence_loop_resolves_view_param_and_region",
+            "propagate_seq_types_rejects_conflicting_sequence_bounds"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_loop::counted_up_to_nat_bound_lowers_and_collects_region::cd44945bec967d2d1e2019cbfb28fc8c413bb0bc73de1f701faa854ce5ae3583",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_loop::over_sequence_loop_resolves_view_param_and_region::7d96a59915946e45b06baad8dcf1da0f6783d05f54db312a2fe1b92660dfebdc",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_loop::propagate_seq_types_rejects_conflicting_sequence_bounds::507f04dc841480b9b27514545266345c2f21da42101f5144be607a11f61f388f"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:76e48513a558c935f0a5bf34d962f46ac46f0b354a302a4bf8b40418c609ef14",
+          "compiled_function_count": 478,
+          "module_elaboration_cache": {
+            "reused_count": 2,
+            "linked_count": 12,
+            "invalidated_count": 12,
+            "published_entry_count": 12,
+            "rejected_entry_count": 12,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": [
+              "mncs.compiler.source.v1",
+              "mncs.std.utf8_primitives.v1",
+              "mncs.std.utf8_scalar.v1",
+              "mncs.std.text_utf8.v1",
+              "mncs.compiler.lexer.v1",
+              "mncs.compiler.segment.v1",
+              "mncs.compiler.parser.v1",
+              "mncs.compiler.decl.v1",
+              "mncs.compiler.flow.v1",
+              "mncs.compiler.ssa.v1",
+              "mncs.compiler.project.v1",
+              "mncs.compiler.vm_emit.v1"
+            ]
+          }
+        },
+        {
+          "run_dir": "40c8f969-3346e982",
+          "verdict": "PASS",
+          "test_entries": [
+            "provider_handoff_closure_filters_unreachable_modules",
+            "provider_handoff_collects_reachable_record_schema_and_excludes_unrelated",
+            "provider_handoff_locates_reachable_callable_and_ignores_unrelated",
+            "record_update_and_exact_seq_construct_lower_and_fail_closed"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_closure_filters_unreachable_modules::e2e217e6819bc603c0ebc1303f0bdea19d588468df76225b0a39883047ca1b34",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_collects_reachable_record_schema_and_excludes_unrelated::2f817a933f8fd0b58c60c75b62d6c4dbf166fe253db91522dc2a2c8fd622bceb",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_locates_reachable_callable_and_ignores_unrelated::0025b306aeec12d9f2797d95cccba60f61033d514f8a1e7121dd93075f1b3dc6",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::record_update_and_exact_seq_construct_lower_and_fail_closed::78d6ba2f805fd91669f5e1784846dc71240507107ba7c1878f92e55ef2aa66c4"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:87e99afdfe84fa3ecb06a6489717f17a5be1bd7dd8d37bad9701228828b0cdd7",
+          "compiled_function_count": 335,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "rejected_entry_count": 0,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": []
+          }
+        },
+        {
+          "run_dir": "3bbd4926-3346e982",
+          "verdict": "PASS",
+          "test_entries": [
+            "record_project_lowers_verified_schema_field",
+            "record_project_rejects_mismatched_field_and_result_type",
+            "record_project_rejects_mismatched_owner_and_unknown_schema"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_lowers_verified_schema_field::b6d5a24f8c9d989cf476af624bfe3d0df682f77a23726351e8276012f5d465ef",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_field_and_result_type::7007f70d12da145227b95120df5d1c1cba0bd2d789fa425dca9a6c1d9d7cbeb9",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_owner_and_unknown_schema::14c9c5e4d3a683caba3009a926e5bbfabe116ea61efb0f82a451a5187c26bc27"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:8bd501cf7904bcae2e7759f72a47b90a15eb2242e8dc0e2eb926704fb6524be5",
+          "compiled_function_count": 54,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "rejected_entry_count": 0,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": []
+          }
+        },
+        {
+          "run_dir": "83fcd5bf-3346e982",
+          "verdict": "PASS",
+          "test_entries": [
+            "scalar_switch_lowers_to_canonical_dispatch_chain",
+            "scalar_switch_rejects_mismatched_default_target",
+            "scalar_switch_rejects_mismatched_join_argument_type"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_lowers_to_canonical_dispatch_chain::4c61386526dadb7030fe04b9339ba1da1e1592054a08f864caaf301cc722c0e4",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_default_target::a6622cfac26dba3243c168976ae5d6a2011b2c71e91837127f703199b69626b2",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_join_argument_type::443553643aab125ebf0839bf6a51b69f93f293af9a8ffec88ca58f5a3845f5a3"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:6df61f6436317d82687307c770b0b75f07f0872ee4a672fa167ed29fc9365158",
+          "compiled_function_count": 150,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "rejected_entry_count": 0,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": []
+          }
+        }
+      ]
+    },
+    "run2_unchanged_reentry": {
+      "session_id": "ses_140a69bed7ab0650",
+      "evidence_id": "mncs-store:ses_140a69bed7ab0650:verification:6a3016e2a564666aaddb3e130a566e6401ee4936a7c2a0324c2c3933a06c46b9",
+      "reused": true,
+      "epoch_reused": true,
+      "obligations_total": 57,
+      "current": 7,
+      "executed_in_epoch": 4,
+      "failed": 0,
+      "blockers": 0,
+      "verification_elapsed_s": 1.902,
+      "full_entry_wall_s": 18.7,
+      "peak_rss_kib": 662156,
+      "new_provider_launches": 0,
+      "cumulative_run_dirs": 10
+    },
+    "run3_covered_provider_edit_in_project_mncs": {
+      "session_id": "ses_140a69bed7ab0650",
+      "evidence_id": "mncs-store:ses_140a69bed7ab0650:verification:311b27a60d9131853aa478835cd65b277218bd88be16b7dfa03f8524139fc6ad",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 57,
+      "current": 7,
+      "executed_in_epoch": 4,
+      "failed": 0,
+      "blockers": 0,
+      "verification_elapsed_s": 188.064,
+      "full_entry_wall_s": 206.05,
+      "peak_rss_kib": 2623996,
+      "edited_file": "src/compiler/project.mncs",
+      "edited_function": "project_import_closure",
+      "new_provider_launches": 4,
+      "reused_unaffected_suites": 3,
+      "cumulative_run_dirs": 14,
+      "launched_runs": [
+        {
+          "run_dir": "bb98b566-6b9809b4",
+          "verdict": "PASS",
+          "test_entries": [
+            "counted_up_to_nat_bound_lowers_and_collects_region",
+            "over_sequence_loop_resolves_view_param_and_region",
+            "propagate_seq_types_rejects_conflicting_sequence_bounds"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_loop::counted_up_to_nat_bound_lowers_and_collects_region::cd44945bec967d2d1e2019cbfb28fc8c413bb0bc73de1f701faa854ce5ae3583",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_loop::over_sequence_loop_resolves_view_param_and_region::7d96a59915946e45b06baad8dcf1da0f6783d05f54db312a2fe1b92660dfebdc",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_loop::propagate_seq_types_rejects_conflicting_sequence_bounds::507f04dc841480b9b27514545266345c2f21da42101f5144be607a11f61f388f"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:76e48513a558c935f0a5bf34d962f46ac46f0b354a302a4bf8b40418c609ef14",
+          "compiled_function_count": 478,
+          "module_elaboration_cache": {
+            "reused_count": 12,
+            "linked_count": 2,
+            "invalidated_count": 2,
+            "published_entry_count": 2,
+            "rejected_entry_count": 2,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": [
+              "mncs.compiler.project.v1",
+              "mncs.compiler.vm_emit.v1"
+            ]
+          }
+        },
+        {
+          "run_dir": "40c8f969-6b9809b4",
+          "verdict": "PASS",
+          "test_entries": [
+            "provider_handoff_closure_filters_unreachable_modules",
+            "provider_handoff_collects_reachable_record_schema_and_excludes_unrelated",
+            "provider_handoff_locates_reachable_callable_and_ignores_unrelated",
+            "record_update_and_exact_seq_construct_lower_and_fail_closed"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_closure_filters_unreachable_modules::e2e217e6819bc603c0ebc1303f0bdea19d588468df76225b0a39883047ca1b34",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_collects_reachable_record_schema_and_excludes_unrelated::2f817a933f8fd0b58c60c75b62d6c4dbf166fe253db91522dc2a2c8fd622bceb",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::provider_handoff_locates_reachable_callable_and_ignores_unrelated::0025b306aeec12d9f2797d95cccba60f61033d514f8a1e7121dd93075f1b3dc6",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_provider_handoff::record_update_and_exact_seq_construct_lower_and_fail_closed::78d6ba2f805fd91669f5e1784846dc71240507107ba7c1878f92e55ef2aa66c4"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:81fce64d1faca97f3edb047aec4bf1165563dee16142fde8d4ad15d717ec5415",
+          "compiled_function_count": 335,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "rejected_entry_count": 0,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": []
+          }
+        },
+        {
+          "run_dir": "3bbd4926-6b9809b4",
+          "verdict": "PASS",
+          "test_entries": [
+            "record_project_lowers_verified_schema_field",
+            "record_project_rejects_mismatched_field_and_result_type",
+            "record_project_rejects_mismatched_owner_and_unknown_schema"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_lowers_verified_schema_field::b6d5a24f8c9d989cf476af624bfe3d0df682f77a23726351e8276012f5d465ef",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_field_and_result_type::7007f70d12da145227b95120df5d1c1cba0bd2d789fa425dca9a6c1d9d7cbeb9",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_record_project::record_project_rejects_mismatched_owner_and_unknown_schema::14c9c5e4d3a683caba3009a926e5bbfabe116ea61efb0f82a451a5187c26bc27"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:8bd501cf7904bcae2e7759f72a47b90a15eb2242e8dc0e2eb926704fb6524be5",
+          "compiled_function_count": 54,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "rejected_entry_count": 0,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": []
+          }
+        },
+        {
+          "run_dir": "83fcd5bf-6b9809b4",
+          "verdict": "PASS",
+          "test_entries": [
+            "scalar_switch_lowers_to_canonical_dispatch_chain",
+            "scalar_switch_rejects_mismatched_default_target",
+            "scalar_switch_rejects_mismatched_join_argument_type"
+          ],
+          "test_case_identities": [
+            "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_lowers_to_canonical_dispatch_chain::4c61386526dadb7030fe04b9339ba1da1e1592054a08f864caaf301cc722c0e4",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_default_target::a6622cfac26dba3243c168976ae5d6a2011b2c71e91837127f703199b69626b2",
+            "mncs:0.2:test-case:tests.compiler_vm_emit_scalar_switch::scalar_switch_rejects_mismatched_join_argument_type::443553643aab125ebf0839bf6a51b69f93f293af9a8ffec88ca58f5a3845f5a3"
+          ],
+          "artifact_identity": "mncs:compiler:backend-artifact:6df61f6436317d82687307c770b0b75f07f0872ee4a672fa167ed29fc9365158",
+          "compiled_function_count": 150,
+          "module_elaboration_cache": {
+            "reused_count": 14,
+            "linked_count": 0,
+            "invalidated_count": 0,
+            "published_entry_count": 0,
+            "rejected_entry_count": 0,
+            "evicted_entry_count": 0,
+            "invalidated_module_subjects": []
+          }
+        }
+      ]
+    },
+    "run4_restored_clean_entry": {
+      "session_id": "ses_140a69bed7ab0650",
+      "evidence_id": "mncs-store:ses_140a69bed7ab0650:verification:ceb8319083dd613dd8216c99201ffec82df76d48296fd8a5f21d50002e19fd08",
+      "reused": false,
+      "epoch_reused": false,
+      "obligations_total": 57,
+      "current": 7,
+      "executed_in_epoch": 4,
+      "failed": 0,
+      "blockers": 0,
+      "verification_elapsed_s": 187.808,
+      "full_entry_wall_s": 205.06,
+      "peak_rss_kib": 2623584,
+      "restored_project_mncs_sha256": "d8b3a654080eb0b40765fc72c0e4938dbacd59fa961088bc57d348f23db7e7ce",
+      "cumulative_run_dirs": 18
+    }
+  },
+  "first_remaining_blocker": {
+    "rank": 1,
+    "owner": "mncs-compiler (vm_emit.mncs / tools/native_vm_artifact.py)",
+    "summary": "Unchanged lexer::significant<32> already emits cleanly (29 functions, 543 blocks, 3,837 instructions), so the next executable frontier is paged multi-page lexer/parser entrypoints starting at unchanged lexer::next_token_global<4, 32>. Emitting call_next_token_global -> lexer.next_token_global<4, 32> fails closed with error_code: 4 (error_function: 0, error_block: 0, error_instruction: 0) on parameter pages: [[byte; up_to 32]; up_to 4] because VmType kind 4 currently represents only flat bounded scalar sequences ([byte; up_to N], [u64; K]) rather than nested bounded sequence-of-sequences.",
+    "reproduce_command": "python3 -u tools/test_native_lexer_skip_trivia_vm_emit.py",
+    "observed_probe_result": {
+      "ok": false,
+      "error_code": 4,
+      "error_function": 0,
+      "error_block": 0,
+      "error_instruction": 0,
+      "function_count": 0,
+      "block_count": 0,
+      "instruction_count": 0
+    }
+  },
+  "stage1_to_stage2_rebuild": "UNKNOWN",
+  "stage1_claimed": false,
+  "stage2_claimed": false
+}

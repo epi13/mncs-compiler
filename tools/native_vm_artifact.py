@@ -116,7 +116,16 @@ def _body_type(vm_ty, record_names=None):
     if kind == 3:
         return {"integer": {"bits": vm_ty["bits"], "signed": vm_ty["signed"]}}
     if kind == 4:
-        return {"sequence": {"element": "byte", "bound": _seq_bound(vm_ty)}}
+        bits = int(vm_ty.get("bits", 0))
+        if bits == 0:
+            elem = "byte"
+        elif bits == 1:
+            elem = "bool"
+        elif bits in (8, 16, 32, 64):
+            elem = {"integer": {"bits": bits, "signed": bool(vm_ty["signed"])}}
+        else:
+            raise ValueError(f"unsupported sequence element bits: {bits}")
+        return {"sequence": {"element": elem, "bound": _seq_bound(vm_ty)}}
     if kind == 5:
         rec_id = _semantic_id_str(vm_ty["nominal_identity"])
         return {"record": {"identity": rec_id, "name": _record_short_name(rec_id, record_names)}}
@@ -242,6 +251,17 @@ def _vm_inst_kind(inst, record_names=None):
             "RecordProject": {
                 "type_identity": rec_id,
                 "field": field_names[0],
+            }
+        }
+    if opcode == 19:
+        seq_ty = _body_type(inst["ty"], record_names)
+        assert isinstance(seq_ty, dict) and "sequence" in seq_ty and "exact" in seq_ty["sequence"]["bound"], (
+            f"SequenceConstruct must produce exact sequence type: {seq_ty}"
+        )
+        return {
+            "SequenceConstruct": {
+                "element_type": seq_ty["sequence"]["element"],
+                "length": seq_ty["sequence"]["bound"]["exact"],
             }
         }
     raise ValueError(f"unsupported VmInstruction opcode: {opcode}")

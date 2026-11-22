@@ -446,6 +446,21 @@ record ProjectResultWithDiagnosticLocations {
     diagnostic_locations: ProjectDiagnosticLocationList
 }
 
+// Selected-target compilation context retaining only the resolved import
+// closure's signature/schema metadata so downstream consumers (such as
+// selected-callable VM emission) can materialize provider bodies on demand
+// without re-parsing unrelated sources or lowering uncalled modules.
+record SelectedProjectContext {
+    result: ProjectResult,
+    reachable: [bool; 64],
+    dependency_modules: ModuleList,
+    dependency_nominal_modules: NominalModuleList
+}
+record MaterializedProviderBuild {
+    ok: bool,
+    modules: ProjectModuleList
+}
+
 record ModuleBuild { rest: ModuleList, acc: ModuleList, valid: bool, count: u64, parse_failed: bool, parse_index: u64, parse_start: u64, parse_end: u64 }
 fn build_modules<M: Nat, N: Nat>(sources: [ProjectSource; up_to 64], flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64, target_only: bool) -> (result: ModuleBuild) {
     iterate i over sources carrying st: ModuleBuild = ModuleBuild {
@@ -3155,9 +3170,9 @@ fn compile_project<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte
     };
 }
 // Compile one ordered snapshot source through proof, CFG, and verified SSA
-// while retaining every module as an import, nominal, and record-schema
-// provider. `target_source_index` indexes the ordered source descriptors.
-fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: ProjectResult) {
+// while retaining only the target's transitive import closure as signature,
+// nominal, and record-schema providers for on-demand provider materialization.
+fn compile_project_target_with_context<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: SelectedProjectContext) {
     let ordered: bool = source_ordered<64>(snapshot.sources);
     let counts_match: bool = descriptors_cover<M, N>(snapshot.sources, flat_pages);
     // Parse target bodies for lowering; parse provider bodies fully for the
@@ -3168,14 +3183,18 @@ fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages:
     let resolved: Resolution = resolve_imports<M, N>(snapshot.sources, flat_pages, parsed);
     let local_nominals: NominalModuleList = collect_local_nominal_modules<M, N>(snapshot.sources, flat_pages, parsed);
     let nominal_modules: NominalModuleList = resolve_project_nominal_modules<M, N>(snapshot.sources, flat_pages, parsed, local_nominals);
-    let lowered: ProjectBuild = lower_project_modules_for_source<M, N>(snapshot.sources, flat_pages, parsed, resolved.imports, nominal_modules, target_source_index);
+    let selected: TargetModuleSelection = select_target_module(parsed, target_source_index);
+    let dependency_closure: ProjectImportClosure = project_import_closure(resolved.imports, target_source_index, snapshot.sources.len);
+    let dependency_modules: ModuleList = project_modules_in_closure<64>(snapshot.sources, parsed, dependency_closure.reachable);
+    let dependency_nominal_modules: NominalModuleList = project_nominal_modules_in_closure<64>(snapshot.sources, nominal_modules, dependency_closure.reachable);
+    let lowered: ProjectBuild = lower_target_module_selected<M, N>(snapshot.sources, flat_pages, parsed, selected.selected, resolved.imports, nominal_modules, dependency_modules, dependency_nominal_modules, selected.found);
     let basic: DiagnosticList = order_diagnostics<64>(snapshot.sources, ordered, counts_match);
     let diagnostics1: DiagnosticList = append_diagnostics<64>(snapshot.sources, basic, duplicate);
     let diagnostics2: DiagnosticList = append_diagnostics<64>(snapshot.sources, diagnostics1, resolved.diagnostics);
     let diagnostics3: DiagnosticList = append_stage_diagnostic<64>(snapshot.sources, diagnostics2, built, lowered.failed);
     let diagnostics: DiagnosticList = append_target_missing(diagnostics3, lowered.target_missing, target_source_index, true);
     let valid: bool = ordered && counts_match && built.valid && diagnostics_empty<64>(snapshot.sources, diagnostics) && resolved.valid && lowered.valid && !(lowered.target_missing);
-    return ProjectResult {
+    let proj_res: ProjectResult = ProjectResult {
         valid: valid,
         fingerprint: snapshot.fingerprint,
         fingerprint_authenticated: false,
@@ -3191,6 +3210,70 @@ fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages:
         imports: resolved.imports,
         diagnostics: diagnostics
     };
+    return SelectedProjectContext {
+        result: proj_res,
+        reachable: dependency_closure.reachable,
+        dependency_modules: dependency_modules,
+        dependency_nominal_modules: dependency_nominal_modules
+    };
+}
+
+// Materialize one reachable provider module through declaration proof, Flow,
+// and verified Value SSA on demand, reusing the resolved import closure and
+// nominal identities established by `compile_project_target_with_context`.
+fn materialize_provider_module<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], ctx: SelectedProjectContext, provider_source_index: u64) -> (result: MaterializedProviderBuild) {
+    if !(ctx.result.valid) || provider_source_index >= snapshot.sources.len || provider_source_index >= 64 {
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+    }
+    if !(ctx.reachable[provider_source_index]) {
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+    }
+    let item: ProjectSource = snapshot.sources[provider_source_index];
+    let pages: [[byte; up_to N]; up_to 1024] = module_pages<M, N>(snapshot.sources, flat_pages, provider_source_index);
+    let unit: decl.Unit = decl.parse_unit<1024, N>(pages, item.stride, item.total);
+    if !(unit.ok) {
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+    }
+    let parsed_provider: ParsedModule = ParsedModule {
+        source_id: item.source_id,
+        source_path: item.source_path,
+        source_index: provider_source_index,
+        unit: unit
+    };
+    let prov_closure: ProjectImportClosure = project_import_closure(ctx.result.imports, provider_source_index, snapshot.sources.len);
+    let prov_dep_modules: ModuleList = project_modules_in_closure<64>(snapshot.sources, ctx.dependency_modules, prov_closure.reachable);
+    let existing_nom: NominalModuleLookup = nominal_module_by_index<M, N>(snapshot.sources, flat_pages, ctx.dependency_nominal_modules, provider_source_index);
+    let refreshed_resolved: decl.NominalTypeIdentityList = project_nominal_type_identities<M, N>(
+        snapshot.sources, flat_pages, parsed_provider,
+        ctx.dependency_modules, ctx.dependency_nominal_modules, existing_nom.facts.local
+    );
+    let refreshed_nom: NominalModule = NominalModule {
+        source_index: provider_source_index,
+        local: existing_nom.facts.local,
+        resolved: refreshed_resolved
+    };
+    let prov_other_mask: [bool; 64] = replace(prov_closure.reachable, provider_source_index, false);
+    let prov_dep_nominals: NominalModuleList = NominalModuleList.NMCons {
+        head: refreshed_nom,
+        tail: project_nominal_modules_in_closure<64>(snapshot.sources, ctx.dependency_nominal_modules, prov_other_mask)
+    };
+    let built: ProjectBuild = lower_one_target_project_module<M, N>(
+        snapshot.sources, flat_pages,
+        ctx.dependency_modules, ctx.result.imports, ctx.dependency_nominal_modules,
+        prov_dep_modules, prov_dep_nominals, parsed_provider
+    );
+    if !(built.valid) || !(built.ssa_valid) || built.count != 1 {
+        return MaterializedProviderBuild { ok: false, modules: ProjectModuleList.PNil };
+    }
+    return MaterializedProviderBuild { ok: true, modules: built.acc };
+}
+
+// Compile one ordered snapshot source through proof, CFG, and verified SSA
+// while retaining every module as an import, nominal, and record-schema
+// provider. `target_source_index` indexes the ordered source descriptors.
+fn compile_project_target<M: Nat, N: Nat>(snapshot: ProjectSnapshot, flat_pages: [[byte; up_to N]; up_to M], target_source_index: u64) -> (result: ProjectResult) {
+    let ctx: SelectedProjectContext = compile_project_target_with_context<M, N>(snapshot, flat_pages, target_source_index);
+    return ctx.result;
 }
 
 // Compile the selected source and project its current diagnostics into source

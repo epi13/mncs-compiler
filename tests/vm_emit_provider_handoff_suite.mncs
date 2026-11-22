@@ -1,0 +1,382 @@
+mncs 0.18;
+module tests.compiler_vm_emit_provider_handoff;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.parser.v1 as parser;
+use mncs.compiler.project.v1 as project;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Page 0 (provider, 49 bytes): "mncs.t.p.v1 Token kind diagnostic u64 skip_trivia"
+//   mncs.t.p.v1: 0..11, Token: 12..17, kind: 18..22, diagnostic: 23..33, u64: 34..37, skip_trivia: 38..49
+fn prov_page() -> (result: [byte; up_to 64]) {
+    return [
+        109, 110, 99, 115, 46, 116, 46, 112, 46, 118, 49, 32,
+        84, 111, 107, 101, 110, 32,
+        107, 105, 110, 100, 32,
+        100, 105, 97, 103, 110, 111, 115, 116, 105, 99, 32,
+        117, 54, 52, 32,
+        115, 107, 105, 112, 95, 116, 114, 105, 118, 105, 97
+    ];
+}
+
+// Page 1 (unrelated out-of-subset module, 30 bytes): "mncs.t.u.v1 Unrel x u64 secret"
+//   mncs.t.u.v1: 0..11, Unrel: 12..17, x: 18..19, u64: 20..23, secret: 24..30
+fn unrel_page() -> (result: [byte; up_to 64]) {
+    return [
+        109, 110, 99, 115, 46, 116, 46, 117, 46, 118, 49, 32,
+        85, 110, 114, 101, 108, 32,
+        120, 32,
+        117, 54, 52, 32,
+        115, 101, 99, 114, 101, 116
+    ];
+}
+
+// Page 2 (target caller, 21 bytes): "mncs.t.c.v1 call_skip"
+//   mncs.t.c.v1: 0..11, call_skip: 12..21
+fn caller_page() -> (result: [byte; up_to 64]) {
+    return [
+        109, 110, 99, 115, 46, 116, 46, 99, 46, 118, 49, 32,
+        99, 97, 108, 108, 95, 115, 107, 105, 112
+    ];
+}
+
+fn make_ident(raw: [byte; up_to 64]) -> (result: decl.SemanticIdentity) {
+    let pages: [[byte; up_to 64]; up_to 1] = [raw];
+    return vm_emit.span_to_ident<1, 64>(pages, 64, raw.len, 0, raw.len);
+}
+
+fn id_skip_trivia() -> (result: decl.SemanticIdentity) {
+    return make_ident([
+        109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 117, 110, 99, 116, 105, 111,
+        110, 58, 109, 110, 99, 115, 46, 116, 46, 112, 46, 118, 49, 58, 58,
+        115, 107, 105, 112, 95, 116, 114, 105, 118, 105, 97
+    ]);
+}
+
+fn id_unrel_secret() -> (result: decl.SemanticIdentity) {
+    return make_ident([
+        109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 117, 110, 99, 116, 105, 111,
+        110, 58, 109, 110, 99, 115, 46, 116, 46, 117, 46, 118, 49, 58, 58,
+        115, 101, 99, 114, 101, 116
+    ]);
+}
+
+fn mk_header(mod_start: u64, mod_end: u64) -> (result: parser.Header) {
+    return parser.Header {
+        code: 0, start: 0, end: mod_end, version_start: 0, version_end: 0,
+        module_start: mod_start, module_end: mod_end, next_offset: mod_end, state: 8
+    };
+}
+
+fn mk_empty_body() -> (result: decl.FnBody) {
+    return decl.FnBody {
+        body: decl.StmtList.SNil,
+        ret: decl.Expr.Integer { start: 0, end: 0, value: 0, overflow: false },
+        has_ret: false
+    };
+}
+
+fn mk_fn_decl(name_start: u64, name_end: u64) -> (result: decl.FnDecl) {
+    return decl.FnDecl {
+        ok: true, err_start: 0, err_end: 0,
+        sig: decl.FnSig {
+            name_start: name_start, name_end: name_end,
+            generics: decl.GenericParamList.GNil,
+            params: decl.FieldList.FNil, results: decl.FieldList.FNil,
+            contracts: decl.ClauseList.CNil, effects: decl.EffectList.XNil, capabilities: decl.CapList.ANil
+        },
+        body: mk_empty_body(), fn_start: name_start, fn_end: name_end, cursor: name_end
+    };
+}
+
+fn token_single_field_decl() -> (result: decl.RecordDecl) {
+    let fields: decl.FieldList = decl.FieldList.FCons {
+        head: decl.Field { name_start: 18, name_end: 22, type_start: 34, type_end: 37, type_kind: 1 },
+        tail: decl.FieldList.FNil
+    };
+    return decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0, name_start: 12, name_end: 17,
+        fields: fields, decl_start: 12, decl_end: 37, cursor: 37
+    };
+}
+
+fn unrel_record_decl() -> (result: decl.RecordDecl) {
+    let fields: decl.FieldList = decl.FieldList.FCons {
+        head: decl.Field { name_start: 18, name_end: 19, type_start: 20, type_end: 23, type_kind: 1 },
+        tail: decl.FieldList.FNil
+    };
+    return decl.RecordDecl {
+        ok: true, err_start: 0, err_end: 0, name_start: 12, name_end: 17,
+        fields: fields, decl_start: 12, decl_end: 23, cursor: 23
+    };
+}
+
+fn mk_src(tag: byte, page_idx: u64, total: u64) -> (result: project.ProjectSource) {
+    return project.ProjectSource {
+        source_id: [tag], source_path: [tag],
+        page_start: page_idx, page_count: 1, stride: 64, total: total
+    };
+}
+
+fn build_three_mod_snapshot() -> (result: project.ProjectSnapshot) {
+    return project.ProjectSnapshot {
+        fingerprint: [104, 111, 102],
+        sources: [mk_src(48, 0, 49), mk_src(49, 1, 30), mk_src(50, 2, 21)]
+    };
+}
+
+fn build_three_mod_pages() -> (result: [[byte; up_to 64]; up_to 4]) {
+    return [prov_page(), unrel_page(), caller_page()];
+}
+
+fn build_parsed_modules() -> (result: project.ModuleList) {
+    let prov_unit: decl.Unit = decl.Unit {
+        ok: true, err_start: 0, err_end: 0, header: mk_header(0, 11),
+        uses: decl.UseList.UNil,
+        records: decl.RecordList.RCons { head: token_single_field_decl(), tail: decl.RecordList.RNil },
+        enums: decl.EnumList.GNil,
+        fns: decl.FnList.DCons { head: mk_fn_decl(38, 49), tail: decl.FnList.DNil },
+        cursor: 49
+    };
+    let unrel_unit: decl.Unit = decl.Unit {
+        ok: true, err_start: 0, err_end: 0, header: mk_header(0, 11),
+        uses: decl.UseList.UNil,
+        records: decl.RecordList.RCons { head: unrel_record_decl(), tail: decl.RecordList.RNil },
+        enums: decl.EnumList.GNil,
+        fns: decl.FnList.DCons { head: mk_fn_decl(24, 30), tail: decl.FnList.DNil },
+        cursor: 30
+    };
+    let caller_unit: decl.Unit = decl.Unit {
+        ok: true, err_start: 0, err_end: 0, header: mk_header(0, 11),
+        uses: decl.UseList.UNil, records: decl.RecordList.RNil, enums: decl.EnumList.GNil,
+        fns: decl.FnList.DCons { head: mk_fn_decl(12, 21), tail: decl.FnList.DNil },
+        cursor: 21
+    };
+    let m0: project.ParsedModule = project.ParsedModule { source_id: [48], source_path: [48], source_index: 0, unit: prov_unit };
+    let m1: project.ParsedModule = project.ParsedModule { source_id: [49], source_path: [49], source_index: 1, unit: unrel_unit };
+    let m2: project.ParsedModule = project.ParsedModule { source_id: [50], source_path: [50], source_index: 2, unit: caller_unit };
+    return project.ModuleList.MCons {
+        head: m0,
+        tail: project.ModuleList.MCons {
+            head: m1,
+            tail: project.ModuleList.MCons { head: m2, tail: project.ModuleList.MNil }
+        }
+    };
+}
+
+fn reachable_0_and_2() -> (result: [bool; 64]) {
+    let r0: [bool; 64] = [false; 64];
+    let r1: [bool; 64] = replace(r0, 0, true);
+    return replace(r1, 2, true);
+}
+
+fn module_list_has_only_0_and_2(mods: project.ModuleList) -> (result: bool) {
+    return match mods {
+        project.ModuleList.MNil => false,
+        project.ModuleList.MCons { head: h1, tail: t1 } => match t1 {
+            project.ModuleList.MNil => false,
+            project.ModuleList.MCons { head: h2, tail: t2 } => match t2 {
+                project.ModuleList.MNil => (h1.source_index == 0 && h2.source_index == 2) || (h1.source_index == 2 && h2.source_index == 0),
+                project.ModuleList.MCons { head: _h3, tail: _t3 } => false
+            }
+        }
+    };
+}
+
+fn nominal_list_has_only_0_and_2(noms: project.NominalModuleList) -> (result: bool) {
+    return match noms {
+        project.NominalModuleList.NMNil => false,
+        project.NominalModuleList.NMCons { head: h1, tail: t1 } => match t1 {
+            project.NominalModuleList.NMNil => false,
+            project.NominalModuleList.NMCons { head: h2, tail: t2 } => match t2 {
+                project.NominalModuleList.NMNil => (h1.source_index == 0 && h2.source_index == 2) || (h1.source_index == 2 && h2.source_index == 0),
+                project.NominalModuleList.NMCons { head: _h3, tail: _t3 } => false
+            }
+        }
+    };
+}
+
+fn record_list_has_single_token(recs: vm_emit.VmRecordTypeList, expected_name: decl.SemanticIdentity) -> (result: bool) {
+    return match recs {
+        vm_emit.VmRecordTypeList.VRTNil => false,
+        vm_emit.VmRecordTypeList.VRTCons { head: h, tail: t } => h.identity.valid && vm_emit.semantic_ids_equal(h.name, expected_name) && match t {
+            vm_emit.VmRecordTypeList.VRTNil => true,
+            vm_emit.VmRecordTypeList.VRTCons { head: _h2, tail: _t2 } => false
+        }
+    };
+}
+
+test provider_handoff_closure_filters_unreachable_modules() -> (result: TestResult) {
+    let snap: project.ProjectSnapshot = build_three_mod_snapshot();
+    let parsed_all: project.ModuleList = build_parsed_modules();
+    let link: project.ImportLink = project.ImportLink {
+        source_index: 2, target_index: 0,
+        module_start: 0, module_end: 11, alias_start: 0, alias_end: 0, has_alias: false
+    };
+    let imports: project.ImportList = project.ImportList.ICons { head: link, tail: project.ImportList.INil };
+    let closure: project.ProjectImportClosure = project.project_import_closure(imports, 2, 3);
+    let dep_mods: project.ModuleList = project.project_modules_in_closure<64>(snap.sources, parsed_all, closure.reachable);
+
+    let nom0: project.NominalModule = project.NominalModule { source_index: 0, local: decl.NominalTypeIdentityList.NINil, resolved: decl.NominalTypeIdentityList.NINil };
+    let nom1: project.NominalModule = project.NominalModule { source_index: 1, local: decl.NominalTypeIdentityList.NINil, resolved: decl.NominalTypeIdentityList.NINil };
+    let nom2: project.NominalModule = project.NominalModule { source_index: 2, local: decl.NominalTypeIdentityList.NINil, resolved: decl.NominalTypeIdentityList.NINil };
+    let noms_all: project.NominalModuleList = project.NominalModuleList.NMCons {
+        head: nom0,
+        tail: project.NominalModuleList.NMCons {
+            head: nom1,
+            tail: project.NominalModuleList.NMCons { head: nom2, tail: project.NominalModuleList.NMNil }
+        }
+    };
+    let dep_noms: project.NominalModuleList = project.project_nominal_modules_in_closure<64>(snap.sources, noms_all, closure.reachable);
+
+    let ok: bool = closure.reachable[0]
+        && !(closure.reachable[1])
+        && closure.reachable[2]
+        && module_list_has_only_0_and_2(dep_mods)
+        && nominal_list_has_only_0_and_2(dep_noms);
+    return from_assertion(equals_bool(true, ok, 5001));
+}
+
+test provider_handoff_collects_reachable_record_schema_and_excludes_unrelated() -> (result: TestResult) {
+    let snap: project.ProjectSnapshot = build_three_mod_snapshot();
+    let pages: [[byte; up_to 64]; up_to 4] = build_three_mod_pages();
+    let parsed_all: project.ModuleList = build_parsed_modules();
+    let reachable: [bool; 64] = reachable_0_and_2();
+
+    let nom0: project.NominalModule = project.NominalModule { source_index: 0, local: decl.NominalTypeIdentityList.NINil, resolved: decl.NominalTypeIdentityList.NINil };
+    let nom2: project.NominalModule = project.NominalModule { source_index: 2, local: decl.NominalTypeIdentityList.NINil, resolved: decl.NominalTypeIdentityList.NINil };
+    let dep_noms: project.NominalModuleList = project.NominalModuleList.NMCons {
+        head: nom0,
+        tail: project.NominalModuleList.NMCons { head: nom2, tail: project.NominalModuleList.NMNil }
+    };
+
+    // Pass full parsed_all with reachable=[0,2]: provider Token is collected, unrelated Unrel (index 1) is excluded.
+    let all_recs: vm_emit.VmRecordTypeList = vm_emit.collect_context_record_types<4, 64>(snap, pages, parsed_all, dep_noms, reachable);
+    let p0_pages: [[byte; up_to 64]; up_to 1] = [prov_page()];
+    let tok_name: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(p0_pages, 64, 49, 12, 17);
+
+    let ok: bool = record_list_has_single_token(all_recs, tok_name);
+    return from_assertion(equals_bool(true, ok, 5002));
+}
+
+test provider_handoff_locates_reachable_callable_and_ignores_unrelated() -> (result: TestResult) {
+    let snap: project.ProjectSnapshot = build_three_mod_snapshot();
+    let pages: [[byte; up_to 64]; up_to 4] = build_three_mod_pages();
+    let parsed_all: project.ModuleList = build_parsed_modules();
+    let reachable: [bool; 64] = reachable_0_and_2();
+
+    // Reachable provider callable is found at source_index 0.
+    let found_prov: vm_emit.ProviderCallableLookup = vm_emit.find_provider_source_for_callable<4, 64>(snap, pages, parsed_all, reachable, id_skip_trivia());
+    // Unrelated out-of-subset callable must NOT be found under reachable=[0,2].
+    let found_unrel: vm_emit.ProviderCallableLookup = vm_emit.find_provider_source_for_callable<4, 64>(snap, pages, parsed_all, reachable, id_unrel_secret());
+
+    let ok: bool = found_prov.found && found_prov.source_index == 0 && !(found_unrel.found);
+    return from_assertion(equals_bool(true, ok, 5003));
+}
+
+fn walk_emits_construct_then_project(insts: vm_emit.VmInstructionList) -> (result: bool) {
+    // Accumulator is reversed: head is RecordConstruct (opcode 16), next is RecordProject (opcode 18).
+    return match insts {
+        vm_emit.VmInstructionList.VINil => false,
+        vm_emit.VmInstructionList.VICons { head: h1, tail: t1 } => h1.opcode == 16 && match t1 {
+            vm_emit.VmInstructionList.VINil => false,
+            vm_emit.VmInstructionList.VICons { head: h2, tail: t2 } => h2.opcode == 18 && h2.op_code == 1 && match t2 {
+                vm_emit.VmInstructionList.VINil => true,
+                vm_emit.VmInstructionList.VICons { head: _h3, tail: _t3 } => false
+            }
+        }
+    };
+}
+
+test record_update_and_exact_seq_construct_lower_and_fail_closed() -> (result: TestResult) {
+    let p0_pages: [[byte; up_to 64]; up_to 1] = [prov_page()];
+    let u64_ty: vm_emit.VmType = vm_emit.int_vm_type(64, false);
+    let tok_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(p0_pages, 64, 49, 12, 17);
+    let f_kind: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(p0_pages, 64, 49, 18, 22);
+    let f_diag: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(p0_pages, 64, 49, 23, 33);
+    let bad_owner_id: decl.SemanticIdentity = vm_emit.span_to_ident<1, 64>(p0_pages, 64, 49, 38, 49);
+
+    let tok_schema: vm_emit.VmRecordType = vm_emit.VmRecordType {
+        identity: tok_id,
+        name: tok_id,
+        fields: vm_emit.VmRecordFieldList.VRFCons {
+            head: vm_emit.VmRecordField { name: f_kind, ty: u64_ty },
+            tail: vm_emit.VmRecordFieldList.VRFCons {
+                head: vm_emit.VmRecordField { name: f_diag, ty: u64_ty },
+                tail: vm_emit.VmRecordFieldList.VRFNil
+            }
+        }
+    };
+    let all_recs: vm_emit.VmRecordTypeList = vm_emit.VmRecordTypeList.VRTCons {
+        head: tok_schema, tail: vm_emit.VmRecordTypeList.VRTNil
+    };
+    let tok_ty: vm_emit.VmType = vm_emit.record_vm_type(tok_id);
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: tok_ty },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 1, ty: u64_ty },
+            tail: vm_emit.VmValueList.VVCons {
+                head: vm_emit.VmValue { id: 2, ty: u64_ty },
+                tail: vm_emit.VmValueList.VVNil
+            }
+        }
+    };
+    let seed: vm_emit.SpecInstListWalk = vm_emit.SpecInstListWalk {
+        rest: ssa.InstructionList.QNil, val_types: val_types, acc: vm_emit.VmInstructionList.VINil,
+        count: 0, next_val_id: 10, next_inst_id: 10, ok: true, error_code: 0, error_inst: 0
+    };
+    // Valid functional RecordUpdate overriding `kind` (18..22) on base id 0 -> projects `diagnostic` + constructs Token.
+    let upd_ok_inst: ssa.Instruction = ssa.Instruction {
+        id: 5, sequence: 5, kind: 16, operator: 1, result: 6,
+        ty: decl.SemType.TNamed { start: 12, end: 17 },
+        inputs: ssa.IdList.ICons {
+            head: ssa.Id { value: 0 },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil }
+        },
+        argc: 2,
+        params: decl.BindList.BCons {
+            head: decl.Bind { start: 18, end: 22, ty: decl.SemType.TInt { width: 64, signed: false } },
+            tail: decl.BindList.BNil
+        },
+        identity: decl.invalid_semantic_identity(), nominal_identity: tok_id,
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 49
+    };
+    let r_upd_ok: vm_emit.SpecInstListWalk = vm_emit.lower_vm_record_update<1, 64>(p0_pages, 64, 49, all_recs, seed, upd_ok_inst, ssa.InstructionList.QNil, tok_ty);
+
+    // Wrong nominal owner on RecordUpdate fails closed (error_code 4).
+    let upd_bad_inst: ssa.Instruction = ssa.Instruction { ..upd_ok_inst, nominal_identity: bad_owner_id };
+    let r_upd_bad: vm_emit.SpecInstListWalk = vm_emit.lower_vm_record_update<1, 64>(p0_pages, 64, 49, all_recs, seed, upd_bad_inst, ssa.InstructionList.QNil, tok_ty);
+
+    // Valid exact scalar SequenceConstruct ([u64; 2]) -> opcode 19.
+    let seq_ty: vm_emit.VmType = vm_emit.exact_scalar_seq_vm_type(u64_ty, 2);
+    let seq_ok_inst: ssa.Instruction = ssa.Instruction {
+        id: 7, sequence: 7, kind: 18, operator: 2, result: 8,
+        ty: decl.SemType.TInt { width: 64, signed: false },
+        inputs: ssa.IdList.ICons {
+            head: ssa.Id { value: 1 },
+            tail: ssa.IdList.ICons { head: ssa.Id { value: 2 }, tail: ssa.IdList.INil }
+        },
+        argc: 2, params: decl.BindList.BNil,
+        identity: decl.invalid_semantic_identity(), nominal_identity: decl.invalid_semantic_identity(),
+        variant_start: 0, variant_end: 0, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: 0, end: 10
+    };
+    let r_seq_ok: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_construct(val_types, seq_ok_inst, seq_ty);
+    // Mismatched SequenceConstruct count (operator 3 != exact length 2) -> error_code 7.
+    let seq_bad_inst: ssa.Instruction = ssa.Instruction { ..seq_ok_inst, operator: 3 };
+    let r_seq_bad: vm_emit.InstLowerResult = vm_emit.lower_vm_seq_construct(val_types, seq_bad_inst, seq_ty);
+
+    let ok: bool = r_upd_ok.ok
+        && r_upd_ok.count == 2
+        && walk_emits_construct_then_project(r_upd_ok.acc)
+        && !(r_upd_bad.ok) && r_upd_bad.error_code == 4
+        && r_seq_ok.ok && r_seq_ok.inst.opcode == 19 && vm_emit.vm_type_equal(r_seq_ok.inst.ty, seq_ty)
+        && !(r_seq_bad.ok) && r_seq_bad.error_code == 7;
+    return from_assertion(equals_bool(true, ok, 5004));
+}
