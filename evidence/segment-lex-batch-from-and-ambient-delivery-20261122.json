@@ -1,0 +1,533 @@
+{
+  "schema_version": "mncs.compiler.self-host-evidence/1",
+  "campaign": "current_campaign_segment_lex_batch_from_and_ambient_delivery_20261122",
+  "date": "2026-11-22",
+  "baseline_heads": {
+    "mncs-compiler": "caf45dac853490847fbf139721413bc1bf23bc80",
+    "mncs-environment": "be0676100ac8bf59d4f56833725b7ae49189bf7f",
+    "mncs-language": "ece0d77ef462ed6f31c1d1a86627dc8690d79718",
+    "mncs-test": "39304e66be28951cdd1b753389739911607ac933",
+    "mncs-vm": "da99dee282336c5acdc91359b14f477745c77f77",
+    "mncs-stdlib": "7f1d3bae9ab676c45b73811cdb2e5827658c69ff",
+    "mncs-debug": "a036a0042bd0529ef8401b952eb921146e01590d",
+    "mncs-doctor": "80afeef861795a79e7d68940d5a5902f5b92257e",
+    "mncs-language-service": "060b7898bbfb823f4e8a8ba32658fc35be2c96ec",
+    "stage0_lock": "6a3f6907e4acd4a98afd4a9421548a978ff266e6"
+  },
+  "unchanged_compiler_sources_sha256": {
+    "src/compiler/source.mncs": "f9bd036f4c515eb692906685f4b13a20e28174f7f05cbcfc601efb0fc2e61a32",
+    "src/compiler/lexer.mncs": "f9c49a2ec291ace46ddea3fe2d6e3eb0565b14b977222440216f9b90d46ff482",
+    "src/compiler/segment.mncs": "c7c9c17135bc358405504bf72d5aa2b0b9d7bc0666d48e2863c4f0ba91df28a5",
+    "src/compiler/parser.mncs": "4c29394be5c5fed1ca257464a1fc5dd9d138006ea3aa718932b60aafb51e9745",
+    "src/compiler/kernel.mncs": "24bd0cf7c67d1312164d10155e20a41032ce0efa6e215f86c1e3ef22246fe1a9",
+    "src/compiler/decl.mncs": "fd5e8a67943011eec33e8d5e37f1865bcbaaa4190efe320a475d88eee35de71c"
+  },
+  "step_1_baseline_delivery_audit": {
+    "ordinary_entry_session": "ses_562381aaddbce4ca",
+    "ordinary_entry_wall_s": 363.17,
+    "ordinary_entry_peak_rss_kib": 2627972,
+    "baseline_refusal_response": {
+      "ok": false,
+      "error_code": 4,
+      "error_function": 2,
+      "error_block": 0,
+      "error_instruction": 0,
+      "wall_s": 373.52,
+      "peak_rss_kib": 6059544
+    },
+    "delivered_automatically": [
+      "session verification summary (native suites PASS)",
+      "environment health & project bindings"
+    ],
+    "available_only_by_manual_followup": [
+      "mncs declaration-inventory for Profile 0.19 declarations & spans",
+      "mncs-doctor/tools/compiler_vm.py health/drift facts",
+      "mncs-debug capabilities & demand-driven trace capture",
+      "SELF-HOST-MATRIX.json (contained stale [Token; 64] explanation)"
+    ],
+    "never_produced_before_repair": [
+      "failing callable semantic identity for error_function: 2",
+      "failing compiler phase, SSA instruction kind, observed nominal type, and source span",
+      "automatic ambient projection of selected-callable diagnosis and separated provenance vs bootstrap status",
+      "Doctor stale-matrix blocker cross-check against authoritative source declarations",
+      "Profile 0.19 declaration support in mncs-language-service (pinned to pre-0.19 mncs-syntax -> MNP008)"
+    ]
+  },
+  "step_2_empirical_refusal_trace": {
+    "target_callable": "mncs:0.2:function:mncs.test.lex_batch_caller.v1::call_lex_batch_from",
+    "target_specialization": "mncs.compiler.segment.v1::lex_batch_from<4, 32>",
+    "resolved_error_function_2": "mncs:0.2:function:mncs.compiler.lexer.v1::lex_tokens_from",
+    "closure_order": [
+      "fn 0: mncs.test.lex_batch_caller.v1::call_lex_batch_from",
+      "fn 1: mncs.compiler.segment.v1::lex_batch_from<4,32>",
+      "fn 2: mncs.compiler.lexer.v1::lex_tokens_from<4,32>"
+    ],
+    "failing_phase": "instruction_lowering",
+    "ssa_operation": {
+      "kind_id": 5,
+      "kind": "EnumConstruct",
+      "source_file": "src/compiler/lexer.mncs",
+      "source_line": 979,
+      "source_byte_span": [
+        58058,
+        58072
+      ],
+      "source_excerpt": "TokenList.TNil"
+    },
+    "observed_type": "nominal_finite_enum",
+    "observed_nominal_identity": "mncs:0.2:finite-type:mncs.compiler.lexer.v1::TokenList",
+    "stale_matrix_correction": {
+      "stale_claim": "segment::lex_batch_from<4,32> -> lexer::lex_batch_from<4,32> failed on nominal-record sequence field tokens: [Token; 64]",
+      "verified_source_truth": "src/compiler/segment.mncs:54-56 calls lexer.lex_tokens_from<P, N>, and src/compiler/lexer.mncs:975-977 declares `enum TokenList { TNil, TCons { head: Token, tail: TokenList } }` and `record BatchResult { tokens: TokenList, next: u64, eof: bool, count: u64 }`. The refusal was missing nominal finite enum lowering (`VmType` kind 7, `FiniteConstruct`, `FinitePayloadProject`, `FiniteIsVariant`, finite schema collection/retention) plus `lower_record_decl_field_one` misclassifying `TokenList` as a record."
+    }
+  },
+  "step_3_4_5_ambient_investigation_delivery": {
+    "compiler_capability": "mncs-compiler:selected-callable-diagnosis",
+    "schema_version": "mncs.compiler.selected-callable-diagnosis/1",
+    "provider_responsibilities": {
+      "mncs-compiler": "structured VmEmitFailureDetail on refusal paths + tools/compiler_diagnosis.py read-only projection & cache",
+      "mncs-language-service_and_mncs_language": "authoritative semantic identities & spans (explicit fallback to mncs declaration-inventory when mnls reports MNP008 on Profile 0.19)",
+      "mncs-doctor": "compiler/VM health & stale SELF-HOST-MATRIX.json blocker detection",
+      "mncs-debug": "strictly demand-driven trace handoff (0 background trace launches)",
+      "mncs-test": "first-class native regression suite mncs-compiler.vm-emit-finite-enum-native",
+      "mncs-environment": "epoch-gated ambient projection onto diagnostic.compiler_investigation, mncs-env diagnostic, and diagnostics evidence store"
+    },
+    "before_refusal_inline_capsule": {
+      "compiler_investigation": {
+        "bootstrap": {
+          "matrix": "evidence/SELF-HOST-MATRIX.json",
+          "missing_rebuild_evidence_count": 3,
+          "stage1_claimed": false,
+          "stage1_to_stage2_rebuild": "UNKNOWN",
+          "stage2_claimed": false,
+          "supporting_evidence": "evidence/lexer-next-token-global-vm-emit-20261121.json"
+        },
+        "delivery_completeness": "complete",
+        "diagnosis": {
+          "callable": "mncs:0.2:function:mncs.compiler.lexer.v1::lex_tokens_from",
+          "error_code": 4,
+          "error_label": "unsupported_or_unresolved_type_or_schema",
+          "observed_nominal": "mncs:0.2:finite-type:mncs.compiler.lexer.v1::TokenList",
+          "observed_type": "nominal_finite_enum",
+          "ok": false,
+          "source": "src/compiler/lexer.mncs:979",
+          "ssa_op": "EnumConstruct"
+        },
+        "freshness": "current",
+        "measurements": {
+          "heavyweight_compile_launched": false,
+          "provider_launches": 1
+        },
+        "provenance": {
+          "compiler": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+          "failing_phase": "instruction_lowering",
+          "last_completed_phase": "ssa_verification",
+          "owner": "mncs-compiler:src/compiler/vm_emit.mncs",
+          "revision": "caf45dac8534",
+          "target": "mncs:0.2:function:mncs.test.lex_batch_caller.v1::call_lex_batch_from"
+        },
+        "providers": {
+          "debug": "available_demand_driven",
+          "doctor": "available",
+          "doctor_findings_count": 3,
+          "language_service": "partial_fallback_mncs_language"
+        },
+        "reused": true,
+        "status": "refused",
+        "unavailable_providers": []
+      },
+      "evidence": "mncs-store:ses_2c38c7328e0201c5:diagnostics:e53734231905b6b36a3b3cd86ab5e88c86ef4ead4cebb9ccb4d912f97573ae11",
+      "reused": false,
+      "summary": {
+        "blockers": 0,
+        "degraded": 1,
+        "elapsed_seconds": 4.532,
+        "epoch_reused": false,
+        "failures": 0
+      }
+    },
+    "after_success_diagnostic_reuse": {
+      "compiler_investigation": {
+        "bootstrap": {
+          "matrix": "evidence/SELF-HOST-MATRIX.json",
+          "missing_rebuild_evidence_count": 3,
+          "stage1_claimed": false,
+          "stage1_to_stage2_rebuild": "UNKNOWN",
+          "stage2_claimed": false,
+          "supporting_evidence": "evidence/lexer-next-token-global-vm-emit-20261121.json"
+        },
+        "delivery_completeness": "complete",
+        "diagnosis": {
+          "callable": null,
+          "error_code": 0,
+          "error_label": "ok",
+          "observed_nominal": null,
+          "observed_type": null,
+          "ok": true,
+          "source": null,
+          "ssa_op": "none"
+        },
+        "freshness": "current",
+        "measurements": {
+          "heavyweight_compile_launched": false,
+          "provider_launches": 0
+        },
+        "provenance": {
+          "compiler": "mncs.compiler.vm_emit.v1::compile_and_emit_project_vm_callable",
+          "failing_phase": null,
+          "last_completed_phase": "execution",
+          "owner": "mncs-compiler:src/compiler/vm_emit.mncs",
+          "revision": "caf45dac8534",
+          "target": "mncs:0.2:function:mncs.test.lex_batch_caller.v1::call_lex_batch_from"
+        },
+        "providers": {
+          "debug": "available_demand_driven",
+          "doctor": "available",
+          "doctor_findings_count": 2,
+          "language_service": "partial_fallback_mncs_language"
+        },
+        "reused": true,
+        "status": "executed",
+        "unavailable_providers": []
+      },
+      "evidence": "mncs-store:ses_a0199b4d1cf931e6:diagnostics:e10add687e5165350ef511b2158669f465e5dd943fba7f6234fc20107a94842b",
+      "reused": true,
+      "session_id": "ses_a0199b4d1cf931e6",
+      "summary": {
+        "blockers": 0,
+        "capsule_ids": [],
+        "captured": 0,
+        "coordination_deferred": 0,
+        "current": 0,
+        "deferred": 0,
+        "depth": "minimal",
+        "elapsed_seconds": 0.016,
+        "epoch_reused": true,
+        "escalated": 0,
+        "failures": 0,
+        "observed": 0,
+        "unsupported": 0
+      }
+    },
+    "measurements": {
+      "before_inline_refusal_diagnostic_pass_s": 4.532,
+      "before_inline_refusal_provider_launches": 1,
+      "before_inline_refusal_heavyweight_compiles": 0,
+      "unchanged_reentry_diagnostic_pass_s": 0.016,
+      "unchanged_reentry_provider_launches": 0,
+      "unchanged_reentry_heavyweight_compiles": 0,
+      "source_edit_invalidation_check_s": 0.089,
+      "source_edit_invalidated_reasons": [
+        "src/compiler/vm_emit.mncs"
+      ],
+      "partial_unavailable_providers_check_s": 0.084,
+      "partial_unavailable_providers": [
+        "mncs-doctor",
+        "mncs-language-service"
+      ],
+      "mncs_environment_unit_and_integration_tests": "42/42 PASS in 9.010s",
+      "ambient_native_suite_invalidation_loop": {
+        "clean_current": 8,
+        "clean_failed": 0,
+        "edited_suite_current": 7,
+        "edited_suite_failed": 1,
+        "restored_current": 8,
+        "restored_failed": 0
+      }
+    }
+  },
+  "step_6_compiler_milestone_proof": {
+    "checkpoint_1_reverse_token_step": {
+      "emit_ok": true,
+      "emit_elapsed_s": 49.769,
+      "function_count": 1,
+      "record_type_count": 2,
+      "finite_type_count": 1,
+      "artifact_id": "sha256:ea5b7e1efa1bfdcf880fc38a858379dce023f91667fded3d485977ead31463ae",
+      "admitted": true,
+      "differential_cases": 4,
+      "differential_matches": 4
+    },
+    "checkpoint_2_segment_lex_batch_from_4_32": {
+      "emit_ok": true,
+      "emit_elapsed_s": 114.018,
+      "function_count": 44,
+      "block_count": 1088,
+      "instruction_count": 6242,
+      "record_type_count": 9,
+      "finite_type_count": 1,
+      "emitted_callables": [
+        "mncs:0.2:function:mncs.test.lex_batch_caller.v1::call_lex_batch_from",
+        "mncs:0.2:function:mncs.compiler.segment.v1::lex_batch_from__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::lex_tokens_from__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::batch_step__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::reverse_tokens",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::next_token_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::reverse_tokens_full",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::reverse_token_step",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_scalar_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_window4_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::identifier_start_scalar",
+        "mncs:0.2:function:mncs.std.utf8_scalar.v1::is_whitespace_scalar",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_line_comment_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::token_from_nonword_scan",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::token_from_word_scan_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_block_comment_scalar_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_unicode_scalar_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_chunk_window",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_word_tail_window",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::punctuation",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_lead_continuations",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_first_continuation_valid",
+        "mncs:0.2:function:mncs.compiler.source.v1::utf8_continuation",
+        "mncs:0.2:function:mncs.compiler.source.v1::missing_window4",
+        "mncs:0.2:function:mncs.compiler.source.v1::byte_at_global_delta__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::scan_line_comment_window__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::keyword__spec_d8642cbd",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::keyword_global__spec_503d154c",
+        "mncs:0.2:function:mncs.compiler.source.v1::identifier_continue_scalar",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::word_char",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::space",
+        "mncs:0.2:function:mncs.compiler.lexer.v1::digit",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane0",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane1",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane2",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphabetic_plane3",
+        "mncs:0.2:function:mncs.compiler.source.v1::global_page_address",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane0",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane1",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane2",
+        "mncs:0.2:function:mncs.compiler.source.v1::unicode_alphanumeric_plane3"
+      ],
+      "artifact_id": "sha256:74f4e397470232683ad80aa259077969da61b817d14c265b295bd509235ef51d",
+      "artifact_bytes": 4434089,
+      "deterministic_two_fresh_processes": true,
+      "admitted": true,
+      "tamper_refused": true,
+      "differential_cases": 15,
+      "differential_matches": 15,
+      "direct_generic_4_32_ok": true,
+      "dual_layout_invariance_ok": true,
+      "uncompiled_specs_refused": {
+        "8_32": true,
+        "4_16": true
+      },
+      "cases": {
+        "empty_input": {
+          "count": 1,
+          "next": 0,
+          "eof": true,
+          "steps": 344
+        },
+        "single_page_simple": {
+          "count": 23,
+          "next": 32,
+          "eof": true,
+          "steps": 12413
+        },
+        "single_page_tokens_eof": {
+          "count": 16,
+          "next": 22,
+          "eof": true,
+          "steps": 9468
+        },
+        "single_page_mid_start": {
+          "count": 7,
+          "next": 22,
+          "eof": true,
+          "steps": 4455
+        },
+        "multi_page_cross_ident": {
+          "count": 13,
+          "next": 29,
+          "eof": true,
+          "steps": 8974
+        },
+        "multi_page_cross_comment": {
+          "count": 11,
+          "next": 22,
+          "eof": true,
+          "steps": 8096
+        },
+        "multi_page_cross_string": {
+          "count": 11,
+          "next": 21,
+          "eof": true,
+          "steps": 7584
+        },
+        "multi_page_full_mncs_4p": {
+          "count": 46,
+          "next": 74,
+          "eof": true,
+          "steps": 29749
+        },
+        "multi_page_utf8_cross": {
+          "count": 14,
+          "next": 35,
+          "eof": true,
+          "steps": 12334
+        },
+        "malformed_utf8_byte": {
+          "count": 8,
+          "next": 8,
+          "eof": true,
+          "steps": 5176
+        },
+        "start_at_total": {
+          "count": 1,
+          "next": 5,
+          "eof": true,
+          "steps": 344
+        },
+        "start_gt_total": {
+          "count": 1,
+          "next": 5,
+          "eof": false,
+          "steps": 339
+        },
+        "zero_stride": {
+          "count": 6,
+          "next": 5,
+          "eof": true,
+          "steps": 754
+        },
+        "short_final_page": {
+          "count": 12,
+          "next": 15,
+          "eof": true,
+          "steps": 7875
+        },
+        "missing_page": {
+          "count": 15,
+          "next": 16,
+          "eof": true,
+          "steps": 5421
+        }
+      }
+    },
+    "focused_finite_and_generic_rejections": {
+      "wrong_finite_owner_construct": {
+        "ok": false,
+        "error_code": 4,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 3,
+        "callable": "mncs:0.2:function:mncs.test.small_finite.v1::score",
+        "phase": 8,
+        "ssa_kind": 5,
+        "expected_type_kind": 8,
+        "observed_type_kind": 7,
+        "observed_nominal": "mncs:0.2:finite-type:mncs.test.small_finite.v1::WrongColor",
+        "source_start": 168,
+        "source_end": 198
+      },
+      "unknown_variant_construct": {
+        "ok": false,
+        "error_code": 7,
+        "error_function": 0,
+        "error_block": 0,
+        "error_instruction": 3,
+        "callable": "mncs:0.2:function:mncs.test.small_finite.v1::score",
+        "phase": 8,
+        "ssa_kind": 5,
+        "expected_type_kind": 0,
+        "observed_type_kind": 7,
+        "observed_nominal": "mncs:0.2:finite-type:mncs.test.small_finite.v1::Color",
+        "source_start": 168,
+        "source_end": 198
+      },
+      "wrong_payload_field_project": {
+        "ok": false,
+        "error_code": 7,
+        "error_function": 0,
+        "error_block": 5,
+        "error_instruction": 5,
+        "callable": "mncs:0.2:function:mncs.test.small_finite.v1::score",
+        "phase": 8,
+        "ssa_kind": 6,
+        "expected_type_kind": 0,
+        "observed_type_kind": 3,
+        "observed_nominal": "mncs:0.2:finite-type:mncs.test.small_finite.v1::Color",
+        "source_start": 238,
+        "source_end": 309
+      },
+      "wrong_finite_owner_project": {
+        "ok": false,
+        "error_code": 7,
+        "error_function": 0,
+        "error_block": 5,
+        "error_instruction": 5,
+        "callable": "mncs:0.2:function:mncs.test.small_finite.v1::score",
+        "phase": 8,
+        "ssa_kind": 6,
+        "expected_type_kind": 0,
+        "observed_type_kind": 3,
+        "observed_nominal": "mncs:0.2:finite-type:mncs.test.small_finite.v1::WrongColor",
+        "source_start": 238,
+        "source_end": 309
+      },
+      "direct_uninstantiated_generic": {
+        "ok": false,
+        "error_code": 11,
+        "error_function": 10,
+        "error_block": 0,
+        "error_instruction": 0,
+        "callable": "mncs:0.2:function:mncs.compiler.segment.v1::lex_batch_from",
+        "phase": 4,
+        "ssa_kind": 0,
+        "expected_type_kind": 0,
+        "observed_type_kind": 0,
+        "observed_nominal": null,
+        "source_start": 2223,
+        "source_end": 2237
+      }
+    },
+    "bonus_kernel_lex_evidence_batch_global_4_32": {
+      "target_callable": "mncs:0.2:function:mncs.test.kernel_caller.v1::call_lex_ev",
+      "elapsed_s": 116.811,
+      "emit_ok": true,
+      "function_count": 42,
+      "record_type_count": 7,
+      "finite_type_count": 0,
+      "artifact_id": "sha256:4cc494aecc3d4d0d979d1377b009b7f7132fa2c1c0443416ebc2d46333ee527a",
+      "admitted": true
+    },
+    "first_class_native_suite": {
+      "obligation": "mncs-compiler.vm-emit-finite-enum-native",
+      "source": "tests/vm_emit_finite_enum_suite.mncs",
+      "tests_passed": "3/3",
+      "verdict": "PASS",
+      "verified_through_mncs_env_enter": true
+    },
+    "preserved_regressions": {
+      "test_native_lexer_next_token_global_vm_emit": {
+        "status": "passed",
+        "next_token_global_matches": 39,
+        "segment_lex_batch_from_4_32_probe_emitted_and_admitted": true
+      },
+      "all_native_compiler_suites_on_mncs_env_enter": "8/8 current, 0 failed"
+    },
+    "new_frontier": {
+      "target": "mncs.compiler.decl.v1::parse_use<4, 32> / parse_unit_signatures<4, 32>",
+      "observed_error_layer": "project_snapshot_capacity_contract",
+      "observed_diagnostics": [
+        "MNE225: host Nat argument 4096 for N exceeds the defining module profile ceiling 1024",
+        "MNCS_VALUE_CONTRACT argument 1: view length exceeds capacity: capacity 1024, received 1031"
+      ],
+      "explanation": "All pre-decl compiler modules (source, lexer, segment, parser, kernel) now emit and admit cleanly in fresh canonical mncs-vm. Reaching decl.mncs (853,358 B = 834 pages of 1024 B) together with its 7 reachable modules (197 pages) requires 1,031 pages of 1024 B, exceeding the 1024-page M=1024, N=1024 flat project-snapshot profile ceiling."
+    }
+  },
+  "bootstrap_status": {
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false,
+    "missing_rebuild_evidence": [
+      "full_compiler_closure_emitted_through_native_vm_emitter",
+      "stage1_compiler_canonical_vm_admission_and_self_compile_run",
+      "stage2_output_reproduced_from_stage1_and_compared_for_fixed_point_equivalence"
+    ]
+  }
+}

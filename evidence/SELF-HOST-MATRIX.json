@@ -26433,5 +26433,101 @@
     "stage1_to_stage2_rebuild": "UNKNOWN",
     "stage1_claimed": false,
     "stage2_claimed": false
+  },
+  "current_campaign_segment_lex_batch_from_and_ambient_delivery_20261122": {
+    "date": "2026-11-22",
+    "evidence_file": "evidence/segment-lex-batch-from-and-ambient-delivery-20261122.json",
+    "evidence_sha256": "074c53b098496f38e9f3f8d10750d5015cc0258f704eb98c406029a19ebf4e0d",
+    "compiler_revision_base": "caf45dac853490847fbf139721413bc1bf23bc80",
+    "environment_revision_base": "be0676100ac8bf59d4f56833725b7ae49189bf7f",
+    "vm_revision": "da99dee282336c5acdc91359b14f477745c77f77",
+    "stage0_lock_revision": "6a3f6907e4acd4a98afd4a9421548a978ff266e6",
+    "stale_blocker_correction": {
+      "previous_stale_description": "segment::lex_batch_from<4,32> -> lexer::lex_batch_from<4,32> on nominal-record sequence [Token; 64]",
+      "corrected_verified_cause": "segment::lex_batch_from<4,32> calls lexer::lex_tokens_from<4,32>; BatchResult.tokens is recursive enum TokenList { TNil, TCons { head: Token, tail: TokenList } } (src/compiler/lexer.mncs:975-977). The baseline error_code: 4 at error_function: 2, block 0, inst 0 was SSA kind 5 (EnumConstruct) on TokenList.TNil at lexer.mncs:979 because vm_emit lacked nominal finite enum lowering (VmType kind 7) and finite schema collection/retention."
+    },
+    "ambient_investigation_delivery": {
+      "capability": "mncs-compiler:selected-callable-diagnosis",
+      "schema_version": "mncs.compiler.selected-callable-diagnosis/1",
+      "inline_refusal_delivered_on_enter": true,
+      "inline_refusal_diagnostic_pass_s": 4.532,
+      "unchanged_reentry_diagnostic_pass_s": 0.016,
+      "unchanged_reentry_provider_launches": 0,
+      "source_edit_invalidation_s": 0.089,
+      "partial_provider_delivery_s": 0.084,
+      "heavyweight_compiles_on_entry": 0,
+      "environment_regression_suite": "42/42 PASS"
+    },
+    "checkpoint_1_lexer_reverse_token_step": {
+      "emit_ok": true,
+      "emit_elapsed_s": 49.769,
+      "function_count": 1,
+      "record_type_count": 2,
+      "finite_type_count": 1,
+      "artifact_id": "sha256:ea5b7e1efa1bfdcf880fc38a858379dce023f91667fded3d485977ead31463ae",
+      "admitted": true,
+      "differential_cases": 4,
+      "differential_matches": 4
+    },
+    "checkpoint_2_segment_lex_batch_from_4_32": {
+      "emit_ok": true,
+      "function_count": 44,
+      "block_count": 1088,
+      "instruction_count": 6242,
+      "record_type_count": 9,
+      "finite_type_count": 1,
+      "artifact_id": "sha256:74f4e397470232683ad80aa259077969da61b817d14c265b295bd509235ef51d",
+      "artifact_bytes": 4434089,
+      "deterministic_two_fresh_processes": true,
+      "admitted": true,
+      "tamper_refused": true,
+      "vm_differential_matches": "15/15",
+      "direct_generic_4_32_ok": true,
+      "dual_layout_invariance_ok": true,
+      "uncompiled_specs_refused": {
+        "8_32": true,
+        "4_16": true
+      },
+      "focused_finite_and_generic_rejections_passed": 5
+    },
+    "bonus_kernel_lex_evidence_batch_global_4_32": {
+      "target_callable": "mncs:0.2:function:mncs.test.kernel_caller.v1::call_lex_ev",
+      "elapsed_s": 116.811,
+      "emit_ok": true,
+      "function_count": 42,
+      "record_type_count": 7,
+      "finite_type_count": 0,
+      "artifact_id": "sha256:4cc494aecc3d4d0d979d1377b009b7f7132fa2c1c0443416ebc2d46333ee527a",
+      "admitted": true
+    },
+    "first_class_finite_enum_ambient_verification": {
+      "obligation": "mncs-compiler.vm-emit-finite-enum-native",
+      "suite": "tests/vm_emit_finite_enum_suite.mncs",
+      "tests": "3/3",
+      "verdict": "PASS",
+      "all_compiler_native_suites_on_enter": "8/8 current, 0 failed",
+      "targeted_edit_invalidation_verified": true
+    },
+    "preserved_regressions": {
+      "test_native_lexer_next_token_global_vm_emit": "PASS (39/39 + segment_lex_batch_from<4,32> emitted & admitted)",
+      "mncs_environment_diagnostics_and_delivery": "42/42 PASS"
+    },
+    "deepest_stage_proved": "Native Project SSA -> native mncs.compiler.vm_emit.v1 now supports recursive nominal finite enums (`VmType` kind 7, `FiniteConstruct` opcode 20, `FinitePayloadProject` opcode 21, `FiniteIsVariant` opcode 22, `FiniteSwitch` dispatch lowering, transitive record+finite schema retention) and structured failure-only emitter diagnostics (`VmEmitFailureDetail`), emitting unchanged `lexer::reverse_token_step` (4/4 Stage-0 matches), unchanged `segment::lex_batch_from<4,32>` (44 functions, 1,088 blocks, 6,242 instructions, 9 record schemas, 1 recursive finite enum `TokenList`, 4,434,089 B, bit-for-bit deterministic across two fresh processes, admitted in fresh `mncs-vm`, tamper refused, 15/15 Stage-0 matches, dual-layout paging invariance, direct `<4,32>` dispatch, `<8,32>`/`<4,16>` refused, 5/5 finite/generic rejections), and unchanged `kernel::lex_evidence_batch_global<4,32>` (42 functions, admitted). Ambient investigation delivery via `mncs-compiler:selected-callable-diagnosis` + `mncs-environment` delivers concise refusal facts and separated provenance/bootstrap status inline on `mncs-env enter` with 0 heavyweight compiles, 0-launch unchanged re-entry, instant source-edit invalidation, and explicit partial delivery on unavailable providers. Does NOT claim `decl` / `flow` / `ssa` emission or Stage-1->Stage-2 rebuild.",
+    "first_remaining_blocker": {
+      "rank": 1,
+      "owner": "mncs-compiler (project.mncs / vm_emit.mncs snapshot capacity) + mncs-language (Nat profile ceiling)",
+      "callable": "mncs:0.2:function:mncs.compiler.decl.v1::parse_use<4, 32> / parse_unit_signatures<4, 32>",
+      "operation_or_type": "flat project-snapshot page capacity ceiling (`1,031` pages of 1024 B > `M = 1024`, `N = 1024`; `MNE225` rejects `N = 4096 > 1024`)",
+      "diagnostic": {
+        "layer": "project_snapshot_capacity_contract",
+        "mne225_at_n4096": "host Nat argument 4096 for N exceeds the defining module profile ceiling 1024",
+        "value_contract_at_m1024_n1024": "view length exceeds capacity: capacity 1024, received 1031"
+      },
+      "summary": "All pre-decl compiler modules (source, lexer, segment, parser, kernel) now emit and admit cleanly in fresh canonical mncs-vm. Reaching unchanged decl.mncs (853,358 B = 834 pages of 1024 B) together with its 7 reachable modules (197 pages) needs 1,031 pages of 1024 B, exceeding the 1,024-page M=1024, N=1024 flat snapshot ceiling.",
+      "reproduce_command": "python3 tools/test_native_segment_lex_batch_vm_emit.py --probe-frontier"
+    },
+    "stage1_to_stage2_rebuild": "UNKNOWN",
+    "stage1_claimed": false,
+    "stage2_claimed": false
   }
 }

@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.repository-manifest/v0alpha1",
   "repository": "mncs-compiler",
-  "revision": 25,
+  "revision": 26,
   "manifest_location": "in-repository",
   "authority": {
     "note": "Compiler is a successor-architecture research implementation subordinate to mncs-language Stage-0 semantics; differential executors remain explicit external integrations."
@@ -89,6 +89,33 @@
             "path": ".bootstrap/target/release/mncs-compiler-stage0-probe"
           },
           "toolchain_env": "MNCS_COMPILER_PROBE"
+        }
+      },
+      {
+        "contract": "selected-callable-diagnosis",
+        "version": "1",
+        "kind": "compiler-diagnostic-projection",
+        "stability": "experimental",
+        "effects": [
+          "read"
+        ],
+        "artifact_contract": {
+          "response_schema": "mncs.compiler.selected-callable-diagnosis/1",
+          "self_host_matrix": "evidence/SELF-HOST-MATRIX.json"
+        },
+        "fingerprint_sources": [
+          "tools/compiler_diagnosis.py",
+          "src/compiler/vm_emit.mncs",
+          "evidence/SELF-HOST-MATRIX.json"
+        ],
+        "invocation": {
+          "kind": "python",
+          "path": "tools/compiler_diagnosis.py",
+          "fixed_argv": [
+            "project",
+            "--compact"
+          ],
+          "timeout_seconds": 15
         }
       },
       {

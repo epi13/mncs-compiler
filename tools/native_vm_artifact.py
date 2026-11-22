@@ -124,7 +124,18 @@ def _record_short_name(rec_id, record_names):
     raise ValueError(f"cannot determine record short name for {rec_id!r}")
 
 
-def _body_type(vm_ty, record_names=None):
+def _finite_short_name(fin_id, finite_names):
+    if finite_names and fin_id in finite_names:
+        return finite_names[fin_id]
+    prefix = "mncs:0.2:finite-type:"
+    if fin_id.startswith(prefix):
+        parts = fin_id[len(prefix):].split("::")
+        if len(parts) >= 2 and parts[1]:
+            return parts[1]
+    raise ValueError(f"cannot determine finite short name for {fin_id!r}")
+
+
+def _body_type(vm_ty, record_names=None, finite_names=None):
     assert vm_ty["valid"], f"invalid VmType: {vm_ty}"
     kind = vm_ty["kind"]
     if kind == 1:
@@ -141,6 +152,9 @@ def _body_type(vm_ty, record_names=None):
     if kind == 6:
         inner = {"sequence": {"element": _scalar_seq_elem(vm_ty), "bound": _inner_seq_bound(vm_ty)}}
         return {"sequence": {"element": inner, "bound": _seq_bound(vm_ty)}}
+    if kind == 7:
+        fin_id = _semantic_id_str(vm_ty["nominal_identity"])
+        return {"finite": {"identity": fin_id, "name": _finite_short_name(fin_id, finite_names)}}
     raise ValueError(f"unsupported VmType kind: {kind}")
 
 
@@ -171,10 +185,10 @@ def _ssa_inst_id(fn_ssa_id, blk_id, inst_id):
     return f"{fn_ssa_id}:b{blk_id}:i{inst_id}"
 
 
-def _vm_inst_kind(inst, record_names=None):
+def _vm_inst_kind(inst, record_names=None, finite_names=None):
     opcode = inst["opcode"]
     if opcode == 1:
-        return {"Constant": {"value": inst["imm_u64"], "ty": _body_type(inst["ty"], record_names)}}
+        return {"Constant": {"value": inst["imm_u64"], "ty": _body_type(inst["ty"], record_names, finite_names)}}
     if opcode == 2:
         return {"Constant": {"value": 1 if inst["imm_bool"] else 0, "ty": "bool"}}
     if opcode == 3:
@@ -207,12 +221,12 @@ def _vm_inst_kind(inst, record_names=None):
     if opcode == 11:
         return {
             "Convert": {
-                "from": _body_type(inst["from_ty"], record_names),
-                "to": _body_type(inst["ty"], record_names),
+                "from": _body_type(inst["from_ty"], record_names, finite_names),
+                "to": _body_type(inst["ty"], record_names, finite_names),
             }
         }
     if opcode == 12:
-        return {"Select": {"operand_type": _body_type(inst["ty"], record_names)}}
+        return {"Select": {"operand_type": _body_type(inst["ty"], record_names, finite_names)}}
     if opcode == 13:
         base_sem_id = _semantic_id_str(inst["callee_identity"])
         callee_nats = flist(inst.get("callee_nat_args"))
@@ -266,7 +280,7 @@ def _vm_inst_kind(inst, record_names=None):
             }
         }
     if opcode == 19:
-        seq_ty = _body_type(inst["ty"], record_names)
+        seq_ty = _body_type(inst["ty"], record_names, finite_names)
         assert isinstance(seq_ty, dict) and "sequence" in seq_ty and "exact" in seq_ty["sequence"]["bound"], (
             f"SequenceConstruct must produce exact sequence type: {seq_ty}"
         )
@@ -276,10 +290,45 @@ def _vm_inst_kind(inst, record_names=None):
                 "length": seq_ty["sequence"]["bound"]["exact"],
             }
         }
+    if opcode == 20:
+        fin_id = _semantic_id_str(inst["ty"]["nominal_identity"])
+        var_id = _semantic_id_str(inst["callee_identity"])
+        payload_fields = [_semantic_id_str(n) for n in flist(inst["field_names"])]
+        fc = {
+            "type_identity": fin_id,
+            "variant_identity": var_id,
+            "discriminant": int(inst["op_code"]),
+        }
+        if payload_fields:
+            fc["payload_fields"] = payload_fields
+        return {"FiniteConstruct": fc}
+    if opcode == 21:
+        fin_id = _semantic_id_str(inst["from_ty"]["nominal_identity"])
+        var_id = _semantic_id_str(inst["callee_identity"])
+        field_names = [_semantic_id_str(n) for n in flist(inst["field_names"])]
+        assert len(field_names) == 1, f"FinitePayloadProject must have exactly 1 field name: {field_names}"
+        return {
+            "FinitePayloadProject": {
+                "type_identity": fin_id,
+                "variant_identity": var_id,
+                "discriminant": int(inst["op_code"]),
+                "field": field_names[0],
+            }
+        }
+    if opcode == 22:
+        fin_id = _semantic_id_str(inst["from_ty"]["nominal_identity"])
+        var_id = _semantic_id_str(inst["callee_identity"])
+        return {
+            "FiniteIsVariant": {
+                "type_identity": fin_id,
+                "variant_identity": var_id,
+                "discriminant": int(inst["op_code"]),
+            }
+        }
     raise ValueError(f"unsupported VmInstruction opcode: {opcode}")
 
 
-def _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names=None):
+def _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names=None, finite_names=None):
     out = []
     for it in raw_iters:
         domain_kind = int(it["domain_kind"])
@@ -299,7 +348,7 @@ def _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names=None):
         if seq_bound is not None:
             entry["sequence_bound"] = seq_bound
         entry.update({
-            "state_type": _body_type(it["state_type"], record_names),
+            "state_type": _body_type(it["state_type"], record_names, finite_names),
             "preheader": _ssa_blk_id(fn_ssa_id, it["preheader_block"]),
             "header": _ssa_blk_id(fn_ssa_id, it["header_block"]),
             "body_entry": _ssa_blk_id(fn_ssa_id, it["body_entry_block"]),
@@ -434,6 +483,12 @@ def package_native_vm_artifact(
         rec_id = _semantic_id_str(rec["identity"])
         record_names[rec_id] = _semantic_id_str(rec["name"])
 
+    raw_finite_types = flist(vm_emit_result.get("finite_types"))
+    finite_names = {}
+    for fin in raw_finite_types:
+        fin_id = _semantic_id_str(fin["identity"])
+        finite_names[fin_id] = _semantic_id_str(fin["name"])
+
     ssa_record_types = []
     seen_rec_ids = set()
     for rec in raw_record_types:
@@ -442,7 +497,7 @@ def package_native_vm_artifact(
             continue
         seen_rec_ids.add(rec_id)
         rec_fields = [
-            [_semantic_id_str(fld["name"]), _body_type(fld["ty"], record_names)]
+            [_semantic_id_str(fld["name"]), _body_type(fld["ty"], record_names, finite_names)]
             for fld in flist(rec["fields"])
         ]
         rec_fields.sort(key=lambda item: item[0])
@@ -452,6 +507,33 @@ def package_native_vm_artifact(
             "fields": rec_fields,
         })
     ssa_record_types.sort(key=lambda item: item["identity"])
+
+    ssa_finite_types = []
+    seen_fin_ids = set()
+    for fin in raw_finite_types:
+        fin_id = _semantic_id_str(fin["identity"])
+        if fin_id in seen_fin_ids:
+            continue
+        seen_fin_ids.add(fin_id)
+        ssa_variants = []
+        for var in flist(fin["variants"]):
+            var_payload = [
+                [_semantic_id_str(fld["name"]), _body_type(fld["ty"], record_names, finite_names)]
+                for fld in flist(var["fields"])
+            ]
+            ssa_variants.append({
+                "identity": _semantic_id_str(var["identity"]),
+                "name": _semantic_id_str(var["name"]),
+                "discriminant": int(var["discriminant"]),
+                "payload": var_payload,
+            })
+        ssa_variants.sort(key=lambda item: item["discriminant"])
+        ssa_finite_types.append({
+            "identity": fin_id,
+            "name": finite_names[fin_id],
+            "variants": ssa_variants,
+        })
+    ssa_finite_types.sort(key=lambda item: item["identity"])
 
     ssa_functions = []
     callables = []
@@ -490,7 +572,7 @@ def package_native_vm_artifact(
             {
                 "identity": _ssa_val_id(fn_ssa_id, val["id"]),
                 "semantic_identity": None,
-                "ty": _body_type(val["ty"], record_names),
+                "ty": _body_type(val["ty"], record_names, finite_names),
                 "producer": None,
                 "block": entry_blk_id,
             }
@@ -500,7 +582,7 @@ def package_native_vm_artifact(
             {
                 "identity": f"{fn_ssa_id}:result",
                 "semantic_identity": None,
-                "ty": _body_type(fn["result_type"], record_names),
+                "ty": _body_type(fn["result_type"], record_names, finite_names),
                 "producer": None,
                 "block": entry_blk_id,
             }
@@ -513,7 +595,7 @@ def package_native_vm_artifact(
                 {
                     "identity": _ssa_val_id(fn_ssa_id, p["id"]),
                     "semantic_identity": None,
-                    "ty": _body_type(p["ty"], record_names),
+                    "ty": _body_type(p["ty"], record_names, finite_names),
                     "producer": None,
                     "block": blk_id,
                 }
@@ -526,13 +608,13 @@ def package_native_vm_artifact(
                     "identity": inst_id,
                     "semantic_identity": None,
                     "hir_identity": None,
-                    "kind": _vm_inst_kind(inst, record_names),
+                    "kind": _vm_inst_kind(inst, record_names, finite_names),
                     "inputs": [_ssa_val_id(fn_ssa_id, item["value"]) for item in flist(inst["inputs"])],
                     "outputs": [
                         {
                             "identity": _ssa_val_id(fn_ssa_id, inst["result"]),
                             "semantic_identity": None,
-                            "ty": _body_type(inst["ty"], record_names),
+                            "ty": _body_type(inst["ty"], record_names, finite_names),
                             "producer": inst_id,
                             "block": blk_id,
                         }
@@ -570,7 +652,7 @@ def package_native_vm_artifact(
         raw_iters = flist(fn.get("bounded_iterations"))
         if raw_iters:
             ssa_fn_entry["cycle_policy"] = "bounded_iteration_only"
-            ssa_fn_entry["bounded_iterations"] = _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names)
+            ssa_fn_entry["bounded_iterations"] = _vm_bounded_iterations(fn_ssa_id, raw_iters, record_names, finite_names)
         ssa_fn_entry["blocks"] = ssa_blocks
         ssa_fn_entry["failure"] = "isolated"
         ssa_functions.append(ssa_fn_entry)
@@ -610,6 +692,8 @@ def package_native_vm_artifact(
     }
     if ssa_record_types:
         ssa_module["record_types"] = ssa_record_types
+    if ssa_finite_types:
+        ssa_module["finite_types"] = ssa_finite_types
     ssa_module["functions"] = ssa_functions
     ssa_module["obligations"] = []
     ssa_module["trace"] = {"entries": []}

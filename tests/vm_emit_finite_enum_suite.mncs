@@ -1,0 +1,317 @@
+mncs 0.18;
+module tests.compiler_vm_emit_finite_enum;
+
+use mncs.compiler.decl.v1 as decl;
+use mncs.compiler.ssa.v1 as ssa;
+use mncs.compiler.vm_emit.v1 as vm_emit;
+use mncs.test.assertions;
+use mncs.test.suite;
+
+// Compact ASCII page (34 bytes):
+//    0..4   "TNil"
+//    5..10  "TCons"
+//   11..15  "head"
+//   16..20  "tail"
+//   21..26  "Other"
+//   27..31  "kind"
+fn ident_pages() -> (result: [[byte; up_to 64]; up_to 1]) {
+    let p: [byte; up_to 64] = [
+        84, 78, 105, 108, 32,
+        84, 67, 111, 110, 115, 32,
+        104, 101, 97, 100, 32,
+        116, 97, 105, 108, 32,
+        79, 116, 104, 101, 114, 32,
+        107, 105, 110, 100
+    ];
+    return [p];
+}
+
+fn fast_ident(raw: [byte; up_to 64]) -> (result: decl.SemanticIdentity) {
+    iterate i over raw carrying buf: [byte; 512] = [0 as byte; 512] {
+        next buf = replace(buf, i, raw[i]);
+    }
+    return decl.SemanticIdentity { bytes: buf, len: raw.len, valid: raw.len > 0 };
+}
+
+fn id_tok() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:record-type:m::T" (25 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 114, 101, 99, 111, 114, 100, 45, 116, 121, 112, 101, 58, 109, 58, 58, 84]);
+}
+fn id_br() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:record-type:m::B" (25 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 114, 101, 99, 111, 114, 100, 45, 116, 121, 112, 101, 58, 109, 58, 58, 66]);
+}
+fn id_unused_rec() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:record-type:m::U" (25 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 114, 101, 99, 111, 114, 100, 45, 116, 121, 112, 101, 58, 109, 58, 58, 85]);
+}
+fn id_tl() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:finite-type:m::L" (25 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 105, 110, 105, 116, 101, 45, 116, 121, 112, 101, 58, 109, 58, 58, 76]);
+}
+fn id_other_fin() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:finite-type:m::O" (25 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 105, 110, 105, 116, 101, 45, 116, 121, 112, 101, 58, 109, 58, 58, 79]);
+}
+fn id_var_nil() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:finite-variant:m::L::TNil" (34 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 105, 110, 105, 116, 101, 45, 118, 97, 114, 105, 97, 110, 116, 58, 109, 58, 58, 76, 58, 58, 84, 78, 105, 108]);
+}
+fn id_var_cons() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:finite-variant:m::L::TCons" (35 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 105, 110, 105, 116, 101, 45, 118, 97, 114, 105, 97, 110, 116, 58, 109, 58, 58, 76, 58, 58, 84, 67, 111, 110, 115]);
+}
+fn id_fn_f() -> (result: decl.SemanticIdentity) {
+    // "mncs:0.2:function:m::f" (22 bytes)
+    return fast_ident([109, 110, 99, 115, 58, 48, 46, 50, 58, 102, 117, 110, 99, 116, 105, 111, 110, 58, 109, 58, 58, 102]);
+}
+
+fn mk_token_list_schema(tok_id: decl.SemanticIdentity, tl_id: decl.SemanticIdentity) -> (result: vm_emit.VmFiniteType) {
+    let tl_name: decl.SemanticIdentity = fast_ident([76]);
+    let nil_name: decl.SemanticIdentity = fast_ident([84, 78, 105, 108]);
+    let cons_name: decl.SemanticIdentity = fast_ident([84, 67, 111, 110, 115]);
+    let head_name: decl.SemanticIdentity = fast_ident([104, 101, 97, 100]);
+    let tail_name: decl.SemanticIdentity = fast_ident([116, 97, 105, 108]);
+
+    let cons_fields: vm_emit.VmRecordFieldList = vm_emit.VmRecordFieldList.VRFCons {
+        head: vm_emit.VmRecordField { name: head_name, ty: vm_emit.record_vm_type(tok_id) },
+        tail: vm_emit.VmRecordFieldList.VRFCons {
+            head: vm_emit.VmRecordField { name: tail_name, ty: vm_emit.finite_vm_type(tl_id) },
+            tail: vm_emit.VmRecordFieldList.VRFNil
+        }
+    };
+    let v_nil: vm_emit.VmFiniteVariant = vm_emit.VmFiniteVariant {
+        identity: id_var_nil(), name: nil_name, discriminant: 0, fields: vm_emit.VmRecordFieldList.VRFNil
+    };
+    let v_cons: vm_emit.VmFiniteVariant = vm_emit.VmFiniteVariant {
+        identity: id_var_cons(), name: cons_name, discriminant: 1, fields: cons_fields
+    };
+    let vars: vm_emit.VmFiniteVariantList = vm_emit.VmFiniteVariantList.VFVCons {
+        head: v_nil,
+        tail: vm_emit.VmFiniteVariantList.VFVCons { head: v_cons, tail: vm_emit.VmFiniteVariantList.VFVNil }
+    };
+    return vm_emit.VmFiniteType { identity: tl_id, name: tl_name, variants: vars };
+}
+
+fn mk_finite_construct_inst(id: u64, res: u64, nom: decl.SemanticIdentity, vstart: u64, vend: u64, inputs: ssa.IdList, argc: u64, params: decl.BindList) -> (result: ssa.Instruction) {
+    return ssa.Instruction {
+        id: id, sequence: id, kind: 5, operator: 0, result: res, ty: decl.SemType.TNamed { start: 0, end: 4 },
+        inputs: inputs, argc: argc, params: params,
+        identity: decl.invalid_semantic_identity(), nominal_identity: nom,
+        variant_start: vstart, variant_end: vend, binding_start: 0, binding_end: 0,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: vstart, end: vend
+    };
+}
+
+fn mk_finite_project_inst(id: u64, res: u64, nom: decl.SemanticIdentity, subj_id: u64, vstart: u64, vend: u64, fstart: u64, fend: u64) -> (result: ssa.Instruction) {
+    let fbind: decl.Bind = decl.Bind { start: fstart, end: fend, ty: decl.SemType.TPoison };
+    return ssa.Instruction {
+        id: id, sequence: id, kind: 6, operator: 0, result: res, ty: decl.SemType.TNamed { start: 0, end: 4 },
+        inputs: ssa.IdList.ICons { head: ssa.Id { value: subj_id }, tail: ssa.IdList.INil },
+        argc: 1,
+        params: decl.BindList.BCons { head: fbind, tail: decl.BindList.BNil },
+        identity: decl.invalid_semantic_identity(), nominal_identity: nom,
+        variant_start: vstart, variant_end: vend, binding_start: fstart, binding_end: fend,
+        effects: decl.EffectIdentityList.EINil, capabilities: decl.CapabilityIdentityList.CINil,
+        start: vstart, end: vend
+    };
+}
+
+test finite_enum_construct_project_and_switch_lower_cleanly() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = ident_pages();
+    let tok_id: decl.SemanticIdentity = id_tok();
+    let tl_id: decl.SemanticIdentity = id_tl();
+    let tl_schema: vm_emit.VmFiniteType = mk_token_list_schema(tok_id, tl_id);
+    let all_fins: vm_emit.VmFiniteTypeList = vm_emit.VmFiniteTypeList.VFTCons { head: tl_schema, tail: vm_emit.VmFiniteTypeList.VFTNil };
+
+    let tok_ty: vm_emit.VmType = vm_emit.record_vm_type(tok_id);
+    let tl_ty: vm_emit.VmType = vm_emit.finite_vm_type(tl_id);
+    let u64_ty: vm_emit.VmType = vm_emit.u64_vm_type();
+
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: tok_ty },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 1, ty: tl_ty },
+            tail: vm_emit.VmValueList.VVCons {
+                head: vm_emit.VmValue { id: 10, ty: u64_ty },
+                tail: vm_emit.VmValueList.VVNil
+            }
+        }
+    };
+
+    // 1. Construct unit variant TNil (opcode 20, discriminant 0)
+    let nil_inst: ssa.Instruction = mk_finite_construct_inst(1, 2, tl_id, 0, 4, ssa.IdList.INil, 0, decl.BindList.BNil);
+    let r_nil: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_construct<1, 64>(pages, 64, 31, val_types, all_fins, nil_inst, tl_ty);
+
+    // 2. Construct payload variant TCons { head: v0, tail: v1 } (opcode 20, discriminant 1)
+    let cons_inputs: ssa.IdList = ssa.IdList.ICons { head: ssa.Id { value: 0 }, tail: ssa.IdList.ICons { head: ssa.Id { value: 1 }, tail: ssa.IdList.INil } };
+    let cons_params: decl.BindList = decl.BindList.BCons {
+        head: decl.Bind { start: 11, end: 15, ty: decl.SemType.TPoison },
+        tail: decl.BindList.BCons { head: decl.Bind { start: 16, end: 20, ty: decl.SemType.TPoison }, tail: decl.BindList.BNil }
+    };
+    let cons_inst: ssa.Instruction = mk_finite_construct_inst(2, 3, tl_id, 5, 10, cons_inputs, 2, cons_params);
+    let r_cons: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_construct<1, 64>(pages, 64, 31, val_types, all_fins, cons_inst, tl_ty);
+
+    // 3. Project payload fields head (Token) and tail (TokenList) (opcode 21, discriminant 1)
+    let proj_head: ssa.Instruction = mk_finite_project_inst(3, 4, tl_id, 1, 5, 10, 11, 15);
+    let r_phead: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_payload_project<1, 64>(pages, 64, 31, val_types, all_fins, proj_head, tok_ty);
+    let proj_tail: ssa.Instruction = mk_finite_project_inst(4, 5, tl_id, 1, 5, 10, 16, 20);
+    let r_ptail: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_payload_project<1, 64>(pages, 64, 31, val_types, all_fins, proj_tail, tl_ty);
+
+    // 4. Lower 2-arm FiniteSwitch into FiniteIsVariant (opcode 22) + CondBranch chain + isolated VmFailure block
+    let blk_arm0: ssa.SsaBlock = ssa.SsaBlock { id: 1, parameters: ssa.ValueList.VNil, parameter_bindings: ssa.Environment.EnvNil, instructions: ssa.InstructionList.QNil, terminator: ssa.Terminator.Jump { target: 3, arguments: ssa.IdList.INil }, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0 };
+    let blk_arm1: ssa.SsaBlock = ssa.SsaBlock { id: 2, parameters: ssa.ValueList.VNil, parameter_bindings: ssa.Environment.EnvNil, instructions: ssa.InstructionList.QNil, terminator: ssa.Terminator.Jump { target: 3, arguments: ssa.IdList.INil }, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0 };
+    let blk_join: ssa.SsaBlock = ssa.SsaBlock {
+        id: 3,
+        parameters: ssa.ValueList.VCons { head: ssa.Value { id: 10, ty: decl.SemType.TInt { width: 64, signed: false }, owner_block: 3, kind: 1, index: 0 }, tail: ssa.ValueList.VNil },
+        parameter_bindings: ssa.Environment.EnvNil, instructions: ssa.InstructionList.QNil,
+        terminator: ssa.Terminator.Return { value: 10 }, reachable: true, has_failure_target: false, failure_target: 0, lowering_ok: true, lowering_failure_kind: 0
+    };
+    let all_blks: ssa.SsaBlockList = ssa.SsaBlockList.LCons { head: blk_arm0, tail: ssa.SsaBlockList.LCons { head: blk_arm1, tail: ssa.SsaBlockList.LCons { head: blk_join, tail: ssa.SsaBlockList.LNil } } };
+    let cases: ssa.FiniteMatchCaseList = ssa.FiniteMatchCaseList.MCCons {
+        head: ssa.FiniteMatchCase { variant_start: 0, variant_end: 4, target: 1, arguments: ssa.IdList.INil },
+        tail: ssa.FiniteMatchCaseList.MCCons {
+            head: ssa.FiniteMatchCase { variant_start: 5, variant_end: 10, target: 2, arguments: ssa.IdList.INil },
+            tail: ssa.FiniteMatchCaseList.MCNil
+        }
+    };
+    let r_sw: vm_emit.ScalarSwitchLowerResult = vm_emit.lower_finite_switch_block<1, 64>(
+        pages, 64, 31, all_blks, all_fins, 0,
+        vm_emit.VmValueList.VVNil, vm_emit.VmInstructionList.VINil, 0,
+        false, 0, val_types, vm_emit.VmBlockList.VBNil, 0, 0,
+        20, 20, 4, 1, tl_id, u64_ty, false, 2, 3, cases
+    );
+
+    let ok: bool = vm_emit.is_finite_nominal_identity(tl_id)
+        && !(vm_emit.is_record_nominal_identity(tl_id))
+        && vm_emit.is_record_nominal_identity(tok_id)
+        && !(vm_emit.is_finite_nominal_identity(tok_id))
+        && !(vm_emit.vm_type_equal(tl_ty, tok_ty))
+        && r_nil.ok && r_nil.inst.opcode == 20 && r_nil.inst.op_code == 0
+        && r_cons.ok && r_cons.inst.opcode == 20 && r_cons.inst.op_code == 1
+        && r_phead.ok && r_phead.inst.opcode == 21 && r_phead.inst.op_code == 1 && vm_emit.vm_type_equal(r_phead.inst.ty, tok_ty)
+        && r_ptail.ok && r_ptail.inst.opcode == 21 && r_ptail.inst.op_code == 1 && vm_emit.vm_type_equal(r_ptail.inst.ty, tl_ty)
+        && r_sw.ok && r_sw.block_count == 3 && r_sw.inst_count == 2;
+    return from_assertion(equals_bool(true, ok, 7001));
+}
+
+test finite_enum_rejects_mismatched_owner_unknown_variant_and_wrong_payload() -> (result: TestResult) {
+    let pages: [[byte; up_to 64]; up_to 1] = ident_pages();
+    let tok_id: decl.SemanticIdentity = id_tok();
+    let tl_id: decl.SemanticIdentity = id_tl();
+    let other_fin_id: decl.SemanticIdentity = id_other_fin();
+    let tl_schema: vm_emit.VmFiniteType = mk_token_list_schema(tok_id, tl_id);
+    let all_fins: vm_emit.VmFiniteTypeList = vm_emit.VmFiniteTypeList.VFTCons { head: tl_schema, tail: vm_emit.VmFiniteTypeList.VFTNil };
+
+    let tok_ty: vm_emit.VmType = vm_emit.record_vm_type(tok_id);
+    let tl_ty: vm_emit.VmType = vm_emit.finite_vm_type(tl_id);
+    let u64_ty: vm_emit.VmType = vm_emit.u64_vm_type();
+    let val_types: vm_emit.VmValueList = vm_emit.VmValueList.VVCons {
+        head: vm_emit.VmValue { id: 0, ty: tok_ty },
+        tail: vm_emit.VmValueList.VVCons {
+            head: vm_emit.VmValue { id: 1, ty: tl_ty },
+            tail: vm_emit.VmValueList.VVNil
+        }
+    };
+
+    // Wrong finite owner on FiniteConstruct -> error_code 4
+    let bad_owner_inst: ssa.Instruction = mk_finite_construct_inst(1, 2, other_fin_id, 0, 4, ssa.IdList.INil, 0, decl.BindList.BNil);
+    let r_bad_owner: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_construct<1, 64>(pages, 64, 31, val_types, all_fins, bad_owner_inst, tl_ty);
+
+    // Unknown variant name ("Other", 21..26) on FiniteConstruct -> error_code 7
+    let bad_var_inst: ssa.Instruction = mk_finite_construct_inst(2, 3, tl_id, 21, 26, ssa.IdList.INil, 0, decl.BindList.BNil);
+    let r_bad_var: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_construct<1, 64>(pages, 64, 31, val_types, all_fins, bad_var_inst, tl_ty);
+
+    // Unknown payload field ("kind", 27..31) on FinitePayloadProject -> error_code 7
+    let bad_fld_inst: ssa.Instruction = mk_finite_project_inst(3, 4, tl_id, 1, 5, 10, 27, 31);
+    let r_bad_fld: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_payload_project<1, 64>(pages, 64, 31, val_types, all_fins, bad_fld_inst, tok_ty);
+
+    // Wrong result type (u64 instead of Token for `head`) on FinitePayloadProject -> error_code 7
+    let bad_ty_inst: ssa.Instruction = mk_finite_project_inst(4, 5, tl_id, 1, 5, 10, 11, 15);
+    let r_bad_ty: vm_emit.InstLowerResult = vm_emit.lower_vm_finite_payload_project<1, 64>(pages, 64, 31, val_types, all_fins, bad_ty_inst, u64_ty);
+
+    // Wrong finite owner on FiniteSwitch -> error_code 4
+    let r_bad_sw: vm_emit.ScalarSwitchLowerResult = vm_emit.lower_finite_switch_block<1, 64>(
+        pages, 64, 31, ssa.SsaBlockList.LNil, all_fins, 0,
+        vm_emit.VmValueList.VVNil, vm_emit.VmInstructionList.VINil, 0,
+        false, 0, val_types, vm_emit.VmBlockList.VBNil, 0, 0,
+        20, 20, 4, 1, other_fin_id, u64_ty, false, 1, 3, ssa.FiniteMatchCaseList.MCNil
+    );
+
+    let ok: bool = !(r_bad_owner.ok) && r_bad_owner.error_code == 4
+        && !(r_bad_var.ok) && r_bad_var.error_code == 7
+        && !(r_bad_fld.ok) && r_bad_fld.error_code == 7
+        && !(r_bad_ty.ok) && r_bad_ty.error_code == 7
+        && !(r_bad_sw.ok) && r_bad_sw.error_code == 4;
+    return from_assertion(equals_bool(true, ok, 7002));
+}
+
+test finite_schema_transitive_retention_and_failure_detail_facts() -> (result: TestResult) {
+    let tok_id: decl.SemanticIdentity = id_tok();
+    let br_id: decl.SemanticIdentity = id_br();
+    let unused_rec_id: decl.SemanticIdentity = id_unused_rec();
+    let tl_id: decl.SemanticIdentity = id_tl();
+    let unused_fin_id: decl.SemanticIdentity = id_other_fin();
+
+    let kind_name: decl.SemanticIdentity = fast_ident([107, 105, 110, 100]);
+    let tok_schema: vm_emit.VmRecordType = vm_emit.VmRecordType {
+        identity: tok_id, name: fast_ident([84]),
+        fields: vm_emit.VmRecordFieldList.VRFCons { head: vm_emit.VmRecordField { name: kind_name, ty: vm_emit.u64_vm_type() }, tail: vm_emit.VmRecordFieldList.VRFNil }
+    };
+    let br_schema: vm_emit.VmRecordType = vm_emit.VmRecordType {
+        identity: br_id, name: fast_ident([66]),
+        fields: vm_emit.VmRecordFieldList.VRFCons { head: vm_emit.VmRecordField { name: fast_ident([116, 97, 105, 108]), ty: vm_emit.finite_vm_type(tl_id) }, tail: vm_emit.VmRecordFieldList.VRFNil }
+    };
+    let unused_rec: vm_emit.VmRecordType = vm_emit.VmRecordType {
+        identity: unused_rec_id, name: fast_ident([85]),
+        fields: vm_emit.VmRecordFieldList.VRFNil
+    };
+    let tl_schema: vm_emit.VmFiniteType = mk_token_list_schema(tok_id, tl_id);
+    let unused_fin: vm_emit.VmFiniteType = vm_emit.VmFiniteType {
+        identity: unused_fin_id, name: fast_ident([79]),
+        variants: vm_emit.VmFiniteVariantList.VFVNil
+    };
+
+    let all_recs: vm_emit.VmRecordTypeList = vm_emit.VmRecordTypeList.VRTCons {
+        head: br_schema,
+        tail: vm_emit.VmRecordTypeList.VRTCons {
+            head: tok_schema,
+            tail: vm_emit.VmRecordTypeList.VRTCons { head: unused_rec, tail: vm_emit.VmRecordTypeList.VRTNil }
+        }
+    };
+    let all_fins: vm_emit.VmFiniteTypeList = vm_emit.VmFiniteTypeList.VFTCons {
+        head: tl_schema,
+        tail: vm_emit.VmFiniteTypeList.VFTCons { head: unused_fin, tail: vm_emit.VmFiniteTypeList.VFTNil }
+    };
+    let fn_item: vm_emit.VmFunction = vm_emit.VmFunction {
+        identity: id_fn_f(),
+        nat_args: vm_emit.VmNatArgList.NANil,
+        inputs: vm_emit.VmValueList.VVNil,
+        result_type: vm_emit.record_vm_type(br_id),
+        blocks: vm_emit.VmBlockList.VBNil,
+        bounded_iterations: vm_emit.VmBoundedIterationList.VBINil,
+        block_count: 0, instruction_count: 0
+    };
+    let retained: vm_emit.SchemaUsageState = vm_emit.retain_referenced_schemas(
+        vm_emit.VmSchemas { records: all_recs, finites: all_fins },
+        vm_emit.VmFunctionList.VFCons { head: fn_item, tail: vm_emit.VmFunctionList.VFNil }
+    );
+
+    // Structured failure detail contract preserves callable, phase, ssa_kind, observed nominal, and span
+    let det: vm_emit.VmEmitFailureDetail = vm_emit.phase_failure_detail(fn_item.identity, 8, 5, 8, 7, tl_id, 0, 4);
+    let fail_res: vm_emit.VmEmitResult = vm_emit.emit_failure_detailed(4, 2, 0, 0, det);
+
+    let ok: bool = retained.rec_count == 2 && retained.fin_count == 1
+        && vm_emit.find_vm_record_type(retained.used_recs, br_id).found
+        && vm_emit.find_vm_record_type(retained.used_recs, tok_id).found
+        && !(vm_emit.find_vm_record_type(retained.used_recs, unused_rec_id).found)
+        && vm_emit.find_vm_finite_type(retained.used_fins, tl_id).found
+        && !(vm_emit.find_vm_finite_type(retained.used_fins, unused_fin_id).found)
+        && !(fail_res.ok) && fail_res.error_code == 4 && fail_res.error_function == 2
+        && fail_res.error_detail.phase == 8 && fail_res.error_detail.ssa_kind == 5
+        && fail_res.error_detail.observed_type_kind == 7
+        && fail_res.error_detail.source_start == 0 && fail_res.error_detail.source_end == 4
+        && vm_emit.semantic_ids_equal(fail_res.error_detail.observed_nominal, tl_id);
+    return from_assertion(equals_bool(true, ok, 7003));
+}

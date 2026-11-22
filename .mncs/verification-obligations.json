@@ -1,7 +1,7 @@
 {
   "schema_version": "mncs-family.verification-obligation-inventory/v1",
   "repository": "mncs-compiler",
-  "revision": 52,
+  "revision": 53,
   "obligations": [
     {
       "identity": "mncs-compiler.frontend-differential",
@@ -2569,6 +2569,64 @@
         "entrypoint": "mncs-test run",
         "source_paths": [
           "tests/vm_emit_nested_seq_suite.mncs"
+        ],
+        "library_paths": [
+          "src"
+        ],
+        "declaration_identities": [
+          "*"
+        ],
+        "verifier_identity": "mncs-test-runner/0.2.1"
+      },
+      "evidence_identity": {
+        "subject_fields": [
+          "repository_fingerprint",
+          "subject_fingerprint"
+        ],
+        "definition_fields": [
+          "obligation_identity",
+          "definition_identity"
+        ],
+        "execution_fields": [
+          "test_case_identity",
+          "executor_identity",
+          "verifier_identity",
+          "invalidation_identity"
+        ]
+      }
+    },
+    {
+      "identity": "mncs-compiler.vm-emit-finite-enum-native",
+      "title": "First-class MNCS vm_emit suite verifies finite enum construct/project/switch lowering, transitive schema retention, mismatch rejections, and structured failure detail",
+      "guarantee_domain": "compiler",
+      "evidence_role": "canonical_regression",
+      "lifecycle": "permanent",
+      "scope": "repository_canonical",
+      "subjects": [
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::finite_vm_type",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_finite_construct",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_vm_finite_payload_project",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::lower_finite_switch_block",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::retain_referenced_schemas",
+        "mncs:0.2:function:mncs.compiler.vm_emit.v1::emit_failure_detailed"
+      ],
+      "invalidation_dependencies": [
+        "tests/vm_emit_finite_enum_suite.mncs",
+        "src/compiler/vm_emit.mncs",
+        "src/compiler/ssa.mncs",
+        "src/compiler/flow.mncs",
+        "src/compiler/decl.mncs",
+        "src/compiler/parser.mncs",
+        "src/compiler/segment.mncs",
+        "src/compiler/lexer.mncs",
+        "src/compiler/source.mncs"
+      ],
+      "executor": {
+        "provider": "mncs-test",
+        "kind": "native_first_class_test",
+        "entrypoint": "mncs-test run",
+        "source_paths": [
+          "tests/vm_emit_finite_enum_suite.mncs"
         ],
         "library_paths": [
           "src"
